@@ -39,6 +39,14 @@ namespace Birko.Data.Store
             }
         }
 
+        public void Destroy()
+        {
+            if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path))
+            {
+                System.IO.File.Delete(Path);
+            }
+        }
+
         public void List(Action<T> action)
         {
             List(null, action);
