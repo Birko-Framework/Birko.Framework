@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Birko.Data.Attribute
+namespace Birko.Data.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class CountField : AggregateField

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Text;
 
-namespace Birko.Data.Attribute
+namespace Birko.Data.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class ViewField : System.Attribute

@@ -9,16 +9,17 @@
     <Import_RootNamespace>Birko.Data.SQL.View</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\AggregateField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\AvgField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\CountField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\MaxField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\MinField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\SumField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\View.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Attribute\ViewField.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connector\AbstractConnector_SelectView.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connector\AbstractConnector_SelectViewCount.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\AggregateField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\AvgField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\CountField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\MaxField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\MinField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\SumField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ViewField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectViewCount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Tables\View.cs" />
   </ItemGroup>
 </Project>
