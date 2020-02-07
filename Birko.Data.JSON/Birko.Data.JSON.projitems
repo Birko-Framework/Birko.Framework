@@ -9,7 +9,7 @@
     <Import_RootNamespace>Birko.Data.JSON</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Repository\JsonRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Store\JsonStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonStore.cs" />
   </ItemGroup>
 </Project>

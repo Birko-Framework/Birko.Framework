@@ -6,10 +6,10 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 
-namespace Birko.Data.Store
+namespace Birko.Data.Stores
 {
     public class JsonStore<T> : IStore<T>
-        where T: Model.AbstractModel
+        where T: Models.AbstractModel
     {
         private readonly Settings _settings;
         private List<T> _items = new List<T>();
@@ -97,10 +97,10 @@ namespace Birko.Data.Store
                     }
                     else //update
                     {
-                        if (data is Model.AbstractLogModel)
+                        if (data is Models.AbstractLogModel)
                         {
-                            (data as Model.AbstractLogModel).PrevUpdatedAt = (data as Model.AbstractLogModel).UpdatedAt;
-                            (data as Model.AbstractLogModel).UpdatedAt = DateTime.UtcNow;
+                            (data as Models.AbstractLogModel).PrevUpdatedAt = (data as Models.AbstractLogModel).UpdatedAt;
+                            (data as Models.AbstractLogModel).UpdatedAt = DateTime.UtcNow;
                         }
                         var item = _items.FirstOrDefault(x => x.Guid == data.Guid);
                         System.Reflection.MethodInfo method = typeof(T).GetMethod("CopyTo", new[] { typeof(T) });
@@ -142,9 +142,15 @@ namespace Birko.Data.Store
                 using (System.IO.TextWriter file = System.IO.File.CreateText(Path))
                 {
                     JsonSerializer serializer = new JsonSerializer();
+                    serializer.Formatting = Formatting.Indented;
                     serializer.Serialize(file, _items);
                 }
             }
+        }
+
+        public T First()
+        {
+            return (_items != null && _items.Any()) ? _items.FirstOrDefault() : null;
         }
     }
 }
