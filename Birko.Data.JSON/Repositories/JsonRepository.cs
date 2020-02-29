@@ -9,13 +9,9 @@ namespace Birko.Data.Repositories
         where TModel:Models.AbstractModel, Models.ILoadable<TViewModel>
         where TViewModel:Models.ILoadable<TModel>
     {
-        public JsonRepository(string path, string name): base(path)
+        public JsonRepository(Stores.Settings settings) : base(settings)
         {
-            _store = new Stores.JsonStore<TModel>(new Stores.Settings()
-            {
-                Location = path,
-                Name = name
-            });
+            _store = new Stores.JsonStore<TModel>(settings);
         }
     }
 }
