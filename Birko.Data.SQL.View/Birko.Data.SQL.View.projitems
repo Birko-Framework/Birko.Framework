@@ -20,7 +20,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectViewCount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\BooleanFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\DateTimeFunction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\FunctionField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\DecimalFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\IntegerFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\CharFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\GuidFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\StringFunction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Tables\View.cs" />
   </ItemGroup>
 </Project>
