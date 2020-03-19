@@ -8,30 +8,38 @@ using System.Text;
 
 namespace Birko.Data.Stores
 {
-    public class JsonStore<T> : IStore<T>
+    public class JsonStore<T> : AbstractStore<T, Settings>
         where T: Models.AbstractModel
     {
-        private readonly Settings _settings;
+        private ISettings _settings;
         private List<T> _items = new List<T>();
 
         public string Path
         {
             get
             {
-                return (!string.IsNullOrEmpty(_settings?.Location) && !string.IsNullOrEmpty(_settings?.Name))
-                    ? System.IO.Path.Combine(_settings.Location, _settings.Name)
+                return ((_settings is Settings settings) && !string.IsNullOrEmpty(settings.Location) && !string.IsNullOrEmpty(settings.Name))
+                    ? System.IO.Path.Combine(settings.Location, settings.Name)
                     : null;
             }
         }
 
-        public JsonStore(Settings settings)
+        public JsonStore()
         {
-            _settings = settings;
-            Init();
-            Load();
+
         }
 
-        public void Init()
+        public override void SetSettings(Settings settings)
+        {
+            if (settings is Settings)
+            {
+                _settings = settings;
+                Init();
+                Load();
+            }
+        }
+
+        public override void Init()
         {
             if (!string.IsNullOrEmpty(Path) && !System.IO.File.Exists(Path))
             {
@@ -39,7 +47,7 @@ namespace Birko.Data.Stores
             }
         }
 
-        public void Destroy()
+        public override void Destroy()
         {
             if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path))
             {
@@ -47,12 +55,12 @@ namespace Birko.Data.Stores
             }
         }
 
-        public void List(Action<T> action)
+        public override void List(Action<T> action)
         {
             List(null, action);
         }
 
-        public void List(Expression<Func<T, bool>> filter, Action<T> action)
+        public override void List(Expression<Func<T, bool>> filter, Action<T> action)
         {
             if(_items != null && _items.Any() && action != null)
             {
@@ -68,18 +76,16 @@ namespace Birko.Data.Stores
             }
         }
 
-        public long Count()
+
+        public override long Count(Expression<Func<T, bool>> filter)
         {
-            return _items?.Count ?? 0;
+
+            return (filter != null)
+                ?_items?.Where(filter.Compile()).Count() ?? 0
+                : _items?.Count ?? 0;
         }
 
-
-        public long Count(Expression<Func<T, bool>> filter)
-        {
-            return _items?.Where(filter.Compile()).Count() ?? 0;
-        }
-
-        public void Save(T data, StoreDataDelegate<T> storeDelegate = null)
+        public override void Save(T data, StoreDataDelegate<T> storeDelegate = null)
         {
             if (data != null)
             {
@@ -110,7 +116,7 @@ namespace Birko.Data.Stores
             }
         }
 
-        public void Delete(T data)
+        public override void Delete(T data)
         {
             if (data.Guid != null && _items != null && _items.Any(x => x.Guid == data.Guid))
             {
@@ -135,7 +141,7 @@ namespace Birko.Data.Stores
             }
         }
 
-        public void StoreChanges()
+        public override void StoreChanges()
         {
             if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path))
             {
