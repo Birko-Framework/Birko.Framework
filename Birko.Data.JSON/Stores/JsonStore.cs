@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Birko.Data.Stores
 {
-    public class JsonStore<T> : AbstractStore<T, Settings>
+    public class JsonStore<T> : AbstractStore<T>
         where T: Models.AbstractModel
     {
         private ISettings _settings;
@@ -29,11 +29,11 @@ namespace Birko.Data.Stores
 
         }
 
-        public override void SetSettings(Settings settings)
+        public override void SetSettings(ISettings settings)
         {
-            if (settings is Settings)
+            if (settings is Settings setts)
             {
-                _settings = settings;
+                _settings = setts;
                 Init();
                 Load();
             }
