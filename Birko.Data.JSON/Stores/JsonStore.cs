@@ -60,7 +60,7 @@ namespace Birko.Data.Stores
             List(null, action);
         }
 
-        public override void List(Expression<Func<T, bool>> filter, Action<T> action)
+        public override void List(Expression<Func<T, bool>> filter, Action<T> action, int? limit = null, int? offset = null)
         {
             if(_items != null && _items.Any() && action != null)
             {
@@ -68,6 +68,14 @@ namespace Birko.Data.Stores
                 if (filter != null)
                 {
                     items = items.Where(filter.Compile()).ToArray();
+                }
+                if (offset != null && offset > 0)
+                {
+                    items = items.Skip(offset.Value).ToArray();
+                }
+                if (limit != null)
+                {
+                    items = items.Take(limit.Value).ToArray();
                 }
                 foreach (T item in items)
                 {
