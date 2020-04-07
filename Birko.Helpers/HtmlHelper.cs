@@ -11,9 +11,9 @@ namespace Birko.Data.Helpers
         /// <summary>
         /// Compiled regular expression for performance.
         /// </summary>
-        static Regex _htmlRegex = new Regex("<.*?>", RegexOptions.Compiled);
-        static Regex _htmlARegex = new Regex(@"<\/*a.*?>", RegexOptions.Compiled);
-        static Regex _htmlImgRegex = new Regex(@"<img[^>]*>", RegexOptions.Compiled);
+        private static readonly Regex _htmlRegex = new Regex("<.*?>", RegexOptions.Compiled);
+        private static readonly Regex _htmlARegex = new Regex(@"<\/*a.*?>", RegexOptions.Compiled);
+        private static readonly Regex _htmlImgRegex = new Regex(@"<img[^>]*>", RegexOptions.Compiled);
 
 
         /// <summary>

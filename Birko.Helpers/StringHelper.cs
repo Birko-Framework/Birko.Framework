@@ -95,8 +95,10 @@ namespace Birko.Data.Helpers
         public static byte[] CalculateSHA1Hash(string data)
         {
             var dataBytes = Encoding.ASCII.GetBytes(data);
-            var sha1 = new SHA1CryptoServiceProvider();
-            return sha1.ComputeHash(dataBytes);
+            using (var sha1 = new SHA1CryptoServiceProvider())
+            {
+                return sha1.ComputeHash(dataBytes);
+            }
         }
 
         public static string HashText(string text)
