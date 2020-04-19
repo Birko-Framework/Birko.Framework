@@ -20,7 +20,7 @@ namespace Birko.Data.SQL.Connectors
 
         private void MSSqlConnector_OnException(Exception ex, string commandText)
         {
-            if (ex is SqlException && !IsInit && ex.Message.Contains("Invalid object name"))
+            if (!IsInit && ex.Message.Contains("Invalid object name"))
             {
                 DoInit();
             }
@@ -56,16 +56,15 @@ namespace Birko.Data.SQL.Connectors
             switch (type)
             {
                 case DbType.VarNumeric:
+                case DbType.Decimal:
                     if (field is DecimalField decimalField && decimalField.Precision != null && decimalField.Scale != null)
                     {
-                        return string.Format("NUMERIC({0},{1})", decimalField.Precision, decimalField.Scale);
+                        return string.Format("DECIMAL({0},{1})", decimalField.Precision, decimalField.Scale);
                     }
                     else
                     {
-                        return "NUMERIC";
+                        return "DECIMAL";
                     }
-                case DbType.Decimal:
-                    return "DECIMAL";
                 case DbType.Double:
                     return "FLOAT";
                 case DbType.Currency:
