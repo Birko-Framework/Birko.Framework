@@ -155,8 +155,10 @@ namespace Birko.Data.Stores
             {
                 using (System.IO.TextWriter file = System.IO.File.CreateText(Path))
                 {
-                    JsonSerializer serializer = new JsonSerializer();
-                    serializer.Formatting = Formatting.Indented;
+                    JsonSerializer serializer = new JsonSerializer
+                    {
+                        Formatting = Formatting.Indented
+                    };
                     serializer.Serialize(file, _items);
                 }
             }
