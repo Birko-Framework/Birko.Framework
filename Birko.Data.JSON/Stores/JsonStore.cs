@@ -1,6 +1,4 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -41,8 +39,12 @@ namespace Birko.Data.Stores
 
         public override void Init()
         {
-            if (!string.IsNullOrEmpty(Path) && !System.IO.File.Exists(Path))
+            if (!string.IsNullOrEmpty(Path) && !System.IO.File.Exists(Path) && (_settings is Settings settings))
             {
+                if (!System.IO.Directory.Exists(settings.Location))
+                {
+                    System.IO.Directory.CreateDirectory(settings.Location);
+                }
                 System.IO.File.WriteAllText(Path, "[]");
             }
         }
@@ -137,11 +139,7 @@ namespace Birko.Data.Stores
         {
             if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path))
             {
-                using (System.IO.StreamReader file = System.IO.File.OpenText(Path))
-                {
-                    JsonSerializer serializer = new JsonSerializer();
-                    _items = (List<T>)serializer.Deserialize(file, typeof(List<T>));
-                }
+                _items  = System.Text.Json.JsonSerializer.Deserialize<List<T>>(System.IO.File.ReadAllText(Path));
             }
             if (_items == null)
             {
@@ -153,20 +151,15 @@ namespace Birko.Data.Stores
         {
             if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path))
             {
-                using (System.IO.TextWriter file = System.IO.File.CreateText(Path))
-                {
-                    JsonSerializer serializer = new JsonSerializer
-                    {
-                        Formatting = Formatting.Indented
-                    };
-                    serializer.Serialize(file, _items);
-                }
+                System.IO.File.WriteAllText(Path, System.Text.Json.JsonSerializer.Serialize(_items, new System.Text.Json.JsonSerializerOptions() {
+                    WriteIndented = true
+                }));
             }
         }
 
         public T First()
         {
-            return (_items != null && _items.Any()) ? _items.FirstOrDefault() : null;
+            return (_items?.Any() == true) ? _items.FirstOrDefault() : null;
         }
     }
 }
