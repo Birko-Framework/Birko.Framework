@@ -17,7 +17,7 @@ namespace Birko.Data.Helpers
         // multiple hyphens
         static readonly Regex MultipleHyphens = new Regex(@"-{2,}", RegexOptions.Compiled);
 
-        public static string GenerateSlug(string value)
+        public static string GenerateSlug(this string value)
         {
             if (!string.IsNullOrEmpty(value))
             {
@@ -42,7 +42,7 @@ namespace Birko.Data.Helpers
             return string.Empty;
         }
 
-        public static string RemoveDiacritics(string text)
+        public static string RemoveDiacritics(this string text)
         {
             if (!string.IsNullOrEmpty(text))
             {
@@ -63,25 +63,7 @@ namespace Birko.Data.Helpers
             return string.Empty;
         }
 
-        public static string ToUrlSlug(string phrase)
-        {
-            if (!string.IsNullOrEmpty(phrase))
-            {
-                string str = RemoveDiacritics(phrase).ToLower();
-                //string str = phrase;
-                // invalid chars
-                str = Regex.Replace(str, @"[^a-z0-9\/\s-]", "");
-                str = RemoveMultipleSpaces(str);
-                // cut and trim
-                str = str.Substring(0, str.Length <= 55 ? str.Length : 55).Trim();
-                str = Regex.Replace(str, @"\s", "-"); // hyphens
-                str = Regex.Replace(str, @"\/", "-"); // hyphens
-                return str;
-            }
-            return string.Empty;
-        }
-
-        public static string RemoveMultipleSpaces(string str)
+        public static string RemoveMultipleSpaces(this string str)
         {
             if (!string.IsNullOrEmpty(str))
             {
@@ -92,20 +74,33 @@ namespace Birko.Data.Helpers
             return string.Empty;
         }
 
-        public static byte[] CalculateSHA1Hash(string data)
+        public static byte[] CalculateSHA1Hash(this string data)
         {
             var dataBytes = Encoding.UTF8.GetBytes(data);
             using var sha1 = new SHA1CryptoServiceProvider();
             return sha1.ComputeHash(dataBytes);
         }
 
-        public static string HashText(string text)
+        public static byte[] CalculateSHA256Hash(this string data)
         {
-            if (!string.IsNullOrEmpty(text))
-            {
-                return Encoding.UTF8.GetString(CalculateSHA1Hash(text));
-            }
-            return string.Empty;
+            using SHA256 sha256 = SHA256.Create();
+            return sha256.ComputeHash(Encoding.UTF8.GetBytes(data));
+        }
+
+        public static byte[] CalculateSHA512Hash(this string data)
+        {
+            using SHA512 sha512 = SHA512.Create();
+            return sha512.ComputeHash(Encoding.UTF8.GetBytes(data));
+        }
+
+        public static string ToHexText(byte[] bytes, bool upperCase = false)
+        {
+            StringBuilder result = new StringBuilder(bytes.Length * 2);
+
+            for (int i = 0; i < bytes.Length; i++)
+                result.Append(bytes[i].ToString(upperCase ? "X2" : "x2"));
+
+            return result.ToString();
         }
     }
 }
