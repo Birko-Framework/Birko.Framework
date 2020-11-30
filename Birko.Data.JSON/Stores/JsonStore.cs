@@ -51,6 +51,7 @@ namespace Birko.Data.Stores
 
         public override void Destroy()
         {
+            _items?.Clear();
             if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path))
             {
                 System.IO.File.Delete(Path);
