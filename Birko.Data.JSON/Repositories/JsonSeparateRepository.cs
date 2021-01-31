@@ -5,11 +5,11 @@ using System.Text;
 
 namespace Birko.Data.Repositories
 {
-    public abstract class JsonRepository<TViewModel, TModel> : AbstractJsonSeparateRepository<TViewModel, TModel, Stores.JsonStore<TModel>>
+    public abstract class JsonSeparateRepository<TViewModel, TModel> : AbstractJsonSeparateRepository<TViewModel, TModel, Stores.JsonSeparateStore<TModel>>
         where TModel:Models.AbstractModel, Models.ILoadable<TViewModel>
         where TViewModel:Models.ILoadable<TModel>
     {
-        public JsonRepository() : base()
+        public JsonSeparateRepository() : base()
         {
 
         }
