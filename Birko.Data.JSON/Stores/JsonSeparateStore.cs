@@ -15,6 +15,15 @@ namespace Birko.Data.Stores
             _files = new Dictionary<Guid, string>();
         }
 
+        protected void AddFile(Guid guid, string name)
+        {
+            if (_files == null)
+            {
+                _files = new Dictionary<Guid, string>(); 
+            }
+            _files[guid] = name;
+        }
+
         public override string GetPath()
         {
             return ((_settings is Settings settings) && !string.IsNullOrEmpty(settings.Location))
@@ -66,7 +75,7 @@ namespace Birko.Data.Stores
                     {
                         var item = System.Text.Json.JsonSerializer.Deserialize<T>(System.IO.File.ReadAllText(file));
                         _items.Add(item);
-                        _files.Add(item.Guid.Value, file);
+                        AddFile(item.Guid.Value, file);
                     }
                 }
             }
@@ -79,8 +88,9 @@ namespace Birko.Data.Stores
         public override void StoreChanges()
         {
             var settings = (_settings as Settings);
-            if (!string.IsNullOrEmpty(Path) && System.IO.File.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
+            if (!string.IsNullOrEmpty(Path) && System.IO.Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
             {
+                var removedFiles = System.IO.Directory.GetFiles(Path, settings.Name).ToDictionary(x => x);
                 foreach (var item in _items)
                 {
                     if (_files.ContainsKey(item.Guid.Value))
@@ -93,6 +103,17 @@ namespace Birko.Data.Stores
                     {
                         WriteIndented = true
                     }));
+                    if (removedFiles.ContainsKey(_files[item.Guid.Value]))
+                    {
+                        removedFiles.Remove(_files[item.Guid.Value]);
+                    }
+                }
+                if (removedFiles.Any())
+                {
+                    foreach (var kvp in removedFiles)
+                    {
+                        System.IO.File.Delete(kvp.Value);
+                    }
                 }
             }
         }
