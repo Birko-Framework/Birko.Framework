@@ -13,6 +13,6 @@
     <Compile Include="ObjectHelper.cs" />
     <Compile Include="StringHelper.cs" />
   </ItemGroup>
-  <Import Project="Birko.Data.Helper.projitems" Label="Shared" />
+  <Import Project="Birko.Data.Helpers.projitems" Label="Shared" />
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\CodeSharing\Microsoft.CodeSharing.CSharp.targets" />
 </Project>

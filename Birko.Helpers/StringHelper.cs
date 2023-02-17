@@ -77,7 +77,7 @@ namespace Birko.Data.Helpers
         public static byte[] CalculateSHA1Hash(this string data)
         {
             var dataBytes = Encoding.UTF8.GetBytes(data);
-            using var sha1 = new SHA1CryptoServiceProvider();
+            using var sha1 = SHA1.Create();
             return sha1.ComputeHash(dataBytes);
         }
 
