@@ -7,27 +7,45 @@ namespace Birko.Data.Structures.Trees
 {
     public class Tree
     {
-        public Node RootNode { get; set; }
+        public Node Root { get; set; }
 
-        public Tree Insert(Node node)
+
+        public int Height
+        {
+            get 
+            {
+                return Root?.Height ?? 0;
+            }
+        }
+
+        public Tree()
+        {
+        }
+
+        public Tree(IEnumerable<Node> nodes) : this()
+        { 
+            Insert(nodes);
+        }
+
+        public virtual Node Insert(Node node)
         {
             if (node == null)
             {
-                return this;
+                return null;
             }
-            if (RootNode == null)
+            if (Root == null)
             {
-                RootNode = node;
-                RootNode.Parent = null;
+                Root = node;
+                Root.Parent = null;
+                return Root;
             }
             else
             {
-                RootNode.Insert(node);
+                return Root.Insert(node);
             }
-            return this;
         }
 
-        public Tree Insert(IEnumerable<Node> nodes)
+        public void Insert(IEnumerable<Node> nodes)
         {
             if (nodes?.Any() ?? false)
             {
@@ -36,7 +54,6 @@ namespace Birko.Data.Structures.Trees
                     Insert(node);
                 }
             }
-            return this;
         }
 
         public Node Find(Node node) 
@@ -45,27 +62,11 @@ namespace Birko.Data.Structures.Trees
             {
                 return null;
             }
-            if (RootNode == null)
+            if (Root == null)
             {
                 return null;
             }
-            if (RootNode.CompareTo(node) == 0)
-            {
-                return RootNode;
-            }
-            if (!(RootNode.Children?.Any() ?? false))
-            {
-                return null;
-            }
-            foreach (Node child in RootNode.Children)
-            {
-                Node find = child.Find(node);
-                if (find != null)
-                {
-                    return find;
-                }
-            }
-            return null;
+            return Root.Find(node);
         }
 
         public bool Contains(Node node)
@@ -73,29 +74,31 @@ namespace Birko.Data.Structures.Trees
             return Find(node) != null;
         }
 
-        public Tree Remove(Node node)
+        public virtual Node Remove(Node node)
         {
             if (node == null)
             {
-                return this;
+                return null;
             }
-            if (RootNode == null)
+            if (Root == null)
             {
-                return this;
+                return node;
             }
-            if (RootNode.CompareTo(node) == 0)
+            if (Root.CompareTo(node) == 0)
             {
-                Node first = RootNode.Children?.First();
-                if ((RootNode.Children?.Count() ?? 0)  > 1)
+                Node first = Root.Children?.First();
+                if ((Root.Children?.Count() ?? 0)  > 1)
                 {
-                    first.Insert(RootNode.Children.Skip(1));
+                    first.Insert(Root.Children.Skip(1));
                     first.Parent = null;
                 }
-                RootNode = first;
+                node = Root;
+                Root = first;
+                return node;
             }
             else
             {
-                foreach (Node child in RootNode.Children.ToArray()) // not use toArray
+                foreach (Node child in Root.Children)
                 {
                     if (child.Contains(node))
                     {
@@ -104,7 +107,32 @@ namespace Birko.Data.Structures.Trees
                     }
                 }
             }
-            return this;
+            return node;
+        }
+
+        public IEnumerable<Node> InOrder()
+        {
+            return Root.InOrder();
+        }
+
+        public IEnumerable<Node> PreOrder()
+        {
+            return Root.PreOrder();
+        }
+
+        public IEnumerable<Node> PostOrder()
+        {
+            return Root.PostOrder();
+        }
+
+        public IEnumerable<Node> LevelOrder()
+        {
+            return Root.LevelOrder();
+        }
+
+        public override string ToString()
+        {
+            return string.Join("\n", PreOrder().Select(x => $"|{string.Empty.PadLeft(x.Depth, '-')} {x}"));
         }
     }
 }

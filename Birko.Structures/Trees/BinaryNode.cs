@@ -9,34 +9,47 @@ namespace Birko.Data.Structures.Trees
     {
         public override Node Insert(Node node)
         {
+            if (node == null) {
+                return null;
+            }
             if (node is not BinaryNode binaryNode)
             {
-                return this;
+                throw new ArgumentException("Node is not derived from BinaryNode");
             }
-            Children ??= new BinaryNode[] { null, null };
-            if (CompareTo(node) <= 0)
+            if (CompareTo(node) < 0)
             {
-                if (Children.First() == null)
+                if (Children?.Last() == null)
                 {
-                    (Children as BinaryNode[])[0] = binaryNode;
+                    InsertChild(binaryNode, 1);
                 }
                 else
                 {
-                    Children.First().Insert(node);
+                    (Children.Last() as Node).Insert(node);
                 }
+                
             }
             else
             {
-                if (Children.Last() == null)
+                if (Children?.First() == null)
                 {
-                    (Children as BinaryNode[])[1] = binaryNode;
+                    InsertChild(binaryNode, 0);
                 }
                 else
                 {
-                    Children.Last().Insert(node);
+                    (Children.First() as Node).Insert(node);
                 }
             }
-            return this;
+
+            return node;
+        }
+
+        internal override void InsertChild(Node node, int index)
+        {
+            if (index >= 0 && index <= 1)
+            {
+                Children ??= new Node[] { null, null };
+            }
+            base.InsertChild(node, index);
         }
     }
 }
