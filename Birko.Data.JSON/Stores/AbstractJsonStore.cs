@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -119,6 +121,20 @@ namespace Birko.Data.Stores
         public T First()
         {
             return (_items?.Any() == true) ? _items.FirstOrDefault() : null;
+        }
+
+        protected TData ReadFromStream<TData>(StreamReader streamReader)
+        {
+            using JsonReader jsonReader = new JsonTextReader(streamReader);
+            JsonSerializer serializer = new();
+            return serializer.Deserialize<TData>(jsonReader);
+        }
+        protected void WriteToStream<TData>(StreamWriter streamWriter, TData data)
+        {
+            using JsonWriter jsonWriter = new JsonTextWriter(streamWriter);
+            jsonWriter.Formatting = Formatting.Indented;
+            JsonSerializer serializer = new();
+            serializer.Serialize(jsonWriter, data);
         }
     }
 }

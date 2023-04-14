@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -42,7 +43,10 @@ namespace Birko.Data.Stores
                     int batch = 1;
                     foreach (var file in files)
                     {
-                        var items = System.Text.Json.JsonSerializer.Deserialize<IEnumerable<T>>(System.IO.File.ReadAllText(file));
+                        using FileStream fileStrem = File.OpenRead(file);
+                        using StreamReader streamReader = new(fileStrem);
+                        var items = ReadFromStream<IEnumerable<T>>(streamReader);
+
                         _items.AddRange(items);
                         byte[] bytes = new byte[16];
                         BitConverter.GetBytes(batch).CopyTo(bytes, 0);
@@ -98,10 +102,11 @@ namespace Birko.Data.Stores
             var fileName = settings.Name.Contains("*") ? settings.Name.Replace("*", guid.ToString("D")) : $"{settings.Name}-{guid.ToString("D")}";
             var path = System.IO.Path.Combine(Path, fileName);
             AddFile(new Guid(bytes), path);
-            System.IO.File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(batchFiles, new System.Text.Json.JsonSerializerOptions()
-            {
-                WriteIndented = true
-            }));
+
+            using FileStream fileStream = File.OpenWrite(path);
+            using StreamWriter streamWriter = new(fileStream);
+            WriteToStream(streamWriter, batchFiles);
+
             if (removedFiles.ContainsKey(path))
             {
                 removedFiles.Remove(path);

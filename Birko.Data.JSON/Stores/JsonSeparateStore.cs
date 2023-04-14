@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Net.NetworkInformation;
 using System.Text;
 
 namespace Birko.Data.Stores
@@ -17,10 +19,7 @@ namespace Birko.Data.Stores
 
         protected void AddFile(Guid guid, string name)
         {
-            if (_files == null)
-            {
-                _files = new Dictionary<Guid, string>(); 
-            }
+            _files ??= new Dictionary<Guid, string>();
             _files[guid] = name;
         }
 
@@ -35,9 +34,9 @@ namespace Birko.Data.Stores
         {
             if (!string.IsNullOrEmpty(Path) && !System.IO.Directory.Exists(Path))
             {
-                if (!System.IO.Directory.Exists(Path))
+                if (!Directory.Exists(Path))
                 {
-                    System.IO.Directory.CreateDirectory(Path);
+                    Directory.CreateDirectory(Path);
                 }
             }
             _files = new Dictionary<Guid, string>();
@@ -48,41 +47,40 @@ namespace Birko.Data.Stores
             _items?.Clear();
             _files.Clear();
             var settings = (_settings as Settings);
-            if (!string.IsNullOrEmpty(Path) && System.IO.Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
+            if (!string.IsNullOrEmpty(Path) && Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
             {
-                var files = System.IO.Directory.GetFiles(Path, settings.Name).ToArray();
+                var files = Directory.GetFiles(Path, settings.Name).ToArray();
                 if (files.Any())
                 {
                     foreach (var file in files)
                     {
-                        System.IO.File.Delete(file);
+                        File.Delete(file);
                     }
                 }
-                System.IO.Directory.Delete(Path);
+                Directory.Delete(Path);
             }
         }
 
         public override void Load()
         {
             var settings = (_settings as Settings);
-            if (!string.IsNullOrEmpty(Path) && System.IO.Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
+            if (!string.IsNullOrEmpty(Path) && Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
             {
-                var files = System.IO.Directory.GetFiles(Path, settings.Name).ToArray();
+                var files = Directory.GetFiles(Path, settings.Name).ToArray();
                 if (files.Any())
                 {
                     _items = new List<T>();
                     foreach (var file in files)
                     {
-                        var item = System.Text.Json.JsonSerializer.Deserialize<T>(System.IO.File.ReadAllText(file));
+                        using FileStream fileStrem = File.OpenRead(file);
+                        using StreamReader streamReader = new(fileStrem);
+                        var item = ReadFromStream<T>(streamReader);
                         _items.Add(item);
                         AddFile(item.Guid.Value, file);
                     }
                 }
             }
-            if (_items == null)
-            {
-                _items = new List<T>();
-            }
+            _items ??= new List<T>();
         }
 
         public override void StoreChanges()
@@ -95,14 +93,15 @@ namespace Birko.Data.Stores
                 {
                     if (_files.ContainsKey(item.Guid.Value))
                     {
-                        var fileName = settings.Name.Contains("*") ? settings.Name.Replace("*", item.Guid?.ToString("D")) : $"{settings.Name}-{item.Guid?.ToString("D")}";
+                        var fileName = settings.Name.Contains('*') ? settings.Name.Replace("*", item.Guid?.ToString("D")) : $"{settings.Name}-{item.Guid?.ToString("D")}";
                         var path = System.IO.Path.Combine(Path, fileName);
                         _files.Add(item.Guid.Value, path);
+
+                        using FileStream fileStream = File.OpenWrite(_files[item.Guid.Value]);
+                        using StreamWriter streamWriter = new(fileStream);
+                        WriteToStream(streamWriter, item);
                     }
-                    System.IO.File.WriteAllText(_files[item.Guid.Value], System.Text.Json.JsonSerializer.Serialize(item, new System.Text.Json.JsonSerializerOptions()
-                    {
-                        WriteIndented = true
-                    }));
+
                     if (removedFiles.ContainsKey(_files[item.Guid.Value]))
                     {
                         removedFiles.Remove(_files[item.Guid.Value]);
@@ -112,7 +111,7 @@ namespace Birko.Data.Stores
                 {
                     foreach (var kvp in removedFiles)
                     {
-                        System.IO.File.Delete(kvp.Value);
+                        File.Delete(kvp.Value);
                     }
                 }
             }
