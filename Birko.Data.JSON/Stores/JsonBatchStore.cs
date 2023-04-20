@@ -34,9 +34,9 @@ namespace Birko.Data.Stores
         public override void Load()
         {
             var settings = (_settings as Settings);
-            if (!string.IsNullOrEmpty(Path) && System.IO.Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
+            if (!string.IsNullOrEmpty(Path) && Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
             {
-                var files = System.IO.Directory.GetFiles(Path, settings.Name).ToArray();
+                var files = Directory.GetFiles(Path, settings.Name).ToArray();
                 if (files.Any())
                 {
                     _items = new List<T>();
@@ -55,20 +55,17 @@ namespace Birko.Data.Stores
                     }
                 }
             }
-            if (_items == null)
-            {
-                _items = new List<T>();
-            }
+            _items ??= new List<T>();
         }
 
         public override void StoreChanges()
         {
             var settings = (_settings as Settings);
-            if (!string.IsNullOrEmpty(Path) && System.IO.Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
+            if (!string.IsNullOrEmpty(Path) && Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
             {
-                var removedFiles = System.IO.Directory.GetFiles(Path, settings.Name).ToDictionary(x => x);
+                var removedFiles = Directory.GetFiles(Path, settings.Name).ToDictionary(x => x);
                 int batch = 1;
-                List<T> batchFiles = new List<T>();
+                List<T> batchFiles = new ();
                 foreach (var item in _items)
                 {
                     batchFiles.Add(item);
@@ -87,7 +84,7 @@ namespace Birko.Data.Stores
                 {
                     foreach (var kvp in removedFiles)
                     {
-                        System.IO.File.Delete(kvp.Value);
+                        File.Delete(kvp.Value);
                     }
                 }
             }

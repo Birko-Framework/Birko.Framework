@@ -32,7 +32,7 @@ namespace Birko.Data.Stores
 
         public override void Init()
         {
-            if (!string.IsNullOrEmpty(Path) && !System.IO.Directory.Exists(Path))
+            if (!string.IsNullOrEmpty(Path) && !Directory.Exists(Path))
             {
                 if (!Directory.Exists(Path))
                 {
@@ -86,9 +86,9 @@ namespace Birko.Data.Stores
         public override void StoreChanges()
         {
             var settings = (_settings as Settings);
-            if (!string.IsNullOrEmpty(Path) && System.IO.Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
+            if (!string.IsNullOrEmpty(Path) && Directory.Exists(Path) && !string.IsNullOrEmpty(settings.Name))
             {
-                var removedFiles = System.IO.Directory.GetFiles(Path, settings.Name).ToDictionary(x => x);
+                var removedFiles = Directory.GetFiles(Path, settings.Name).ToDictionary(x => x);
                 foreach (var item in _items)
                 {
                     if (_files.ContainsKey(item.Guid.Value))
