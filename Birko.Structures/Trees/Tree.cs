@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Birko.Data.Structures.Extensions.Trees;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,16 +9,6 @@ namespace Birko.Data.Structures.Trees
     public class Tree
     {
         public Node Root { get; set; }
-
-
-        public int Height
-        {
-            get 
-            {
-                return Root?.Height ?? 0;
-            }
-        }
-
         public Tree()
         {
         }
@@ -108,31 +99,6 @@ namespace Birko.Data.Structures.Trees
                 }
             }
             return node;
-        }
-
-        public IEnumerable<Node> InOrder()
-        {
-            return Root.InOrder();
-        }
-
-        public IEnumerable<Node> PreOrder()
-        {
-            return Root.PreOrder();
-        }
-
-        public IEnumerable<Node> PostOrder()
-        {
-            return Root.PostOrder();
-        }
-
-        public IEnumerable<Node> LevelOrder()
-        {
-            return Root.LevelOrder();
-        }
-
-        public override string ToString()
-        {
-            return string.Join("\n", PreOrder().Select(x => $"|{string.Empty.PadLeft(x.Depth, '-')} {x}"));
         }
     }
 }

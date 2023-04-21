@@ -4,55 +4,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Xml.Linq;
 using static Nest.JoinField;
 
 namespace Birko.Data.Structures.Trees
 {
     public abstract class Node : IComparable<Node>
     {
-        private Node _parent = null;
-        public Node Parent
-        {
-            get {
-                return _parent;
-            }
-            set
-            {
-                bool isSameParent = (Parent == null && value == null) || (Parent != null && value != null && Parent.CompareTo(value) == 0);
-                if (!isSameParent)
-                {
-                    //Remove node as child from parent childs
-                    if (Parent != null && (value == null || Parent.CompareTo(value) != 0))
-                    {
-                        Parent.Children = Parent.Children?.Select(x => ((x?.CompareTo(this) ?? 0) == 0) ? null : x);
-                    }
-                    _parent = value;
-                    // Try insert node as parent child
-                    if (Parent != null && !(Parent.Children?.Any(x => x != null && x.CompareTo(this) == 0) ?? false))
-                    {
-                        Parent.Insert(this);
-                    }
-                }
-            }
-        }
+        public Node Parent { get; set; }
         public IEnumerable<Node> Children { get; protected set; } = null;
-
-        public int Depth
-        {
-            get 
-            {
-                return (Parent?.Depth ?? -1) + 1;
-            }
-        }
-
-        public int Height
-        {
-            get
-            {
-                return (Children?.Max(x => x?.Height ?? 0) ?? 0) + 1;
-            }
-        }
-
         public abstract int CompareTo(Node other);
         public abstract Node Insert(Node node);
 
@@ -121,11 +81,11 @@ namespace Birko.Data.Structures.Trees
                 Children = null;
                 Parent = null;
             }
-            else
+            else if(Children?.Any() ?? false)
             {
-                foreach (Node child in Children.ToArray()) // not use toArray
+                foreach (Node child in Children)
                 {
-                    if (child.Contains(node))
+                    if (child?.Contains(node) ?? false)
                     {
                         child.Remove(node);
                         break;
@@ -135,97 +95,74 @@ namespace Birko.Data.Structures.Trees
             return this;
         }
 
-        public IEnumerable<Node> InOrder()
+        internal virtual Node InsertChild(Node node, int index)
         {
-            bool wasThis = false;
-            if (Children?.Any(x=> x!= null) ?? false)
+            if (index < 0)
             {
-                foreach (Node child in Children.Where(x => x != null))
+                index = Children.Count() - index;
+            }
+            if (index < 0)
+            {
+                throw new IndexOutOfRangeException(nameof(index));
+            }
+
+            ExtendChildren(index);
+
+            Children = Children?.Select((x, i) =>
+            {
+                if (i == index)
                 {
-                    if (CompareTo(child) < 0 && !wasThis)
+                    x?.Parent?.RemoveChild(x);
+                    if (node != null)
                     {
-                        wasThis = true;
-                        yield return this;
+                        node.Parent = this;
                     }
-                    foreach (Node node in child.InOrder())
-                    {
-                        yield return node;
-                    }
+                    return node;
                 }
-            }
-            if(!wasThis) 
-            {
-                yield return this;
-            }
+                return x;
+            }).ToArray();
+
+            FreeChildren();
+            return node;
         }
 
-        public IEnumerable<Node> PreOrder()
+        internal virtual int RemoveChild(Node node)
         {
-            yield return this;
-            if (Children?.Any(x => x != null) ?? false)
+            if (node == null)
             {
-                foreach (Node child in Children.Where(x => x != null))
+                throw new ArgumentNullException(nameof(node));
+            }
+            int result = -1;
+            Children = Children?.Select((x, i) =>
+            {
+                if (x?.CompareTo(node) == 0 && result < 0)
                 {
-                    foreach (var node in child.PreOrder())
-                    {
-                        yield return node;
-                    }
+                    node.Parent = null;
+                    result = i;
+                    return null;
                 }
-            }
+                return x;
+            }).ToArray();
+
+            FreeChildren();
+            return result;
         }
 
-        public IEnumerable<Node> PostOrder()
+        private void ExtendChildren(int index)
         {
-            if (Children?.Any(x => x != null) ?? false)
+            if ((Children?.Count() ?? -1) < index)
             {
-                foreach (Node child in Children.Reverse().Where(x => x != null))
-                {
-                    foreach (var node in child.PostOrder())
-                    {
-                        yield return node;
-                    }
-                }
-            }
-            yield return this;
-        }
-
-        public IEnumerable<Node> LevelOrder()
-        {
-            return ProcessLevelNode(new List<Node>(){ this });
-        }
-
-        private static IEnumerable<Node> ProcessLevelNode(IList<Node> list) {
-            while (list.Any())
-            {
-                yield return list.First();
-
-                if ((list.First().Children?.Count(x => x != null) ?? 0) > 0)
-                {
-                    foreach (Node child in list.First().Children?.Where(x => x != null))
-                    {
-                        list.Add(child);
-                    }
-                }
-                list.RemoveAt(0);
+                Node[] newChildren = new Node[index + 1];
+                Array.Copy(Children?.ToArray() ?? Array.Empty<Node>(), newChildren, Children?.Count() ?? 0);
+                Children = newChildren;
             }
         }
 
-        internal virtual void InsertChild(Node node, int index)
+        private void FreeChildren()
         {
-            if (index >= (Children?.Count() ?? 0))
+            if ((Children?.All(x => x == null) ?? false) || (Children?.Count() ?? 0) == 0)
             {
                 Children = null;
-                return;
-            }
-
-            Children = Children.Select((x, i) => (i == index) ? node : x);
-            if (Children.All(x => x == null) || Children.Count() == 0)
-            {
-                Children = null;
-            }
-            if (node != null)
-            {
-                node.Parent = this;
             }
         }
     }

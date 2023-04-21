@@ -9,9 +9,12 @@
     <Import_RootNamespace>Birko.Data.Structures</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Trees\AVLNode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\TreeExtensions..cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\BinaryNodeExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\NodeExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\AVLTree.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\BinaryNode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Trees\BinarySearchNode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\Node.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\Tree.cs" />
   </ItemGroup>
