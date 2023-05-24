@@ -19,10 +19,10 @@ namespace Birko.Data.Structures.Extensions.Trees
 
             Node nodeParent = node.Parent;
             int nodeIndex = nodeParent?.RemoveChild(node) ?? -1;
-            node.RemoveChild(left);
+            node.RemoveChild(left, 0);
             if (leftRight != null)
             {
-                left.RemoveChild(leftRight);
+                left.RemoveChild(leftRight, 1);
             }
 
             node.Parent = null;
@@ -43,10 +43,10 @@ namespace Birko.Data.Structures.Extensions.Trees
 
             Node nodeParent = node.Parent;
             int nodeIndex = nodeParent?.RemoveChild(node) ?? -1;
-            node.RemoveChild(right);
+            node.RemoveChild(right, 1);
             if (rightLeft != null)
             {
-                right.RemoveChild(rightLeft);
+                right.RemoveChild(rightLeft, 0);
             }
 
             node.Parent = null;

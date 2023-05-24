@@ -126,7 +126,7 @@ namespace Birko.Data.Structures.Trees
             return node;
         }
 
-        internal virtual int RemoveChild(Node node)
+        internal virtual int RemoveChild(Node node,int? index = null)
         {
             if (node == null)
             {
@@ -135,7 +135,10 @@ namespace Birko.Data.Structures.Trees
             int result = -1;
             Children = Children?.Select((x, i) =>
             {
-                if (x?.CompareTo(node) == 0 && result < 0)
+                if (
+                    (index  == i)
+                    || (index == null && x?.CompareTo(node) == 0 && result < 0)
+                )
                 {
                     node.Parent = null;
                     result = i;
