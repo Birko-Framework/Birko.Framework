@@ -1,5 +1,6 @@
 ﻿using Birko.Data.Structures.Trees;
 using Nest;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -19,22 +20,22 @@ namespace Birko.Data.Structures.Extensions.Trees
 
         public static IEnumerable<Node> InOrder(this Tree tree)
         {
-            return tree?.Root?.InOrder();
+            return tree?.Root?.InOrder() ?? Array.Empty<Node>();
         }
 
         public static IEnumerable<Node> PreOrder(this Tree tree)
         {
-            return tree?.Root?.PreOrder();
+            return tree?.Root?.PreOrder() ?? Array.Empty<Node>();
         }
 
         public static IEnumerable<Node> PostOrder(this Tree tree)
         {
-            return tree?.Root?.PostOrder();
+            return tree?.Root?.PostOrder() ?? Array.Empty<Node>();
         }
 
         public static IEnumerable<Node> LevelOrder(this Tree tree)
         {
-            return tree?.Root?.LevelOrder();
+            return tree?.Root?.LevelOrder() ?? Array.Empty<Node>();
         }
     }
 }
