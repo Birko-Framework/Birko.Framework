@@ -38,6 +38,16 @@ namespace Birko.Data.Structures.Trees
             {
                 return this;
             }
+            
+            return FindInChildren(node);
+        }
+
+        protected virtual Node FindInChildren(Node node)
+        {
+            if (node == null)
+            {
+                return null;
+            }
             if (!(Children?.Any(x => x != null) ?? false))
             {
                 return null;
@@ -50,6 +60,7 @@ namespace Birko.Data.Structures.Trees
                     return find;
                 }
             }
+            
             return null;
         }
 

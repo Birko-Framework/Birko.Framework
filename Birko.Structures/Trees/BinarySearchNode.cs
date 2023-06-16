@@ -40,5 +40,27 @@ namespace Birko.Data.Structures.Trees
                 }
             }
         }
+
+        protected override Node FindInChildren(Node node)
+        {
+            if (node == null)
+            {
+                return null;
+            }
+            
+            if (!(Children?.Any(x => x != null) ?? false))
+            {
+                return null;
+            }
+
+            if(CompareTo(node) < 0)
+            {
+                return Children.Last()?.Find(node) ?? null;
+            }
+            else
+            {
+                return Children.First()?.Find(node) ?? null;
+            }
+        }
     }
 }
