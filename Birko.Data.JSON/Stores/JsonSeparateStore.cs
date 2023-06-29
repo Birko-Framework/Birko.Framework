@@ -69,18 +69,18 @@ namespace Birko.Data.Stores
                 var files = Directory.GetFiles(Path, settings.Name).ToArray();
                 if (files.Any())
                 {
-                    _items = new List<T>();
+                    _items = new();
                     foreach (var file in files)
                     {
                         using FileStream fileStrem = File.OpenRead(file);
                         using StreamReader streamReader = new(fileStrem);
                         var item = ReadFromStream<T>(streamReader);
-                        _items.Add(item);
+                        _items.Add(item.Guid.Value, item);
                         AddFile(item.Guid.Value, file);
                     }
                 }
             }
-            _items ??= new List<T>();
+            _items ??= new();
         }
 
         public override void StoreChanges()
@@ -91,20 +91,20 @@ namespace Birko.Data.Stores
                 var removedFiles = Directory.GetFiles(Path, settings.Name).ToDictionary(x => x);
                 foreach (var item in _items)
                 {
-                    if (_files.ContainsKey(item.Guid.Value))
+                    if (_files.ContainsKey(item.Key))
                     {
-                        var fileName = settings.Name.Contains('*') ? settings.Name.Replace("*", item.Guid?.ToString("D")) : $"{settings.Name}-{item.Guid?.ToString("D")}";
+                        var fileName = settings.Name.Contains('*') ? settings.Name.Replace("*", item.Key.ToString("D")) : $"{settings.Name}-{item.Key.ToString("D")}";
                         var path = System.IO.Path.Combine(Path, fileName);
-                        _files.Add(item.Guid.Value, path);
+                        _files.Add(item.Key, path);
 
-                        using FileStream fileStream = File.OpenWrite(_files[item.Guid.Value]);
+                        using FileStream fileStream = File.OpenWrite(_files[item.Key]);
                         using StreamWriter streamWriter = new(fileStream);
                         WriteToStream(streamWriter, item);
                     }
 
-                    if (removedFiles.ContainsKey(_files[item.Guid.Value]))
+                    if (removedFiles.ContainsKey(_files[item.Key]))
                     {
-                        removedFiles.Remove(_files[item.Guid.Value]);
+                        removedFiles.Remove(_files[item.Key]);
                     }
                 }
                 if (removedFiles.Any())

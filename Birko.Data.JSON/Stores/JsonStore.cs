@@ -50,9 +50,14 @@ namespace Birko.Data.Stores
             {
                 using FileStream fileStrem = File.OpenRead(Path);
                 using StreamReader streamReader = new(fileStrem);
-                _items = ReadFromStream<List<T>>(streamReader);
+                var items = ReadFromStream<List<T>>(streamReader);
+                _items = new ();
+                foreach(var item in items)
+                {
+                    _items.Add(item.Guid.Value, item);
+                }
             }
-            _items ??= new List<T>();
+            _items ??= new();
         }
 
         public override void StoreChanges()

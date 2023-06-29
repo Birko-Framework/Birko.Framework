@@ -39,15 +39,17 @@ namespace Birko.Data.Stores
                 var files = Directory.GetFiles(Path, settings.Name).ToArray();
                 if (files.Any())
                 {
-                    _items = new List<T>();
+                    _items = new();
                     int batch = 1;
                     foreach (var file in files)
                     {
                         using FileStream fileStrem = File.OpenRead(file);
                         using StreamReader streamReader = new(fileStrem);
                         var items = ReadFromStream<IEnumerable<T>>(streamReader);
-
-                        _items.AddRange(items);
+                        foreach(var item in items)
+                        {
+                            _items.Add(item.Guid.Value, item);
+                        }
                         byte[] bytes = new byte[16];
                         BitConverter.GetBytes(batch).CopyTo(bytes, 0);
                         AddFile(new Guid(bytes), file);
@@ -55,7 +57,7 @@ namespace Birko.Data.Stores
                     }
                 }
             }
-            _items ??= new List<T>();
+            _items ??= new();
         }
 
         public override void StoreChanges()
@@ -68,7 +70,7 @@ namespace Birko.Data.Stores
                 List<T> batchFiles = new ();
                 foreach (var item in _items)
                 {
-                    batchFiles.Add(item);
+                    batchFiles.Add(item.Value);
                     if(batchFiles.Count == _batchSize)
                     {
                         SaveBatch(batch, batchFiles, removedFiles);

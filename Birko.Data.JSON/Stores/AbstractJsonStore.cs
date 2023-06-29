@@ -12,7 +12,7 @@ namespace Birko.Data.Stores
         where T: Models.AbstractModel
     {
         protected ISettings _settings;
-        protected List<T> _items = new List<T>();
+        protected Dictionary<Guid, T> _items = new ();
 
         public string Path
         {
@@ -47,24 +47,21 @@ namespace Birko.Data.Stores
 
         public override void List(Expression<Func<T, bool>> filter, Action<T> action, int? limit = null, int? offset = null)
         {
-            if(_items != null && _items.Any() && action != null)
+            if((_items?.Any() ?? false) && action != null)
             {
-                var items = _items.ToArray<T>();
-                if (filter != null)
+                int i = 0;
+                foreach (var item in _items.Where(x =>  filter?.Compile()?.Invoke(x.Value) ?? true))
                 {
-                    items = items.Where(filter.Compile()).ToArray();
-                }
-                if (offset != null && offset > 0)
-                {
-                    items = items.Skip(offset.Value).ToArray();
-                }
-                if (limit != null)
-                {
-                    items = items.Take(limit.Value).ToArray();
-                }
-                foreach (T item in items)
-                {
-                    action?.Invoke(item);
+                    if(i < (offset ?? 0)) 
+                    {
+                        continue;
+                    }
+                    if(i >= (limit ?? _items.Count)) 
+                    {
+                        break;
+                    }
+                    action?.Invoke(item.Value);
+                    i++;
                 }
             }
         }
@@ -72,10 +69,7 @@ namespace Birko.Data.Stores
 
         public override long Count(Expression<Func<T, bool>> filter)
         {
-
-            return (filter != null)
-                ?_items?.Where(filter.Compile()).Count() ?? 0
-                : _items?.Count ?? 0;
+            return _items?.Where(x =>  filter?.Compile()?.Invoke(x.Value) ?? true)?.Count() ?? 0;
         }
 
         public override void Save(T data, StoreDataDelegate<T> storeDelegate = null)
@@ -92,7 +86,7 @@ namespace Birko.Data.Stores
                 {
                     if (newItem) // new
                     {
-                        _items.Add(data);
+                        _items.Add(data.Guid.Value, data);
                     }
                     else //update
                     {
@@ -101,9 +95,8 @@ namespace Birko.Data.Stores
                             (data as Models.AbstractLogModel).PrevUpdatedAt = (data as Models.AbstractLogModel).UpdatedAt;
                             (data as Models.AbstractLogModel).UpdatedAt = DateTime.UtcNow;
                         }
-                        var item = _items.FirstOrDefault(x => x.Guid == data.Guid);
                         System.Reflection.MethodInfo method = typeof(T).GetMethod("CopyTo", new[] { typeof(T) });
-                        method.Invoke(data, new[] { item });
+                        method.Invoke(data, new[] { _items[data.Guid.Value] });
                     }
                 }
             }
@@ -111,16 +104,15 @@ namespace Birko.Data.Stores
 
         public override void Delete(T data)
         {
-            if (data.Guid != null && _items != null && _items.Any(x => x.Guid == data.Guid))
+            if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
-                var item = _items.FirstOrDefault(x => x.Guid == data.Guid);
-                _items.Remove(item);
+                _items.Remove(data.Guid.Value);
             }
         }
 
         public T First()
         {
-            return (_items?.Any() == true) ? _items.FirstOrDefault() : null;
+            return _items?.FirstOrDefault().Value ?? null;
         }
 
         protected TData ReadFromStream<TData>(StreamReader streamReader)
