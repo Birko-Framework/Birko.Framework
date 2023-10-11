@@ -1,13 +1,4 @@
-﻿using Elasticsearch.Net;
-using Nest;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Xml.Linq;
-using static Nest.JoinField;
-
-namespace Birko.Data.Structures.Trees
+﻿namespace Birko.Data.Structures.Trees
 {
     public abstract class Node : IComparable<Node>
     {
@@ -119,46 +110,60 @@ namespace Birko.Data.Structures.Trees
 
             ExtendChildren(index);
 
-            Children = Children?.Select((x, i) =>
+            if (Children?.Any() ?? false)
             {
-                if (i == index)
+                List<Node> newChildren = new();
+                var i = 0;
+                foreach (Node child in Children)
                 {
-                    x?.Parent?.RemoveChild(x);
-                    if (node != null)
+                    if (i == index)
                     {
-                        node.Parent = this;
+                        child?.Parent?.RemoveChild(child, i);
+                        if (node != null)
+                        {
+                            node.Parent = this;
+                        }
                     }
-                    return node;
+                    newChildren.Add((i == index) ? node : child);
+                    i++;
                 }
-                return x;
-            })?.ToArray();
+                Children = newChildren.AsEnumerable();
+                FreeChildren();
+            }
 
             FreeChildren();
             return node;
         }
 
-        internal virtual int? RemoveChild(Node node,int? index = null)
+        internal virtual int? RemoveChild(Node node, int? index = null)
         {
             if (node == null)
             {
                 throw new ArgumentNullException(nameof(node));
             }
             int? result = null;
-            Children = Children?.Select((x, i) =>
+            if (Children?.Any() ?? false)
             {
-                if (
-                    (index == i)
-                    || (index == null && x?.CompareTo(node) == 0 && result == null)
-                )
+                List<Node> newChildren = new();
+                var i = 0;
+                foreach (Node child in Children)
                 {
-                    node.Parent = null;
-                    result = i;
-                    return null;
+                    if (
+                        child != null &&
+                        ((index != null && i == index)
+                        || (index == null && result == null && child.CompareTo(node) == 0))
+                    )
+                    {
+                        child.Parent = null;
+                        result = i;
+                    }
+                    newChildren.Add((result != i) ? child : null);
+                    i++;
                 }
-                return x;
-            })?.ToArray();
+                Children = newChildren.AsEnumerable();
+                FreeChildren();
+            }
 
-            FreeChildren();
             return result;
         }
 
@@ -168,7 +173,7 @@ namespace Birko.Data.Structures.Trees
             {
                 Node[] newChildren = new Node[index + 1];
                 Array.Copy(Children?.ToArray() ?? Array.Empty<Node>(), newChildren, Children?.Count() ?? 0);
-                Children = newChildren;
+                Children = newChildren.AsEnumerable();
             }
         }
 
