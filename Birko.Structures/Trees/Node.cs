@@ -131,24 +131,24 @@ namespace Birko.Data.Structures.Trees
                     return node;
                 }
                 return x;
-            }).ToArray();
+            })?.ToArray();
 
             FreeChildren();
             return node;
         }
 
-        internal virtual int RemoveChild(Node node,int? index = null)
+        internal virtual int? RemoveChild(Node node,int? index = null)
         {
             if (node == null)
             {
                 throw new ArgumentNullException(nameof(node));
             }
-            int result = -1;
+            int? result = null;
             Children = Children?.Select((x, i) =>
             {
                 if (
-                    (index  == i)
-                    || (index == null && x?.CompareTo(node) == 0 && result < 0)
+                    (index == i)
+                    || (index == null && x?.CompareTo(node) == 0 && result == null)
                 )
                 {
                     node.Parent = null;
@@ -156,7 +156,7 @@ namespace Birko.Data.Structures.Trees
                     return null;
                 }
                 return x;
-            }).ToArray();
+            })?.ToArray();
 
             FreeChildren();
             return result;

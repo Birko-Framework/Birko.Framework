@@ -1,7 +1,4 @@
 ﻿using Birko.Data.Structures.Trees;
-using Nest;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace Birko.Data.Structures.Extensions.Trees
 {

@@ -17,7 +17,7 @@ namespace Birko.Data.Structures.Trees
             {
                 throw new ArgumentException("Node is not derived from BinaryNode");
             }
-            if (CompareTo(node) < 0)
+            if (CompareTo(node) <= 0)
             {
                 if (Children?.Last() == null)
                 {

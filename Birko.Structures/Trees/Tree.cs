@@ -8,7 +8,8 @@ namespace Birko.Data.Structures.Trees
 {
     public class Tree
     {
-        public Node Root { get; set; }
+        public Node Root { get; protected set; }
+        
         public Tree()
         {
         }

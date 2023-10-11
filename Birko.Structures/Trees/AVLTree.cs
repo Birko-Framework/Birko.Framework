@@ -16,7 +16,7 @@ namespace Birko.Data.Structures.Trees
                 throw new ArgumentException("Argument is not a instance of BinarySearchNode");
             }
             BinarySearchNode insertedNode = (BinarySearchNode)base.Insert(node);
-            if (insertedNode != null || insertedNode.Parent != null)
+            if (insertedNode != null)
             {
                 Root = ReBalance(insertedNode);
             }

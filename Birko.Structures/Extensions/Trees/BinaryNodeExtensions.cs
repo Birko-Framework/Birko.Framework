@@ -1,6 +1,4 @@
 ﻿using Birko.Data.Structures.Trees;
-using Nest;
-using System.Linq;
 
 namespace Birko.Data.Structures.Extensions.Trees
 {
@@ -18,7 +16,7 @@ namespace Birko.Data.Structures.Extensions.Trees
             BinaryNode leftRight = (BinaryNode)left.Children?.Last();
 
             Node nodeParent = node.Parent;
-            int nodeIndex = nodeParent?.RemoveChild(node) ?? -1;
+            int? nodeIndex = nodeParent?.RemoveChild(node);
             node.RemoveChild(left, 0);
             if (leftRight != null)
             {
@@ -26,9 +24,9 @@ namespace Birko.Data.Structures.Extensions.Trees
             }
 
             node.Parent = null;
-            if (nodeIndex >= 0)
+            if (nodeIndex != null)
             {
-                nodeParent?.InsertChild(left, nodeIndex);
+                nodeParent?.InsertChild(left, nodeIndex.Value);
             }
             left.InsertChild(node, 1);
             node.InsertChild(leftRight, 0);
@@ -42,7 +40,7 @@ namespace Birko.Data.Structures.Extensions.Trees
             BinaryNode rightLeft = (BinaryNode)right.Children?.First();
 
             Node nodeParent = node.Parent;
-            int nodeIndex = nodeParent?.RemoveChild(node) ?? -1;
+            int? nodeIndex = nodeParent?.RemoveChild(node);
             node.RemoveChild(right, 1);
             if (rightLeft != null)
             {
@@ -50,9 +48,9 @@ namespace Birko.Data.Structures.Extensions.Trees
             }
 
             node.Parent = null;
-            if (nodeIndex >= 0)
+            if (nodeIndex != null)
             {
-                nodeParent?.InsertChild(right, nodeIndex);
+                nodeParent?.InsertChild(right, nodeIndex.Value);
             }
             right.InsertChild(node, 0);
             node.InsertChild(rightLeft, 1);
@@ -64,17 +62,17 @@ namespace Birko.Data.Structures.Extensions.Trees
         {
             if (node.Balance() > 1) // Subtree on right has more levels
             {
-                if ((node.Children.Last() as BinaryNode).Balance() < 0)
+                if (((BinaryNode)node.Children.Last()).Balance() < 0)
                 {
-                    (node.Children.Last() as BinaryNode).RightRotation();
+                    ((BinaryNode)node.Children.Last()).RightRotation();
                 }
                 return node.LeftRotation();
             }
             else if (node.Balance() < -1) //Subtree on left has more levels
             {
-                if ((node.Children.First() as BinaryNode).Balance() > 0)
+                if (((BinaryNode)node.Children.First()).Balance() > 0)
                 {
-                    (node.Children.First() as BinaryNode).LeftRotation();
+                    ((BinaryNode)node.Children.First()).LeftRotation();
                 }
                 return node.RightRotation();
             }
