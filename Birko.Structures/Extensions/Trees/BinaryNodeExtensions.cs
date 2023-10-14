@@ -1,4 +1,5 @@
 ﻿using Birko.Data.Structures.Trees;
+using System.Linq;
 
 namespace Birko.Data.Structures.Extensions.Trees
 {

@@ -11,7 +11,7 @@ namespace Birko.Data.Structures.Trees
         {
             if (node != null)
             {
-                Children ??= new Node[2]; // to preserve first as left and last as right
+                Children ??= (new Node[2]).AsEnumerable(); // to preserve first as left and last as right
             }
 
             return base.InsertChild(node, index);

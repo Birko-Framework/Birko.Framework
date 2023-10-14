@@ -1,4 +1,8 @@
-﻿namespace Birko.Data.Structures.Trees
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Birko.Data.Structures.Trees
 {
     public abstract class Node : IComparable<Node>
     {
@@ -101,7 +105,7 @@
         {
             if (index < 0)
             {
-                index = Children.Count() - index;
+                index = (Children?.Count() ?? 0) - index;
             }
             if (index < 0)
             {
@@ -118,7 +122,10 @@
                 {
                     if (i == index)
                     {
-                        child?.Parent?.RemoveChild(child, i);
+                        if(child != null)
+                        {
+                            child.Parent = null;
+                        }
                         if (node != null)
                         {
                             node.Parent = this;
@@ -131,16 +138,21 @@
                 FreeChildren();
             }
 
-            FreeChildren();
             return node;
         }
 
         internal virtual int? RemoveChild(Node node, int? index = null)
         {
-            if (node == null)
+            if (index != null && index < 0)
             {
-                throw new ArgumentNullException(nameof(node));
+                index = (Children?.Count() ?? 0) - index;
             }
+
+            if (index != null && index < 0)
+            {
+                throw new IndexOutOfRangeException(nameof(index));
+            }
+
             int? result = null;
             if (Children?.Any() ?? false)
             {
@@ -149,12 +161,14 @@
                 foreach (Node child in Children)
                 {
                     if (
-                        child != null &&
-                        ((index != null && i == index)
-                        || (index == null && result == null && child.CompareTo(node) == 0))
+                        (index != null && i == index)
+                        || (index == null && result == null && child != null && child.CompareTo(node) == 0)
                     )
                     {
-                        child.Parent = null;
+                        if(child != null)
+                        {
+                            child.Parent = null;
+                        }
                         result = i;
                     }
                     newChildren.Add((result != i) ? child : null);

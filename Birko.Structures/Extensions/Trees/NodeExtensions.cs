@@ -1,4 +1,6 @@
 ﻿using Birko.Data.Structures.Trees;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Birko.Data.Structures.Extensions.Trees
 {
@@ -13,7 +15,7 @@ namespace Birko.Data.Structures.Extensions.Trees
         {
             return (node?.Children?.Max(x => x?.Height() ?? 0) ?? 0) + 1;
         }
-
+        
         public static int Count(this Node node)
         {
             return (node?.Children?.Sum(x => x?.Count() ?? 0) ?? 0) + 1;

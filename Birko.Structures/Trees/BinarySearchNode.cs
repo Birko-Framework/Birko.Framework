@@ -25,7 +25,7 @@ namespace Birko.Data.Structures.Trees
                 }
                 else
                 {
-                    return Children.Last().Insert(node);
+                    return Children.Last().Insert(binaryNode);
                 }
             }
             else
@@ -36,7 +36,7 @@ namespace Birko.Data.Structures.Trees
                 }
                 else
                 {
-                    return Children.First().Insert(node);
+                    return Children.First().Insert(binaryNode);
                 }
             }
         }
@@ -53,7 +53,7 @@ namespace Birko.Data.Structures.Trees
                 return null;
             }
 
-            if(CompareTo(node) < 0)
+            if(CompareTo(node) <= 0)
             {
                 return Children.Last()?.Find(node) ?? null;
             }
