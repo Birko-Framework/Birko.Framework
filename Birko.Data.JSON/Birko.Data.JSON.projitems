@@ -9,14 +9,22 @@
     <Import_RootNamespace>Birko.Data.JSON</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractJsonBulkRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractJsonRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonBatchBulkRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonBatchRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonSeparateBulkRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonSeparateRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\JsonRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractJsonBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\BatchSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractJsonStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonBatchBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonBatchStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonSeparateBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonSeparateStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonStore.cs" />
   </ItemGroup>
 </Project>

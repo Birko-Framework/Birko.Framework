@@ -1,46 +1,83 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using System.Text.Json;
 
 namespace Birko.Data.Stores
 {
     public abstract class AbstractJsonStore<T> : AbstractStore<T>
         where T: Models.AbstractModel
     {
-        protected ISettings _settings;
+      
         protected Dictionary<Guid, T> _items = new ();
-
-        public string Path
-        {
-            get
-            {
-                return GetPath();
-            }
-        }
-
         public AbstractJsonStore()
         {
 
         }
 
-        public abstract string GetPath();
-        public override void SetSettings(ISettings settings)
+        public override T? ReadOne(Expression<Func<T, bool>>? filter = null)
         {
-            if (settings is Settings setts)
+            return _items?.Values.Where(x => filter?.Compile()?.Invoke(x) ?? true)?.FirstOrDefault() ?? null;
+        }
+
+        protected abstract void LoadData();
+
+        protected abstract void SaveData();
+
+        public override long Count(Expression<Func<T, bool>>? filter = null)
+        {
+            return _items?.Where(x => filter?.Compile()?.Invoke(x.Value) ?? true)?.Count() ?? 0;
+        }
+
+        public override void Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            data.Guid = Guid.NewGuid(); 
+            storeDelegate?.Invoke(data);
+            _items.Add(data.Guid.Value, data);
+            SaveData();
+        }
+
+        public override void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
-                _settings = setts;
-                Init();
-                Load();
+                storeDelegate?.Invoke(data);
+                _items[data.Guid.Value] = data;
+                SaveData();
             }
         }
 
-        public abstract void Load();
+        public override void Delete(T data)
+        {
+            if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
+            {
+                _items.Remove(data.Guid.Value);
+                SaveData();
+            }
+        }
 
-        public override void List(Action<T> action)
+        protected static TData ReadFromStream<TData>(FileStream stream)
+        {
+            return JsonSerializer.Deserialize<TData>(stream);
+        }
+
+        protected static void WriteToStream<TData>(FileStream stream, TData data)
+        {
+            using Utf8JsonWriter jsonWriter = new(stream, new JsonWriterOptions() { 
+                Indented = true,
+            });
+            JsonSerializer.Serialize(jsonWriter, data);
+        }
+
+        /*
+        public abstract string GetPath();
+        
+       
+
+        public override IEnumerable<T>(Action<T> action)
         {
             List(null, action);
         }
@@ -65,68 +102,6 @@ namespace Birko.Data.Stores
                 }
             }
         }
-
-
-        public override long Count(Expression<Func<T, bool>> filter)
-        {
-            return _items?.Where(x =>  filter?.Compile()?.Invoke(x.Value) ?? true)?.Count() ?? 0;
-        }
-
-        public override void Save(T data, StoreDataDelegate<T> storeDelegate = null)
-        {
-            if (data != null)
-            {
-                bool newItem = data.Guid == null;
-                if (newItem) // new
-                {
-                    data.Guid = Guid.NewGuid();
-                }
-                data = storeDelegate?.Invoke(data) ?? data;
-                if (data != null)
-                {
-                    if (newItem) // new
-                    {
-                        _items.Add(data.Guid.Value, data);
-                    }
-                    else //update
-                    {
-                        if (data is Models.AbstractLogModel)
-                        {
-                            (data as Models.AbstractLogModel).PrevUpdatedAt = (data as Models.AbstractLogModel).UpdatedAt;
-                            (data as Models.AbstractLogModel).UpdatedAt = DateTime.UtcNow;
-                        }
-                        System.Reflection.MethodInfo method = typeof(T).GetMethod("CopyTo", new[] { typeof(T) });
-                        method.Invoke(data, new[] { _items[data.Guid.Value] });
-                    }
-                }
-            }
-        }
-
-        public override void Delete(T data)
-        {
-            if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
-            {
-                _items.Remove(data.Guid.Value);
-            }
-        }
-
-        public T First()
-        {
-            return _items?.FirstOrDefault().Value ?? null;
-        }
-
-        protected TData ReadFromStream<TData>(StreamReader streamReader)
-        {
-            using JsonReader jsonReader = new JsonTextReader(streamReader);
-            JsonSerializer serializer = new();
-            return serializer.Deserialize<TData>(jsonReader);
-        }
-        protected void WriteToStream<TData>(StreamWriter streamWriter, TData data)
-        {
-            using JsonWriter jsonWriter = new JsonTextWriter(streamWriter);
-            jsonWriter.Formatting = Formatting.Indented;
-            JsonSerializer serializer = new();
-            serializer.Serialize(jsonWriter, data);
-        }
+        */
     }
 }

@@ -7,13 +7,13 @@ using System.Text;
 
 namespace Birko.Data.Stores
 {
-    public class JsonStore<T> 
-        : AbstractJsonStore<T>
+    public class JsonBulkStore<T> 
+        : AbstractJsonBulkStore<T>
         , ISettingsStore<Settings>
         where T: Models.AbstractModel
     {
 
-        protected Settings _settings = null;
+        protected Settings _settings;
 
         public string Path
         {
@@ -23,7 +23,7 @@ namespace Birko.Data.Stores
             }
         }
 
-        public JsonStore(): base()
+        public JsonBulkStore(): base()
         {
 
         }
@@ -68,7 +68,6 @@ namespace Birko.Data.Stores
             if (string.IsNullOrEmpty(Path) || !File.Exists(Path))
             {
                 _items ??= new();
-                return;
             }
             using FileStream fileStrem = File.OpenRead(Path);
             var items = ReadFromStream<List<T>>(fileStrem);

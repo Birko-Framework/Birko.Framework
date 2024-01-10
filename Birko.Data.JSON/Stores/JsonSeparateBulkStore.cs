@@ -8,13 +8,13 @@ using System.Text;
 
 namespace Birko.Data.Stores
 {
-    public class JsonSeparateStore<T>
-        : JsonStore<T>
+    public class JsonSeparateBulkStore<T>
+        : JsonBulkStore<T>
         , ISettingsStore<Settings>
         where T : Models.AbstractModel
     {
         private Dictionary<Guid, string> _files = null;
-        public JsonSeparateStore() : base()
+        public JsonSeparateBulkStore() : base()
         {
             _files = new Dictionary<Guid, string>();
         }
@@ -85,12 +85,10 @@ namespace Birko.Data.Stores
             {
                 return;
             }
-
             if (!Directory.Exists(Path))
             {
                 Directory.CreateDirectory(Path);
             }
-
             var removedFiles = Directory.GetFiles(Path, _settings.Name).ToDictionary(x => x);
 
             foreach (var item in _items)

@@ -7,13 +7,13 @@ using System.Text;
 
 namespace Birko.Data.Stores
 {
-    public class JsonBatchStore<T>
-        : JsonSeparateStore<T>
+    public class JsonBatchBulkStore<T>
+        : JsonSeparateBulkStore<T>
         , ISettingsStore<Settings>
         where T : Models.AbstractModel
     {
         private int _batchSize = 1024;
-        public JsonBatchStore() : base()
+        public JsonBatchBulkStore() : base()
         {
         }
 
