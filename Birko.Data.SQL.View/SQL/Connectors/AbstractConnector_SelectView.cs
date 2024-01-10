@@ -9,58 +9,85 @@ namespace Birko.Data.SQL.Connectors
 {
     public abstract partial class AbstractConnector
     {
-        public void SelectView(Type type, Action<object> readAction, LambdaExpression expr, IDictionary<string, bool> orderFields = null, int? limit = null, int? offset = null)
+        public IEnumerable<object> SelectView(Type type, LambdaExpression expr, IDictionary<string, bool>? orderFields = null, int? limit = null, int? offset = null)
         {
-            SelectView(type, readAction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields, limit, offset);
+            foreach (var item in SelectView(type, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields, limit, offset))
+            {
+                yield return item;
+            }
         }
 
-        public void SelectView<T, P>(Type type, Action<object> readAction, LambdaExpression expr, IDictionary<Expression<Func<T, P>>, bool> orderFields = null, int? limit = null, int? offset = null)
+        public IEnumerable<object> SelectView<T, P>(Type type, LambdaExpression expr, IDictionary<Expression<Func<T, P>>, bool>? orderFields = null, int? limit = null, int? offset = null)
         {
-            SelectView(type, readAction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewField(x.Key).GetSelectName(true), x => x.Value), limit, offset);
+            foreach (var item in SelectView(type, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewField(x.Key).GetSelectName(true), x => x.Value), limit, offset))
+            {
+                yield return item;
+            }
         }
 
-        public void SelectView(Type type, Action<object> readAction, IEnumerable<Conditions.Condition> conditions = null, IDictionary<string, bool> orderFields = null, int? limit = null, int? offset = null)
+        public IEnumerable<object> SelectView
+            (Type type, 
+            IEnumerable<Conditions.Condition>? conditions = null,
+            IDictionary<string, bool>? orderFields = null, 
+            int? limit = null, 
+            int? offset = null
+        )
         {
-            Select(DataBase.LoadView(type), (fields, reader) => {
-                if (readAction != null)
-                {
-                    var data = Activator.CreateInstance(type, new object[0]);
+            foreach (var item in Select(DataBase.LoadView(type), (fields, reader) => {
+                    var data = Activator.CreateInstance(type, Array.Empty<object>());
                     DataBase.ReadView(reader, data);
-                    readAction(data);
-                }
-            }, conditions, orderFields, limit, offset);
+                    return data;
+            }, conditions, orderFields, limit, offset)) {
+                yield return item;
+            }
         }
 
-        public void Select(Tables.View view, Action<IDictionary<int, string>, DbDataReader> readAction, LambdaExpression expr, IDictionary<string, bool> orderFields = null, int? limit = null, int? offset = null)
+        public IEnumerable<object> Select(
+            Tables.View view,
+            Func<IDictionary<int, string>, DbDataReader, object>? transformFunction = null,
+            LambdaExpression? expr = null, 
+            IDictionary<string, bool>? orderFields = null, 
+            int? limit = null,
+            int? offset = null
+        )
         {
-            Select(view, readAction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields, limit, offset);
+            foreach (var item in Select(view, transformFunction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields, limit, offset))
+            {
+                yield return item;
+            }
         }
 
-        public void Select<T, P>(Tables.View view, Action<IDictionary<int, string>, DbDataReader> readAction, LambdaExpression expr, IDictionary<Expression<Func<T, P>>, bool> orderFields = null, int? limit = null, int? offset = null)
+        public IEnumerable<object> Select<T, P>(
+            Tables.View view,
+            Func<IDictionary<int, string>, DbDataReader, object>? transformFunction = null,
+            LambdaExpression? expr = null,
+            IDictionary<Expression<Func<T, P>>, bool>? orderFields = null,
+            int? limit = null, 
+            int? offset = null
+        )
         {
-            Select(view, readAction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewField(x.Key).GetSelectName(true), x => x.Value), limit, offset);
+            foreach (var item in Select(view, transformFunction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewField(x.Key).GetSelectName(true), x => x.Value), limit, offset))
+            {
+                yield return item;
+            }
         }
 
-        public void Select(Tables.View view, Action<IDictionary<int, string>, DbDataReader> readAction = null, IEnumerable<Conditions.Condition> conditions = null, IDictionary<string, bool> orderFields = null, int? limit = null, int? offset = null)
+        public IEnumerable<object> Select(
+            Tables.View view,
+            Func<IDictionary<int, string>, DbDataReader, object>? transformFunction = null,
+            IEnumerable<Conditions.Condition>? conditions = null,
+            IDictionary<string, bool>? orderFields = null, 
+            int? limit = null,
+            int? offset = null)
         {
             if (view != null)
             {
-                DoCommand((command) => {
+                foreach (var items in RunReaderCommand((command) => {
                     command = CreateSelectCommand(command, view, conditions, orderFields, limit, offset);
-                }, (command) =>
+                }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader) ?? null })) 
                 {
-                    var reader = command.ExecuteReader();
-                    if (reader.HasRows)
-                    {
-
-                        bool isNext = reader.Read();
-                        while (isNext)
-                        {
-                            readAction?.Invoke(view.GetSelectFields(), reader);
-                            isNext = reader.Read();
-                        }
-                    }
-                });
+                    yield return items?.FirstOrDefault();
+                }
             }
         }
     }
