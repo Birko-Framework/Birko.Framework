@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>55b9e185-1e0b-4b4a-b091-e6fd25ed7ee6</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Models.Product</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\Product.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ProductBySlug.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ProductList.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IProductManufacturer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IProductTags.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IProductProperties.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Product.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\IProductTags.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\IProductProperties.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\IProductManufacturer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Product.cs" />
+  </ItemGroup>
+</Project>
