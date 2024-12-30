@@ -17,7 +17,13 @@ namespace Birko.Filters
 
         public Expression<Func<T, bool>> Filter()
         {
-            throw new NotImplementedException();
+            if(string.IsNullOrEmpty(Path))
+            {
+                return null;
+            }
+            return Exact
+                ? (x) => x.Path == Path
+                : (x) => x.Path.StartsWith(Path);
         }
     }
 }

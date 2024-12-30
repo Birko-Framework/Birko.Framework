@@ -10,7 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Filters\SEOByPath.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)filters\SEO.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\SEO.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\SEO.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\SEO.cs" />
   </ItemGroup>
