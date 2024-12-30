@@ -1,38 +1,37 @@
-﻿using Birko.Data.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 
 namespace Birko.ViewModels
 {
-    public interface IProductManufacturer 
-        : ILoadable<Models.IProductManufacturer>
-        , ILoadable<IProductManufacturer>
+    public interface IProductManufacturer
     {
         const string ManufacturerProperty = "Manufacturer";
         ObservableCollection<string> Manufacturer { get; set; }
 
-        new void LoadFrom(IProductManufacturer data)
+        void LoadManufacturers(IEnumerable<string> data, bool clear = true)
         {
-            Manufacturer.Clear();
-            if (data.Manufacturer != null && data.Manufacturer.Any())
+            if (clear)
             {
-                foreach (var manufacturer in data.Manufacturer)
+                Manufacturer.Clear();
+            }
+            if (data?.Any() ?? false)
+            {
+                foreach (var manufacturer in data)
                 {
-                    if(Manufacturer.Contains(manufacturer, StringComparer.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-                    Manufacturer.Add(manufacturer);
+                   AddManufacturer(manufacturer);
                 }
             }
         }
 
-        new void LoadFrom(Models.IProductManufacturer data)
+        void AddManufacturer(string manufacturer)
         {
-            Manufacturer = new(data.Manufacturer);
+            if (Manufacturer.Contains(manufacturer, StringComparer.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            Manufacturer.Add(manufacturer);
         }
     }
 }

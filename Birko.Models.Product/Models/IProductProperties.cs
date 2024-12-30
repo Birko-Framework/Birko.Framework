@@ -1,19 +1,16 @@
-﻿using Birko.Data.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace Birko.Models
 {
     public interface IProductProperties
-        : ILoadable<ViewModels.IProductProperties>
     {
-        SourceValue<string>[] Properties { get; set; }
+        IEnumerable<SourceValue<string>> Properties { get; set; }
 
-        new void LoadFrom(ViewModels.IProductProperties data)
+        void LoadProperties(IDictionary<string, IList<string>> data)
         {
-            Properties = data?.Properties
+            Properties = data
                     ?.SelectMany(x => x.Value.Select(y => new SourceValue<string>()
                     {
                         Source = x.Key,

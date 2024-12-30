@@ -6,7 +6,10 @@ using System.Text;
 
 namespace Birko.ViewModels
 {
-    public class Product : Data.ViewModels.LogViewModel, Data.Models.ILoadable<Models.Product>, Birko.Data.Models.ILoadable<Product>
+    public class Product
+        : Data.ViewModels.LogViewModel
+        , Data.Models.ILoadable<Models.Product>
+        , Birko.Data.Models.ILoadable<Product>
     {
         public const string SKUCodeProperty = "SKUCode";
         public const string BarCodeProperty = "BarCode";
@@ -134,17 +137,17 @@ namespace Birko.ViewModels
                 Category = data.Category;
                 if (this is IProductManufacturer pm && data is Models.IProductManufacturer dm)
                 {
-                    pm.LoadFrom(dm);
+                    pm.LoadManufacturers(dm.Manufacturer);
                 }
 
                 if (this is IProductProperties pp && data is Models.IProductProperties dp)
                 {
-                    pp.LoadFrom(dp);
+                    pp.LoadProperties(dp.Properties);
                 }
 
                 if (this is IProductTags pt && data is Models.IProductTags dt)
                 {
-                    pt.LoadFrom(dt);
+                    pt.LoadTags(dt.Tags);
                 }
             }
         }
@@ -168,17 +171,17 @@ namespace Birko.ViewModels
                 Category = data.Category;
                 if (this is IProductManufacturer pm && data is IProductManufacturer dpm)
                 {
-                    pm.LoadFrom(dpm);
+                    pm.LoadManufacturers(dpm.Manufacturer);
                 }
 
                 if (this is IProductProperties pp && data is IProductProperties dpp)
                 {
-                    pp.LoadFrom(dpp);
+                    pp.LoadProperties(dpp.Properties);
                 }
 
                 if (this is IProductTags pt && data is IProductTags dpt)
                 {
-                    pt.LoadFrom(dpt);
+                    pt.LoadTags(dpt.Tags);
                 }
             }
         }

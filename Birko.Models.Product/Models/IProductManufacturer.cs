@@ -1,24 +1,20 @@
-﻿using Birko.Data.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Intrinsics.Arm;
-using System.Text;
 
 namespace Birko.Models
 {
-    public interface IProductManufacturer 
-        : ILoadable<ViewModels.IProductManufacturer>
+    public interface IProductManufacturer
     {
-        string[] Manufacturer { get; set; }
+        IEnumerable<string> Manufacturer { get; set; }
 
-        new void LoadFrom(ViewModels.IProductManufacturer data)
+        void LoadManufacturers(IEnumerable<string> data)
         {
-            Manufacturer = data?.Manufacturer?
+            Manufacturer = data?
                 .Select(x => x)?
-                .Where(x => x != null)?
+                .Where(x => !string.IsNullOrEmpty(x))?
                 .Distinct()?
-                .ToArray() 
+                .ToArray()
                 ?? Array.Empty<string>();
         }
     }

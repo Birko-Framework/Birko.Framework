@@ -1,25 +1,23 @@
-﻿using Birko.Data.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 
 namespace Birko.ViewModels
 {
-    public interface IProductTags 
-        : ILoadable<Models.IProductTags>
-        , ILoadable<IProductTags>
+    public interface IProductTags
     {
         const string TagsProperty = "Tags";
         Dictionary<string, IList<string>> Tags { get; set; }
 
-        new void LoadFrom(IProductTags data)
+        void LoadTags(IDictionary<string, IList<string>> data, bool clear = true)
         {
-            Tags.Clear();
-            if (data.Tags != null && data.Tags.Any())
+            if (clear)
             {
-                foreach (var tag in data.Tags.Where(x => x.Value.Any()))
+                Tags.Clear();
+            }
+            if (data?.Any() ?? false)
+            {
+                foreach (var tag in data.Where(x => x.Value.Any()))
                 {
                     foreach (var value in tag.Value)
                     {
@@ -28,12 +26,13 @@ namespace Birko.ViewModels
                 }
             }
         }
-        new void LoadFrom(Models.IProductTags data)
+
+        void LoadTags(IEnumerable<Models.SourceValue<string>> data)
         {
             Tags = new();
-            if (data.Tags != null && data.Tags.Any())
+            if (data?.Any() ?? false)
             {
-                foreach (var property in data.Tags)
+                foreach (var property in data)
                 {
                     AddTag(property.Source, property.Value);
                 }

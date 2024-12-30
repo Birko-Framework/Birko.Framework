@@ -1,26 +1,23 @@
-﻿using Birko.Data.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
-using System.Runtime.Intrinsics.Arm;
-using System.Text;
 
 namespace Birko.ViewModels
 {
-    public interface IProductProperties 
-        : ILoadable<Models.IProductProperties>
-        , ILoadable<IProductProperties>
+    public interface IProductProperties
     {
         const string PropertiesProperty = "Properties";
         Dictionary<string, IList<string>> Properties { get; set; }
 
-        new void LoadFrom(IProductProperties data)
+        void LoadProperties(IDictionary<string, IList<string>> data, bool clear = true)
         {
-            Properties.Clear();
-            if (data.Properties != null && data.Properties.Any())
+            if (clear)
             {
-                foreach (var property in data.Properties.Where(x => x.Value.Any()))
+                Properties.Clear();
+            }
+            if (data?.Any() ?? false)
+            {
+                foreach (var property in data.Where(x => x.Value.Any()))
                 {
                     foreach (var value in property.Value)
                     {
@@ -30,12 +27,12 @@ namespace Birko.ViewModels
             }
         }
 
-        new void LoadFrom(Models.IProductProperties data)
+        void LoadProperties(IEnumerable<Models.SourceValue<string>> data)
         {
             Properties = new ();
-            if (data.Properties != null && data.Properties.Any())
+            if (data?.Any() ?? false)
             {
-                foreach (var property in data.Properties)
+                foreach (var property in data)
                 {
                     AddProperty(property.Source, property.Value);
                 }

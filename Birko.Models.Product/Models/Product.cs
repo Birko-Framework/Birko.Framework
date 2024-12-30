@@ -33,17 +33,17 @@ namespace Birko.Models
 
                 if (this is IProductManufacturer pm && data is ViewModels.IProductManufacturer dpm)
                 {
-                    pm.LoadFrom(dpm);
+                    pm.LoadManufacturers(dpm.Manufacturer);
                 }
 
                 if (this is IProductProperties pp && data is ViewModels.IProductProperties dpp)
                 {
-                    pp.LoadFrom(dpp);
+                    pp.LoadProperties(dpp.Properties);
                 }
 
                 if (this is IProductTags pt && data is ViewModels.IProductTags dpt)
                 {
-                    pt.LoadFrom(dpt);
+                    pt.LoadTags(dpt.Tags);
                 }
             }
         }

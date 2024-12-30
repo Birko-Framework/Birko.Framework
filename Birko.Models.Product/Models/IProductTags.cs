@@ -1,20 +1,16 @@
-﻿using Birko.Data.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Intrinsics.Arm;
-using System.Text;
 
 namespace Birko.Models
 {
     public interface IProductTags
-        : ILoadable<ViewModels.IProductTags>
     {
-        SourceValue<string>[] Tags { get; set; }
+        IEnumerable<SourceValue<string>> Tags { get; set; }
 
-        new void LoadFrom(ViewModels.IProductTags data)
+        void LoadTags(IDictionary<string, IList<string>> data)
         {
-            Tags = data?.Tags
+            Tags = data
                     ?.SelectMany(x => x.Value.Select(y => new SourceValue<string>()
                     {
                         Source = x.Key,
