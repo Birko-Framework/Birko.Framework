@@ -25,13 +25,21 @@ namespace Birko.Filters
         public virtual Expression<Func<T, bool>> Filter()
         {
             Expression<Func<T, bool>> result = SearchExpression(Search);
+            if (!string.IsNullOrEmpty(Category))
+            {
+                Expression<Func<T, bool>> right = (x) => x.Category.StartsWith(Category);
+                result = (result != null)
+                      ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters.Skip(1)).Distinct())
+                      : right;
+            }
+
             if (typeof(IProductTags).IsAssignableFrom(typeof(T)) && (Tags?.Any() ?? false))
             {
                 foreach (var kvp in Tags)
                 {
                     Expression<Func<T, bool>> right = (x) => (x as IProductTags).Tags.Any(p => p.Source == kvp.Key && kvp.Value.Contains(p.Value));
                     result = (result != null)
-                        ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters).Distinct())
+                        ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters.Skip(1)).Distinct())
                         : right;
                 }
             }
@@ -41,7 +49,7 @@ namespace Birko.Filters
                 {
                     Expression<Func<T, bool>> right = (x) => (x as IProductProperties).Properties.Any(p => p.Source == kvp.Key && kvp.Value.Contains(p.Value));
                     result = (result != null)
-                        ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters).Distinct())
+                        ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters.Skip(1)).Distinct())
                         : right;
                 }
             }
