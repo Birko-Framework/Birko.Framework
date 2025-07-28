@@ -9,6 +9,7 @@ namespace Birko.Data.Stores
 {
     public class JsonBulkStore<T> 
         : AbstractJsonBulkStore<T>
+        , ISettingsStore<ISettings>
         , ISettingsStore<Settings>
         where T: Models.AbstractModel
     {
@@ -23,9 +24,25 @@ namespace Birko.Data.Stores
             }
         }
 
+        public string PathDirectory
+        {
+            get
+            {
+                return GetDirectory();
+            }
+        }
+
         public JsonBulkStore(): base()
         {
 
+        }
+
+        public virtual void SetSettings(ISettings settings)
+        {
+            if (settings is Settings settings1)
+            {
+                SetSettings(settings1);
+            }
         }
 
         public virtual void SetSettings(Settings settings)
@@ -37,8 +54,15 @@ namespace Birko.Data.Stores
 
         public virtual string GetPath()
         {
-            return (!string.IsNullOrEmpty(_settings?.Location) && !string.IsNullOrEmpty(_settings?.Name))
-                ? System.IO.Path.Combine(_settings.Location, _settings.Name)
+            return (!string.IsNullOrEmpty(_settings?.Name))
+                ? System.IO.Path.Combine(PathDirectory, _settings.Name)
+                : null;
+        }
+
+        public virtual string GetDirectory()
+        {
+            return (!string.IsNullOrEmpty(_settings?.Location))
+                ? _settings?.Location
                 : null;
         }
 

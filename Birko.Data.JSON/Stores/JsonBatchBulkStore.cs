@@ -10,6 +10,7 @@ namespace Birko.Data.Stores
     public class JsonBatchBulkStore<T>
         : JsonSeparateBulkStore<T>
         , ISettingsStore<Settings>
+        , ISettingsStore<ISettings>
         where T : Models.AbstractModel
     {
         private int _batchSize = 1024;

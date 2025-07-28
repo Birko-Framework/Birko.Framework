@@ -10,6 +10,7 @@ namespace Birko.Data.Stores
 {
     public class JsonSeparateBulkStore<T>
         : JsonBulkStore<T>
+        , ISettingsStore<ISettings>
         , ISettingsStore<Settings>
         where T : Models.AbstractModel
     {
@@ -27,11 +28,11 @@ namespace Birko.Data.Stores
 
         public override void Init()
         {
-            if (!string.IsNullOrEmpty(Path) && !Directory.Exists(Path))
+            if (!string.IsNullOrEmpty(PathDirectory) && !Directory.Exists(PathDirectory))
             {
-                if (!Directory.Exists(Path))
+                if (!Directory.Exists(PathDirectory))
                 {
-                    Directory.CreateDirectory(Path);
+                    Directory.CreateDirectory(PathDirectory);
                 }
             }
             _files = new Dictionary<Guid, string>();
@@ -41,11 +42,11 @@ namespace Birko.Data.Stores
         {
             _items?.Clear();
             _files.Clear();
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || !string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || !string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
-            var files = Directory.GetFiles(Path, _settings.Name).ToArray();
+            var files = Directory.GetFiles(PathDirectory, _settings.Name).ToArray();
             if (files.Any())
             {
                 foreach (var file in files)
@@ -58,13 +59,13 @@ namespace Birko.Data.Stores
 
         protected override void LoadData()
         {
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 _items ??= new();
                 return;
             }
 
-            var files = Directory.GetFiles(Path, _settings.Name).ToArray();
+            var files = Directory.GetFiles(PathDirectory, _settings.Name).ToArray();
             if (!files.Any())
             {
                 return;
@@ -81,15 +82,15 @@ namespace Birko.Data.Stores
 
         protected override void SaveData()
         {
-            if (string.IsNullOrEmpty(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
-            if (!Directory.Exists(Path))
+            if (!Directory.Exists(PathDirectory))
             {
-                Directory.CreateDirectory(Path);
+                Directory.CreateDirectory(PathDirectory);
             }
-            var removedFiles = Directory.GetFiles(Path, _settings.Name).ToDictionary(x => x);
+            var removedFiles = Directory.GetFiles(PathDirectory, _settings.Name).ToDictionary(x => x);
 
             foreach (var item in _items)
             {

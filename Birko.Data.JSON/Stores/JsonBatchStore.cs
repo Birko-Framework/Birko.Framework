@@ -10,6 +10,7 @@ namespace Birko.Data.Stores
     public class JsonBatchStore<T>
         : JsonSeparateStore<T>
         , ISettingsStore<Settings>
+        , ISettingsStore<ISettings>
         where T : Models.AbstractModel
     {
         private int _batchSize = 1024;
@@ -25,6 +26,14 @@ namespace Birko.Data.Stores
             }
             _batchSize = ((BatchSettings)settings).BatchSize;
             base.SetSettings(settings);
+        }
+
+        public virtual void SetSettings(ISettings settings)
+        {
+            if (settings is Settings settings1)
+            {
+                SetSettings(settings1);
+            }
         }
 
         protected override void LoadData()
