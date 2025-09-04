@@ -30,12 +30,12 @@ namespace Birko.Data.Stores
 
         protected override void LoadData()
         {
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 _items ??= new();
                 return;
             }
-            var files = Directory.GetFiles(Path, _settings.Name).ToArray();
+            var files = Directory.GetFiles(PathDirectory, _settings.Name).ToArray();
             if (files.Any())
             {
                 _items = new();
@@ -58,12 +58,12 @@ namespace Birko.Data.Stores
 
         protected override void SaveData()
         {
-            if (string.IsNullOrEmpty(Path) || string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
 
-            var removedFiles = Directory.GetFiles(Path, _settings.Name).ToDictionary(x => x);
+            var removedFiles = Directory.GetFiles(PathDirectory, _settings.Name).ToDictionary(x => x);
 
             int batch = 1;
             List<T> batchFiles = new();
@@ -94,16 +94,16 @@ namespace Birko.Data.Stores
 
         private void SaveBatch(int batch, List<T> batchFiles, Dictionary<string, string> removedFiles)
         {
-            if (!Directory.Exists(Path))
+            if (!Directory.Exists(PathDirectory))
             {
-                Directory.CreateDirectory(Path);
+                Directory.CreateDirectory(PathDirectory);
             }
 
             byte[] bytes = new byte[16];
             BitConverter.GetBytes(batch).CopyTo(bytes, 0);
             var guid = new Guid(bytes);
             var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", guid.ToString("D")) : $"{_settings.Name}-{guid.ToString("D")}";
-            var path = System.IO.Path.Combine(Path, fileName);
+            var path = System.IO.Path.Combine(PathDirectory, fileName);
             AddFile(new Guid(bytes), path);
 
             using FileStream fileStream = File.OpenWrite(path);

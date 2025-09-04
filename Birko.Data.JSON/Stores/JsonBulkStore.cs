@@ -70,9 +70,9 @@ namespace Birko.Data.Stores
         {
             if (!string.IsNullOrEmpty(Path) && !File.Exists(Path) && (_settings is Settings settings))
             {
-                if (!Directory.Exists(settings.Location))
+                if (!Directory.Exists(PathDirectory))
                 {
-                    Directory.CreateDirectory(settings.Location);
+                    Directory.CreateDirectory(PathDirectory);
                 }
                 File.WriteAllText(Path, "[]");
             }

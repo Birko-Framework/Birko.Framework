@@ -96,8 +96,8 @@ namespace Birko.Data.Stores
             {
                 if (_files.ContainsKey(item.Key))
                 {
-                    var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key.ToString("D")}";
-                    var path = System.IO.Path.Combine(Path, fileName);
+                    var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key:D}";
+                    var path = System.IO.Path.Combine(PathDirectory, fileName);
                     _files.Add(item.Key, path);
 
                     using FileStream fileStream = File.OpenWrite(_files[item.Key]);
