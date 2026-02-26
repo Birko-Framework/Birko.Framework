@@ -74,6 +74,7 @@ namespace Birko.Data.Helpers
             return str;
         }
 
+        [Obsolete("SHA1 is deprecated for security reasons. Use CalculateSHA256Hash or CalculateSHA512Hash instead.", error: false)]
         public static byte[] CalculateSHA1Hash(this string data)
         {
             if (string.IsNullOrEmpty(data))
@@ -111,12 +112,12 @@ namespace Birko.Data.Helpers
             {
                 return string.Empty;
             }
-            StringBuilder result = new StringBuilder(bytes.Length * 2);
 
-            for (int i = 0; i < bytes.Length; i++)
-                result.Append(bytes[i].ToString(upperCase ? "X2" : "x2"));
-
-            return result.ToString();
+            // Use optimized .NET native API (available in .NET 5+)
+            // This is significantly faster than manual StringBuilder loop
+            return upperCase
+                ? Convert.ToHexString(bytes)
+                : Convert.ToHexStringLower(bytes);
         }
     }
 }

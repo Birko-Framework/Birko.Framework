@@ -13,5 +13,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)ObjectHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)EnumerableHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StringHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)PathValidator.cs" />
   </ItemGroup>
 </Project>

@@ -29,19 +29,8 @@ namespace Birko.Data.Helpers
 
         public static bool CompareHash(byte[] hash1, byte[] hash2)
         {
-            if ((hash1?.Length ?? 0) == (hash2?.Length ?? 0))
-            {
-                int i = 0;
-                while ((i < hash1.Length) && (hash1[i] == hash2[i]))
-                {
-                    i += 1;
-                }
-                if (i == hash1.Length)
-                {
-                    return true;
-                }
-            }
-            return false;
+            // Use SequenceEqual for efficient comparison - handles nulls and uses optimized native code
+            return hash1 != null && hash2 != null && hash1.AsSpan().SequenceEqual(hash2);
         }
 
     }
