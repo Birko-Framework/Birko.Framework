@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using Birko.Data.Helpers;
 
 namespace Birko.Data.Stores
 {
@@ -54,27 +55,72 @@ namespace Birko.Data.Stores
 
         public virtual string GetPath()
         {
-            return (!string.IsNullOrEmpty(_settings?.Name))
-                ? System.IO.Path.Combine(PathDirectory, _settings.Name)
-                : null;
+            if (string.IsNullOrEmpty(_settings?.Name))
+            {
+                return null;
+            }
+
+            var directory = GetDirectory();
+            if (string.IsNullOrEmpty(directory))
+            {
+                return null;
+            }
+
+            try
+            {
+                // Validate the path to prevent directory traversal attacks
+                return PathValidator.CombineAndValidate(directory, _settings.Name);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Invalid path configuration for store. Location: '{_settings.Location}', Name: '{_settings.Name}'. " +
+                    $"See inner exception for details.",
+                    ex);
+            }
         }
 
         public virtual string GetDirectory()
         {
-            return (!string.IsNullOrEmpty(_settings?.Location))
-                ? _settings?.Location
-                : null;
+            if (string.IsNullOrEmpty(_settings?.Location))
+            {
+                return null;
+            }
+
+            try
+            {
+                // Validate the directory path
+                return PathValidator.ValidateDirectory(_settings.Location);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"Invalid directory configuration for store. Location: '{_settings.Location}'. " +
+                    $"See inner exception for details.",
+                    ex);
+            }
         }
 
         public override void Init()
         {
             if (!string.IsNullOrEmpty(Path) && !File.Exists(Path) && (_settings is Settings settings))
             {
-                if (!Directory.Exists(PathDirectory))
+                try
                 {
-                    Directory.CreateDirectory(PathDirectory);
+                    var directory = GetDirectory();
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+                    File.WriteAllText(Path, "[]");
                 }
-                File.WriteAllText(Path, "[]");
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to initialize JSON bulk store. Location: '{settings.Location}', Name: '{settings.Name}'. " +
+                        $"See inner exception for details.",
+                        ex);
+                }
             }
         }
 
@@ -108,6 +154,7 @@ namespace Birko.Data.Stores
             {
                 return;
             }
+            File.Delete(Path);
             using FileStream fileStream = File.OpenWrite(Path);
             WriteToStream(fileStream, _items);
         }

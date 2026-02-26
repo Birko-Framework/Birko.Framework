@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using Birko.Data.Helpers;
 
 namespace Birko.Data.Stores
 {
@@ -72,7 +73,7 @@ namespace Birko.Data.Stores
                 batchFiles.Add(item.Value);
                 if (batchFiles.Count == _batchSize)
                 {
-                    SaveBatch(batch, batchFiles, removedFiles);
+                    SaveBatch(batch, batchFiles.ToArray(), removedFiles);
                     batch++;
                     batchFiles.Clear();
                 }
@@ -92,7 +93,7 @@ namespace Birko.Data.Stores
             }
         }
 
-        private void SaveBatch(int batch, List<T> batchFiles, Dictionary<string, string> removedFiles)
+        private void SaveBatch(int batch, IEnumerable<T> batchFiles, Dictionary<string, string> removedFiles)
         {
             if (!Directory.Exists(PathDirectory))
             {
@@ -103,9 +104,10 @@ namespace Birko.Data.Stores
             BitConverter.GetBytes(batch).CopyTo(bytes, 0);
             var guid = new Guid(bytes);
             var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", guid.ToString("D")) : $"{_settings.Name}-{guid.ToString("D")}";
-            var path = System.IO.Path.Combine(PathDirectory, fileName);
+            // Validate the combined path even though fileName is constructed internally
+            var path = PathValidator.CombineAndValidate(PathDirectory ?? throw new InvalidOperationException("PathDirectory cannot be null"), fileName);
             AddFile(new Guid(bytes), path);
-
+            File.Delete(path);
             using FileStream fileStream = File.OpenWrite(path);
             WriteToStream(fileStream, batchFiles);
 
@@ -113,6 +115,7 @@ namespace Birko.Data.Stores
             {
                 removedFiles.Remove(path);
             }
+            fileStream.Close();
         }
     }
 }

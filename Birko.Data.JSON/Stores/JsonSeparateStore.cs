@@ -5,6 +5,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Net.NetworkInformation;
 using System.Text;
+using Birko.Data.Helpers;
 
 namespace Birko.Data.Stores
 {
@@ -98,9 +99,10 @@ namespace Birko.Data.Stores
                 if (_files.ContainsKey(item.Key))
                 {
                     var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key.ToString("D")}";
-                    var path = System.IO.Path.Combine(Path, fileName);
+                    // Validate the combined path even though fileName is constructed internally
+                    var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
                     _files.Add(item.Key, path);
-
+                    File.Delete(_files[item.Key]);
                     using FileStream fileStream = File.OpenWrite(_files[item.Key]);
                     WriteToStream(fileStream, item);
                 }

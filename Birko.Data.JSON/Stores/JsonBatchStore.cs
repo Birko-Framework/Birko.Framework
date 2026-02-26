@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
+using Birko.Data.Helpers;
 
 namespace Birko.Data.Stores
 {
@@ -111,9 +112,10 @@ namespace Birko.Data.Stores
             BitConverter.GetBytes(batch).CopyTo(bytes, 0);
             var guid = new Guid(bytes);
             var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", guid.ToString("D")) : $"{_settings.Name}-{guid.ToString("D")}";
-            var path = System.IO.Path.Combine(Path, fileName);
+            // Validate the combined path even though fileName is constructed internally
+            var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
             AddFile(new Guid(bytes), path);
-
+            File.Delete(path);
             using FileStream fileStream = File.OpenWrite(path);
             WriteToStream(fileStream, batchFiles);
 
