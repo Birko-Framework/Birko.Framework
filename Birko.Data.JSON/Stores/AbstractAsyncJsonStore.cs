@@ -46,13 +46,13 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        public override async Task CreateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
 
             if (data == null)
             {
-                return await Task.FromResult(Guid.Empty);
+                return;
             }
 
             data.Guid = Guid.NewGuid();
@@ -60,7 +60,6 @@ namespace Birko.Data.Stores
             _items.Add(data.Guid.Value, data);
 
             await SaveDataAsync(ct);
-            return await Task.FromResult(data.Guid.Value);
         }
 
         /// <inheritdoc />
