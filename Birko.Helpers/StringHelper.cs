@@ -74,18 +74,6 @@ namespace Birko.Data.Helpers
             return str;
         }
 
-        [Obsolete("SHA1 is deprecated for security reasons. Use CalculateSHA256Hash or CalculateSHA512Hash instead.", error: false)]
-        public static byte[] CalculateSHA1Hash(this string data)
-        {
-            if (string.IsNullOrEmpty(data))
-            {
-                return Array.Empty<byte>();
-            }
-            var dataBytes = Encoding.UTF8.GetBytes(data);
-            using var sha1 = SHA1.Create();
-            return sha1.ComputeHash(dataBytes);
-        }
-
         public static byte[] CalculateSHA256Hash(this string data)
         {
             if (string.IsNullOrEmpty(data))
