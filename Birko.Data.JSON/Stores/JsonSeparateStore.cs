@@ -1,43 +1,51 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Net.NetworkInformation;
-using System.Text;
 using Birko.Data.Helpers;
 
 namespace Birko.Data.Stores
 {
+    /// <summary>
+    /// JSON file-based data store that stores each entity in a separate file.
+    /// Files are named using the pattern: {Name}-{Guid}.json
+    /// </summary>
+    /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
     public class JsonSeparateStore<T>
         : JsonStore<T>
         , ISettingsStore<Settings>
         where T : Models.AbstractModel
     {
+        #region Fields and Properties
+
+        /// <summary>
+        /// Mapping of entity GUIDs to their file paths.
+        /// </summary>
         private Dictionary<Guid, string> _files = null;
+
+        #endregion
+
+        #region Constructors and Initialization
+
+        /// <summary>
+        /// Initializes a new instance of the JsonSeparateStore class.
+        /// </summary>
         public JsonSeparateStore() : base()
         {
             _files = new Dictionary<Guid, string>();
         }
 
-        protected void AddFile(Guid guid, string name)
-        {
-            _files ??= new Dictionary<Guid, string>();
-            _files[guid] = name;
-        }
-
+        /// <inheritdoc />
         public override void Init()
         {
             if (!string.IsNullOrEmpty(Path) && !Directory.Exists(Path))
             {
-                if (!Directory.Exists(Path))
-                {
-                    Directory.CreateDirectory(Path);
-                }
+                Directory.CreateDirectory(Path);
             }
             _files = new Dictionary<Guid, string>();
         }
 
+        /// <inheritdoc />
         public override void Destroy()
         {
             _items?.Clear();
@@ -57,6 +65,26 @@ namespace Birko.Data.Stores
             Directory.Delete(Path);
         }
 
+        #endregion
+
+        #region File Management
+
+        /// <summary>
+        /// Adds a file mapping for an entity.
+        /// </summary>
+        /// <param name="guid">The entity GUID.</param>
+        /// <param name="name">The file path.</param>
+        protected void AddFile(Guid guid, string name)
+        {
+            _files ??= new Dictionary<Guid, string>();
+            _files[guid] = name;
+        }
+
+        #endregion
+
+        #region Data Persistence
+
+        /// <inheritdoc />
         protected override void LoadData()
         {
             if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
@@ -73,13 +101,14 @@ namespace Birko.Data.Stores
 
             foreach (var file in files)
             {
-                using FileStream fileStrem = File.OpenRead(file);
-                var item = ReadFromStream<T>(fileStrem);
+                using FileStream fileStream = File.OpenRead(file);
+                var item = ReadFromStream<T>(fileStream);
                 _items.Add(item.Guid.Value, item);
                 AddFile(item.Guid.Value, file);
             }
         }
 
+        /// <inheritdoc />
         protected override void SaveData()
         {
             if (string.IsNullOrEmpty(Path) || string.IsNullOrEmpty(_settings.Name))
@@ -101,10 +130,10 @@ namespace Birko.Data.Stores
                     var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key.ToString("D")}";
                     // Validate the combined path even though fileName is constructed internally
                     var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
-                    _files.Add(item.Key, path);
+                    _files[item.Key] = path;
                     File.Delete(_files[item.Key]);
                     using FileStream fileStream = File.OpenWrite(_files[item.Key]);
-                    WriteToStream(fileStream, item);
+                    WriteToStream(fileStream, item.Value);
                 }
 
                 if (removedFiles.ContainsKey(_files[item.Key]))
@@ -118,5 +147,7 @@ namespace Birko.Data.Stores
                 File.Delete(kvp.Value);
             }
         }
+
+        #endregion
     }
 }

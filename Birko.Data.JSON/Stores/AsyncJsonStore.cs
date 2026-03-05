@@ -1,33 +1,31 @@
+using Birko.Data.Helpers;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using Birko.Data.Helpers;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Birko.Data.Stores
 {
     /// <summary>
-    /// JSON file-based data store that stores all entities in a single JSON file.
+    /// Async JSON file-based data store implementation.
+    /// Stores all entities in a single JSON file.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public class JsonStore<T>
-        : AbstractJsonStore<T>
-        , ISettingsStore<Settings>
-        , ISettingsStore<ISettings>
+    public class AsyncJsonStore<T> : AbstractAsyncJsonStore<T>, ISettingsStore<Settings>, ISettingsStore<ISettings>
         where T : Models.AbstractModel
     {
         #region Fields and Properties
 
         /// <summary>
-        /// The settings for this JSON store.
+        /// The settings for the JSON store.
         /// </summary>
-        protected Settings _settings = null;
+        protected Settings? _settings = null;
 
         /// <summary>
-        /// Gets the full file path for the JSON data file.
+        /// Gets the file path for the JSON store.
         /// </summary>
-        public string Path
+        public string? Path
         {
             get
             {
@@ -36,9 +34,9 @@ namespace Birko.Data.Stores
         }
 
         /// <summary>
-        /// Gets the directory path where the JSON file is stored.
+        /// Gets the directory path for the JSON store.
         /// </summary>
-        public string PathDirectory
+        public string? PathDirectory
         {
             get
             {
@@ -51,21 +49,19 @@ namespace Birko.Data.Stores
         #region Constructors and Initialization
 
         /// <summary>
-        /// Initializes a new instance of the JsonStore class.
+        /// Initializes a new instance of the AsyncJsonStore class.
         /// </summary>
-        public JsonStore() : base()
+        public AsyncJsonStore()
         {
         }
 
         /// <summary>
-        /// Sets the store settings and initializes the store.
+        /// Sets the store settings.
         /// </summary>
         /// <param name="settings">The settings to apply.</param>
         public virtual void SetSettings(Settings settings)
         {
             _settings = settings;
-            Init();
-            LoadData();
         }
 
         /// <summary>
@@ -81,9 +77,10 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public override void Init()
+        public override async Task InitAsync(CancellationToken ct = default)
         {
-            if (!string.IsNullOrEmpty(Path) && !File.Exists(Path) && (_settings is Settings settings))
+            var path = Path;
+            if (!string.IsNullOrEmpty(path) && !File.Exists(path) && (_settings is Settings settings))
             {
                 try
                 {
@@ -92,7 +89,9 @@ namespace Birko.Data.Stores
                     {
                         Directory.CreateDirectory(directory);
                     }
-                    File.WriteAllText(Path, "[]");
+
+                    // Async file write
+                    await File.WriteAllTextAsync(path, "[]", ct);
                 }
                 catch (Exception ex)
                 {
@@ -102,15 +101,18 @@ namespace Birko.Data.Stores
                         ex);
                 }
             }
+
+            await EnsureDataLoadedAsync(ct);
         }
 
         /// <inheritdoc />
-        public override void Destroy()
+        public override async Task DestroyAsync(CancellationToken ct = default)
         {
             _items?.Clear();
-            if (!string.IsNullOrEmpty(Path) && File.Exists(Path))
+            var path = Path;
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
             {
-                File.Delete(Path);
+                await Task.Run(() => File.Delete(path), ct);
             }
         }
 
@@ -119,12 +121,12 @@ namespace Birko.Data.Stores
         #region Path Configuration
 
         /// <summary>
-        /// Gets the full file path for the JSON data file.
+        /// Gets the file path for the JSON store.
         /// </summary>
-        /// <returns>The validated file path.</returns>
-        public virtual string GetPath()
+        /// <returns>The file path, or null if settings are not configured.</returns>
+        public virtual string? GetPath()
         {
-            if (string.IsNullOrEmpty(_settings?.Location) || string.IsNullOrEmpty(_settings?.Name))
+            if (string.IsNullOrEmpty(_settings?.Name))
             {
                 return null;
             }
@@ -150,10 +152,10 @@ namespace Birko.Data.Stores
         }
 
         /// <summary>
-        /// Gets the directory path where the JSON file is stored.
+        /// Gets the directory path for the JSON store.
         /// </summary>
-        /// <returns>The validated directory path.</returns>
-        public virtual string GetDirectory()
+        /// <returns>The directory path, or null if settings are not configured.</returns>
+        public virtual string? GetDirectory()
         {
             if (string.IsNullOrEmpty(_settings?.Location))
             {
@@ -179,32 +181,59 @@ namespace Birko.Data.Stores
         #region Data Persistence
 
         /// <inheritdoc />
-        protected override void LoadData()
+        protected override async Task LoadDataAsync(CancellationToken ct)
         {
-            if (string.IsNullOrEmpty(Path) || !File.Exists(Path))
+            var path = Path;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
                 _items ??= new();
                 return;
             }
-            using FileStream fileStream = File.OpenRead(Path);
-            var items = ReadFromStream<List<T>>(fileStream);
+
+            // Open file with async enabled
+            using var fileStream = new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                bufferSize: 4096,
+                useAsync: true);
+
+            var items = await ReadFromStreamAsync<List<T>>(fileStream, ct);
             _items = new();
-            foreach (var item in items)
+            if (items != null)
             {
-                _items.Add(item.Guid.Value, item);
+                foreach (var item in items)
+                {
+                    if (item.Guid.HasValue)
+                    {
+                        _items.Add(item.Guid.Value, item);
+                    }
+                }
             }
         }
 
         /// <inheritdoc />
-        protected override void SaveData()
+        protected override async Task SaveDataAsync(CancellationToken ct)
         {
-            if (string.IsNullOrEmpty(Path))
+            var path = Path;
+            if (string.IsNullOrEmpty(path))
             {
                 return;
             }
-            File.Delete(Path);
-            using FileStream fileStream = File.OpenWrite(Path);
-            WriteToStream(fileStream, _items);
+
+            // Delete and recreate file
+            await Task.Run(() => File.Delete(path), ct);
+
+            using var fileStream = new FileStream(
+                path,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 4096,
+                useAsync: true);
+
+            await WriteToStreamAsync(fileStream, _items.Values, ct);
         }
 
         #endregion

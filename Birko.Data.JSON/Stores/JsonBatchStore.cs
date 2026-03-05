@@ -1,35 +1,60 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Linq.Expressions;
-using System.Text;
 using Birko.Data.Helpers;
 
 namespace Birko.Data.Stores
 {
+    /// <summary>
+    /// JSON file-based data store that stores entities in batched files.
+    /// Entities are grouped into batch files based on the configured batch size.
+    /// </summary>
+    /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
     public class JsonBatchStore<T>
         : JsonSeparateStore<T>
         , ISettingsStore<Settings>
         , ISettingsStore<ISettings>
         where T : Models.AbstractModel
     {
+        #region Fields and Properties
+
+        /// <summary>
+        /// The maximum number of entities per batch file.
+        /// </summary>
         private int _batchSize = 1024;
+
+        #endregion
+
+        #region Constructors and Initialization
+
+        /// <summary>
+        /// Initializes a new instance of the JsonBatchStore class.
+        /// </summary>
         public JsonBatchStore() : base()
         {
         }
 
+        /// <summary>
+        /// Sets the batch settings for the store.
+        /// </summary>
+        /// <param name="settings">The batch settings to apply.</param>
+        /// <exception cref="InvalidDataException">Thrown when settings is not a BatchSettings instance.</exception>
         public override void SetSettings(Settings settings)
         {
-            if (settings is not BatchSettings)
+            if (settings is not BatchSettings batchSettings)
             {
                 throw new InvalidDataException(nameof(settings));
             }
-            _batchSize = ((BatchSettings)settings).BatchSize;
+            _batchSize = batchSettings.BatchSize;
             base.SetSettings(settings);
         }
 
-        public virtual void SetSettings(ISettings settings)
+        /// <summary>
+        /// Sets the store settings using the ISettings interface.
+        /// </summary>
+        /// <param name="settings">The settings to apply.</param>
+        public new virtual void SetSettings(ISettings settings)
         {
             if (settings is Settings settings1)
             {
@@ -37,6 +62,11 @@ namespace Birko.Data.Stores
             }
         }
 
+        #endregion
+
+        #region Data Persistence
+
+        /// <inheritdoc />
         protected override void LoadData()
         {
             if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
@@ -51,8 +81,8 @@ namespace Birko.Data.Stores
                 int batch = 1;
                 foreach (var file in files)
                 {
-                    using FileStream fileStrem = File.OpenRead(file);
-                    var items = ReadFromStream<IEnumerable<T>>(fileStrem);
+                    using FileStream fileStream = File.OpenRead(file);
+                    var items = ReadFromStream<IEnumerable<T>>(fileStream);
                     foreach (var item in items)
                     {
                         _items.Add(item.Guid.Value, item);
@@ -65,6 +95,7 @@ namespace Birko.Data.Stores
             }
         }
 
+        /// <inheritdoc />
         protected override void SaveData()
         {
             if (string.IsNullOrEmpty(Path) || string.IsNullOrEmpty(_settings.Name))
@@ -101,6 +132,12 @@ namespace Birko.Data.Stores
             }
         }
 
+        /// <summary>
+        /// Saves a batch of entities to a file.
+        /// </summary>
+        /// <param name="batch">The batch number.</param>
+        /// <param name="batchFiles">The entities in the batch.</param>
+        /// <param name="removedFiles">Dictionary of files to remove after saving.</param>
         private void SaveBatch(int batch, List<T> batchFiles, Dictionary<string, string> removedFiles)
         {
             if (!Directory.Exists(Path))
@@ -124,5 +161,7 @@ namespace Birko.Data.Stores
                 removedFiles.Remove(path);
             }
         }
+
+        #endregion
     }
 }
