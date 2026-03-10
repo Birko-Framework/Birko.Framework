@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>6963fc74-fdaa-416a-b221-650d6548be8b</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core abstractions only - specialized ports moved to dedicated projects -->
+    <!-- NOTE: PortFactory removed as it requires knowledge of all specialized port types -->
+    <!-- Consumers that need a factory should implement their own or use DI -->
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\AbstractPort.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\IPort.cs" />
+  </ItemGroup>
+</Project>
