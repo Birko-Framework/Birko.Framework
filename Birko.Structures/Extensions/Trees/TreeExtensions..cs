@@ -1,8 +1,8 @@
-﻿using Birko.Data.Structures.Trees;
+﻿using Birko.Structures.Trees;
 using System;
 using System.Collections.Generic;
 
-namespace Birko.Data.Structures.Extensions.Trees
+namespace Birko.Structures.Extensions.Trees
 {
     public static class TreeExtensions
     {

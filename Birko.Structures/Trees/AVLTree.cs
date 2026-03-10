@@ -1,9 +1,9 @@
-﻿using Birko.Data.Structures.Extensions.Trees;
+﻿using Birko.Structures.Extensions.Trees;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Birko.Data.Structures.Trees
+namespace Birko.Structures.Trees
 {
     public class AVLTree : Tree
     {

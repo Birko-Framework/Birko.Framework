@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Birko.Data.Structures.Trees
+namespace Birko.Structures.Trees
 {
     public abstract class Node : IComparable<Node>
     {

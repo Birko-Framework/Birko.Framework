@@ -6,7 +6,7 @@
     <SharedGUID>66527c81-0aca-45f9-a725-16b8b858eebf</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
-    <Import_RootNamespace>Birko.Data.Structures</Import_RootNamespace>
+    <Import_RootNamespace>Birko.Structures</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\TreeExtensions..cs" />

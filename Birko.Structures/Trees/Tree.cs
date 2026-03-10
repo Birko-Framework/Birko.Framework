@@ -1,10 +1,10 @@
-﻿using Birko.Data.Structures.Extensions.Trees;
+﻿using Birko.Structures.Extensions.Trees;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Birko.Data.Structures.Trees
+namespace Birko.Structures.Trees
 {
     public class Tree
     {
