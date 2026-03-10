@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>C3D4E5F6-A7B8-4C6D-9E2F-3A4B5C6D7E8F</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.Bluetooth</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\Bluetooth.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\BluetoothLE.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\BluetoothLEDevices.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\BluetoothLESettings.cs" />
+  </ItemGroup>
+</Project>
