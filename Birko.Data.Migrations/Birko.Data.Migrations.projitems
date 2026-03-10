@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{E7A3B4C5-9F2D-4A8E-B6C1-3D5E8F7A9B1C}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Migrations</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)MigrationDirection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IMigration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IMigrationStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MigrationResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractMigration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\MigrationException.cs" />
+  </ItemGroup>
+</Project>
