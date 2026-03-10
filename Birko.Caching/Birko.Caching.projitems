@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-caching00001</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Caching</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ICache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\CacheEntryOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\CacheResult.cs" />
+    <!-- Memory -->
+    <Compile Include="$(MSBuildThisFileDirectory)Memory\MemoryCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Memory\MemoryCacheEntry.cs" />
+    <!-- Serialization -->
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\CacheSerializer.cs" />
+  </ItemGroup>
+</Project>
