@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>7F8E9D0A-1B2C-4D3E-8F9A-2B3C4D5E6F7A</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.SSE</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseAuthenticationConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseAuthenticationMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseAuthenticationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseCorsMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseLoggingMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseRateLimitMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SseMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SseClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SseEvent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SseServer.cs" />
+  </ItemGroup>
+</Project>
