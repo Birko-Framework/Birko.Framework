@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>E5F6A7B8-C9D0-4E8F-9F4B-5C6D7E8F9A0B</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.SOAP</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SoapAuthenticationConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\SoapAuthenticationService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SoapClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SoapServer.cs" />
+  </ItemGroup>
+</Project>
