@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Birko.ViewModels
+namespace Birko.Models.ViewModels
 {
     public class SourceValue<T> : Birko.Data.ViewModels.ViewModel, Birko.Data.Models.ILoadable<Models.SourceValue<T>>, Birko.Data.Models.ILoadable<SourceValue<T>>
     {

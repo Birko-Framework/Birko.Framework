@@ -11,6 +11,12 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\SourceValueExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\SourceValue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AbstractPercentage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AbstractTree.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ValueData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\SourceValue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\AbstractPercentage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\AbstractTree.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ValueData.cs" />
   </ItemGroup>
 </Project>
