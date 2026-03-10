@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Birko.Data.Helpers
+namespace Birko.Helpers
 {
     /// <summary>
     /// Provides path validation utilities to prevent path traversal attacks.

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Birko.Data.Helpers
+namespace Birko.Helpers
 {
     public static class ObjectHelper
     {

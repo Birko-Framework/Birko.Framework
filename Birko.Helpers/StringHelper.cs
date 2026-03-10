@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using static System.Net.Mime.MediaTypeNames;
 
-namespace Birko.Data.Helpers
+namespace Birko.Helpers
 {
     public static class StringHelper
     {

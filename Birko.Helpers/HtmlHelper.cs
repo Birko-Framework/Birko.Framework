@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Birko.Data.Helpers
+namespace Birko.Helpers
 {
-    //gitea.dev.zdrojak.eu:3000/
+    //From Miro
     public static class HtmlHelper
     {
         /// <summary>
