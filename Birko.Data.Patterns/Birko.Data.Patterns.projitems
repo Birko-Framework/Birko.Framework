@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d1a2b3c4-5e6f-7a8b-9c0d-1e2f3a4b5c6d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Patterns</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Models / Interfaces -->
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ISoftDeletable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IAuditable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IAuditContext.cs" />
+    <!-- UnitOfWork -->
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\IUnitOfWork.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\UnitOfWorkException.cs" />
+    <!-- Paging -->
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedResult.cs" />
+    <!-- Decorators: SoftDelete -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSoftDeleteStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSoftDeleteBulkStoreWrapper.cs" />
+    <!-- Decorators: Audit -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AuditStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AuditBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditBulkStoreWrapper.cs" />
+  </ItemGroup>
+</Project>
