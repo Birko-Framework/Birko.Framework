@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>bffa340b-3e85-46f3-bd80-f0ed7c5d0aca</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Sync</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\SyncProviderBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ConflictInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ConflictResolution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ConflictResolutionPolicy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ISyncKnowledgeItem.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncAction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncBatchResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncDirection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncError.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncFilterOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncItemPreview.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncPreview.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncProgress.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\SyncResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ISyncKnowledgeStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ISyncKnowledgeItemStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncSyncKnowledgeItemStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SyncProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AsyncSyncProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SyncQueue.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory).gitignore" />
+    <None Include="$(MSBuildThisFileDirectory)ARCHITECTURE.md" />
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" />
+  </ItemGroup>
+</Project>
