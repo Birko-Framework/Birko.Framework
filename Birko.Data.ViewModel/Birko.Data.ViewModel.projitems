@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>6a3be12e-e37d-4697-8f29-d307c10774ba</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.ViewModel</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- ViewModel repository interfaces -->
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IViewModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IAsyncViewModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IBulkViewModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IAsyncBulkViewModelRepository.cs" />
+    <!-- ViewModel repository abstract implementations -->
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractViewModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractAsyncViewModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractBulkViewModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractAsyncBulkViewModelRepository.cs" />
+  </ItemGroup>
+</Project>
