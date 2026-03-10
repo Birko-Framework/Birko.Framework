@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-validation001</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Validation</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IValidationRule.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ValidationResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ValidationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ValidationException.cs" />
+    <!-- Rules -->
+    <Compile Include="$(MSBuildThisFileDirectory)Rules\RequiredRule.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Rules\EmailRule.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Rules\RangeRule.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Rules\LengthRule.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Rules\RegexRule.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Rules\CustomRule.cs" />
+    <!-- Fluent -->
+    <Compile Include="$(MSBuildThisFileDirectory)Fluent\AbstractValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fluent\RuleBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Fluent\PropertyRule.cs" />
+    <!-- Integration -->
+    <Compile Include="$(MSBuildThisFileDirectory)Integration\ValidatingStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Integration\AsyncValidatingStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Integration\AsyncValidatingBulkStoreWrapper.cs" />
+  </ItemGroup>
+</Project>
