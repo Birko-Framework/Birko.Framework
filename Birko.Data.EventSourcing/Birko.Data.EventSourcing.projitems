@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>8b9c0d1e-2f3a-4b5c-9d0e-1f2a3b4c5d6e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.EventSourcing</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Events\IEvent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Events\DomainEvent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Events\IEventStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IEventSourced.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\EventSourcingStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncEventSourcingStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\EventSourcingBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncEventSourcingBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\EventSourcingStoreExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\EventSourcingRepositoryExtensions.cs" />
+  </ItemGroup>
+</Project>
