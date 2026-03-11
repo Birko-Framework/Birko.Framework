@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
@@ -11,5 +11,10 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connector\MSSqlConnector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMSSqlRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMSSqlModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMSSqlStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MSSqlStore.cs" />
   </ItemGroup>
 </Project>
