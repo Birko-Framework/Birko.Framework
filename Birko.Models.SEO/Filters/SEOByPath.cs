@@ -1,9 +1,9 @@
 using Birko.Data.Filters;
-using Birko.Models;
+using Birko.Models.SEO;
 using System;
 using System.Linq.Expressions;
 
-namespace Birko.Filters
+namespace Birko.Models.SEO.Filters
 {
     public class SEOByPath<T> : IRepositoryFilter<T> where T : SEO
     {

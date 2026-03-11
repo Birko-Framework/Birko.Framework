@@ -1,8 +1,8 @@
 using Birko.Data.Filters;
-using Birko.Models;
+using Birko.Models.SEO;
 using System;
 
-namespace Birko.Filters
+namespace Birko.Models.SEO.Filters
 {
     public class SEO<T> : ModelByGuid<T> where T : SEO
     {

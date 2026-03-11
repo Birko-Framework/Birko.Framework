@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
-namespace Birko.ViewModels
+namespace Birko.Models.SEO.ViewModels
 {
-    public class SEO : Birko.Data.ViewModels.LogViewModel, Birko.Data.Models.ILoadable<Models.SEO>, Birko.Data.Models.ILoadable<SEO>
+    public class SEO : Birko.Data.ViewModels.LogViewModel, Birko.Data.Models.ILoadable<Birko.Models.SEO.SEO>, Birko.Data.Models.ILoadable<SEO>
     {
         public const string TitleProperty = "Title";
         public const string PathProperty = "Path";
@@ -69,7 +68,7 @@ namespace Birko.ViewModels
             }
         }
 
-        public void LoadFrom(Models.SEO data)
+        public void LoadFrom(Birko.Models.SEO.SEO data)
         {
             base.LoadFrom(data);
             if (data != null)
