@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>8c9a0b22-d338-4b9e-c647-65237d009ccc</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.SQL.MySQL</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\MySQLConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MySQLRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMySQLStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMySQLRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MySQLModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMySQLModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStore.cs" />
+  </ItemGroup>
+</Project>
