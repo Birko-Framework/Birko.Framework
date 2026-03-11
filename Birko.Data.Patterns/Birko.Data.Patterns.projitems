@@ -18,6 +18,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\UnitOfWorkException.cs" />
     <!-- Paging -->
     <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\IPagedRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedRepositoryWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Paging\AsyncPagedRepositoryWrapper.cs" />
     <!-- Decorators: SoftDelete -->
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteStoreWrapper.cs" />
