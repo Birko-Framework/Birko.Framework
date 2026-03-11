@@ -1,8 +1,8 @@
 using Birko.Data.Filters;
-using Birko.Models;
+using Birko.Models.Category;
 using System;
 
-namespace Birko.Filters
+namespace Birko.Models.Category.Filters
 {
     public class Category<T> : ModelByGuid<T> where T : Category
     {

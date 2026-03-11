@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Linq;
 
-namespace Birko.ViewModels
+namespace Birko.Models.Category.ViewModels
 {
-    public class Category : Data.ViewModels.LogViewModel, Data.Models.ILoadable<Models.Category>, Data.Models.ILoadable<Category>
+    public class Category : Data.ViewModels.LogViewModel, Data.Models.ILoadable<Birko.Models.Category.Category>, Data.Models.ILoadable<Category>
     {
         public const string TitleProperty = "Title";
         public const string PathProperty = "Path";
@@ -67,7 +67,7 @@ namespace Birko.ViewModels
             }
         }
 
-        public void LoadFrom(Models.Category data)
+        public void LoadFrom(Birko.Models.Category.Category data)
         {
             base.LoadFrom(data);
             if (data != null)
