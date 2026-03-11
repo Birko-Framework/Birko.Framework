@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(BuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c3d4e5f6-a7b8-4c5d-0e1f-2a3b4c5d6e7f</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Models.Users</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\User.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\UserAgenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\User.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\UserAgenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\User.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserAgenda.cs" />
+  </ItemGroup>
+</Project>
