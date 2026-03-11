@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b2c3d4e5-f6a7-8901-bcde-f12345678901</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.TimescaleDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\TimescaleDBConnector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\TimescaleDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncTimescaleDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\TimescaleDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncTimescaleDBModelRepository.cs" />
+  </ItemGroup>
+</Project>
