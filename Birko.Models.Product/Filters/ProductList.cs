@@ -1,11 +1,11 @@
 ﻿using Birko.Data.Filters;
-using Birko.Models;
+using Birko.Models.Product;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 
-namespace Birko.Filters
+namespace Birko.Models.Product.Filters
 {
     public class ProductList<T> : IRepositoryFilter<T> where T : Product
     {

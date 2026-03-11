@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
-namespace Birko.ViewModels
+namespace Birko.Models.Product.ViewModels
 {
     public interface IProductManufacturer
     {

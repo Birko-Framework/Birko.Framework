@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Birko.Models
+namespace Birko.Models.Product
 {
     public interface IProductProperties
     {

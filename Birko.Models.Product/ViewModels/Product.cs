@@ -1,14 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Text;
 
-namespace Birko.ViewModels
+namespace Birko.Models.Product.ViewModels
 {
     public class Product
         : Data.ViewModels.LogViewModel
-        , Data.Models.ILoadable<Models.Product>
+        , Data.Models.ILoadable<Birko.Models.Product.Product>
         , Birko.Data.Models.ILoadable<Product>
     {
         public const string SKUCodeProperty = "SKUCode";
@@ -124,7 +123,7 @@ namespace Birko.ViewModels
             }
         }
 
-        public void LoadFrom(Models.Product data)
+        public void LoadFrom(Birko.Models.Product.Product data)
         {
             base.LoadFrom(data);
             if (data != null)
@@ -135,17 +134,17 @@ namespace Birko.ViewModels
                 Slug = data.Slug;
                 Description = data.Description;
                 Category = data.Category;
-                if (this is IProductManufacturer pm && data is Models.IProductManufacturer dm)
+                if (this is IProductManufacturer pm && data is Birko.Models.Product.IProductManufacturer dm)
                 {
                     pm.LoadManufacturers(dm.Manufacturer);
                 }
 
-                if (this is IProductProperties pp && data is Models.IProductProperties dp)
+                if (this is IProductProperties pp && data is Birko.Models.Product.IProductProperties dp)
                 {
                     pp.LoadProperties(dp.Properties);
                 }
 
-                if (this is IProductTags pt && data is Models.IProductTags dt)
+                if (this is IProductTags pt && data is Birko.Models.Product.IProductTags dt)
                 {
                     pt.LoadTags(dt.Tags);
                 }

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace Birko.Models
+namespace Birko.Models.Product
 {
-    public class Product : Data.Models.AbstractLogModel, Data.Models.ILoadable<ViewModels.Product>
+    public class Product : Data.Models.AbstractLogModel, Data.Models.ILoadable<Birko.Models.Product.ViewModels.Product>
     {
         public string SKUCode { get; set; }
 
@@ -19,7 +19,7 @@ namespace Birko.Models
 
         public string Category { get; set; }
 
-        public void LoadFrom(ViewModels.Product data)
+        public void LoadFrom(Birko.Models.Product.ViewModels.Product data)
         {
             base.LoadFrom(data);
             if (data != null)

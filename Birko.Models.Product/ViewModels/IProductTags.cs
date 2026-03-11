@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Birko.ViewModels
+namespace Birko.Models.Product.ViewModels
 {
     public interface IProductTags
     {

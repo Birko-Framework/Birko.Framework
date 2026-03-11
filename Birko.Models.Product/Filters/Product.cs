@@ -1,12 +1,10 @@
 ﻿using Birko.Data.Filters;
-using Birko.Models;
+using Birko.Models.Product;
 using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace Birko.Filters
+namespace Birko.Models.Product.Filters
 {
-    public class Product<T> : ModelByGuid<T> where T: Product
+    public class Product<T> : ModelByGuid<T> where T : Product
     {
         public Product(Guid id) : base(id)
         {
