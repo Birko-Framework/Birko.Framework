@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace Birko.Data.Attributes
+namespace Birko.Data.SQL.Attributes
 {
     public enum ViewConnect
     {
@@ -12,7 +12,7 @@ namespace Birko.Data.Attributes
     }
 
     [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct, AllowMultiple = true)]
-    public class View : System.Attribute
+    public class ViewAttribute : System.Attribute
     {
         public Type ModelLeft { get; private set; }
         public Type ModelRight { get; private set; }
@@ -20,7 +20,7 @@ namespace Birko.Data.Attributes
         public object ModelProperyRight { get; private set; }
         public string Name { get; internal set; }
         public ViewConnect Connect { get; internal set; }
-        public View(Type modelLeft, Type modelRight, object modelProperyLeft, object modelProperyRight, string name = null, ViewConnect connect = ViewConnect.None)
+        public ViewAttribute(Type modelLeft, Type modelRight, object modelProperyLeft, object modelProperyRight, string name = null, ViewConnect connect = ViewConnect.None)
         {
             ModelLeft = modelLeft;
             ModelRight = modelRight;

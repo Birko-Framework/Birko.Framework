@@ -1,13 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Birko.Data.Attributes
+namespace Birko.Data.SQL.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public abstract class AggregateField : ViewField
+    public abstract class AggregateFieldAttribute : ViewFieldAttribute
     {
-        public AggregateField(Type modelType, string modelPropertyName, string name = null) : base(modelType, modelPropertyName, name)
+        public AggregateFieldAttribute(Type modelType, string modelPropertyName, string name = null) : base(modelType, modelPropertyName, name)
         { }
     }
 }

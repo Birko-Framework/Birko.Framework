@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Text;
@@ -14,22 +14,22 @@ namespace Birko.Data.SQL.Fields
             Parameters = parameters;
         }
 
-        public static FunctionField CreateFunctionAggregateField(System.Reflection.PropertyInfo property, Attributes.AggregateField field, AbstractField tablefield)
+        public static FunctionField CreateFunctionAggregateField(System.Reflection.PropertyInfo property, Attributes.AggregateFieldAttribute field, AbstractField tablefield)
         {
             FunctionField functionField = null;
-            if (field is Attributes.AvgField)
+            if (field is Attributes.AvgFieldAttribute)
             {
                 functionField = (tablefield.IsNotNull)
                     ? new DecimalFunction(property, "AVG", new[] { tablefield.Name })
                     : new NullableDecimalFunction(property, "AVG", new[] { tablefield.Name });
             }
-            if (field is Attributes.CountField)
+            else if (field is Attributes.CountFieldAttribute)
             {
                 functionField = (tablefield.IsNotNull)
                     ? new IntegerFunction(property, "COUNT", new[] { tablefield.Name })
                     : new NullableIntegerFunction(property, "COUNT", new[] { tablefield.Name });
             }
-            else if (field is Attributes.MaxField)
+            else if (field is Attributes.MaxFieldAttribute)
             {
                 if (tablefield is IntegerField)
                 {
@@ -43,13 +43,13 @@ namespace Birko.Data.SQL.Fields
                     ? new DecimalFunction(property, "MAX", new[] { tablefield.Name })
                     : new NullableDecimalFunction(property, "MAX", new[] { tablefield.Name });
                 }
-                else if (tablefield is DecimalField)
+                else if (tablefield is BooleanField)
                 {
                     functionField = (tablefield.IsNotNull)
                     ? new BooleanFunction(property, "MAX", new[] { tablefield.Name })
                     : new NullableBooleanFunction(property, "MAX", new[] { tablefield.Name });
                 }
-                else if (tablefield is DecimalField)
+                else if (tablefield is DateTimeField)
                 {
                     functionField = (tablefield.IsNotNull)
                     ? new DateTimeFunction(property, "MAX", new[] { tablefield.Name })
@@ -70,7 +70,7 @@ namespace Birko.Data.SQL.Fields
                     functionField = new StringFunction(property, "MAX", new[] { tablefield.Name });
                 }
             }
-            else if (field is Attributes.MinField)
+            else if (field is Attributes.MinFieldAttribute)
             {
                 if (tablefield is IntegerField)
                 {
@@ -84,13 +84,13 @@ namespace Birko.Data.SQL.Fields
                     ? new DecimalFunction(property, "MIN", new[] { tablefield.Name })
                     : new NullableDecimalFunction(property, "MIN", new[] { tablefield.Name });
                 }
-                else if (tablefield is DecimalField)
+                else if (tablefield is BooleanField)
                 {
                     functionField = (tablefield.IsNotNull)
                     ? new BooleanFunction(property, "MIN", new[] { tablefield.Name })
                     : new NullableBooleanFunction(property, "MIN", new[] { tablefield.Name });
                 }
-                else if (tablefield is DecimalField)
+                else if (tablefield is DateTimeField)
                 {
                     functionField = (tablefield.IsNotNull)
                     ? new DateTimeFunction(property, "MIN", new[] { tablefield.Name })
@@ -111,7 +111,7 @@ namespace Birko.Data.SQL.Fields
                     functionField = new StringFunction(property, "MIN", new[] { tablefield.Name });
                 }
             }
-            else if (field is Attributes.SumField)
+            else if (field is Attributes.SumFieldAttribute)
             {
                 if (tablefield is IntegerField)
                 {

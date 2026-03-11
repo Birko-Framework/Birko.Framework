@@ -1,13 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Birko.Data.Attributes
+namespace Birko.Data.SQL.Attributes
 {
     [System.AttributeUsage(System.AttributeTargets.Property)]
-    public class AvgField : AggregateField
+    public class AvgFieldAttribute : AggregateFieldAttribute
     {
-        public AvgField(Type modelType, string modelPropertyName, string name = null) : base(modelType, modelPropertyName, name)
+        public AvgFieldAttribute(Type modelType, string modelPropertyName, string name = null) : base(modelType, modelPropertyName, name)
         { }
     }
 }

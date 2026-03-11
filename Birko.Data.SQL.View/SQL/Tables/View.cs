@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Fields;
 
 namespace Birko.Data.SQL.Tables
@@ -51,7 +51,8 @@ namespace Birko.Data.SQL.Tables
                 }
                 else
                 {
-                    table = new Table() {
+                    table = new Table()
+                    {
                         Name = tableName,
                         Type = tableType
                     };
@@ -128,8 +129,8 @@ namespace Birko.Data.SQL.Tables
 
         internal IEnumerable<AbstractField> GetTableFields(bool notAggregate = false)
         {
-            List<AbstractField> tableFields = new List<Fields.AbstractField>();
-            foreach(var table in Tables.Where(x=> x!= null))
+            List<AbstractField> tableFields = new List<AbstractField>();
+            foreach (var table in Tables.Where(x => x != null))
             {
                 tableFields.AddRange(table.GetTableFields(notAggregate));
             }
