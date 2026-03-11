@@ -1,0 +1,83 @@
+using System;
+using System.Linq;
+
+namespace Birko.Models.Customers.ViewModels
+{
+    public class InvoiceAddress : Address
+    {
+        public const string BINProperty = "BIN";
+        public const string TINProperty = "TIN";
+        public const string VATINProperty = "VATIN";
+        public const string BankAccountProperty = "BankAccount";
+        public const string InvoiceAddressObjectProperty = "InvoiceAddress";
+
+        public InvoiceAddress()
+        {
+            PropertyChanged += InvoiceAddress_PropertyChanged;
+        }
+
+        private string _bin;
+        public string BIN
+        {
+            get { return _bin; }
+            set
+            {
+                if (_bin != value)
+                {
+                    _bin = value;
+                    RaisePropertyChanged(BINProperty);
+                }
+            }
+        }
+
+        private string _tin;
+        public string TIN
+        {
+            get { return _tin; }
+            set
+            {
+                if (_tin != value)
+                {
+                    _tin = value;
+                    RaisePropertyChanged(TINProperty);
+                }
+            }
+        }
+
+        private string _vatin;
+        public string VATIN
+        {
+            get { return _vatin; }
+            set
+            {
+                if (_vatin != value)
+                {
+                    _vatin = value;
+                    RaisePropertyChanged(VATINProperty);
+                }
+            }
+        }
+
+        private string _bankAccount;
+        public string BankAccount
+        {
+            get { return _bankAccount; }
+            set
+            {
+                if (_bankAccount != value)
+                {
+                    _bankAccount = value;
+                    RaisePropertyChanged(BankAccountProperty);
+                }
+            }
+        }
+
+        private void InvoiceAddress_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (new[] { BINProperty, TINProperty, VATINProperty, BankAccountProperty }.Contains(e.PropertyName))
+            {
+                RaisePropertyChanged(InvoiceAddressObjectProperty);
+            }
+        }
+    }
+}
