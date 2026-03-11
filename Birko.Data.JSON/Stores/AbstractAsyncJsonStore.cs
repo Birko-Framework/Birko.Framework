@@ -46,20 +46,22 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public override async Task CreateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
 
             if (data == null)
             {
-                return;
+                return Guid.Empty;
             }
 
-            data.Guid = Guid.NewGuid();
+            data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
 
             await SaveDataAsync(ct);
+
+            return data.Guid.Value;
         }
 
         /// <inheritdoc />
@@ -157,19 +159,24 @@ namespace Birko.Data.Stores
         /// </summary>
         public override async Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
         {
-            await EnsureDataLoadedAsync(ct);
-            return _items?.Values ?? Enumerable.Empty<T>();
+            return await ReadAsync(null, null, null, null, ct);
         }
 
         /// <inheritdoc />
         public override async Task<IEnumerable<T>> ReadAsync(
             Expression<Func<T, bool>>? filter = null,
+            OrderBy<T>? orderBy = null,
             int? limit = null,
             int? offset = null,
             CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
             var query = _items.Values.Where(x => filter?.Compile()?.Invoke(x) ?? true);
+
+            if (orderBy != null && orderBy.Fields.Count > 0)
+            {
+                query = ApplyOrderBy(query, orderBy);
+            }
 
             if (offset.HasValue)
             {
@@ -182,6 +189,34 @@ namespace Birko.Data.Stores
             }
 
             return [.. query];
+        }
+
+        private IEnumerable<T> ApplyOrderBy(IEnumerable<T> source, OrderBy<T> orderBy)
+        {
+            IOrderedEnumerable<T> orderedSource = null;
+
+            foreach (var field in orderBy.Fields)
+            {
+                var param = Expression.Parameter(typeof(T), "x");
+                var property = Expression.Property(param, field.PropertyName);
+                var lambda = Expression.Lambda<Func<T, object>>(Expression.Convert(property, typeof(object)), param);
+                var compiledFunc = lambda.Compile();
+
+                if (orderedSource == null)
+                {
+                    orderedSource = field.Descending
+                        ? source.OrderByDescending(compiledFunc)
+                        : source.OrderBy(compiledFunc);
+                }
+                else
+                {
+                    orderedSource = field.Descending
+                        ? orderedSource.ThenByDescending(compiledFunc)
+                        : orderedSource.ThenBy(compiledFunc);
+                }
+            }
+
+            return orderedSource ?? source;
         }
 
         /// <inheritdoc />

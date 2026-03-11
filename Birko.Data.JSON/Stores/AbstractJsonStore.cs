@@ -53,12 +53,13 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public override void Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+        public override Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
-            data.Guid = Guid.NewGuid();
+            data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
             _items.Add(data.Guid.Value, data);
             SaveData();
+            return data.Guid.Value;
         }
 
         /// <inheritdoc />
@@ -137,9 +138,15 @@ namespace Birko.Data.Stores
         #region Core CRUD Operations - Bulk
 
         /// <inheritdoc />
-        public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, int? limit = null, int? offset = null)
+        public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
             var result = _items?.Values?.Where(x => filter?.Compile()?.Invoke(x) ?? true);
+
+            if (orderBy != null && orderBy.Fields.Count > 0)
+            {
+                result = ApplyOrderBy(result, orderBy);
+            }
+
             if (offset != null)
             {
                 result = result?.Skip(offset.Value);
@@ -149,6 +156,34 @@ namespace Birko.Data.Stores
                 result = result?.Take(limit.Value);
             }
             return result ?? Enumerable.Empty<T>();
+        }
+
+        private IEnumerable<T> ApplyOrderBy(IEnumerable<T> source, OrderBy<T> orderBy)
+        {
+            IOrderedEnumerable<T> orderedSource = null;
+
+            foreach (var field in orderBy.Fields)
+            {
+                var param = Expression.Parameter(typeof(T), "x");
+                var property = Expression.Property(param, field.PropertyName);
+                var lambda = Expression.Lambda<Func<T, object>>(Expression.Convert(property, typeof(object)), param);
+                var compiledFunc = lambda.Compile();
+
+                if (orderedSource == null)
+                {
+                    orderedSource = field.Descending
+                        ? source.OrderByDescending(compiledFunc)
+                        : source.OrderBy(compiledFunc);
+                }
+                else
+                {
+                    orderedSource = field.Descending
+                        ? orderedSource.ThenByDescending(compiledFunc)
+                        : orderedSource.ThenBy(compiledFunc);
+                }
+            }
+
+            return orderedSource ?? source;
         }
 
         /// <inheritdoc />

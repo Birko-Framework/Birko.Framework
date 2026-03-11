@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Birko.Data.Helpers;
+using Birko.Helpers;
 
 namespace Birko.Data.Stores
 {
