@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{D2E3F4A5-B6C7-4D8E-9F0A-2B3C4D5E6F7A}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Migrations.MongoDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)MongoMigration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MongoMigrationStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MongoMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Settings\MongoMigrationSettings.cs" />
+  </ItemGroup>
+</Project>
