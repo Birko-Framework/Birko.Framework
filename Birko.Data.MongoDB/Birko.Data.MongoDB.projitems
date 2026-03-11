@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>9d0b1c33-e449-5c0f-d758-76348e110ddd</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.MongoDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="MongoDB.Driver" Version="3.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\MongoDBLogModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\MongoDBModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MongoDB\MongoDBClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MongoDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMongoDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\MongoDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMongoDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\MongoDbUnitOfWork.cs" />
+  </ItemGroup>
+</Project>
