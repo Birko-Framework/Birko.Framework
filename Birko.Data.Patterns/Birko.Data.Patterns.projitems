@@ -21,6 +21,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Paging\IPagedRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedRepositoryWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Paging\AsyncPagedRepositoryWrapper.cs" />
+    <!-- Specification -->
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\ISpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\Specification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\AndSpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\OrSpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\NotSpecification.cs" />
     <!-- Concurrency -->
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\IVersioned.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\ConcurrentUpdateException.cs" />
