@@ -314,6 +314,9 @@ ASALocalRun/
 !.vscode/extensions.json
 *.code-workspace
 
+## Claude Code
+.claude/
+
 ## Local environment
 *.env
 *.env.*
