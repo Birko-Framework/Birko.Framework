@@ -1,0 +1,50 @@
+# Birko.Models.Customers
+
+Customer management models for the Birko Framework.
+
+## Models
+
+| Model | Description |
+|-------|-------------|
+| **Address** | Full address with Name, Street, City, ZIP, District, Region, Country, Phone, Email |
+| **InvoiceAddress** | Address extended with billing info (BIN, TIN, VATIN, BankAccount) |
+| **BaseCustomer** | Base customer with Name and Code |
+| **Customer** | Customer with optional PriceGroup reference |
+| **CustomerAddress** | Join table linking Customers to Addresses |
+
+## Interfaces
+
+| Interface | Purpose |
+|-----------|---------|
+| `IRelatedToAddress` | Entities that reference an Address |
+| `IRelatedToInvoiceAddress` | Entities that reference an InvoiceAddress |
+| `IRelatedToCustomer` | Entities that reference a Customer |
+
+## Dependencies
+
+- Birko.Data (for base classes and attributes)
+- Birko.Models.Accounting (for PriceGroup reference)
+
+## Maintenance
+
+### README Updates
+When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly. This includes:
+- New classes, interfaces, or methods
+- Changed dependencies
+- New or modified usage examples
+- Breaking changes
+
+### CLAUDE.md Updates
+When making major changes to this project, update this CLAUDE.md to reflect:
+- New or renamed files and components
+- Changed architecture or patterns
+- New dependencies or removed dependencies
+- Updated interfaces or abstract class signatures
+- New conventions or important notes
+
+### Test Requirements
+Every new public functionality must have corresponding unit tests. When adding new features:
+- Create test classes in the corresponding test project
+- Follow existing test patterns (xUnit + FluentAssertions)
+- Test both success and failure cases
+- Include edge cases and boundary conditions
