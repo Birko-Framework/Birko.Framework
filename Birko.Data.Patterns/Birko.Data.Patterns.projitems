@@ -21,6 +21,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Paging\IPagedRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Paging\PagedRepositoryWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Paging\AsyncPagedRepositoryWrapper.cs" />
+    <!-- Concurrency -->
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\IVersioned.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\ConcurrentUpdateException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\VersionedStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Concurrency\AsyncVersionedStoreWrapper.cs" />
     <!-- Decorators: SoftDelete -->
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteStoreWrapper.cs" />
