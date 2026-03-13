@@ -44,12 +44,11 @@ namespace Birko.Models
 
         public virtual void LoadFrom(IValueData data)
         {
-            if (data != null)
-            {
-                Price = data.Price != null ? Math.Round(data.Price.Value, StoreDecimalPlaces) : (decimal?)null;
-                PriceVAT = data.PriceVAT != null ? Math.Round(data.PriceVAT.Value, StoreDecimalPlaces) : (decimal?)null;
-                VAT = data.VAT != null ? Math.Round(data.VAT.Value, StoreDecimalPlaces) : (decimal?)null;
-            }
+            if (data == null) return;
+
+            Price = data.Price != null ? Math.Round(data.Price.Value, StoreDecimalPlaces) : (decimal?)null;
+            PriceVAT = data.PriceVAT != null ? Math.Round(data.PriceVAT.Value, StoreDecimalPlaces) : (decimal?)null;
+            VAT = data.VAT != null ? Math.Round(data.VAT.Value, StoreDecimalPlaces) : (decimal?)null;
         }
 
         public virtual void LoadFrom(ValueData data)
@@ -62,12 +61,11 @@ namespace Birko.Models
 
         public virtual void LoadFrom(ViewModels.Value data)
         {
-            if (data != null)
-            {
-                Price = data.Price != null ? Math.Round(data.Price.Value, StoreDecimalPlaces) : (decimal?)null;
-                PriceVAT = data.PriceVAT != null ? Math.Round(data.PriceVAT.Value, StoreDecimalPlaces) : (decimal?)null;
-                VAT = data.VAT != null ? Math.Round(data.VAT.Value, StoreDecimalPlaces) : (decimal?)null;
-            }
+            if (data == null) return;
+
+            Price = data.Price != null ? Math.Round(data.Price.Value, StoreDecimalPlaces) : (decimal?)null;
+            PriceVAT = data.PriceVAT != null ? Math.Round(data.PriceVAT.Value, StoreDecimalPlaces) : (decimal?)null;
+            VAT = data.VAT != null ? Math.Round(data.VAT.Value, StoreDecimalPlaces) : (decimal?)null;
         }
     }
 }

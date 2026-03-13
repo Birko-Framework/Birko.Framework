@@ -57,7 +57,7 @@ namespace Birko.Models.ViewModels
             }
         }
 
-        private void Value_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Value_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { PriceProperty, PriceVATProperty, VATProperty }.Contains(e.PropertyName))
             {

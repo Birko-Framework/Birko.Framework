@@ -16,7 +16,7 @@ namespace Birko.Models.ViewModels
             PropertyChanged += SourceValue_PropertyChanged;
         }
 
-        private string _source;
+        private string _source = null!;
         public string Source
         {
             get { return _source; }
@@ -30,7 +30,7 @@ namespace Birko.Models.ViewModels
             }
         }
 
-        private T _value;
+        private T _value = default!;
         public T Value
         {
             get { return _value; }
@@ -41,7 +41,7 @@ namespace Birko.Models.ViewModels
             }
         }
 
-        private void SourceValue_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void SourceValue_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] {
                     ValueProperty,

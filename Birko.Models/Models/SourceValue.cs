@@ -7,8 +7,8 @@ namespace Birko.Models
 {
     public class SourceValue<T> : Data.Models.ILoadable<ViewModels.SourceValue<T>>
     {
-        public string Source { get; set; }
-        public T Value { get; set; }
+        public string Source { get; set; } = null!;
+        public T Value { get; set; } = default!;
 
         public void LoadFrom(ViewModels.SourceValue<T> data)
         {

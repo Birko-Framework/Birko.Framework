@@ -27,7 +27,7 @@ namespace Birko.Models.ViewModels
             }
         }
 
-        private void AbstractPercentage_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void AbstractPercentage_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { PercentageProperty }.Contains(e.PropertyName))
             {

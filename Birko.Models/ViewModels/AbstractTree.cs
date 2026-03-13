@@ -14,7 +14,7 @@ namespace Birko.Models.ViewModels
             PropertyChanged += AbstractTree_PropertyChanged;
         }
 
-        private IEnumerable<Guid> _path;
+        private IEnumerable<Guid> _path = null!;
         public IEnumerable<Guid> Path
         {
             get { return _path; }
@@ -25,7 +25,7 @@ namespace Birko.Models.ViewModels
             }
         }
 
-        private void AbstractTree_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void AbstractTree_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { PathProperty }.Contains(e.PropertyName))
             {

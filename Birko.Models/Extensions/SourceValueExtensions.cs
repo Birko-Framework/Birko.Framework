@@ -6,11 +6,11 @@ namespace Birko.Extensions
 {
     public static class SourceValueExtensions
     {
-        public static T GetValue<T>(this IEnumerable<SourceValue<T>> values, string source)
+        public static T? GetValue<T>(this IEnumerable<SourceValue<T>> values, string source)
         {
             if (!string.IsNullOrEmpty(source) && (values?.Any(x => x.Source == source) ?? false))
             {
-                return values.FirstOrDefault(x => x.Source == source).Value;
+                return values.FirstOrDefault(x => x.Source == source)!.Value;
             }
             return default;
         }
@@ -24,7 +24,7 @@ namespace Birko.Extensions
 
             if (values != null && values.Any(x => x.Source == source))
             {
-                values.FirstOrDefault(x => x.Source == source).Value = value;
+                values.FirstOrDefault(x => x.Source == source)!.Value = value;
                 return values;
             }
 

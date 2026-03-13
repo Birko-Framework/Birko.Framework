@@ -27,7 +27,7 @@ namespace Birko.Models
                 clone.Percentage = Percentage;
             }
 
-            return clone;
+            return clone!;
         }
     }
 }
