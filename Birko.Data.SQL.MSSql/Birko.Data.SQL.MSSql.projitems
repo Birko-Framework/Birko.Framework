@@ -9,6 +9,9 @@
     <Import_RootNamespace>Birko.Data.SQL</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connector\MSSqlConnector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MSSqlRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMSSqlRepository.cs" />
