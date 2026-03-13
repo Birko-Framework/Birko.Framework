@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e71</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.MessageQueue.InMemory</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)InMemoryMessageQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InMemoryMessageQueueOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InMemoryChannel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InMemoryProducer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InMemoryConsumer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InMemorySubscription.cs" />
+  </ItemGroup>
+</Project>
