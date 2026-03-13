@@ -9,10 +9,11 @@ JSON file-based sync knowledge item implementation for the Birko.Data.Sync frame
 ## Components
 
 ### Models
-- `JsonSyncKnowledgeItem` - Implements `ISyncKnowledgeItem` with `JsonPropertyName` attributes for serialization
+- `JsonSyncKnowledgeItem` - Extends `AbstractModel` (from Birko.Data.Models), implements `ISyncKnowledgeItem` with `JsonPropertyName` attributes for serialization
 
 ## Dependencies
-- Birko.Data.Sync
+- Birko.Data (AbstractModel)
+- Birko.Data.Sync (ISyncKnowledgeItem)
 - System.Text.Json
 
 ## Maintenance
