@@ -14,12 +14,12 @@ namespace Birko.Communication.Bluetooth.Ports
         /// <summary>
         /// Gets or sets the device name
         /// </summary>
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the device address (MAC address)
         /// </summary>
-        public string Address { get; set; }
+        public string Address { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the signal strength (RSSI in dBm)

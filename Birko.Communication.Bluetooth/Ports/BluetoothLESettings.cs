@@ -11,7 +11,7 @@ namespace Birko.Communication.Bluetooth.Ports
         /// <summary>
         /// Gets or sets the Bluetooth device address (MAC address in format "XX:XX:XX:XX:XX:XX")
         /// </summary>
-        public string DeviceAddress { get; set; }
+        public string DeviceAddress { get; set; } = string.Empty;
 
         /// <summary>
         /// Gets or sets the service UUID to connect to

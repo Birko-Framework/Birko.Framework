@@ -18,7 +18,7 @@ namespace Birko.Communication.Bluetooth.Ports
         private int _socket = -1;
         private BluetoothAddress _address;
 #endif
-        private Thread _readThread;
+        private Thread? _readThread = null;
         private bool _stopThread;
         private int _reconnectAttempts = 0;
 
@@ -35,23 +35,22 @@ namespace Birko.Communication.Bluetooth.Ports
         /// </summary>
         public override void Open()
         {
-            if (!IsOpen())
-            {
-                var settings = Settings as BluetoothLESettings;
-                if (settings == null)
-                    throw new InvalidOperationException("Invalid Settings for BluetoothLE port");
+            if (IsOpen()) return;
 
-                if (string.IsNullOrEmpty(settings.DeviceAddress))
-                    throw new InvalidOperationException("DeviceAddress is required in BluetoothLESettings");
+            var settings = Settings as BluetoothLESettings;
+            if (settings == null)
+                throw new InvalidOperationException("Invalid Settings for BluetoothLE port");
+
+            if (string.IsNullOrEmpty(settings.DeviceAddress))
+                throw new InvalidOperationException("DeviceAddress is required in BluetoothLESettings");
 
 #if WINDOWS
-                OpenWindows(settings);
+            OpenWindows(settings);
 #elif LINUX
-                OpenLinux(settings);
+            OpenLinux(settings);
 #else
-                throw new PlatformNotSupportedException("Bluetooth LE is not supported on this platform");
+            throw new PlatformNotSupportedException("Bluetooth LE is not supported on this platform");
 #endif
-            }
         }
 
 #if WINDOWS
@@ -422,28 +421,27 @@ namespace Birko.Communication.Bluetooth.Ports
         /// </summary>
         public override void Close()
         {
-            if (IsOpen())
-            {
-                _stopThread = true;
+            if (!IsOpen()) return;
 
-                // Wait for read thread to finish
-                if (_readThread != null && _readThread.IsAlive)
+            _stopThread = true;
+
+            // Wait for read thread to finish
+            if (_readThread != null && _readThread.IsAlive)
+            {
+                if (!_readThread.Join(1000))
                 {
-                    if (!_readThread.Join(1000))
-                    {
-                        // Thread didn't finish in time, it will exit on its own
-                    }
+                    // Thread didn't finish in time, it will exit on its own
                 }
+            }
 
 #if WINDOWS
-                CleanupWindows();
+            CleanupWindows();
 #elif LINUX
-                CloseLinux();
+            CloseLinux();
 #endif
 
-                _isOpen = false;
-                Clear();
-            }
+            _isOpen = false;
+            Clear();
         }
 
         /// <summary>
