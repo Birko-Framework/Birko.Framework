@@ -5,7 +5,9 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// Async JSON file-based data store implementation.

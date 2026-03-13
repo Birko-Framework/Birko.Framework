@@ -6,7 +6,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// Async JSON store that stores each item in a separate file.

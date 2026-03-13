@@ -4,7 +4,9 @@ using System.IO;
 using System.Linq;
 using Birko.Helpers;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// JSON file-based bulk data store that stores each entity in a separate file.

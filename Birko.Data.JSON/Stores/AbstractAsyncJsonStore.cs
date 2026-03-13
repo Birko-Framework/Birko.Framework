@@ -7,7 +7,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// Abstract base class for async JSON file-based data stores with bulk operations.

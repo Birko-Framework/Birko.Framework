@@ -5,7 +5,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using Birko.Helpers;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// JSON file-based data store that stores all entities in a single JSON file.

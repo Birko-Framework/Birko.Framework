@@ -1,6 +1,8 @@
 using System;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// Settings for JSON batch stores that split data into multiple files.

@@ -5,7 +5,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Text.Json;
 
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.JSON.Stores
 {
     /// <summary>
     /// Abstract base class for synchronous JSON file-based data stores with bulk operations.
