@@ -1,5 +1,5 @@
 using System;
-using Birko.Data.Attributes;
+using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Customers
