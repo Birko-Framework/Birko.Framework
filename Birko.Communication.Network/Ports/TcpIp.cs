@@ -10,7 +10,7 @@ namespace Birko.Communication.Network.Ports
 {
     public class TcpIpSettings : PortSettings
     {
-        public string Address { get; set; }
+        public string Address { get; set; } = string.Empty;
         public int Port { get; set; }
 
         public override string GetID()
@@ -21,9 +21,9 @@ namespace Birko.Communication.Network.Ports
 
     public class TcpIp : AbstractPort
     {
-        private TcpClient _client;
-        private NetworkStream _stream;
-        private Thread _readThread;
+        private TcpClient? _client;
+        private NetworkStream? _stream;
+        private Thread? _readThread;
         private bool _stopThread;
 
         public TcpIp(TcpIpSettings settings) : base(settings)
@@ -60,50 +60,48 @@ namespace Birko.Communication.Network.Ports
 
         public override void Open()
         {
-            if (!IsOpen())
+            if (IsOpen()) return;
+
+            var settings = Settings as TcpIpSettings;
+            if (settings == null) throw new InvalidOperationException("Invalid Settings for TcpIp port");
+
+            try
             {
-                var settings = Settings as TcpIpSettings;
-                if (settings == null) throw new InvalidOperationException("Invalid Settings for TcpIp port");
+                _client = new TcpClient();
+                _client.Connect(settings.Address, settings.Port);
+                _stream = _client.GetStream();
+                _isOpen = true;
 
-                try
-                {
-                    _client = new TcpClient();
-                    _client.Connect(settings.Address, settings.Port);
-                    _stream = _client.GetStream();
-                    _isOpen = true;
-
-                    _stopThread = false;
-                    _readThread = new Thread(ReadWorker);
-                    _readThread.IsBackground = true;
-                    _readThread.Start();
-                }
-                catch (Exception)
-                {
-                    _isOpen = false;
-                    throw;
-                }
+                _stopThread = false;
+                _readThread = new Thread(ReadWorker);
+                _readThread.IsBackground = true;
+                _readThread.Start();
+            }
+            catch (Exception)
+            {
+                _isOpen = false;
+                throw;
             }
         }
 
         public override void Close()
         {
-            if (IsOpen())
-            {
-                _stopThread = true;
-                // Wait for thread to finish? Or just close stream which will throw in thread
+            if (!IsOpen()) return;
 
-                if (_stream != null)
-                {
-                    _stream.Close();
-                    _stream = null;
-                }
-                if (_client != null)
-                {
-                    _client.Close();
-                    _client = null;
-                }
-                _isOpen = false;
+            _stopThread = true;
+            // Wait for thread to finish? Or just close stream which will throw in thread
+
+            if (_stream != null)
+            {
+                _stream.Close();
+                _stream = null;
             }
+            if (_client != null)
+            {
+                _client.Close();
+                _client = null;
+            }
+            _isOpen = false;
         }
 
         private void ReadWorker()

@@ -10,7 +10,7 @@ namespace Birko.Communication.Network.Ports
 {
     public class UdpSettings : PortSettings
     {
-        public string Address { get; set; }
+        public string Address { get; set; } = string.Empty;
         public int Port { get; set; }
         public int LocalPort { get; set; } // For receiving
 
@@ -22,9 +22,9 @@ namespace Birko.Communication.Network.Ports
 
     public class Udp : AbstractPort
     {
-        private UdpClient _client;
-        private IPEndPoint _remoteEndPoint;
-        private Thread _readThread;
+        private UdpClient? _client;
+        private IPEndPoint? _remoteEndPoint;
+        private Thread? _readThread;
         private bool _stopThread;
 
         public Udp(UdpSettings settings) : base(settings)
