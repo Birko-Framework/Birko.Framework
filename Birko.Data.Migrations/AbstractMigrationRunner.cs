@@ -70,7 +70,10 @@ namespace Birko.Data.Migrations
         /// </summary>
         public void RegisterMigrations(IEnumerable<IMigration> migrations)
         {
-            RegisterMigrations(migrations?.ToArray());
+            if (migrations != null)
+            {
+                RegisterMigrations(migrations.ToArray());
+            }
         }
 
         /// <summary>

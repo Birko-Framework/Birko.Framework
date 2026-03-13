@@ -31,7 +31,7 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Gets migrations that were executed during the operation.
         /// </summary>
-        public IReadOnlyList<ExecutedMigration> ExecutedMigrations { get; init; }
+        public IReadOnlyList<ExecutedMigration> ExecutedMigrations { get; init; } = Array.Empty<ExecutedMigration>();
 
         /// <summary>
         /// Gets the error message if the operation failed.
