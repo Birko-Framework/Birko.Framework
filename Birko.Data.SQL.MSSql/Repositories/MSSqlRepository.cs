@@ -4,6 +4,7 @@ using System.Text;
 using Birko.Data.Repositories;
 using Birko.Data.Models;
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Repositories;
 
 namespace Birko.Data.SQL.Repositories
 {

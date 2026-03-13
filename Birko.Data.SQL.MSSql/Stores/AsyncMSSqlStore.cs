@@ -1,4 +1,6 @@
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +8,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores
+namespace Birko.Data.SQL.MSSql.Stores
 {
     /// <summary>
     /// Native async MSSQL store with bulk operation support via SqlBulkCopy.
@@ -27,11 +29,11 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The remote settings to use.</param>
-        public void SetSettings(Stores.RemoteSettings settings)
+        public void SetSettings(RemoteSettings settings)
         {
             if (settings != null)
             {
-                var pwSettings = new Stores.PasswordSettings
+                var pwSettings = new PasswordSettings
                 {
                     Location = settings.Location,
                     Name = settings.Name,
@@ -45,9 +47,9 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The password settings to use.</param>
-        public override void SetSettings(Stores.PasswordSettings settings)
+        public override void SetSettings(PasswordSettings settings)
         {
-            if (settings is Stores.RemoteSettings remote)
+            if (settings is RemoteSettings remote)
             {
                 SetSettings(remote);
             }
