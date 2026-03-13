@@ -9,12 +9,12 @@ namespace Birko.Models.Product.Filters
 {
     public class ProductList<T> : IRepositoryFilter<T> where T : Product
     {
-        public string Search { get; private set; }
-        public string Category { get; private set; }
-        public Dictionary<string, List<string>> Parameters { get; private set; }
-        public Dictionary<string, List<string>> Tags { get; private set; }
+        public string? Search { get; private set; }
+        public string? Category { get; private set; }
+        public Dictionary<string, List<string>>? Parameters { get; private set; }
+        public Dictionary<string, List<string>>? Tags { get; private set; }
 
-        public ProductList(string search = null, string category = null, Dictionary<string, List<string>> parameters = null, Dictionary<string, List<string>> tags = null)
+        public ProductList(string? search = null, string? category = null, Dictionary<string, List<string>>? parameters = null, Dictionary<string, List<string>>? tags = null)
         {
             Search = search;
             Category = category;
@@ -22,9 +22,9 @@ namespace Birko.Models.Product.Filters
             Tags = tags;
         }
 
-        public virtual Expression<Func<T, bool>> Filter()
+        public virtual Expression<Func<T, bool>>? Filter()
         {
-            Expression<Func<T, bool>> result = SearchExpression(Search);
+            Expression<Func<T, bool>>? result = SearchExpression(Search);
             if (!string.IsNullOrEmpty(Category))
             {
                 Expression<Func<T, bool>> right = (x) => x.Category.StartsWith(Category);
@@ -37,7 +37,7 @@ namespace Birko.Models.Product.Filters
             {
                 foreach (var kvp in Tags)
                 {
-                    Expression<Func<T, bool>> right = (x) => (x as IProductTags).Tags.Any(p => p.Source == kvp.Key && kvp.Value.Contains(p.Value));
+                    Expression<Func<T, bool>> right = (x) => ((IProductTags)x).Tags.Any(p => p.Source == kvp.Key && kvp.Value.Contains(p.Value));
                     result = (result != null)
                         ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters.Skip(1)).Distinct())
                         : right;
@@ -47,7 +47,7 @@ namespace Birko.Models.Product.Filters
             {
                 foreach (var kvp in Parameters)
                 {
-                    Expression<Func<T, bool>> right = (x) => (x as IProductProperties).Properties.Any(p => p.Source == kvp.Key && kvp.Value.Contains(p.Value));
+                    Expression<Func<T, bool>> right = (x) => ((IProductProperties)x).Properties.Any(p => p.Source == kvp.Key && kvp.Value.Contains(p.Value));
                     result = (result != null)
                         ? Expression.Lambda<Func<T, bool>>(Expression.AndAlso(result.Body, right.Body), result.Parameters.Concat(right.Parameters.Skip(1)).Distinct())
                         : right;
@@ -57,7 +57,7 @@ namespace Birko.Models.Product.Filters
             return result;
         }
 
-        protected virtual Expression<Func<T, bool>> SearchExpression(string filter)
+        protected virtual Expression<Func<T, bool>>? SearchExpression(string? filter)
         {
             return
                 !string.IsNullOrEmpty(filter)

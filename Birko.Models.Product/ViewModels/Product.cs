@@ -23,7 +23,7 @@ namespace Birko.Models.Product.ViewModels
             PropertyChanged += Product_PropertyChanged;
         }
 
-        private string _SKUCode;
+        private string _SKUCode = null!;
         public string SKUCode
         {
             get { return _SKUCode; }
@@ -37,7 +37,7 @@ namespace Birko.Models.Product.ViewModels
             }
         }
 
-        private string _barCode;
+        private string _barCode = null!;
         public string BarCode
         {
             get { return _barCode; }
@@ -51,7 +51,7 @@ namespace Birko.Models.Product.ViewModels
             }
         }
 
-        private string _name;
+        private string _name = null!;
         public string Name
         {
             get { return _name; }
@@ -65,7 +65,7 @@ namespace Birko.Models.Product.ViewModels
             }
         }
 
-        private string _slug;
+        private string _slug = null!;
         public string Slug
         {
             get { return _slug; }
@@ -79,7 +79,7 @@ namespace Birko.Models.Product.ViewModels
             }
         }
 
-        private string _description;
+        private string _description = null!;
         public string Description
         {
             get { return _description; }
@@ -93,7 +93,7 @@ namespace Birko.Models.Product.ViewModels
             }
         }
 
-        private string _category;
+        private string _category = null!;
         public string Category
         {
             get { return _category; }
@@ -107,7 +107,7 @@ namespace Birko.Models.Product.ViewModels
             }
         }
 
-        private void Product_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Product_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] {
                     SKUCodeProperty,
@@ -126,62 +126,60 @@ namespace Birko.Models.Product.ViewModels
         public void LoadFrom(Birko.Models.Product.Product data)
         {
             base.LoadFrom(data);
-            if (data != null)
+            if (data == null) return;
+
+            SKUCode = data.SKUCode;
+            BarCode = data.BarCode;
+            Name = data.Name;
+            Slug = data.Slug;
+            Description = data.Description;
+            Category = data.Category;
+            if (this is IProductManufacturer pm && data is Birko.Models.Product.IProductManufacturer dm)
             {
-                SKUCode = data.SKUCode;
-                BarCode = data.BarCode;
-                Name = data.Name;
-                Slug = data.Slug;
-                Description = data.Description;
-                Category = data.Category;
-                if (this is IProductManufacturer pm && data is Birko.Models.Product.IProductManufacturer dm)
-                {
-                    pm.LoadManufacturers(dm.Manufacturer);
-                }
+                pm.LoadManufacturers(dm.Manufacturer);
+            }
 
-                if (this is IProductProperties pp && data is Birko.Models.Product.IProductProperties dp)
-                {
-                    pp.LoadProperties(dp.Properties);
-                }
+            if (this is IProductProperties pp && data is Birko.Models.Product.IProductProperties dp)
+            {
+                pp.LoadProperties(dp.Properties);
+            }
 
-                if (this is IProductTags pt && data is Birko.Models.Product.IProductTags dt)
-                {
-                    pt.LoadTags(dt.Tags);
-                }
+            if (this is IProductTags pt && data is Birko.Models.Product.IProductTags dt)
+            {
+                pt.LoadTags(dt.Tags);
             }
         }
 
         public void LoadFrom(Product data)
         {
             base.LoadFrom(data);
-            if (data != null)
+            if (data == null) return;
+
+            SKUCode = data.SKUCode;
+            BarCode = data.BarCode;
+            Name = data.Name;
+            Slug = data.Slug;
+            if (
+                string.IsNullOrEmpty(Description)
+                || (!string.IsNullOrEmpty(data.Description) && data.Description.Length > Description.Length)
+            )
             {
-                SKUCode = data.SKUCode;
-                BarCode = data.BarCode;
-                Name = data.Name;
-                Slug = data.Slug;
-                if (
-                    string.IsNullOrEmpty(Description)
-                    || (!string.IsNullOrEmpty(data.Description) && data.Description.Length > Description.Length)
-                )
-                {
-                    Description = data.Description;
-                }
-                Category = data.Category;
-                if (this is IProductManufacturer pm && data is IProductManufacturer dpm)
-                {
-                    pm.LoadManufacturers(dpm.Manufacturer);
-                }
+                Description = data.Description;
+            }
+            Category = data.Category;
+            if (this is IProductManufacturer pm && data is IProductManufacturer dpm)
+            {
+                pm.LoadManufacturers(dpm.Manufacturer);
+            }
 
-                if (this is IProductProperties pp && data is IProductProperties dpp)
-                {
-                    pp.LoadProperties(dpp.Properties);
-                }
+            if (this is IProductProperties pp && data is IProductProperties dpp)
+            {
+                pp.LoadProperties(dpp.Properties);
+            }
 
-                if (this is IProductTags pt && data is IProductTags dpt)
-                {
-                    pt.LoadTags(dpt.Tags);
-                }
+            if (this is IProductTags pt && data is IProductTags dpt)
+            {
+                pt.LoadTags(dpt.Tags);
             }
         }
 
