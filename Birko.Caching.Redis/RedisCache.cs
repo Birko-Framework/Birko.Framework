@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Caching.Serialization;
+using Birko.Redis;
 using StackExchange.Redis;
 
 namespace Birko.Caching.Redis;
@@ -14,19 +15,36 @@ namespace Birko.Caching.Redis;
 public sealed class RedisCache : ICache
 {
     private readonly RedisConnectionManager _connectionManager;
-    private readonly RedisCacheOptions _options;
+    private readonly RedisSettings _settings;
+    private readonly TimeSpan _defaultExpiration;
+    private readonly bool _ownsConnection;
     private bool _disposed;
 
-    public RedisCache(RedisCacheOptions options)
+    /// <summary>
+    /// Creates a new RedisCache that owns its connection.
+    /// </summary>
+    /// <param name="settings">Redis connection settings.</param>
+    /// <param name="defaultExpiration">Default expiration for entries without explicit options. Defaults to 5 minutes.</param>
+    public RedisCache(RedisSettings settings, TimeSpan? defaultExpiration = null)
     {
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _connectionManager = new RedisConnectionManager(options);
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _connectionManager = new RedisConnectionManager(settings);
+        _defaultExpiration = defaultExpiration ?? TimeSpan.FromMinutes(5);
+        _ownsConnection = true;
     }
 
-    public RedisCache(RedisConnectionManager connectionManager, RedisCacheOptions options)
+    /// <summary>
+    /// Creates a new RedisCache using a shared connection manager.
+    /// </summary>
+    /// <param name="connectionManager">A pre-configured connection manager.</param>
+    /// <param name="settings">Redis settings (for key prefix configuration).</param>
+    /// <param name="defaultExpiration">Default expiration for entries without explicit options. Defaults to 5 minutes.</param>
+    public RedisCache(RedisConnectionManager connectionManager, RedisSettings settings, TimeSpan? defaultExpiration = null)
     {
         _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _defaultExpiration = defaultExpiration ?? TimeSpan.FromMinutes(5);
+        _ownsConnection = false;
     }
 
     public async Task<CacheResult<T>> GetAsync<T>(string key, CancellationToken ct = default)
@@ -48,7 +66,7 @@ public sealed class RedisCache : ICache
     {
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
-        var opts = options ?? new CacheEntryOptions { AbsoluteExpiration = _options.DefaultExpiration };
+        var opts = options ?? new CacheEntryOptions { AbsoluteExpiration = _defaultExpiration };
 
         var serialized = CacheSerializer.Serialize(value);
         var expiry = GetExpiry(opts);
@@ -126,7 +144,7 @@ public sealed class RedisCache : ICache
         var server = _connectionManager.GetServer();
         var fullPrefix = GetFullKey(prefix);
 
-        await foreach (var key in server.KeysAsync(pattern: $"{fullPrefix}*", database: _options.Database))
+        await foreach (var key in server.KeysAsync(pattern: $"{fullPrefix}*", database: _settings.Database))
         {
             await db.KeyDeleteAsync(key);
         }
@@ -134,19 +152,19 @@ public sealed class RedisCache : ICache
 
     public async Task ClearAsync(CancellationToken ct = default)
     {
-        if (_options.InstanceName is not null)
+        if (_settings.KeyPrefix is not null)
         {
             await RemoveByPrefixAsync("", ct);
         }
         else
         {
             var server = _connectionManager.GetServer();
-            await server.FlushDatabaseAsync(_options.Database);
+            await server.FlushDatabaseAsync(_settings.Database);
         }
     }
 
     private string GetFullKey(string key) =>
-        _options.InstanceName is not null ? $"{_options.InstanceName}:{key}" : key;
+        _settings.KeyPrefix is not null ? $"{_settings.KeyPrefix}:{key}" : key;
 
     private static RedisKey GetMetaKey(string fullKey) => $"{fullKey}:__meta";
 
@@ -192,6 +210,9 @@ public sealed class RedisCache : ICache
     {
         if (_disposed) return;
         _disposed = true;
-        _connectionManager.Dispose();
+        if (_ownsConnection)
+        {
+            _connectionManager.Dispose();
+        }
     }
 }

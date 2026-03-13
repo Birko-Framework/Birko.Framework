@@ -10,7 +10,5 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)RedisCache.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)RedisCacheOptions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)RedisConnectionManager.cs" />
   </ItemGroup>
 </Project>

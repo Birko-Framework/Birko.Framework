@@ -6,36 +6,38 @@ Redis-backed ICache implementation using StackExchange.Redis.
 ## Structure
 ```
 Birko.Caching.Redis/
-├── RedisCache.cs              - ICache implementation over Redis
-├── RedisCacheOptions.cs       - ConnectionString, InstanceName, DefaultExpiration, Database
-└── RedisConnectionManager.cs  - Lazy<ConnectionMultiplexer> singleton, thread-safe
+└── RedisCache.cs              - ICache implementation over Redis
 ```
 
 ## Dependencies
 - **Birko.Caching** (imports projitems)
+- **Birko.Redis** (imports projitems — RedisSettings, RedisConnectionManager)
 - **StackExchange.Redis** NuGet — must be added by the consuming project
 
 ## Usage
 ```csharp
-var options = new RedisCacheOptions
+var settings = new RedisSettings
 {
-    ConnectionString = "localhost:6379",
-    InstanceName = "symbio",    // Keys prefixed as "symbio:{key}"
-    DefaultExpiration = TimeSpan.FromMinutes(10),
+    Location = "localhost",
+    Port = 6379,
+    KeyPrefix = "symbio",       // Keys prefixed as "symbio:{key}"
     Database = 0
 };
-using var cache = new RedisCache(options);
+using var cache = new RedisCache(settings, defaultExpiration: TimeSpan.FromMinutes(10));
 
 await cache.SetAsync("user:42", user, CacheEntryOptions.Sliding(TimeSpan.FromMinutes(15)));
 var result = await cache.GetAsync<User>("user:42");
 ```
 
 ## Key Design Decisions
-- RedisConnectionManager wraps Lazy<ConnectionMultiplexer> — safe to share across threads
+- Uses shared `RedisConnectionManager` from `Birko.Redis` (no local duplicate)
+- Uses `RedisSettings` from `Birko.Redis` (extends RemoteSettings, follows framework settings hierarchy)
+- `DefaultExpiration` is a constructor parameter, not part of settings
+- `_ownsConnection` flag tracks whether to dispose the connection manager (fixes bug where shared connections were disposed)
 - Sliding expiration uses Redis Hash metadata key (`{key}:__meta`) to track sliding/absolute TTL
 - GetOrSetAsync uses Redis SET NX as distributed lock to prevent stampede
 - RemoveByPrefixAsync uses SCAN via KeysAsync (non-blocking)
-- ClearAsync with InstanceName does prefix removal; without it does FlushDatabase
+- ClearAsync with KeyPrefix does prefix removal; without it does FlushDatabase
 - All values serialized via CacheSerializer (JSON)
 
 ## Maintenance

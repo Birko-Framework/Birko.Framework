@@ -5,46 +5,54 @@ Redis-backed ICache implementation for the Birko Framework.
 ## Features
 
 - RedisCache implementing ICache interface
-- Thread-safe singleton RedisConnectionManager
-- Configurable Redis connection options
+- Shared `RedisConnectionManager` from `Birko.Redis`
+- `RedisSettings` configuration (extends framework's `RemoteSettings` hierarchy)
 - Distributed caching for multi-instance deployments
-
-## Installation
-
-```bash
-dotnet add package Birko.Caching.Redis
-```
+- Connection ownership tracking (safe shared connections)
 
 ## Dependencies
 
 - Birko.Caching
+- Birko.Redis (RedisSettings, RedisConnectionManager)
 - StackExchange.Redis
 
 ## Usage
 
 ```csharp
 using Birko.Caching.Redis;
+using Birko.Redis;
 
-var options = new RedisCacheOptions
+var settings = new RedisSettings
 {
-    ConnectionString = "localhost:6379",
-    InstanceName = "myapp:"
+    Location = "localhost",
+    Port = 6379,
+    KeyPrefix = "myapp",        // Keys prefixed as "myapp:{key}"
+    Database = 0
 };
 
-ICache cache = new RedisCache(options);
+ICache cache = new RedisCache(settings, defaultExpiration: TimeSpan.FromMinutes(5));
 await cache.SetAsync("key", value);
 var result = await cache.GetAsync<MyType>("key");
 ```
 
+### Shared Connection
+
+```csharp
+var connectionManager = new RedisConnectionManager(settings);
+
+// Both cache instances share one connection
+var cache1 = new RedisCache(connectionManager, settings);
+var cache2 = new RedisCache(connectionManager, settings);
+```
+
 ## API Reference
 
-- **RedisCache** - Redis ICache implementation
-- **RedisCacheOptions** - Connection string, instance name
-- **RedisConnectionManager** - Thread-safe singleton connection manager
+- **RedisCache** — Redis ICache implementation
 
 ## Related Projects
 
-- [Birko.Caching](../Birko.Caching/) - Core caching interfaces
+- [Birko.Caching](../Birko.Caching/) — Core caching interfaces
+- [Birko.Redis](../Birko.Redis/) — Shared Redis settings and connection manager
 
 ## License
 
