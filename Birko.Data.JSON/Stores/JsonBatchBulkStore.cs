@@ -71,9 +71,9 @@ namespace Birko.Data.Stores
                 {
                     using FileStream fileStream = File.OpenRead(file);
                     var items = ReadFromStream<IEnumerable<T>>(fileStream);
-                    foreach (var item in items)
+                    foreach (var item in items ?? Enumerable.Empty<T>())
                     {
-                        _items.Add(item.Guid.Value, item);
+                        _items.Add(item.Guid!.Value, item);
                     }
                     byte[] bytes = new byte[16];
                     BitConverter.GetBytes(batch).CopyTo(bytes, 0);
@@ -128,7 +128,7 @@ namespace Birko.Data.Stores
         /// <param name="removedFiles">Dictionary of files to remove after saving.</param>
         private void SaveBatch(int batch, IEnumerable<T> batchFiles, Dictionary<string, string> removedFiles)
         {
-            if (!Directory.Exists(PathDirectory))
+            if (!string.IsNullOrEmpty(PathDirectory) && !Directory.Exists(PathDirectory))
             {
                 Directory.CreateDirectory(PathDirectory);
             }

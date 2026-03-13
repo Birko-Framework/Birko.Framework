@@ -21,7 +21,7 @@ namespace Birko.Data.Stores
         /// <summary>
         /// Dictionary tracking which file each item is stored in.
         /// </summary>
-        protected Dictionary<Guid, string> _files = null;
+        protected Dictionary<Guid, string> _files = null!;
 
         #endregion
 

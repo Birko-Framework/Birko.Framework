@@ -22,7 +22,7 @@ namespace Birko.Data.Stores
         /// <summary>
         /// Mapping of entity GUIDs to their file paths.
         /// </summary>
-        private Dictionary<Guid, string> _files = null;
+        private Dictionary<Guid, string> _files = null!;
 
         #endregion
 
@@ -63,7 +63,7 @@ namespace Birko.Data.Stores
                     File.Delete(file);
                 }
             }
-            Directory.Delete(Path);
+            Directory.Delete(Path!);
         }
 
         #endregion
@@ -104,8 +104,11 @@ namespace Birko.Data.Stores
             {
                 using FileStream fileStream = File.OpenRead(file);
                 var item = ReadFromStream<T>(fileStream);
-                _items.Add(item.Guid.Value, item);
-                AddFile(item.Guid.Value, file);
+                if (item?.Guid.HasValue == true)
+                {
+                    _items.Add(item.Guid!.Value, item);
+                    AddFile(item.Guid.Value, file);
+                }
             }
         }
 

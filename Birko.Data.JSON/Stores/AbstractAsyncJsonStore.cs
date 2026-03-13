@@ -50,10 +50,7 @@ namespace Birko.Data.Stores
         {
             await EnsureDataLoadedAsync(ct);
 
-            if (data == null)
-            {
-                return Guid.Empty;
-            }
+            if (data == null) return Guid.Empty;
 
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
@@ -134,7 +131,7 @@ namespace Birko.Data.Stores
         /// <typeparam name="TData">Type of data to deserialize.</typeparam>
         /// <param name="stream">The stream to read from.</param>
         /// <returns>The deserialized data.</returns>
-        protected static async Task<TData> ReadFromStreamAsync<TData>(FileStream stream, CancellationToken ct)
+        protected static async Task<TData?> ReadFromStreamAsync<TData>(FileStream stream, CancellationToken ct)
         {
             return await JsonSerializer.DeserializeAsync<TData>(stream, cancellationToken: ct);
         }
@@ -193,7 +190,7 @@ namespace Birko.Data.Stores
 
         private IEnumerable<T> ApplyOrderBy(IEnumerable<T> source, OrderBy<T> orderBy)
         {
-            IOrderedEnumerable<T> orderedSource = null;
+            IOrderedEnumerable<T>? orderedSource = null;
 
             foreach (var field in orderBy.Fields)
             {
@@ -224,10 +221,7 @@ namespace Birko.Data.Stores
         {
             await EnsureDataLoadedAsync(ct);
 
-            if (data == null)
-            {
-                return;
-            }
+            if (data == null) return;
 
             foreach (var item in data.Where(x => x != null))
             {
@@ -236,7 +230,7 @@ namespace Birko.Data.Stores
                     item.Guid = Guid.NewGuid();
                 }
                 storeDelegate?.Invoke(item);
-                _items[item.Guid.Value] = item;
+                _items[item.Guid!.Value] = item;
             }
 
             await SaveDataAsync(ct);
@@ -246,16 +240,12 @@ namespace Birko.Data.Stores
         public override async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
-
-            if (data == null)
-            {
-                return;
-            }
+            if (data == null) return;
 
             foreach (var item in data.Where(x => x != null && x.Guid.HasValue))
             {
                 storeDelegate?.Invoke(item);
-                _items[item.Guid.Value] = item;
+                _items[item.Guid!.Value] = item;
             }
 
             await SaveDataAsync(ct);
@@ -265,15 +255,11 @@ namespace Birko.Data.Stores
         public override async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
-
-            if (data == null)
-            {
-                return;
-            }
+            if (data == null) return;
 
             foreach (var item in data.Where(x => x != null && x.Guid.HasValue))
             {
-                _items.Remove(item.Guid.Value);
+                _items.Remove(item.Guid!.Value);
             }
 
             await SaveDataAsync(ct);

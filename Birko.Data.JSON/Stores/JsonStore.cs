@@ -22,12 +22,12 @@ namespace Birko.Data.Stores
         /// <summary>
         /// The settings for this JSON store.
         /// </summary>
-        protected Settings _settings = null;
+        protected Settings _settings = null!;
 
         /// <summary>
         /// Gets the full file path for the JSON data file.
         /// </summary>
-        public string Path
+        public string? Path
         {
             get
             {
@@ -38,7 +38,7 @@ namespace Birko.Data.Stores
         /// <summary>
         /// Gets the directory path where the JSON file is stored.
         /// </summary>
-        public string PathDirectory
+        public string? PathDirectory
         {
             get
             {
@@ -122,7 +122,7 @@ namespace Birko.Data.Stores
         /// Gets the full file path for the JSON data file.
         /// </summary>
         /// <returns>The validated file path.</returns>
-        public virtual string GetPath()
+        public virtual string? GetPath()
         {
             if (string.IsNullOrEmpty(_settings?.Location) || string.IsNullOrEmpty(_settings?.Name))
             {
@@ -153,7 +153,7 @@ namespace Birko.Data.Stores
         /// Gets the directory path where the JSON file is stored.
         /// </summary>
         /// <returns>The validated directory path.</returns>
-        public virtual string GetDirectory()
+        public virtual string? GetDirectory()
         {
             if (string.IsNullOrEmpty(_settings?.Location))
             {
@@ -189,9 +189,12 @@ namespace Birko.Data.Stores
             using FileStream fileStream = File.OpenRead(Path);
             var items = ReadFromStream<List<T>>(fileStream);
             _items = new();
-            foreach (var item in items)
+            if (items != null)
             {
-                _items.Add(item.Guid.Value, item);
+                foreach (var item in items)
+                {
+                    _items.Add(item.Guid!.Value, item);
+                }
             }
         }
 

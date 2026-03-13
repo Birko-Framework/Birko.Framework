@@ -113,7 +113,7 @@ namespace Birko.Data.Stores
         /// <typeparam name="TData">Type of data to deserialize.</typeparam>
         /// <param name="stream">The stream to read from.</param>
         /// <returns>The deserialized data.</returns>
-        protected static TData ReadFromStream<TData>(FileStream stream)
+        protected static TData? ReadFromStream<TData>(FileStream stream)
         {
             return JsonSerializer.Deserialize<TData>(stream);
         }
@@ -144,7 +144,7 @@ namespace Birko.Data.Stores
 
             if (orderBy != null && orderBy.Fields.Count > 0)
             {
-                result = ApplyOrderBy(result, orderBy);
+                result = ApplyOrderBy(result!, orderBy);
             }
 
             if (offset != null)
@@ -160,7 +160,7 @@ namespace Birko.Data.Stores
 
         private IEnumerable<T> ApplyOrderBy(IEnumerable<T> source, OrderBy<T> orderBy)
         {
-            IOrderedEnumerable<T> orderedSource = null;
+            IOrderedEnumerable<T>? orderedSource = null;
 
             foreach (var field in orderBy.Fields)
             {
