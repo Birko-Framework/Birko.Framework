@@ -1,4 +1,6 @@
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.PostgreSQL.Stores;
+using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
 using System;
 using PasswordSettings = Birko.Data.Stores.PasswordSettings;
