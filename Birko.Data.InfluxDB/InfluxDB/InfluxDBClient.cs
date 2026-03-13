@@ -93,8 +93,7 @@ namespace Birko.Data.InfluxDB
         {
             try
             {
-                var health = Client.HealthAsync().GetAwaiter().GetResult();
-                return health.Status == global::InfluxDB.Client.Api.Domain.HealthCheck.StatusEnum.Pass;
+                return Client.PingAsync().GetAwaiter().GetResult();
             }
             catch
             {
@@ -110,8 +109,7 @@ namespace Birko.Data.InfluxDB
         {
             try
             {
-                var health = await Client.HealthAsync();
-                return health.Status == global::InfluxDB.Client.Api.Domain.HealthCheck.StatusEnum.Pass;
+                return await Client.PingAsync();
             }
             catch
             {

@@ -115,11 +115,11 @@ namespace Birko.Data.InfluxDB.Stores
                 var records = await queryApi.QueryAsync(flux, _settings.Organization, ct);
                 if (records != null && records.Count > 0 && records[0].Records.Count > 0)
                 {
-                    var items = records[0].Records.Select(r => MapRecordToModel(r)).Where(x => x != null);
+                    var items = records[0].Records.Select(r => MapRecordToModel(r)).Where(x => x != null)!;
                     if (filter != null)
                     {
                         var compiled = filter.Compile();
-                        return items.FirstOrDefault(compiled);
+                        return items.FirstOrDefault(x => x != null && compiled(x));
                     }
                     return items.FirstOrDefault();
                 }

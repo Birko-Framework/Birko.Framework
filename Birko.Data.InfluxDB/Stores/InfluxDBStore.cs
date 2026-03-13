@@ -62,10 +62,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Init()
         {
-            if (Client == null || _settings == null)
-            {
-                return;
-            }
+            if (Client == null || _settings == null) return;
 
             try
             {
@@ -91,10 +88,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Destroy()
         {
-            if (Client == null || _settings == null)
-            {
-                return;
-            }
+            if (Client == null || _settings == null) return;
 
             try
             {
@@ -114,10 +108,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override T? Read(Guid guid)
         {
-            if (Client == null || _settings == null)
-            {
-                return null;
-            }
+            if (Client == null || _settings == null) return null;
 
             var flux = $"from(bucket: \"{_settings.Bucket}\") " +
                        $"|> range(start: 0) " +
@@ -145,10 +136,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override T? Read(Expression<Func<T, bool>>? filter = null)
         {
-            if (Client == null || _settings == null)
-            {
-                return null;
-            }
+            if (Client == null || _settings == null) return null;
 
             var flux = $"from(bucket: \"{_settings.Bucket}\") " +
                        $"|> range(start: 0) " +
@@ -162,11 +150,11 @@ namespace Birko.Data.InfluxDB.Stores
                 var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
                 if (records != null && records.Count > 0 && records[0].Records.Count > 0)
                 {
-                    var items = records[0].Records.Select(r => MapRecordToModel(r)).Where(x => x != null);
+                    var items = records[0].Records.Select(r => MapRecordToModel(r)).Where(x => x != null)!;
                     if (filter != null)
                     {
                         var compiled = filter.Compile();
-                        return items.FirstOrDefault(compiled);
+                        return items.FirstOrDefault(x => x != null && compiled(x));
                     }
                     return items.FirstOrDefault();
                 }
@@ -181,10 +169,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override long Count(Expression<Func<T, bool>>? filter = null)
         {
-            if (Client == null || _settings == null)
-            {
-                return 0;
-            }
+            if (Client == null || _settings == null) return 0;
 
             var flux = $"from(bucket: \"{_settings.Bucket}\") " +
                        $"|> range(start: 0) " +
@@ -217,10 +202,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override Guid Create(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Client == null || _settings == null || data == null)
-            {
-                return Guid.Empty;
-            }
+            if (Client == null || _settings == null || data == null) return Guid.Empty;
 
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
@@ -244,10 +226,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Update(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
-            {
-                return;
-            }
+            if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
             storeDelegate?.Invoke(data);
 
@@ -268,10 +247,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Delete(T data)
         {
-            if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
-            {
-                return;
-            }
+            if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
             try
             {
@@ -295,10 +271,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
-            if (Client == null || _settings == null)
-            {
-                return Enumerable.Empty<T>();
-            }
+            if (Client == null || _settings == null) return Enumerable.Empty<T>();
 
             var flux = $"from(bucket: \"{_settings.Bucket}\") " +
                        $"|> range(start: 0) " +
@@ -354,16 +327,10 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Create(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Client == null || _settings == null || data == null)
-            {
-                return;
-            }
+            if (Client == null || _settings == null || data == null) return;
 
             var itemsToCreate = data.Where(x => x != null).ToList();
-            if (itemsToCreate.Count == 0)
-            {
-                return;
-            }
+            if (itemsToCreate.Count == 0) return;
 
             var points = new List<PointData>();
             foreach (var item in itemsToCreate)
@@ -389,16 +356,10 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Update(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Client == null || _settings == null || data == null)
-            {
-                return;
-            }
+            if (Client == null || _settings == null || data == null) return;
 
             var itemsToUpdate = data.Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty).ToList();
-            if (itemsToUpdate.Count == 0)
-            {
-                return;
-            }
+            if (itemsToUpdate.Count == 0) return;
 
             var points = new List<PointData>();
             foreach (var item in itemsToUpdate)
@@ -423,20 +384,14 @@ namespace Birko.Data.InfluxDB.Stores
         /// <inheritdoc />
         public override void Delete(IEnumerable<T> data)
         {
-            if (Client == null || _settings == null || data == null)
-            {
-                return;
-            }
+            if (Client == null || _settings == null || data == null) return;
 
             var guids = data
                 .Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty)
                 .Select(x => x.Guid!.Value)
                 .ToList();
 
-            if (guids.Count == 0)
-            {
-                return;
-            }
+            if (guids.Count == 0) return;
 
             try
             {

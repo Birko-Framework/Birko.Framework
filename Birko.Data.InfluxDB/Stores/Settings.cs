@@ -10,12 +10,12 @@ namespace Birko.Data.InfluxDB.Stores
         /// <summary>
         /// Gets or sets the authentication token for InfluxDB.
         /// </summary>
-        public string Token { get; set; }
+        public string Token { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the organization name.
         /// </summary>
-        public string Organization { get; set; }
+        public string Organization { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the bucket name.
@@ -41,11 +41,11 @@ namespace Birko.Data.InfluxDB.Stores
         /// <param name="bucket">The bucket name.</param>
         /// <param name="token">The authentication token.</param>
         /// <param name="organization">The organization name.</param>
-        public Settings(string location, string bucket, string token = null, string organization = null)
+        public Settings(string location, string bucket, string? token = null, string? organization = null)
             : base(location, bucket)
         {
-            Token = token;
-            Organization = organization;
+            Token = token ?? string.Empty;
+            Organization = organization ?? string.Empty;
         }
 
         /// <summary>
