@@ -14,7 +14,7 @@ namespace Birko.Data.SQL.Connectors
             return SelectCountView(type, (expr != null) ? DataBase.ParseConditionExpression(expr) : null);
         }
 
-        public long SelectCountView(Type type, IEnumerable<Conditions.Condition> conditions = null)
+        public long SelectCountView(Type type, IEnumerable<Conditions.Condition>? conditions = null)
         {
             return SelectCount(DataBase.LoadView(type), conditions);
         }
@@ -24,7 +24,7 @@ namespace Birko.Data.SQL.Connectors
             return SelectCount(view, (expr != null) ? DataBase.ParseConditionExpression(expr) : null);
         }
 
-        public long SelectCount(Tables.View view, IEnumerable<Conditions.Condition> conditions = null)
+        public long SelectCount(Tables.View view, IEnumerable<Conditions.Condition>? conditions = null)
         {
             return SelectCount(view.Tables.Select(x => x.Name), view.Join, conditions);
         }

@@ -8,13 +8,13 @@ namespace Birko.Data.SQL.Tables
 {
     public class View
     {
-        public string Name { get; private set; }
-        public IEnumerable<Table> Tables { get; private set; }
-        public IEnumerable<Conditions.Join> Join { get; private set; }
+        public string? Name { get; private set; }
+        public IEnumerable<Table> Tables { get; private set; } = null!;
+        public IEnumerable<Conditions.Join>? Join { get; private set; }
 
-        public View(IEnumerable<Table> tables = null, IEnumerable<Conditions.Join> join = null, string name = null)
+        public View(IEnumerable<Table>? tables = null, IEnumerable<Conditions.Join>? join = null, string? name = null)
         {
-            Tables = tables;
+            Tables = tables!;
             Join = join;
             Name = name;
             if (!string.IsNullOrEmpty(name) && Tables != null && Tables.Any())
@@ -40,14 +40,14 @@ namespace Birko.Data.SQL.Tables
             return this;
         }
 
-        public View AddField(string tableName, Type tableType, AbstractField field, string name = null)
+        public View AddField(string tableName, Type tableType, AbstractField field, string? name = null)
         {
             if (!string.IsNullOrEmpty(tableName) && field != null)
             {
-                Table table = null;
+                Table? table = null;
                 if (Tables != null && Tables.Any() && Tables.Any(x => x.Name == tableName))
                 {
-                    table = Tables.FirstOrDefault(x => x.Name == tableName);
+                    table = Tables.FirstOrDefault(x => x.Name == tableName)!;
                 }
                 else
                 {
@@ -58,7 +58,7 @@ namespace Birko.Data.SQL.Tables
                     };
                     Tables = (Tables == null) ? new[] { table } : Tables.Concat(new[] { table });
                 }
-                if (table.Fields == null)
+                if (table!.Fields == null)
                 {
                     table.Fields = new Dictionary<string, AbstractField>();
                 }

@@ -16,7 +16,7 @@ namespace Birko.Data.SQL.Fields
 
         public static FunctionField CreateFunctionAggregateField(System.Reflection.PropertyInfo property, Attributes.AggregateFieldAttribute field, AbstractField tablefield)
         {
-            FunctionField functionField = null;
+            FunctionField? functionField = null;
             if (field is Attributes.AvgFieldAttribute)
             {
                 functionField = (tablefield.IsNotNull)
@@ -130,7 +130,7 @@ namespace Birko.Data.SQL.Fields
             {
                 functionField.IsAggregate = true;
             }
-            return functionField;
+            return functionField!;
         }
     }
 }

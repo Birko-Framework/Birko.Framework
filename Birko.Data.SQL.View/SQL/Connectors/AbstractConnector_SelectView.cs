@@ -35,8 +35,8 @@ namespace Birko.Data.SQL.Connectors
         {
             foreach (var item in Select(DataBase.LoadView(type), (fields, reader) => {
                     var data = Activator.CreateInstance(type, Array.Empty<object>());
-                    DataBase.ReadView(reader, data);
-                    return data;
+                    DataBase.ReadView(reader, data!);
+                    return data!;
             }, conditions, orderFields, limit, offset)) {
                 yield return item;
             }
@@ -84,9 +84,9 @@ namespace Birko.Data.SQL.Connectors
             {
                 foreach (var items in RunReaderCommand((command) => {
                     command = CreateSelectCommand(command, view, conditions, orderFields, limit, offset);
-                }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader) ?? null })) 
+                }, (reader) => new object[1] { transformFunction?.Invoke(view.GetSelectFields(), reader)! }))
                 {
-                    yield return items?.FirstOrDefault();
+                    yield return items?.FirstOrDefault()!;
                 }
             }
         }

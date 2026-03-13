@@ -13,7 +13,7 @@ namespace Birko.Data.SQL
 {
     public static partial class DataBase
     {
-        private static Dictionary<Type, Tables.View> _viewCache = null;
+        private static Dictionary<Type, Tables.View>? _viewCache = null;
 
         public static IEnumerable<Tables.View> LoadViews(IEnumerable<Type> types)
         {
@@ -39,8 +39,8 @@ namespace Birko.Data.SQL
         public static AbstractField GetViewField<T, P>(Expression<Func<T, P>> expr)
         {
             var expression = (UnaryExpression)expr.Body;
-            PropertyInfo propInfo = (expression.Operand as MemberExpression).Member as PropertyInfo;
-            object[] fieldAttrs = propInfo.GetCustomAttributes(typeof(ViewFieldAttribute), true);
+            PropertyInfo? propInfo = ((MemberExpression)expression.Operand).Member as PropertyInfo;
+            object[] fieldAttrs = propInfo!.GetCustomAttributes(typeof(ViewFieldAttribute), true);
             if (fieldAttrs != null && fieldAttrs.Any())
             {
                 foreach (ViewFieldAttribute fieldAttr in fieldAttrs)
@@ -48,11 +48,11 @@ namespace Birko.Data.SQL
                     var table = LoadTable(fieldAttr.ModelType);
                     if (table != null)
                     {
-                        return table.GetFieldByPropertyName(fieldAttr.ModelProperyName);
+                        return table.GetFieldByPropertyName(fieldAttr.ModelProperyName!)!;
                     }
                 }
             }
-            return null;
+            return null!;
         }
 
         public static Tables.View LoadView(Type type)
@@ -84,10 +84,10 @@ namespace Birko.Data.SQL
                                     case ViewConnect.CheckExisting: joinType = JoinType.Inner; break;
                                 }
 
-                                Conditions.Condition cond = null;
+                                Conditions.Condition? cond = null;
                                 if (fieldLeft != null && fieldRight != null)
                                 {
-                                    cond = Conditions.Condition.AndField(tableLeft.Name + "." + fieldLeft.Name, tableRight.Name + "." + fieldRight.Name);
+                                    cond = Conditions.Condition.AndField(tableLeft.Name + "." + fieldLeft.Name, tableRight!.Name + "." + fieldRight.Name);
                                 }
                                 else if (fieldLeft != null && fieldRight == null)
                                 {
@@ -95,11 +95,11 @@ namespace Birko.Data.SQL
                                 }
                                 else if (fieldLeft == null && fieldRight != null)
                                 {
-                                    cond = Conditions.Condition.AndValue(tableRight.Name + "." + fieldRight.Name, attr.ModelProperyLeft);
+                                    cond = Conditions.Condition.AndValue(tableRight!.Name + "." + fieldRight.Name, attr.ModelProperyLeft);
                                 }
                                 if (cond != null)
                                 {
-                                    view.AddJoin(Join.Create(tableLeft.Name, tableRight.Name, cond, joinType));
+                                    view.AddJoin(Join.Create(tableLeft.Name, tableRight!.Name, cond, joinType));
                                 }
                             }
                         }
@@ -116,14 +116,14 @@ namespace Birko.Data.SQL
                                         string name = !string.IsNullOrEmpty(fieldAttr.ModelProperyName) ? fieldAttr.ModelProperyName : field.Name;
                                         if (_fieldsCache.ContainsKey(type) && _fieldsCache[type].Any(x => x.Name == name))
                                         {
-                                            view.AddField(table.Name, table.Type, _fieldsCache[type].FirstOrDefault(x => x.Name == name));
+                                            view.AddField(table.Name, table.Type, _fieldsCache[type].FirstOrDefault(x => x.Name == name)!);
                                         }
                                         else
                                         {
-                                            var tableField = table.GetFieldByPropertyName(fieldAttr.ModelProperyName);
+                                            var tableField = table.GetFieldByPropertyName(fieldAttr.ModelProperyName!);
                                             if (tableField != null)
                                             {
-                                                string tableFieldName = null;
+                                                string? tableFieldName = null;
                                                 if (fieldAttr is AggregateFieldAttribute)
                                                 {
                                                     tableFieldName = tableField.Name;
@@ -158,7 +158,7 @@ namespace Birko.Data.SQL
                     }
                     else
                     {
-                        return null;
+                        return null!;
                     }
                 }
                 else
@@ -174,7 +174,7 @@ namespace Birko.Data.SQL
             var type = data.GetType();
             var view = LoadView(type);
             var tableFields = view?.GetTableFields();
-            return Read(tableFields, reader, data, index);
+            return Read(tableFields!, reader, data, index);
         }
     }
 }

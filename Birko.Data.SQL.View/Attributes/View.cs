@@ -18,9 +18,9 @@ namespace Birko.Data.SQL.Attributes
         public Type ModelRight { get; private set; }
         public object ModelProperyLeft { get; private set; }
         public object ModelProperyRight { get; private set; }
-        public string Name { get; internal set; }
+        public string? Name { get; internal set; }
         public ViewConnect Connect { get; internal set; }
-        public ViewAttribute(Type modelLeft, Type modelRight, object modelProperyLeft, object modelProperyRight, string name = null, ViewConnect connect = ViewConnect.None)
+        public ViewAttribute(Type modelLeft, Type modelRight, object modelProperyLeft, object modelProperyRight, string? name = null, ViewConnect connect = ViewConnect.None)
         {
             ModelLeft = modelLeft;
             ModelRight = modelRight;

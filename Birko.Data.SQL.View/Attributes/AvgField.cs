@@ -7,7 +7,7 @@ namespace Birko.Data.SQL.Attributes
     [System.AttributeUsage(System.AttributeTargets.Property)]
     public class AvgFieldAttribute : AggregateFieldAttribute
     {
-        public AvgFieldAttribute(Type modelType, string modelPropertyName, string name = null) : base(modelType, modelPropertyName, name)
+        public AvgFieldAttribute(Type modelType, string? modelPropertyName, string? name = null) : base(modelType, modelPropertyName, name)
         { }
     }
 }

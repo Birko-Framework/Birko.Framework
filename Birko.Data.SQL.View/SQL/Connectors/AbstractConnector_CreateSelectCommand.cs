@@ -25,7 +25,7 @@ namespace Birko.Data.SQL.Connectors
             var leftTables = view.Join?.Select(x => x.Left).Distinct().Where(x => !string.IsNullOrEmpty(x)).ToList();
             if (leftTables != null)
             {
-                foreach (var tableName in view.Join.Select(x => x.Right).Distinct().Where(x => !string.IsNullOrEmpty(x)))
+                foreach (var tableName in view.Join!.Select(x => x.Right).Distinct().Where(x => !string.IsNullOrEmpty(x)))
                 {
                     leftTables.Remove(tableName);
                 }
