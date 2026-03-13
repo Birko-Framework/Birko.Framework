@@ -71,8 +71,8 @@
     <Project Path="../Birko.Data.JSON.ViewModel/Birko.Data.JSON.ViewModel.shproj" Id="3c4d5e6f-7a8b-9012-3cde-f45678901234" />
     <Project Path="../Birko.Data.MongoDB.ViewModel/Birko.Data.MongoDB.ViewModel.shproj" Id="1a2b3c4d-5e6f-7890-1abc-def234567890" />
     <Project Path="../Birko.Data.RavenDB.ViewModel/Birko.Data.RavenDB.ViewModel.shproj" Id="4d5e6f7a-8b9c-0123-4def-567890123456" />
-    <Project Path="../Birko.Data.SQL.ViewModel/Birko.Data.SQL.ViewModel.shproj" Id="9c5de2f0-ba3c-4e6d-af4g-2b3c4d5e6f7g" />
-    <Project Path="../Birko.Data.TimescaleDB.ViewModel/Birko.Data.TimescaleDB.ViewModel.shproj" Id="5e6f7a8b-9c0d-1234-5ef6-7890123456789" />
+    <Project Path="../Birko.Data.SQL.ViewModel/Birko.Data.SQL.ViewModel.shproj" Id="9c5de2f0-ba3c-4e6d-af40-2b3c4d5e6f70" />
+    <Project Path="../Birko.Data.TimescaleDB.ViewModel/Birko.Data.TimescaleDB.ViewModel.shproj" Id="5e6f7a8b-9c0d-1234-5ef6-789012345678" />
   </Folder>
   <Folder Name="/Helpers/">
     <Project Path="../Birko.Helpers/Birko.Helpers.shproj" />

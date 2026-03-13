@@ -305,6 +305,11 @@ When creating a new project in the framework, every project directory must conta
 3. **`CLAUDE.md`** — Overview, project location, components, dependencies, and maintenance instructions.
 4. **`.gitignore`** — Standard Visual Studio .gitignore. Copy from any existing project.
 
+**GUID requirements for `.shproj` and `.projitems` files:**
+- `ProjectGuid` in `.shproj` and `SharedGUID` in `.projitems` must be valid GUIDs containing **only hex characters** (`0-9`, `a-f`).
+- Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (8-4-4-4-12 characters). Do NOT use human-readable names or non-hex letters (`g-z`) in GUIDs.
+- Each project must have a unique GUID. Generate a proper random GUID (e.g., `b3a8c1d4-e5f6-4a7b-9c0d-1e2f3a4b5c6d`).
+
 ### Solution & Workspace Registration
 When adding a new project to the framework, it must be registered in both:
 
