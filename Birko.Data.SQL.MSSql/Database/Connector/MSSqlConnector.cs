@@ -45,12 +45,13 @@ namespace Birko.Data.SQL.Connectors
             if (settings != null && !string.IsNullOrEmpty(settings.Location) && !string.IsNullOrEmpty(settings.Name) && !string.IsNullOrEmpty(settings.Location) && settings is RemoteSettings remotesettings)
             {
 
-                var connection = new SqlConnection(string.Format("Server=tcp:{0},{4};Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt=True;", new object[] {
+                var connection = new SqlConnection(string.Format("Server=tcp:{0},{4};Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt={5};", new object[] {
                     remotesettings.Location,
                     remotesettings.Name,
                     remotesettings.UserName,
                     remotesettings.Password,
-                    remotesettings.Port
+                    remotesettings.Port,
+                    remotesettings.UseSsl ? "True" : "False"
                 }));
                 return connection;
             }
