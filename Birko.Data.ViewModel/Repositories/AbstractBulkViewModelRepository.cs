@@ -43,7 +43,11 @@ namespace Birko.Data.Repositories
 
             foreach (var item in ((IBulkStore<TModel>)Store).Read(filter?.Filter(), null, limit, offset))
             {
-                yield return LoadInstance(item);
+                var instance = LoadInstance(item);
+                if (instance != null)
+                {
+                    yield return instance;
+                }
             }
         }
 

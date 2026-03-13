@@ -20,7 +20,7 @@ namespace Birko.Data.Repositories
         #region Properties and Fields
 
         private bool _isReadMode = false;
-        protected IDictionary<Guid?, byte[]> _modelHash = new Dictionary<Guid?, byte[]>();
+        protected IDictionary<Guid, byte[]> _modelHash = new Dictionary<Guid, byte[]>();
         protected IAsyncStore<TModel>? Store { get; set; }
 
         /// <inheritdoc />
@@ -56,16 +56,13 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual TViewModel CreateInstance()
         {
-            return (TViewModel)Activator.CreateInstance(typeof(TViewModel), Array.Empty<object>());
+            return (TViewModel)Activator.CreateInstance(typeof(TViewModel), Array.Empty<object>())!;
         }
 
         /// <inheritdoc />
         public virtual TModel CreateModelInstance()
         {
-            if (Store == null)
-            {
-                return Activator.CreateInstance<TModel>();
-            }
+            if (Store == null) return Activator.CreateInstance<TModel>();
             return Store.CreateInstance();
         }
 
@@ -79,10 +76,10 @@ namespace Birko.Data.Repositories
         /// <param name="data">The model to hash.</param>
         protected virtual void StoreHash(TModel data)
         {
-            if (!ReadMode && data != null && data.Guid != null)
+            if (!ReadMode && data != null && data.Guid.HasValue)
             {
                 var hash = CalculateHash(data);
-                _modelHash[data.Guid] = hash;
+                _modelHash[data.Guid.Value] = hash;
             }
         }
 
@@ -102,9 +99,9 @@ namespace Birko.Data.Repositories
         /// <param name="data">The model to remove the hash for.</param>
         protected virtual void RemoveHash(TModel data)
         {
-            if (!ReadMode && data != null && data.Guid != null)
+            if (!ReadMode && data != null && data.Guid.HasValue)
             {
-                _modelHash.Remove(data.Guid);
+                _modelHash.Remove(data.Guid.Value);
             }
         }
 
@@ -117,17 +114,17 @@ namespace Birko.Data.Repositories
         protected virtual bool CheckHashChange(TModel data, bool update = true)
         {
             var result = true;
-            if (data != null && data.Guid != null)
+            if (data != null && data.Guid.HasValue)
             {
                 var hash = CalculateHash(data);
-                if (_modelHash.TryGetValue(data.Guid, out byte[]? storedHash)
+                if (_modelHash.TryGetValue(data.Guid.Value, out byte[]? storedHash)
                     && Helpers.ObjectHelper.CompareHash(storedHash, hash))
                 {
                     result = false;
                 }
             }
 
-            if (update)
+            if (update && data != null)
             {
                 StoreHash(data);
             }
@@ -144,11 +141,11 @@ namespace Birko.Data.Repositories
         /// </summary>
         /// <param name="model">The data model to load from.</param>
         /// <returns>The loaded view model, or default if model is null.</returns>
-        public virtual TViewModel LoadInstance(TModel? model = null)
+        public virtual TViewModel? LoadInstance(TModel? model = null)
         {
             if (model == null)
             {
-                return default(TViewModel);
+                return default;
             }
             TViewModel result = CreateInstance();
             result.LoadFrom(model);
@@ -177,10 +174,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task<TViewModel?> ReadAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null)
-            {
-                return default;
-            }
+            if (Store == null) return default;
             var model = await Store.ReadAsync(filter?.Filter(), ct);
             return LoadInstance(model);
         }
@@ -188,25 +182,16 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<TViewModel?> ReadOneAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default)
         {
-            if (Store != null)
-            {
-                var model = await Store.ReadAsync(filter?.Filter(), ct);
-                return LoadInstance(model);
-            }
-            return default;
+            if (Store == null) return default;
+            var model = await Store.ReadAsync(filter?.Filter(), ct);
+            return LoadInstance(model);
         }
 
         /// <inheritdoc />
         public virtual async Task<Guid> CreateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
-            if (ReadMode)
-            {
-                throw new AccessViolationException("Repository is in Read Mode");
-            }
-            if (Store == null || data == null)
-            {
-                return Guid.Empty;
-            }
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
+            if (Store == null || data == null) return Guid.Empty;
 
             TModel item = LoadModelInstance(data);
             var guid = await Store.CreateAsync(item, (x) =>
@@ -222,14 +207,8 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task UpdateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
-            if (ReadMode)
-            {
-                throw new AccessViolationException("Repository is in Read Mode");
-            }
-            if (Store == null || data == null)
-            {
-                return;
-            }
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
+            if (Store == null || data == null) return;
 
             TModel item = LoadModelInstance(data);
             await Store.UpdateAsync(item, (x) =>
@@ -239,7 +218,7 @@ namespace Birko.Data.Repositories
                 {
                     return x;
                 }
-                return null;
+                return null!;
             }, ct);
             data.LoadFrom(item);
         }
@@ -247,15 +226,9 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task DeleteAsync(TViewModel data, CancellationToken ct = default)
         {
-            if (ReadMode)
-            {
-                throw new AccessViolationException("Repository is in Read Mode");
-            }
-            if (Store == null)
-            {
-                return;
-            }
-            var item = (TModel)Activator.CreateInstance(data.GetType(), Array.Empty<object>());
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
+            if (Store == null) return;
+            var item = (TModel)Activator.CreateInstance(data.GetType(), Array.Empty<object>())!;
             item.LoadFrom(data);
             await Store.DeleteAsync(item, ct);
         }
@@ -267,10 +240,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<long> CountAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default)
         {
-            if (Store == null)
-            {
-                return 0;
-            }
+            if (Store == null) return 0;
             return await Store.CountAsync(filter?.Filter(), ct);
         }
 
@@ -281,10 +251,8 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task DestroyAsync(CancellationToken ct = default)
         {
-            if (Store != null)
-            {
-                await Store.DestroyAsync(ct);
-            }
+            if (Store == null) return;
+            await Store.DestroyAsync(ct);
         }
 
         #endregion

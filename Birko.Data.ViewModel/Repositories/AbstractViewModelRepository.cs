@@ -18,7 +18,7 @@ namespace Birko.Data.Repositories
         #region Properties and Fields
 
         private bool _isReadMode = false;
-        protected IDictionary<Guid?, byte[]> _modelHash = new Dictionary<Guid?, byte[]>();
+        protected IDictionary<Guid, byte[]> _modelHash = new Dictionary<Guid, byte[]>();
         protected IStore<TModel>? Store { get; set; }
 
         /// <summary>
@@ -53,7 +53,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual TViewModel CreateInstance()
         {
-            return (TViewModel)Activator.CreateInstance(typeof(TViewModel), Array.Empty<object>());
+            return (TViewModel)Activator.CreateInstance(typeof(TViewModel), Array.Empty<object>())!;
         }
 
         /// <inheritdoc />
@@ -72,10 +72,10 @@ namespace Birko.Data.Repositories
 
         protected virtual void StoreHash(TModel data)
         {
-            if (!ReadMode && data != null && data.Guid != null)
+            if (!ReadMode && data != null && data.Guid.HasValue)
             {
                 var hash = CalculateHash(data);
-                _modelHash[data.Guid] = hash;
+                _modelHash[data.Guid.Value] = hash;
             }
         }
 
@@ -86,26 +86,26 @@ namespace Birko.Data.Repositories
 
         protected virtual void RemoveHash(TModel data)
         {
-            if (!ReadMode && data != null && data.Guid != null)
+            if (!ReadMode && data != null && data.Guid.HasValue)
             {
-                _modelHash.Remove(data.Guid);
+                _modelHash.Remove(data.Guid.Value);
             }
         }
 
         protected virtual bool CheckHashChange(TModel data, bool update = true)
         {
             var result = true;
-            if (data != null && data.Guid != null)
+            if (data != null && data.Guid.HasValue)
             {
                 var hash = CalculateHash(data);
-                if (_modelHash.TryGetValue(data.Guid, out byte[]? storedHash)
+                if (_modelHash.TryGetValue(data.Guid.Value, out byte[]? storedHash)
                     && Helpers.ObjectHelper.CompareHash(storedHash, hash))
                 {
                     result = false;
                 }
             }
 
-            if (update)
+            if (update && data != null)
             {
                 StoreHash(data);
             }
@@ -117,11 +117,11 @@ namespace Birko.Data.Repositories
 
         #region Instance Loading Methods
 
-        public virtual TViewModel LoadInstance(TModel? model = null)
+        public virtual TViewModel? LoadInstance(TModel? model = null)
         {
             if (model == null)
             {
-                return default(TViewModel);
+                return default;
             }
             TViewModel result = CreateInstance();
             result.LoadFrom(model);
@@ -212,7 +212,7 @@ namespace Birko.Data.Repositories
                 {
                     return x;
                 }
-                return null;
+                return null!;
             });
             data.LoadFrom(item);
         }
