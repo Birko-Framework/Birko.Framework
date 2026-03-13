@@ -47,7 +47,7 @@ namespace Birko.Data.Migrations.MongoDB
                 // Create index on Version field
                 var collection = _database.GetCollection<MigrationDocument>(collectionName);
                 var keys = Builders<MigrationDocument>.IndexKeys.Ascending(d => d.Version);
-                collection.Indexes.CreateOne(keys, new CreateIndexOptions { Unique = true });
+                collection.Indexes.CreateOne(new CreateIndexModel<MigrationDocument>(keys, new CreateIndexOptions { Unique = true }));
             }
 
             _collection = _database.GetCollection<MigrationDocument>(collectionName);

@@ -99,7 +99,7 @@ namespace Birko.Data.Migrations.MongoDB
         {
             var collection = database.GetCollection<BsonDocument>(collectionName);
             var keys = BsonDocument.Parse(keysJson);
-            return collection.Indexes.CreateOne(new BsonDocumentIndexKeysDefinition<BsonDocument>(keys), options);
+            return collection.Indexes.CreateOne(new CreateIndexModel<BsonDocument>(new BsonDocumentIndexKeysDefinition<BsonDocument>(keys), options));
         }
 
         /// <summary>
