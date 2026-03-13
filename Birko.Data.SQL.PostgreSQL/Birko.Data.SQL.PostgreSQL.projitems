@@ -9,9 +9,6 @@
     <Import_RootNamespace>Birko.Data.SQL.PostgreSQL</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Npgsql" Version="9.0.2" />
-  </ItemGroup>
-  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\PostgreSQLConnector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\PostgreSQLRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncPostgreSQLStore.cs" />
