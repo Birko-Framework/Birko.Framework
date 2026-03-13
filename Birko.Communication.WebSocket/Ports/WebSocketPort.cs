@@ -10,7 +10,7 @@ namespace Birko.Communication.WebSocket.Ports
 {
     public class WebSocketSettings : PortSettings
     {
-        public string Uri { get; set; }
+        public string Uri { get; set; } = string.Empty;
 
         public override string GetID()
         {
@@ -20,10 +20,10 @@ namespace Birko.Communication.WebSocket.Ports
 
     public class WebSocketPort : AbstractPort
     {
-        private ClientWebSocket _socket;
-        private Thread _readThread;
+        private ClientWebSocket? _socket;
+        private Thread? _readThread;
         private bool _stopThread;
-        private CancellationTokenSource _cts;
+        private CancellationTokenSource? _cts;
 
         public WebSocketPort(WebSocketSettings settings) : base(settings)
         {
@@ -132,7 +132,7 @@ namespace Birko.Communication.WebSocket.Ports
                 {
                     var segment = new ArraySegment<byte>(buffer);
                     // ReceiveAsync
-                    var resultTask = _socket.ReceiveAsync(segment, _cts.Token);
+                    var resultTask = _socket!.ReceiveAsync(segment, _cts!.Token);
                     resultTask.Wait();
 
                     var result = resultTask.Result;
