@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c4d5e6f7-a8b9-4c0d-9e1f-2a3b4c5d6e72</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.MessageQueue.Mqtt</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)MqttMessageQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttProducer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttConsumer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttSubscription.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttQualityOfService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttLastWill.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttTopic.cs" />
+  </ItemGroup>
+</Project>
