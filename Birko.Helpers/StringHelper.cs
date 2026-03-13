@@ -94,7 +94,7 @@ namespace Birko.Helpers
             return sha512.ComputeHash(Encoding.UTF8.GetBytes(data));
         }
 
-        public static string ToHexText(byte[] bytes, bool upperCase = false)
+        public static string ToHexText(byte[]? bytes, bool upperCase = false)
         {
             if ((bytes?.Length ?? 0) == 0)
             {
@@ -104,8 +104,8 @@ namespace Birko.Helpers
             // Use optimized .NET native API (available in .NET 5+)
             // This is significantly faster than manual StringBuilder loop
             return upperCase
-                ? Convert.ToHexString(bytes)
-                : Convert.ToHexStringLower(bytes);
+                ? Convert.ToHexString(bytes!)
+                : Convert.ToHexStringLower(bytes!);
         }
     }
 }
