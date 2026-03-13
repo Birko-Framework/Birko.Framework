@@ -9,7 +9,7 @@ namespace Birko.Data.Repositories
         where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
         where TViewModel : Models.ILoadable<TModel>
     {
-        TConnector Connector { get; }
+        TConnector? Connector { get; }
         void AddOnInit(SQL.Connectors.InitConnector onInit);
         void RemoveOnInit(SQL.Connectors.InitConnector onInit);
     }

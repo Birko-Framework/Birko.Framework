@@ -14,7 +14,7 @@ namespace Birko.Data.Repositories
         /// Gets the database connector from the (potentially wrapped) store.
         /// This works with tenant wrappers and other store wrappers.
         /// </summary>
-        public TConnector Connector => Store?.GetUnwrappedStore<TModel, DataBaseBulkStore<TConnector, TModel>>()?.Connector;
+        public TConnector? Connector => Store?.GetUnwrappedStore<TModel, DataBaseBulkStore<TConnector, TModel>>()?.Connector;
 
         public DataBaseRepository()
             : this(new DataBaseBulkStore<TConnector, TModel>())
