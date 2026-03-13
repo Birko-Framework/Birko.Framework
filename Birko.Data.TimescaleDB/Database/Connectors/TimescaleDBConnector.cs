@@ -44,7 +44,8 @@ namespace Birko.Data.SQL.Connectors
                     Name = settings.Name,
                     Password = settings.Password,
                     UserName = settings.UserName,
-                    Port = settings.Port
+                    Port = settings.Port,
+                    UseSsl = settings.UseSsl
                 };
             }
         }
