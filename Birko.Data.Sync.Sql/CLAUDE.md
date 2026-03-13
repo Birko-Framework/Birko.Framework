@@ -9,13 +9,15 @@ SQL-specific sync knowledge item implementation for the Birko.Data.Sync framewor
 ## Components
 
 ### Models
-- `SqlSyncKnowledgeItem` - Implements `ISyncKnowledgeItem` with DataAnnotations attributes
-  - Mapped to `[Table("SyncKnowledge")]` SQL table
+- `SqlSyncKnowledgeItem` - Extends `AbstractModel`, implements `ISyncKnowledgeItem` with Birko.Data.SQL attributes
+  - `[Table("SyncKnowledge")]` for table mapping
+  - `[PrimaryField]` on Guid, `[IncrementField]` on Id
+  - `[NamedField]` on all properties for column mapping
 
 ## Dependencies
-- Birko.Data.Sync
-- Birko.Data.SQL
-- System.ComponentModel.DataAnnotations
+- Birko.Data (AbstractModel)
+- Birko.Data.Sync (ISyncKnowledgeItem)
+- Birko.Data.SQL (attributes: Table, PrimaryField, NamedField, IncrementField)
 
 ## Maintenance
 
