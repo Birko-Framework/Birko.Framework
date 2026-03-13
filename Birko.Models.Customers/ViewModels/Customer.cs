@@ -14,8 +14,8 @@ namespace Birko.Models.Customers.ViewModels
             PropertyChanged += Customer_PropertyChanged;
         }
 
-        private PriceGroup _priceGroup;
-        public PriceGroup PriceGroup
+        private PriceGroup? _priceGroup;
+        public PriceGroup? PriceGroup
         {
             get { return _priceGroup; }
             set
@@ -25,7 +25,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private void Customer_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Customer_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { PriceGroupProperty }.Contains(e.PropertyName))
             {

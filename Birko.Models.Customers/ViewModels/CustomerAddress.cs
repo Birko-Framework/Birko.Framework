@@ -13,8 +13,8 @@ namespace Birko.Models.Customers.ViewModels
             PropertyChanged += CustomerAddress_PropertyChanged;
         }
 
-        private Address _address;
-        public Address Address
+        private Address? _address;
+        public Address? Address
         {
             get { return _address; }
             set
@@ -24,7 +24,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private void CustomerAddress_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void CustomerAddress_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { AddressProperty }.Contains(e.PropertyName))
             {

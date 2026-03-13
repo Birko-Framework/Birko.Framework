@@ -14,7 +14,7 @@ namespace Birko.Models.Customers.ViewModels
             PropertyChanged += BaseCustomer_PropertyChanged;
         }
 
-        private string _name;
+        private string _name = string.Empty;
         public string Name
         {
             get { return _name; }
@@ -28,7 +28,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _code;
+        private string _code = string.Empty;
         public string Code
         {
             get { return _code; }
@@ -42,7 +42,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private void BaseCustomer_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void BaseCustomer_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { NameProperty, CodeProperty }.Contains(e.PropertyName))
             {

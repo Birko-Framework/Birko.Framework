@@ -15,10 +15,10 @@ namespace Birko.Models.Customers
         , Birko.Data.Models.ILoadable<ViewModels.InvoiceAddress>
         , ICopyable<InvoiceAddress>
     {
-        public string BIN { get; set; }
-        public string TIN { get; set; }
-        public string VATIN { get; set; }
-        public string BankAccount { get; set; }
+        public string BIN { get; set; } = string.Empty;
+        public string TIN { get; set; } = string.Empty;
+        public string VATIN { get; set; } = string.Empty;
+        public string BankAccount { get; set; } = string.Empty;
 
         public virtual InvoiceAddress CopyTo(InvoiceAddress clone)
         {
@@ -38,13 +38,11 @@ namespace Birko.Models.Customers
         public override void LoadFrom(ViewModels.Address data)
         {
             base.LoadFrom(data);
-            if (data != null && data is ViewModels.InvoiceAddress invoiceData)
-            {
-                BIN = invoiceData.BIN;
-                TIN = invoiceData.TIN;
-                VATIN = invoiceData.VATIN;
-                BankAccount = invoiceData.BankAccount;
-            }
+            if (data is not ViewModels.InvoiceAddress invoiceData) return;
+            BIN = invoiceData.BIN;
+            TIN = invoiceData.TIN;
+            VATIN = invoiceData.VATIN;
+            BankAccount = invoiceData.BankAccount;
         }
 
         public virtual void LoadFrom(ViewModels.InvoiceAddress data)

@@ -16,7 +16,7 @@ namespace Birko.Models.Customers.ViewModels
             PropertyChanged += InvoiceAddress_PropertyChanged;
         }
 
-        private string _bin;
+        private string _bin = string.Empty;
         public string BIN
         {
             get { return _bin; }
@@ -30,7 +30,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _tin;
+        private string _tin = string.Empty;
         public string TIN
         {
             get { return _tin; }
@@ -44,7 +44,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _vatin;
+        private string _vatin = string.Empty;
         public string VATIN
         {
             get { return _vatin; }
@@ -58,7 +58,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _bankAccount;
+        private string _bankAccount = string.Empty;
         public string BankAccount
         {
             get { return _bankAccount; }
@@ -72,7 +72,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private void InvoiceAddress_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void InvoiceAddress_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { BINProperty, TINProperty, VATINProperty, BankAccountProperty }.Contains(e.PropertyName))
             {

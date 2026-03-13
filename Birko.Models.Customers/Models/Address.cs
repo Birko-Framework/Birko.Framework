@@ -15,16 +15,16 @@ namespace Birko.Models.Customers
         , Birko.Data.Models.ILoadable<ViewModels.Address>
         , ICopyable<Address>
     {
-        public string Name { get; set; }
-        public string Street { get; set; }
-        public string StreetNumber { get; set; }
-        public string City { get; set; }
-        public string ZIP { get; set; }
-        public string District { get; set; }
-        public string Region { get; set; }
-        public string Country { get; set; }
-        public string Phone { get; set; }
-        public string Email { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Street { get; set; } = string.Empty;
+        public string StreetNumber { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+        public string ZIP { get; set; } = string.Empty;
+        public string District { get; set; } = string.Empty;
+        public string Region { get; set; } = string.Empty;
+        public string Country { get; set; } = string.Empty;
+        public string Phone { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
 
         public virtual Address CopyTo(Address clone)
         {
@@ -49,19 +49,17 @@ namespace Birko.Models.Customers
         public virtual void LoadFrom(ViewModels.Address data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                Name = data.Name;
-                Street = data.Street;
-                StreetNumber = data.StreetNumber;
-                City = data.City;
-                ZIP = data.ZIP;
-                District = data.District;
-                Region = data.Region;
-                Country = data.Country;
-                Phone = data.Phone;
-                Email = data.Email;
-            }
+            if (data == null) return;
+            Name = data.Name;
+            Street = data.Street;
+            StreetNumber = data.StreetNumber;
+            City = data.City;
+            ZIP = data.ZIP;
+            District = data.District;
+            Region = data.Region;
+            Country = data.Country;
+            Phone = data.Phone;
+            Email = data.Email;
         }
     }
 }

@@ -22,7 +22,7 @@ namespace Birko.Models.Customers.ViewModels
             PropertyChanged += Address_PropertyChanged;
         }
 
-        private string _name;
+        private string _name = string.Empty;
         public string Name
         {
             get { return _name; }
@@ -36,7 +36,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _street;
+        private string _street = string.Empty;
         public string Street
         {
             get { return _street; }
@@ -50,7 +50,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _streetNumber;
+        private string _streetNumber = string.Empty;
         public string StreetNumber
         {
             get { return _streetNumber; }
@@ -64,7 +64,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _city;
+        private string _city = string.Empty;
         public string City
         {
             get { return _city; }
@@ -78,7 +78,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _zip;
+        private string _zip = string.Empty;
         public string ZIP
         {
             get { return _zip; }
@@ -92,7 +92,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _district;
+        private string _district = string.Empty;
         public string District
         {
             get { return _district; }
@@ -106,7 +106,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _region;
+        private string _region = string.Empty;
         public string Region
         {
             get { return _region; }
@@ -120,7 +120,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _country;
+        private string _country = string.Empty;
         public string Country
         {
             get { return _country; }
@@ -134,7 +134,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _phone;
+        private string _phone = string.Empty;
         public string Phone
         {
             get { return _phone; }
@@ -148,7 +148,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private string _email;
+        private string _email = string.Empty;
         public string Email
         {
             get { return _email; }
@@ -162,7 +162,7 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
-        private void Address_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Address_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { NameProperty, StreetProperty, StreetNumberProperty, CityProperty, ZIPProperty, DistrictProperty, RegionProperty, CountryProperty, PhoneProperty, EmailProperty }.Contains(e.PropertyName))
             {

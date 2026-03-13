@@ -15,8 +15,8 @@ namespace Birko.Models.Customers
         , Birko.Data.Models.ILoadable<ViewModels.BaseCustomer>
         , ICopyable<BaseCustomer>
     {
-        public string Name { get; set; }
-        public string Code { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Code { get; set; } = string.Empty;
 
         public virtual BaseCustomer CopyTo(BaseCustomer clone)
         {
@@ -33,11 +33,9 @@ namespace Birko.Models.Customers
         public virtual void LoadFrom(ViewModels.BaseCustomer data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                Name = data.Name;
-                Code = data.Code;
-            }
+            if (data == null) return;
+            Name = data.Name;
+            Code = data.Code;
         }
     }
 }
