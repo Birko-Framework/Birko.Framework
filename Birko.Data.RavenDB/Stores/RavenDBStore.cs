@@ -127,10 +127,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (_documentStore == null || data == null)
-        {
-            return Guid.Empty;
-        }
+        if (_documentStore == null || data == null) return Guid.Empty;
 
         data.Guid ??= Guid.NewGuid();
         storeDelegate?.Invoke(data);
@@ -151,10 +148,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override T? Read(Guid guid)
     {
-        if (_documentStore == null || guid == Guid.Empty)
-        {
-            return null;
-        }
+        if (_documentStore == null || guid == Guid.Empty) return null;
 
         if (TransactionContext != null)
         {
@@ -168,10 +162,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override IEnumerable<T> Read()
     {
-        if (_documentStore == null)
-        {
-            return Enumerable.Empty<T>();
-        }
+        if (_documentStore == null) return Enumerable.Empty<T>();
 
         if (TransactionContext != null)
         {
@@ -185,10 +176,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override T? Read(Expression<Func<T, bool>>? filter = null)
     {
-        if (_documentStore == null)
-        {
-            return null;
-        }
+        if (_documentStore == null) return null;
 
         if (TransactionContext != null)
         {
@@ -212,10 +200,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
-        {
-            return;
-        }
+        if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
         storeDelegate?.Invoke(data);
 
@@ -245,10 +230,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override void Delete(T data)
     {
-        if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
-        {
-            return;
-        }
+        if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
         if (TransactionContext != null)
         {
@@ -268,10 +250,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override long Count(Expression<Func<T, bool>>? filter = null)
     {
-        if (_documentStore == null)
-        {
-            return 0;
-        }
+        if (_documentStore == null) return 0;
 
         if (TransactionContext != null)
         {
@@ -299,10 +278,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
-        if (_documentStore == null)
-        {
-            return Enumerable.Empty<T>();
-        }
+        if (_documentStore == null) return Enumerable.Empty<T>();
 
         var session = TransactionContext ?? _documentStore.OpenSession();
         try
@@ -354,10 +330,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (_documentStore == null || data == null)
-        {
-            return;
-        }
+        if (_documentStore == null || data == null) return;
 
         if (TransactionContext != null)
         {
@@ -387,10 +360,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (_documentStore == null || data == null)
-        {
-            return;
-        }
+        if (_documentStore == null || data == null) return;
 
         var session = TransactionContext ?? _documentStore.OpenSession();
         try
@@ -430,10 +400,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override void Delete(IEnumerable<T> data)
     {
-        if (_documentStore == null || data == null)
-        {
-            return;
-        }
+        if (_documentStore == null || data == null) return;
 
         var session = TransactionContext ?? _documentStore.OpenSession();
         try
