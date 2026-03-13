@@ -6,6 +6,7 @@
     <Project Path="../Birko.BackgroundJobs.MongoDB/Birko.BackgroundJobs.MongoDB.shproj" />
     <Project Path="../Birko.BackgroundJobs.RavenDB/Birko.BackgroundJobs.RavenDB.shproj" />
     <Project Path="../Birko.BackgroundJobs.JSON/Birko.BackgroundJobs.JSON.shproj" />
+    <Project Path="../Birko.BackgroundJobs.Redis/Birko.BackgroundJobs.Redis.shproj" />
   </Folder>
   <Folder Name="/Caching/">
     <Project Path="../Birko.Caching/Birko.Caching.shproj" />
@@ -86,6 +87,9 @@
     <Project Path="../Birko.Models.SEO/Birko.Models.SEO.shproj" />
     <Project Path="../Birko.Models.Users/Birko.Models.Users.shproj" />
     <Project Path="../Birko.Models.Warehouse/Birko.Models.Warehouse.shproj" />
+  </Folder>
+  <Folder Name="/Redis/">
+    <Project Path="../Birko.Redis/Birko.Redis.shproj" />
   </Folder>
   <Folder Name="/Security/">
     <Project Path="../Birko.Security/Birko.Security.shproj" />

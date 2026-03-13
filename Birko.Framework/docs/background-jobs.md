@@ -218,7 +218,78 @@ await JsonJobQueueSchema.EnsureCreatedAsync(queue);
 
 Stores jobs as JSON files on disk. No external database required.
 
+### Redis
+
+Uses `RedisSettings` from `Birko.Redis` (extends the framework's `RemoteSettings` hierarchy):
+
+```csharp
+var settings = new RedisSettings
+{
+    Location = "localhost",
+    Port = 6379,
+    KeyPrefix = "myapp:jobs",
+    Database = 0
+};
+
+var queue = new RedisJobQueue(settings);
+```
+
+High-performance persistent queue using Redis hashes for job storage and sorted sets for priority-based ordering. Atomic dequeue via Lua scripts prevents race conditions between workers.
+
+**Features:**
+- Atomic dequeue (Lua script: `ZRANGEBYSCORE` + `ZREM`)
+- Priority ordering (higher priority first, FIFO within same priority)
+- Status tracking via Redis sets for fast lookup
+- Key prefix isolation for multi-app Redis instances
+- No schema creation needed (Redis is schemaless)
+
+**Shared connection:**
+
+```csharp
+// Share a connection manager across queue and lock provider
+var connectionManager = new RedisConnectionManager(settings);
+var queue = new RedisJobQueue(connectionManager, settings);
+var lockProvider = new RedisJobLockProvider(connectionManager, settings);
+```
+
+**Distributed locking:**
+
+```csharp
+await using var lockProvider = new RedisJobLockProvider(settings);
+
+if (await lockProvider.TryAcquireAsync("my-queue", TimeSpan.FromSeconds(30)))
+{
+    await processor.StartAsync(cancellationToken);
+    await lockProvider.ReleaseAsync("my-queue");
+}
+```
+
+Uses SET NX with expiry and Lua-based safe release (checks lock token before DEL).
+
+**Redis key schema:**
+
+| Key Pattern | Type | Description |
+|-------------|------|-------------|
+| `{prefix}:job:{id}` | Hash | Job descriptor fields |
+| `{prefix}:queue:{name}` | Sorted Set | Pending/scheduled jobs ordered by priority + time |
+| `{prefix}:status:{int}` | Set | Job IDs grouped by status |
+| `{prefix}:lock:{name}` | String | Distributed lock with TTL |
+
+## Queue Backend Comparison
+
+| Backend | Persistence | Distributed | ACID | Best For |
+|---------|------------|-------------|------|----------|
+| **InMemory** | No | No | N/A | Unit tests, development |
+| **SQL** | Yes | Yes (advisory locks) | Yes | Production, existing SQL infrastructure |
+| **Elasticsearch** | Yes | Yes (bulk API) | No | Search-heavy workloads |
+| **MongoDB** | Yes | Yes (sessions) | Yes (4.0+) | Document-oriented workloads |
+| **RavenDB** | Yes | Yes (built-in) | Yes | RavenDB-based applications |
+| **JSON** | Yes (files) | No | No | Development, small deployments |
+| **Redis** | Yes | Yes (Redlock) | No | High-throughput, low-latency |
+
 ## See Also
 
 - [Birko.BackgroundJobs CLAUDE.md](../Birko.BackgroundJobs/CLAUDE.md)
 - [Birko.BackgroundJobs.SQL CLAUDE.md](../Birko.BackgroundJobs.SQL/CLAUDE.md)
+- [Birko.BackgroundJobs.Redis CLAUDE.md](../Birko.BackgroundJobs.Redis/CLAUDE.md)
+- [Birko.Redis CLAUDE.md](../Birko.Redis/CLAUDE.md)

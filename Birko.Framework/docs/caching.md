@@ -73,18 +73,18 @@ await cache.RemoveByPrefixAsync("product:");
 
 ## Redis Cache
 
-Distributed Redis backend via StackExchange.Redis:
+Distributed Redis backend via StackExchange.Redis. Uses `RedisSettings` from `Birko.Redis` (extends the framework's `RemoteSettings` hierarchy):
 
 ```csharp
-var options = new RedisCacheOptions
+var settings = new RedisSettings
 {
-    ConnectionString = "localhost:6379",
-    InstanceName = "myapp",           // Keys prefixed as "myapp:{key}"
-    DefaultExpiration = TimeSpan.FromMinutes(10),
+    Location = "localhost",
+    Port = 6379,
+    KeyPrefix = "myapp",             // Keys prefixed as "myapp:{key}"
     Database = 0
 };
 
-using var cache = new RedisCache(options);
+using var cache = new RedisCache(settings, defaultExpiration: TimeSpan.FromMinutes(10));
 
 await cache.SetAsync("user:42", user, CacheEntryOptions.Sliding(TimeSpan.FromMinutes(15)));
 var result = await cache.GetAsync<User>("user:42");
@@ -105,3 +105,4 @@ var result = await cache.GetAsync<User>("user:42");
 
 - [Birko.Caching CLAUDE.md](../Birko.Caching/CLAUDE.md)
 - [Birko.Caching.Redis CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md)
+- [Birko.Redis CLAUDE.md](../Birko.Redis/CLAUDE.md)

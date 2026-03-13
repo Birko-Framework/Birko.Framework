@@ -104,6 +104,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.BackgroundJobs.MongoDB | MongoDB-based persistent job queue |
 | Birko.BackgroundJobs.RavenDB | RavenDB-based persistent job queue |
 | Birko.BackgroundJobs.JSON | JSON file-based job queue (dev/testing) |
+| Birko.BackgroundJobs.Redis | Redis-based persistent job queue |
 | Birko.Structures | Tree data structures (AVL, BST) |
 | Birko.Helpers | Utility and extension methods |
 

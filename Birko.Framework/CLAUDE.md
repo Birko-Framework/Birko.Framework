@@ -89,7 +89,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Caching
 - **Birko.Caching** - Unified caching interface (ICache, MemoryCache, CacheSerializer)
-- **Birko.Caching.Redis** - Redis backend (RedisCache, RedisConnectionManager)
+- **Birko.Caching.Redis** - Redis backend (RedisCache)
+
+### Redis
+- **Birko.Redis** - Shared Redis infrastructure (RedisSettings extending RemoteSettings, RedisConnectionManager)
 
 ### Security
 - **Birko.Security** - Password hashing (PBKDF2), AES-256-GCM encryption, token provider interfaces, static token auth (moved from Birko.Communication.Authentication), RBAC interfaces
@@ -102,11 +105,11 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.BackgroundJobs.MongoDB** - MongoDB-based persistent job queue
 - **Birko.BackgroundJobs.RavenDB** - RavenDB-based persistent job queue
 - **Birko.BackgroundJobs.JSON** - JSON file-based job queue (dev/testing)
+- **Birko.BackgroundJobs.Redis** - Redis-based persistent job queue (StackExchange.Redis)
 
 ### Planned Projects
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
 - **Birko.Telemetry** - Logging, metrics, distributed tracing
-- **Birko.BackgroundJobs.Redis** - Redis-based persistent job queue
 - **Birko.Messaging** - Email, SMS, push notifications
 - **Birko.MessageQueue** - Message queues (RabbitMQ, Kafka, Azure Service Bus, AWS SQS, Redis Streams)
 - **Birko.Security.BCrypt** - BCrypt password hashing
@@ -221,8 +224,10 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.BackgroundJobs.MongoDB | [../Birko.BackgroundJobs.MongoDB/CLAUDE.md](../Birko.BackgroundJobs.MongoDB/CLAUDE.md) |
 | Birko.BackgroundJobs.RavenDB | [../Birko.BackgroundJobs.RavenDB/CLAUDE.md](../Birko.BackgroundJobs.RavenDB/CLAUDE.md) |
 | Birko.BackgroundJobs.JSON | [../Birko.BackgroundJobs.JSON/CLAUDE.md](../Birko.BackgroundJobs.JSON/CLAUDE.md) |
+| Birko.BackgroundJobs.Redis | [../Birko.BackgroundJobs.Redis/CLAUDE.md](../Birko.BackgroundJobs.Redis/CLAUDE.md) |
 | Birko.Caching | [../Birko.Caching/CLAUDE.md](../Birko.Caching/CLAUDE.md) |
 | Birko.Caching.Redis | [../Birko.Caching.Redis/CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md) |
+| Birko.Redis | [../Birko.Redis/CLAUDE.md](../Birko.Redis/CLAUDE.md) |
 | Birko.Security | [../Birko.Security/CLAUDE.md](../Birko.Security/CLAUDE.md) |
 | Birko.Security.Jwt | [../Birko.Security.Jwt/CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md) |
 
@@ -320,6 +325,7 @@ Existing folder groups in both files:
 - **Data.ViewModels/** — Birko.Data.*.ViewModel
 - **Helpers/** — Birko.Helpers, Birko.Structures
 - **Models/** — Birko.Models.*
+- **Redis/** — Birko.Redis
 - **Security/** — Birko.Security, Birko.Security.Jwt
 - **Tests/** — All *.Tests projects
 - **Validation/** — Birko.Validation
