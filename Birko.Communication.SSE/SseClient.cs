@@ -14,6 +14,7 @@ namespace Birko.Communication.SSE
         private CancellationTokenSource? _cts;
         private Task? _receiveTask;
         private readonly Dictionary<string, string> _headers;
+        private SseEvent _currentEvent = new();
 
         /// <summary>
         /// Raised when the client successfully connects to the server
@@ -159,29 +160,40 @@ namespace Birko.Communication.SSE
         /// </summary>
         protected virtual void ProcessEventLine(string line)
         {
-            if (string.IsNullOrWhiteSpace(line))
+            // Blank line = dispatch the accumulated event (SSE spec)
+            if (string.IsNullOrEmpty(line))
             {
+                if (_currentEvent.Data != null || _currentEvent.Event != null)
+                {
+                    if (_currentEvent.Data != null)
+                    {
+                        OnMessage?.Invoke(this, _currentEvent.Data);
+                    }
+                    OnEvent?.Invoke(this, _currentEvent);
+                    _currentEvent = new SseEvent();
+                }
                 return;
             }
 
             if (line.StartsWith("data: ", StringComparison.Ordinal))
             {
                 var data = line.Substring(6);
-                OnMessage?.Invoke(this, data);
+                _currentEvent.Data = _currentEvent.Data == null ? data : _currentEvent.Data + "\n" + data;
             }
             else if (line.StartsWith("event: ", StringComparison.Ordinal))
             {
-                var eventName = line.Substring(7);
-                // Could be used for typed event handling
+                _currentEvent.Event = line.Substring(7);
             }
             else if (line.StartsWith("id: ", StringComparison.Ordinal))
             {
-                LastEventId = line.Substring(4);
+                _currentEvent.Id = line.Substring(4);
+                LastEventId = _currentEvent.Id;
             }
             else if (line.StartsWith("retry: ", StringComparison.Ordinal))
             {
                 if (int.TryParse(line.Substring(7), out var retry))
                 {
+                    _currentEvent.Retry = retry;
                     ReconnectDelay = retry;
                 }
             }

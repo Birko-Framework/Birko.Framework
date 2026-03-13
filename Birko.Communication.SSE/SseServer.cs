@@ -95,8 +95,11 @@ namespace Birko.Communication.SSE
         /// </summary>
         public async Task BroadcastAsync(SseEvent sseEvent)
         {
-            var sendTasks = _clients.Values.Select(client => client.SendAsync(sseEvent));
-            await Task.WhenAll(sendTasks);
+            foreach (var client in _clients.Values)
+            {
+                await client.SendAsync(sseEvent);
+                OnEventSent?.Invoke(this, (client, sseEvent));
+            }
         }
 
         /// <summary>
@@ -123,6 +126,7 @@ namespace Birko.Communication.SSE
             if (_clients.TryGetValue(clientId, out var client))
             {
                 await client.SendAsync(sseEvent);
+                OnEventSent?.Invoke(this, (client, sseEvent));
                 return true;
             }
             return false;

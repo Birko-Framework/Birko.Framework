@@ -178,7 +178,7 @@ namespace Birko.Communication.SSE.Middleware
         private string? GetClientIpAddress(Dictionary<string, string>? headers, string? remoteEndPoint)
         {
             return AuthenticationService.GetClientIpAddress(
-                headers != null ? (key => headers.TryGetValue(key, out var value) ? value : null) : null,
+                headers != null ? (key => headers.TryGetValue(key, out var value) ? value : null) : (_ => (string?)null),
                 remoteEndPoint
             );
         }
