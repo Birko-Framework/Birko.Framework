@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,9 +13,12 @@ namespace Birko.Communication.SOAP
     /// <summary>
     /// SOAP client for consuming web services
     /// </summary>
-    public class SoapClient
+    public class SoapClient : IDisposable
     {
         private static readonly Dictionary<string, SoapClient> _clients = new Dictionary<string, SoapClient>();
+
+        private readonly HttpClient _httpClient;
+        private bool _disposed;
 
         /// <summary>
         /// Gets the URI endpoint for this SOAP client
@@ -29,7 +33,11 @@ namespace Birko.Communication.SOAP
         /// <summary>
         /// Gets or sets the timeout for requests in milliseconds
         /// </summary>
-        public int Timeout { get; set; } = 100000; // 100 seconds default
+        public int Timeout
+        {
+            get => (int)_httpClient.Timeout.TotalMilliseconds;
+            set => _httpClient.Timeout = TimeSpan.FromMilliseconds(value);
+        }
 
         /// <summary>
         /// Event raised when a SOAP request is sent
@@ -65,6 +73,22 @@ namespace Birko.Communication.SOAP
                 throw new ArgumentNullException(nameof(uri));
 
             URI = uri;
+
+            var handler = new HttpClientHandler();
+            _httpClient = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromMilliseconds(100000) // 100 seconds default
+            };
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the SoapClient class with credentials
+        /// </summary>
+        /// <param name="uri">The SOAP service endpoint URI</param>
+        /// <param name="credentials">The credentials for authentication</param>
+        public SoapClient(string uri, ICredentials credentials) : this(uri)
+        {
+            Credentials = credentials;
         }
 
         /// <summary>
@@ -76,17 +100,7 @@ namespace Birko.Communication.SOAP
         /// <returns>The response XML as a string</returns>
         public string SendRequest(string action, string xml, ICredentials? credentials = null)
         {
-            var request = CreateRequest(action, xml, credentials);
-            OnRequest?.Invoke(this, new SoapRequestEventArgs(action, xml));
-
-            using var response = (HttpWebResponse)request.GetResponse();
-            using var stream = response.GetResponseStream();
-            using var reader = new StreamReader(stream ?? throw new InvalidOperationException("No response stream"));
-
-            var responseXml = reader.ReadToEnd();
-            OnResponse?.Invoke(this, new SoapResponseEventArgs(responseXml, response.StatusCode));
-
-            return responseXml;
+            return SendRequestAsync(action, xml, credentials).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -99,14 +113,19 @@ namespace Birko.Communication.SOAP
         /// <returns>The response XML as a string</returns>
         public async Task<string> SendRequestAsync(string action, string xml, ICredentials? credentials = null, CancellationToken cancellationToken = default)
         {
-            var request = CreateRequest(action, xml, credentials);
+            if (string.IsNullOrWhiteSpace(action))
+                throw new ArgumentNullException(nameof(action));
+
+            if (string.IsNullOrWhiteSpace(xml))
+                throw new ArgumentNullException(nameof(xml));
+
+            using var request = CreateRequest(action, xml, credentials);
+
             OnRequest?.Invoke(this, new SoapRequestEventArgs(action, xml));
 
-            using var response = (HttpWebResponse)await request.GetResponseAsync().ConfigureAwait(false);
-            using var stream = response.GetResponseStream();
-            using var reader = new StreamReader(stream ?? throw new InvalidOperationException("No response stream"));
+            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var responseXml = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-            var responseXml = await reader.ReadToEndAsync().ConfigureAwait(false);
             OnResponse?.Invoke(this, new SoapResponseEventArgs(responseXml, response.StatusCode));
 
             return responseXml;
@@ -144,34 +163,19 @@ namespace Birko.Communication.SOAP
         }
 
         /// <summary>
-        /// Creates a web request for the SOAP action
+        /// Creates an HttpRequestMessage for the SOAP action
         /// </summary>
         /// <param name="action">The SOAP action to perform</param>
         /// <param name="xml">The XML payload</param>
         /// <param name="credentials">Optional credentials for authentication</param>
-        /// <returns>A configured WebRequest</returns>
-        protected virtual WebRequest CreateRequest(string action, string xml, ICredentials? credentials = null)
+        /// <returns>A configured HttpRequestMessage</returns>
+        protected virtual HttpRequestMessage CreateRequest(string action, string xml, ICredentials? credentials = null)
         {
-            if (string.IsNullOrWhiteSpace(action))
-                throw new ArgumentNullException(nameof(action));
+            var request = new HttpRequestMessage(System.Net.Http.HttpMethod.Post, URI);
+            request.Content = new StringContent(xml, Encoding.UTF8, "text/xml");
+            request.Headers.Add("SOAPAction", action);
 
-            if (string.IsNullOrWhiteSpace(xml))
-                throw new ArgumentNullException(nameof(xml));
-
-            var wr = (HttpWebRequest)WebRequest.Create(URI);
-            wr.ContentType = "text/xml;charset=utf-8";
-            wr.Method = "POST";
-            wr.Timeout = Timeout;
-            wr.Headers.Add("SOAPAction", action);
-            wr.Credentials = credentials ?? Credentials;
-
-            var bytes = Encoding.UTF8.GetBytes(xml);
-            wr.ContentLength = bytes.Length;
-
-            using var stream = wr.GetRequestStream();
-            stream.Write(bytes, 0, bytes.Length);
-
-            return wr;
+            return request;
         }
 
         /// <summary>
@@ -179,6 +183,10 @@ namespace Birko.Communication.SOAP
         /// </summary>
         public static void ClearCache()
         {
+            foreach (var client in _clients.Values)
+            {
+                client.Dispose();
+            }
             _clients.Clear();
         }
 
@@ -189,7 +197,24 @@ namespace Birko.Communication.SOAP
         /// <returns>True if the client was removed; otherwise, false</returns>
         public static bool RemoveClient(string uri)
         {
-            return _clients.Remove(uri);
+            if (_clients.TryGetValue(uri, out var client))
+            {
+                client.Dispose();
+                return _clients.Remove(uri);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Disposes the underlying HttpClient
+        /// </summary>
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _httpClient.Dispose();
+                _disposed = true;
+            }
         }
     }
 
