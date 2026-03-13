@@ -1,7 +1,9 @@
+using Birko.Data.JSON.Stores;
+using Birko.Data.Repositories;
 using Birko.Data.Stores;
 using System;
 
-namespace Birko.Data.Repositories
+namespace Birko.Data.JSON.Repositories
 {
     /// <summary>
     /// JSON repository with bulk operations support.
