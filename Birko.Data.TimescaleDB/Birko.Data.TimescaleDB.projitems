@@ -9,9 +9,6 @@
     <Import_RootNamespace>Birko.Data.TimescaleDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Npgsql" Version="9.0.3" />
-  </ItemGroup>
-  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\TimescaleDBConnector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\TimescaleDBStore.cs" />

@@ -38,7 +38,7 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The remote settings to use.</param>
-        public new void SetSettings(Stores.RemoteSettings settings)
+        public void SetSettings(Stores.RemoteSettings settings)
         {
             if (settings is Stores.TimescaleDBSettings timescaleSettings)
             {

@@ -107,7 +107,7 @@ namespace Birko.Data.SQL.Connectors
         {
             using var connection = (NpgsqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
