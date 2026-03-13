@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-bgjobs000001</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.BackgroundJobs</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IJob.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IJobExecutor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IJobQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\JobContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\JobDescriptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\JobQueueOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\JobResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\JobStatus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\RetryPolicy.cs" />
+    <!-- Serialization -->
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\IJobSerializer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\JsonJobSerializer.cs" />
+    <!-- Processing -->
+    <Compile Include="$(MSBuildThisFileDirectory)Processing\BackgroundJobProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Processing\InMemoryJobQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Processing\JobDispatcher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Processing\JobExecutor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Processing\RecurringJobScheduler.cs" />
+  </ItemGroup>
+</Project>
