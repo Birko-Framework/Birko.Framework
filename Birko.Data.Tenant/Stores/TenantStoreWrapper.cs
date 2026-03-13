@@ -28,7 +28,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     /// <summary>
     /// Create a new item (automatically sets TenantId if available)
     /// </summary>
-    public Guid Create(T item, StoreDataDelegate<T> processDelegate = null)
+    public Guid Create(T item, StoreDataDelegate<T>? processDelegate = null)
     {
         SetTenantIdIfNeeded(item);
         return _innerStore.Create(item, processDelegate);
@@ -37,7 +37,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     /// <summary>
     /// Read an item by GUID (only if it belongs to the current tenant)
     /// </summary>
-    public T Read(Guid id)
+    public T? Read(Guid id)
     {
         return ReadOne((new ModelByGuid<T>(id)).Filter());
     }
@@ -52,7 +52,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
         return Read(filter);
     }
 
-    public long Count(Expression<Func<T, bool>> filter = null)
+    public long Count(Expression<Func<T, bool>>? filter = null)
     {
         return _innerStore.Count((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter());
     }
@@ -60,7 +60,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     /// <summary>
     /// Update an item (only if it belongs to the current tenant)
     /// </summary>
-    public void Update(T data, StoreDataDelegate<T> processDelegate = null)
+    public void Update(T data, StoreDataDelegate<T>? processDelegate = null)
     {
         if (!BelongsToCurrentTenant(data))
         {
@@ -86,7 +86,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
         _innerStore.Delete(item);
     }
 
-    public Guid Save(T data, StoreDataDelegate<T> processDelegate = null)
+    public Guid Save(T data, StoreDataDelegate<T>? processDelegate = null)
     {
         if (data == null)
         {

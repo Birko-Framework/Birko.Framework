@@ -16,11 +16,11 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, ITenant
 {
-    public AsyncTenantBulkStoreWrapper(TStore innerStore, ITenantContext tenantContext = null) : base(innerStore, tenantContext)
+    public AsyncTenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null) : base(innerStore, tenantContext)
     {
     }
 
-    public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T> storeDelegate = null, CancellationToken cancellationToken = default)
+    public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)
     {
         await _innerStore.CreateAsync(data.Select(item => { SetTenantIdIfNeeded(item); return item; }), storeDelegate, cancellationToken);
     }
@@ -50,7 +50,7 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
         return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), orderBy, limit, offset, cancellationToken);
     }
 
-    public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T> storeDelegate = null, CancellationToken cancellationToken = default)
+    public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)
     {
         if (!data.All(BelongsToCurrentTenant))
         {

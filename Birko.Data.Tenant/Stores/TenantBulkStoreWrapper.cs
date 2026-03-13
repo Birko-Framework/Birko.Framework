@@ -14,11 +14,11 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
     where TStore : IBulkStore<T>
     where T : Data.Models.AbstractModel, ITenant
 {
-    public TenantBulkStoreWrapper(TStore innerStore, ITenantContext tenantContext = null) : base(innerStore, tenantContext)
+    public TenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null) : base(innerStore, tenantContext)
     {
     }
 
-    public void Create(IEnumerable<T> data, StoreDataDelegate<T> storeDelegate = null)
+    public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         _innerStore.Create(data.Select(item => { SetTenantIdIfNeeded(item); return item; }), storeDelegate);
     }
@@ -48,7 +48,7 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
         return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), orderBy, limit, offset);
     }
 
-    public void Update(IEnumerable<T> data, StoreDataDelegate<T> storeDelegate = null)
+    public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (!data.All(BelongsToCurrentTenant))
         {

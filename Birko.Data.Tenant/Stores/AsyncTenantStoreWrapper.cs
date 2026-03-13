@@ -30,7 +30,7 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     /// <summary>
     /// Create a new item (automatically sets TenantId if available)
     /// </summary>
-    public async Task<Guid> CreateAsync(T item, StoreDataDelegate<T> processDelegate = null, CancellationToken cancellationToken = default)
+    public async Task<Guid> CreateAsync(T item, StoreDataDelegate<T>? processDelegate = null, CancellationToken cancellationToken = default)
     {
         SetTenantIdIfNeeded(item);
         return await _innerStore.CreateAsync(item, processDelegate, cancellationToken);
@@ -39,17 +39,17 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     /// <summary>
     /// Read an item by GUID (only if it belongs to the current tenant)
     /// </summary>
-    public async Task<T> ReadAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<T?> ReadAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await ReadAsync((new ModelByGuid<T>(id)).Filter(), cancellationToken);
     }
 
-    public async Task<T> ReadAsync(Expression<Func<T, bool>> filter = null, CancellationToken cancellationToken = default)
+    public async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
     {
         return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), cancellationToken);
     }
 
-    public async Task<long> CountAsync(Expression<Func<T, bool>> filter = null, CancellationToken cancellationToken = default)
+    public async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
     {
         return await _innerStore.CountAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), cancellationToken);
     }
@@ -57,7 +57,7 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     /// <summary>
     /// Update an item (only if it belongs to the current tenant)
     /// </summary>
-    public async Task UpdateAsync(T data, StoreDataDelegate<T> processDelegate = null, CancellationToken ct = default)
+    public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         if (!BelongsToCurrentTenant(data))
         {
@@ -83,7 +83,7 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
         await _innerStore.DeleteAsync(item, cancellationToken);
     }
 
-    public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T> processDelegate = null, CancellationToken cancellationToken = default)
+    public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken cancellationToken = default)
     {
         if (data == null)
         {
