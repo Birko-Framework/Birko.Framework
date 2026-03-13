@@ -1,4 +1,12 @@
 <Solution>
+  <Folder Name="/BackgroundJobs/">
+    <Project Path="../Birko.BackgroundJobs/Birko.BackgroundJobs.shproj" />
+    <Project Path="../Birko.BackgroundJobs.SQL/Birko.BackgroundJobs.SQL.shproj" />
+    <Project Path="../Birko.BackgroundJobs.ElasticSearch/Birko.BackgroundJobs.ElasticSearch.shproj" />
+    <Project Path="../Birko.BackgroundJobs.MongoDB/Birko.BackgroundJobs.MongoDB.shproj" />
+    <Project Path="../Birko.BackgroundJobs.RavenDB/Birko.BackgroundJobs.RavenDB.shproj" />
+    <Project Path="../Birko.BackgroundJobs.JSON/Birko.BackgroundJobs.JSON.shproj" />
+  </Folder>
   <Folder Name="/Caching/">
     <Project Path="../Birko.Caching/Birko.Caching.shproj" />
     <Project Path="../Birko.Caching.Redis/Birko.Caching.Redis.shproj" />
@@ -89,6 +97,7 @@
     <Project Path="../Birko.Data.Tests/Birko.Data.Tests.csproj" />
     <Project Path="../Birko.Helpers.Tests/Birko.Helpers.Tests.csproj" />
     <Project Path="../Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
+    <Project Path="../Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />

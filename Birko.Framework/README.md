@@ -98,6 +98,12 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Caching.Redis | Redis-backed cache |
 | Birko.Security | Password hashing, AES encryption, RBAC interfaces |
 | Birko.Security.Jwt | JWT token provider |
+| Birko.BackgroundJobs | Background job processing framework |
+| Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
+| Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
+| Birko.BackgroundJobs.MongoDB | MongoDB-based persistent job queue |
+| Birko.BackgroundJobs.RavenDB | RavenDB-based persistent job queue |
+| Birko.BackgroundJobs.JSON | JSON file-based job queue (dev/testing) |
 | Birko.Structures | Tree data structures (AVL, BST) |
 | Birko.Helpers | Utility and extension methods |
 
@@ -110,6 +116,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.ElasticSearch.Tests | Elasticsearch expression tests |
 | Birko.Helpers.Tests | Helper utility tests |
 | Birko.Structures.Tests | Tree data structure tests |
+| Birko.BackgroundJobs.Tests | Background job processing tests |
 
 ## Architecture
 
@@ -138,7 +145,7 @@ AbstractAsyncRepository -> AbstractAsyncBulkRepository (async)
 
 ```bash
 # Clone and build
-dotnet build Birko.Framework.sln
+dotnet build Birko.Framework.slnx
 ```
 
 ## Running Tests
@@ -153,6 +160,14 @@ dotnet test
 - [Store Implementation Guide](docs/store-implementation.md)
 - [Repository Implementation Guide](docs/repository-implementation.md)
 - [Migration Guide](docs/migrations.md)
+- [Data Patterns Guide](docs/patterns.md) (Unit of Work, Soft Delete, Audit, Paging, Specifications, Concurrency)
+- [Validation Guide](docs/validation.md)
+- [Caching Guide](docs/caching.md)
+- [Security Guide](docs/security.md)
+- [Background Jobs Guide](docs/background-jobs.md)
+- [Event Sourcing Guide](docs/event-sourcing.md)
+- [Data Synchronization Guide](docs/sync.md)
+- [Multi-Tenancy Guide](docs/tenant.md)
 
 ## License
 

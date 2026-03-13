@@ -172,7 +172,24 @@ Unified caching interface:
 - Static token authentication (moved from Birko.Communication.Authentication)
 - RBAC interfaces
 
-### 7. Communication Layer
+### 7. Background Jobs Layer (Birko.BackgroundJobs)
+Job processing framework with pluggable persistent queues:
+- `IJob` / `IJob<TInput>` - Job contracts (parameterless and typed)
+- `IJobQueue` - Storage interface (enqueue, dequeue, complete, fail)
+- `JobDescriptor` - Persistence model with status, retries, priority, scheduling
+- `BackgroundJobProcessor` - Concurrent polling processor with semaphore-based concurrency
+- `JobDispatcher` - Fluent enqueue/schedule/cancel API
+- `RecurringJobScheduler` - Interval-based recurring job registration
+- `InMemoryJobQueue` - Non-persistent queue for testing
+
+Queue backends:
+- **SQL** (`Birko.BackgroundJobs.SQL`) - `SqlJobQueue<DB>` using any SQL connector
+- **Elasticsearch** (`Birko.BackgroundJobs.ElasticSearch`) - `ElasticSearchJobQueue`
+- **MongoDB** (`Birko.BackgroundJobs.MongoDB`) - `MongoDBJobQueue`
+- **RavenDB** (`Birko.BackgroundJobs.RavenDB`) - `RavenDBJobQueue`
+- **JSON** (`Birko.BackgroundJobs.JSON`) - `JsonJobQueue` for dev/testing
+
+### 8. Communication Layer
 
 #### Base (Birko.Communication)
 - `AbstractPort` with `SubscribeProcessData()` delegate pattern for data processing
@@ -186,7 +203,7 @@ Unified caching interface:
 - **SOAP** - SOAP client
 - **SSE** - Server-Sent Events with middleware
 
-### 8. Helper Libraries
+### 9. Helper Libraries
 - **Birko.Helpers** - StringHelper, HtmlHelper, ObjectHelper, EnumerableHelper, PathValidator
 - **Birko.Structures** - Generic data structures (Tree, AVLTree, BinaryNode)
 
