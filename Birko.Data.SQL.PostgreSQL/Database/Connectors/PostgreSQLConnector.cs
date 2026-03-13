@@ -53,6 +53,10 @@ namespace Birko.Data.SQL.Connectors
                     remoteSettings.UserName,
                     remoteSettings.Password,
                     remoteSettings.Name);
+                if (remoteSettings.UseSsl)
+                {
+                    connectionString += ";SSL Mode=Require";
+                }
                 return new NpgsqlConnection(connectionString);
             }
             else
