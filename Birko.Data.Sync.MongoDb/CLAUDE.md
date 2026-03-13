@@ -9,12 +9,13 @@ MongoDB-specific sync knowledge item implementation for the Birko.Data.Sync fram
 ## Components
 
 ### Models
-- `MongoSyncKnowledgeItem` - Implements `ISyncKnowledgeItem` with BSON attributes
+- `MongoSyncKnowledgeItem` - Extends `AbstractModel` (from Birko.Data.Models), implements `ISyncKnowledgeItem` with BSON attributes
   - `CollectionName` property for MongoDB collection targeting
   - `IdRecord` field for document identification
 
 ## Dependencies
-- Birko.Data.Sync
+- Birko.Data (AbstractModel)
+- Birko.Data.Sync (ISyncKnowledgeItem)
 - MongoDB.Driver / MongoDB.Bson
 
 ## Maintenance
