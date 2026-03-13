@@ -9,11 +9,12 @@ Elasticsearch-specific sync knowledge item implementation for the Birko.Data.Syn
 ## Components
 
 ### Models
-- `ElasticSyncKnowledgeItem` - Implements `ISyncKnowledgeItem` with NEST attributes (@Text, @Integer, @Keyword, @Date, @Boolean)
+- `ElasticSyncKnowledgeItem` - Extends `AbstractModel` (from Birko.Data.Models), implements `ISyncKnowledgeItem` with NEST attributes (@Text, @Integer, @Keyword, @Date, @Boolean)
   - Static `GenerateId()` method for document ID generation
 
 ## Dependencies
-- Birko.Data.Sync
+- Birko.Data (AbstractModel)
+- Birko.Data.Sync (ISyncKnowledgeItem)
 - NEST / Elasticsearch.Net
 
 ## Maintenance

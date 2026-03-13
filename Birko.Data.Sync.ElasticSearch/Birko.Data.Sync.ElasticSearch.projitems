@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Models\ElasticSyncKnowledgeItem.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncElasticSyncKnowledgeStore.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Birko.Data.Sync\Birko.Data.Sync.projitems">
