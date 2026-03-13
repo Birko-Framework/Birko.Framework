@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,9 +9,9 @@ namespace Birko.Structures.Trees
     {
         public override Node Insert(Node node)
         {
-            if (node == null) 
+            if (node == null)
             {
-                return null;
+                return null!;
             }
             if (node is not BinaryNode binaryNode)
             {
@@ -21,33 +21,33 @@ namespace Birko.Structures.Trees
             {
                 if (Children?.Last() == null)
                 {
-                    return InsertChild(binaryNode, 1);
+                    return InsertChild(binaryNode, 1)!;
                 }
                 else
                 {
-                    return Children.Last().Insert(binaryNode);
+                    return Children.Last()!.Insert(binaryNode);
                 }
             }
             else
             {
                 if (Children?.First() == null)
                 {
-                    return InsertChild(binaryNode, 0);
+                    return InsertChild(binaryNode, 0)!;
                 }
                 else
                 {
-                    return Children.First().Insert(binaryNode);
+                    return Children.First()!.Insert(binaryNode);
                 }
             }
         }
 
-        protected override Node FindInChildren(Node node)
+        protected override Node? FindInChildren(Node? node)
         {
             if (node == null)
             {
                 return null;
             }
-            
+
             if (!(Children?.Any(x => x != null) ?? false))
             {
                 return null;
@@ -55,11 +55,11 @@ namespace Birko.Structures.Trees
 
             if(CompareTo(node) <= 0)
             {
-                return Children.Last()?.Find(node) ?? null;
+                return Children.Last()?.Find(node);
             }
             else
             {
-                return Children.First()?.Find(node) ?? null;
+                return Children.First()?.Find(node);
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿using Birko.Structures.Extensions.Trees;
+using Birko.Structures.Extensions.Trees;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,13 +9,13 @@ namespace Birko.Structures.Trees
     {
         public AVLTree(IEnumerable<BinarySearchNode> items) : base(items) { }
 
-        public override Node Insert(Node node)
+        public override Node? Insert(Node? node)
         {
             if (node is not BinarySearchNode)
             {
                 throw new ArgumentException("Argument is not a instance of BinarySearchNode");
             }
-            BinarySearchNode insertedNode = (BinarySearchNode)base.Insert(node);
+            BinarySearchNode? insertedNode = (BinarySearchNode?)base.Insert(node);
             if (insertedNode != null)
             {
                 Root = ReBalance(insertedNode);
@@ -23,14 +23,14 @@ namespace Birko.Structures.Trees
             return insertedNode;
         }
 
-        public override Node Remove(Node node)
+        public override Node? Remove(Node? node)
         {
             if (node is not BinarySearchNode)
             {
                 throw new ArgumentException("Argument is not a instance of BinarySearchNode");
             }
-            BinarySearchNode removedNodeParent = (BinarySearchNode)node.Parent;
-            Node removedNode = base.Remove(node);
+            BinarySearchNode? removedNodeParent = node.Parent as BinarySearchNode;
+            Node? removedNode = base.Remove(node);
             if (removedNodeParent != null)
             {
                 Root = ReBalance(removedNodeParent);
@@ -44,11 +44,11 @@ namespace Birko.Structures.Trees
 
         protected static Node ReBalance(BinarySearchNode node)
         {
-            Node pathNode = node;
-            Node newRoot = pathNode;
+            Node? pathNode = (Node?)node;
+            Node newRoot = pathNode!;
             do
             {
-                pathNode = (pathNode as BinarySearchNode).ReBalance();
+                pathNode = ((BinarySearchNode)pathNode!).ReBalance();
                 if (pathNode.Parent == null)
                 {
                     newRoot = pathNode;

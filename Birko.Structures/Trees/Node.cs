@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,9 +6,9 @@ namespace Birko.Structures.Trees
 {
     public abstract class Node : IComparable<Node>
     {
-        public Node Parent { get; set; }
-        public IEnumerable<Node> Children { get; protected set; } = null;
-        public abstract int CompareTo(Node other);
+        public Node? Parent { get; set; }
+        public IEnumerable<Node?>? Children { get; protected set; } = null;
+        public abstract int CompareTo(Node? other);
         public abstract Node Insert(Node node);
 
         public Node Insert(IEnumerable<Node> nodes)
@@ -23,7 +23,7 @@ namespace Birko.Structures.Trees
             return this;
         }
 
-        public Node Find(Node node)
+        public Node? Find(Node? node)
         {
             if (node == null)
             {
@@ -33,11 +33,11 @@ namespace Birko.Structures.Trees
             {
                 return this;
             }
-            
+
             return FindInChildren(node);
         }
 
-        protected virtual Node FindInChildren(Node node)
+        protected virtual Node? FindInChildren(Node? node)
         {
             if (node == null)
             {
@@ -47,15 +47,15 @@ namespace Birko.Structures.Trees
             {
                 return null;
             }
-            foreach (Node child in Children.Where(x => x != null))
+            foreach (Node child in Children.Where(x => x != null)!)
             {
-                Node find = child.Find(node);
+                Node? find = child.Find(node);
                 if (find != null)
                 {
                     return find;
                 }
             }
-            
+
             return null;
         }
 
@@ -72,26 +72,33 @@ namespace Birko.Structures.Trees
             }
             if (CompareTo(node) == 0)
             {
-                IEnumerable<Node> siblings = Parent?.Children?.Where(x => x.CompareTo(node) != 0) ?? Array.Empty<Node>();
-                Node first = Children?.First();
+                IEnumerable<Node> siblings = Parent?.Children?.Where(x => x != null && x.CompareTo(node) != 0).Cast<Node>()! ?? Array.Empty<Node>();
+                Node? first = Children?.First();
                 if (first != null)
                 {
                     if ((Children?.Count() ?? 0) > 1)
                     {
-                        first.Insert(Children?.Skip(1));
+                        var remaining = Children?.Skip(1)?.Where(x => x != null).Cast<Node>();
+                        if (remaining != null)
+                        {
+                            first.Insert(remaining);
+                        }
                     }
                 }
-                Parent.Children = null;
-                Parent?.Insert(siblings.Concat(node.Children ?? Array.Empty<Node>()).Concat(new[] { first }).Where(x => x != null));
+                if (Parent != null)
+                {
+                    Parent.Children = null;
+                    Parent.Insert(siblings.Concat(node.Children?.Where(x => x != null).Cast<Node>() ?? Array.Empty<Node>()).Concat(first != null ? new[] { first } : Array.Empty<Node>()));
+                }
 
                 Children = null;
                 Parent = null;
             }
             else if(Children?.Any() ?? false)
             {
-                foreach (Node child in Children)
+                foreach (Node? child in Children)
                 {
-                    if (child?.Contains(node) ?? false)
+                    if (child != null && child.Contains(node))
                     {
                         child.Remove(node);
                         break;
@@ -101,7 +108,7 @@ namespace Birko.Structures.Trees
             return this;
         }
 
-        internal virtual Node InsertChild(Node node, int index)
+        internal virtual Node? InsertChild(Node? node, int index)
         {
             if (index < 0)
             {
@@ -116,9 +123,9 @@ namespace Birko.Structures.Trees
 
             if (Children?.Any() ?? false)
             {
-                List<Node> newChildren = new();
+                List<Node?> newChildren = new();
                 var i = 0;
-                foreach (Node child in Children)
+                foreach (Node? child in Children)
                 {
                     if (i == index)
                     {
@@ -156,9 +163,9 @@ namespace Birko.Structures.Trees
             int? result = null;
             if (Children?.Any() ?? false)
             {
-                List<Node> newChildren = new();
+                List<Node?> newChildren = new();
                 var i = 0;
-                foreach (Node child in Children)
+                foreach (Node? child in Children)
                 {
                     if (
                         (index != null && i == index)
@@ -185,8 +192,8 @@ namespace Birko.Structures.Trees
         {
             if ((Children?.Count() ?? -1) < index)
             {
-                Node[] newChildren = new Node[index + 1];
-                Array.Copy(Children?.ToArray() ?? Array.Empty<Node>(), newChildren, Children?.Count() ?? 0);
+                Node?[] newChildren = new Node?[index + 1];
+                Array.Copy(Children?.ToArray() ?? Array.Empty<Node?>(), newChildren, Children?.Count() ?? 0);
                 Children = newChildren.AsEnumerable();
             }
         }

@@ -1,4 +1,4 @@
-﻿using Birko.Structures.Trees;
+using Birko.Structures.Trees;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -15,7 +15,7 @@ namespace Birko.Structures.Extensions.Trees
         {
             return (node?.Children?.Max(x => x?.Height() ?? 0) ?? 0) + 1;
         }
-        
+
         public static int Count(this Node node)
         {
             return (node?.Children?.Sum(x => x?.Count() ?? 0) ?? 0) + 1;
@@ -26,7 +26,7 @@ namespace Birko.Structures.Extensions.Trees
             bool wasThis = false;
             if (node?.Children?.Any(x => x != null) ?? false)
             {
-                foreach (Node child in node.Children.Where(x => x != null))
+                foreach (Node child in node.Children.Where(x => x != null)!)
                 {
                     if (node.CompareTo(child) < 0 && !wasThis)
                     {
@@ -41,7 +41,7 @@ namespace Birko.Structures.Extensions.Trees
             }
             if (!wasThis)
             {
-                yield return node;
+                yield return node!;
             }
         }
 
@@ -50,7 +50,7 @@ namespace Birko.Structures.Extensions.Trees
             yield return node;
             if (node?.Children?.Any(x => x != null) ?? false)
             {
-                foreach (Node child in node.Children.Where(x => x != null))
+                foreach (Node child in node.Children.Where(x => x != null)!)
                 {
                     foreach (var childNode in child.PreOrder())
                     {
@@ -64,7 +64,7 @@ namespace Birko.Structures.Extensions.Trees
         {
             if (node?.Children?.Any(x => x != null) ?? false)
             {
-                foreach (Node child in node?.Children.Reverse().Where(x => x != null))
+                foreach (Node child in node.Children!.Reverse().Where(x => x != null)!)
                 {
                     foreach (var childNode in child.PostOrder())
                     {
@@ -72,7 +72,7 @@ namespace Birko.Structures.Extensions.Trees
                     }
                 }
             }
-            yield return node;
+            yield return node!;
         }
 
         public static IEnumerable<Node> LevelOrder(this Node node)
@@ -88,7 +88,7 @@ namespace Birko.Structures.Extensions.Trees
 
                 if ((list.First().Children?.Count(x => x != null) ?? 0) > 0)
                 {
-                    foreach (Node child in list.First().Children?.Where(x => x != null))
+                    foreach (Node child in list.First().Children!.Where(x => x != null)!)
                     {
                         list.Add(child);
                     }

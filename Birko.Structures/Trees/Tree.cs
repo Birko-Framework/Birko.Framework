@@ -1,4 +1,4 @@
-﻿using Birko.Structures.Extensions.Trees;
+using Birko.Structures.Extensions.Trees;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,18 +8,18 @@ namespace Birko.Structures.Trees
 {
     public class Tree
     {
-        public Node Root { get; protected set; }
-        
+        public Node? Root { get; protected set; }
+
         public Tree()
         {
         }
 
         public Tree(IEnumerable<Node> nodes) : this()
-        { 
+        {
             Insert(nodes);
         }
 
-        public virtual Node Insert(Node node)
+        public virtual Node? Insert(Node? node)
         {
             if (node == null)
             {
@@ -48,7 +48,7 @@ namespace Birko.Structures.Trees
             }
         }
 
-        public Node Find(Node node) 
+        public Node? Find(Node? node)
         {
             if (node == null)
             {
@@ -66,7 +66,7 @@ namespace Birko.Structures.Trees
             return Find(node) != null;
         }
 
-        public virtual Node Remove(Node node)
+        public virtual Node? Remove(Node? node)
         {
             if (node == null)
             {
@@ -78,10 +78,11 @@ namespace Birko.Structures.Trees
             }
             if (Root.CompareTo(node) == 0)
             {
-                Node first = Root.Children?.First();
-                if ((Root.Children?.Count() ?? 0)  > 1)
+                Node? first = Root.Children?.First();
+                if (first != null && (Root.Children?.Count() ?? 0) > 1)
                 {
-                    first.Insert(Root.Children.Skip(1));
+                    var remaining = Root.Children!.Skip(1).Where(x => x != null).Cast<Node>();
+                    first.Insert(remaining);
                     first.Parent = null;
                 }
                 node = Root;
@@ -90,12 +91,15 @@ namespace Birko.Structures.Trees
             }
             else
             {
-                foreach (Node child in Root.Children)
+                if (Root.Children != null)
                 {
-                    if (child.Contains(node))
+                    foreach (Node? child in Root.Children)
                     {
-                        child.Remove(node);
-                        break;
+                        if (child != null && child.Contains(node))
+                        {
+                            child.Remove(node);
+                            break;
+                        }
                     }
                 }
             }
