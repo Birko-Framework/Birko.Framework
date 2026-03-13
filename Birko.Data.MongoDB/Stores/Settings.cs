@@ -5,24 +5,10 @@ namespace Birko.Data.MongoDB.Stores
 {
     /// <summary>
     /// MongoDB-specific settings for database connection.
+    /// Extends RemoteSettings — inherits Location (host), Port, UserName, Password, UseSsl from the framework hierarchy.
     /// </summary>
-    public class Settings : Data.Stores.Settings, Data.Models.ILoadable<Settings>
+    public class Settings : Data.Stores.RemoteSettings, Data.Models.ILoadable<Settings>
     {
-        /// <summary>
-        /// Gets or sets the username for authentication.
-        /// </summary>
-        public string UserName { get; set; } = null!;
-
-        /// <summary>
-        /// Gets or sets the password for authentication.
-        /// </summary>
-        public string Password { get; set; } = null!;
-
-        /// <summary>
-        /// Gets or sets the port number (default: 27017).
-        /// </summary>
-        public int Port { get; set; } = 27017;
-
         /// <summary>
         /// Gets or sets the authentication database name (default: admin).
         /// </summary>
@@ -34,15 +20,11 @@ namespace Birko.Data.MongoDB.Stores
         public string ReplicaSet { get; set; } = null!;
 
         /// <summary>
-        /// Gets or sets whether to use TLS/SSL for the connection.
-        /// </summary>
-        public bool UseTls { get; set; } = false;
-
-        /// <summary>
         /// Initializes a new instance of the Settings class.
         /// </summary>
         public Settings() : base()
         {
+            Port = 27017;
         }
 
         /// <summary>
@@ -52,10 +34,9 @@ namespace Birko.Data.MongoDB.Stores
         /// <param name="name">The database name.</param>
         /// <param name="username">The username for authentication.</param>
         /// <param name="password">The password for authentication.</param>
-        public Settings(string location, string name, string? username = null, string? password = null) : base(location, name)
+        public Settings(string location, string name, string? username = null, string? password = null)
+            : base(location, name, username ?? string.Empty, password ?? string.Empty, 27017)
         {
-            UserName = username ?? string.Empty;
-            Password = password ?? string.Empty;
         }
 
         /// <summary>
@@ -94,7 +75,7 @@ namespace Birko.Data.MongoDB.Stores
                 queryParams.Add($"replicaSet={ReplicaSet}");
             }
 
-            if (UseTls)
+            if (UseSsl)
             {
                 queryParams.Add("tls=true");
             }
@@ -121,13 +102,21 @@ namespace Birko.Data.MongoDB.Stores
         {
             if (data != null)
             {
-                base.LoadFrom(data);
-                UserName = data.UserName;
-                Password = data.Password;
-                Port = data.Port;
+                base.LoadFrom((Data.Stores.RemoteSettings)data);
                 AuthDatabase = data.AuthDatabase;
                 ReplicaSet = data.ReplicaSet;
-                UseTls = data.UseTls;
+            }
+        }
+
+        public override void LoadFrom(Data.Stores.Settings data)
+        {
+            if (data is Settings mongoData)
+            {
+                LoadFrom(mongoData);
+            }
+            else
+            {
+                base.LoadFrom(data);
             }
         }
     }
