@@ -3,7 +3,7 @@
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
     <HasSharedItems>true</HasSharedItems>
-    <SharedGUID>5e6f7a8b-9c0d-1234-5ef6-7890123456789</SharedGUID>
+    <SharedGUID>5e6f7a8b-9c0d-1234-5ef6-789012345678</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data.TimescaleDB.ViewModel</Import_RootNamespace>
