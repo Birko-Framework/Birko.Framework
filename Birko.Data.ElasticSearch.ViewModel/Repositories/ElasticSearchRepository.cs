@@ -94,7 +94,11 @@ namespace Birko.Data.ElasticSearch.Repositories
 
             foreach (var item in ElasticSearchStore.ReadStream(request))
             {
-                yield return LoadInstance(item);
+                var instance = LoadInstance(item);
+                if (instance != null)
+                {
+                    yield return instance;
+                }
             }
         }
 
