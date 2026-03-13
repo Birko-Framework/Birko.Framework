@@ -15,7 +15,7 @@ namespace Birko.Models.SEO.Filters
             Exact = exact;
         }
 
-        public Expression<Func<T, bool>> Filter()
+        public Expression<Func<T, bool>>? Filter()
         {
             if(string.IsNullOrEmpty(Path))
             {

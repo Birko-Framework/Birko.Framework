@@ -16,7 +16,7 @@ namespace Birko.Models.SEO.ViewModels
             PropertyChanged += SEO_PropertyChanged;
         }
 
-        private string _title;
+        private string _title = null!;
         public string Title
         {
             get { return _title; }
@@ -30,7 +30,7 @@ namespace Birko.Models.SEO.ViewModels
             }
         }
 
-        private string _path;
+        private string _path = null!;
         public string Path
         {
             get { return _path; }
@@ -41,7 +41,7 @@ namespace Birko.Models.SEO.ViewModels
             }
         }
 
-        private string _description;
+        private string _description = null!;
         public string Description
         {
             get { return _description; }
@@ -55,7 +55,7 @@ namespace Birko.Models.SEO.ViewModels
             }
         }
 
-        private void SEO_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void SEO_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] {
                     TitleProperty,
@@ -71,23 +71,21 @@ namespace Birko.Models.SEO.ViewModels
         public void LoadFrom(Birko.Models.SEO.SEO data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                Title = data.Title;
-                Path = data.Path;
-                Description = data.Description;
-            }
+            if (data == null) return;
+
+            Title = data.Title;
+            Path = data.Path;
+            Description = data.Description;
         }
 
         public virtual void LoadFrom(SEO data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                Title = data.Title;
-                Path = data.Path;
-                Description = data.Description;
-            }
+            if (data == null) return;
+
+            Title = data.Title;
+            Path = data.Path;
+            Description = data.Description;
         }
     }
 }
