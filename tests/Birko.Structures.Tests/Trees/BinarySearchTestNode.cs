@@ -7,7 +7,7 @@ namespace Birko.Structures.Tests.Trees
     {
         public int Data { get; set; }
 
-        public override int CompareTo(Node other)
+        public override int CompareTo(Node? other)
         {
             if (other is not BinarySearchTestNode testNode)
             {
