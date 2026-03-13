@@ -42,7 +42,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         Guid? tenantId,
         CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenAsyncSession();
+        using var session = DocumentStore!.OpenAsyncSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
@@ -50,7 +50,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         // Apply tenant filter if needed
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -77,7 +77,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         IEnumerable<ISyncKnowledgeItem> items,
         CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenAsyncSession();
+        using var session = DocumentStore!.OpenAsyncSession();
 
         foreach (var item in items)
         {
@@ -106,14 +106,14 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         Guid? tenantId,
         CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenAsyncSession();
+        using var session = DocumentStore!.OpenAsyncSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -146,14 +146,14 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         DateTime syncTime,
         CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenAsyncSession();
+        using var session = DocumentStore!.OpenAsyncSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
         }
 
         var items = await query.ToListAsync(cancellationToken);

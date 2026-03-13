@@ -39,7 +39,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         Guid? tenantId,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenSession();
+        using var session = DocumentStore!.OpenSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
@@ -48,7 +48,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         if (tenantId.HasValue)
         {
             // For tenant-aware storage, could use collection prefix/suffix or document ID filtering
-            query = query.Where(x => x.Guid.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
         }
 
         var items = query.ToList();
@@ -75,7 +75,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         IEnumerable<ISyncKnowledgeItem> items,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenSession();
+        using var session = DocumentStore!.OpenSession();
 
         foreach (var item in items)
         {
@@ -104,14 +104,14 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         Guid? tenantId,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenSession();
+        using var session = DocumentStore!.OpenSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
         }
 
         var items = query.ToList();
@@ -144,14 +144,14 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         System.DateTime syncTime,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        using var session = DocumentStore.OpenSession();
+        using var session = DocumentStore!.OpenSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
         }
 
         var items = query.ToList();
