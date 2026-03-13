@@ -1,7 +1,9 @@
-﻿using Birko.Data.Stores;
+﻿using Birko.Data.Repositories;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
 using System;
 
-namespace Birko.Data.Repositories
+namespace Birko.Data.SQL.Repositories
 {
     public abstract class DataBaseRepository<TConnector, TViewModel, TModel>
         : AbstractBulkViewModelRepository<TViewModel, TModel>

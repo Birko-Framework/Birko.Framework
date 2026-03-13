@@ -1,8 +1,10 @@
 using System;
-using Birko.Data.Stores;
+using Birko.Data.Repositories;
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
 
-namespace Birko.Data.Repositories
+namespace Birko.Data.SQL.Repositories
 {
     /// <summary>
     /// Async database repository for SQL-based storage.
@@ -18,7 +20,7 @@ namespace Birko.Data.Repositories
         /// Gets the database store.
         /// This works with wrapped stores (e.g., tenant wrappers).
         /// </summary>
-        public Data.Stores.AsyncDataBaseBulkStore<SQL.Connectors.AbstractConnector, TModel>? DataBaseStore =>
+        public AsyncDataBaseBulkStore<SQL.Connectors.AbstractConnector, TModel>? DataBaseStore =>
             Store?.GetUnwrappedStore<TModel, Stores.AsyncDataBaseBulkStore<SQL.Connectors.AbstractConnector, TModel>>();
 
         //public TConnector Connector => DataBaseStore?.Connector;
