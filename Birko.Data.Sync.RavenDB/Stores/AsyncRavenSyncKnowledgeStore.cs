@@ -1,6 +1,7 @@
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.RavenDB.Models;
 using Birko.Data.Sync.Stores;
+using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Linq;
