@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,9 +13,12 @@ namespace Birko.Communication.REST
     /// <summary>
     /// REST client for consuming RESTful APIs
     /// </summary>
-    public class RestClient
+    public class RestClient : IDisposable
     {
         private static readonly Dictionary<string, RestClient> _clients = new Dictionary<string, RestClient>();
+
+        private readonly HttpClient _httpClient;
+        private bool _disposed;
 
         /// <summary>
         /// Gets the base URI endpoint for this REST client
@@ -28,7 +33,11 @@ namespace Birko.Communication.REST
         /// <summary>
         /// Gets or sets the timeout for requests in milliseconds
         /// </summary>
-        public int Timeout { get; set; } = 100000; // 100 seconds default
+        public int Timeout
+        {
+            get => (int)_httpClient.Timeout.TotalMilliseconds;
+            set => _httpClient.Timeout = TimeSpan.FromMilliseconds(value);
+        }
 
         /// <summary>
         /// Gets or sets the default content type for requests
@@ -74,6 +83,10 @@ namespace Birko.Communication.REST
                 throw new ArgumentNullException(nameof(baseUri));
 
             BaseURI = baseUri.TrimEnd('/');
+            _httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromMilliseconds(100000) // 100 seconds default
+            };
         }
 
         /// <summary>
@@ -218,6 +231,24 @@ namespace Birko.Communication.REST
         }
 
         /// <summary>
+        /// Maps the custom HttpMethod enum to System.Net.Http.HttpMethod
+        /// </summary>
+        private static System.Net.Http.HttpMethod ToHttpMethod(HttpMethod method)
+        {
+            return method switch
+            {
+                HttpMethod.GET => System.Net.Http.HttpMethod.Get,
+                HttpMethod.POST => System.Net.Http.HttpMethod.Post,
+                HttpMethod.PUT => System.Net.Http.HttpMethod.Put,
+                HttpMethod.DELETE => System.Net.Http.HttpMethod.Delete,
+                HttpMethod.PATCH => System.Net.Http.HttpMethod.Patch,
+                HttpMethod.HEAD => System.Net.Http.HttpMethod.Head,
+                HttpMethod.OPTIONS => System.Net.Http.HttpMethod.Options,
+                _ => new System.Net.Http.HttpMethod(method.ToString())
+            };
+        }
+
+        /// <summary>
         /// Sends a REST request and returns the response as a string
         /// </summary>
         /// <param name="method">The HTTP method to use</param>
@@ -231,56 +262,13 @@ namespace Birko.Communication.REST
         protected async Task<string> SendRequestAsync(HttpMethod method, string endpoint, string? queryString, string? body, string? contentType, Dictionary<string, string>? headers, CancellationToken cancellationToken = default)
         {
             var uri = BuildUri(endpoint, queryString);
-            var request = CreateRequest(method, uri, body, contentType, headers);
 
-            OnRequest?.Invoke(this, new RestRequestEventArgs(method.ToString(), uri, body));
-
-            using var response = (HttpWebResponse)await request.GetResponseAsync().ConfigureAwait(false);
-            using var stream = response.GetResponseStream();
-            using var reader = new StreamReader(stream ?? throw new InvalidOperationException("No response stream"));
-
-            var responseContent = await reader.ReadToEndAsync().ConfigureAwait(false);
-            OnResponse?.Invoke(this, new RestResponseEventArgs(method.ToString(), uri, responseContent, response.StatusCode));
-
-            return responseContent;
-        }
-
-        /// <summary>
-        /// Creates a web request for the REST API call
-        /// </summary>
-        /// <param name="method">The HTTP method</param>
-        /// <param name="uri">The full URI</param>
-        /// <param name="body">The request body content</param>
-        /// <param name="contentType">The content type</param>
-        /// <param name="headers">Optional headers</param>
-        /// <returns>A configured HttpWebRequest</returns>
-        protected virtual HttpWebRequest CreateRequest(HttpMethod method, string uri, string? body, string? contentType, Dictionary<string, string>? headers)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(uri);
-            request.Method = method.ToString();
-            request.Timeout = Timeout;
-            request.Credentials = Credentials;
-
-            // Set content type for methods that typically have a body
-            if (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH)
-            {
-                request.ContentType = contentType ?? DefaultContentType;
-            }
+            using var request = new HttpRequestMessage(ToHttpMethod(method), uri);
 
             // Add default headers
             foreach (var header in DefaultHeaders)
             {
-                if (!request.Headers[header.Key]?.Equals(header.Value) ?? true)
-                {
-                    try
-                    {
-                        request.Headers[header.Key] = header.Value;
-                    }
-                    catch (Exception)
-                    {
-                        // Some headers are restricted and cannot be set
-                    }
-                }
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
             }
 
             // Add custom headers
@@ -288,28 +276,25 @@ namespace Birko.Communication.REST
             {
                 foreach (var header in headers)
                 {
-                    try
-                    {
-                        request.Headers[header.Key] = header.Value;
-                    }
-                    catch (Exception)
-                    {
-                        // Some headers are restricted and cannot be set
-                    }
+                    request.Headers.TryAddWithoutValidation(header.Key, header.Value);
                 }
             }
 
             // Write body if present
             if (!string.IsNullOrEmpty(body) && (method == HttpMethod.POST || method == HttpMethod.PUT || method == HttpMethod.PATCH))
             {
-                var bytes = Encoding.UTF8.GetBytes(body);
-                request.ContentLength = bytes.Length;
-
-                using var stream = request.GetRequestStream();
-                stream.Write(bytes, 0, bytes.Length);
+                var mediaType = contentType ?? DefaultContentType;
+                request.Content = new StringContent(body, Encoding.UTF8, mediaType);
             }
 
-            return request;
+            OnRequest?.Invoke(this, new RestRequestEventArgs(method.ToString(), uri, body));
+
+            using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            OnResponse?.Invoke(this, new RestResponseEventArgs(method.ToString(), uri, responseContent, response.StatusCode));
+
+            return responseContent;
         }
 
         /// <summary>
@@ -335,6 +320,10 @@ namespace Birko.Communication.REST
         /// </summary>
         public static void ClearCache()
         {
+            foreach (var client in _clients.Values)
+            {
+                client.Dispose();
+            }
             _clients.Clear();
         }
 
@@ -345,7 +334,24 @@ namespace Birko.Communication.REST
         /// <returns>True if the client was removed; otherwise, false</returns>
         public static bool RemoveClient(string baseUri)
         {
-            return _clients.Remove(baseUri);
+            if (_clients.TryGetValue(baseUri, out var client))
+            {
+                client.Dispose();
+                return _clients.Remove(baseUri);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Disposes the underlying HttpClient
+        /// </summary>
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _httpClient.Dispose();
+                _disposed = true;
+            }
         }
     }
 

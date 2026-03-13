@@ -297,7 +297,7 @@ namespace Birko.Communication.REST
             // Copy headers
             foreach (string key in request.Headers.Keys)
             {
-                restRequest.Headers[key] = request.Headers[key];
+                restRequest.Headers[key] = request.Headers[key] ?? string.Empty;
             }
 
             // Parse query parameters
