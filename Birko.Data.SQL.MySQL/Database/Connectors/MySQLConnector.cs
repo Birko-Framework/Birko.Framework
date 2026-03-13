@@ -59,6 +59,10 @@ namespace Birko.Data.SQL.Connectors
                     remoteSettings.UserName,
                     remoteSettings.Password,
                     remoteSettings.Name);
+                if (remoteSettings.UseSsl)
+                {
+                    connectionString += ";SslMode=Required";
+                }
                 return new MySqlConnection(connectionString);
             }
             else
