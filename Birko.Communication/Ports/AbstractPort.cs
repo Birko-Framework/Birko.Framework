@@ -7,7 +7,7 @@ namespace Birko.Communication.Ports
 
     public class PortSettings
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         public virtual string GetID()
         {
@@ -25,19 +25,19 @@ namespace Birko.Communication.Ports
         /// Gets or sets the read data buffer list.
         /// </summary>
         /// <value>The read data buffer list.</value>
-        public List<byte> ReadData { get; set; } = null;
+        public List<byte> ReadData { get; set; } = new();
 
         /// <summary>
         /// Gets or sets the settings.
         /// </summary>
         /// <value>The settings.</value>
-        public PortSettings Settings { get; set; }
+        public PortSettings Settings { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the process data delegate.
         /// </summary>
         /// <value>The process data delegate.</value>
-        private event ProcessDataDelegate OnProcessData;
+        private event ProcessDataDelegate? OnProcessData;
 
         /// <summary>
         /// Gets or sets a value indicating whether port is open.
