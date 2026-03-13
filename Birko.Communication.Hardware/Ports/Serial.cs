@@ -21,7 +21,7 @@ namespace Birko.Communication.Hardware.Ports
 
     public class Serial : AbstractPort
     {
-        private readonly SerialPort port;
+        private readonly SerialPort port = null!;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Serial"/> class.
@@ -75,13 +75,13 @@ namespace Birko.Communication.Hardware.Ports
                     port.DataReceived += new SerialDataReceivedEventHandler(DataReceviedHandler);
                     _isOpen = true;
                 }
-                catch (UnauthorizedAccessException ex)
+                catch (UnauthorizedAccessException)
                 {
                     _isOpen = false;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    throw (ex);
+                    throw;
                 }
             }
             // osetrenie ak hodi chyby ze niekto pouziva port vrati false
@@ -98,12 +98,10 @@ namespace Birko.Communication.Hardware.Ports
         }
         public override void Close()
         {
-            if (IsOpen())
-            {
-                port.Close();
-                port.DataReceived -= new SerialDataReceivedEventHandler(DataReceviedHandler);
-                _isOpen = false;
-            }
+            if (!IsOpen()) return;
+            port.Close();
+            port.DataReceived -= new SerialDataReceivedEventHandler(DataReceviedHandler);
+            _isOpen = false;
         }
 
         /// <summary>
