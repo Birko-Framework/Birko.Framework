@@ -29,7 +29,7 @@ namespace Birko.Data.SQL.Connectors
             OnException += MySQLConnector_OnException;
         }
 
-        private void MySQLConnector_OnException(Exception ex, string commandText)
+        private void MySQLConnector_OnException(Exception ex, string? commandText)
         {
             if (!IsInitializing && (ex.Message.Contains("doesn't exist") || ex.Message.Contains("Table") && ex.Message.Contains("doesn't exist")))
             {
@@ -165,11 +165,11 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <inheritdoc />
-        public override DbCommand AddParameter(DbCommand command, string name, object value)
+        public override DbCommand AddParameter(DbCommand command, string name, object? value)
         {
             if (command.Parameters.Contains(name))
             {
-                (command.Parameters[name] as MySqlParameter).Value = value ?? DBNull.Value;
+                ((MySqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
             }
             else
             {
@@ -216,7 +216,7 @@ namespace Birko.Data.SQL.Connectors
             using var connection = (MySqlConnection)CreateConnection(_settings);
             connection.Open();
             using var transaction = connection.BeginTransaction();
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -268,7 +268,7 @@ namespace Birko.Data.SQL.Connectors
             using var connection = (MySqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -319,7 +319,7 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
@@ -331,7 +331,7 @@ namespace Birko.Data.SQL.Connectors
             using var connection = (MySqlConnection)CreateConnection(_settings);
             connection.Open();
             using var transaction = connection.BeginTransaction();
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -385,7 +385,7 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
@@ -397,7 +397,7 @@ namespace Birko.Data.SQL.Connectors
             using var connection = (MySqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -457,14 +457,14 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
             using var connection = (MySqlConnection)CreateConnection(_settings);
             connection.Open();
             using var transaction = connection.BeginTransaction();
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -508,14 +508,14 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
             using var connection = (MySqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();

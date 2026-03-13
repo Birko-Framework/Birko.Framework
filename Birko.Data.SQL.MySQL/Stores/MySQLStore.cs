@@ -35,7 +35,7 @@ namespace Birko.Data.SQL.MySQL.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The password settings to use.</param>
-        public void SetSettings(Data.Stores.PasswordSettings settings)
+        public override void SetSettings(Data.Stores.PasswordSettings settings)
         {
             if (settings is Data.Stores.RemoteSettings remote)
             {

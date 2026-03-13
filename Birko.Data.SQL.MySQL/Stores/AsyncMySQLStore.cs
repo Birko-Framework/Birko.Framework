@@ -26,7 +26,7 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The remote settings to use.</param>
-        public new void SetSettings(RemoteSettings settings)
+        public void SetSettings(RemoteSettings settings)
         {
             if (settings != null)
             {
