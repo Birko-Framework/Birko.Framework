@@ -13,7 +13,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores;
+namespace Birko.Data.RavenDB.Stores;
 
 /// <summary>
 /// Async RavenDB implementation of IAsyncBulkStore with bulk operations.

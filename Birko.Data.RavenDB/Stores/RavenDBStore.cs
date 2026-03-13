@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 
-namespace Birko.Data.Stores;
+namespace Birko.Data.RavenDB.Stores;
 
 /// <summary>
 /// RavenDB implementation of IBulkStore for document-based storage with bulk operations.

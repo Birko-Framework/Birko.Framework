@@ -1,5 +1,6 @@
 using Birko.Data.Models;
 using Birko.Data.Repositories;
+using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
 using Raven.Client.Documents;
 using System;
