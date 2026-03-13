@@ -16,7 +16,7 @@ namespace Birko.Models.Users
         , IDefault
     {
         [PrecisionField(256)]
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
 
         [NamedField("IsDefault")]
         public bool Default { get; set; } = false;
@@ -24,11 +24,9 @@ namespace Birko.Models.Users
         public virtual void LoadFrom(ViewModels.Agenda data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                Name = data.Name;
-                Default = data.Default;
-            }
+            if (data == null) return;
+            Name = data.Name;
+            Default = data.Default;
         }
     }
 }

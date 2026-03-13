@@ -6,6 +6,6 @@ namespace Birko.Models.Users.Filters
     {
         public Guid? UserGuid { get; set; }
         public Guid? AgendaGuid { get; set; }
-        public string Role { get; set; }
+        public string? Role { get; set; }
     }
 }

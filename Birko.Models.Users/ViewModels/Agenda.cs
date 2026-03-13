@@ -14,7 +14,7 @@ namespace Birko.Models.Users.ViewModels
             PropertyChanged += Agenda_PropertyChanged;
         }
 
-        private string _name;
+        private string _name = null!;
         public string Name
         {
             get { return _name; }
@@ -42,7 +42,7 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private void Agenda_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Agenda_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { NameProperty, DefaultProperty }.Contains(e.PropertyName))
             {

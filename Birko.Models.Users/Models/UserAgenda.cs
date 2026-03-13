@@ -13,32 +13,30 @@ namespace Birko.Models.Users
     {
         public Guid UserGuid { get; set; }
         public Guid AgendaGuid { get; set; }
-        public string Roles { get; set; }
+        public string? Roles { get; set; }
 
         public virtual void LoadFrom(ViewModels.User data)
         {
             if (data != null)
             {
-                UserGuid = data.Guid.Value;
+                UserGuid = data.Guid!.Value;
             }
         }
 
         public virtual void LoadFrom(ViewModels.UserAgenda data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                Roles = (data.Roles != null && data.Roles.Any(x => !string.IsNullOrEmpty(x)))
-                    ? string.Join(User.UserRolesSeparator, data.Roles.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
-                    : null;
-            }
+            if (data == null) return;
+            Roles = (data.Roles != null && data.Roles.Any(x => !string.IsNullOrEmpty(x)))
+                ? string.Join(User.UserRolesSeparator, data.Roles.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
+                : null;
         }
 
         public virtual void LoadFrom(ViewModels.Agenda data)
         {
             if (data != null)
             {
-                AgendaGuid = data.Guid.Value;
+                AgendaGuid = data.Guid!.Value;
             }
         }
     }

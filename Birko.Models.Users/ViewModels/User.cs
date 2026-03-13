@@ -15,7 +15,7 @@ namespace Birko.Models.Users.ViewModels
             PropertyChanged += User_PropertyChanged;
         }
 
-        private string _userName;
+        private string _userName = null!;
         public string UserName
         {
             get { return _userName; }
@@ -29,8 +29,8 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private IEnumerable<string> _roles;
-        public IEnumerable<string> Roles
+        private IEnumerable<string>? _roles;
+        public IEnumerable<string>? Roles
         {
             get { return _roles; }
             set
@@ -40,7 +40,7 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private void User_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void User_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { UserNameProperty, RolesProperty }.Contains(e.PropertyName))
             {

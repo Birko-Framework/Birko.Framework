@@ -17,20 +17,18 @@ namespace Birko.Models.Users
 
         [UniqueField]
         [PrecisionField(256)]
-        public string UserName { get; set; }
+        public string UserName { get; set; } = null!;
 
-        public string Roles { get; set; }
+        public string? Roles { get; set; }
 
         public virtual void LoadFrom(ViewModels.User data)
         {
             base.LoadFrom(data);
-            if (data != null)
-            {
-                UserName = data.UserName;
-                Roles = (data.Roles != null && data.Roles.Any(x => !string.IsNullOrEmpty(x)))
-                    ? string.Join(UserRolesSeparator, data.Roles.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
-                    : null;
-            }
+            if (data == null) return;
+            UserName = data.UserName;
+            Roles = (data.Roles != null && data.Roles.Any(x => !string.IsNullOrEmpty(x)))
+                ? string.Join(UserRolesSeparator, data.Roles.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
+                : null;
         }
     }
 }

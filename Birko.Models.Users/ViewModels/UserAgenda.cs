@@ -14,8 +14,8 @@ namespace Birko.Models.Users.ViewModels
             PropertyChanged += UserAgenda_PropertyChanged;
         }
 
-        private IEnumerable<string> _roles;
-        public IEnumerable<string> Roles
+        private IEnumerable<string>? _roles;
+        public IEnumerable<string>? Roles
         {
             get { return _roles; }
             set
@@ -25,7 +25,7 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private void UserAgenda_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void UserAgenda_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { RolesProperty }.Contains(e.PropertyName))
             {
