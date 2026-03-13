@@ -1,5 +1,7 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
+using Birko.Data.SQL.MySQL.Stores;
+using Birko.Data.SQL.Stores;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,7 +25,7 @@ namespace Birko.Data.SQL.Repositories
         /// Gets the MySQL connector.
         /// This works with wrapped stores (e.g., tenant wrappers).
         /// </summary>
-        public MySQLConnector? Connector => Store?.GetUnwrappedStore<TModel, Data.Stores.AsyncMySQLStore<TModel>>()?.Connector;
+        public MySQLConnector? Connector => Store?.GetUnwrappedStore<TModel, AsyncMySQLStore<TModel>>()?.Connector;
 
         /// <summary>
         /// Initializes a new instance of the AsyncMySQLRepository class.
@@ -31,7 +33,7 @@ namespace Birko.Data.SQL.Repositories
         public AsyncMySQLRepository()
             : base(null)
         {
-            Store = new Data.Stores.AsyncMySQLStore<TModel>();
+            Store = new AsyncMySQLStore<TModel>();
         }
 
         /// <summary>
@@ -41,13 +43,13 @@ namespace Birko.Data.SQL.Repositories
         public AsyncMySQLRepository(Data.Stores.IAsyncStore<TModel>? store)
             : base(null)
         {
-            if (store != null && !store.IsStoreOfType<TModel, Data.Stores.AsyncMySQLStore<TModel>>())
+            if (store != null && !store.IsStoreOfType<TModel, AsyncMySQLStore<TModel>>())
             {
                 throw new ArgumentException(
                     "Store must be of type AsyncMySQLStore<TModel> or a wrapper around it (e.g., AsyncTenantStoreWrapper).",
                     nameof(store));
             }
-            Store = store ?? new Data.Stores.AsyncMySQLStore<TModel>();
+            Store = store ?? new AsyncMySQLStore<TModel>();
         }
 
         /// <summary>
@@ -58,7 +60,7 @@ namespace Birko.Data.SQL.Repositories
         {
             if (settings != null)
             {
-                var innerStore = Store?.GetUnwrappedStore<TModel, Data.Stores.AsyncMySQLStore<TModel>>();
+                var innerStore = Store?.GetUnwrappedStore<TModel, AsyncMySQLStore<TModel>>();
                 innerStore?.SetSettings(settings);
             }
         }

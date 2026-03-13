@@ -1,11 +1,13 @@
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores
+namespace Birko.Data.SQL.MySQL.Stores
 {
     /// <summary>
     /// Native async MySQL store with bulk operation support.

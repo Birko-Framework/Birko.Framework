@@ -1,3 +1,4 @@
+using Birko.Data.SQL.Stores;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace Birko.Data.SQL.MySQL.Stores
     /// Combines single-item and bulk CRUD operations in one store.
     /// </summary>
     /// <typeparam name="T">The type of entity.</typeparam>
-    public class MySQLStore<T> : Data.Stores.DataBaseBulkStore<SQL.Connectors.MySQLConnector, T>
+    public class MySQLStore<T> : DataBaseBulkStore<SQL.Connectors.MySQLConnector, T>
         where T : Data.Models.AbstractModel
     {
         /// <summary>

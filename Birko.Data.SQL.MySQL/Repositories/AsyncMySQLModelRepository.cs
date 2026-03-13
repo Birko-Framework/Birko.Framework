@@ -1,5 +1,7 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
+using Birko.Data.SQL.MySQL.Stores;
+using Birko.Data.SQL.Stores;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,31 +21,31 @@ namespace Birko.Data.SQL.Repositories
         /// <summary>
         /// Gets the MySQL connector.
         /// </summary>
-        public MySQLConnector? Connector => Store?.GetUnwrappedStore<T, Data.Stores.AsyncMySQLStore<T>>()?.Connector;
+        public MySQLConnector? Connector => Store?.GetUnwrappedStore<T, AsyncMySQLStore<T>>()?.Connector;
 
         public AsyncMySQLModelRepository()
             : base(null)
         {
-            Store = new Data.Stores.AsyncMySQLStore<T>();
+            Store = new AsyncMySQLStore<T>();
         }
 
         public AsyncMySQLModelRepository(Data.Stores.IAsyncStore<T>? store)
             : base(null)
         {
-            if (store != null && !store.IsStoreOfType<T, Data.Stores.AsyncMySQLStore<T>>())
+            if (store != null && !store.IsStoreOfType<T, AsyncMySQLStore<T>>())
             {
                 throw new ArgumentException(
                     "Store must be of type AsyncMySQLStore<T> or a wrapper around it.",
                     nameof(store));
             }
-            Store = store ?? new Data.Stores.AsyncMySQLStore<T>();
+            Store = store ?? new AsyncMySQLStore<T>();
         }
 
         public void SetSettings(RemoteSettings settings)
         {
             if (settings != null)
             {
-                var innerStore = Store?.GetUnwrappedStore<T, Data.Stores.AsyncMySQLStore<T>>();
+                var innerStore = Store?.GetUnwrappedStore<T, AsyncMySQLStore<T>>();
                 innerStore?.SetSettings(settings);
             }
         }

@@ -1,5 +1,6 @@
 using System;
 using Birko.Data.Repositories;
+using Birko.Data.SQL.Repositories;
 using Birko.Data.Models;
 using Birko.Data.SQL.Connectors;
 
