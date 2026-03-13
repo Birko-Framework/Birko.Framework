@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using System.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -22,7 +22,7 @@ namespace Birko.Data.SQL.Connectors
             OnException += MSSqlConnector_OnException;
         }
 
-        private void MSSqlConnector_OnException(Exception ex, string commandText)
+        private void MSSqlConnector_OnException(Exception ex, string? commandText)
         {
             if (!IsInitializing && ex.Message.Contains("Invalid object name"))
             {
@@ -168,15 +168,15 @@ namespace Birko.Data.SQL.Connectors
             return result.ToString();
         }
 
-        public override DbCommand AddParameter(DbCommand command, string name, object value)
+        public override DbCommand AddParameter(DbCommand command, string name, object? value)
         {
             if (command.Parameters.Contains(name))
             {
-                (command.Parameters[name] as SqlParameter).Value = value ?? DBNull.Value;
+                ((SqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
             }
             else
             {
-                (command as SqlCommand).Parameters.AddWithValue(name, value ?? DBNull.Value);
+                ((SqlCommand)command).Parameters.AddWithValue(name, value ?? DBNull.Value);
             }
             return command;
         }
@@ -269,7 +269,7 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
@@ -281,7 +281,7 @@ namespace Birko.Data.SQL.Connectors
             using var connection = (SqlConnection)CreateConnection(_settings);
             connection.Open();
             using var transaction = connection.BeginTransaction();
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -335,7 +335,7 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
@@ -347,7 +347,7 @@ namespace Birko.Data.SQL.Connectors
             using var connection = (SqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -407,14 +407,14 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
             using var connection = (SqlConnection)CreateConnection(_settings);
             connection.Open();
             using var transaction = connection.BeginTransaction();
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
@@ -458,14 +458,14 @@ namespace Birko.Data.SQL.Connectors
             if (table == null)
                 return;
 
-            var primaryFields = table.GetPrimaryFields().ToList();
+            var primaryFields = (table.GetPrimaryFields() ?? Enumerable.Empty<AbstractField>()).ToList();
             if (!primaryFields.Any())
                 return;
 
             using var connection = (SqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string commandText = null;
+            string? commandText = null;
             try
             {
                 using var command = connection.CreateCommand();
