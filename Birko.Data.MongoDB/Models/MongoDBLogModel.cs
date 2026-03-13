@@ -10,7 +10,7 @@ namespace Birko.Data.MongoDB.Models
         public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
         public virtual DateTime? PrevUpdatedAt { get; set; } = null;
 
-        public AbstractLogModel CopyTo(AbstractLogModel clone = null)
+        public AbstractLogModel CopyTo(AbstractLogModel clone = null!)
         {
             base.CopyTo(clone);
             if (clone != null)
@@ -19,7 +19,7 @@ namespace Birko.Data.MongoDB.Models
                 clone.UpdatedAt = UpdatedAt;
                 clone.PrevUpdatedAt = PrevUpdatedAt;
             }
-            return clone;
+            return clone!;
         }
 
         public void LoadFrom(LogViewModel data)

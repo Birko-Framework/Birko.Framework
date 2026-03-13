@@ -43,11 +43,8 @@ namespace Birko.Data.MongoDB.Stores
         {
             get
             {
-                if (Client != null)
-                {
-                    return Client.GetCollection<T>();
-                }
-                return null;
+                if (Client == null) return null;
+                return Client.GetCollection<T>();
             }
         }
 
@@ -90,20 +87,15 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Destroy()
         {
-            if (Client != null)
-            {
-                var collectionName = typeof(T).Name;
-                Client.DropCollection<T>(collectionName);
-            }
+            if (Client == null) return;
+            var collectionName = typeof(T).Name;
+            Client.DropCollection<T>(collectionName);
         }
 
         /// <inheritdoc />
         public override T? Read(Guid guid)
         {
-            if (Collection == null)
-            {
-                return null;
-            }
+            if (Collection == null) return null;
 
             return Collection.Find(new ModelByGuid<T>(guid).Filter()).FirstOrDefault();
         }
@@ -111,10 +103,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override IEnumerable<T> Read()
         {
-            if (Collection == null)
-            {
-                return Enumerable.Empty<T>();
-            }
+            if (Collection == null) return Enumerable.Empty<T>();
 
             return Collection.Find(FilterDefinition<T>.Empty).ToList();
         }
@@ -122,10 +111,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override T? Read(Expression<Func<T, bool>>? filter = null)
         {
-            if (Collection == null)
-            {
-                return null;
-            }
+            if (Collection == null) return null;
 
             if (filter == null)
             {
@@ -138,10 +124,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override long Count(Expression<Func<T, bool>>? filter = null)
         {
-            if (Collection == null)
-            {
-                return 0;
-            }
+            if (Collection == null) return 0;
 
             if (filter == null)
             {
@@ -154,10 +137,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override Guid Create(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Collection == null || data == null)
-            {
-                return Guid.Empty;
-            }
+            if (Collection == null || data == null) return Guid.Empty;
 
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
@@ -173,10 +153,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Update(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
-            {
-                return;
-            }
+            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
             storeDelegate?.Invoke(data);
 
@@ -190,10 +167,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Delete(T data)
         {
-            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
-            {
-                return;
-            }
+            if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
             var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
             if (TransactionContext != null)
@@ -207,10 +181,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
-            if (Collection == null)
-            {
-                return Enumerable.Empty<T>();
-            }
+            if (Collection == null) return Enumerable.Empty<T>();
 
             var query = Collection.Find(filter ?? FilterDefinition<T>.Empty);
 
@@ -239,16 +210,10 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Create(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Collection == null || data == null)
-            {
-                return;
-            }
+            if (Collection == null || data == null) return;
 
             var itemsToCreate = data.Where(x => x != null).ToList();
-            if (itemsToCreate.Count == 0)
-            {
-                return;
-            }
+            if (itemsToCreate.Count == 0) return;
 
             foreach (var item in itemsToCreate)
             {
@@ -265,16 +230,10 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Update(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
-            if (Collection == null || data == null)
-            {
-                return;
-            }
+            if (Collection == null || data == null) return;
 
             var itemsToUpdate = data.Where(x => x != null).ToList();
-            if (itemsToUpdate.Count == 0)
-            {
-                return;
-            }
+            if (itemsToUpdate.Count == 0) return;
 
             foreach (var item in itemsToUpdate)
             {
@@ -296,20 +255,14 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Delete(IEnumerable<T> data)
         {
-            if (Collection == null || data == null)
-            {
-                return;
-            }
+            if (Collection == null || data == null) return;
 
             var guids = data
                 .Where(x => x != null && x.Guid != null && x.Guid != Guid.Empty)
                 .Select(x => x.Guid!.Value)
                 .ToList();
 
-            if (guids.Count == 0)
-            {
-                return;
-            }
+            if (guids.Count == 0) return;
 
             var filter = new ModelsByGuid<T>(guids).Filter();
             if (TransactionContext != null)

@@ -51,7 +51,7 @@ namespace Birko.Data.MongoDB
         /// <typeparam name="T">The type of document in the collection.</typeparam>
         /// <param name="collectionName">Optional collection name. If not provided, uses the type name.</param>
         /// <returns>A MongoDB collection.</returns>
-        public IMongoCollection<T> GetCollection<T>(string collectionName = null)
+        public IMongoCollection<T> GetCollection<T>(string? collectionName = null)
         {
             var name = collectionName ?? typeof(T).Name;
             return Database.GetCollection<T>(name);
@@ -80,11 +80,11 @@ namespace Birko.Data.MongoDB
         /// <typeparam name="T">The document type.</typeparam>
         /// <param name="indexKeysDefinition">The index keys definition.</param>
         /// <param name="collectionName">Optional collection name.</param>
-        public void CreateIndex<T>(IndexKeysDefinition<T> indexKeysDefinition, string collectionName = null)
+        public void CreateIndex<T>(IndexKeysDefinition<T> indexKeysDefinition, string? collectionName = null)
         {
             var collection = GetCollection<T>(collectionName);
             var indexOptions = new CreateIndexOptions { Background = true };
-            collection.Indexes.CreateOne(indexKeysDefinition, indexOptions);
+            collection.Indexes.CreateOne(new CreateIndexModel<T>(indexKeysDefinition, indexOptions));
         }
 
         /// <summary>
@@ -92,7 +92,7 @@ namespace Birko.Data.MongoDB
         /// </summary>
         /// <typeparam name="T">The document type.</typeparam>
         /// <param name="collectionName">Optional collection name.</param>
-        public void DropCollection<T>(string collectionName = null)
+        public void DropCollection<T>(string? collectionName = null)
         {
             var name = collectionName ?? typeof(T).Name;
             Database.DropCollection(name);

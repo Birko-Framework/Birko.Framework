@@ -11,12 +11,12 @@ namespace Birko.Data.MongoDB.Stores
         /// <summary>
         /// Gets or sets the username for authentication.
         /// </summary>
-        public string UserName { get; set; }
+        public string UserName { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the password for authentication.
         /// </summary>
-        public string Password { get; set; }
+        public string Password { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets the port number (default: 27017).
@@ -31,7 +31,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <summary>
         /// Gets or sets the replica set name for replica set connections.
         /// </summary>
-        public string ReplicaSet { get; set; }
+        public string ReplicaSet { get; set; } = null!;
 
         /// <summary>
         /// Gets or sets whether to use TLS/SSL for the connection.
@@ -52,10 +52,10 @@ namespace Birko.Data.MongoDB.Stores
         /// <param name="name">The database name.</param>
         /// <param name="username">The username for authentication.</param>
         /// <param name="password">The password for authentication.</param>
-        public Settings(string location, string name, string username = null, string password = null) : base(location, name)
+        public Settings(string location, string name, string? username = null, string? password = null) : base(location, name)
         {
-            UserName = username;
-            Password = password;
+            UserName = username ?? string.Empty;
+            Password = password ?? string.Empty;
         }
 
         /// <summary>
