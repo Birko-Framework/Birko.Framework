@@ -8,6 +8,11 @@
     <Project Path="../Birko.BackgroundJobs.JSON/Birko.BackgroundJobs.JSON.shproj" />
     <Project Path="../Birko.BackgroundJobs.Redis/Birko.BackgroundJobs.Redis.shproj" />
   </Folder>
+  <Folder Name="/MessageQueue/">
+    <Project Path="../Birko.MessageQueue/Birko.MessageQueue.shproj" />
+    <Project Path="../Birko.MessageQueue.InMemory/Birko.MessageQueue.InMemory.shproj" />
+    <Project Path="../Birko.MessageQueue.MQTT/Birko.MessageQueue.MQTT.shproj" />
+  </Folder>
   <Folder Name="/Caching/">
     <Project Path="../Birko.Caching/Birko.Caching.shproj" />
     <Project Path="../Birko.Caching.Redis/Birko.Caching.Redis.shproj" />
@@ -102,6 +107,7 @@
     <Project Path="../Birko.Helpers.Tests/Birko.Helpers.Tests.csproj" />
     <Project Path="../Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
     <Project Path="../Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
+    <Project Path="../Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />

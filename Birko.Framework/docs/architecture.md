@@ -189,7 +189,30 @@ Queue backends:
 - **RavenDB** (`Birko.BackgroundJobs.RavenDB`) - `RavenDBJobQueue`
 - **JSON** (`Birko.BackgroundJobs.JSON`) - `JsonJobQueue` for dev/testing
 
-### 8. Communication Layer
+### 8. Message Queue Layer (Birko.MessageQueue)
+Asynchronous messaging abstractions for pub/sub and point-to-point patterns:
+- `IMessageQueue` - Combined producer + consumer with connection management
+- `IMessageProducer` / `IMessageConsumer` - Send and receive messages
+- `IMessageHandler<T>` - Typed message handler
+- `ISubscription` - Active subscription handle (dispose to unsubscribe)
+- `QueueMessage` - Message wrapper (Id, Body, Headers, Priority, TTL, Delay)
+- `MessageHeaders` - Metadata (CorrelationId, ReplyTo, ContentType, GroupId)
+
+Messaging patterns:
+- **IPublisher / ISubscriber** - Pub/Sub (one-to-many)
+- **ISender / IReceiver** - Point-to-point (one-to-one)
+- **ITransactionalProducer** - Atomic message batches
+
+Infrastructure:
+- `IMessageSerializer` - Pluggable serialization (`JsonMessageSerializer` default)
+- `RetryPolicy` - Exponential backoff for failed deliveries
+- `DeadLetterOptions` - DLQ routing for exhausted retries
+
+Queue backends:
+- **InMemory** (`Birko.MessageQueue.InMemory`) - Channel-based in-process queue for testing/dev
+- **MQTT** (`Birko.MessageQueue.MQTT`) - MQTTnet-based client for IoT/sensor messaging
+
+### 9. Communication Layer
 
 #### Base (Birko.Communication)
 - `AbstractPort` with `SubscribeProcessData()` delegate pattern for data processing
@@ -203,7 +226,7 @@ Queue backends:
 - **SOAP** - SOAP client
 - **SSE** - Server-Sent Events with middleware
 
-### 9. Helper Libraries
+### 10. Helper Libraries
 - **Birko.Helpers** - StringHelper, HtmlHelper, ObjectHelper, EnumerableHelper, PathValidator
 - **Birko.Structures** - Generic data structures (Tree, AVLTree, BinaryNode)
 
@@ -240,7 +263,7 @@ Models -> Data Interfaces -> Abstract Classes -> Provider Implementations
                                            -> Repositories
                                            -> ViewModel Repositories
                                            -> Features (Migrations, Sync, Tenant, EventSourcing, Patterns)
-                                           -> Validation, Caching, Security
+                                           -> Validation, Caching, Security, MessageQueue
 ```
 
 ## Extensibility

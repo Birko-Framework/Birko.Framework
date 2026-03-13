@@ -16,6 +16,8 @@ A modular .NET framework providing data access, communication, and model infrast
 - Fluent validation framework
 - Caching with in-memory and Redis backends
 - Security (password hashing, AES encryption, JWT tokens, RBAC)
+- Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
+- Background job processing with pluggable persistent queues
 - Data structures (trees, AVL trees, BST)
 - Helper utilities and extensions
 
@@ -105,6 +107,9 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.BackgroundJobs.RavenDB | RavenDB-based persistent job queue |
 | Birko.BackgroundJobs.JSON | JSON file-based job queue (dev/testing) |
 | Birko.BackgroundJobs.Redis | Redis-based persistent job queue |
+| Birko.MessageQueue | Core message queue interfaces (pub/sub, point-to-point) |
+| Birko.MessageQueue.InMemory | In-memory channel-based queue (testing/development) |
+| Birko.MessageQueue.MQTT | MQTT implementation via MQTTnet (IoT, sensors, telemetry) |
 | Birko.Structures | Tree data structures (AVL, BST) |
 | Birko.Helpers | Utility and extension methods |
 
@@ -166,6 +171,7 @@ dotnet test
 - [Caching Guide](docs/caching.md)
 - [Security Guide](docs/security.md)
 - [Background Jobs Guide](docs/background-jobs.md)
+- [Message Queue Guide](docs/message-queue.md)
 - [Event Sourcing Guide](docs/event-sourcing.md)
 - [Data Synchronization Guide](docs/sync.md)
 - [Multi-Tenancy Guide](docs/tenant.md)

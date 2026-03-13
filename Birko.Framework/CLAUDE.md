@@ -63,6 +63,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Helpers.Tests** - Unit tests for helper utilities (EnumerableHelper)
 - **Birko.Structures.Tests** - Unit tests for data structures (AVL tree, BST)
 - **Birko.BackgroundJobs.Tests** - Unit tests for background job processing (queue, dispatcher, executor, processor, scheduler)
+- **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
 
 ### Communication Layer
 - **Birko.Communication** - Base communication interfaces
@@ -106,6 +107,11 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.BackgroundJobs.RavenDB** - RavenDB-based persistent job queue
 - **Birko.BackgroundJobs.JSON** - JSON file-based job queue (dev/testing)
 - **Birko.BackgroundJobs.Redis** - Redis-based persistent job queue (StackExchange.Redis)
+
+### Message Queue
+- **Birko.MessageQueue** - Core interfaces (IMessageQueue, IMessageProducer, IMessageConsumer, IMessageHandler), patterns (Pub/Sub, Point-to-Point), serialization, retry, transactions
+- **Birko.MessageQueue.InMemory** - In-memory channel-based queue (testing/development)
+- **Birko.MessageQueue.MQTT** - MQTT implementation via MQTTnet (IoT, sensors, telemetry)
 
 ### Planned Projects
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
@@ -201,6 +207,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Helpers.Tests | [../Birko.Helpers.Tests/CLAUDE.md](../Birko.Helpers.Tests/CLAUDE.md) |
 | Birko.Structures.Tests | [../Birko.Structures.Tests/CLAUDE.md](../Birko.Structures.Tests/CLAUDE.md) |
 | Birko.BackgroundJobs.Tests | [../Birko.BackgroundJobs.Tests/CLAUDE.md](../Birko.BackgroundJobs.Tests/CLAUDE.md) |
+| Birko.MessageQueue.Tests | [../Birko.MessageQueue.Tests/CLAUDE.md](../Birko.MessageQueue.Tests/CLAUDE.md) |
 | Birko.Communication | [../Birko.Communication/CLAUDE.md](../Birko.Communication/CLAUDE.md) |
 | Birko.Communication.Network | [../Birko.Communication.Network/CLAUDE.md](../Birko.Communication.Network/CLAUDE.md) |
 | Birko.Communication.Hardware | [../Birko.Communication.Hardware/CLAUDE.md](../Birko.Communication.Hardware/CLAUDE.md) |
@@ -225,6 +232,9 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.BackgroundJobs.RavenDB | [../Birko.BackgroundJobs.RavenDB/CLAUDE.md](../Birko.BackgroundJobs.RavenDB/CLAUDE.md) |
 | Birko.BackgroundJobs.JSON | [../Birko.BackgroundJobs.JSON/CLAUDE.md](../Birko.BackgroundJobs.JSON/CLAUDE.md) |
 | Birko.BackgroundJobs.Redis | [../Birko.BackgroundJobs.Redis/CLAUDE.md](../Birko.BackgroundJobs.Redis/CLAUDE.md) |
+| Birko.MessageQueue | [../Birko.MessageQueue/CLAUDE.md](../Birko.MessageQueue/CLAUDE.md) |
+| Birko.MessageQueue.InMemory | [../Birko.MessageQueue.InMemory/CLAUDE.md](../Birko.MessageQueue.InMemory/CLAUDE.md) |
+| Birko.MessageQueue.MQTT | [../Birko.MessageQueue.MQTT/CLAUDE.md](../Birko.MessageQueue.MQTT/CLAUDE.md) |
 | Birko.Caching | [../Birko.Caching/CLAUDE.md](../Birko.Caching/CLAUDE.md) |
 | Birko.Caching.Redis | [../Birko.Caching.Redis/CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md) |
 | Birko.Redis | [../Birko.Redis/CLAUDE.md](../Birko.Redis/CLAUDE.md) |
