@@ -73,7 +73,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// <summary>
         /// Reads an item by GUID.
         /// </summary>
-        public virtual async Task<T> ReadAsync(Guid id, CancellationToken cancellationToken = default)
+        public virtual async Task<T?> ReadAsync(Guid id, CancellationToken cancellationToken = default)
         {
             return await ReadAsync((new ModelByGuid<T>(id)).Filter(), cancellationToken);
         }
@@ -81,7 +81,7 @@ namespace Birko.Data.EventSourcing.Stores
         /// <summary>
         /// Reads a single item.
         /// </summary>
-        public virtual async Task<T> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
+        public virtual async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
         {
             return await _innerStore.ReadAsync(filter, cancellationToken);
         }

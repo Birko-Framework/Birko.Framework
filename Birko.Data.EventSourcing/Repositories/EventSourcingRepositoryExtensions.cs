@@ -33,7 +33,7 @@ namespace Birko.Data.EventSourcing.Repositories
                 {
                     var innerStore = ActivatorUtilities.CreateInstance<TStore>(sp);
                     var eventStore = sp.GetRequiredService<IEventStore>();
-                    return innerStore.WithEventSourcing(eventStore) as TStore;
+                    return (innerStore.WithEventSourcing(eventStore) as TStore)!;
                 },
                 lifetime));
 
@@ -67,7 +67,7 @@ namespace Birko.Data.EventSourcing.Repositories
                 {
                     var innerStore = ActivatorUtilities.CreateInstance<TStore>(sp);
                     var eventStore = sp.GetRequiredService<IAsyncEventStore>();
-                    return innerStore.WithEventSourcing(eventStore) as TStore;
+                    return (innerStore.WithEventSourcing(eventStore) as TStore)!;
                 },
                 lifetime));
 
@@ -101,7 +101,7 @@ namespace Birko.Data.EventSourcing.Repositories
                 {
                     var innerStore = ActivatorUtilities.CreateInstance<TStore>(sp);
                     var eventStore = sp.GetRequiredService<IAsyncEventStore>();
-                    return innerStore.WithEventSourcing(eventStore) as TStore;
+                    return (innerStore.WithEventSourcing(eventStore) as TStore)!;
                 },
                 lifetime));
 
