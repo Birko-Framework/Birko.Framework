@@ -1,11 +1,13 @@
 using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.Stores;
+using Birko.Data.Stores;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Birko.Data.Stores
+namespace Birko.Data.SQL.TimescaleDB.Stores
 {
     /// <summary>
     /// Native async TimescaleDB store with bulk operation support.
@@ -26,11 +28,11 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The TimescaleDB settings to use.</param>
-        public void SetSettings(Stores.TimescaleDBSettings settings)
+        public void SetSettings(TimescaleDBSettings settings)
         {
             if (settings != null)
             {
-                base.SetSettings((Stores.ISettings)settings);
+                base.SetSettings((ISettings)settings);
             }
         }
 
@@ -38,15 +40,15 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The remote settings to use.</param>
-        public void SetSettings(Stores.RemoteSettings settings)
+        public void SetSettings(RemoteSettings settings)
         {
-            if (settings is Stores.TimescaleDBSettings timescaleSettings)
+            if (settings is TimescaleDBSettings timescaleSettings)
             {
                 SetSettings(timescaleSettings);
             }
             else if (settings != null)
             {
-                base.SetSettings((Stores.ISettings)settings);
+                base.SetSettings((ISettings)settings);
             }
         }
 
@@ -54,9 +56,9 @@ namespace Birko.Data.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The password settings to use.</param>
-        public override void SetSettings(Stores.PasswordSettings settings)
+        public override void SetSettings(PasswordSettings settings)
         {
-            if (settings is Stores.RemoteSettings remote)
+            if (settings is RemoteSettings remote)
             {
                 SetSettings(remote);
             }

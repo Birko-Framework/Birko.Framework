@@ -1,5 +1,7 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
+using Birko.Data.SQL.Stores;
+using Birko.Data.SQL.TimescaleDB.Stores;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,7 +23,7 @@ namespace Birko.Data.SQL.Repositories
         /// Gets the TimescaleDB connector.
         /// This works with wrapped stores (e.g., tenant wrappers).
         /// </summary>
-        public TimescaleDBConnector? Connector => Store?.GetUnwrappedStore<TModel, Stores.AsyncTimescaleDBStore<TModel>>()?.Connector;
+        public TimescaleDBConnector? Connector => Store?.GetUnwrappedStore<TModel, AsyncTimescaleDBStore<TModel>>()?.Connector;
 
         /// <summary>
         /// Initializes a new instance of the AsyncTimescaleDBRepository class.
@@ -29,7 +31,7 @@ namespace Birko.Data.SQL.Repositories
         public AsyncTimescaleDBRepository()
             : base(null)
         {
-            Store = new Stores.AsyncTimescaleDBStore<TModel>();
+            Store = new AsyncTimescaleDBStore<TModel>();
         }
 
         /// <summary>
@@ -39,24 +41,24 @@ namespace Birko.Data.SQL.Repositories
         public AsyncTimescaleDBRepository(Data.Stores.IAsyncStore<TModel>? store)
             : base(null)
         {
-            if (store != null && !store.IsStoreOfType<TModel, Stores.AsyncTimescaleDBStore<TModel>>())
+            if (store != null && !store.IsStoreOfType<TModel, AsyncTimescaleDBStore<TModel>>())
             {
                 throw new ArgumentException(
                     "Store must be of type AsyncTimescaleDBStore<TModel> or a wrapper around it (e.g., AsyncTenantStoreWrapper).",
                     nameof(store));
             }
-            Store = store ?? new Stores.AsyncTimescaleDBStore<TModel>();
+            Store = store ?? new AsyncTimescaleDBStore<TModel>();
         }
 
         /// <summary>
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The TimescaleDB settings to use.</param>
-        public void SetSettings(Stores.TimescaleDBSettings settings)
+        public void SetSettings(TimescaleDBSettings settings)
         {
             if (settings != null)
             {
-                var innerStore = Store?.GetUnwrappedStore<TModel, Stores.AsyncTimescaleDBStore<TModel>>();
+                var innerStore = Store?.GetUnwrappedStore<TModel, AsyncTimescaleDBStore<TModel>>();
                 innerStore?.SetSettings(settings);
             }
         }
@@ -65,11 +67,11 @@ namespace Birko.Data.SQL.Repositories
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The remote settings to use.</param>
-        public void SetSettings(Stores.RemoteSettings settings)
+        public void SetSettings(RemoteSettings settings)
         {
             if (settings != null)
             {
-                var innerStore = Store?.GetUnwrappedStore<TModel, Stores.AsyncTimescaleDBStore<TModel>>();
+                var innerStore = Store?.GetUnwrappedStore<TModel, AsyncTimescaleDBStore<TModel>>();
                 innerStore?.SetSettings(settings);
             }
         }
@@ -78,9 +80,9 @@ namespace Birko.Data.SQL.Repositories
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The password settings to use.</param>
-        public void SetSettings(Stores.PasswordSettings settings)
+        public void SetSettings(PasswordSettings settings)
         {
-            if (settings is Stores.RemoteSettings remote)
+            if (settings is RemoteSettings remote)
             {
                 SetSettings(remote);
             }

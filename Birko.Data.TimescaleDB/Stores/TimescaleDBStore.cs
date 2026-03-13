@@ -1,3 +1,4 @@
+using Birko.Data.SQL.Stores;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,7 +10,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
     /// Combines single-item and bulk CRUD operations in one store.
     /// </summary>
     /// <typeparam name="T">The type of entity.</typeparam>
-    public class TimescaleDBStore<T> : Data.Stores.DataBaseBulkStore<SQL.Connectors.TimescaleDBConnector, T>
+    public class TimescaleDBStore<T> : DataBaseBulkStore<SQL.Connectors.TimescaleDBConnector, T>
         where T : Data.Models.AbstractModel
     {
         /// <summary>
@@ -23,7 +24,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The TimescaleDB settings to use.</param>
-        public void SetSettings(Data.Stores.TimescaleDBSettings settings)
+        public void SetSettings(TimescaleDBSettings settings)
         {
             if (settings != null)
             {
@@ -37,7 +38,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
         /// <param name="settings">The remote settings to use.</param>
         public void SetSettings(Data.Stores.RemoteSettings settings)
         {
-            if (settings is Data.Stores.TimescaleDBSettings timescaleSettings)
+            if (settings is TimescaleDBSettings timescaleSettings)
             {
                 SetSettings(timescaleSettings);
             }

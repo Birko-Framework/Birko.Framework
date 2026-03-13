@@ -1,9 +1,8 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
+using Birko.Data.SQL.Stores;
+using Birko.Data.SQL.TimescaleDB.Stores;
 using System;
-using PasswordSettings = Birko.Data.Stores.PasswordSettings;
-using RemoteSettings = Birko.Data.Stores.RemoteSettings;
-using TimescaleDBSettings = Birko.Data.Stores.TimescaleDBSettings;
 using System.Threading;
 using System.Threading.Tasks;
 

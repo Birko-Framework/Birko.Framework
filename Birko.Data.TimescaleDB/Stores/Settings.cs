@@ -1,4 +1,6 @@
-namespace Birko.Data.Stores
+using Birko.Data.Stores;
+
+namespace Birko.Data.SQL.TimescaleDB.Stores
 {
     /// <summary>
     /// Settings for TimescaleDB connections.
