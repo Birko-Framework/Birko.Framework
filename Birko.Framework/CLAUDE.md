@@ -118,6 +118,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Telemetry** - Logging, metrics, distributed tracing
 - **Birko.Messaging** - Email, SMS, push notifications
 - **Birko.MessageQueue** - Message queues (RabbitMQ, Kafka, Azure Service Bus, AWS SQS, Redis Streams)
+- **Birko.EventBus** - Event bus abstraction (in-process, distributed via MessageQueue, EventSourcing integration)
 - **Birko.Security.BCrypt** - BCrypt password hashing
 - **Birko.Storage** - File and blob storage abstraction
 - **Birko.Workflow** - State machine and business process automation
