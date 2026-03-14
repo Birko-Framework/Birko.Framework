@@ -13,7 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)MqttProducer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttConsumer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttSubscription.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)MqttOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttQualityOfService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttLastWill.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttTopic.cs" />

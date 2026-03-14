@@ -18,12 +18,12 @@ MQTT message queue implementation for the Birko Framework using [MQTTnet](https:
 ### Connect to broker
 
 ```csharp
-var options = new MqttOptions
+var options = new MqttSettings
 {
-    Host = "broker.example.com",
+    Location = "broker.example.com",
     Port = 1883,
     ClientId = "my-device-001",
-    Username = "user",
+    UserName = "user",
     Password = "pass",
     AutoReconnect = true,
     DefaultQualityOfService = MqttQualityOfService.AtLeastOnce
@@ -79,9 +79,9 @@ var sub3 = await queue.Consumer.SubscribeAsync(
 ### Last Will and Testament
 
 ```csharp
-var options = new MqttOptions
+var options = new MqttSettings
 {
-    Host = "broker.example.com",
+    Location = "broker.example.com",
     LastWill = new MqttLastWill
     {
         Topic = "devices/status/sensor-42",
@@ -95,11 +95,11 @@ var options = new MqttOptions
 ### TLS connection
 
 ```csharp
-var options = new MqttOptions
+var options = new MqttSettings
 {
-    Host = "broker.example.com",
+    Location = "broker.example.com",
     Port = 8883,
-    UseTls = true,
+    UseSsl = true,
     ClientCertificate = new X509Certificate2("client.pfx", "password")
 };
 ```
@@ -129,6 +129,7 @@ queue.Disconnected += async () => Console.WriteLine("Disconnected from broker");
 
 ## Dependencies
 
+- **Birko.Data** — Settings hierarchy (RemoteSettings base class for MqttSettings)
 - **Birko.MessageQueue** — Core interfaces
 - **MQTTnet** — MQTT client library (consuming project must reference this NuGet package)
 

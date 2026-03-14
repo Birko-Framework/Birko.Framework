@@ -16,12 +16,12 @@ namespace Birko.MessageQueue.Mqtt
     {
         private readonly IMqttClient _client;
         private readonly IMessageSerializer _serializer;
-        private readonly MqttOptions _options;
+        private readonly MqttSettings _options;
         private readonly ConcurrentDictionary<string, Func<QueueMessage, CancellationToken, Task>> _handlers = new();
         private bool _disposed;
         private bool _eventAttached;
 
-        internal MqttConsumer(IMqttClient client, IMessageSerializer serializer, MqttOptions options)
+        internal MqttConsumer(IMqttClient client, IMessageSerializer serializer, MqttSettings options)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));

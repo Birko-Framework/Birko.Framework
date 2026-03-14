@@ -16,10 +16,10 @@ namespace Birko.MessageQueue.Mqtt
     {
         private readonly IMqttClient _client;
         private readonly IMessageSerializer _serializer;
-        private readonly MqttOptions _options;
+        private readonly MqttSettings _options;
         private bool _disposed;
 
-        internal MqttProducer(IMqttClient client, IMessageSerializer serializer, MqttOptions options)
+        internal MqttProducer(IMqttClient client, IMessageSerializer serializer, MqttSettings options)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));

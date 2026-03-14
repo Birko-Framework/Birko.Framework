@@ -16,7 +16,7 @@ MQTT message queue implementation using MQTTnet. For IoT device communication, s
 | MqttProducer.cs | IMessageProducer — publishes to MQTT topics with QoS and retain flag |
 | MqttConsumer.cs | IMessageConsumer — subscribes to topic filters, dispatches to handlers with wildcard matching |
 | MqttSubscription.cs | ISubscription — unsubscribes from MQTT topic on dispose |
-| MqttOptions.cs | Connection config (host, port, TLS, credentials, keepalive, reconnect, LWT) |
+| MqttSettings.cs | Connection settings extending RemoteSettings (host, port, TLS, credentials, keepalive, reconnect, LWT) |
 | MqttQualityOfService.cs | Enum: AtMostOnce (0), AtLeastOnce (1), ExactlyOnce (2) |
 | MqttLastWill.cs | LWT config (topic, payload, QoS, retain) |
 | MqttTopic.cs | Static topic utilities — validation and wildcard matching (+/#) |
@@ -38,6 +38,7 @@ MqttMessageQueue
 - Auto-reconnect runs in background task with configurable delay and max attempts
 
 ## Dependencies
+- **Birko.Data** — Settings hierarchy (RemoteSettings base class for MqttSettings)
 - **Birko.MessageQueue** — Core interfaces
 - **MQTTnet** — MQTT client (NuGet, referenced by consuming project)
 

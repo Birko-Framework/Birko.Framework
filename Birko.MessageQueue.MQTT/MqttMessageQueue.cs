@@ -14,7 +14,7 @@ namespace Birko.MessageQueue.Mqtt
     /// </summary>
     public class MqttMessageQueue : IMessageQueue
     {
-        private readonly MqttOptions _options;
+        private readonly MqttSettings _options;
         private readonly IMqttClient _client;
         private readonly MqttProducer _producer;
         private readonly MqttConsumer _consumer;
@@ -40,7 +40,7 @@ namespace Birko.MessageQueue.Mqtt
         /// </summary>
         /// <param name="options">MQTT connection options.</param>
         /// <param name="serializer">Message serializer. Defaults to JsonMessageSerializer.</param>
-        public MqttMessageQueue(MqttOptions options, IMessageSerializer? serializer = null)
+        public MqttMessageQueue(MqttSettings options, IMessageSerializer? serializer = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             var ser = serializer ?? new JsonMessageSerializer();
@@ -60,18 +60,18 @@ namespace Birko.MessageQueue.Mqtt
             ObjectDisposedException.ThrowIf(_disposed, this);
 
             var optionsBuilder = new MqttClientOptionsBuilder()
-                .WithTcpServer(_options.Host, _options.Port)
+                .WithTcpServer(_options.Location, _options.Port)
                 .WithClientId(_options.ClientId ?? $"birko-{Guid.NewGuid():N}")
                 .WithCleanSession(_options.CleanSession)
                 .WithKeepAlivePeriod(_options.KeepAlive)
                 .WithTimeout(_options.ConnectionTimeout);
 
-            if (!string.IsNullOrEmpty(_options.Username))
+            if (!string.IsNullOrEmpty(_options.UserName))
             {
-                optionsBuilder.WithCredentials(_options.Username, _options.Password);
+                optionsBuilder.WithCredentials(_options.UserName, _options.Password);
             }
 
-            if (_options.UseTls)
+            if (_options.UseSsl)
             {
                 optionsBuilder.WithTlsOptions(tls =>
                 {
