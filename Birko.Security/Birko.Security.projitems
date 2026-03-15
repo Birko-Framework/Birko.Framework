@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\IPasswordHasher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEncryptionProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\ITokenProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ISecretProvider.cs" />
     <!-- Authentication (moved from Birko.Communication.Authentication) -->
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\AuthenticationService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication\AuthenticationConfiguration.cs" />

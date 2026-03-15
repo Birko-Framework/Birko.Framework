@@ -1,7 +1,7 @@
 # Birko.Security
 
 ## Overview
-Core security framework — password hashing, encryption, token provider interfaces, static token authentication, and RBAC authorization interfaces.
+Core security framework — password hashing, encryption, token provider interfaces, secret provider interface, static token authentication, and RBAC authorization interfaces.
 
 Includes the former `Birko.Communication.Authentication` (moved here — all Communication projects updated to use `Birko.Security.Authentication` namespace).
 
@@ -11,7 +11,8 @@ Birko.Security/
 ├── Core/
 │   ├── IPasswordHasher.cs            - Hash(password) → string, Verify(password, hash) → bool
 │   ├── IEncryptionProvider.cs         - Encrypt/Decrypt byte[] and string, AES-256-GCM
-│   └── ITokenProvider.cs             - GenerateToken/ValidateToken, TokenResult, TokenOptions
+│   ├── ITokenProvider.cs             - GenerateToken/ValidateToken, TokenResult, TokenOptions
+│   └── ISecretProvider.cs           - GetSecret/SetSecret/DeleteSecret/ListSecrets, SecretResult
 ├── Authentication/                    ← Moved from Birko.Communication.Authentication
 │   ├── AuthenticationService.cs       - Static token validation + IP binding, thread-safe
 │   ├── AuthenticationConfiguration.cs - Enabled, Tokens[], TokenBindings[]
