@@ -27,14 +27,14 @@ public class TenantSyncQueue : SyncQueue
     /// <summary>
     /// Get the current tenant ID from context
     /// </summary>
-    protected Guid CurrentTenantId => _tenantContext?.CurrentTenantId ?? Guid.Empty;
+    protected Guid CurrentTenantGuid => _tenantContext?.CurrentTenantGuid ?? Guid.Empty;
 
     /// <summary>
     /// Get the effective tenant ID (from parameter or context)
     /// </summary>
-    protected Guid? GetEffectiveTenantId(Guid? tenantId)
+    protected Guid? GetEffectiveTenantGuid(Guid? tenantGuid)
     {
-        return tenantId ?? (HasTenantContext ? CurrentTenantId : null);
+        return tenantGuid ?? (HasTenantContext ? CurrentTenantGuid : null);
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ public class TenantSyncQueue : SyncQueue
     {
         if (HasTenantContext)
         {
-            return $"{scope}_{CurrentTenantId}";
+            return $"{scope}_{CurrentTenantGuid}";
         }
         return base.GetQueueKey(scope);
     }
@@ -54,22 +54,22 @@ public class TenantSyncQueue : SyncQueue
     /// </summary>
     public async Task<T> EnqueueAsync<T>(
         string scope,
-        Guid? tenantId,
+        Guid? tenantGuid,
         Func<Task<T>> syncOperation,
         CancellationToken cancellationToken = default)
     {
-        var effectiveTenantId = GetEffectiveTenantId(tenantId);
-        var key = GetQueueKey(scope, effectiveTenantId);
+        var effectiveTenantGuid = GetEffectiveTenantGuid(tenantGuid);
+        var key = GetQueueKey(scope, effectiveTenantGuid);
         return await EnqueueWithKeyAsync(key, syncOperation, cancellationToken);
     }
 
     /// <summary>
     /// Get the number of queued operations for a scope/tenant
     /// </summary>
-    public int GetQueueLength(string scope, Guid? tenantId)
+    public int GetQueueLength(string scope, Guid? tenantGuid)
     {
-        var effectiveTenantId = GetEffectiveTenantId(tenantId);
-        var key = GetQueueKey(scope, effectiveTenantId);
+        var effectiveTenantGuid = GetEffectiveTenantGuid(tenantGuid);
+        var key = GetQueueKey(scope, effectiveTenantGuid);
         lock (Lock)
         {
             return Queues.TryGetValue(key, out var queue) ? queue.Count : 0;

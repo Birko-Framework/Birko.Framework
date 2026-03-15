@@ -12,7 +12,7 @@ public class TenantSyncOptions : SyncOptions
     /// <summary>
     /// Tenant ID for tenant-scoped synchronization
     /// </summary>
-    public Guid? TenantId { get; set; }
+    public Guid? TenantGuid { get; set; }
 
     /// <summary>
     /// Optional tenant name for display/logging purposes

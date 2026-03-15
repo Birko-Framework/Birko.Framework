@@ -36,7 +36,7 @@ public class TenantSyncKnowledgeItem : ITenantSyncKnowledgeItem
     public string? Metadata { get; set; }
 
     /// <inheritdoc />
-    public Guid TenantId { get; set; }
+    public Guid TenantGuid { get; set; }
 
     /// <inheritdoc />
     public string? TenantName { get; set; }

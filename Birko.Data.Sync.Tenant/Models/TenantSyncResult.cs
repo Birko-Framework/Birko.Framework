@@ -12,7 +12,7 @@ public class TenantSyncResult : SyncResult
     /// <summary>
     /// Tenant ID for this sync operation
     /// </summary>
-    public Guid? TenantId { get; set; }
+    public Guid? TenantGuid { get; set; }
 
     /// <summary>
     /// Optional tenant name for display/logging purposes

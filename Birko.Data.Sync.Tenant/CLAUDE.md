@@ -19,11 +19,11 @@ Tenant-aware synchronization support for multi-tenant applications using the Bir
 
 ### Queue
 - `TenantSyncQueue` - Extends `SyncQueue` with tenant-aware scoping
-  - `GetEffectiveTenantId()`, `GetQueueKey()` overrides
+  - `GetEffectiveTenantGuid()`, `GetQueueKey()` overrides
 
 ### Models
-- `TenantSyncResult` - Extends `SyncResult` with `TenantId` and `TenantName`
-- `TenantSyncOptions` - Extends `SyncOptions` with `TenantId` and `TenantName`
+- `TenantSyncResult` - Extends `SyncResult` with `TenantGuid` and `TenantName`
+- `TenantSyncOptions` - Extends `SyncOptions` with `TenantGuid` and `TenantName`
 
 ### Extensions
 - `TenantSyncProviderExtensions` - `CreateTenantSync()`, `WithTenantSync()` helpers

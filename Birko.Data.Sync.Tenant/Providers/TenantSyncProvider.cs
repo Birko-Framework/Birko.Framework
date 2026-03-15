@@ -25,7 +25,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     private readonly ISyncKnowledgeStore _knowledgeStore;
     private readonly ITenantContext _tenantContext;
     private readonly PropertyInfo _guidProperty;
-    private readonly PropertyInfo? _tenantIdProperty;
+    private readonly PropertyInfo? _tenantGuidProperty;
 
     /// <summary>
     /// Create a new tenant-aware sync provider
@@ -45,8 +45,8 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         _guidProperty = typeof(T).GetProperty("Guid")
             ?? throw new InvalidOperationException($"Type {typeof(T).Name} must have a Guid property");
 
-        // Get TenantId property if exists
-        _tenantIdProperty = typeof(T).GetProperty("TenantId");
+        // Get TenantGuid property if exists
+        _tenantGuidProperty = typeof(T).GetProperty("TenantGuid");
     }
 
     /// <summary>
@@ -96,9 +96,9 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         if (options is TenantSyncOptions tenantOptions)
         {
             // Only set if not explicitly provided
-            if (!tenantOptions.TenantId.HasValue && _tenantContext.HasTenant)
+            if (!tenantOptions.TenantGuid.HasValue && _tenantContext.HasTenant)
             {
-                tenantOptions.TenantId = _tenantContext.CurrentTenantId;
+                tenantOptions.TenantGuid = _tenantContext.CurrentTenantGuid;
             }
             return tenantOptions;
         }
@@ -119,17 +119,17 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             OnBatchStarting = options.OnBatchStarting,
             OnBatchCompleted = options.OnBatchCompleted,
             SkipPreview = options.SkipPreview,
-            TenantId = _tenantContext.HasTenant ? _tenantContext.CurrentTenantId : null
+            TenantGuid = _tenantContext.HasTenant ? _tenantContext.CurrentTenantGuid : null
         };
         return wrapped;
     }
 
     /// <summary>
-    /// Get TenantId from options (returns null if not TenantSyncOptions)
+    /// Get TenantGuid from options (returns null if not TenantSyncOptions)
     /// </summary>
-    private Guid? GetTenantId(SyncOptions options)
+    private Guid? GetTenantGuid(SyncOptions options)
     {
-        return (options as TenantSyncOptions)?.TenantId;
+        return (options as TenantSyncOptions)?.TenantGuid;
     }
 
     /// <summary>
@@ -142,22 +142,22 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             filterOptions = new SyncFilterOptions<T>();
         }
 
-        // Add tenant filtering if tenant context exists and entity has TenantId
-        if (_tenantContext.HasTenant && _tenantIdProperty != null)
+        // Add tenant filtering if tenant context exists and entity has TenantGuid
+        if (_tenantContext.HasTenant && _tenantGuidProperty != null)
         {
-            var currentTenantId = _tenantContext.CurrentTenantId!.Value;
+            var currentTenantGuid = _tenantContext.CurrentTenantGuid!.Value;
 
             // Wrap existing save predicates with tenant check
             var canSaveLocal = filterOptions.CanSaveToLocal;
             var canSaveRemote = filterOptions.CanSaveToRemote;
 
             filterOptions.CanSaveToLocal = canSaveLocal == null
-                ? (T item) => BelongsToTenant(item, currentTenantId)
-                : (T item) => BelongsToTenant(item, currentTenantId) && canSaveLocal(item);
+                ? (T item) => BelongsToTenant(item, currentTenantGuid)
+                : (T item) => BelongsToTenant(item, currentTenantGuid) && canSaveLocal(item);
 
             filterOptions.CanSaveToRemote = canSaveRemote == null
-                ? (T item) => BelongsToTenant(item, currentTenantId)
-                : (T item) => BelongsToTenant(item, currentTenantId) && canSaveRemote(item);
+                ? (T item) => BelongsToTenant(item, currentTenantGuid)
+                : (T item) => BelongsToTenant(item, currentTenantGuid) && canSaveRemote(item);
         }
 
         return filterOptions;
@@ -166,17 +166,17 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// <summary>
     /// Check if an item belongs to the specified tenant
     /// </summary>
-    private bool BelongsToTenant(T item, Guid tenantId)
+    private bool BelongsToTenant(T item, Guid tenantGuid)
     {
-        if (_tenantIdProperty == null)
+        if (_tenantGuidProperty == null)
         {
             return true;
         }
 
-        var value = _tenantIdProperty.GetValue(item);
-        if (value is Guid itemTenantId)
+        var value = _tenantGuidProperty.GetValue(item);
+        if (value is Guid itemTenantGuid)
         {
-            return itemTenantId == tenantId;
+            return itemTenantGuid == tenantGuid;
         }
 
         return true;
@@ -272,18 +272,18 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         {
             ReportProgress(options, SyncPhase.DetectingChanges, 0);
 
-            var tenantId = GetTenantId(options);
+            var tenantGuid = GetTenantGuid(options);
 
             // Get existing sync knowledge
             var knowledge = await _knowledgeStore.GetKnowledgeAsync(
                 options.Scope,
-                tenantId,
+                tenantGuid,
                 options.CancellationToken
             );
 
             var lastSyncTime = await _knowledgeStore.GetLastSyncTimeAsync(
                 options.Scope,
-                tenantId,
+                tenantGuid,
                 options.CancellationToken
             );
 
@@ -352,18 +352,18 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         {
             ReportProgress(options, SyncPhase.DetectingChanges, 0);
 
-            var tenantId = GetTenantId(options);
+            var tenantGuid = GetTenantGuid(options);
 
             // Get existing sync knowledge
             var knowledge = await _knowledgeStore.GetKnowledgeAsync(
                 options.Scope,
-                tenantId,
+                tenantGuid,
                 options.CancellationToken
             );
 
             var lastSyncTime = await _knowledgeStore.GetLastSyncTimeAsync(
                 options.Scope,
-                tenantId,
+                tenantGuid,
                 options.CancellationToken
             );
 
@@ -517,7 +517,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             await _knowledgeStore.UpdateKnowledgeAsync(knowledgeUpdates, options.CancellationToken);
             await _knowledgeStore.SetLastSyncTimeAsync(
                 options.Scope,
-                tenantId,
+                tenantGuid,
                 DateTime.UtcNow,
                 options.CancellationToken
             );
@@ -793,13 +793,13 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         T? remoteItem,
         SyncOptions options)
     {
-        var tenantId = GetTenantId(options) ?? (_tenantContext.HasTenant ? _tenantContext.CurrentTenantId : Guid.Empty);
+        var tenantGuid = GetTenantGuid(options) ?? (_tenantContext.HasTenant ? _tenantContext.CurrentTenantGuid : Guid.Empty);
 
         return new TenantSyncKnowledgeItem
         {
             EntityGuid = guid,
             Scope = options.Scope,
-            TenantId = tenantId ?? Guid.Empty,
+            TenantGuid = tenantGuid ?? Guid.Empty,
             LastSyncedAt = DateTime.UtcNow,
             LocalVersion = GetVersionHash(localItem),
             RemoteVersion = GetVersionHash(remoteItem),
