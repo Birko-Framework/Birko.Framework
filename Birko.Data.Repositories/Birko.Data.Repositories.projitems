@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c3e4f5a6-b7c8-4d9e-0f1a-2b3c4d5e6f7a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IBaseRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IAsyncRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IAsyncBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractAsyncRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractAsyncBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\RepositoryLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\ServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
