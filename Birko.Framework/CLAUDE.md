@@ -66,11 +66,13 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Structures.Tests** - Unit tests for data structures (AVL tree, BST)
 - **Birko.BackgroundJobs.Tests** - Unit tests for background job processing (queue, dispatcher, executor, processor, scheduler)
 - **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
+- **Birko.EventBus.Tests** - Unit tests for event bus (core, distributed, outbox, event sourcing)
 - **Birko.Security.AspNetCore.Tests** - Unit tests for ASP.NET Core security integration (JWT auth, ICurrentUser, permissions, tenant resolution, middleware)
 - **Birko.Security.BCrypt.Tests** - Unit tests for BCrypt password hashing
 - **Birko.Security.Vault.Tests** - Unit tests for HashiCorp Vault secret provider
 - **Birko.Security.AzureKeyVault.Tests** - Unit tests for Azure Key Vault secret provider
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
+- **Birko.Telemetry.Tests** - Unit tests for telemetry (conventions, store wrappers, metrics, middleware)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
 
 ### Messaging
