@@ -1,217 +1,97 @@
 # Birko.Data.Tenant
 
 ## Overview
-Multi-tenancy support for the Birko data layer providing tenant-aware data access.
+Multi-tenancy support for the Birko data layer. Provides tenant context management, automatic tenant filtering via store wrappers, tenant-aware filters, ASP.NET Core middleware for tenant resolution, and DI extensions.
 
 ## Project Location
 `C:\Source\Birko.Data.Tenant\`
 
-## Purpose
-- Multi-tenant data isolation
-- Tenant context management
-- Automatic tenant filtering
-- Tenant-specific migrations
-
 ## Components
 
-### Stores
-- `TenantStore<T>` - Tenant-aware store
-- `TenantBulkStore<T>` - Tenant-aware bulk store
-- `AsyncTenantStore<T>` - Async tenant-aware store
-- `AsyncTenantBulkStore<T>` - Async tenant-aware bulk store
+### Models (`Birko.Data.Tenant.Models`)
+- **ITenant** — Interface for tenant-aware entities: `Guid TenantGuid`, `string? TenantName`
+- **ITenantContext** — Interface for current tenant management: `CurrentTenantGuid`, `CurrentTenantName`, `HasTenant`, `SetTenant()`, `ClearTenant()`, `WithTenant()` / `WithTenantAsync()` (scoped execution)
+- **TenantContext** — Default ITenantContext implementation using `AsyncLocal<T>` for thread-safe storage. Supports nested scopes (saves/restores previous tenant)
+- **Tenant** — Static singleton accessor: `Tenant.Current` (ITenantContext), `Tenant.Id`, `Tenant.Name`, `Tenant.IsSet`, `Tenant.Set()`, `Tenant.Clear()`
 
-### Repositories
-- `TenantRepository<T>` - Tenant-aware repository
-- `AsyncTenantRepository<T>` - Async tenant-aware repository
+### Filters (`Birko.Data.Tenant.Filters`)
+- **ModelByTenant\<TModel\>** — `IFilter<TModel>` where `TModel : AbstractModel, ITenant`. Combines optional base filter with tenant GUID check via `Expression.AndAlso`
 
-### Models
-- `Tenant` - Tenant entity
-- `TenantEntity` - Base entity with tenant ID
+### Stores (`Birko.Data.Tenant.Stores`)
+- **TenantStoreWrapper\<TStore, T\>** — Sync `IStore<T>` wrapper. Auto-filters reads by tenant, auto-assigns tenant on create, throws `UnauthorizedAccessException` on cross-tenant update/delete
+- **TenantBulkStoreWrapper\<TStore, T\>** — Extends TenantStoreWrapper, implements `IBulkStore<T>` with bulk CRUD + ordering/paging
+- **AsyncTenantStoreWrapper\<TStore, T\>** — Async `IAsyncStore<T>` wrapper (same semantics as sync)
+- **AsyncTenantBulkStoreWrapper\<TStore, T\>** — Extends AsyncTenantStoreWrapper, implements `IAsyncBulkStore<T>`
+- **TenantStoreExtensions** — `AsTenantAware<T>()` extension methods for IStore and IAsyncStore (auto-detects bulk variant)
 
-### Filters
-- `TenantFilter` - Filter by tenant
+All wrappers implement `IStoreWrapper<T>` for accessing the inner store.
 
-### Middleware
-- `TenantMiddleware` - ASP.NET Core middleware for tenant resolution
+### Repositories (`Birko.Data.Tenant.Repositories`)
+- **RepositoryServiceCollectionExtensions** — DI extension methods:
+  - `AddTenantRepository<TStore, TRepository, TModel>()` — Registers sync store with tenant wrapper
+  - `AddTenantAsyncRepository<TStore, TRepository, TModel>()` — Registers async store with tenant wrapper
+  - Overloads with `Func<IServiceProvider, IStore<TModel>>` factory
+  - Convenience `*Scoped` variants
 
-## Tenant Context
+### Middleware (`Birko.Data.Tenant.Middleware`)
+- **TenantMiddleware** — ASP.NET Core middleware for automatic tenant resolution per-request
+- **TenantMiddlewareOptions** — Configuration:
+  - `TenantHeaderName` (default: `"X-Tenant-Id"`)
+  - `TenantNameHeaderName` (default: `"X-Tenant-Name"`)
+  - `TenantQueryStringKey` — Optional query string resolution
+  - `TenantRouteKey` — Optional route parameter resolution
+  - `RequireTenant` — Return 401 if no tenant found (default: false)
+  - `CustomTenantResolver` — `Func<HttpContext, Guid?>` delegate
+  - `CustomTenantNameResolver` — `Func<HttpContext, Guid, string?>` delegate
+- **TenantMiddlewareExtensions** — `UseTenantMiddleware()` extension for IApplicationBuilder
+- **ServiceCollectionExtensions** — `AddTenantContext()`, `AddTenantContextSingleton()`, `AddTenantContextScoped()`, `AddTenantContextTransient()`
 
-```csharp
-using Birko.Data.Tenant;
-
-// Set current tenant
-TenantContext.Current = new TenantContext
-{
-    TenantGuid = tenantGuid,
-    TenantName = "Acme Corp"
-};
-
-// Get current tenant
-var currentTenant = TenantContext.Current;
+## File Structure
 ```
-
-## Implementation
-
-```csharp
-using Birko.Data.Tenant.Stores;
-
-public class CustomerStore : TenantStore<Customer>
-{
-    public override IEnumerable<Customer> ReadAll()
-    {
-        // Automatically filtered by current tenant
-        var items = base.ReadAll();
-        return items.Where(x => x.TenantGuid == TenantContext.Current.TenantGuid);
-    }
-
-    public override Guid Create(Customer item)
-    {
-        // Automatically set tenant ID
-        item.TenantGuid = TenantContext.Current.TenantGuid;
-        return base.Create(item);
-    }
-}
+Models/
+├── ITenant.cs
+├── ITenantContext.cs
+└── TenantContext.cs
+Filters/
+└── ModelByTenant.cs
+Stores/
+├── TenantStoreExtensions.cs
+├── TenantStoreWrapper.cs
+├── TenantBulkStoreWrapper.cs
+├── AsyncTenantStoreWrapper.cs
+└── AsyncTenantBulkStoreWrapper.cs
+Repositories/
+└── RepositoryServiceCollectionExtensions.cs
+Middleware/
+├── TenantMiddleware.cs
+└── ServiceCollectionExtensions.cs
 ```
-
-## Tenant Entity
-
-```csharp
-public class TenantEntity : Entity
-{
-    public Guid TenantGuid { get; set; }
-}
-```
-
-## Middleware
-
-```csharp
-// ASP.NET Core integration
-app.UseMiddleware<TenantMiddleware>();
-```
-
-Tenant resolution from:
-- Subdomain (tenant1.app.com)
-- Header (X-Tenant-ID)
-- Query parameter
-- Cookie
-- Route parameter
 
 ## Dependencies
-- Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
-- Microsoft.AspNetCore.Http (for middleware)
+- **Birko.Data.Core** — AbstractModel
+- **Birko.Data.Stores** — IStore, IAsyncStore, IBulkStore, IAsyncBulkStore, IStoreWrapper, StoreDataDelegate, OrderBy
+- **Birko.Data.Filters** — IFilter, ModelByGuid
+- **Microsoft.AspNetCore.Http** — HttpContext, RequestDelegate (for middleware)
+- **Microsoft.Extensions.DependencyInjection** — ServiceCollection extensions
 
-## Tenant Strategies
-
-### Subdomain
-```
-tenant1.yourapp.com → TenantGuid from subdomain
-```
-
-### Header
-```
-X-Tenant-ID: 123e4567-e89b-12d3-a456-426614174000
-```
-
-### Query Parameter
-```
-https://yourapp.com?tenant=tenant-name
-```
-
-### Route Parameter
-```
-https://yourapp.com/tenants/{tenantGuid}/...
-```
-
-## Features
-
-### Automatic Filtering
-Queries automatically filter by tenant:
-```csharp
-var customers = store.ReadAll(); // Only returns current tenant's customers
-```
-
-### Automatic Assignment
-New entities automatically get tenant ID:
-```csharp
-var customer = new Customer { Name = "John" };
-store.Create(customer); // TenantGuid automatically set
-```
-
-### Tenant Isolation
-Each tenant's data is completely isolated:
-- Separate queries
-- Separate security contexts
-- Separate caches
-
-## Database Design
-
-### Shared Database, Shared Schema
-```sql
-CREATE TABLE customers (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    name TEXT,
-    FOREIGN KEY (tenant_id) REFERENCES tenants(id)
-);
-
-CREATE INDEX idx_customers_tenant ON customers(tenant_id);
-```
-
-### Row-Level Security (PostgreSQL)
-```sql
-ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY customer_tenant_policy ON customers
-    USING (tenant_id = current_setting('app.tenant_id')::UUID);
-```
-
-## Best Practices
-
-1. **Always index tenant_id** - For query performance
-2. **Use row-level security** - For additional safety (PostgreSQL)
-3. **Tenant context** - Always validate tenant context
-4. **Cross-tenant queries** - Explicitly disable filters if needed
-5. **Tenant caching** - Cache tenant information
-
-## Security
-
-```csharp
-// Validate tenant access
-if (!await tenantService.CanAccess(TenantContext.Current.TenantGuid, requestedTenantGuid))
-{
-    throw new UnauthorizedAccessException();
-}
-```
-
-## Use Cases
-- SaaS applications
-- Multi-organization systems
-- White-label applications
-- Department-based data separation
+## Key Patterns
+- **Wrapper/Decorator:** Store wrappers transparently add tenant filtering to any store
+- **AsyncLocal storage:** Thread-safe, async-aware tenant context without thread-local
+- **Nested scopes:** WithTenant/WithTenantAsync save/restore previous context
+- **Filter composition:** ModelByTenant combines base filters with tenant predicate via Expression.AndAlso
+- **Authorization:** Update/Delete throw UnauthorizedAccessException for cross-tenant access
 
 ## Related Projects
-- [Birko.Data.Sync.Tenant](../Birko.Data.Sync.Tenant/CLAUDE.md) - Tenant-aware synchronization
+- [Birko.Data.Sync.Tenant](../Birko.Data.Sync.Tenant/CLAUDE.md) — Tenant-aware synchronization
+- [Birko.Security.AspNetCore](../Birko.Security.AspNetCore/CLAUDE.md) — ASP.NET Core tenant resolution (header/subdomain strategies)
 
 ## Maintenance
 
 ### README Updates
-When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly. This includes:
-- New classes, interfaces, or methods
-- Changed dependencies
-- New or modified usage examples
-- Breaking changes
+When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly.
 
 ### CLAUDE.md Updates
-When making major changes to this project, update this CLAUDE.md to reflect:
-- New or renamed files and components
-- Changed architecture or patterns
-- New dependencies or removed dependencies
-- Updated interfaces or abstract class signatures
-- New conventions or important notes
+When making major changes to this project, update this CLAUDE.md to reflect new or renamed files, changed architecture, dependencies, or conventions.
 
 ### Test Requirements
-Every new public functionality must have corresponding unit tests. When adding new features:
-- Create test classes in the corresponding test project
-- Follow existing test patterns (xUnit + FluentAssertions)
-- Test both success and failure cases
-- Include edge cases and boundary conditions
+Every new public functionality must have corresponding unit tests.
