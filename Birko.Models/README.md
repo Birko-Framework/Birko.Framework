@@ -1,67 +1,125 @@
 # Birko.Models
 
-Base models, ViewModels, and extensions for the Birko Framework.
+Base abstract models, ViewModels, and extensions for the Birko Framework.
 
 ## Features
 
-- Entity base classes (Entity, LogEntity, DateEntity)
-- ViewModel base classes (ViewModel, LogViewModel, PagedViewModel, FilteredViewModel)
-- Abstract model types (AbstractPercentage, AbstractTree, ValueData, SourceValue)
-- Model extensions and utilities
+- Abstract percentage model with decimal value
+- Abstract tree model with hierarchical path (slash-separated GUIDs)
+- ValueData model for price/VAT/PriceVAT with configurable decimal precision
+- Generic SourceValue for key-value pairs with source tracking
+- Parallel ViewModel implementations with INotifyPropertyChanged
+- Extension methods for SourceValue collections
 
 ## Installation
 
-```bash
-dotnet add package Birko.Models
+Shared project — import in your `.csproj`:
+
+```xml
+<Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
 ```
 
 ## Dependencies
 
-- .NET 10.0
+- Birko.Data.Core (AbstractLogModel, ViewModels, ILoadable, ICopyable)
 
 ## Usage
+
+### AbstractPercentage
 
 ```csharp
 using Birko.Models;
 
-public class Product : LogEntity
+public class Discount : AbstractPercentage
 {
     public string Name { get; set; }
-    public decimal Price { get; set; }
 }
+
+var discount = new Discount { Percentage = 15.5m, Name = "Summer Sale" };
+```
+
+### AbstractTree
+
+```csharp
+using Birko.Models;
+
+// Build a path from a hierarchy of GUIDs
+var path = AbstractTree.BuildPath(new[] { parentGuid, childGuid });
+// "/parentGuid/childGuid"
+```
+
+### ValueData
+
+```csharp
+using Birko.Models;
+
+var price = new ValueData
+{
+    Price = 100.00m,
+    VAT = 20.00m,
+    PriceVAT = 120.00m
+};
+```
+
+### SourceValue
+
+```csharp
+using Birko.Models;
+using Birko.Extensions;
+
+var values = new[]
+{
+    new SourceValue<string> { Source = "en", Value = "Hello" },
+    new SourceValue<string> { Source = "sk", Value = "Ahoj" }
+};
+
+var english = values.GetValue("en"); // "Hello"
+values = values.SetValue("de", "Hallo"); // Appends new entry
 ```
 
 ## API Reference
 
-### Entities
+### Models (Birko.Models)
 
-- **Entity** - Base with `Id` (Guid)
-- **LogEntity** - Adds `CreatedAt`, `UpdatedAt` timestamps
-- **DateEntity** - Date-specific entity
+| Class | Base | Description |
+|-------|------|-------------|
+| **AbstractPercentage** | AbstractLogModel | Abstract model with `decimal Percentage` |
+| **AbstractTree** | AbstractLogModel | Abstract model with `string Path` (slash-separated GUIDs) |
+| **ValueData** | AbstractLogModel | Price data with `Price`, `PriceVAT`, `VAT` |
+| **SourceValue\<T\>** | — | Generic value with `Source` string and `Value` of type T |
 
-### ViewModels
+### Interfaces
 
-- **ViewModel** - Base ViewModel
-- **ModelViewModel** - ViewModel with Guid
-- **LogViewModel** - Adds timestamps (extends ModelViewModel)
-- **AbstractLogViewModel** - Extends ViewModel directly (no Guid)
+| Interface | Description |
+|-----------|-------------|
+| **ITreePath** | `string Path { get; set; }` |
+| **IValueData** | Price/PriceVAT/VAT properties, extends ILoadable and ICopyable |
 
-### Abstract Types
+### ViewModels (Birko.Models.ViewModels)
 
-- **AbstractPercentage** - Percentage value model
-- **AbstractTree** - Hierarchical tree model
-- **ValueData** - Key-value data model
-- **SourceValue** - Value with source tracking
+| Class | Base | Description |
+|-------|------|-------------|
+| **AbstractPercentage** | LogViewModel | ViewModel with `decimal Percentage` |
+| **AbstractTree** | LogViewModel | ViewModel with `IEnumerable<Guid> Path` |
+| **Value** | LogViewModel | ViewModel with `Price`, `PriceVAT`, `VAT` |
+| **SourceValue\<T\>** | ViewModel | ViewModel with `Source` and `Value` |
+
+### Extensions (Birko.Extensions)
+
+| Method | Description |
+|--------|-------------|
+| `GetValue<T>(source)` | Find value by source string in SourceValue collection |
+| `SetValue<T>(source, value)` | Update or append SourceValue in array |
 
 ## Related Projects
 
 - [Birko.Models.Product](../Birko.Models.Product/) - Product models
 - [Birko.Models.Category](../Birko.Models.Category/) - Category models
+- [Birko.Models.SEO](../Birko.Models.SEO/) - SEO models
 - [Birko.Models.Accounting](../Birko.Models.Accounting/) - Accounting models
 - [Birko.Models.Customers](../Birko.Models.Customers/) - Customer models
 - [Birko.Models.Users](../Birko.Models.Users/) - User models
 - [Birko.Models.Warehouse](../Birko.Models.Warehouse/) - Warehouse models
-- [Birko.Models.SEO](../Birko.Models.SEO/) - SEO models
 
 ## License
 

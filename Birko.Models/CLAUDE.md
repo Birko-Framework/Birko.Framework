@@ -1,117 +1,74 @@
 # Birko.Models
 
 ## Overview
-Base models and extensions for the Birko Framework.
+Base abstract models, ViewModels, and extensions for the Birko Framework. Provides reusable value-type abstractions that domain model projects (Product, Category, Accounting, etc.) build upon.
 
 ## Project Location
 `C:\Source\Birko.Models\`
 
-## Purpose
-- Define base entity classes
-- Provide common model properties
-- Model extensions and utilities
-- ViewModels base classes
-
 ## Components
 
-### Models
-- `Entity` - Base entity with Id
-- `LogEntity` - Entity with logging support
-- `DateEntity` - Entity with date tracking
+### Models (`Birko.Models`)
+- **AbstractPercentage** — Abstract model with `decimal Percentage` property. Extends `AbstractLogModel`, implements `ILoadable<ViewModels.AbstractPercentage>`, `ICopyable<AbstractPercentage>`
+- **AbstractTree** — Abstract hierarchical model with `string Path` property (slash-separated GUIDs). Extends `AbstractLogModel`, implements `ITreePath`, `ILoadable<ViewModels.AbstractTree>`. Static `BuildPath(IEnumerable<Guid>)` helper
+- **ITreePath** — Interface: `string Path { get; set; }`
+- **ValueData** — Price data model with `decimal? Price`, `PriceVAT`, `VAT`. Extends `AbstractLogModel`, implements `IValueData`, `ILoadable<ValueData>`. Constants: `StoreDecimalPlaces = 6`, `StoreDecimalPrecision = 22`
+- **IValueData** — Interface combining `ILoadable<ViewModels.Value>`, `ILoadable<IValueData>`, `ICopyable<ValueData>` with Price/PriceVAT/VAT properties
+- **SourceValue\<T\>** — Generic value with `string Source` and `T Value`. Implements `ILoadable<ViewModels.SourceValue<T>>`
 
-### ViewModels
-- `ViewModel` - Base view model
-- `LogViewModel` - View model with logging
+### ViewModels (`Birko.Models.ViewModels`)
+- **AbstractPercentage** — ViewModel for percentage. Extends `LogViewModel` with `decimal Percentage` and INotifyPropertyChanged
+- **AbstractTree** — ViewModel for tree path. Extends `LogViewModel` with `IEnumerable<Guid> Path` and INotifyPropertyChanged
+- **Value** — ViewModel for price data (in file `ViewModels/ValueData.cs`). Extends `LogViewModel` with `decimal? Price`, `PriceVAT`, `VAT`
+- **SourceValue\<T\>** — Generic ViewModel. Extends `ViewModel` with `string Source`, `T Value`. Implements `ILoadable<Models.SourceValue<T>>` and `ILoadable<SourceValue<T>>`
 
-### Extensions
-- Model extensions for common operations
-- Conversion utilities
+### Extensions (`Birko.Extensions`)
+- **SourceValueExtensions** — Static extension methods:
+  - `GetValue<T>(this IEnumerable<SourceValue<T>>, string source)` — Find value by source string
+  - `SetValue<T>(this SourceValue<T>[], string source, T value)` — Update or append value in array
 
-### ViewModels
-- `PagedViewModel` - Pagination support
-- `FilteredViewModel` - Filtering support
-
-## Base Entity
-
-```csharp
-using Birko.Models.Models;
-
-public class Product : Entity
-{
-    public string Name { get; set; }
-    public decimal Price { get; set; }
-}
-
-var product = new Product
-{
-    Id = Guid.NewGuid(), // From Entity
-    Name = "Widget",
-    Price = 19.99m
-};
+## File Structure
 ```
-
-## Log Entity
-
-```csharp
-using Birko.Models.Models;
-
-public class AuditedProduct : LogEntity
-{
-    public string Name { get; set; }
-    // Includes: CreatedAt, UpdatedAt, CreatedBy, UpdatedBy
-}
-```
-
-## ViewModel
-
-```csharp
-using Birko.Models.ViewModels;
-
-public class ProductViewModel : ViewModel
-{
-    public string Name { get; set; }
-    public string PriceFormatted { get; set; }
-}
+Models/
+├── AbstractPercentage.cs
+├── AbstractTree.cs
+├── SourceValue.cs
+└── ValueData.cs
+ViewModels/
+├── AbstractPercentage.cs
+├── AbstractTree.cs
+├── SourceValue.cs
+└── ValueData.cs
+Extensions/
+└── SourceValueExtensions.cs
 ```
 
 ## Dependencies
-- .NET 10.0
+- **Birko.Data.Core** — AbstractLogModel, ViewModel, ModelViewModel, LogViewModel, ILoadable, ICopyable
 
-## Specialized Models
+## Patterns
+- **Dual Model/ViewModel:** Each abstract type has parallel implementations in Models/ and ViewModels/
+- **INotifyPropertyChanged:** All ViewModels use property constants and raise change notifications
+- **ILoadable:** Models implement bidirectional loading with their ViewModel counterparts
+- **ICopyable:** Models support deep cloning via `CopyTo()` methods
+- **Virtual properties and methods:** Allow derived classes to override behavior
 
-Different domains have their own models:
-- [Birko.Models.Product](../Birko.Models.Product/CLAUDE.md) - Product models
-- [Birko.Models.Category](../Birko.Models.Category/CLAUDE.md) - Category models
-- [Birko.Models.SEO](../Birko.Models.SEO/CLAUDE.md) - SEO models
-
-## Best Practices
-
-1. **Inheritance** - Always inherit from Entity for database entities
-2. **Guid IDs** - Use Guid for entity IDs
-3. **Immutability** - Consider immutable DTOs
-4. **Validation** - Add data annotations for validation
-5. **Namespaces** - Organize models by domain
+## Specialized Model Projects
+- [Birko.Models.Product](../Birko.Models.Product/CLAUDE.md)
+- [Birko.Models.Category](../Birko.Models.Category/CLAUDE.md)
+- [Birko.Models.SEO](../Birko.Models.SEO/CLAUDE.md)
+- [Birko.Models.Accounting](../Birko.Models.Accounting/CLAUDE.md)
+- [Birko.Models.Customers](../Birko.Models.Customers/CLAUDE.md)
+- [Birko.Models.Users](../Birko.Models.Users/CLAUDE.md)
+- [Birko.Models.Warehouse](../Birko.Models.Warehouse/CLAUDE.md)
 
 ## Maintenance
 
 ### README Updates
-When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly. This includes:
-- New classes, interfaces, or methods
-- Changed dependencies
-- New or modified usage examples
-- Breaking changes
+When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly.
 
 ### CLAUDE.md Updates
-When making major changes to this project, update this CLAUDE.md to reflect:
-- New or renamed files and components
-- Changed architecture or patterns
-- New dependencies or removed dependencies
-- Updated interfaces or abstract class signatures
-- New conventions or important notes
+When making major changes to this project, update this CLAUDE.md to reflect new or renamed files, changed architecture, dependencies, or conventions.
 
 ### Test Requirements
-Every new public functionality must have corresponding unit tests. When adding new features:
-- Create test classes in the corresponding test project
-- Follow existing test patterns (xUnit + FluentAssertions)
-- Test both success and failure cases
-- Include edge cases and boundary conditions
+Every new public functionality must have corresponding unit tests.
