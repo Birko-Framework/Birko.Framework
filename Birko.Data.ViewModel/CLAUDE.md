@@ -1,10 +1,10 @@
 # Birko.Data.ViewModel
 
-ViewModel support for Birko.Data framework.
+ViewModel support for the Birko data layer.
 
 ## Overview
 
-This project provides ViewModel pattern implementation for the Birko.Data framework, enabling separation between presentation models (ViewModels) and data persistence models (Models).
+This project provides ViewModel pattern implementation for the Birko data layer, enabling separation between presentation models (ViewModels) and data persistence models (Models).
 
 ## Features
 
@@ -15,7 +15,9 @@ This project provides ViewModel pattern implementation for the Birko.Data framew
 
 ## Dependencies
 
-- **Birko.Data** - Core data abstractions and models
+- **Birko.Data.Core** - Models (AbstractModel, ILoadable, ICopyable)
+- **Birko.Data.Stores** - Store interfaces and settings
+- **Birko.Data.Repositories** - Repository interfaces and abstractions
 
 ## Usage
 
@@ -70,7 +72,7 @@ Birko.Data.ViewModel/
 - This project only contains abstractions and base classes
 - Concrete implementations are in platform-specific packages
 - Reference only if your application uses the ViewModel pattern
-- For direct Model access, use `Birko.Data` repositories directly
+- For direct Model access, use Birko.Data.Repositories directly
 
 ## Maintenance
 

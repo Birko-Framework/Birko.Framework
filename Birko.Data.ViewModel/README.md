@@ -18,7 +18,9 @@ dotnet add package Birko.Data.ViewModel
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel, ViewModels)
+- Birko.Data.Stores (store interfaces)
+- Birko.Data.Repositories (repository interfaces)
 
 ## Usage
 
