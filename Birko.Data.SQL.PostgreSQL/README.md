@@ -17,7 +17,8 @@ dotnet add package Birko.Data.SQL.PostgreSQL
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.SQL
 - Npgsql
 

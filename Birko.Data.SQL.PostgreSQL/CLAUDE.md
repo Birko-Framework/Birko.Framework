@@ -121,7 +121,7 @@ CREATE TABLE products (
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core, Birko.Data.Stores
 - Birko.Data.SQL
 - Npgsql (PostgreSQL driver)
 
