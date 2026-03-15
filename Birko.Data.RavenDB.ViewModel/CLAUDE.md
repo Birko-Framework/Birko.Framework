@@ -20,7 +20,9 @@ ViewModel repository implementations for RavenDB stores.
 - Extends `AbstractAsyncBulkViewModelRepository` (async)
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
+- Birko.Data.Repositories
 - Birko.Data.RavenDB
 - Birko.Data.ViewModel
 
