@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Helpers;
 
 namespace Birko.Storage.Local;
 
@@ -87,7 +88,7 @@ public sealed class LocalFileStorage : IFileStorage
 
         var reference = new FileReference
         {
-            Path = NormalizePath(path),
+            Path = PathValidator.NormalizePath(path),
             FileName = Path.GetFileName(path),
             ContentType = contentType,
             Size = size,
@@ -253,7 +254,7 @@ public sealed class LocalFileStorage : IFileStorage
 
         var reference = new FileReference
         {
-            Path = NormalizePath(destinationPath),
+            Path = PathValidator.NormalizePath(destinationPath),
             FileName = Path.GetFileName(destinationPath),
             ContentType = sourceRef?.ContentType ?? string.Empty,
             Size = info.Length,
@@ -292,8 +293,16 @@ public sealed class LocalFileStorage : IFileStorage
 
     private string ResolvePath(string path)
     {
-        ValidatePath(path);
-        var normalized = NormalizePath(path);
+        try
+        {
+            PathValidator.ValidateUserPath(path, nameof(path));
+        }
+        catch (ArgumentException)
+        {
+            throw new InvalidPathException(path ?? string.Empty);
+        }
+
+        var normalized = PathValidator.NormalizePath(path);
         var withPrefix = CombinePrefix(normalized) ?? normalized;
         var systemPath = withPrefix.Replace('/', Path.DirectorySeparatorChar);
         var resolved = Path.GetFullPath(Path.Combine(_basePath, systemPath));
@@ -306,37 +315,6 @@ public sealed class LocalFileStorage : IFileStorage
         return resolved;
     }
 
-    private static string NormalizePath(string path)
-    {
-        return path.Replace('\\', '/').TrimStart('/');
-    }
-
-    private static void ValidatePath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new InvalidPathException(path ?? string.Empty);
-        }
-
-        if (path.Contains("..", StringComparison.Ordinal))
-        {
-            throw new InvalidPathException(path);
-        }
-
-        if (Path.IsPathRooted(path))
-        {
-            throw new InvalidPathException(path);
-        }
-
-        foreach (var c in path)
-        {
-            if (char.IsControl(c))
-            {
-                throw new InvalidPathException(path);
-            }
-        }
-    }
-
     private string? CombinePrefix(string? path)
     {
         if (string.IsNullOrEmpty(_settings.PathPrefix))
@@ -344,7 +322,7 @@ public sealed class LocalFileStorage : IFileStorage
             return path;
         }
 
-        var prefix = NormalizePath(_settings.PathPrefix!);
+        var prefix = PathValidator.NormalizePath(_settings.PathPrefix!);
         if (!prefix.EndsWith('/'))
         {
             prefix += "/";
@@ -435,7 +413,7 @@ public sealed class LocalFileStorage : IFileStorage
 
         return new FileReference
         {
-            Path = NormalizePath(storagePath),
+            Path = PathValidator.NormalizePath(storagePath),
             FileName = info.Name,
             ContentType = stored?.ContentType ?? string.Empty,
             Size = info.Length,

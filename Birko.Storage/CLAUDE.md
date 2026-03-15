@@ -26,6 +26,7 @@ Birko.Storage/
 
 ## Dependencies
 - **Birko.Data.Stores** — Settings/ISettings base classes
+- **Birko.Helpers** — PathValidator (ValidateUserPath, NormalizePath) for path security
 
 ## Key Design Decisions
 - **Async-first** — All operations return Task for cloud backend compatibility
