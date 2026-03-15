@@ -10,7 +10,7 @@ Shared Redis infrastructure for the Birko Framework. Provides connection setting
 
 ## Dependencies
 
-- Birko.Data (for RemoteSettings base class)
+- Birko.Data.Stores (for RemoteSettings base class)
 - StackExchange.Redis (NuGet — added by consuming project)
 
 ## Usage

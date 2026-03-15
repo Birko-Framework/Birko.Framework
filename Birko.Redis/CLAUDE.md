@@ -11,7 +11,7 @@ Birko.Redis/
 ```
 
 ## Dependencies
-- **Birko.Data** (imports projitems — for RemoteSettings base class)
+- **Birko.Data.Stores** (imports projitems — for RemoteSettings base class)
 - **StackExchange.Redis** NuGet — must be added by the consuming project
 
 ## RedisSettings Field Mapping
