@@ -21,7 +21,8 @@
   </ItemGroup>
 
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data\Birko.Data.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
   <Import Project="..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
   <Import Project="..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
   <Import Project="..\Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems" Label="Shared" />
