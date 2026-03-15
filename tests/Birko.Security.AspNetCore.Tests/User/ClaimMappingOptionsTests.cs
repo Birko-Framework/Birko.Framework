@@ -14,7 +14,7 @@ public class ClaimMappingOptionsTests
 
         options.UserIdClaim.Should().Be(ClaimTypes.NameIdentifier);
         options.EmailClaim.Should().Be(ClaimTypes.Email);
-        options.TenantIdClaim.Should().Be(JwtClaimNames.TenantId);
+        options.TenantGuidClaim.Should().Be(JwtClaimNames.TenantGuid);
         options.RoleClaim.Should().Be(ClaimTypes.Role);
         options.PermissionClaim.Should().Be(JwtClaimNames.Permission);
     }
@@ -26,14 +26,14 @@ public class ClaimMappingOptionsTests
         {
             UserIdClaim = "custom_uid",
             EmailClaim = "custom_email",
-            TenantIdClaim = "custom_tenant",
+            TenantGuidClaim = "custom_tenant",
             RoleClaim = "custom_role",
             PermissionClaim = "custom_perm"
         };
 
         options.UserIdClaim.Should().Be("custom_uid");
         options.EmailClaim.Should().Be("custom_email");
-        options.TenantIdClaim.Should().Be("custom_tenant");
+        options.TenantGuidClaim.Should().Be("custom_tenant");
         options.RoleClaim.Should().Be("custom_role");
         options.PermissionClaim.Should().Be("custom_perm");
     }

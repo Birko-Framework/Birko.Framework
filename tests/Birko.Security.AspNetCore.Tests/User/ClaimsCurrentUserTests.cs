@@ -23,12 +23,12 @@ public class ClaimsCurrentUserTests
     public void Authenticated_ReturnsAllProperties()
     {
         var userId = Guid.NewGuid();
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userId.ToString()),
             new(ClaimTypes.Email, "user@example.com"),
-            new(JwtClaimNames.TenantId, tenantId.ToString()),
+            new(JwtClaimNames.TenantGuid, tenantGuid.ToString()),
             new(ClaimTypes.Role, "Admin"),
             new(ClaimTypes.Role, "User"),
             new(JwtClaimNames.Permission, "users.read"),
@@ -42,7 +42,7 @@ public class ClaimsCurrentUserTests
         user.IsAuthenticated.Should().BeTrue();
         user.UserId.Should().Be(userId);
         user.Email.Should().Be("user@example.com");
-        user.TenantId.Should().Be(tenantId);
+        user.TenantGuid.Should().Be(tenantGuid);
         user.Roles.Should().Contain("Admin").And.Contain("User");
         user.Permissions.Should().Contain("users.read").And.Contain("users.write");
     }
@@ -58,7 +58,7 @@ public class ClaimsCurrentUserTests
         user.IsAuthenticated.Should().BeFalse();
         user.UserId.Should().BeNull();
         user.Email.Should().BeNull();
-        user.TenantId.Should().BeNull();
+        user.TenantGuid.Should().BeNull();
         user.Roles.Should().BeEmpty();
         user.Permissions.Should().BeEmpty();
     }

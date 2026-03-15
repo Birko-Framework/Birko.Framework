@@ -19,9 +19,9 @@ public class JwtClaimNamesTests
     }
 
     [Fact]
-    public void TenantId_IsTenantIdClaim()
+    public void TenantGuid_IsTenantIdClaim()
     {
-        JwtClaimNames.TenantId.Should().Be("tenant_id");
+        JwtClaimNames.TenantGuid.Should().Be("tenant_id");
     }
 
     [Fact]

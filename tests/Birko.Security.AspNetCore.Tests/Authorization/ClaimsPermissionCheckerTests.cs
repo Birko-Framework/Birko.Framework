@@ -82,19 +82,19 @@ public class ClaimsPermissionCheckerTests
 
     private class TestCurrentUser : ICurrentUser
     {
-        public TestCurrentUser(Guid? userId = null, string? email = null, Guid? tenantId = null,
+        public TestCurrentUser(Guid? userId = null, string? email = null, Guid? tenantGuid = null,
             HashSet<string>? roles = null, HashSet<string>? permissions = null)
         {
             UserId = userId;
             Email = email;
-            TenantId = tenantId;
+            TenantGuid = tenantGuid;
             Roles = (IReadOnlySet<string>?)(roles?.AsReadOnly()) ?? new HashSet<string>().AsReadOnly();
             Permissions = (IReadOnlySet<string>?)(permissions?.AsReadOnly()) ?? new HashSet<string>().AsReadOnly();
         }
 
         public Guid? UserId { get; }
         public string? Email { get; }
-        public Guid? TenantId { get; }
+        public Guid? TenantGuid { get; }
         public IReadOnlySet<string> Roles { get; }
         public IReadOnlySet<string> Permissions { get; }
         public bool IsAuthenticated => UserId.HasValue;

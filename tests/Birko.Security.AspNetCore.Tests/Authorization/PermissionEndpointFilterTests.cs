@@ -102,7 +102,7 @@ public class PermissionEndpointFilterTests
 
         public Guid? UserId => _isAuthenticated ? Guid.NewGuid() : null;
         public string? Email => null;
-        public Guid? TenantId => null;
+        public Guid? TenantGuid => null;
         public IReadOnlySet<string> Roles => new HashSet<string>().AsReadOnly();
         public IReadOnlySet<string> Permissions { get; }
         public bool IsAuthenticated => _isAuthenticated;

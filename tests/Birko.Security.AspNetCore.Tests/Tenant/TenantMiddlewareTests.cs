@@ -10,27 +10,27 @@ public class TenantMiddlewareTests
     [Fact]
     public async Task InvokeAsync_TenantResolved_SetsTenantContext()
     {
-        var tenantId = Guid.NewGuid();
-        var resolver = new TestTenantResolver(new TenantInfo(tenantId, "Acme"));
+        var tenantGuid = Guid.NewGuid();
+        var resolver = new TestTenantResolver(new TenantInfo(tenantGuid, "Acme"));
         var tenantContext = new TestTenantContext();
-        Guid? capturedTenantId = null;
+        Guid? capturedTenantGuid = null;
 
         var middleware = new TenantMiddleware(_ =>
         {
-            capturedTenantId = tenantContext.CurrentTenantId;
+            capturedTenantGuid = tenantContext.CurrentTenantGuid;
             return Task.CompletedTask;
         });
 
         await middleware.InvokeAsync(new DefaultHttpContext(), resolver, tenantContext);
 
-        capturedTenantId.Should().Be(tenantId);
+        capturedTenantGuid.Should().Be(tenantGuid);
     }
 
     [Fact]
     public async Task InvokeAsync_TenantResolved_ClearsAfterRequest()
     {
-        var tenantId = Guid.NewGuid();
-        var resolver = new TestTenantResolver(new TenantInfo(tenantId, "Acme"));
+        var tenantGuid = Guid.NewGuid();
+        var resolver = new TestTenantResolver(new TenantInfo(tenantGuid, "Acme"));
         var tenantContext = new TestTenantContext();
 
         var middleware = new TenantMiddleware(_ => Task.CompletedTask);
@@ -38,7 +38,7 @@ public class TenantMiddlewareTests
         await middleware.InvokeAsync(new DefaultHttpContext(), resolver, tenantContext);
 
         tenantContext.HasTenant.Should().BeFalse();
-        tenantContext.CurrentTenantId.Should().BeNull();
+        tenantContext.CurrentTenantGuid.Should().BeNull();
     }
 
     [Fact]
@@ -57,8 +57,8 @@ public class TenantMiddlewareTests
     [Fact]
     public async Task InvokeAsync_NextThrows_StillClearsTenant()
     {
-        var tenantId = Guid.NewGuid();
-        var resolver = new TestTenantResolver(new TenantInfo(tenantId, "Acme"));
+        var tenantGuid = Guid.NewGuid();
+        var resolver = new TestTenantResolver(new TenantInfo(tenantGuid, "Acme"));
         var tenantContext = new TestTenantContext();
 
         var middleware = new TenantMiddleware(_ => throw new InvalidOperationException("boom"));
@@ -97,19 +97,19 @@ public class TenantMiddlewareTests
 
     private class TestTenantContext : ITenantContext
     {
-        public Guid? CurrentTenantId { get; private set; }
+        public Guid? CurrentTenantGuid { get; private set; }
         public string? CurrentTenantName { get; private set; }
-        public bool HasTenant => CurrentTenantId.HasValue;
+        public bool HasTenant => CurrentTenantGuid.HasValue;
 
-        public void SetTenant(Guid tenantId, string? tenantName = null)
+        public void SetTenant(Guid tenantGuid, string? tenantName = null)
         {
-            CurrentTenantId = tenantId;
+            CurrentTenantGuid = tenantGuid;
             CurrentTenantName = tenantName;
         }
 
         public void ClearTenant()
         {
-            CurrentTenantId = null;
+            CurrentTenantGuid = null;
             CurrentTenantName = null;
         }
     }

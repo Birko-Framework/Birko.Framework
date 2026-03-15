@@ -10,9 +10,9 @@ public class SubdomainTenantResolverTests
     [Fact]
     public async Task ResolveAsync_WithBaseDomain_ExtractsSubdomain()
     {
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
         var resolver = new SubdomainTenantResolver(
-            (subdomain, _) => Task.FromResult<TenantInfo?>(new TenantInfo(tenantId, subdomain)),
+            (subdomain, _) => Task.FromResult<TenantInfo?>(new TenantInfo(tenantGuid, subdomain)),
             "myapp.com");
 
         var httpContext = new DefaultHttpContext();
@@ -21,16 +21,16 @@ public class SubdomainTenantResolverTests
         var result = await resolver.ResolveAsync(httpContext);
 
         result.Should().NotBeNull();
-        result!.TenantId.Should().Be(tenantId);
+        result!.TenantGuid.Should().Be(tenantGuid);
         result.TenantName.Should().Be("acme");
     }
 
     [Fact]
     public async Task ResolveAsync_WithoutBaseDomain_TakesFirstSegment()
     {
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
         var resolver = new SubdomainTenantResolver(
-            (subdomain, _) => Task.FromResult<TenantInfo?>(new TenantInfo(tenantId, subdomain)));
+            (subdomain, _) => Task.FromResult<TenantInfo?>(new TenantInfo(tenantGuid, subdomain)));
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Host = new HostString("tenant1.example.com");
@@ -38,7 +38,7 @@ public class SubdomainTenantResolverTests
         var result = await resolver.ResolveAsync(httpContext);
 
         result.Should().NotBeNull();
-        result!.TenantId.Should().Be(tenantId);
+        result!.TenantGuid.Should().Be(tenantGuid);
         result.TenantName.Should().Be("tenant1");
     }
 

@@ -50,9 +50,9 @@ public class TokenServiceAdapterTests
     {
         var adapter = CreateAdapter();
         var userId = Guid.NewGuid();
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
         var request = new TokenRequest(
-            userId, "user@example.com", tenantId,
+            userId, "user@example.com", tenantGuid,
             new HashSet<string> { "Admin", "User" }.AsReadOnly(),
             new HashSet<string> { "users.read", "users.write" }.AsReadOnly());
 
@@ -62,7 +62,7 @@ public class TokenServiceAdapterTests
         info.IsValid.Should().BeTrue();
         info.UserId.Should().Be(userId);
         info.Email.Should().Be("user@example.com");
-        info.TenantId.Should().Be(tenantId);
+        info.TenantGuid.Should().Be(tenantGuid);
         info.Roles.Should().Contain("Admin").And.Contain("User");
         info.Permissions.Should().Contain("users.read").And.Contain("users.write");
     }
@@ -80,7 +80,7 @@ public class TokenServiceAdapterTests
         info.IsValid.Should().BeTrue();
         info.UserId.Should().Be(userId);
         info.Email.Should().Be("user@example.com");
-        info.TenantId.Should().BeNull();
+        info.TenantGuid.Should().BeNull();
     }
 
     [Fact]

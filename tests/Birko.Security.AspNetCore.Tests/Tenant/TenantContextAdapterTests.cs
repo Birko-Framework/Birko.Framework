@@ -11,12 +11,12 @@ public class TenantContextAdapterTests
     {
         var birkoContext = new TestBirkoTenantContext();
         var adapter = new TenantContextAdapter(birkoContext);
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
 
-        adapter.SetTenant(tenantId, "Acme");
+        adapter.SetTenant(tenantGuid, "Acme");
 
         adapter.HasTenant.Should().BeTrue();
-        adapter.CurrentTenantId.Should().Be(tenantId);
+        adapter.CurrentTenantGuid.Should().Be(tenantGuid);
         adapter.CurrentTenantName.Should().Be("Acme");
     }
 
@@ -30,7 +30,7 @@ public class TenantContextAdapterTests
         adapter.ClearTenant();
 
         adapter.HasTenant.Should().BeFalse();
-        adapter.CurrentTenantId.Should().BeNull();
+        adapter.CurrentTenantGuid.Should().BeNull();
         adapter.CurrentTenantName.Should().BeNull();
     }
 
@@ -41,52 +41,52 @@ public class TenantContextAdapterTests
         var adapter = new TenantContextAdapter(birkoContext);
 
         adapter.HasTenant.Should().BeFalse();
-        adapter.CurrentTenantId.Should().BeNull();
+        adapter.CurrentTenantGuid.Should().BeNull();
         adapter.CurrentTenantName.Should().BeNull();
     }
 
     private class TestBirkoTenantContext : Birko.Data.Tenant.Models.ITenantContext
     {
-        public Guid? CurrentTenantId { get; private set; }
+        public Guid? CurrentTenantGuid { get; private set; }
         public string? CurrentTenantName { get; private set; }
-        public bool HasTenant => CurrentTenantId.HasValue;
+        public bool HasTenant => CurrentTenantGuid.HasValue;
 
-        public void SetTenant(Guid tenantId, string? tenantName = null)
+        public void SetTenant(Guid tenantGuid, string? tenantName = null)
         {
-            CurrentTenantId = tenantId;
+            CurrentTenantGuid = tenantGuid;
             CurrentTenantName = tenantName;
         }
 
         public void ClearTenant()
         {
-            CurrentTenantId = null;
+            CurrentTenantGuid = null;
             CurrentTenantName = null;
         }
 
-        public T WithTenant<T>(Guid tenantId, string? tenantName, Func<T> action)
+        public T WithTenant<T>(Guid tenantGuid, string? tenantName, Func<T> action)
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             try { return action(); }
             finally { ClearTenant(); }
         }
 
-        public async Task<T?> WithTenantAsync<T>(Guid tenantId, string? tenantName, Func<Task<T>> action)
+        public async Task<T?> WithTenantAsync<T>(Guid tenantGuid, string? tenantName, Func<Task<T>> action)
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             try { return await action(); }
             finally { ClearTenant(); }
         }
 
-        public void WithTenant(Guid tenantId, string? tenantName, Action action)
+        public void WithTenant(Guid tenantGuid, string? tenantName, Action action)
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             try { action(); }
             finally { ClearTenant(); }
         }
 
-        public async Task WithTenantAsync(Guid tenantId, string? tenantName, Func<Task> action)
+        public async Task WithTenantAsync(Guid tenantGuid, string? tenantName, Func<Task> action)
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             try { await action(); }
             finally { ClearTenant(); }
         }

@@ -8,32 +8,32 @@ namespace Birko.Security.AspNetCore.Tests.Tenant;
 public class HeaderTenantResolverTests
 {
     [Fact]
-    public async Task ResolveAsync_ValidTenantIdHeader_ReturnsTenantInfo()
+    public async Task ResolveAsync_ValidTenantGuidHeader_ReturnsTenantInfo()
     {
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Tenant-Id"] = tenantId.ToString();
+        httpContext.Request.Headers["X-Tenant-Id"] = tenantGuid.ToString();
 
         var resolver = new HeaderTenantResolver();
         var result = await resolver.ResolveAsync(httpContext);
 
         result.Should().NotBeNull();
-        result!.TenantId.Should().Be(tenantId);
+        result!.TenantGuid.Should().Be(tenantGuid);
     }
 
     [Fact]
     public async Task ResolveAsync_WithTenantNameHeader_IncludesName()
     {
-        var tenantId = Guid.NewGuid();
+        var tenantGuid = Guid.NewGuid();
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Tenant-Id"] = tenantId.ToString();
+        httpContext.Request.Headers["X-Tenant-Id"] = tenantGuid.ToString();
         httpContext.Request.Headers["X-Tenant-Name"] = "Acme Corp";
 
         var resolver = new HeaderTenantResolver();
         var result = await resolver.ResolveAsync(httpContext);
 
         result.Should().NotBeNull();
-        result!.TenantId.Should().Be(tenantId);
+        result!.TenantGuid.Should().Be(tenantGuid);
         result.TenantName.Should().Be("Acme Corp");
     }
 
