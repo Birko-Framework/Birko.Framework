@@ -129,7 +129,7 @@ queue.Disconnected += async () => Console.WriteLine("Disconnected from broker");
 
 ## Dependencies
 
-- **Birko.Data** — Settings hierarchy (RemoteSettings base class for MqttSettings)
+- **Birko.Data.Stores** — Settings hierarchy (RemoteSettings base class for MqttSettings)
 - **Birko.MessageQueue** — Core interfaces
 - **MQTTnet** — MQTT client library (consuming project must reference this NuGet package)
 

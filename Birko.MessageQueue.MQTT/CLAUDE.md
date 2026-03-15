@@ -38,7 +38,7 @@ MqttMessageQueue
 - Auto-reconnect runs in background task with configurable delay and max attempts
 
 ## Dependencies
-- **Birko.Data** — Settings hierarchy (RemoteSettings base class for MqttSettings)
+- **Birko.Data.Stores** — Settings hierarchy (RemoteSettings base class for MqttSettings)
 - **Birko.MessageQueue** — Core interfaces
 - **MQTTnet** — MQTT client (NuGet, referenced by consuming project)
 
