@@ -13,7 +13,7 @@ Elasticsearch-specific sync knowledge item implementation for the Birko.Data.Syn
   - Static `GenerateId()` method for document ID generation
 
 ## Dependencies
-- Birko.Data (AbstractModel)
+- Birko.Data.Core (AbstractModel)
 - Birko.Data.Sync (ISyncKnowledgeItem)
 - NEST / Elasticsearch.Net
 
