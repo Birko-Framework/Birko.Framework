@@ -1,7 +1,7 @@
 # Birko.Helpers
 
 ## Overview
-Helper utilities and extensions for Birko.Data operations.
+Helper utilities and extensions for Birko data layer operations.
 
 ## Project Location
 `C:\Source\Birko.Helpers\`
@@ -122,7 +122,9 @@ public static string ToXml(this object obj);
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
+- Birko.Data.Repositories
 - System.Text.Json (or Newtonsoft.Json)
 - System.ComponentModel.DataAnnotations
 
