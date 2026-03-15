@@ -30,5 +30,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Integration\ValidatingStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Integration\AsyncValidatingStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Integration\AsyncValidatingBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Integration\RuleBasedValidator.cs" />
   </ItemGroup>
 </Project>
