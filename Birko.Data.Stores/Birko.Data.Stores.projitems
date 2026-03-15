@@ -9,19 +9,19 @@
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\IStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\IBulkStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncBulkStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractBulkStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncBulkStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\IStoreWrapper.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\ITransactionalStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\OrderBy.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\StoreExtensions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Stores\StoreLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ITransactionalStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OrderBy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StoreExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)StoreLocator.cs" />
   </ItemGroup>
 </Project>
