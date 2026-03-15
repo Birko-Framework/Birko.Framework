@@ -1,7 +1,7 @@
 # Birko.Data.Tests
 
 ## Overview
-Unit tests for the core Birko.Data project - store and repository abstractions.
+Unit tests for the core Birko data layer - store and repository abstractions.
 
 ## Project Location
 `C:\Source\Birko.Data.Tests\`
@@ -20,7 +20,7 @@ Unit tests for the core Birko.Data project - store and repository abstractions.
 - `Concurrency/AsyncVersionedStoreWrapperTests.cs` - Async versioned store wrapper tests
 
 ## Dependencies
-- Birko.Data (via .projitems) - core store interfaces and abstract classes
+- Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories (via .projitems) - core models, store interfaces, and repository abstractions
 - Birko.Data.Patterns (via .projitems) - paging, specification, concurrency patterns
 
 ## Running Tests

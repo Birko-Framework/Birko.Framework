@@ -1,6 +1,6 @@
 # Birko.Data.Tests
 
-Unit tests for the core Birko.Data project.
+Unit tests for the core Birko.Data.Core and Birko.Data.Stores projects.
 
 ## Test Coverage
 
@@ -20,7 +20,8 @@ dotnet test Birko.Data.Tests
 
 ## Dependencies
 
-- Birko.Data (shared project via .projitems)
+- Birko.Data.Core (shared project via .projitems)
+- Birko.Data.Stores (shared project via .projitems)
 
 ## License
 
