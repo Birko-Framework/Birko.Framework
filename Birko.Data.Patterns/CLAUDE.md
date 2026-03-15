@@ -62,7 +62,7 @@ IStore<T> -> SoftDeleteStoreWrapper<T> -> AuditStoreWrapper<T> -> actual store
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
 
 ## Maintenance
 

@@ -18,7 +18,8 @@ dotnet add package Birko.Data.Patterns
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel, interfaces)
+- Birko.Data.Stores (store interfaces, wrappers)
 
 ## Usage
 
@@ -82,7 +83,8 @@ await uow.CommitAsync(); // or RollbackAsync()
 
 ## Related Projects
 
-- [Birko.Data](../Birko.Data/) - Core interfaces
+- [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
+- [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 
 ## License
 
