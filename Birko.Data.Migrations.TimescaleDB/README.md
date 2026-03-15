@@ -17,7 +17,8 @@ dotnet add package Birko.Data.Migrations.TimescaleDB
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (Settings)
 - Birko.Data.Migrations
 - Birko.Data.Migrations.SQL
 - Birko.Data.TimescaleDB
