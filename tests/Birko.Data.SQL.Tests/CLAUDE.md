@@ -38,7 +38,8 @@ Unit tests for the Birko.Data.SQL project - SQL connector condition builders, st
 - `DataBase/WhereExpressionTests.cs` - WHERE condition expression parsing
 
 ## Dependencies
-- Birko.Data (via .projitems) - core models and interfaces
+- Birko.Data.Core (via .projitems) - core models and filters
+- Birko.Data.Stores (via .projitems) - store interfaces and settings
 - Birko.Data.SQL (via .projitems) - SQL connectors, strategies, expression parser
 - Birko.Data.SQL.View (via .projitems) - SQL view generation
 - Birko.Models (via .projitems) - model base classes
