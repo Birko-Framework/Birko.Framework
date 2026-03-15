@@ -117,6 +117,7 @@
     <Project Path="../Birko.Security/Birko.Security.shproj" />
     <Project Path="../Birko.Security.Jwt/Birko.Security.Jwt.shproj" />
     <Project Path="../Birko.Security.AspNetCore/Birko.Security.AspNetCore.shproj" />
+    <Project Path="../Birko.Security.BCrypt/Birko.Security.BCrypt.shproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />

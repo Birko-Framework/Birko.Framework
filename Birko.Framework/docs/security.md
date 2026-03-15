@@ -29,6 +29,28 @@ var valid = hasher.Verify("mypassword", hash);  // true
 
 Uses `CryptographicOperations.FixedTimeEquals` to prevent timing attacks.
 
+### BCryptPasswordHasher (Birko.Security.BCrypt)
+
+Pure C# BCrypt implementation with configurable work factor (4–31, default 12). Output format: standard `$2a$XX$` modular crypt. No external NuGet dependencies.
+
+```csharp
+using Birko.Security.BCrypt.Hashing;
+
+var hasher = new BCryptPasswordHasher();              // default work factor 12
+var hasher5 = new BCryptPasswordHasher(workFactor: 5); // faster, less secure
+
+var hash = hasher.Hash("mypassword");       // "$2a$12$..."
+var valid = hasher.Verify("mypassword", hash);  // true
+
+// Check if stored hash needs upgrade to current work factor
+if (hasher.NeedsRehash(oldHash))
+{
+    var newHash = hasher.Hash(password);
+}
+```
+
+BCrypt is more GPU-resistant than PBKDF2 due to its memory-bound Blowfish state (~4KB). Use BCrypt when stronger protection against hardware-accelerated brute force is needed. The 72-byte password limit (UTF-8, null-terminated) is per the BCrypt specification.
+
 ## Encryption
 
 ### IEncryptionProvider
@@ -237,3 +259,4 @@ var info = adapter.ValidateToken(token.Token);
 - [Birko.Security CLAUDE.md](../Birko.Security/CLAUDE.md)
 - [Birko.Security.Jwt CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md)
 - [Birko.Security.AspNetCore CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md)
+- [Birko.Security.BCrypt CLAUDE.md](../Birko.Security.BCrypt/CLAUDE.md)

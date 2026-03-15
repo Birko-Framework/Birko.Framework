@@ -67,6 +67,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.BackgroundJobs.Tests** - Unit tests for background job processing (queue, dispatcher, executor, processor, scheduler)
 - **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
 - **Birko.Security.AspNetCore.Tests** - Unit tests for ASP.NET Core security integration (JWT auth, ICurrentUser, permissions, tenant resolution, middleware)
+- **Birko.Security.BCrypt.Tests** - Unit tests for BCrypt password hashing
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
 
 ### Messaging
@@ -104,7 +105,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Redis** - Shared Redis infrastructure (RedisSettings extending RemoteSettings, RedisConnectionManager)
 
 ### Security
-- **Birko.Security** - Password hashing (PBKDF2), AES-256-GCM encryption, token provider interfaces, static token auth (moved from Birko.Communication.Authentication), RBAC interfaces
+- **Birko.Security.BCrypt** - BCrypt password hashing (pure C# Blowfish implementation, configurable work factor, NeedsRehash support)
 - **Birko.Security.Jwt** - JWT implementation of ITokenProvider
 - **Birko.Security.AspNetCore** - ASP.NET Core integration: JWT Bearer authentication setup, ICurrentUser from claims, ClaimsPermissionChecker, tenant resolution middleware (header/subdomain), Minimal API permission endpoint filters, one-line DI via AddBirkoSecurity()
 
@@ -272,6 +273,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Security | [../Birko.Security/CLAUDE.md](../Birko.Security/CLAUDE.md) |
 | Birko.Security.Jwt | [../Birko.Security.Jwt/CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md) |
 | Birko.Security.AspNetCore | [../Birko.Security.AspNetCore/CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md) |
+| Birko.Security.BCrypt | [../Birko.Security.BCrypt/CLAUDE.md](../Birko.Security.BCrypt/CLAUDE.md) |
+| Birko.Security.BCrypt.Tests | [../Birko.Security.BCrypt.Tests/CLAUDE.md](../Birko.Security.BCrypt.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
