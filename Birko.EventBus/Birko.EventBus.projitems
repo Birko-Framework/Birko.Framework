@@ -22,6 +22,7 @@
     <!-- Pipeline -->
     <Compile Include="$(MSBuildThisFileDirectory)Pipeline\IEventPipelineBehavior.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pipeline\EventPipeline.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Pipeline\RuleFilterBehavior.cs" />
     <!-- Routing -->
     <Compile Include="$(MSBuildThisFileDirectory)Routing\ITopicConvention.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Routing\TopicAttribute.cs" />
