@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 
 namespace Birko.Models.Product.Filters
 {
-    public class ProductList<T> : IRepositoryFilter<T> where T : Product
+    public class ProductList<T> : IFilter<T> where T : Product
     {
         public string? Search { get; private set; }
         public string? Category { get; private set; }
