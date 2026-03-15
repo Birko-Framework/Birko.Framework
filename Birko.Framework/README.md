@@ -29,7 +29,9 @@ A modular .NET framework providing data access, communication, and model infrast
 | Project | Description |
 |---------|-------------|
 | Birko.Framework | Main framework application |
-| Birko.Data | Core data interfaces (IStore, IAsyncStore, IBulkStore, IAsyncBulkStore) |
+| Birko.Data.Core | Models, ViewModels, Filters, Exceptions (foundation layer) |
+| Birko.Data.Stores | Store interfaces/abstractions, Settings, OrderBy, StoreLocator |
+| Birko.Data.Repositories | Repository interfaces/abstractions, RepositoryLocator, DI extensions |
 | Birko.Models | Base entity and ViewModel classes |
 
 ### Data Layer
