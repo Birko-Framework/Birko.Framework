@@ -22,7 +22,7 @@ Birko.Redis/
 | `Port` | Port | `6379` |
 | `Password` | AUTH password | — |
 | `UserName` | ACL username (Redis 6+) | — |
-| `UseSsl` | TLS connection | `false` |
+| `UseSecure` | TLS connection | `false` |
 | `Name` | Client name | — |
 
 New fields:

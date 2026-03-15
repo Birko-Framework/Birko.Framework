@@ -25,7 +25,7 @@ var settings = new RedisSettings
     Location = "redis.example.com",
     Port = 6380,
     Password = "secret",
-    UseSsl = true,
+    UseSecure = true,
     Database = 2,
     KeyPrefix = "myapp"
 };

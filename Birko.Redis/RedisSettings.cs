@@ -6,7 +6,7 @@ namespace Birko.Redis
     /// <summary>
     /// Redis connection settings extending the framework's RemoteSettings hierarchy.
     /// Maps inherited fields to Redis concepts: Location=Host, Port=Port, Password=AUTH,
-    /// UserName=ACL username, UseSsl=TLS, Name=client name.
+    /// UserName=ACL username, UseSecure=TLS, Name=client name.
     /// </summary>
     public class RedisSettings : RemoteSettings, Birko.Data.Models.ILoadable<RedisSettings>
     {
@@ -88,7 +88,7 @@ namespace Birko.Redis
                 sb.Append(UserName);
             }
 
-            if (UseSsl)
+            if (UseSecure)
             {
                 sb.Append(",ssl=True,sslHost=");
                 sb.Append(Location ?? "localhost");
