@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 
 namespace Birko.Data.Tenant.Filters
 {
-    public class ModelByTenant<TModel> : IRepositoryFilter<TModel>
+    public class ModelByTenant<TModel> : IFilter<TModel>
          where TModel : AbstractModel, ITenant
     {
         public Guid? TenantGuid { get; set; }
