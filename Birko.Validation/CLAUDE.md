@@ -1,7 +1,7 @@
 # Birko.Validation
 
 ## Overview
-Fluent validation framework for Birko.Data models. Platform-agnostic — no separate platform projects needed.
+Fluent validation framework for Birko data layer models. Platform-agnostic — no separate platform projects needed.
 
 ## Structure
 ```
@@ -30,7 +30,7 @@ Birko.Validation/
 ```
 
 ## Dependencies
-- **Birko.Data** — for IStore<T>/IAsyncStore<T>/IAsyncBulkStore<T>/IStoreWrapper<T> (store integration only)
+- **Birko.Data.Stores** — for IStore<T>/IAsyncStore<T>/IAsyncBulkStore<T>/IStoreWrapper<T> (store integration only)
 
 ## Usage
 

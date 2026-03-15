@@ -17,7 +17,7 @@ dotnet add package Birko.Validation
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel, ILoadable)
 
 ## Usage
 
