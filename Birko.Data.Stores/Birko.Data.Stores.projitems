@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b2d3e4f5-a6b7-4c8d-9e0f-1a2b3c4d5e6f</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IAsyncBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AbstractAsyncBulkStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ITransactionalStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\OrderBy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\StoreExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\StoreLocator.cs" />
+  </ItemGroup>
+</Project>
