@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Specification\AndSpecification.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Specification\OrSpecification.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Specification\NotSpecification.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Specification\RuleSpecification.cs" />
     <!-- Concurrency -->
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\IVersioned.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\ConcurrentUpdateException.cs" />
