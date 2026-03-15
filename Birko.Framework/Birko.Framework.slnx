@@ -34,7 +34,9 @@
     <Project Path="../Birko.Communication.WebSocket/Birko.Communication.WebSocket.shproj" Id="d4e5f6a7-b8c9-4d7e-9f3a-4b5c6d7e8f9a" />
   </Folder>
   <Folder Name="/Data/">
-    <Project Path="../Birko.Data/Birko.Data.shproj" />
+    <Project Path="../Birko.Data.Core/Birko.Data.Core.shproj" />
+    <Project Path="../Birko.Data.Stores/Birko.Data.Stores.shproj" />
+    <Project Path="../Birko.Data.Repositories/Birko.Data.Repositories.shproj" />
   </Folder>
   <Folder Name="/Data.Migrations/">
     <Project Path="../Birko.Data.Migrations/Birko.Data.Migrations.shproj" />

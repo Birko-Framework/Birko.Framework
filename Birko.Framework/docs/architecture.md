@@ -8,7 +8,7 @@ Birko Framework is designed as a modular, layered architecture supporting multip
 
 ### 1. Models Layer
 
-#### Base Models (Birko.Data)
+#### Base Models (Birko.Data.Core)
 - `AbstractModel` - Base entity with `Guid?` identifier
 - `AbstractLogModel` - Extends AbstractModel with `CreatedAt`, `UpdatedAt`, `PrevUpdatedAt` timestamps
 
@@ -29,7 +29,7 @@ Birko Framework is designed as a modular, layered architecture supporting multip
 
 ### 2. Data Access Layer
 
-#### Core Interfaces (Birko.Data)
+#### Core Interfaces (Birko.Data.Stores)
 
 | Interface | Description |
 |-----------|-------------|

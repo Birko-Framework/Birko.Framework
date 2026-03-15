@@ -2,7 +2,7 @@
 
 ## Overview
 
-Birko.Validation provides a fluent validation framework for Birko.Data models. It supports manual validation and automatic store-level validation via decorator wrappers.
+Birko.Validation provides a fluent validation framework for Birko.Data.Core models. It supports manual validation and automatic store-level validation via decorator wrappers.
 
 ## Core Interfaces
 

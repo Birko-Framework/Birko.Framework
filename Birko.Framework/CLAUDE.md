@@ -7,7 +7,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Core Projects
 - **Birko.Framework** - Main framework application (.NET 10.0, shared projects via .projitems)
-- **Birko.Data** - Core data interfaces and abstract classes
+- **Birko.Data.Core** - Models, ViewModels, Filters, Exceptions (foundation layer)
+- **Birko.Data.Stores** - Store interfaces/abstractions, Settings, OrderBy, StoreLocator
+- **Birko.Data.Repositories** - Repository interfaces/abstractions, RepositoryLocator, DI extensions
 - **Birko.Models** - Base models and extensions
 
 ### Data Layer
@@ -171,7 +173,9 @@ Each project has its own CLAUDE.md with specific details:
 
 | Project | CLAUDE.md Location |
 |---------|-------------------|
-| Birko.Data | [../Birko.Data/CLAUDE.md](../Birko.Data/CLAUDE.md) |
+| Birko.Data.Core | [../Birko.Data.Core/CLAUDE.md](../Birko.Data.Core/CLAUDE.md) |
+| Birko.Data.Stores | [../Birko.Data.Stores/CLAUDE.md](../Birko.Data.Stores/CLAUDE.md) |
+| Birko.Data.Repositories | [../Birko.Data.Repositories/CLAUDE.md](../Birko.Data.Repositories/CLAUDE.md) |
 | Birko.Data.SQL | [../Birko.Data.SQL/CLAUDE.md](../Birko.Data.SQL/CLAUDE.md) |
 | Birko.Data.SQL.MSSql | [../Birko.Data.SQL.MSSql/CLAUDE.md](../Birko.Data.SQL.MSSql/CLAUDE.md) |
 | Birko.Data.SQL.PostgreSQL | [../Birko.Data.SQL.PostgreSQL/CLAUDE.md](../Birko.Data.SQL.PostgreSQL/CLAUDE.md) |
@@ -349,7 +353,7 @@ Existing folder groups in both files:
 - **BackgroundJobs/** — Birko.BackgroundJobs
 - **Caching/** — Birko.Caching, Birko.Caching.Redis
 - **Communication/** — Birko.Communication.*
-- **Data/** — Birko.Data (core)
+- **Data/** — Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
 - **Data.Migrations/** — Birko.Data.Migrations.*
 - **Data.NoSQL/** — ElasticSearch, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB stores
 - **Data.Patterns/** — Birko.Data.Patterns, EventSourcing, Tenant
