@@ -18,7 +18,8 @@ MongoDB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncMongoDBS
 
 ## Dependencies
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy)
-- Birko.Data (AbstractModel, OrderBy)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (OrderBy)
 - Birko.Data.MongoDB (AsyncMongoDBStore, Settings)
 - MongoDB.Driver / MongoDB.Bson
 
