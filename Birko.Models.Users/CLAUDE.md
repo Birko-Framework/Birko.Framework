@@ -47,7 +47,7 @@ public class MyEntity : ITenant
 
 ## Dependencies
 
-- Birko.Data (for base classes and attributes)
+- Birko.Data.Core (for base classes and attributes)
 - Birko.Models (for base model classes)
 
 ## Maintenance
