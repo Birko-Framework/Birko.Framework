@@ -4,7 +4,7 @@ using Birko.Data.Filters;
 
 namespace Birko.Models.Users.Filters
 {
-    public class Agenda : IRepositoryFilter<Models.Users.Agenda>
+    public class Agenda : IFilter<Models.Users.Agenda>
     {
         public string? Name { get; set; }
         public bool? Default { get; set; }

@@ -4,7 +4,7 @@ using Birko.Data.Filters;
 
 namespace Birko.Models.Users.Filters
 {
-    public class UserProfile : IRepositoryFilter<Models.Users.UserProfile>
+    public class UserProfile : IFilter<Models.Users.UserProfile>
     {
         public Guid? UserGuid { get; set; }
         public string? FirstName { get; set; }

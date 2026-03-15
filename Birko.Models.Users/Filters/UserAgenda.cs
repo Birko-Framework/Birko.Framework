@@ -4,7 +4,7 @@ using Birko.Data.Filters;
 
 namespace Birko.Models.Users.Filters
 {
-    public class UserAgenda : IRepositoryFilter<Models.Users.UserAgenda>
+    public class UserAgenda : IFilter<Models.Users.UserAgenda>
     {
         public Guid? UserGuid { get; set; }
         public Guid? AgendaGuid { get; set; }
