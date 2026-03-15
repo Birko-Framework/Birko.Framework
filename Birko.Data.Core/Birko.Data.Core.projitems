@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Exceptions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreException.cs" />
+    <!-- Filters -->
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\IRepositoryFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByGuid.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelsByGuid.cs" />
+    <!-- Models -->
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AbstractLogModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\AbstractModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ICopyable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IDefault.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ILoadable.cs" />
+    <!-- ViewModels -->
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ModelViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\AbstractLogViewModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\LogViewModel.cs" />
+  </ItemGroup>
+</Project>
