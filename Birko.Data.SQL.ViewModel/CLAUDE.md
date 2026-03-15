@@ -8,7 +8,9 @@ Provides ViewModel-based repository implementations for SQL databases (SQL Serve
 
 ## Dependencies
 
-- **Birko.Data** - Core data abstractions
+- **Birko.Data.Core** - Models and filters
+- **Birko.Data.Stores** - Store interfaces and settings
+- **Birko.Data.Repositories** - Repository interfaces and abstractions
 - **Birko.Data.ViewModel** - ViewModel base classes and interfaces
 - **Birko.Data.SQL** - SQL base stores and connectors
 
