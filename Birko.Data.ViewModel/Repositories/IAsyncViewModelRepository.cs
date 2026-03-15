@@ -20,7 +20,7 @@ namespace Birko.Data.Repositories
         /// <param name="filter">Optional filter to apply to the count.</param>
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         /// <returns>The count of matching entities.</returns>
-        Task<long> CountAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default);
+        Task<long> CountAsync(IFilter<TModel>? filter = null, CancellationToken ct = default);
     }
 
     #endregion
@@ -42,7 +42,7 @@ namespace Birko.Data.Repositories
         /// <param name="filter">Optional filter to apply to the query.</param>
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         /// <returns>The view model if found; otherwise, null.</returns>
-        Task<TViewModel?> ReadAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default);
+        Task<TViewModel?> ReadAsync(IFilter<TModel>? filter = null, CancellationToken ct = default);
     }
 
     #endregion

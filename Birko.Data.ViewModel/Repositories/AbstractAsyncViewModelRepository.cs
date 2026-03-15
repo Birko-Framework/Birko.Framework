@@ -172,7 +172,7 @@ namespace Birko.Data.Repositories
         /// <summary>
         /// Asynchronously reads a single entity by filter.
         /// </summary>
-        public virtual async Task<TViewModel?> ReadAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default)
+        public virtual async Task<TViewModel?> ReadAsync(IFilter<TModel>? filter = null, CancellationToken ct = default)
         {
             if (Store == null) return default;
             var model = await Store.ReadAsync(filter?.Filter(), ct);
@@ -180,7 +180,7 @@ namespace Birko.Data.Repositories
         }
 
         /// <inheritdoc />
-        public virtual async Task<TViewModel?> ReadOneAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default)
+        public virtual async Task<TViewModel?> ReadOneAsync(IFilter<TModel>? filter = null, CancellationToken ct = default)
         {
             if (Store == null) return default;
             var model = await Store.ReadAsync(filter?.Filter(), ct);
@@ -238,7 +238,7 @@ namespace Birko.Data.Repositories
         #region Query and Count Operations
 
         /// <inheritdoc />
-        public virtual async Task<long> CountAsync(IRepositoryFilter<TModel>? filter = null, CancellationToken ct = default)
+        public virtual async Task<long> CountAsync(IFilter<TModel>? filter = null, CancellationToken ct = default)
         {
             if (Store == null) return 0;
             return await Store.CountAsync(filter?.Filter(), ct);

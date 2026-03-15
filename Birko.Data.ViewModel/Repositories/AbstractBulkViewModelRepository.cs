@@ -34,7 +34,7 @@ namespace Birko.Data.Repositories
         #region Core CRUD Operations - Bulk
 
         /// <inheritdoc />
-        public virtual IEnumerable<TViewModel> Read(IRepositoryFilter<TModel>? filter = null, int? limit = null, int? offset = null)
+        public virtual IEnumerable<TViewModel> Read(IFilter<TModel>? filter = null, int? limit = null, int? offset = null)
         {
             if (Store is not IBulkStore<TModel>)
             {

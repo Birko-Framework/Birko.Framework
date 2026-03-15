@@ -21,7 +21,7 @@ namespace Birko.Data.Repositories
         /// <param name="limit">Maximum number of entities to return.</param>
         /// <param name="offset">Number of entities to skip.</param>
         /// <returns>A collection of matching view models.</returns>
-        IEnumerable<T> Read(IRepositoryFilter<TModel>? filter = null, int? limit = null, int? offset = null);
+        IEnumerable<T> Read(IFilter<TModel>? filter = null, int? limit = null, int? offset = null);
     }
 
     #endregion

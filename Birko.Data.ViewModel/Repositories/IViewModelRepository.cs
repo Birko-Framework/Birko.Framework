@@ -17,7 +17,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         /// <param name="filter">Optional filter to apply to the count.</param>
         /// <returns>The total count of entities.</returns>
-        long Count(IRepositoryFilter<TModel>? filter = null);
+        long Count(IFilter<TModel>? filter = null);
     }
 
     #endregion
@@ -38,7 +38,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         /// <param name="filter">Optional filter to apply to the query.</param>
         /// <returns>The view model if found; otherwise, null.</returns>
-        T? Read(IRepositoryFilter<TModel>? filter = null);
+        T? Read(IFilter<TModel>? filter = null);
     }
 
     #endregion

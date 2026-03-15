@@ -141,7 +141,7 @@ namespace Birko.Data.Repositories
         #region Core CRUD Operations
 
         /// <inheritdoc />
-        public virtual long Count(IRepositoryFilter<TModel>? filter = null)
+        public virtual long Count(IFilter<TModel>? filter = null)
         {
             if (Store == null)
             {
@@ -153,13 +153,13 @@ namespace Birko.Data.Repositories
         /// <summary>
         /// Reads a single entity matching the specified filter. Alias for Read.
         /// </summary>
-        public virtual TViewModel? ReadOne(IRepositoryFilter<TModel>? filter = null)
+        public virtual TViewModel? ReadOne(IFilter<TModel>? filter = null)
         {
             return Read(filter);
         }
 
         /// <inheritdoc />
-        public virtual TViewModel? Read(IRepositoryFilter<TModel>? filter = null)
+        public virtual TViewModel? Read(IFilter<TModel>? filter = null)
         {
             if (Store == null)
             {
