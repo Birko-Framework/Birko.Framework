@@ -37,7 +37,7 @@ namespace Birko.EventBus.MessageQueue
         /// <summary>
         /// Tenant identifier, if multi-tenancy is enabled.
         /// </summary>
-        public Guid? TenantId { get; set; }
+        public Guid? TenantGuid { get; set; }
 
         /// <summary>
         /// Serialized event payload (JSON).

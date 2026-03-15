@@ -72,7 +72,7 @@ namespace Birko.EventBus.MessageQueue
                 Source = @event.Source,
                 OccurredAt = @event.OccurredAt,
                 CorrelationId = context.CorrelationId,
-                TenantId = context.TenantId,
+                TenantGuid = context.TenantGuid,
                 Payload = _serializer.Serialize(@event),
                 Headers = new(context.Metadata)
             };
@@ -156,7 +156,7 @@ namespace Birko.EventBus.MessageQueue
                     EventId = envelope.EventId,
                     Source = envelope.Source,
                     CorrelationId = envelope.CorrelationId,
-                    TenantId = envelope.TenantId,
+                    TenantGuid = envelope.TenantGuid,
                     DeliveryCount = message.Headers?.Custom.ContainsKey("x-delivery-count") == true
                         ? int.TryParse(message.Headers.Custom["x-delivery-count"], out var dc) ? dc : 1
                         : 1,

@@ -14,7 +14,7 @@ Distributed event bus backed by Birko.MessageQueue. Bridges strongly-typed IEven
 |------|-------------|
 | DistributedEventBus.cs | IEventBus over IMessageQueue — serializes events as EventEnvelope, dispatches received envelopes to handlers |
 | DistributedEventBusOptions.cs | TopicConvention, Serializer, RetryPolicy, DeadLetterOptions, ConsumerOptions, AutoSubscribe |
-| EventEnvelope.cs | Transport wrapper: EventId, EventType (assembly-qualified), Source, Payload (JSON), Headers, TenantId |
+| EventEnvelope.cs | Transport wrapper: EventId, EventType (assembly-qualified), Source, Payload (JSON), Headers, TenantGuid |
 | AutoSubscriber.cs | Scans DI for IEventHandler&lt;T&gt;, calls SubscribeToTransportAsync for each discovered event type |
 | DistributedEventBusHostedService.cs | IHostedService that runs AutoSubscriber on startup |
 | DistributedEventBusServiceCollectionExtensions.cs | AddDistributedEventBus() DI extension |
