@@ -20,7 +20,9 @@ ViewModel repository implementations for Elasticsearch stores.
 - Extends `AbstractAsyncBulkViewModelRepository` (async)
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
+- Birko.Data.Repositories
 - Birko.Data.ElasticSearch
 - Birko.Data.ViewModel
 
