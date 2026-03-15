@@ -1,0 +1,57 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Http;
+
+namespace Birko.Security.AspNetCore;
+
+/// <summary>
+/// Resolves the current user from HttpContext JWT claims.
+/// Claim names are configurable via <see cref="ClaimMappingOptions"/>.
+/// </summary>
+public sealed class ClaimsCurrentUser : ICurrentUser
+{
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly ClaimMappingOptions _options;
+
+    public ClaimsCurrentUser(IHttpContextAccessor httpContextAccessor, ClaimMappingOptions options)
+    {
+        _httpContextAccessor = httpContextAccessor;
+        _options = options;
+    }
+
+    private ClaimsPrincipal? Principal => _httpContextAccessor.HttpContext?.User;
+
+    public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated ?? false;
+
+    public Guid? UserId
+    {
+        get
+        {
+            var claim = Principal?.FindFirstValue(_options.UserIdClaim);
+            return claim is not null && Guid.TryParse(claim, out var id) ? id : null;
+        }
+    }
+
+    public string? Email => Principal?.FindFirstValue(_options.EmailClaim);
+
+    public Guid? TenantId
+    {
+        get
+        {
+            var claim = Principal?.FindFirstValue(_options.TenantIdClaim);
+            return claim is not null && Guid.TryParse(claim, out var id) ? id : null;
+        }
+    }
+
+    public IReadOnlySet<string> Roles =>
+        Principal?.FindAll(_options.RoleClaim).Select(c => c.Value).ToHashSet()
+        ?? new HashSet<string>();
+
+    public IReadOnlySet<string> Permissions =>
+        Principal?.FindAll(_options.PermissionClaim).Select(c => c.Value).ToHashSet()
+        ?? new HashSet<string>();
+
+    public string? GetClaim(string claimType) => Principal?.FindFirstValue(claimType);
+}

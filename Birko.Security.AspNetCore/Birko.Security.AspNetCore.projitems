@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b3c4d5e6-f7a8-4b9c-8d1e-2f3a4b5c6d7f</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Security.AspNetCore</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- User -->
+    <Compile Include="$(MSBuildThisFileDirectory)User/ICurrentUser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)User/ClaimMappingOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)User/ClaimsCurrentUser.cs" />
+    <!-- Authentication -->
+    <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtClaimNames.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtAuthenticationOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtBearerExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authentication/TokenServiceAdapter.cs" />
+    <!-- Authorization -->
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization/ClaimsPermissionChecker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization/PermissionEndpointFilter.cs" />
+    <!-- Tenant -->
+    <Compile Include="$(MSBuildThisFileDirectory)Tenant/ITenantResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tenant/HeaderTenantResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tenant/SubdomainTenantResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tenant/TenantContextAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tenant/TenantMiddleware.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions/SecurityServiceExtensions.cs" />
+  </ItemGroup>
+</Project>
