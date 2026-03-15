@@ -13,6 +13,12 @@
     <Project Path="../Birko.MessageQueue.InMemory/Birko.MessageQueue.InMemory.shproj" />
     <Project Path="../Birko.MessageQueue.MQTT/Birko.MessageQueue.MQTT.shproj" />
   </Folder>
+  <Folder Name="/EventBus/">
+    <Project Path="../Birko.EventBus/Birko.EventBus.shproj" />
+    <Project Path="../Birko.EventBus.MessageQueue/Birko.EventBus.MessageQueue.shproj" />
+    <Project Path="../Birko.EventBus.Outbox/Birko.EventBus.Outbox.shproj" />
+    <Project Path="../Birko.EventBus.EventSourcing/Birko.EventBus.EventSourcing.shproj" />
+  </Folder>
   <Folder Name="/Caching/">
     <Project Path="../Birko.Caching/Birko.Caching.shproj" />
     <Project Path="../Birko.Caching.Redis/Birko.Caching.Redis.shproj" />
@@ -108,6 +114,7 @@
     <Project Path="../Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
     <Project Path="../Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
     <Project Path="../Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
+    <Project Path="../Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />

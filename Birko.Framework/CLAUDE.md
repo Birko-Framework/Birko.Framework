@@ -113,7 +113,13 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.MessageQueue.InMemory** - In-memory channel-based queue (testing/development)
 - **Birko.MessageQueue.MQTT** - MQTT implementation via MQTTnet (IoT, sensors, telemetry)
 
-### Planned Projects
+### Event Bus
+- **Birko.EventBus** - Core interfaces (IEvent, IEventBus, IEventHandler), in-process bus, pipeline behaviors, enrichment, deduplication, DI extensions
+- **Birko.EventBus.MessageQueue** - Distributed event bus over Birko.MessageQueue (EventEnvelope, AutoSubscriber, HostedService)
+- **Birko.EventBus.Outbox** - Transactional outbox pattern (OutboxEventBus decorator, OutboxProcessor, IOutboxStore, InMemoryOutboxStore)
+- **Birko.EventBus.EventSourcing** - EventStore-to-EventBus bridge (DomainEventPublished, EventStoreEventBus decorator, EventReplayService)
+
+### Planned Projects (See TODO.md for details)
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
 - **Birko.Telemetry** - Logging, metrics, distributed tracing
 - **Birko.Messaging** - Email, SMS, push notifications
@@ -209,6 +215,11 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Structures.Tests | [../Birko.Structures.Tests/CLAUDE.md](../Birko.Structures.Tests/CLAUDE.md) |
 | Birko.BackgroundJobs.Tests | [../Birko.BackgroundJobs.Tests/CLAUDE.md](../Birko.BackgroundJobs.Tests/CLAUDE.md) |
 | Birko.MessageQueue.Tests | [../Birko.MessageQueue.Tests/CLAUDE.md](../Birko.MessageQueue.Tests/CLAUDE.md) |
+| Birko.EventBus | [../Birko.EventBus/CLAUDE.md](../Birko.EventBus/CLAUDE.md) |
+| Birko.EventBus.MessageQueue | [../Birko.EventBus.MessageQueue/CLAUDE.md](../Birko.EventBus.MessageQueue/CLAUDE.md) |
+| Birko.EventBus.Outbox | [../Birko.EventBus.Outbox/CLAUDE.md](../Birko.EventBus.Outbox/CLAUDE.md) |
+| Birko.EventBus.EventSourcing | [../Birko.EventBus.EventSourcing/CLAUDE.md](../Birko.EventBus.EventSourcing/CLAUDE.md) |
+| Birko.EventBus.Tests | [../Birko.EventBus.Tests/CLAUDE.md](../Birko.EventBus.Tests/CLAUDE.md) |
 | Birko.Communication | [../Birko.Communication/CLAUDE.md](../Birko.Communication/CLAUDE.md) |
 | Birko.Communication.Network | [../Birko.Communication.Network/CLAUDE.md](../Birko.Communication.Network/CLAUDE.md) |
 | Birko.Communication.Hardware | [../Birko.Communication.Hardware/CLAUDE.md](../Birko.Communication.Hardware/CLAUDE.md) |

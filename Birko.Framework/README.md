@@ -17,6 +17,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Caching with in-memory and Redis backends
 - Security (password hashing, AES encryption, JWT tokens, RBAC)
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
+- Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
 - Background job processing with pluggable persistent queues
 - Data structures (trees, AVL trees, BST)
 - Helper utilities and extensions
@@ -110,6 +111,10 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.MessageQueue | Core message queue interfaces (pub/sub, point-to-point) |
 | Birko.MessageQueue.InMemory | In-memory channel-based queue (testing/development) |
 | Birko.MessageQueue.MQTT | MQTT implementation via MQTTnet (IoT, sensors, telemetry) |
+| Birko.EventBus | Core event bus (in-process, pipelines, deduplication, DI) |
+| Birko.EventBus.MessageQueue | Distributed event bus over MessageQueue providers |
+| Birko.EventBus.Outbox | Transactional outbox pattern (at-least-once delivery) |
+| Birko.EventBus.EventSourcing | EventStore-to-EventBus bridge and replay |
 | Birko.Structures | Tree data structures (AVL, BST) |
 | Birko.Helpers | Utility and extension methods |
 
@@ -123,6 +128,8 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Helpers.Tests | Helper utility tests |
 | Birko.Structures.Tests | Tree data structure tests |
 | Birko.BackgroundJobs.Tests | Background job processing tests |
+| Birko.MessageQueue.Tests | Message queue tests (core, InMemory, MQTT) |
+| Birko.EventBus.Tests | Event bus tests (core, distributed, outbox, event sourcing) |
 
 ## Architecture
 
@@ -172,6 +179,7 @@ dotnet test
 - [Security Guide](docs/security.md)
 - [Background Jobs Guide](docs/background-jobs.md)
 - [Message Queue Guide](docs/message-queue.md)
+- [Event Bus Guide](docs/event-bus.md) (In-process, Distributed, Outbox, Event Sourcing integration)
 - [Event Sourcing Guide](docs/event-sourcing.md)
 - [Data Synchronization Guide](docs/sync.md)
 - [Multi-Tenancy Guide](docs/tenant.md)
