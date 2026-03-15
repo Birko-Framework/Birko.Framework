@@ -111,7 +111,7 @@ public class SyncEntity : Entity
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core, Birko.Data.Stores
 
 ## Provider-Specific Sync
 
