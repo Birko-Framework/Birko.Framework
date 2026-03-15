@@ -17,7 +17,8 @@ dotnet add package Birko.Data.Migrations
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (Settings)
 
 ## Usage
 

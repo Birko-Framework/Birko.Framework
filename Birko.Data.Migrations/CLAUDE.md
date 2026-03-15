@@ -60,7 +60,7 @@ runner.RunMigrations();
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
 
 ## Provider-Specific Migrations
 
