@@ -9,16 +9,16 @@
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IBaseRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IAsyncRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IBulkRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\IAsyncBulkRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractAsyncRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractBulkRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AbstractAsyncBulkRepository.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\RepositoryLocator.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Repositories\ServiceCollectionExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IBaseRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncBulkRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)RepositoryLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ServiceCollectionExtensions.cs" />
   </ItemGroup>
 </Project>
