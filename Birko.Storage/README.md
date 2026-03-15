@@ -14,7 +14,7 @@ File and blob storage abstraction for the Birko Framework.
 
 ## Dependencies
 
-- Birko.Data (for Settings base classes)
+- Birko.Data.Stores (for Settings base classes)
 
 ## Usage
 

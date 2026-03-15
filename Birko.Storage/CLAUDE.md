@@ -25,7 +25,7 @@ Birko.Storage/
 ```
 
 ## Dependencies
-- **Birko.Data** — Settings/ISettings base classes
+- **Birko.Data.Stores** — Settings/ISettings base classes
 
 ## Key Design Decisions
 - **Async-first** — All operations return Task for cloud backend compatibility
