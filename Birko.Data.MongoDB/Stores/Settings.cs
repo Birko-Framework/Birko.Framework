@@ -5,7 +5,7 @@ namespace Birko.Data.MongoDB.Stores
 {
     /// <summary>
     /// MongoDB-specific settings for database connection.
-    /// Extends RemoteSettings — inherits Location (host), Port, UserName, Password, UseSsl from the framework hierarchy.
+    /// Extends RemoteSettings — inherits Location (host), Port, UserName, Password, UseSecure from the framework hierarchy.
     /// </summary>
     public class Settings : Data.Stores.RemoteSettings, Data.Models.ILoadable<Settings>
     {
@@ -75,7 +75,7 @@ namespace Birko.Data.MongoDB.Stores
                 queryParams.Add($"replicaSet={ReplicaSet}");
             }
 
-            if (UseSsl)
+            if (UseSecure)
             {
                 queryParams.Add("tls=true");
             }
