@@ -80,7 +80,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Models.SEO | SEO metadata, URL aliases, sitemaps |
 | Birko.Models.Accounting | Currency, Tax, PriceGroup, MeasureUnit |
 | Birko.Models.Customers | Address, Customer, InvoiceAddress |
-| Birko.Models.Users | User, Agenda, UserAgenda |
+| Birko.Models.Users | User, UserLogin, UserProfile, Role, RolePermission, UserRole, Agenda |
 | Birko.Models.Warehouse | Items, variants, repositories, documents |
 
 ### Communication

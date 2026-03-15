@@ -90,7 +90,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Models.SEO** - SEO models
 - **Birko.Models.Accounting** - Accounting models (Currency, Tax, PriceGroup, MeasureUnit)
 - **Birko.Models.Customers** - Customer models (Address, Customer, InvoiceAddress)
-- **Birko.Models.Users** - User and Agenda models
+- **Birko.Models.Users** - User, authentication (UserLogin), profile (UserProfile), RBAC (Role, RolePermission, UserRole), Agenda
 - **Birko.Models.Warehouse** - Warehouse/Inventory models (Item, ItemVariant, Repository, WareHouseDocument)
 
 ### Validation
