@@ -21,6 +21,7 @@ Helper utilities and extensions for Birko data layer operations.
 - Guid extensions
 
 ### Helpers
+- **PathValidator** — Path security utilities (ValidateUserPath, SanitizePath, NormalizePath, CombineAndValidate, CombineAndValidateUnchecked)
 - Data conversion helpers
 - Validation helpers
 - Serialization helpers

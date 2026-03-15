@@ -110,11 +110,93 @@ namespace Birko.Helpers
         }
 
         /// <summary>
+        /// Validates a user-provided path is safe: rejects path traversal (..), absolute paths,
+        /// and control characters. Throws <see cref="ArgumentException"/> on violations.
+        /// Unlike <see cref="SanitizePath"/>, this method rejects rather than strips dangerous patterns.
+        /// </summary>
+        /// <param name="path">The user-provided path to validate.</param>
+        /// <param name="paramName">Optional parameter name for the exception.</param>
+        /// <exception cref="ArgumentException">Thrown when the path contains dangerous patterns.</exception>
+        public static void ValidateUserPath(string path, string? paramName = null)
+        {
+            paramName ??= nameof(path);
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException("Path cannot be null or empty.", paramName);
+            }
+
+            if (path.Contains("..", StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"Path traversal detected in: {path}", paramName);
+            }
+
+            if (Path.IsPathRooted(path))
+            {
+                throw new ArgumentException($"Absolute paths are not allowed: {path}", paramName);
+            }
+
+            foreach (var c in path)
+            {
+                if (char.IsControl(c))
+                {
+                    throw new ArgumentException($"Path contains control characters: {path}", paramName);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Normalizes a user-provided path: replaces backslashes with forward slashes and trims leading slashes.
+        /// </summary>
+        /// <param name="path">The path to normalize.</param>
+        /// <returns>A normalized path using forward slashes.</returns>
+        public static string NormalizePath(string path)
+        {
+            return path.Replace('\\', '/').TrimStart('/');
+        }
+
+        /// <summary>
+        /// Validates a user path and combines it with a base directory, without requiring
+        /// the base directory to already exist. Suitable for storage paths where directories
+        /// are created on first write.
+        /// </summary>
+        /// <param name="basePath">The base directory path.</param>
+        /// <param name="userPath">The user-provided relative path.</param>
+        /// <returns>The validated, normalized full path.</returns>
+        /// <exception cref="ArgumentException">Thrown when path traversal is detected.</exception>
+        public static string CombineAndValidateUnchecked(string basePath, string userPath)
+        {
+            if (string.IsNullOrWhiteSpace(basePath))
+            {
+                throw new ArgumentException("Base path cannot be null or empty.", nameof(basePath));
+            }
+
+            if (string.IsNullOrWhiteSpace(userPath))
+            {
+                throw new ArgumentException("User path cannot be null or empty.", nameof(userPath));
+            }
+
+            var normalizedBasePath = Path.GetFullPath(basePath);
+            var sanitizedUserPath = SanitizePath(userPath);
+            var combinedPath = Path.Combine(normalizedBasePath, sanitizedUserPath);
+            var normalizedCombinedPath = Path.GetFullPath(combinedPath);
+
+            if (!normalizedCombinedPath.StartsWith(normalizedBasePath, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException(
+                    $"Path traversal detected. The path '{userPath}' attempts to access directories outside the base path.",
+                    nameof(userPath));
+            }
+
+            return normalizedCombinedPath;
+        }
+
+        /// <summary>
         /// Sanitizes a user-provided path component by removing potentially dangerous patterns.
         /// </summary>
         /// <param name="path">The path to sanitize.</param>
         /// <returns>A sanitized path safe for use with the base directory.</returns>
-        private static string SanitizePath(string path)
+        public static string SanitizePath(string path)
         {
             // Remove any null characters
             path = path.Replace("\0", string.Empty);
