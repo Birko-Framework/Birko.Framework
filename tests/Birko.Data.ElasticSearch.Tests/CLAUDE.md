@@ -16,7 +16,8 @@ Unit tests for the Birko.Data.ElasticSearch project - expression parsing and que
 - `TestResources/Models/DateModel.cs` - Test fixture model
 
 ## Dependencies
-- Birko.Data (via .projitems) - core models and interfaces
+- Birko.Data.Core (via .projitems) - core models and filters
+- Birko.Data.Stores (via .projitems) - store interfaces and settings
 - Birko.Data.ElasticSearch (via .projitems) - Elasticsearch expression parser
 - Birko.Data.SQL (via .projitems) - SQL expression parser (used in cross-reference test)
 - Birko.Data.SQL.View (via .projitems) - SQL view generation
