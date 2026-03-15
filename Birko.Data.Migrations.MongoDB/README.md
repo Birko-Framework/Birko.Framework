@@ -16,7 +16,8 @@ dotnet add package Birko.Data.Migrations.MongoDB
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (Settings)
 - Birko.Data.Migrations
 - Birko.Data.MongoDB
 
