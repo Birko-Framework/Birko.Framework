@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f52</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.EventBus.Outbox</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\OutboxStatus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\OutboxEntry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\OutboxOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IOutboxStore.cs" />
+    <!-- Stores -->
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\InMemoryOutboxStore.cs" />
+    <!-- Publishing -->
+    <Compile Include="$(MSBuildThisFileDirectory)Publishing\OutboxEventBus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Publishing\OutboxProcessor.cs" />
+    <!-- Hosting -->
+    <Compile Include="$(MSBuildThisFileDirectory)Hosting\OutboxProcessorHostedService.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\OutboxServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
