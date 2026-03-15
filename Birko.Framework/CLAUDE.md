@@ -68,6 +68,8 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
 - **Birko.Security.AspNetCore.Tests** - Unit tests for ASP.NET Core security integration (JWT auth, ICurrentUser, permissions, tenant resolution, middleware)
 - **Birko.Security.BCrypt.Tests** - Unit tests for BCrypt password hashing
+- **Birko.Security.Vault.Tests** - Unit tests for HashiCorp Vault secret provider
+- **Birko.Security.AzureKeyVault.Tests** - Unit tests for Azure Key Vault secret provider
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
 
 ### Messaging
@@ -105,7 +107,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Redis** - Shared Redis infrastructure (RedisSettings extending RemoteSettings, RedisConnectionManager)
 
 ### Security
+- **Birko.Security** - Password hashing (PBKDF2), AES-256-GCM encryption, token provider interfaces, secret provider interface (ISecretProvider, SecretResult), static token auth (moved from Birko.Communication.Authentication), RBAC interfaces
 - **Birko.Security.BCrypt** - BCrypt password hashing (pure C# Blowfish implementation, configurable work factor, NeedsRehash support)
+- **Birko.Security.Vault** - HashiCorp Vault secret provider (ISecretProvider, KV v1/v2, HTTP API, VaultSettings extends PasswordSettings)
+- **Birko.Security.AzureKeyVault** - Azure Key Vault secret provider (ISecretProvider, OAuth2 client credentials, REST API, AzureKeyVaultSettings extends RemoteSettings)
 - **Birko.Security.Jwt** - JWT implementation of ITokenProvider
 - **Birko.Security.AspNetCore** - ASP.NET Core integration: JWT Bearer authentication setup, ICurrentUser from claims, ClaimsPermissionChecker, tenant resolution middleware (header/subdomain), Minimal API permission endpoint filters, one-line DI via AddBirkoSecurity()
 
@@ -137,7 +142,6 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Planned Projects (See TODO.md for details)
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
-- **Birko.Security.BCrypt** - BCrypt password hashing
 - **Birko.Workflow** - State machine and business process automation
 - **Birko.Time** - Time zone, business calendar, working hours
 - **Birko.Health** - Health checks and diagnostics
@@ -275,6 +279,10 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Security.AspNetCore | [../Birko.Security.AspNetCore/CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md) |
 | Birko.Security.BCrypt | [../Birko.Security.BCrypt/CLAUDE.md](../Birko.Security.BCrypt/CLAUDE.md) |
 | Birko.Security.BCrypt.Tests | [../Birko.Security.BCrypt.Tests/CLAUDE.md](../Birko.Security.BCrypt.Tests/CLAUDE.md) |
+| Birko.Security.Vault | [../Birko.Security.Vault/CLAUDE.md](../Birko.Security.Vault/CLAUDE.md) |
+| Birko.Security.Vault.Tests | [../Birko.Security.Vault.Tests/CLAUDE.md](../Birko.Security.Vault.Tests/CLAUDE.md) |
+| Birko.Security.AzureKeyVault | [../Birko.Security.AzureKeyVault/CLAUDE.md](../Birko.Security.AzureKeyVault/CLAUDE.md) |
+| Birko.Security.AzureKeyVault.Tests | [../Birko.Security.AzureKeyVault.Tests/CLAUDE.md](../Birko.Security.AzureKeyVault.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
@@ -389,7 +397,9 @@ Existing folder groups in both files:
 - **Helpers/** — Birko.Helpers, Birko.Structures
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
-- **Security/** — Birko.Security, Birko.Security.Jwt
+- **Security/** — Birko.Security, Birko.Security.Jwt, Birko.Security.AspNetCore, Birko.Security.BCrypt, Birko.Security.Vault, Birko.Security.AzureKeyVault
+- **Storage/** — Birko.Storage
+- **Telemetry/** — Birko.Telemetry
 - **Tests/** — All *.Tests projects
 - **Validation/** — Birko.Validation
 

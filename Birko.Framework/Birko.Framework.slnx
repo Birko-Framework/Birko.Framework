@@ -118,6 +118,8 @@
     <Project Path="../Birko.Security.Jwt/Birko.Security.Jwt.shproj" />
     <Project Path="../Birko.Security.AspNetCore/Birko.Security.AspNetCore.shproj" />
     <Project Path="../Birko.Security.BCrypt/Birko.Security.BCrypt.shproj" />
+<Project Path="../Birko.Security.Vault/Birko.Security.Vault.shproj" />
+    <Project Path="../Birko.Security.AzureKeyVault/Birko.Security.AzureKeyVault.shproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
@@ -132,6 +134,9 @@
     <Project Path="../Birko.Security.AspNetCore.Tests/Birko.Security.AspNetCore.Tests.csproj" />
     <Project Path="../Birko.Storage.Tests/Birko.Storage.Tests.csproj" />
     <Project Path="../Birko.Telemetry.Tests/Birko.Telemetry.Tests.csproj" />
+    <Project Path="../Birko.Security.BCrypt.Tests/Birko.Security.BCrypt.Tests.csproj" />
+    <Project Path="../Birko.Security.Vault.Tests/Birko.Security.Vault.Tests.csproj" />
+    <Project Path="../Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />

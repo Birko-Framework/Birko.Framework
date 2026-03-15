@@ -254,9 +254,58 @@ var info = adapter.ValidateToken(token.Token);
 // info.UserId, info.Email, info.TenantId, info.Roles, info.Permissions
 ```
 
+## Secret Management
+
+### ISecretProvider
+
+```csharp
+public interface ISecretProvider
+{
+    Task<string?> GetSecretAsync(string key, CancellationToken ct = default);
+    Task<SecretResult?> GetSecretWithMetadataAsync(string key, CancellationToken ct = default);
+    Task SetSecretAsync(string key, string value, CancellationToken ct = default);
+    Task DeleteSecretAsync(string key, CancellationToken ct = default);
+    Task<IReadOnlyList<string>> ListSecretsAsync(string? path = null, CancellationToken ct = default);
+}
+```
+
+`SecretResult` includes `Key`, `Value`, `CreatedAt`, `UpdatedAt`, `ExpiresAt`, `Version`, and `Metadata`.
+
+### HashiCorp Vault (Birko.Security.Vault)
+
+Uses Vault HTTP API directly — no VaultSharp dependency. Supports KV v1 and v2. `VaultSettings` extends `PasswordSettings` (Location=Address, Password=Token, Name=MountPath).
+
+```csharp
+using Birko.Security.Vault;
+
+var settings = new VaultSettings("https://vault.example.com:8200", "hvs.token", "secret");
+settings.KvVersion = 2;
+
+using var vault = new VaultSecretProvider(settings);
+await vault.SetSecretAsync("myapp/db-pass", "s3cret");
+var password = await vault.GetSecretAsync("myapp/db-pass");
+var healthy = await vault.IsHealthyAsync();
+```
+
+### Azure Key Vault (Birko.Security.AzureKeyVault)
+
+Uses Key Vault REST API with OAuth2 client credentials — no Azure SDK dependency. `AzureKeyVaultSettings` extends `RemoteSettings` (Location=VaultUri, UserName=ClientId, Password=ClientSecret, Name=TenantId).
+
+```csharp
+using Birko.Security.AzureKeyVault;
+
+var settings = new AzureKeyVaultSettings("https://myvault.vault.azure.net/", "tenant-id", "client-id", "client-secret");
+
+using var akv = new AzureKeyVaultSecretProvider(settings);
+await akv.SetSecretAsync("db-password", "s3cret");
+var password = await akv.GetSecretAsync("db-password");
+```
+
 ## See Also
 
 - [Birko.Security CLAUDE.md](../Birko.Security/CLAUDE.md)
 - [Birko.Security.Jwt CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md)
 - [Birko.Security.AspNetCore CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md)
 - [Birko.Security.BCrypt CLAUDE.md](../Birko.Security.BCrypt/CLAUDE.md)
+- [Birko.Security.Vault CLAUDE.md](../Birko.Security.Vault/CLAUDE.md)
+- [Birko.Security.AzureKeyVault CLAUDE.md](../Birko.Security.AzureKeyVault/CLAUDE.md)

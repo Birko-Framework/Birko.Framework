@@ -15,7 +15,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Domain model libraries (Product, Category, SEO, Accounting, Customers, Users, Warehouse)
 - Fluent validation framework
 - Caching with in-memory and Redis backends
-- Security (password hashing, AES encryption, JWT tokens, RBAC, ASP.NET Core integration)
+- Security (password hashing with PBKDF2 and BCrypt, AES encryption, JWT tokens, RBAC, ASP.NET Core integration)
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
 - Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
@@ -108,6 +108,9 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Security | Password hashing, AES encryption, RBAC interfaces |
 | Birko.Security.Jwt | JWT token provider |
 | Birko.Security.AspNetCore | ASP.NET Core integration (JWT Bearer auth, ICurrentUser, tenant middleware, permission filters) |
+| Birko.Security.BCrypt | BCrypt password hashing (pure C#, configurable work factor) |
+| Birko.Security.Vault | HashiCorp Vault secret provider (KV v1/v2, HTTP API) |
+| Birko.Security.AzureKeyVault | Azure Key Vault secret provider (OAuth2, REST API) |
 | Birko.BackgroundJobs | Background job processing framework |
 | Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
 | Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
@@ -144,6 +147,9 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Storage.Tests | File storage tests (core types, LocalFileStorage, extensions) |
 | Birko.Messaging.Tests | Messaging tests (core types, email, templates) |
 | Birko.Telemetry.Tests | Telemetry tests (conventions, store wrappers, metrics, middleware) |
+| Birko.Security.BCrypt.Tests | BCrypt password hashing tests |
+| Birko.Security.Vault.Tests | Vault secret provider tests |
+| Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
 
 ## Architecture
 
