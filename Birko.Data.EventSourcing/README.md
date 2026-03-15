@@ -19,7 +19,8 @@ dotnet add package Birko.Data.EventSourcing
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - System.Text.Json
 
 ## Usage
@@ -63,7 +64,8 @@ var pastState = repo.GetAtTime(id, someDate); // Temporal query
 
 ## Related Projects
 
-- [Birko.Data](../Birko.Data/) - Core interfaces
+- [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
+- [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 
 ## License
 

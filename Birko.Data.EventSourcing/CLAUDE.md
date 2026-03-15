@@ -1,7 +1,7 @@
 # Birko.Data.EventSourcing
 
 ## Overview
-Event sourcing implementation for Birko.Data providing audit trails and event replay capabilities.
+Event sourcing implementation for the Birko data layer providing audit trails and event replay capabilities.
 
 ## Project Location
 `C:\Source\Birko.Data.EventSourcing\`
@@ -190,7 +190,8 @@ public class CustomerSummaryProjection
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - System.Text.Json (or Newtonsoft.Json)
 
 ## Best Practices
