@@ -24,7 +24,9 @@
     <PackageReference Include="Moq" Version="4.20.72" />
   </ItemGroup>
 
-  <Import Project="..\Birko.Data\Birko.Data.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.SQL\Birko.Data.SQL.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
