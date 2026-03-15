@@ -22,7 +22,7 @@ Customer management models for the Birko Framework.
 
 ## Dependencies
 
-- Birko.Data (for base classes and attributes)
+- Birko.Data.Core (for base classes and attributes)
 - Birko.Models.Accounting (for PriceGroup reference)
 
 ## Maintenance
