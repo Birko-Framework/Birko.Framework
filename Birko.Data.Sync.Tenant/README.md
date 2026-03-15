@@ -16,7 +16,8 @@ dotnet add package Birko.Data.Sync.Tenant
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.Sync
 - Birko.Data.Tenant
 
