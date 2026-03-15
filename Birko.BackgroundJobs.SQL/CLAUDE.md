@@ -2,7 +2,7 @@
 
 ## Overview
 
-SQL-based persistent job queue implementing `IJobQueue` from Birko.BackgroundJobs. Built on Birko.Data and Birko.Data.SQL — uses `AsyncDataBaseBulkStore<DB, JobDescriptorModel>` for all database operations.
+SQL-based persistent job queue implementing `IJobQueue` from Birko.BackgroundJobs. Built on the Birko data layer and Birko.Data.SQL — uses `AsyncDataBaseBulkStore<DB, JobDescriptorModel>` for all database operations.
 
 ## Structure
 
@@ -18,7 +18,8 @@ Birko.BackgroundJobs.SQL/
 ## Dependencies
 
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, JobStatus, RetryPolicy)
-- Birko.Data (AbstractModel, stores, settings, OrderBy)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings, PasswordSettings, OrderBy)
 - Birko.Data.SQL (AsyncDataBaseBulkStore, AbstractConnector, attributes, DataBase factory)
 
 ## Key Design Decisions
@@ -27,7 +28,7 @@ Birko.BackgroundJobs.SQL/
 - **AbstractModel-based persistence** — `JobDescriptorModel` extends `AbstractModel` with `[Table]`/`[NamedField]`/`[PrimaryField]` attributes for automatic SQL mapping
 - **Store-based CRUD** — All operations go through `AsyncDataBaseBulkStore<DB, JobDescriptorModel>` — no raw ADO.NET
 - **Expression-based queries** — Dequeue uses lambda expressions (`j => j.Status == pending`) parsed by the SQL connector
-- **PasswordSettings for connection** — Same settings pattern as all Birko.Data.SQL stores
+- **PasswordSettings for connection** — Same settings pattern (from Birko.Data.Stores) as all Birko.Data.SQL stores
 - **Store exposed publicly** — `SqlJobQueue.Store` property allows external transaction context (`SetTransactionContext`) and SqlUnitOfWork integration
 - **Status as int** — `JobStatus` enum stored as int column for SQL compatibility; model uses `int Status` property with casts
 - **Metadata as JSON** — `Dictionary<string, string>` serialized to a single TEXT column

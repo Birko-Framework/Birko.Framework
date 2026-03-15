@@ -1,13 +1,13 @@
 # Birko.BackgroundJobs.SQL
 
-SQL-based persistent job queue for the Birko Background Jobs framework. Built on Birko.Data and Birko.Data.SQL for seamless integration with the framework's data access layer.
+SQL-based persistent job queue for the Birko Background Jobs framework. Built on the Birko data layer and Birko.Data.SQL for seamless integration with the framework's data access layer.
 
 ## Features
 
 - **Persistent storage** — Jobs survive process restarts, stored via Birko.Data.SQL stores
 - **Auto-schema creation** — Table created automatically by the SQL connector on first use
 - **Any SQL provider** — Works with any `AbstractConnector` (PostgreSQL, MSSql, MySQL, SQLite)
-- **Expression-based queries** — Uses Birko.Data lambda expressions for filtering
+- **Expression-based queries** — Uses Birko.Data.Stores lambda expressions for filtering
 - **Transaction support** — Integrates with `SqlTransactionContext` for atomic operations
 - **Retry with backoff** — Failed jobs are re-scheduled with configurable delay
 - **Advisory locking** — Optional `SqlJobLockProvider` for cross-worker coordination
@@ -15,7 +15,8 @@ SQL-based persistent job queue for the Birko Background Jobs framework. Built on
 ## Dependencies
 
 - Birko.BackgroundJobs (core interfaces)
-- Birko.Data (AbstractModel, stores, settings)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.SQL (AsyncDataBaseBulkStore, connectors, attributes)
 
 ## Usage
