@@ -188,6 +188,7 @@ Queue backends:
 - **MongoDB** (`Birko.BackgroundJobs.MongoDB`) - `MongoDBJobQueue`
 - **RavenDB** (`Birko.BackgroundJobs.RavenDB`) - `RavenDBJobQueue`
 - **JSON** (`Birko.BackgroundJobs.JSON`) - `JsonJobQueue` for dev/testing
+- **Redis** (`Birko.BackgroundJobs.Redis`) - `RedisJobQueue` via StackExchange.Redis
 
 ### 8. Message Queue Layer (Birko.MessageQueue)
 Asynchronous messaging abstractions for pub/sub and point-to-point patterns:
@@ -212,7 +213,42 @@ Queue backends:
 - **InMemory** (`Birko.MessageQueue.InMemory`) - Channel-based in-process queue for testing/dev
 - **MQTT** (`Birko.MessageQueue.MQTT`) - MQTTnet-based client for IoT/sensor messaging
 
-### 9. Communication Layer
+### 9. Event Bus Layer (Birko.EventBus)
+In-process and distributed event-driven architecture:
+- `IEvent` - Marker interface for domain events (EventId, OccurredAt, CorrelationId)
+- `IEventBus` - Publish events, register handlers
+- `IEventHandler<T>` - Typed event handler
+- `IPipelineBehavior<T>` - Cross-cutting pipeline (logging, validation, enrichment)
+- `IEventDeduplicator` - Prevent duplicate event processing
+- DI extensions for handler auto-registration
+
+Distribution layers:
+- **Birko.EventBus.MessageQueue** - Distributed event bus over any Birko.MessageQueue provider (EventEnvelope, AutoSubscriber, HostedService)
+- **Birko.EventBus.Outbox** - Transactional outbox pattern (OutboxEventBus decorator, OutboxProcessor, IOutboxStore)
+- **Birko.EventBus.EventSourcing** - EventStore-to-EventBus bridge (DomainEventPublished, EventStoreEventBus decorator, EventReplayService)
+
+### 10. Storage Layer (Birko.Storage)
+File and blob storage abstraction:
+- `IFileStorage` - Upload, Download, Delete, Exists, List, Copy, Move (async, stream-based)
+- `StorageResult<T>` - Distinguishes "not found" from success
+- `FileReference` - Metadata (path, size, content type, ETag, timestamps)
+- `StorageOptions` - MaxFileSize, AllowedContentTypes, OverwriteExisting, custom Metadata
+- `IPresignedUrlStorage` - Optional interface for cloud providers (presigned upload/download URLs)
+- **LocalFileStorage** - Built-in filesystem implementation with `.meta.json` companion files
+- Path security: rejects traversal attacks, absolute paths, null bytes, control characters
+
+### 11. Messaging Layer (Birko.Messaging)
+Unified interfaces for email, SMS, and push notifications:
+- `IMessage` - Base message interface (Recipients, Body, Metadata, ScheduledAt)
+- `IMessageSender<T>` - Generic sender with batch support
+- `MessageResult` - Static factory (Succeeded/Failed), never throws for delivery failures
+- `MessageAddress` - Recipient value object (email, phone, device token)
+- **EmailMessage** - Full email with CC, BCC, ReplyTo, attachments, HTML/plain text
+- **SmtpEmailSender** - Built-in SMTP implementation via System.Net.Mail
+- **ITemplateEngine** / **StringTemplateEngine** - `{{placeholder}}` templates with nested property support
+- **SmsMessage** / **PushMessage** - Interface-only (provider implementations planned)
+
+### 12. Communication Layer
 
 #### Base (Birko.Communication)
 - `AbstractPort` with `SubscribeProcessData()` delegate pattern for data processing
@@ -226,7 +262,22 @@ Queue backends:
 - **SOAP** - SOAP client
 - **SSE** - Server-Sent Events with middleware
 
-### 10. Helper Libraries
+### 13. Security Layer — ASP.NET Core Integration (Birko.Security.AspNetCore)
+Bridges Birko.Security into ASP.NET Core:
+- `AddBirkoSecurity()` - One-line DI registration (JWT Bearer auth, ICurrentUser, IPermissionChecker, ITenantResolver, ITenantContext)
+- `ICurrentUser` / `ClaimsCurrentUser` - Access authenticated user (UserId, Email, TenantId, Roles, Permissions)
+- `ClaimsPermissionChecker` - Permission checking from JWT claims (supports wildcard `"*"`)
+- `RequirePermission()` - Minimal API endpoint filter
+- **Tenant Resolution** - Header (`X-Tenant-Id`), Subdomain, or Custom via `ITenantResolver`
+- `TenantMiddleware` - Per-request tenant resolution into scoped `ITenantContext`
+- `TokenServiceAdapter` - Structured request/response wrapper around ITokenProvider
+
+### 14. Redis Infrastructure (Birko.Redis)
+Shared Redis connection management:
+- `RedisSettings` - Extends `RemoteSettings` with Redis-specific configuration
+- `RedisConnectionManager` - Singleton connection multiplexer, used by Birko.Caching.Redis and Birko.BackgroundJobs.Redis
+
+### 15. Helper Libraries
 - **Birko.Helpers** - StringHelper, HtmlHelper, ObjectHelper, EnumerableHelper, PathValidator
 - **Birko.Structures** - Generic data structures (Tree, AVLTree, BinaryNode)
 
@@ -263,7 +314,8 @@ Models -> Data Interfaces -> Abstract Classes -> Provider Implementations
                                            -> Repositories
                                            -> ViewModel Repositories
                                            -> Features (Migrations, Sync, Tenant, EventSourcing, Patterns)
-                                           -> Validation, Caching, Security, MessageQueue
+                                           -> Validation, Caching, Security, MessageQueue, EventBus
+                                           -> Storage, Messaging
 ```
 
 ## Extensibility

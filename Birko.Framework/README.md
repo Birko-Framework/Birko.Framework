@@ -103,6 +103,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Validation | Fluent validation framework |
 | Birko.Caching | In-memory caching with ICache interface |
 | Birko.Caching.Redis | Redis-backed cache |
+| Birko.Redis | Shared Redis infrastructure (RedisSettings, RedisConnectionManager) |
 | Birko.Security | Password hashing, AES encryption, RBAC interfaces |
 | Birko.Security.Jwt | JWT token provider |
 | Birko.Security.AspNetCore | ASP.NET Core integration (JWT Bearer auth, ICurrentUser, tenant middleware, permission filters) |
