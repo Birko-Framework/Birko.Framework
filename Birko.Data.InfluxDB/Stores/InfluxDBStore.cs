@@ -281,6 +281,13 @@ namespace Birko.Data.InfluxDB.Stores
                        $"|> sort(columns: [\"_time\"], desc: true) " +
                        $"|> unique(column: \"Guid\")";
 
+            if (orderBy?.Fields.Count > 0)
+            {
+                var columns = string.Join(", ", orderBy.Fields.Select(f => $"\"{f.PropertyName}\""));
+                var desc = orderBy.Fields[0].Descending ? "true" : "false";
+                flux += $" |> sort(columns: [{columns}], desc: {desc})";
+            }
+
             if (offset.HasValue)
             {
                 flux += $" |> limit(n: {int.MaxValue}, offset: {offset.Value})";
