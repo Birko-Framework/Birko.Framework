@@ -1,7 +1,7 @@
 # Birko.Data.Migrations.SQL
 
 ## Overview
-SQL-specific database migrations for Birko.Data.
+SQL-specific database migrations for the Birko data layer.
 
 ## Project Location
 `C:\Source\Birko.Data.Migrations.SQL\`
@@ -136,7 +136,8 @@ runner.RollbackToVersion("2024.01.01");
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - Birko.Data.Migrations
 - Birko.Data.SQL
 
