@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace Birko.Models.SEO.Filters
 {
-    public class SEOByPath<T> : IRepositoryFilter<T> where T : SEO
+    public class SEOByPath<T> : IFilter<T> where T : SEO
     {
         public string Path { get; private set; }
         public bool Exact { get; private set; } = false;
