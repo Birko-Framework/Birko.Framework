@@ -71,6 +71,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Security.Vault.Tests** - Unit tests for HashiCorp Vault secret provider
 - **Birko.Security.AzureKeyVault.Tests** - Unit tests for Azure Key Vault secret provider
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
+- **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
 
 ### Messaging
 - **Birko.Messaging** - Core messaging interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP email sender, string template engine
@@ -98,6 +99,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Validation
 - **Birko.Validation** - Fluent validation framework (IValidator<T>, AbstractValidator<T>, built-in rules, store wrappers)
+
+### Rules
+- **Birko.Rules** - Data-driven rule engine (IRule, Rule, RuleGroup, RuleSet, RuleEvaluator, comparison operators, dictionary/object contexts)
+- **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator with all operators)
 
 ### Caching
 - **Birko.Caching** - Unified caching interface (ICache, MemoryCache, CacheSerializer)
@@ -261,6 +266,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Models.Users | [../Birko.Models.Users/CLAUDE.md](../Birko.Models.Users/CLAUDE.md) |
 | Birko.Models.Warehouse | [../Birko.Models.Warehouse/CLAUDE.md](../Birko.Models.Warehouse/CLAUDE.md) |
 | Birko.Validation | [../Birko.Validation/CLAUDE.md](../Birko.Validation/CLAUDE.md) |
+| Birko.Rules | [../Birko.Rules/CLAUDE.md](../Birko.Rules/CLAUDE.md) |
+| Birko.Rules.Tests | [../Birko.Rules.Tests/CLAUDE.md](../Birko.Rules.Tests/CLAUDE.md) |
 | Birko.BackgroundJobs | [../Birko.BackgroundJobs/CLAUDE.md](../Birko.BackgroundJobs/CLAUDE.md) |
 | Birko.BackgroundJobs.SQL | [../Birko.BackgroundJobs.SQL/CLAUDE.md](../Birko.BackgroundJobs.SQL/CLAUDE.md) |
 | Birko.BackgroundJobs.ElasticSearch | [../Birko.BackgroundJobs.ElasticSearch/CLAUDE.md](../Birko.BackgroundJobs.ElasticSearch/CLAUDE.md) |
@@ -343,6 +350,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Messaging](docs/messaging.md)
   - [Telemetry](docs/telemetry.md)
   - [Security](docs/security.md)
+  - [Rules Engine](docs/rules.md)
   - [Data Sync](docs/sync.md)
   - [Multi-Tenancy](docs/tenant.md)
 
@@ -401,6 +409,7 @@ Existing folder groups in both files:
 - **Storage/** — Birko.Storage
 - **Telemetry/** — Birko.Telemetry
 - **Tests/** — All *.Tests projects
+- **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
 
 ### Test Requirements

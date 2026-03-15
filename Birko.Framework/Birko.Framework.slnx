@@ -137,8 +137,12 @@
     <Project Path="../Birko.Security.BCrypt.Tests/Birko.Security.BCrypt.Tests.csproj" />
     <Project Path="../Birko.Security.Vault.Tests/Birko.Security.Vault.Tests.csproj" />
     <Project Path="../Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
+    <Project Path="../Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
+  </Folder>
+  <Folder Name="/Rules/">
+    <Project Path="../Birko.Rules/Birko.Rules.shproj" />
   </Folder>
 </Solution>
