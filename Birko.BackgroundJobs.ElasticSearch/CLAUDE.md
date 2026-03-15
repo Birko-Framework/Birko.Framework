@@ -17,7 +17,8 @@ Elasticsearch-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncEl
 
 ## Dependencies
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy)
-- Birko.Data (AbstractModel, OrderBy)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (OrderBy)
 - Birko.Data.ElasticSearch (AsyncElasticSearchStore, Settings)
 - NEST / Elasticsearch.Net
 

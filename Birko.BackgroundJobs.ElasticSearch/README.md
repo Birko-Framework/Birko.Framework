@@ -6,14 +6,15 @@ Elasticsearch-based persistent job queue for the Birko Background Jobs framework
 
 - **Persistent storage** — Jobs stored as Elasticsearch documents via `AsyncElasticSearchStore`
 - **Auto-index creation** — Index created automatically on first use
-- **Expression-based queries** — Uses Birko.Data lambda expressions for filtering
+- **Expression-based queries** — Uses Birko.Data.Stores lambda expressions for filtering
 - **Retry with backoff** — Failed jobs are re-scheduled with configurable delay
 - **Scroll-based reads** — Leverages ES scroll API for large result sets
 
 ## Dependencies
 
 - Birko.BackgroundJobs (core interfaces)
-- Birko.Data (AbstractModel, stores, settings)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.ElasticSearch (AsyncElasticSearchStore, NEST)
 
 ## Usage
