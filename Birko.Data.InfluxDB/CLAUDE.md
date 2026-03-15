@@ -1,7 +1,7 @@
 # Birko.Data.InfluxDB
 
 ## Overview
-InfluxDB implementation for Birko.Data providing time-series database storage.
+InfluxDB implementation for the Birko data layer providing time-series database storage.
 
 ## Project Location
 `C:\Source\Birko.Data.InfluxDB\`
@@ -120,7 +120,8 @@ public override IEnumerable<KeyValuePair<Metric, Guid>> CreateAll(IEnumerable<Me
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - InfluxDB.Client (official InfluxDB 2.x .NET client)
 - InfluxDB Server 2.x
 
