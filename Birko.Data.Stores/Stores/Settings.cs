@@ -182,9 +182,9 @@ namespace Birko.Data.Stores
         public int Port { get; set; }
 
         /// <summary>
-        /// Gets or sets whether to use SSL/TLS for the connection.
+        /// Gets or sets whether to use a secure (SSL/TLS) connection.
         /// </summary>
-        public bool UseSsl { get; set; }
+        public bool UseSecure { get; set; }
 
         #endregion
 
@@ -203,12 +203,12 @@ namespace Birko.Data.Stores
         /// <param name="username">The authentication username.</param>
         /// <param name="password">The authentication password.</param>
         /// <param name="port">The connection port.</param>
-        /// <param name="useSsl">Whether to use SSL/TLS.</param>
-        public RemoteSettings(string location, string name, string username, string password, int port, bool useSsl = false) : base(location, name, password)
+        /// <param name="useSecure">Whether to use a secure (SSL/TLS) connection.</param>
+        public RemoteSettings(string location, string name, string username, string password, int port, bool useSecure = false) : base(location, name, password)
         {
             UserName = username;
             Port = port;
-            UseSsl = useSsl;
+            UseSecure = useSecure;
         }
 
         #endregion
@@ -236,7 +236,7 @@ namespace Birko.Data.Stores
             {
                 UserName = data.UserName;
                 Port = data.Port;
-                UseSsl = data.UseSsl;
+                UseSecure = data.UseSecure;
             }
         }
 

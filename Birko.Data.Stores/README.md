@@ -17,7 +17,7 @@ AbstractAsyncStore<T>
 ```
 Settings (Location, Name)
     -> PasswordSettings (Password)
-        -> RemoteSettings (UserName, Port, UseSsl)
+        -> RemoteSettings (UserName, Port, UseSecure)
 ```
 
 ## Key Interfaces

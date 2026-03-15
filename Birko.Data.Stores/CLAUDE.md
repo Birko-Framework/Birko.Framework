@@ -25,7 +25,7 @@ Store abstractions for the Birko Framework. Contains store interfaces, abstract 
 ### Settings (`Birko.Data.Stores`)
 - **Settings** — Base settings (Location, Name), implements ISettings
 - **PasswordSettings** — Extends Settings with Password
-- **RemoteSettings** — Extends PasswordSettings with UserName, Port, UseSsl
+- **RemoteSettings** — Extends PasswordSettings with UserName, Port, UseSecure
 
 ### Utilities
 - **OrderBy\<T\>** — Type-safe sorting specification with expression-based API
