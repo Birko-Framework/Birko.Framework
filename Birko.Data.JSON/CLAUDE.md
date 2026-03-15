@@ -1,7 +1,7 @@
 # Birko.Data.JSON
 
 ## Overview
-JSON file-based storage implementation for Birko.Data.
+JSON file-based storage implementation for the Birko data layer.
 
 ## Project Location
 `C:\Source\Birko.Data.JSON\`
@@ -116,7 +116,8 @@ JSON output can be formatted for readability.
 Automatic backup before writes (optional).
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - System.Text.Json (or Newtonsoft.Json)
 
 ## Advantages

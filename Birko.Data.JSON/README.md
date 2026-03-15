@@ -18,7 +18,8 @@ dotnet add package Birko.Data.JSON
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - System.Text.Json
 
 ## Usage
@@ -69,7 +70,8 @@ store.SetSettings(settings);
 
 ## Related Projects
 
-- [Birko.Data](../Birko.Data/) - Core interfaces
+- [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
+- [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.JSON.ViewModel](../Birko.Data.JSON.ViewModel/) - JSON ViewModel repositories
 
 ## License
