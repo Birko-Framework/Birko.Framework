@@ -18,7 +18,8 @@ dotnet add package Birko.Data.TimescaleDB
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.SQL
 - Birko.Data.SQL.PostgreSQL
 - Npgsql

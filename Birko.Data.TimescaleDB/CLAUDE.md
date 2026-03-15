@@ -1,7 +1,7 @@
 # Birko.Data.TimescaleDB
 
 ## Overview
-TimescaleDB implementation for Birko.Data providing time-series database storage built on PostgreSQL.
+TimescaleDB implementation for the Birko data layer providing time-series database storage built on PostgreSQL.
 
 ## Project Location
 `C:\Source\Birko.Data.TimescaleDB\`
@@ -127,7 +127,7 @@ SELECT add_compression_policy('metrics', INTERVAL '7 days');
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core, Birko.Data.Stores
 - Birko.Data.SQL
 - Birko.Data.SQL.PostgreSQL
 - Npgsql
