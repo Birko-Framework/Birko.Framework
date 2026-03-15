@@ -10,7 +10,8 @@ dotnet add package Birko.Data.Sync.Sql
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.Sync
 - Birko.Data.SQL
 

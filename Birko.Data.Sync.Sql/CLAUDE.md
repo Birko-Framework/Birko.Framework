@@ -15,7 +15,7 @@ SQL-specific sync knowledge item implementation for the Birko.Data.Sync framewor
   - `[NamedField]` on all properties for column mapping
 
 ## Dependencies
-- Birko.Data (AbstractModel)
+- Birko.Data.Core (AbstractModel)
 - Birko.Data.Sync (ISyncKnowledgeItem)
 - Birko.Data.SQL (attributes: Table, PrimaryField, NamedField, IncrementField)
 
