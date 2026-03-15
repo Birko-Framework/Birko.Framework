@@ -139,6 +139,13 @@ namespace Birko.Data.InfluxDB.Stores
                 return 0;
             }
 
+            if (filter != null)
+            {
+                // Filter requires in-memory evaluation since Flux can't translate C# expressions
+                var items = await ReadAsync(filter, null, null, null, ct);
+                return items.Count();
+            }
+
             var flux = $"from(bucket: \"{_settings.Bucket}\") " +
                        $"|> range(start: 0) " +
                        $"|> filter(fn: (r) => r._measurement == \"{MeasurementName}\") " +

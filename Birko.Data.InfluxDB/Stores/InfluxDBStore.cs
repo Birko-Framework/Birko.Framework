@@ -171,6 +171,12 @@ namespace Birko.Data.InfluxDB.Stores
         {
             if (Client == null || _settings == null) return 0;
 
+            if (filter != null)
+            {
+                // Filter requires in-memory evaluation since Flux can't translate C# expressions
+                return Read(filter, null, null, null).Count();
+            }
+
             var flux = $"from(bucket: \"{_settings.Bucket}\") " +
                        $"|> range(start: 0) " +
                        $"|> filter(fn: (r) => r._measurement == \"{MeasurementName}\") " +
