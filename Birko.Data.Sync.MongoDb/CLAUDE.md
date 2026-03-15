@@ -14,7 +14,7 @@ MongoDB-specific sync knowledge item implementation for the Birko.Data.Sync fram
   - `IdRecord` field for document identification
 
 ## Dependencies
-- Birko.Data (AbstractModel)
+- Birko.Data.Core (AbstractModel)
 - Birko.Data.Sync (ISyncKnowledgeItem)
 - MongoDB.Driver / MongoDB.Bson
 
