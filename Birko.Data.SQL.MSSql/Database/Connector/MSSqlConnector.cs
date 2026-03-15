@@ -51,7 +51,7 @@ namespace Birko.Data.SQL.Connectors
                     remotesettings.UserName,
                     remotesettings.Password,
                     remotesettings.Port,
-                    remotesettings.UseSsl ? "True" : "False"
+                    remotesettings.UseSecure ? "True" : "False"
                 }));
                 return connection;
             }
