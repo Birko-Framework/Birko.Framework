@@ -20,7 +20,7 @@ Birko.Storage.Tests/
 ```
 
 ## Dependencies
-- Birko.Data (shared project)
+- Birko.Data.Core, Birko.Data.Stores (shared projects)
 - Birko.Storage (shared project)
 - xUnit 2.9.3, FluentAssertions 7.0.0
 
