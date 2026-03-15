@@ -1,7 +1,7 @@
 # Birko.Data.MongoDB
 
 ## Overview
-MongoDB implementation for Birko.Data providing document-based storage.
+MongoDB implementation for the Birko data layer providing document-based storage.
 
 ## Project Location
 `C:\Source\Birko.Data.MongoDB\`
@@ -127,7 +127,7 @@ collection.Indexes.CreateOne(new CreateIndexModel<Customer>(indexKeysDefinition)
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core, Birko.Data.Stores
 - MongoDB.Driver (official MongoDB .NET driver)
 - MongoDB Server 4.0 or later
 

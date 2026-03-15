@@ -18,7 +18,8 @@ dotnet add package Birko.Data.MongoDB
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - MongoDB.Driver
 
 ## Usage
@@ -57,7 +58,8 @@ var results = collection.Find(filter).ToList();
 
 ## Related Projects
 
-- [Birko.Data](../Birko.Data/) - Core interfaces
+- [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
+- [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.MongoDB.ViewModel](../Birko.Data.MongoDB.ViewModel/) - ViewModel repositories
 
 ## License
