@@ -26,7 +26,9 @@
   <Import Project="..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus.MessageQueue\Birko.EventBus.MessageQueue.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data\Birko.Data.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus.EventSourcing\Birko.EventBus.EventSourcing.projitems" Label="Shared" />
