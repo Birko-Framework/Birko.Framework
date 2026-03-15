@@ -238,7 +238,8 @@ namespace Birko.Data.InfluxDB.Stores
                     DateTime.UtcNow.AddYears(1),
                     predicate,
                     _settings.Bucket,
-                    _settings.Organization);
+                    _settings.Organization,
+                    ct);
             }
             catch (Exception ex)
             {
@@ -279,15 +280,15 @@ namespace Birko.Data.InfluxDB.Stores
             try
             {
                 var bucketsApi = Client.GetBucketsApi();
-                var bucket = await bucketsApi.FindBucketByNameAsync(_settings.Bucket);
+                var bucket = await bucketsApi.FindBucketByNameAsync(_settings.Bucket, ct);
                 if (bucket == null)
                 {
                     var orgsApi = Client.GetOrganizationsApi();
-                    var orgs = await orgsApi.FindOrganizationsAsync(org: _settings.Organization);
+                    var orgs = await orgsApi.FindOrganizationsAsync(org: _settings.Organization, cancellationToken: ct);
                     var org = orgs.FirstOrDefault();
                     if (org != null)
                     {
-                        await bucketsApi.CreateBucketAsync(_settings.Bucket, org.Id);
+                        await bucketsApi.CreateBucketAsync(_settings.Bucket, org.Id, ct);
                     }
                 }
             }
@@ -308,10 +309,10 @@ namespace Birko.Data.InfluxDB.Stores
             try
             {
                 var bucketsApi = Client.GetBucketsApi();
-                var bucket = await bucketsApi.FindBucketByNameAsync(_settings.Bucket);
+                var bucket = await bucketsApi.FindBucketByNameAsync(_settings.Bucket, ct);
                 if (bucket != null)
                 {
-                    await bucketsApi.DeleteBucketAsync(bucket);
+                    await bucketsApi.DeleteBucketAsync(bucket, ct);
                 }
             }
             catch (Exception ex)
@@ -493,7 +494,8 @@ namespace Birko.Data.InfluxDB.Stores
                         DateTime.UtcNow.AddYears(1),
                         predicate,
                         _settings.Bucket,
-                        _settings.Organization);
+                        _settings.Organization,
+                        ct);
                 }
             }
             catch (Exception ex)
