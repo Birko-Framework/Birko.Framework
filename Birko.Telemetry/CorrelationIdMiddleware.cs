@@ -42,6 +42,7 @@ public class CorrelationIdMiddleware
 
         Activity.Current?.SetBaggage("correlation-id", correlationId);
 
+        context.Items["CorrelationId"] = correlationId;
         context.Response.Headers[headerName] = correlationId;
 
         await _next(context).ConfigureAwait(false);
