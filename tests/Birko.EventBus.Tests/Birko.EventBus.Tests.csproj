@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" Version="7.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-preview.3.25171.5" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0-preview.3.25171.5" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0-preview.3.25171.5" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <Import Project="..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
+  <Import Project="..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
+  <Import Project="..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
+  <Import Project="..\Birko.EventBus.MessageQueue\Birko.EventBus.MessageQueue.projitems" Label="Shared" />
+  <Import Project="..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data\Birko.Data.projitems" Label="Shared" />
+  <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
+  <Import Project="..\Birko.EventBus.EventSourcing\Birko.EventBus.EventSourcing.projitems" Label="Shared" />
+
+</Project>
