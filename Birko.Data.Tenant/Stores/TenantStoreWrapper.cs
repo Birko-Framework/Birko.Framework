@@ -26,11 +26,11 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     }
 
     /// <summary>
-    /// Create a new item (automatically sets TenantId if available)
+    /// Create a new item (automatically sets TenantGuid if available)
     /// </summary>
     public Guid Create(T item, StoreDataDelegate<T>? processDelegate = null)
     {
-        SetTenantIdIfNeeded(item);
+        SetTenantGuidIfNeeded(item);
         return _innerStore.Create(item, processDelegate);
     }
 
@@ -44,7 +44,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public T? Read(Expression<Func<T, bool>>? filter = null)
     {
-        return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter());
+        return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter());
     }
 
     public T? ReadOne(Expression<Func<T, bool>>? filter = null)
@@ -54,7 +54,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public long Count(Expression<Func<T, bool>>? filter = null)
     {
-        return _innerStore.Count((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter());
+        return _innerStore.Count((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter());
     }
 
     /// <summary>
@@ -146,15 +146,15 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
             return true;
         }
 
-        return item.TenantId == _tenantContext.CurrentTenantId;
+        return item.TenantGuid == _tenantContext.CurrentTenantGuid;
     }
 
     /// <summary>
-    /// Set the TenantId on an item if the property exists and no tenant is set
+    /// Set the TenantGuid on an item if the property exists and no tenant is set
     /// </summary>
-    protected void SetTenantIdIfNeeded(T item)
+    protected void SetTenantGuidIfNeeded(T item)
     {
-        item.TenantId = _tenantContext.CurrentTenantId ?? Guid.Empty;
+        item.TenantGuid = _tenantContext.CurrentTenantGuid ?? Guid.Empty;
         item.TenantName = _tenantContext.CurrentTenantName;
     }
 }

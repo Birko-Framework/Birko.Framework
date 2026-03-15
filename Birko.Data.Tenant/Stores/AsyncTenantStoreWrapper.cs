@@ -28,11 +28,11 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     }
 
     /// <summary>
-    /// Create a new item (automatically sets TenantId if available)
+    /// Create a new item (automatically sets TenantGuid if available)
     /// </summary>
     public async Task<Guid> CreateAsync(T item, StoreDataDelegate<T>? processDelegate = null, CancellationToken cancellationToken = default)
     {
-        SetTenantIdIfNeeded(item);
+        SetTenantGuidIfNeeded(item);
         return await _innerStore.CreateAsync(item, processDelegate, cancellationToken);
     }
 
@@ -46,12 +46,12 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
 
     public async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
     {
-        return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), cancellationToken);
+        return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), cancellationToken);
     }
 
     public async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
     {
-        return await _innerStore.CountAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), cancellationToken);
+        return await _innerStore.CountAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), cancellationToken);
     }
 
     /// <summary>
@@ -144,15 +144,15 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
             return true;
         }
 
-        return item.TenantId == _tenantContext.CurrentTenantId;
+        return item.TenantGuid == _tenantContext.CurrentTenantGuid;
     }
 
     /// <summary>
-    /// Set the TenantId on an item if the property exists and no tenant is set
+    /// Set the TenantGuid on an item if the property exists and no tenant is set
     /// </summary>
-    protected void SetTenantIdIfNeeded(T item)
+    protected void SetTenantGuidIfNeeded(T item)
     {
-        item.TenantId = _tenantContext.CurrentTenantId ?? Guid.Empty;
+        item.TenantGuid = _tenantContext.CurrentTenantGuid ?? Guid.Empty;
         item.TenantName = _tenantContext.CurrentTenantName;
     }
 }

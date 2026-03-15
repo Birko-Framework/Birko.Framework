@@ -11,7 +11,7 @@ public interface ITenantContext
     /// <summary>
     /// The current tenant ID (null if no tenant is set)
     /// </summary>
-    Guid? CurrentTenantId { get; }
+    Guid? CurrentTenantGuid { get; }
 
     /// <summary>
     /// The current tenant name (null if no tenant is set)
@@ -26,7 +26,7 @@ public interface ITenantContext
     /// <summary>
     /// Set the current tenant
     /// </summary>
-    void SetTenant(Guid tenantId, string? tenantName = null);
+    void SetTenant(Guid tenantGuid, string? tenantName = null);
 
     /// <summary>
     /// Clear the current tenant (switch to non-tenant mode)
@@ -36,20 +36,20 @@ public interface ITenantContext
     /// <summary>
     /// Execute an action within a specific tenant scope
     /// </summary>
-    TResult? WithTenant<TResult>(Guid tenantId, string? tenantName, Func<TResult> action);
+    TResult? WithTenant<TResult>(Guid tenantGuid, string? tenantName, Func<TResult> action);
 
     /// <summary>
     /// Execute an async action within a specific tenant scope
     /// </summary>
-    Task<TResult?> WithTenantAsync<TResult>(Guid tenantId, string? tenantName, Func<Task<TResult>> action);
+    Task<TResult?> WithTenantAsync<TResult>(Guid tenantGuid, string? tenantName, Func<Task<TResult>> action);
 
     /// <summary>
     /// Execute an action within a specific tenant scope (no return value)
     /// </summary>
-    void WithTenant(Guid tenantId, string? tenantName, Action action);
+    void WithTenant(Guid tenantGuid, string? tenantName, Action action);
 
     /// <summary>
     /// Execute an async action within a specific tenant scope (no return value)
     /// </summary>
-    Task WithTenantAsync(Guid tenantId, string? tenantName, Func<Task> action);
+    Task WithTenantAsync(Guid tenantGuid, string? tenantName, Func<Task> action);
 }

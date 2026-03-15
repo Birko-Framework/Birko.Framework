@@ -38,16 +38,16 @@ public class TenantMiddleware
     public async Task InvokeAsync(HttpContext context)
     {
         // Try to resolve tenant from configured sources
-        var tenantId = ResolveTenantId(context);
+        var tenantGuid = ResolveTenantGuid(context);
 
-        if (tenantId.HasValue)
+        if (tenantGuid.HasValue)
         {
             // Set the tenant for this request
-            var tenantName = ResolveTenantName(context, tenantId.Value);
-            _tenantContext.SetTenant(tenantId.Value, tenantName);
+            var tenantName = ResolveTenantName(context, tenantGuid.Value);
+            _tenantContext.SetTenant(tenantGuid.Value, tenantName);
 
             // Add tenant to HTTP context for easy access
-            context.Items[_options.TenantContextKey] = tenantId.Value;
+            context.Items[_options.TenantContextKey] = tenantGuid.Value;
         }
         else if (_options.RequireTenant)
         {
@@ -74,16 +74,16 @@ public class TenantMiddleware
     /// <summary>
     /// Resolve tenant ID from the HTTP request
     /// </summary>
-    private Guid? ResolveTenantId(HttpContext context)
+    private Guid? ResolveTenantGuid(HttpContext context)
     {
         // 1. Check header
         if (!string.IsNullOrEmpty(_options.TenantHeaderName))
         {
             if (context.Request.Headers.TryGetValue(_options.TenantHeaderName, out var headerValue))
             {
-                if (Guid.TryParse(headerValue.FirstOrDefault(), out var tenantId))
+                if (Guid.TryParse(headerValue.FirstOrDefault(), out var tenantGuid))
                 {
-                    return tenantId;
+                    return tenantGuid;
                 }
             }
         }
@@ -93,9 +93,9 @@ public class TenantMiddleware
         {
             if (context.Request.Query.TryGetValue(_options.TenantQueryStringKey, out var queryValue))
             {
-                if (Guid.TryParse(queryValue.FirstOrDefault(), out var tenantId))
+                if (Guid.TryParse(queryValue.FirstOrDefault(), out var tenantGuid))
                 {
-                    return tenantId;
+                    return tenantGuid;
                 }
             }
         }
@@ -105,9 +105,9 @@ public class TenantMiddleware
         {
             if (context.GetRouteValue(_options.TenantRouteKey) is string routeValue)
             {
-                if (Guid.TryParse(routeValue, out var tenantId))
+                if (Guid.TryParse(routeValue, out var tenantGuid))
                 {
-                    return tenantId;
+                    return tenantGuid;
                 }
             }
         }
@@ -124,7 +124,7 @@ public class TenantMiddleware
     /// <summary>
     /// Resolve tenant name from the HTTP request
     /// </summary>
-    private string? ResolveTenantName(HttpContext context, Guid tenantId)
+    private string? ResolveTenantName(HttpContext context, Guid tenantGuid)
     {
         // Check header for tenant name
         if (!string.IsNullOrEmpty(_options.TenantNameHeaderName))
@@ -138,7 +138,7 @@ public class TenantMiddleware
         // Custom name resolver
         if (_options.CustomTenantNameResolver != null)
         {
-            return _options.CustomTenantNameResolver(context, tenantId);
+            return _options.CustomTenantNameResolver(context, tenantGuid);
         }
 
         return null;

@@ -20,7 +20,7 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        _innerStore.Create(data.Select(item => { SetTenantIdIfNeeded(item); return item; }), storeDelegate);
+        _innerStore.Create(data.Select(item => { SetTenantGuidIfNeeded(item); return item; }), storeDelegate);
     }
 
     public void Delete(IEnumerable<T> data)
@@ -45,7 +45,7 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
-        return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), orderBy, limit, offset);
+        return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), orderBy, limit, offset);
     }
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)

@@ -10,7 +10,7 @@ public interface ITenant
     /// <summary>
     /// Unique identifier for the tenant
     /// </summary>
-    Guid TenantId { get; set; }
+    Guid TenantGuid { get; set; }
 
     /// <summary>
     /// Optional tenant name for display purposes

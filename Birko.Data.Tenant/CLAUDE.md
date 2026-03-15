@@ -42,7 +42,7 @@ using Birko.Data.Tenant;
 // Set current tenant
 TenantContext.Current = new TenantContext
 {
-    TenantId = tenantId,
+    TenantGuid = tenantGuid,
     TenantName = "Acme Corp"
 };
 
@@ -61,13 +61,13 @@ public class CustomerStore : TenantStore<Customer>
     {
         // Automatically filtered by current tenant
         var items = base.ReadAll();
-        return items.Where(x => x.TenantId == TenantContext.Current.TenantId);
+        return items.Where(x => x.TenantGuid == TenantContext.Current.TenantGuid);
     }
 
     public override Guid Create(Customer item)
     {
         // Automatically set tenant ID
-        item.TenantId = TenantContext.Current.TenantId;
+        item.TenantGuid = TenantContext.Current.TenantGuid;
         return base.Create(item);
     }
 }
@@ -78,7 +78,7 @@ public class CustomerStore : TenantStore<Customer>
 ```csharp
 public class TenantEntity : Entity
 {
-    public Guid TenantId { get; set; }
+    public Guid TenantGuid { get; set; }
 }
 ```
 
@@ -104,7 +104,7 @@ Tenant resolution from:
 
 ### Subdomain
 ```
-tenant1.yourapp.com → TenantId from subdomain
+tenant1.yourapp.com → TenantGuid from subdomain
 ```
 
 ### Header
@@ -119,7 +119,7 @@ https://yourapp.com?tenant=tenant-name
 
 ### Route Parameter
 ```
-https://yourapp.com/tenants/{tenantId}/...
+https://yourapp.com/tenants/{tenantGuid}/...
 ```
 
 ## Features
@@ -134,7 +134,7 @@ var customers = store.ReadAll(); // Only returns current tenant's customers
 New entities automatically get tenant ID:
 ```csharp
 var customer = new Customer { Name = "John" };
-store.Create(customer); // TenantId automatically set
+store.Create(customer); // TenantGuid automatically set
 ```
 
 ### Tenant Isolation
@@ -177,7 +177,7 @@ CREATE POLICY customer_tenant_policy ON customers
 
 ```csharp
 // Validate tenant access
-if (!await tenantService.CanAccess(TenantContext.Current.TenantId, requestedTenantId))
+if (!await tenantService.CanAccess(TenantContext.Current.TenantGuid, requestedTenantGuid))
 {
     throw new UnauthorizedAccessException();
 }

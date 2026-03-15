@@ -9,100 +9,100 @@ namespace Birko.Data.Tenant.Models;
 /// </summary>
 public class TenantContext : ITenantContext
 {
-    private readonly AsyncLocal<Guid?> _currentTenantId = new();
+    private readonly AsyncLocal<Guid?> _currentTenantGuid = new();
     private readonly AsyncLocal<string?> _currentTenantName = new();
 
     /// <inheritdoc />
-    public Guid? CurrentTenantId => _currentTenantId.Value;
+    public Guid? CurrentTenantGuid => _currentTenantGuid.Value;
 
     /// <inheritdoc />
     public string? CurrentTenantName => _currentTenantName.Value;
 
     /// <inheritdoc />
-    public bool HasTenant => _currentTenantId.Value.HasValue;
+    public bool HasTenant => _currentTenantGuid.Value.HasValue;
 
     /// <inheritdoc />
-    public void SetTenant(Guid tenantId, string? tenantName = null)
+    public void SetTenant(Guid tenantGuid, string? tenantName = null)
     {
-        _currentTenantId.Value = tenantId;
+        _currentTenantGuid.Value = tenantGuid;
         _currentTenantName.Value = tenantName;
     }
 
     /// <inheritdoc />
     public void ClearTenant()
     {
-        _currentTenantId.Value = null;
+        _currentTenantGuid.Value = null;
         _currentTenantName.Value = null;
     }
 
     /// <inheritdoc />
-    public TResult? WithTenant<TResult>(Guid tenantId, string? tenantName, Func<TResult> action)
+    public TResult? WithTenant<TResult>(Guid tenantGuid, string? tenantName, Func<TResult> action)
     {
-        var previousTenantId = _currentTenantId.Value;
+        var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
 
         try
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             return action();
         }
         finally
         {
-            _currentTenantId.Value = previousTenantId;
+            _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
         }
     }
 
     /// <inheritdoc />
-    public async Task<TResult?> WithTenantAsync<TResult>(Guid tenantId, string? tenantName, Func<Task<TResult>> action)
+    public async Task<TResult?> WithTenantAsync<TResult>(Guid tenantGuid, string? tenantName, Func<Task<TResult>> action)
     {
-        var previousTenantId = _currentTenantId.Value;
+        var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
 
         try
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             return await action();
         }
         finally
         {
-            _currentTenantId.Value = previousTenantId;
+            _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
         }
     }
 
     /// <inheritdoc />
-    public void WithTenant(Guid tenantId, string? tenantName, Action action)
+    public void WithTenant(Guid tenantGuid, string? tenantName, Action action)
     {
-        var previousTenantId = _currentTenantId.Value;
+        var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
 
         try
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             action();
         }
         finally
         {
-            _currentTenantId.Value = previousTenantId;
+            _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
         }
     }
 
     /// <inheritdoc />
-    public async Task WithTenantAsync(Guid tenantId, string? tenantName, Func<Task> action)
+    public async Task WithTenantAsync(Guid tenantGuid, string? tenantName, Func<Task> action)
     {
-        var previousTenantId = _currentTenantId.Value;
+        var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
 
         try
         {
-            SetTenant(tenantId, tenantName);
+            SetTenant(tenantGuid, tenantName);
             await action();
         }
         finally
         {
-            _currentTenantId.Value = previousTenantId;
+            _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
         }
     }
@@ -123,8 +123,8 @@ public static class Tenant
     /// <summary>
     /// Set the current tenant
     /// </summary>
-    public static void Set(Guid tenantId, string? tenantName = null)
-        => _instance.SetTenant(tenantId, tenantName);
+    public static void Set(Guid tenantGuid, string? tenantName = null)
+        => _instance.SetTenant(tenantGuid, tenantName);
 
     /// <summary>
     /// Clear the current tenant
@@ -135,7 +135,7 @@ public static class Tenant
     /// <summary>
     /// Get the current tenant ID
     /// </summary>
-    public static Guid? Id => _instance.CurrentTenantId;
+    public static Guid? Id => _instance.CurrentTenantGuid;
 
     /// <summary>
     /// Get the current tenant name

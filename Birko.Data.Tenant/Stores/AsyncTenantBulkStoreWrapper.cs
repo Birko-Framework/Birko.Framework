@@ -22,7 +22,7 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
 
     public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)
     {
-        await _innerStore.CreateAsync(data.Select(item => { SetTenantIdIfNeeded(item); return item; }), storeDelegate, cancellationToken);
+        await _innerStore.CreateAsync(data.Select(item => { SetTenantGuidIfNeeded(item); return item; }), storeDelegate, cancellationToken);
     }
 
     public async Task DeleteAsync(IEnumerable<T> data, CancellationToken cancellationToken = default)
@@ -47,7 +47,7 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
 
     public async Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken cancellationToken = default)
     {
-        return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantId, filter)).Filter(), orderBy, limit, offset, cancellationToken);
+        return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), orderBy, limit, offset, cancellationToken);
     }
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)

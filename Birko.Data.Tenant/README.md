@@ -28,11 +28,11 @@ dotnet add package Birko.Data.Tenant
 using Birko.Data.Tenant;
 
 // Set tenant context
-TenantContext.Current = new TenantContext { TenantId = tenantId, TenantName = "Acme Corp" };
+TenantContext.Current = new TenantContext { TenantGuid = tenantGuid, TenantName = "Acme Corp" };
 
 // Use tenant-aware store
 var store = new TenantStore<Customer>();
-store.Create(customer);   // TenantId automatically set
+store.Create(customer);   // TenantGuid automatically set
 var all = store.ReadAll(); // Filtered by current tenant
 
 // ASP.NET Core middleware
@@ -49,7 +49,7 @@ app.UseMiddleware<TenantMiddleware>();
 ### Models
 
 - **Tenant** - Tenant entity
-- **TenantEntity** - Base entity with TenantId
+- **TenantEntity** - Base entity with TenantGuid
 
 ### Middleware
 
