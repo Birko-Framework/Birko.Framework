@@ -7,6 +7,8 @@ namespace Birko.Models.Users.ViewModels
     public class UserAgenda : Birko.Data.ViewModels.LogViewModel
     {
         public const string RolesProperty = "Roles";
+        public const string IsOwnerProperty = "IsOwner";
+        public const string JoinedAtProperty = "JoinedAt";
         public const string UserAgendaObjectProperty = "UserAgenda";
 
         public UserAgenda()
@@ -25,9 +27,37 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
+        private bool _isOwner;
+        public bool IsOwner
+        {
+            get { return _isOwner; }
+            set
+            {
+                if (_isOwner != value)
+                {
+                    _isOwner = value;
+                    RaisePropertyChanged(IsOwnerProperty);
+                }
+            }
+        }
+
+        private DateTime _joinedAt = DateTime.UtcNow;
+        public DateTime JoinedAt
+        {
+            get { return _joinedAt; }
+            set
+            {
+                if (_joinedAt != value)
+                {
+                    _joinedAt = value;
+                    RaisePropertyChanged(JoinedAtProperty);
+                }
+            }
+        }
+
         private void UserAgenda_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { RolesProperty }.Contains(e.PropertyName))
+            if (new[] { RolesProperty, IsOwnerProperty, JoinedAtProperty }.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(UserAgendaObjectProperty);
             }

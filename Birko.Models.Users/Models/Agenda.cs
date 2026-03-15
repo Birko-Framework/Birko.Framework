@@ -18,15 +18,23 @@ namespace Birko.Models.Users
         [PrecisionField(256)]
         public string Name { get; set; } = null!;
 
+        [PrecisionField(1000)]
+        public string? Description { get; set; }
+
         [NamedField("IsDefault")]
         public bool Default { get; set; } = false;
+
+        [NamedField("IsActive")]
+        public bool IsActive { get; set; } = true;
 
         public virtual void LoadFrom(ViewModels.Agenda data)
         {
             base.LoadFrom(data);
             if (data == null) return;
             Name = data.Name;
+            Description = data.Description;
             Default = data.Default;
+            IsActive = data.IsActive;
         }
     }
 }
