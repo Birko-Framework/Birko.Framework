@@ -1,7 +1,7 @@
 # Birko.Data.RavenDB
 
 ## Overview
-RavenDB implementation for Birko.Data providing document-based storage with advanced features.
+RavenDB implementation for the Birko data layer providing document-based storage with advanced features.
 
 ## Project Location
 `C:\Source\Birko.Data.RavenDB\`
@@ -185,7 +185,8 @@ using (var session = Store.OpenSession())
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - RavenDB.Client (official RavenDB .NET client)
 - RavenDB Server 5.0 or later
 

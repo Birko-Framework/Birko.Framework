@@ -18,7 +18,8 @@ dotnet add package Birko.Data.RavenDB
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - RavenDB.Client
 
 ## Usage
@@ -60,7 +61,8 @@ using (var session = Store.OpenSession())
 
 ## Related Projects
 
-- [Birko.Data](../Birko.Data/) - Core interfaces
+- [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
+- [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.RavenDB.ViewModel](../Birko.Data.RavenDB.ViewModel/) - ViewModel repositories
 
 ## License
