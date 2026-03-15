@@ -6,7 +6,7 @@ RavenDB-based persistent job queue for the Birko Background Jobs framework. Buil
 
 - **Persistent storage** — Jobs stored as RavenDB documents via `AsyncRavenDBStore`
 - **Auto-database setup** — Database initialized automatically on first use
-- **Expression-based queries** — Uses Birko.Data lambda expressions for filtering
+- **Expression-based queries** — Uses Birko.Data.Stores lambda expressions for filtering
 - **Transaction support** — Integrates with RavenDB document sessions for atomic operations
 - **Retry with backoff** — Failed jobs are re-scheduled with configurable delay
 - **Convention-based mapping** — No special attributes needed on model properties
@@ -14,7 +14,8 @@ RavenDB-based persistent job queue for the Birko Background Jobs framework. Buil
 ## Dependencies
 
 - Birko.BackgroundJobs (core interfaces)
-- Birko.Data (AbstractModel, stores, RemoteSettings)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, RemoteSettings)
 - Birko.Data.RavenDB (AsyncRavenDBStore, RavenDB.Client)
 
 ## Usage
