@@ -41,7 +41,7 @@ Unit tests for all Birko.EventBus projects — core event bus, pipeline, dedupli
 - Birko.EventBus.Outbox (projitems)
 - Birko.EventBus.EventSourcing (projitems)
 - Birko.MessageQueue + InMemory (projitems)
-- Birko.Data + Models (projitems)
+- Birko.Data.Core + Birko.Data.Stores + Models (projitems)
 - Birko.Data.EventSourcing (projitems)
 - xUnit 2.9.3, FluentAssertions 7.0.0
 - Microsoft.Extensions.DependencyInjection, Hosting.Abstractions
