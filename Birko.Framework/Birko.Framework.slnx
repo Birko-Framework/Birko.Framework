@@ -113,6 +113,7 @@
   <Folder Name="/Security/">
     <Project Path="../Birko.Security/Birko.Security.shproj" />
     <Project Path="../Birko.Security.Jwt/Birko.Security.Jwt.shproj" />
+    <Project Path="../Birko.Security.AspNetCore/Birko.Security.AspNetCore.shproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
@@ -124,6 +125,7 @@
     <Project Path="../Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
     <Project Path="../Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
     <Project Path="../Birko.Messaging.Tests/Birko.Messaging.Tests.csproj" />
+    <Project Path="../Birko.Security.AspNetCore.Tests/Birko.Security.AspNetCore.Tests.csproj" />
     <Project Path="../Birko.Storage.Tests/Birko.Storage.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">

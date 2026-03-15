@@ -66,6 +66,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Structures.Tests** - Unit tests for data structures (AVL tree, BST)
 - **Birko.BackgroundJobs.Tests** - Unit tests for background job processing (queue, dispatcher, executor, processor, scheduler)
 - **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
+- **Birko.Security.AspNetCore.Tests** - Unit tests for ASP.NET Core security integration (JWT auth, ICurrentUser, permissions, tenant resolution, middleware)
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
 
 ### Messaging
@@ -105,6 +106,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Security
 - **Birko.Security** - Password hashing (PBKDF2), AES-256-GCM encryption, token provider interfaces, static token auth (moved from Birko.Communication.Authentication), RBAC interfaces
 - **Birko.Security.Jwt** - JWT implementation of ITokenProvider
+- **Birko.Security.AspNetCore** - ASP.NET Core integration: JWT Bearer authentication setup, ICurrentUser from claims, ClaimsPermissionChecker, tenant resolution middleware (header/subdomain), Minimal API permission endpoint filters, one-line DI via AddBirkoSecurity()
 
 ### Background Jobs
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, recurring scheduler
@@ -229,6 +231,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.EventBus.EventSourcing | [../Birko.EventBus.EventSourcing/CLAUDE.md](../Birko.EventBus.EventSourcing/CLAUDE.md) |
 | Birko.EventBus.Tests | [../Birko.EventBus.Tests/CLAUDE.md](../Birko.EventBus.Tests/CLAUDE.md) |
 | Birko.Storage | [../Birko.Storage/CLAUDE.md](../Birko.Storage/CLAUDE.md) |
+| Birko.Security.AspNetCore.Tests | [../Birko.Security.AspNetCore.Tests/CLAUDE.md](../Birko.Security.AspNetCore.Tests/CLAUDE.md) |
 | Birko.Storage.Tests | [../Birko.Storage.Tests/CLAUDE.md](../Birko.Storage.Tests/CLAUDE.md) |
 | Birko.Messaging | [../Birko.Messaging/CLAUDE.md](../Birko.Messaging/CLAUDE.md) |
 | Birko.Messaging.Tests | [../Birko.Messaging.Tests/CLAUDE.md](../Birko.Messaging.Tests/CLAUDE.md) |
@@ -264,6 +267,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Redis | [../Birko.Redis/CLAUDE.md](../Birko.Redis/CLAUDE.md) |
 | Birko.Security | [../Birko.Security/CLAUDE.md](../Birko.Security/CLAUDE.md) |
 | Birko.Security.Jwt | [../Birko.Security.Jwt/CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md) |
+| Birko.Security.AspNetCore | [../Birko.Security.AspNetCore/CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md) |
 
 ## Key Patterns
 

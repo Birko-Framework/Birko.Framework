@@ -2,7 +2,7 @@
 
 ## Overview
 
-Birko.Security provides password hashing, AES-256-GCM encryption, token provider interfaces, static token authentication, and RBAC interfaces. Birko.Security.Jwt adds JWT token generation and validation.
+Birko.Security provides password hashing, AES-256-GCM encryption, token provider interfaces, static token authentication, and RBAC interfaces. Birko.Security.Jwt adds JWT token generation and validation. Birko.Security.AspNetCore provides ASP.NET Core integration — JWT Bearer authentication, current user resolution, permission checking, and multi-tenant middleware.
 
 ## Password Hashing
 
@@ -151,7 +151,89 @@ public interface IPermissionChecker
 
 `AuthorizationContext` is a POCO carrying user claims for authorization decisions.
 
+## ASP.NET Core Integration (Birko.Security.AspNetCore)
+
+Bridges Birko.Security into ASP.NET Core applications with a single DI call.
+
+### One-Line Setup
+
+```csharp
+builder.Services.AddBirkoSecurity(options =>
+{
+    options.JwtOptions.Secret = "my-secret-key-at-least-32-chars-long!";
+    options.JwtOptions.Issuer = "myapp";
+    options.JwtOptions.Audience = "myapp-api";
+    options.TenantResolver = TenantResolverType.Header; // or Subdomain, Custom
+});
+```
+
+This registers: JWT Bearer authentication, `ICurrentUser`, `IPermissionChecker`, `ITenantResolver`, and `ITenantContext`.
+
+### ICurrentUser
+
+Access the authenticated user from any service via DI:
+
+```csharp
+public class MyService(ICurrentUser currentUser)
+{
+    public void DoWork()
+    {
+        var userId = currentUser.UserId;
+        var email = currentUser.Email;
+        var tenantId = currentUser.TenantId;
+        var roles = currentUser.Roles;
+        var permissions = currentUser.Permissions;
+    }
+}
+```
+
+`ClaimsCurrentUser` reads claims from `HttpContext` automatically.
+
+### Permission-Based Authorization
+
+#### Claims Permission Checker
+
+`ClaimsPermissionChecker` implements `IPermissionChecker` by reading permissions from JWT claims. Supports wildcard `"*"` for superadmin access.
+
+#### Minimal API Endpoint Filters
+
+```csharp
+app.MapGet("/admin/users", () => { /* ... */ })
+   .RequirePermission("users.read");
+
+app.MapDelete("/admin/users/{id}", (Guid id) => { /* ... */ })
+   .RequirePermission("users.delete");
+```
+
+### Tenant Resolution
+
+Three built-in strategies:
+
+| Strategy | How it resolves |
+|----------|----------------|
+| **Header** | `X-Tenant-Id` and `X-Tenant-Name` HTTP headers |
+| **Subdomain** | Hostname subdomain (e.g., `acme.myapp.com` → `acme`) with optional async lookup |
+| **Custom** | Provide your own `ITenantResolver` implementation |
+
+`TenantMiddleware` runs per-request to resolve the tenant and populate `ITenantContext` (scoped).
+
+### Token Service Adapter
+
+Wraps `ITokenProvider` with structured request/response:
+
+```csharp
+var adapter = new TokenServiceAdapter(jwtProvider, options);
+
+var token = adapter.GenerateAccessToken(new TokenRequest(
+    UserId: userId, Email: "user@example.com",
+    TenantId: tenantId, Roles: ["Admin"], Permissions: ["users.read"]));
+
+var info = adapter.ValidateToken(token.Token);
+// info.UserId, info.Email, info.TenantId, info.Roles, info.Permissions
+```
+
 ## See Also
 
 - [Birko.Security CLAUDE.md](../Birko.Security/CLAUDE.md)
 - [Birko.Security.Jwt CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md)
+- [Birko.Security.AspNetCore CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md)

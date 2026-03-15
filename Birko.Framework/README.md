@@ -15,7 +15,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Domain model libraries (Product, Category, SEO, Accounting, Customers, Users, Warehouse)
 - Fluent validation framework
 - Caching with in-memory and Redis backends
-- Security (password hashing, AES encryption, JWT tokens, RBAC)
+- Security (password hashing, AES encryption, JWT tokens, RBAC, ASP.NET Core integration)
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
 - Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
@@ -105,6 +105,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Caching.Redis | Redis-backed cache |
 | Birko.Security | Password hashing, AES encryption, RBAC interfaces |
 | Birko.Security.Jwt | JWT token provider |
+| Birko.Security.AspNetCore | ASP.NET Core integration (JWT Bearer auth, ICurrentUser, tenant middleware, permission filters) |
 | Birko.BackgroundJobs | Background job processing framework |
 | Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
 | Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
@@ -136,6 +137,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.BackgroundJobs.Tests | Background job processing tests |
 | Birko.MessageQueue.Tests | Message queue tests (core, InMemory, MQTT) |
 | Birko.EventBus.Tests | Event bus tests (core, distributed, outbox, event sourcing) |
+| Birko.Security.AspNetCore.Tests | ASP.NET Core security integration tests (JWT, permissions, tenants) |
 | Birko.Storage.Tests | File storage tests (core types, LocalFileStorage, extensions) |
 | Birko.Messaging.Tests | Messaging tests (core types, email, templates) |
 
@@ -184,7 +186,7 @@ dotnet test
 - [Data Patterns Guide](docs/patterns.md) (Unit of Work, Soft Delete, Audit, Paging, Specifications, Concurrency)
 - [Validation Guide](docs/validation.md)
 - [Caching Guide](docs/caching.md)
-- [Security Guide](docs/security.md)
+- [Security Guide](docs/security.md) (Password hashing, AES encryption, JWT, ASP.NET Core integration)
 - [Background Jobs Guide](docs/background-jobs.md)
 - [Message Queue Guide](docs/message-queue.md)
 - [Event Bus Guide](docs/event-bus.md) (In-process, Distributed, Outbox, Event Sourcing integration)
