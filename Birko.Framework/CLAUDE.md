@@ -131,9 +131,11 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Storage
 - **Birko.Storage** - File/blob storage abstraction (IFileStorage, LocalFileStorage, StorageResult, FileReference, presigned URL support)
 
+### Telemetry
+- **Birko.Telemetry** - Thin instrumentation layer: store metrics (duration/count/errors via System.Diagnostics.Metrics), distributed tracing (ActivitySource), correlation ID middleware, store wrapper decorators
+
 ### Planned Projects (See TODO.md for details)
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
-- **Birko.Telemetry** - Logging, metrics, distributed tracing
 - **Birko.Security.BCrypt** - BCrypt password hashing
 - **Birko.Workflow** - State machine and business process automation
 - **Birko.Time** - Time zone, business calendar, working hours
@@ -231,6 +233,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.EventBus.EventSourcing | [../Birko.EventBus.EventSourcing/CLAUDE.md](../Birko.EventBus.EventSourcing/CLAUDE.md) |
 | Birko.EventBus.Tests | [../Birko.EventBus.Tests/CLAUDE.md](../Birko.EventBus.Tests/CLAUDE.md) |
 | Birko.Storage | [../Birko.Storage/CLAUDE.md](../Birko.Storage/CLAUDE.md) |
+| Birko.Telemetry | [../Birko.Telemetry/CLAUDE.md](../Birko.Telemetry/CLAUDE.md) |
+| Birko.Telemetry.Tests | [../Birko.Telemetry.Tests/CLAUDE.md](../Birko.Telemetry.Tests/CLAUDE.md) |
 | Birko.Security.AspNetCore.Tests | [../Birko.Security.AspNetCore.Tests/CLAUDE.md](../Birko.Security.AspNetCore.Tests/CLAUDE.md) |
 | Birko.Storage.Tests | [../Birko.Storage.Tests/CLAUDE.md](../Birko.Storage.Tests/CLAUDE.md) |
 | Birko.Messaging | [../Birko.Messaging/CLAUDE.md](../Birko.Messaging/CLAUDE.md) |
@@ -326,6 +330,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Event Sourcing](docs/event-sourcing.md)
   - [Storage](docs/storage.md)
   - [Messaging](docs/messaging.md)
+  - [Telemetry](docs/telemetry.md)
   - [Security](docs/security.md)
   - [Data Sync](docs/sync.md)
   - [Multi-Tenancy](docs/tenant.md)

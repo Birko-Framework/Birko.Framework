@@ -277,7 +277,21 @@ Shared Redis connection management:
 - `RedisSettings` - Extends `RemoteSettings` with Redis-specific configuration
 - `RedisConnectionManager` - Singleton connection multiplexer, used by Birko.Caching.Redis and Birko.BackgroundJobs.Redis
 
-### 15. Helper Libraries
+### 15. Telemetry Layer (Birko.Telemetry)
+Thin instrumentation over .NET built-in APIs (`System.Diagnostics.Metrics`, `System.Diagnostics.Activity`):
+- `BirkoTelemetryConventions` - Standard meter, activity source, metric, and tag names
+- `StoreInstrumentation` - Internal helper: Meter, ActivitySource, Histogram, Counters; sync/async Execute overloads
+- `InstrumentedStoreWrapper<TStore, T>` - Decorator for `IStore<T>` with metrics and tracing
+- `InstrumentedBulkStoreWrapper<TStore, T>` - Extends above for `IBulkStore<T>` (bulk flag in tags)
+- `AsyncInstrumentedStoreWrapper<TStore, T>` - Decorator for `IAsyncStore<T>`
+- `AsyncInstrumentedBulkStoreWrapper<TStore, T>` - Extends above for `IAsyncBulkStore<T>`
+- `CorrelationIdMiddleware` - ASP.NET Core middleware: reads/generates `X-Correlation-Id`, sets Activity baggage
+- `BirkoTelemetryOptions` - EnableCorrelationId, CorrelationIdHeaderName
+- `AddBirkoTelemetry()` / `UseBirkoCorrelationId()` - DI and middleware registration extensions
+- Fluent API: `.WithInstrumentation()`, `.WithBulkInstrumentation()`, `.WithAsyncInstrumentation()`, `.WithAsyncBulkInstrumentation()`
+- No external NuGet dependencies
+
+### 16. Helper Libraries
 - **Birko.Helpers** - StringHelper, HtmlHelper, ObjectHelper, EnumerableHelper, PathValidator
 - **Birko.Structures** - Generic data structures (Tree, AVLTree, BinaryNode)
 
@@ -305,7 +319,7 @@ ISettings (GetId)
 | **Template Method** | Abstract base classes define algorithms |
 | **Unit of Work** | Transaction batching across stores |
 | **Specification** | Composable query predicates |
-| **Decorator** | Cache, audit, soft-delete wrappers |
+| **Decorator** | Cache, audit, soft-delete, instrumentation wrappers |
 
 ## Dependency Flow
 
@@ -315,7 +329,7 @@ Models -> Data Interfaces -> Abstract Classes -> Provider Implementations
                                            -> ViewModel Repositories
                                            -> Features (Migrations, Sync, Tenant, EventSourcing, Patterns)
                                            -> Validation, Caching, Security, MessageQueue, EventBus
-                                           -> Storage, Messaging
+                                           -> Storage, Messaging, Telemetry
 ```
 
 ## Extensibility

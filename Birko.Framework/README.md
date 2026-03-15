@@ -20,6 +20,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
 - Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
 - File/blob storage abstraction (local filesystem, cloud providers planned)
+- Telemetry (store metrics via System.Diagnostics.Metrics, distributed tracing via ActivitySource, correlation ID middleware)
 - Background job processing with pluggable persistent queues
 - Data structures (trees, AVL trees, BST)
 - Helper utilities and extensions
@@ -123,6 +124,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.EventBus.EventSourcing | EventStore-to-EventBus bridge and replay |
 | Birko.Messaging | Email, SMS, push notification interfaces and SMTP sender |
 | Birko.Storage | File/blob storage abstraction (local filesystem) |
+| Birko.Telemetry | Store instrumentation (metrics, tracing), correlation ID middleware |
 | Birko.Structures | Tree data structures (AVL, BST) |
 | Birko.Helpers | Utility and extension methods |
 
@@ -141,6 +143,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Security.AspNetCore.Tests | ASP.NET Core security integration tests (JWT, permissions, tenants) |
 | Birko.Storage.Tests | File storage tests (core types, LocalFileStorage, extensions) |
 | Birko.Messaging.Tests | Messaging tests (core types, email, templates) |
+| Birko.Telemetry.Tests | Telemetry tests (conventions, store wrappers, metrics, middleware) |
 
 ## Architecture
 
@@ -196,6 +199,7 @@ dotnet test
 - [Messaging Guide](docs/messaging.md) (Email, SMS, Push, Templates)
 - [Data Synchronization Guide](docs/sync.md)
 - [Multi-Tenancy Guide](docs/tenant.md)
+- [Telemetry Guide](docs/telemetry.md) (Store metrics, distributed tracing, correlation ID)
 
 ## License
 
