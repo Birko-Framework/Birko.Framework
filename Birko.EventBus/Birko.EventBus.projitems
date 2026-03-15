@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f50</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.EventBus</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IEvent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\EventBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\EventContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IEventHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IEventBus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IEventSubscription.cs" />
+    <!-- Local -->
+    <Compile Include="$(MSBuildThisFileDirectory)Local\InProcessEventBus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Local\InProcessEventBusOptions.cs" />
+    <!-- Pipeline -->
+    <Compile Include="$(MSBuildThisFileDirectory)Pipeline\IEventPipelineBehavior.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Pipeline\EventPipeline.cs" />
+    <!-- Routing -->
+    <Compile Include="$(MSBuildThisFileDirectory)Routing\ITopicConvention.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Routing\TopicAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Routing\DefaultTopicConvention.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Routing\AttributeTopicConvention.cs" />
+    <!-- Enrichment -->
+    <Compile Include="$(MSBuildThisFileDirectory)Enrichment\IEventEnricher.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Enrichment\CorrelationEventEnricher.cs" />
+    <!-- Deduplication -->
+    <Compile Include="$(MSBuildThisFileDirectory)Deduplication\IDeduplicationStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Deduplication\InMemoryDeduplicationStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Deduplication\DeduplicationBehavior.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\EventBusServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
