@@ -93,7 +93,8 @@ Common SQL Server to .NET type mappings:
 - `BIT` → `bool`
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - Birko.Data.SQL
 - System.Data.SqlClient (or Microsoft.Data.SqlClient)
 

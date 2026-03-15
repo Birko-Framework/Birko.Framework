@@ -17,7 +17,8 @@ dotnet add package Birko.Data.SQL.MSSql
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.SQL
 - System.Data.SqlClient (or Microsoft.Data.SqlClient)
 
