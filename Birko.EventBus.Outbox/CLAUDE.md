@@ -13,7 +13,7 @@ Transactional outbox pattern for Birko.EventBus. Persists events in a store, pub
 | File | Description |
 |------|-------------|
 | Core/IOutboxStore.cs | Persistence interface: Save, GetPending, MarkPublished, MarkFailed, Cleanup |
-| Core/OutboxEntry.cs | Persisted event: EventId, EventType, Payload, Source, CorrelationId, TenantId, Status, Attempts |
+| Core/OutboxEntry.cs | Persisted event: EventId, EventType, Payload, Source, CorrelationId, TenantGuid, Status, Attempts |
 | Core/OutboxStatus.cs | Enum: Pending, Publishing, Published, Failed |
 | Core/OutboxOptions.cs | BatchSize (100), PollingInterval (5s), MaxAttempts (5), RetentionPeriod (7d) |
 | Stores/InMemoryOutboxStore.cs | ConcurrentDictionary-based store for testing |

@@ -41,7 +41,7 @@ namespace Birko.EventBus.Outbox
         /// <summary>
         /// Tenant identifier, if multi-tenancy is enabled.
         /// </summary>
-        public Guid? TenantId { get; set; }
+        public Guid? TenantGuid { get; set; }
 
         /// <summary>
         /// Additional metadata headers.

@@ -62,7 +62,7 @@ namespace Birko.EventBus.Outbox.Publishing
                 Payload = _serializer.Serialize(@event),
                 Source = @event.Source,
                 CorrelationId = context.CorrelationId,
-                TenantId = context.TenantId,
+                TenantGuid = context.TenantGuid,
                 Headers = new Dictionary<string, string>(context.Metadata)
             };
 
