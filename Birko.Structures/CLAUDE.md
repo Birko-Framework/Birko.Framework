@@ -1,7 +1,7 @@
 # Birko.Structures
 
 ## Overview
-Data structure implementations for Birko.Data providing trees and other structures.
+Data structure implementations for the Birko data layer providing trees and other structures.
 
 ## Project Location
 `C:\Source\Birko.Structures\`
@@ -143,7 +143,7 @@ CREATE TABLE categories (
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
 
 ## Use Cases
 - Category hierarchies
