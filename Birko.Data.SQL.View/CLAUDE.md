@@ -121,7 +121,8 @@ public class UserStatsView
 ```
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
 - Birko.Data.SQL
 
 ## Supported Databases
