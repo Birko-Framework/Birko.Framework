@@ -6,7 +6,7 @@ using System.Text;
 
 namespace Birko.Data.Filters
 {
-    public class ModelByGuid<TModel> : IRepositoryFilter<TModel>
+    public class ModelByGuid<TModel> : IFilter<TModel>
          where TModel : AbstractModel
     {
         public Guid Guid { get; set; }

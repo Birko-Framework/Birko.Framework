@@ -12,7 +12,7 @@
     <!-- Exceptions -->
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreException.cs" />
     <!-- Filters -->
-    <Compile Include="$(MSBuildThisFileDirectory)Filters\IRepositoryFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\IFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByGuid.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelsByGuid.cs" />
     <!-- Models -->

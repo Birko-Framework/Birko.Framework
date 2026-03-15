@@ -18,7 +18,7 @@ Core data layer foundation for the Birko Framework. Contains base models, view m
 - `AbstractLogViewModel` — ViewModel with audit timestamps but no Guid
 
 ### Filters
-- `IRepositoryFilter<TModel>` — Generic filter interface for composable query predicates
+- `IFilter<TModel>` — Generic filter interface for composable query predicates
 - `ModelByGuid<TModel>` — Filter for single GUID lookup
 - `ModelsByGuid<TModel>` — Filter for multiple GUID lookup
 

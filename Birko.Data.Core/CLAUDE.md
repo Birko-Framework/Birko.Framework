@@ -22,7 +22,7 @@ Core data layer foundation for the Birko Framework. Contains base models, view m
 - **AbstractLogViewModel** — Extends ViewModel with audit timestamps (no Guid)
 
 ### Filters (`Birko.Data.Filters`)
-- **IRepositoryFilter\<TModel\>** — Generic filter interface returning Expression<Func<TModel, bool>>
+- **IFilter\<TModel\>** — Generic filter interface returning Expression<Func<TModel, bool>>
 - **ModelByGuid\<TModel\>** — Filter for single GUID lookup
 - **ModelsByGuid\<TModel\>** — Filter for multiple GUID lookup
 
