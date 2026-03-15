@@ -142,12 +142,12 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            await TransactionContext.StoreAsync(data);
+            await TransactionContext.StoreAsync(data, ct);
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        await session.StoreAsync(data);
+        await session.StoreAsync(data, ct);
         await session.SaveChangesAsync(ct);
 
         return data.Guid.Value;
@@ -214,7 +214,7 @@ public class AsyncRavenDBStore<T>
             {
                 TransactionContext.Advanced.Evict(existing);
             }
-            await TransactionContext.StoreAsync(data);
+            await TransactionContext.StoreAsync(data, ct);
             return;
         }
 
@@ -226,7 +226,7 @@ public class AsyncRavenDBStore<T>
             session.Advanced.Evict(existingItem);
         }
 
-        await session.StoreAsync(data);
+        await session.StoreAsync(data, ct);
         await session.SaveChangesAsync(ct);
     }
 
@@ -301,12 +301,12 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            await TransactionContext.StoreAsync(data);
+            await TransactionContext.StoreAsync(data, ct);
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        await session.StoreAsync(data);
+        await session.StoreAsync(data, ct);
         await session.SaveChangesAsync(ct);
 
         return data.Guid.Value;
@@ -398,7 +398,7 @@ public class AsyncRavenDBStore<T>
                 if (item == null) continue;
                 item.Guid = Guid.NewGuid();
                 storeDelegate?.Invoke(item);
-                await TransactionContext.StoreAsync(item);
+                await TransactionContext.StoreAsync(item, ct);
             }
             return;
         }
@@ -442,7 +442,7 @@ public class AsyncRavenDBStore<T>
                     session.Advanced.Evict(existing);
                 }
 
-                await session.StoreAsync(item);
+                await session.StoreAsync(item, ct);
             }
 
             if (TransactionContext == null)
