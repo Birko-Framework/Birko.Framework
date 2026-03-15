@@ -7,14 +7,15 @@ JSON file-based job queue for the Birko Background Jobs framework. Built on Birk
 - **File-based storage** — Jobs stored as JSON file via `AsyncJsonStore`
 - **No external dependencies** — No database server required
 - **Auto-file creation** — JSON file created automatically on first use
-- **Expression-based queries** — Uses Birko.Data lambda expressions for filtering
+- **Expression-based queries** — Uses Birko.Data.Stores lambda expressions for filtering
 - **Retry with backoff** — Failed jobs are re-scheduled with configurable delay
 - **Good for testing** — Drop-in replacement for production queues during development
 
 ## Dependencies
 
 - Birko.BackgroundJobs (core interfaces)
-- Birko.Data (AbstractModel, stores, Settings)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Birko.Data.JSON (AsyncJsonStore)
 
 ## Usage

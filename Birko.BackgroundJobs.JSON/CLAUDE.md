@@ -17,11 +17,12 @@ JSON file-based job queue for Birko.BackgroundJobs. Uses `AsyncJsonStore` from B
 
 ## Dependencies
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy)
-- Birko.Data (AbstractModel, OrderBy, Settings)
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (OrderBy, Settings)
 - Birko.Data.JSON (AsyncJsonStore)
 - System.Text.Json
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs
-- Settings type is `Birko.Data.Stores.Settings` (basic Location + Name)
+- Settings type is `Birko.Data.Stores.Settings` (from Birko.Data.Stores, basic Location + Name)
 - No external database dependencies — stores jobs as JSON file on disk
