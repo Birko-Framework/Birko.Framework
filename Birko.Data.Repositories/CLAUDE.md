@@ -26,7 +26,7 @@ Repository abstractions for the Birko Framework. Contains repository interfaces,
 - **ServiceCollectionExtensions** — DI registration helpers (AddRepository, AddRepositorySingleton, etc.)
 
 ## Dependencies
-- **Birko.Data.Core** — Models (AbstractModel), Filters (IRepositoryFilter)
+- **Birko.Data.Core** — Models (AbstractModel), Filters (IFilter)
 - **Birko.Data.Stores** — Store interfaces (IStore, IAsyncStore, IBulkStore, IAsyncBulkStore), OrderBy, Settings
 
 ## Maintenance
