@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f51</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.EventBus.MessageQueue</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)EventEnvelope.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DistributedEventBusOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DistributedEventBus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AutoSubscriber.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DistributedEventBusHostedService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DistributedEventBusServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
