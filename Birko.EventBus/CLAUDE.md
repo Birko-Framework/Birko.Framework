@@ -14,7 +14,7 @@ Strongly-typed event bus for modular monolith architectures. In-process pub/sub 
 |------|-------------|
 | Core/IEvent.cs | Marker interface (EventId, OccurredAt, Source) |
 | Core/EventBase.cs | Abstract record base class (adds CorrelationId) |
-| Core/EventContext.cs | Handler context (EventId, Source, CorrelationId, TenantId, DeliveryCount, Metadata) |
+| Core/EventContext.cs | Handler context (EventId, Source, CorrelationId, TenantGuid, DeliveryCount, Metadata) |
 | Core/IEventHandler.cs | IEventHandler&lt;TEvent&gt; — HandleAsync(event, context, ct) |
 | Core/IEventBus.cs | PublishAsync&lt;T&gt;, Subscribe&lt;T&gt;, IDisposable |
 | Core/IEventSubscription.cs | Subscription handle (Dispose to unsubscribe) |
@@ -37,7 +37,7 @@ Strongly-typed event bus for modular monolith architectures. In-process pub/sub 
 
 ```
 PublishAsync<T>(event)
-  → Enrichers (CorrelationId, TenantId, custom)
+  → Enrichers (CorrelationId, TenantGuid, custom)
   → Pipeline (behaviors in registration order, Russian doll)
     → Dispatch to handlers (DI-resolved + manual subscriptions)
       Sequential (MaxConcurrency=1) or Parallel (semaphore)
@@ -49,7 +49,7 @@ PublishAsync<T>(event)
 
 ## Important Notes
 - Consuming project must reference `Microsoft.Extensions.DependencyInjection.Abstractions` (or use ASP.NET Core which includes it)
-- EventContext uses mutable setters for CorrelationId/TenantId/Metadata so enrichers can modify them
+- EventContext uses mutable setters for CorrelationId/TenantGuid/Metadata so enrichers can modify them
 - EventBase is an abstract record — concrete events should be `sealed record`
 - ITopicConvention is used by Birko.EventBus.MessageQueue (not this project) for distributed routing
 

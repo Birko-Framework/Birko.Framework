@@ -7,7 +7,7 @@ Strongly-typed event bus for the Birko Framework. Provides in-process pub/sub wi
 - **Strongly-typed events** — `IEvent` marker interface, `EventBase` record with Id/Timestamp/CorrelationId/Source
 - **In-process event bus** — `InProcessEventBus` with DI handler resolution and manual subscriptions
 - **Pipeline behaviors** — Middleware chain (logging, retry, validation, dedup) via `IEventPipelineBehavior`
-- **Event enrichment** — Pre-publish enrichers for CorrelationId, TenantId, custom headers
+- **Event enrichment** — Pre-publish enrichers for CorrelationId, TenantGuid, custom headers
 - **Deduplication** — `IDeduplicationStore` with in-memory TTL implementation
 - **Topic conventions** — `ITopicConvention` for event type → topic name mapping (default kebab-case or attribute-based)
 - **Error isolation** — Handler failures don't cascade to other handlers

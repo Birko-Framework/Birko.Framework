@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 namespace Birko.EventBus.Enrichment
 {
     /// <summary>
-    /// Enriches an event context before publishing (e.g., adds TenantId, CorrelationId, custom headers).
+    /// Enriches an event context before publishing (e.g., adds TenantGuid, CorrelationId, custom headers).
     /// Enrichers run in registration order before the event is dispatched to handlers or transport.
     /// </summary>
     public interface IEventEnricher

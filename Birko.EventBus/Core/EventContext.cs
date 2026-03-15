@@ -27,7 +27,7 @@ namespace Birko.EventBus
         /// <summary>
         /// Tenant identifier, if multi-tenancy is enabled.
         /// </summary>
-        public Guid? TenantId { get; set; }
+        public Guid? TenantGuid { get; set; }
 
         /// <summary>
         /// Number of times this event has been delivered (1 = first attempt).
@@ -42,14 +42,14 @@ namespace Birko.EventBus
         /// <summary>
         /// Creates an EventContext from an IEvent.
         /// </summary>
-        public static EventContext From(IEvent @event, Guid? tenantId = null, int deliveryCount = 1, IDictionary<string, string>? metadata = null)
+        public static EventContext From(IEvent @event, Guid? tenantGuid = null, int deliveryCount = 1, IDictionary<string, string>? metadata = null)
         {
             return new EventContext
             {
                 EventId = @event.EventId,
                 Source = @event.Source,
                 CorrelationId = @event is EventBase eb ? eb.CorrelationId : null,
-                TenantId = tenantId,
+                TenantGuid = tenantGuid,
                 DeliveryCount = deliveryCount,
                 Metadata = metadata ?? new Dictionary<string, string>()
             };
