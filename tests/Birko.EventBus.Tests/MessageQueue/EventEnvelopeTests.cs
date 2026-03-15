@@ -21,7 +21,7 @@ namespace Birko.EventBus.Tests.MessageQueue
         {
             var eventId = Guid.NewGuid();
             var correlationId = Guid.NewGuid();
-            var tenantId = Guid.NewGuid();
+            var tenantGuid = Guid.NewGuid();
             var now = DateTime.UtcNow;
 
             var envelope = new EventEnvelope
@@ -31,7 +31,7 @@ namespace Birko.EventBus.Tests.MessageQueue
                 Source = "test",
                 OccurredAt = now,
                 CorrelationId = correlationId,
-                TenantId = tenantId,
+                TenantGuid = tenantGuid,
                 Payload = "{\"value\":1}",
                 Headers = new() { ["key"] = "value" }
             };
@@ -41,7 +41,7 @@ namespace Birko.EventBus.Tests.MessageQueue
             envelope.Source.Should().Be("test");
             envelope.OccurredAt.Should().Be(now);
             envelope.CorrelationId.Should().Be(correlationId);
-            envelope.TenantId.Should().Be(tenantId);
+            envelope.TenantGuid.Should().Be(tenantGuid);
             envelope.Payload.Should().Be("{\"value\":1}");
             envelope.Headers["key"].Should().Be("value");
         }

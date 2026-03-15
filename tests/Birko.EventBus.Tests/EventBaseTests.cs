@@ -55,14 +55,14 @@ namespace Birko.EventBus.Tests
         {
             var correlationId = Guid.NewGuid();
             var evt = new OrderPlaced(Guid.NewGuid(), 1m) { CorrelationId = correlationId };
-            var tenantId = Guid.NewGuid();
+            var tenantGuid = Guid.NewGuid();
 
-            var ctx = EventContext.From(evt, tenantId: tenantId, deliveryCount: 3);
+            var ctx = EventContext.From(evt, tenantGuid: tenantGuid, deliveryCount: 3);
 
             ctx.EventId.Should().Be(evt.EventId);
             ctx.Source.Should().Be("orders");
             ctx.CorrelationId.Should().Be(correlationId);
-            ctx.TenantId.Should().Be(tenantId);
+            ctx.TenantGuid.Should().Be(tenantGuid);
             ctx.DeliveryCount.Should().Be(3);
         }
 
