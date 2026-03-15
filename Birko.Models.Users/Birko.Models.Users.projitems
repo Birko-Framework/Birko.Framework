@@ -10,19 +10,25 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\User.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\UserAgenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\UserLogin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\UserProfile.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\UserRole.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\User.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\UserAgenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\UserLogin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\UserProfile.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\UserRole.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\User.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserAgenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserLogin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserProfile.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserRole.cs" />
   </ItemGroup>
 </Project>

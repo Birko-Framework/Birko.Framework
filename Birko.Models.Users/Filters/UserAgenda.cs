@@ -8,7 +8,6 @@ namespace Birko.Models.Users.Filters
     {
         public Guid? UserGuid { get; set; }
         public Guid? AgendaGuid { get; set; }
-        public string? Role { get; set; }
         public bool? IsOwner { get; set; }
 
         public Expression<Func<Models.Users.UserAgenda, bool>>? Filter()
@@ -25,11 +24,6 @@ namespace Birko.Models.Users.Filters
             {
                 var guid = AgendaGuid.Value;
                 result = Combine(result, x => x.AgendaGuid == guid);
-            }
-
-            if (!string.IsNullOrEmpty(Role))
-            {
-                result = Combine(result, x => x.Roles != null && x.Roles.Contains(Role));
             }
 
             if (IsOwner.HasValue)

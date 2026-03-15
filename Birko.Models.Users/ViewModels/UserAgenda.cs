@@ -1,12 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Birko.Models.Users.ViewModels
 {
     public class UserAgenda : Birko.Data.ViewModels.LogViewModel
     {
-        public const string RolesProperty = "Roles";
         public const string IsOwnerProperty = "IsOwner";
         public const string JoinedAtProperty = "JoinedAt";
         public const string UserAgendaObjectProperty = "UserAgenda";
@@ -14,17 +12,6 @@ namespace Birko.Models.Users.ViewModels
         public UserAgenda()
         {
             PropertyChanged += UserAgenda_PropertyChanged;
-        }
-
-        private IEnumerable<string>? _roles;
-        public IEnumerable<string>? Roles
-        {
-            get { return _roles; }
-            set
-            {
-                _roles = value;
-                RaisePropertyChanged(RolesProperty);
-            }
         }
 
         private bool _isOwner;
@@ -57,7 +44,7 @@ namespace Birko.Models.Users.ViewModels
 
         private void UserAgenda_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { RolesProperty, IsOwnerProperty, JoinedAtProperty }.Contains(e.PropertyName))
+            if (new[] { IsOwnerProperty, JoinedAtProperty }.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(UserAgendaObjectProperty);
             }

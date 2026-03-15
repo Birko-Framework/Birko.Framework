@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
@@ -13,7 +12,6 @@ namespace Birko.Models.Users
     {
         public Guid UserGuid { get; set; }
         public Guid AgendaGuid { get; set; }
-        public string? Roles { get; set; }
 
         [NamedField("IsOwner")]
         public bool IsOwner { get; set; }
@@ -32,9 +30,6 @@ namespace Birko.Models.Users
         {
             base.LoadFrom(data);
             if (data == null) return;
-            Roles = (data.Roles != null && data.Roles.Any(x => !string.IsNullOrEmpty(x)))
-                ? string.Join(User.UserRolesSeparator, data.Roles.Where(x => !string.IsNullOrEmpty(x)).Distinct().OrderBy(x => x))
-                : null;
             IsOwner = data.IsOwner;
             JoinedAt = data.JoinedAt;
         }

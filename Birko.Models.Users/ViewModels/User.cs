@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Birko.Models.Users.ViewModels
@@ -8,7 +7,6 @@ namespace Birko.Models.Users.ViewModels
     {
         public const string UserNameProperty = "UserName";
         public const string EmailProperty = "Email";
-        public const string RolesProperty = "Roles";
         public const string IsActiveProperty = "IsActive";
         public const string LastLoginAtProperty = "LastLoginAt";
         public const string EmailVerifiedProperty = "EmailVerified";
@@ -44,17 +42,6 @@ namespace Birko.Models.Users.ViewModels
                     _email = value;
                     RaisePropertyChanged(EmailProperty);
                 }
-            }
-        }
-
-        private IEnumerable<string>? _roles;
-        public IEnumerable<string>? Roles
-        {
-            get { return _roles; }
-            set
-            {
-                _roles = value;
-                RaisePropertyChanged(RolesProperty);
             }
         }
 
@@ -102,7 +89,7 @@ namespace Birko.Models.Users.ViewModels
 
         private void User_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { UserNameProperty, EmailProperty, RolesProperty, IsActiveProperty, LastLoginAtProperty, EmailVerifiedProperty }.Contains(e.PropertyName))
+            if (new[] { UserNameProperty, EmailProperty, IsActiveProperty, LastLoginAtProperty, EmailVerifiedProperty }.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(UserObjectProperty);
             }

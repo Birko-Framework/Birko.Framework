@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Linq.Expressions;
 using Birko.Data.Filters;
 
@@ -9,7 +8,6 @@ namespace Birko.Models.Users.Filters
     {
         public string? UserName { get; set; }
         public string? Email { get; set; }
-        public string? Role { get; set; }
         public bool? IsActive { get; set; }
         public bool? EmailVerified { get; set; }
 
@@ -25,11 +23,6 @@ namespace Birko.Models.Users.Filters
             if (!string.IsNullOrEmpty(Email))
             {
                 result = Combine(result, x => x.Email == Email);
-            }
-
-            if (!string.IsNullOrEmpty(Role))
-            {
-                result = Combine(result, x => x.Roles != null && x.Roles.Contains(Role));
             }
 
             if (IsActive.HasValue)
