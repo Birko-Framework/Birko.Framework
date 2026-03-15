@@ -71,7 +71,7 @@ namespace Birko.MessageQueue.Mqtt
                 optionsBuilder.WithCredentials(_options.UserName, _options.Password);
             }
 
-            if (_options.UseSsl)
+            if (_options.UseSecure)
             {
                 optionsBuilder.WithTlsOptions(tls =>
                 {

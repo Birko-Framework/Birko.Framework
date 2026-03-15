@@ -99,7 +99,7 @@ var options = new MqttSettings
 {
     Location = "broker.example.com",
     Port = 8883,
-    UseSsl = true,
+    UseSecure = true,
     ClientCertificate = new X509Certificate2("client.pfx", "password")
 };
 ```
