@@ -19,7 +19,9 @@ ViewModel repository implementations for InfluxDB stores.
 - Extends `AbstractAsyncBulkViewModelRepository` (async)
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core
+- Birko.Data.Stores
+- Birko.Data.Repositories
 - Birko.Data.InfluxDB
 - Birko.Data.ViewModel
 
