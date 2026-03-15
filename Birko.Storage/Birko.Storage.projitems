@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d4c8a1b7-e5f2-4a3d-9b6c-8e1f0a2b3c4d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Storage</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IFileStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IPresignedUrlStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\FileReference.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\StorageResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\StorageSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\StorageOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\PresignedUrlOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\StorageException.cs" />
+    <!-- Local -->
+    <Compile Include="$(MSBuildThisFileDirectory)Local\LocalFileStorage.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\FileStorageExtensions.cs" />
+  </ItemGroup>
+</Project>
