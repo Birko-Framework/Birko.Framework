@@ -1,7 +1,7 @@
 # Birko.Data.Tenant
 
 ## Overview
-Multi-tenancy support for Birko.Data providing tenant-aware data access.
+Multi-tenancy support for the Birko data layer providing tenant-aware data access.
 
 ## Project Location
 `C:\Source\Birko.Data.Tenant\`
@@ -97,7 +97,7 @@ Tenant resolution from:
 - Route parameter
 
 ## Dependencies
-- Birko.Data
+- Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
 - Microsoft.AspNetCore.Http (for middleware)
 
 ## Tenant Strategies

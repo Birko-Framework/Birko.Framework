@@ -18,7 +18,8 @@ dotnet add package Birko.Data.Tenant
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (store interfaces, Settings)
 - Microsoft.AspNetCore.Http (middleware)
 
 ## Usage
@@ -56,7 +57,8 @@ app.UseMiddleware<TenantMiddleware>();
 
 ## Related Projects
 
-- [Birko.Data](../Birko.Data/) - Core interfaces
+- [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
+- [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.Sync.Tenant](../Birko.Data.Sync.Tenant/) - Tenant-aware synchronization
 
 ## License
