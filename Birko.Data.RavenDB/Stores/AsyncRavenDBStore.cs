@@ -339,6 +339,29 @@ public class AsyncRavenDBStore<T>
                 query = query.Where(filter);
             }
 
+            if (orderBy?.Fields.Count > 0)
+            {
+                IQueryable<T> sorted = query;
+                for (int i = 0; i < orderBy.Fields.Count; i++)
+                {
+                    var field = orderBy.Fields[i];
+                    var param = Expression.Parameter(typeof(T), "x");
+                    var property = Expression.Property(param, field.PropertyName);
+                    var lambda = Expression.Lambda(property, param);
+
+                    var methodName = i == 0
+                        ? (field.Descending ? "OrderByDescending" : "OrderBy")
+                        : (field.Descending ? "ThenByDescending" : "ThenBy");
+
+                    var method = typeof(Queryable).GetMethods()
+                        .First(m => m.Name == methodName && m.GetParameters().Length == 2)
+                        .MakeGenericMethod(typeof(T), property.Type);
+
+                    sorted = (IQueryable<T>)method.Invoke(null, new object[] { sorted, lambda })!;
+                }
+                query = (IRavenQueryable<T>)sorted;
+            }
+
             if (offset.HasValue)
             {
                 query = (IRavenQueryable<T>)query.Skip(offset.Value);
@@ -349,23 +372,7 @@ public class AsyncRavenDBStore<T>
                 query = (IRavenQueryable<T>)query.Take(limit.Value);
             }
 
-            var results = await query.ToListAsync(ct);
-
-            if (orderBy?.Fields.Count > 0)
-            {
-                IOrderedEnumerable<T>? ordered = null;
-                foreach (var field in orderBy.Fields)
-                {
-                    var prop = typeof(T).GetProperty(field.PropertyName);
-                    if (prop == null) continue;
-                    ordered = ordered == null
-                        ? (field.Descending ? results.OrderByDescending(x => prop.GetValue(x)) : results.OrderBy(x => prop.GetValue(x)))
-                        : (field.Descending ? ordered.ThenByDescending(x => prop.GetValue(x)) : ordered.ThenBy(x => prop.GetValue(x)));
-                }
-                return ordered?.ToList() ?? results;
-            }
-
-            return results;
+            return await query.ToListAsync(ct);
         }
         finally
         {
