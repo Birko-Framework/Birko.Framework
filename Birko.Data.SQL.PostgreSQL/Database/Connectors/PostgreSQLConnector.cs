@@ -53,7 +53,7 @@ namespace Birko.Data.SQL.Connectors
                     remoteSettings.UserName,
                     remoteSettings.Password,
                     remoteSettings.Name);
-                if (remoteSettings.UseSsl)
+                if (remoteSettings.UseSecure)
                 {
                     connectionString += ";SSL Mode=Require";
                 }
