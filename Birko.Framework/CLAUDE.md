@@ -68,6 +68,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
 
+### Messaging
+- **Birko.Messaging** - Core messaging interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP email sender, string template engine
+- **Birko.Messaging.Tests** - Unit tests for messaging (core types, email, templates)
+
 ### Communication Layer
 - **Birko.Communication** - Base communication interfaces
 - **Birko.Communication.Network** - Network communication
@@ -128,11 +132,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Planned Projects (See TODO.md for details)
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
 - **Birko.Telemetry** - Logging, metrics, distributed tracing
-- **Birko.Messaging** - Email, SMS, push notifications
-- **Birko.MessageQueue** - Message queues (RabbitMQ, Kafka, Azure Service Bus, AWS SQS, Redis Streams)
-- **Birko.EventBus** - Event bus abstraction (in-process, distributed via MessageQueue, EventSourcing integration)
 - **Birko.Security.BCrypt** - BCrypt password hashing
-- **Birko.Storage** - File and blob storage abstraction
 - **Birko.Workflow** - State machine and business process automation
 - **Birko.Time** - Time zone, business calendar, working hours
 - **Birko.Health** - Health checks and diagnostics
@@ -230,6 +230,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.EventBus.Tests | [../Birko.EventBus.Tests/CLAUDE.md](../Birko.EventBus.Tests/CLAUDE.md) |
 | Birko.Storage | [../Birko.Storage/CLAUDE.md](../Birko.Storage/CLAUDE.md) |
 | Birko.Storage.Tests | [../Birko.Storage.Tests/CLAUDE.md](../Birko.Storage.Tests/CLAUDE.md) |
+| Birko.Messaging | [../Birko.Messaging/CLAUDE.md](../Birko.Messaging/CLAUDE.md) |
+| Birko.Messaging.Tests | [../Birko.Messaging.Tests/CLAUDE.md](../Birko.Messaging.Tests/CLAUDE.md) |
 | Birko.Communication | [../Birko.Communication/CLAUDE.md](../Birko.Communication/CLAUDE.md) |
 | Birko.Communication.Network | [../Birko.Communication.Network/CLAUDE.md](../Birko.Communication.Network/CLAUDE.md) |
 | Birko.Communication.Hardware | [../Birko.Communication.Hardware/CLAUDE.md](../Birko.Communication.Hardware/CLAUDE.md) |
@@ -311,6 +313,18 @@ Extracted reusable models from FisData.Stock into framework:
   - [Store Implementation Guide](docs/store-implementation.md)
   - [Repository Implementation Guide](docs/repository-implementation.md)
   - [Migration Guide](docs/migrations.md)
+  - [Data Patterns](docs/patterns.md)
+  - [Caching](docs/caching.md)
+  - [Validation](docs/validation.md)
+  - [Background Jobs](docs/background-jobs.md)
+  - [Message Queue](docs/message-queue.md)
+  - [Event Bus](docs/event-bus.md)
+  - [Event Sourcing](docs/event-sourcing.md)
+  - [Storage](docs/storage.md)
+  - [Messaging](docs/messaging.md)
+  - [Security](docs/security.md)
+  - [Data Sync](docs/sync.md)
+  - [Multi-Tenancy](docs/tenant.md)
 
 ## Maintenance
 

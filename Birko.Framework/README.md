@@ -18,6 +18,8 @@ A modular .NET framework providing data access, communication, and model infrast
 - Security (password hashing, AES encryption, JWT tokens, RBAC)
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
+- Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
+- File/blob storage abstraction (local filesystem, cloud providers planned)
 - Background job processing with pluggable persistent queues
 - Data structures (trees, AVL trees, BST)
 - Helper utilities and extensions
@@ -117,6 +119,8 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.EventBus.MessageQueue | Distributed event bus over MessageQueue providers |
 | Birko.EventBus.Outbox | Transactional outbox pattern (at-least-once delivery) |
 | Birko.EventBus.EventSourcing | EventStore-to-EventBus bridge and replay |
+| Birko.Messaging | Email, SMS, push notification interfaces and SMTP sender |
+| Birko.Storage | File/blob storage abstraction (local filesystem) |
 | Birko.Structures | Tree data structures (AVL, BST) |
 | Birko.Helpers | Utility and extension methods |
 
@@ -132,6 +136,8 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.BackgroundJobs.Tests | Background job processing tests |
 | Birko.MessageQueue.Tests | Message queue tests (core, InMemory, MQTT) |
 | Birko.EventBus.Tests | Event bus tests (core, distributed, outbox, event sourcing) |
+| Birko.Storage.Tests | File storage tests (core types, LocalFileStorage, extensions) |
+| Birko.Messaging.Tests | Messaging tests (core types, email, templates) |
 
 ## Architecture
 
@@ -183,6 +189,8 @@ dotnet test
 - [Message Queue Guide](docs/message-queue.md)
 - [Event Bus Guide](docs/event-bus.md) (In-process, Distributed, Outbox, Event Sourcing integration)
 - [Event Sourcing Guide](docs/event-sourcing.md)
+- [Storage Guide](docs/storage.md) (Local filesystem, cloud providers)
+- [Messaging Guide](docs/messaging.md) (Email, SMS, Push, Templates)
 - [Data Synchronization Guide](docs/sync.md)
 - [Multi-Tenancy Guide](docs/tenant.md)
 

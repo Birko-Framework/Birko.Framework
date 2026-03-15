@@ -104,6 +104,9 @@
   <Folder Name="/Redis/">
     <Project Path="../Birko.Redis/Birko.Redis.shproj" />
   </Folder>
+  <Folder Name="/Messaging/">
+    <Project Path="../Birko.Messaging/Birko.Messaging.shproj" />
+  </Folder>
   <Folder Name="/Storage/">
     <Project Path="../Birko.Storage/Birko.Storage.shproj" />
   </Folder>
@@ -120,6 +123,7 @@
     <Project Path="../Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
     <Project Path="../Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
     <Project Path="../Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
+    <Project Path="../Birko.Messaging.Tests/Birko.Messaging.Tests.csproj" />
     <Project Path="../Birko.Storage.Tests/Birko.Storage.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
