@@ -21,7 +21,7 @@ public sealed class TenantMiddleware
         var tenant = await resolver.ResolveAsync(context, context.RequestAborted);
         if (tenant is not null)
         {
-            tenantContext.SetTenant(tenant.TenantId, tenant.TenantName);
+            tenantContext.SetTenant(tenant.TenantGuid, tenant.TenantName);
         }
 
         try

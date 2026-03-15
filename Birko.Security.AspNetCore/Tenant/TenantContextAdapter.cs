@@ -15,12 +15,12 @@ public sealed class TenantContextAdapter : ITenantContext
         _birkoContext = birkoContext;
     }
 
-    public Guid? CurrentTenantId => _birkoContext.CurrentTenantId;
+    public Guid? CurrentTenantGuid => _birkoContext.CurrentTenantGuid;
     public string? CurrentTenantName => _birkoContext.CurrentTenantName;
     public bool HasTenant => _birkoContext.HasTenant;
 
-    public void SetTenant(Guid tenantId, string? tenantName = null)
-        => _birkoContext.SetTenant(tenantId, tenantName);
+    public void SetTenant(Guid tenantGuid, string? tenantName = null)
+        => _birkoContext.SetTenant(tenantGuid, tenantName);
 
     public void ClearTenant()
         => _birkoContext.ClearTenant();
@@ -32,9 +32,9 @@ public sealed class TenantContextAdapter : ITenantContext
 /// </summary>
 public interface ITenantContext
 {
-    Guid? CurrentTenantId { get; }
+    Guid? CurrentTenantGuid { get; }
     string? CurrentTenantName { get; }
     bool HasTenant { get; }
-    void SetTenant(Guid tenantId, string? tenantName = null);
+    void SetTenant(Guid tenantGuid, string? tenantName = null);
     void ClearTenant();
 }

@@ -8,7 +8,7 @@ namespace Birko.Security.AspNetCore;
 /// <summary>
 /// Resolves tenant from the request hostname subdomain.
 /// Example: "tenant1.example.com" → TenantName = "tenant1".
-/// Requires a lookup function to map tenant name → TenantId.
+/// Requires a lookup function to map tenant name → TenantGuid.
 /// </summary>
 public sealed class SubdomainTenantResolver : ITenantResolver
 {

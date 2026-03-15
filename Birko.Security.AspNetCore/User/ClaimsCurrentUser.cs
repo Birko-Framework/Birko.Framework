@@ -36,11 +36,11 @@ public sealed class ClaimsCurrentUser : ICurrentUser
 
     public string? Email => Principal?.FindFirstValue(_options.EmailClaim);
 
-    public Guid? TenantId
+    public Guid? TenantGuid
     {
         get
         {
-            var claim = Principal?.FindFirstValue(_options.TenantIdClaim);
+            var claim = Principal?.FindFirstValue(_options.TenantGuidClaim);
             return claim is not null && Guid.TryParse(claim, out var id) ? id : null;
         }
     }

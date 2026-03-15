@@ -12,7 +12,7 @@ public static class JwtClaimNames
     public const string Email = "email";
 
     /// <summary>Tenant ID (Guid).</summary>
-    public const string TenantId = "tenant_id";
+    public const string TenantGuid = "tenant_id";
 
     /// <summary>Permission (repeated for each permission).</summary>
     public const string Permission = "permission";

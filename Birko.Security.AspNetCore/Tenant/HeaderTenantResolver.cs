@@ -10,16 +10,16 @@ namespace Birko.Security.AspNetCore;
 /// </summary>
 public sealed class HeaderTenantResolver : ITenantResolver
 {
-    private const string TenantIdHeader = "X-Tenant-Id";
+    private const string TenantGuidHeader = "X-Tenant-Id";
     private const string TenantNameHeader = "X-Tenant-Name";
 
     public Task<TenantInfo?> ResolveAsync(HttpContext context, CancellationToken ct = default)
     {
-        var tenantIdStr = context.Request.Headers[TenantIdHeader].FirstOrDefault();
-        if (tenantIdStr is null || !Guid.TryParse(tenantIdStr, out var tenantId))
+        var tenantGuidStr = context.Request.Headers[TenantGuidHeader].FirstOrDefault();
+        if (tenantGuidStr is null || !Guid.TryParse(tenantGuidStr, out var tenantGuid))
             return Task.FromResult<TenantInfo?>(null);
 
         var tenantName = context.Request.Headers[TenantNameHeader].FirstOrDefault();
-        return Task.FromResult<TenantInfo?>(new TenantInfo(tenantId, tenantName));
+        return Task.FromResult<TenantInfo?>(new TenantInfo(tenantGuid, tenantName));
     }
 }

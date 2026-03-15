@@ -11,7 +11,7 @@ public interface ICurrentUser
 {
     Guid? UserId { get; }
     string? Email { get; }
-    Guid? TenantId { get; }
+    Guid? TenantGuid { get; }
     IReadOnlySet<string> Roles { get; }
     IReadOnlySet<string> Permissions { get; }
     bool IsAuthenticated { get; }

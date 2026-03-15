@@ -10,7 +10,7 @@ ASP.NET Core integration for Birko.Security — JWT Bearer authentication, curre
 ```
 Birko.Security.AspNetCore/
 ├── User/
-│   ├── ICurrentUser.cs              - Authenticated user interface (UserId, Email, TenantId, Roles, Permissions, IsAuthenticated, GetClaim)
+│   ├── ICurrentUser.cs              - Authenticated user interface (UserId, Email, TenantGuid, Roles, Permissions, IsAuthenticated, GetClaim)
 │   ├── ClaimMappingOptions.cs       - Configuration for mapping JWT claim types to ICurrentUser properties
 │   └── ClaimsCurrentUser.cs         - Resolves ICurrentUser from HttpContext JWT claims
 ├── Authentication/

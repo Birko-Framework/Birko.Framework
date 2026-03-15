@@ -18,6 +18,6 @@ public interface ITenantResolver
 /// Resolved tenant information.
 /// </summary>
 public sealed record TenantInfo(
-    Guid TenantId,
+    Guid TenantGuid,
     string? TenantName = null,
     Dictionary<string, string>? Metadata = null);

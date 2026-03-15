@@ -11,7 +11,7 @@ namespace Birko.Security.AspNetCore;
 public sealed record TokenRequest(
     Guid UserId,
     string Email,
-    Guid? TenantId = null,
+    Guid? TenantGuid = null,
     IReadOnlySet<string>? Roles = null,
     IReadOnlySet<string>? Permissions = null);
 
@@ -22,7 +22,7 @@ public sealed record TokenValidationInfo(
     bool IsValid,
     Guid? UserId = null,
     string? Email = null,
-    Guid? TenantId = null,
+    Guid? TenantGuid = null,
     IReadOnlySet<string>? Roles = null,
     IReadOnlySet<string>? Permissions = null);
 
@@ -52,8 +52,8 @@ public sealed class TokenServiceAdapter
             [ClaimTypes.Email] = request.Email,
         };
 
-        if (request.TenantId.HasValue)
-            claims[_options.Claims.TenantIdClaim] = request.TenantId.Value.ToString();
+        if (request.TenantGuid.HasValue)
+            claims[_options.Claims.TenantGuidClaim] = request.TenantGuid.Value.ToString();
 
         // Roles and permissions are multi-value — encode as semicolon-separated
         // (ITokenProvider uses IDictionary which doesn't support multi-value keys;
@@ -100,7 +100,7 @@ public sealed class TokenServiceAdapter
         var userId = result.Claims.TryGetValue(ClaimTypes.NameIdentifier, out var uid) && Guid.TryParse(uid, out var parsedUid)
             ? parsedUid : (Guid?)null;
         result.Claims.TryGetValue(ClaimTypes.Email, out var email);
-        var tenantId = result.Claims.TryGetValue(_options.Claims.TenantIdClaim, out var tid) && Guid.TryParse(tid, out var parsedTid)
+        var tenantGuid = result.Claims.TryGetValue(_options.Claims.TenantGuidClaim, out var tid) && Guid.TryParse(tid, out var parsedTid)
             ? parsedTid : (Guid?)null;
 
         var roles = result.Claims.TryGetValue(_options.Claims.RoleClaim, out var r)
@@ -111,6 +111,6 @@ public sealed class TokenServiceAdapter
             ? p.Split(';', StringSplitOptions.RemoveEmptyEntries).ToHashSet()
             : new HashSet<string>();
 
-        return new TokenValidationInfo(true, userId, email, tenantId, roles, permissions);
+        return new TokenValidationInfo(true, userId, email, tenantGuid, roles, permissions);
     }
 }

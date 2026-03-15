@@ -13,8 +13,8 @@ public class ClaimMappingOptions
     /// <summary>Claim type for Email. Default: ClaimTypes.Email.</summary>
     public string EmailClaim { get; set; } = ClaimTypes.Email;
 
-    /// <summary>Claim type for TenantId (Guid). Default: "tenant_id".</summary>
-    public string TenantIdClaim { get; set; } = JwtClaimNames.TenantId;
+    /// <summary>Claim type for TenantGuid (Guid). Default: "tenant_id".</summary>
+    public string TenantGuidClaim { get; set; } = JwtClaimNames.TenantGuid;
 
     /// <summary>Claim type for roles (multiple claims). Default: ClaimTypes.Role.</summary>
     public string RoleClaim { get; set; } = ClaimTypes.Role;
