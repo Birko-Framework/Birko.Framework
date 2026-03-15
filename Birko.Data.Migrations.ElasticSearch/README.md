@@ -17,7 +17,8 @@ dotnet add package Birko.Data.Migrations.ElasticSearch
 
 ## Dependencies
 
-- Birko.Data
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (Settings)
 - Birko.Data.Migrations
 - Birko.Data.ElasticSearch
 
