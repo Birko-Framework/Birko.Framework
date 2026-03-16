@@ -21,9 +21,11 @@ A modular .NET framework providing data access, communication, and model infrast
 - Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
 - File/blob storage abstraction (local filesystem, cloud providers planned)
 - Telemetry (store metrics via System.Diagnostics.Metrics, distributed tracing via ActivitySource, correlation ID middleware)
+- Data-driven rules engine (composable rules, groups, contexts, SQL/Specification/Validation integration)
+- Generic data processors (XML, CSV, HTTP, ZIP with decorator composition)
 - Background job processing with pluggable persistent queues
 - Data structures (trees, AVL trees, BST)
-- Helper utilities and extensions
+- Helper utilities and extensions (including RFC 4180 CSV parser)
 
 ## Project Structure
 
@@ -128,8 +130,10 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Messaging | Email, SMS, push notification interfaces and SMTP sender |
 | Birko.Storage | File/blob storage abstraction (local filesystem) |
 | Birko.Telemetry | Store instrumentation (metrics, tracing), correlation ID middleware |
+| Birko.Rules | Data-driven rule engine (rules, groups, contexts, evaluator) |
+| Birko.Data.Processors | Generic stream processors (XML, CSV, HTTP, ZIP, decorator composition) |
 | Birko.Structures | Tree data structures (AVL, BST) |
-| Birko.Helpers | Utility and extension methods |
+| Birko.Helpers | Utility and extension methods, CsvParser |
 
 ### Tests
 
@@ -150,6 +154,8 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Security.BCrypt.Tests | BCrypt password hashing tests |
 | Birko.Security.Vault.Tests | Vault secret provider tests |
 | Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
+| Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
+| Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
 
 ## Architecture
 
@@ -206,6 +212,9 @@ dotnet test
 - [Data Synchronization Guide](docs/sync.md)
 - [Multi-Tenancy Guide](docs/tenant.md)
 - [Telemetry Guide](docs/telemetry.md) (Store metrics, distributed tracing, correlation ID)
+- [Rules Engine Guide](docs/rules.md) (Data-driven rules, groups, contexts, SQL/Spec/Validation integration)
+- [Data Processors Guide](docs/processors.md) (XML, CSV, HTTP, ZIP, decorator composition)
+- [TODO / Roadmap](TODO.md)
 
 ## License
 

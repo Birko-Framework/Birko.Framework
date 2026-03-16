@@ -56,6 +56,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Structures** - Data structures (trees, etc.)
 - **Birko.Data.SQL.View** - SQL view generation
 - **Birko.Helpers** - Data helper utilities
+- **Birko.Data.Processors** - Generic stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Data.Repositories** - Shared repository project (reserved)
 
 ### Tests
@@ -74,6 +75,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
 - **Birko.Telemetry.Tests** - Unit tests for telemetry (conventions, store wrappers, metrics, middleware)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
+- **Birko.Data.Processors.Tests** - Unit tests for data processors (CSV parser, XML/CSV/ZIP processors, HTTP transport, event wiring)
 
 ### Messaging
 - **Birko.Messaging** - Core messaging interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP email sender, string template engine
@@ -147,6 +149,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Telemetry
 - **Birko.Telemetry** - Thin instrumentation layer: store metrics (duration/count/errors via System.Diagnostics.Metrics), distributed tracing (ActivitySource), correlation ID middleware, store wrapper decorators
 
+### Processors
+- **Birko.Data.Processors** - Generic stream processor framework: IProcessor/IStreamProcessor interfaces, AbstractProcessor<T> base with event pipeline, XmlProcessor (XmlReader), CsvProcessor + CsvParser (RFC 4180), HttpProcessor (download decorator), ZipProcessor (extraction decorator), decorator composition pattern
+
 ### Planned Projects (See TODO.md for details)
 - **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
 - **Birko.Workflow** - State machine and business process automation
@@ -192,6 +197,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Data.Core | [../Birko.Data.Core/CLAUDE.md](../Birko.Data.Core/CLAUDE.md) |
 | Birko.Data.Stores | [../Birko.Data.Stores/CLAUDE.md](../Birko.Data.Stores/CLAUDE.md) |
 | Birko.Data.Repositories | [../Birko.Data.Repositories/CLAUDE.md](../Birko.Data.Repositories/CLAUDE.md) |
+| Birko.Data.Processors | [../Birko.Data.Processors/CLAUDE.md](../Birko.Data.Processors/CLAUDE.md) |
+| Birko.Data.Processors.Tests | [../Birko.Data.Processors.Tests/CLAUDE.md](../Birko.Data.Processors.Tests/CLAUDE.md) |
 | Birko.Data.SQL | [../Birko.Data.SQL/CLAUDE.md](../Birko.Data.SQL/CLAUDE.md) |
 | Birko.Data.SQL.MSSql | [../Birko.Data.SQL.MSSql/CLAUDE.md](../Birko.Data.SQL.MSSql/CLAUDE.md) |
 | Birko.Data.SQL.PostgreSQL | [../Birko.Data.SQL.PostgreSQL/CLAUDE.md](../Birko.Data.SQL.PostgreSQL/CLAUDE.md) |
@@ -353,6 +360,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Telemetry](docs/telemetry.md)
   - [Security](docs/security.md)
   - [Rules Engine](docs/rules.md)
+  - [Data Processors](docs/processors.md)
   - [Data Sync](docs/sync.md)
   - [Multi-Tenancy](docs/tenant.md)
 

@@ -58,6 +58,7 @@
   <Folder Name="/Data.Patterns/">
     <Project Path="../Birko.Data.EventSourcing/Birko.Data.EventSourcing.shproj" />
     <Project Path="../Birko.Data.Patterns/Birko.Data.Patterns.shproj" />
+    <Project Path="../Birko.Data.Processors/Birko.Data.Processors.shproj" />
     <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
   </Folder>
   <Folder Name="/Data.SQL/">
@@ -138,6 +139,7 @@
     <Project Path="../Birko.Security.Vault.Tests/Birko.Security.Vault.Tests.csproj" />
     <Project Path="../Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
     <Project Path="../Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
+    <Project Path="../Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
