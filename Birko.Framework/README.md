@@ -21,6 +21,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
 - File/blob storage abstraction (local filesystem, cloud providers planned)
 - Telemetry (store metrics via System.Diagnostics.Metrics, distributed tracing via ActivitySource, correlation ID middleware)
+- OpenTelemetry integration (OTLP + Console exporters, auto-wires Birko meters/activity sources)
 - Data-driven rules engine (composable rules, groups, contexts, SQL/Specification/Validation integration)
 - Generic data processors (XML, CSV, HTTP, ZIP with decorator composition)
 - Background job processing with pluggable persistent queues
@@ -130,6 +131,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Messaging | Email, SMS, push notification interfaces and SMTP sender |
 | Birko.Storage | File/blob storage abstraction (local filesystem) |
 | Birko.Telemetry | Store instrumentation (metrics, tracing), correlation ID middleware |
+| Birko.Telemetry.OpenTelemetry | OpenTelemetry SDK integration (OTLP, Console exporters) |
 | Birko.Rules | Data-driven rule engine (rules, groups, contexts, evaluator) |
 | Birko.Data.Processors | Generic stream processors (XML, CSV, HTTP, ZIP, decorator composition) |
 | Birko.Structures | Tree data structures (AVL, BST) |
@@ -156,6 +158,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
 | Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
+| Birko.Telemetry.OpenTelemetry.Tests | OpenTelemetry integration tests (options, DI, providers) |
 
 ## Architecture
 

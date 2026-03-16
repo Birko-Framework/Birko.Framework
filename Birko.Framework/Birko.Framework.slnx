@@ -113,6 +113,7 @@
   </Folder>
   <Folder Name="/Telemetry/">
     <Project Path="../Birko.Telemetry/Birko.Telemetry.shproj" />
+    <Project Path="../Birko.Telemetry.OpenTelemetry/Birko.Telemetry.OpenTelemetry.shproj" />
   </Folder>
   <Folder Name="/Security/">
     <Project Path="../Birko.Security/Birko.Security.shproj" />
@@ -140,6 +141,7 @@
     <Project Path="../Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
     <Project Path="../Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
     <Project Path="../Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
+    <Project Path="../Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />

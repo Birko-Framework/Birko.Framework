@@ -74,6 +74,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Security.AzureKeyVault.Tests** - Unit tests for Azure Key Vault secret provider
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
 - **Birko.Telemetry.Tests** - Unit tests for telemetry (conventions, store wrappers, metrics, middleware)
+- **Birko.Telemetry.OpenTelemetry.Tests** - Unit tests for OpenTelemetry integration (options, DI registration, provider resolution)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
 - **Birko.Data.Processors.Tests** - Unit tests for data processors (CSV parser, XML/CSV/ZIP processors, HTTP transport, event wiring)
 
@@ -148,6 +149,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Telemetry
 - **Birko.Telemetry** - Thin instrumentation layer: store metrics (duration/count/errors via System.Diagnostics.Metrics), distributed tracing (ActivitySource), correlation ID middleware, store wrapper decorators
+- **Birko.Telemetry.OpenTelemetry** - OpenTelemetry SDK integration: AddBirkoOpenTelemetry() DI extension, auto-wires Birko meters/activity sources, OTLP + Console exporters, ASP.NET Core instrumentation, configurable service resource
 
 ### Processors
 - **Birko.Data.Processors** - Generic stream processor framework: IProcessor/IStreamProcessor interfaces, AbstractProcessor<T> base with event pipeline, XmlProcessor (XmlReader), CsvProcessor + CsvParser (RFC 4180), HttpProcessor (download decorator), ZipProcessor (extraction decorator), decorator composition pattern
@@ -253,7 +255,9 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.EventBus.Tests | [../Birko.EventBus.Tests/CLAUDE.md](../Birko.EventBus.Tests/CLAUDE.md) |
 | Birko.Storage | [../Birko.Storage/CLAUDE.md](../Birko.Storage/CLAUDE.md) |
 | Birko.Telemetry | [../Birko.Telemetry/CLAUDE.md](../Birko.Telemetry/CLAUDE.md) |
+| Birko.Telemetry.OpenTelemetry | [../Birko.Telemetry.OpenTelemetry/CLAUDE.md](../Birko.Telemetry.OpenTelemetry/CLAUDE.md) |
 | Birko.Telemetry.Tests | [../Birko.Telemetry.Tests/CLAUDE.md](../Birko.Telemetry.Tests/CLAUDE.md) |
+| Birko.Telemetry.OpenTelemetry.Tests | [../Birko.Telemetry.OpenTelemetry.Tests/CLAUDE.md](../Birko.Telemetry.OpenTelemetry.Tests/CLAUDE.md) |
 | Birko.Security.AspNetCore.Tests | [../Birko.Security.AspNetCore.Tests/CLAUDE.md](../Birko.Security.AspNetCore.Tests/CLAUDE.md) |
 | Birko.Storage.Tests | [../Birko.Storage.Tests/CLAUDE.md](../Birko.Storage.Tests/CLAUDE.md) |
 | Birko.Messaging | [../Birko.Messaging/CLAUDE.md](../Birko.Messaging/CLAUDE.md) |
@@ -343,6 +347,7 @@ Extracted reusable models from FisData.Stock into framework:
 ## Documentation
 
 ### Framework Documentation
+- [TODO.md](./TODO.md) - Planned features and enhancement roadmap
 - [docs/](docs/) folder for detailed documentation:
   - [Architecture](docs/architecture.md)
   - [Store Implementation Guide](docs/store-implementation.md)
@@ -417,7 +422,7 @@ Existing folder groups in both files:
 - **Redis/** — Birko.Redis
 - **Security/** — Birko.Security, Birko.Security.Jwt, Birko.Security.AspNetCore, Birko.Security.BCrypt, Birko.Security.Vault, Birko.Security.AzureKeyVault
 - **Storage/** — Birko.Storage
-- **Telemetry/** — Birko.Telemetry
+- **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry
 - **Tests/** — All *.Tests projects
 - **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
