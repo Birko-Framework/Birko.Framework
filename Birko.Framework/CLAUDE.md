@@ -162,6 +162,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Serialization** - JSON, XML, binary serialization abstraction
 - **Birko.Localization** - Translations and culture support
 - **Birko.CQRS** - Command Query Responsibility Segregation
+- **Birko.Data.Aggregates** - SQL ↔ NoSQL aggregate mapper (m:n relations ↔ nested documents) for sync scenarios
 
 ## Architecture
 
