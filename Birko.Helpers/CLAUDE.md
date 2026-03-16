@@ -22,6 +22,7 @@ Helper utilities and extensions for Birko data layer operations.
 
 ### Helpers
 - **PathValidator** — Path security utilities (ValidateUserPath, SanitizePath, NormalizePath, CombineAndValidate, CombineAndValidateUnchecked)
+- **CsvParser** — RFC 4180-compliant CSV parser with state machine for quoted fields, lazy `IEnumerable<IList<string>>`, configurable delimiter/enclosure/encoding, BOM-aware encoding detection
 - Data conversion helpers
 - Validation helpers
 - Serialization helpers
