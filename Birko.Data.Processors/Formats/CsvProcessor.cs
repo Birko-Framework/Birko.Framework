@@ -53,7 +53,7 @@ public class CsvProcessor<T> : AbstractProcessor<T>, IStreamProcessor where T : 
         await ProcessStreamAsync(stream, cancellationToken).ConfigureAwait(false);
     }
 
-    public void ProcessStream(Stream stream)
+    public virtual void ProcessStream(Stream stream)
     {
         var parser = new CsvParser(stream, _delimiter, _enclosure, _encoding);
         var lineIndex = 0;
@@ -89,7 +89,7 @@ public class CsvProcessor<T> : AbstractProcessor<T>, IStreamProcessor where T : 
         InvokeProcessFinished();
     }
 
-    public async Task ProcessStreamAsync(Stream stream, CancellationToken cancellationToken = default)
+    public virtual async Task ProcessStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         var parser = new CsvParser(stream, _delimiter, _enclosure, _encoding);
         var lineIndex = 0;

@@ -42,7 +42,7 @@ public class XmlProcessor<T> : AbstractProcessor<T>, IStreamProcessor where T : 
         await ProcessStreamAsync(stream, cancellationToken).ConfigureAwait(false);
     }
 
-    public void ProcessStream(Stream stream)
+    public virtual void ProcessStream(Stream stream)
     {
         var settings = new XmlReaderSettings
         {
@@ -61,7 +61,7 @@ public class XmlProcessor<T> : AbstractProcessor<T>, IStreamProcessor where T : 
         InvokeProcessFinished();
     }
 
-    public async Task ProcessStreamAsync(Stream stream, CancellationToken cancellationToken = default)
+    public virtual async Task ProcessStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         var settings = new XmlReaderSettings
         {
