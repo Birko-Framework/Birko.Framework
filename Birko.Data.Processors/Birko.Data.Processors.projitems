@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a4c7e2b1-8d3f-4a6e-b5c9-0d1e2f3a4b5c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Processors</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ProcessorException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\AbstractProcessor.cs" />
+    <!-- Formats -->
+    <Compile Include="$(MSBuildThisFileDirectory)Formats\XmlProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Formats\CsvProcessor.cs" />
+    <!-- Transport -->
+    <Compile Include="$(MSBuildThisFileDirectory)Transport\HttpProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Transport\ZipProcessor.cs" />
+  </ItemGroup>
+</Project>
