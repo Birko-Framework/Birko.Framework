@@ -108,6 +108,7 @@ SQL (normalized)                    NoSQL (denormalized)
 
 - **Birko.Data.Core** — AbstractModel base class
 - **Birko.Data.Stores** — Store interfaces (for settings)
+- **Birko.Helpers** — EnumerableHelper.DiffByKey for collection diffing in Expand
 
 ## Important
 
