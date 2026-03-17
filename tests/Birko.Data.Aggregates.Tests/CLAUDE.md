@@ -10,6 +10,7 @@ Unit tests for the Birko.Data.Aggregates project — SQL ↔ NoSQL aggregate map
 - **Birko.Data.Aggregates** (shared project via .projitems)
 - **Birko.Data.Core** (AbstractModel)
 - **Birko.Data.Stores** (store interfaces)
+- **Birko.Helpers** (EnumerableHelper.DiffByKey, DiffResult)
 - xUnit 2.9.3
 - FluentAssertions 7.0.0
 
@@ -17,7 +18,7 @@ Unit tests for the Birko.Data.Aggregates project — SQL ↔ NoSQL aggregate map
 - **AggregateDefinitionTests** — Fluent definition: HasMany/HasOne/Via/Through, relationship metadata, root types
 - **AggregateMapperFlattenTests** — Flatten sync/async: root resolution, nested collections/singles, typed accessors, validation, FlattenMany
 - **AggregateMapperExpandTests** — Expand sync/async: no-change detection, collection add/remove/mixed, OneToOne add/remove/replace
-- **CollectionDifferTests** — Diff by Guid: empty, all-added, all-removed, unchanged, mixed, null-Guid handling, AbstractModel overload
+- **DiffByKeyTests** — EnumerableHelper.DiffByKey: empty, added, removed, unchanged, mixed, null keys, string/int keys, filter parameter
 - **SyncPipelineExtensionsTests** — CreateMapper, FlattenForSync, ExpandFromSync, ExpandManyFromSync (sync + async)
 
 ## Test Resources
