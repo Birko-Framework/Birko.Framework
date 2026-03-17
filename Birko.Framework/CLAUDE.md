@@ -51,6 +51,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Data.Sync.RavenDB** - RavenDB sync provider
 - **Birko.Data.Sync.Json** - JSON sync provider
 - **Birko.Data.Sync.Tenant** - Tenant-aware sync
+- **Birko.Data.Aggregates** - SQL ↔ NoSQL aggregate mapper (flatten/expand for sync scenarios)
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.EventSourcing** - Event sourcing pattern implementation
 - **Birko.Structures** - Data structures (trees, etc.)
@@ -78,6 +79,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Telemetry.OpenTelemetry.Tests** - Unit tests for OpenTelemetry integration (options, DI registration, provider resolution)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
 - **Birko.Data.Processors.Tests** - Unit tests for data processors (CSV parser, XML/CSV/ZIP processors, HTTP transport, event wiring)
+- **Birko.Data.Aggregates.Tests** - Unit tests for aggregate mapper (definitions, flatten, expand, diff, sync extensions)
 
 ### Messaging
 - **Birko.Messaging** - Core messaging interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP email sender, string template engine
@@ -250,6 +252,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Data.Sync.RavenDB | [../Birko.Data.Sync.RavenDB/CLAUDE.md](../Birko.Data.Sync.RavenDB/CLAUDE.md) |
 | Birko.Data.Sync.Json | [../Birko.Data.Sync.Json/CLAUDE.md](../Birko.Data.Sync.Json/CLAUDE.md) |
 | Birko.Data.Sync.Tenant | [../Birko.Data.Sync.Tenant/CLAUDE.md](../Birko.Data.Sync.Tenant/CLAUDE.md) |
+| Birko.Data.Aggregates | [../Birko.Data.Aggregates/CLAUDE.md](../Birko.Data.Aggregates/CLAUDE.md) |
+| Birko.Data.Aggregates.Tests | [../Birko.Data.Aggregates.Tests/CLAUDE.md](../Birko.Data.Aggregates.Tests/CLAUDE.md) |
 | Birko.Data.Tenant | [../Birko.Data.Tenant/CLAUDE.md](../Birko.Data.Tenant/CLAUDE.md) |
 | Birko.Data.EventSourcing | [../Birko.Data.EventSourcing/CLAUDE.md](../Birko.Data.EventSourcing/CLAUDE.md) |
 | Birko.Structures | [../Birko.Structures/CLAUDE.md](../Birko.Structures/CLAUDE.md) |

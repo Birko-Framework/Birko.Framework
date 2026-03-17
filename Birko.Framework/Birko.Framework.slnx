@@ -78,6 +78,7 @@
     <Project Path="../Birko.Data.Sync.RavenDB/Birko.Data.Sync.RavenDB.shproj" />
     <Project Path="../Birko.Data.Sync.Sql/Birko.Data.Sync.Sql.shproj" />
     <Project Path="../Birko.Data.Sync.Tenant/Birko.Data.Sync.Tenant.shproj" />
+    <Project Path="../Birko.Data.Aggregates/Birko.Data.Aggregates.shproj" />
   </Folder>
   <Folder Name="/Data.ViewModels/">
     <Project Path="../Birko.Data.ViewModel/Birko.Data.ViewModel.shproj" Id="8b4cd1ef-a9b2-4d5c-9e3f-1a2b3c4d5e6f" />
@@ -156,6 +157,7 @@
     <Project Path="../Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
     <Project Path="../Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
     <Project Path="../Birko.Caching.Hybrid.Tests/Birko.Caching.Hybrid.Tests.csproj" />
+    <Project Path="../Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />

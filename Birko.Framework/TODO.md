@@ -73,7 +73,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 1. ~~**Birko.Health** (High)~~ ✅ — Implemented 2026-03-17. Core + Data (SQL, ES, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP) + Redis + Azure (Blob, KeyVault) health checks with aggregated runner.
 2. ~~**Birko.Caching.Hybrid** (High)~~ ✅ — Implemented 2026-03-17. L1 memory + L2 Redis two-tier cache with write-through, L1 TTL capping, and L2 failure resilience.
 3. ~~**Birko.Storage.AzureBlob** (High)~~ ✅ — Implemented 2026-03-17. REST API with OAuth2, SAS presigned URLs, tenant isolation via PathPrefix.
-4. **Birko.Data.Aggregates** (Medium) — Symbio uses 5 data stores. Aggregate mapper simplifies keeping denormalized ES search indices in sync with relational SQL data, especially for m:n relations (e.g., products ↔ categories).
+4. ~~**Birko.Data.Aggregates** (Medium)~~ ✅ — Implemented 2026-03-17. Fluent aggregate definitions, flatten (SQL → NoSQL), expand (NoSQL → SQL) with collection diffing, sync pipeline extensions.
 5. **Birko.Messaging — Razor templates** (Medium) — Symbio sends email invoices and reservation confirmations via StringTemplateEngine. Razor templates enable proper HTML email layout with loops, conditionals, and partial views.
 6. **Birko.Workflow** (Medium) — Reservations, order tracking, and device lifecycle likely have ad-hoc state machines today. Formalizing with a workflow engine improves correctness and auditability.
 7. **Birko.MessageQueue.Redis** (Low) — Redis infra already exists. Redis Streams would provide a persistent non-IoT queue without deploying a separate broker (RabbitMQ/Kafka).
@@ -1749,14 +1749,14 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |
-| — | **Birko.Data.Aggregates** | (platform-agnostic) | ⬜ Planned (Medium) | SQL ↔ NoSQL aggregate mapping for sync |
+| — | **Birko.Data.Aggregates** | (platform-agnostic) | ✅ Implemented | SQL ↔ NoSQL aggregate mapping for sync |
 
 ---
 
 ## Future Enhancements
 
 ### Birko.Data.Aggregates — SQL ↔ NoSQL Aggregate Mapper
-**Status:** Planned | **Priority:** Medium
+**Status:** ✅ Implemented (2026-03-17) | **Priority:** Medium
 
 Helper library to bridge the impedance mismatch between SQL m:n relations and NoSQL nested/denormalized documents. Defines aggregate shapes once, then automatically flattens (SQL → document) and expands (document → SQL junction table ops) for sync scenarios.
 
@@ -1765,21 +1765,24 @@ Helper library to bridge the impedance mismatch between SQL m:n relations and No
 ```
 Birko.Data.Aggregates/                    (.shproj)
 ├── Core/
-│   ├── IAggregateDefinition.cs           - Interface for aggregate shape definitions
-│   ├── AggregateDefinition<T>.cs         - Fluent builder (HasMany, HasOne, Through)
-│   ├── RelationshipType.cs               - OneToOne, OneToMany, ManyToMany enum
-│   └── RelationshipDescriptor.cs         - Metadata about each relation (FKs, junction table, navigation property)
+│   ├── IAggregateDefinition.cs           ✅ Interface for aggregate shape definitions
+│   ├── AggregateDefinition<T>.cs         ✅ Fluent builder (HasMany, HasOne, Via, Through)
+│   ├── RelationshipType.cs               ✅ OneToOne, OneToMany, ManyToMany enum
+│   ├── RelationshipDescriptor.cs         ✅ Metadata about each relation (FKs, junction table, navigation property)
+│   ├── RelationshipBuilder.cs            ✅ Fluent builder for Via/Through configuration
+│   └── ExpressionHelper.cs              ✅ Internal lambda property name extraction
 ├── Mapping/
-│   ├── IAggregateMapper.cs               - Flatten + Expand interface
-│   ├── AggregateMapper.cs                - Core mapping logic
-│   ├── FlattenResult.cs                  - Denormalized document output
-│   └── SyncOperation.cs                  - Insert/Delete/Update operations for junction/child tables
-├── Diff/
-│   ├── CollectionDiffer.cs               - Diffs current vs desired state for m:n relations
-│   └── DiffResult.cs                     - Added, Removed, Unchanged items
+│   ├── IAggregateMapper.cs               ✅ Flatten + Expand interface
+│   ├── AggregateMapper.cs                ✅ Core mapping logic (uses EnumerableHelper.DiffByKey for expand)
+│   ├── IRelatedDataProvider.cs           ✅ Store-agnostic data fetching (sync + async)
+│   ├── FlattenResult.cs                  ✅ Denormalized document output with typed accessors
+│   ├── SyncOperation.cs                  ✅ Insert/Delete/Update operations for junction/child tables
+│   └── SyncOperationType.cs             ✅ Operation type enum
 └── Extensions/
-    └── SyncPipelineExtensions.cs         - Integration with Birko.Data.Sync providers
+    └── SyncPipelineExtensions.cs         ✅ Integration with Birko.Data.Sync providers
 ```
+
+**Collection diffing:** Moved to `Birko.Helpers.EnumerableHelper.DiffByKey<T>` — generic, O(n) key-based diff with `DiffResult<T>` (Added, Removed, Unchanged). Used by AggregateMapper with `e => e.Guid` key selector.
 
 **Fluent definition API:**
 ```csharp
@@ -1788,30 +1791,25 @@ public class ProductAggregate : AggregateDefinition<Product>
     public ProductAggregate()
     {
         HasMany(p => p.Categories)
-            .Through<ProductCategory>(j => j.ProductId, j => j.CategoryId);
+            .Through<ProductCategory>(j => j.ProductGuid, j => j.CategoryGuid);
 
         HasMany(p => p.Tags)
-            .Via(t => t.ProductId);
+            .Via(t => t.ProductGuid);
 
         HasOne(p => p.DefaultImage)
-            .Via(i => i.ProductId);
+            .Via(i => i.ProductGuid);
     }
 }
 ```
 
-**Phase 1 — Flatten only (SQL → NoSQL sync):**
-- AggregateDefinition fluent builder
-- AggregateMapper.Flatten() — composes related entities into nested document
-- SyncPipelineExtensions — plugs into Birko.Data.Sync for automatic denormalization
+**Features (both phases implemented):**
+- AggregateDefinition fluent builder (HasMany, HasOne, Via, Through)
+- AggregateMapper.Flatten/FlattenMany (sync + async) — composes related entities into nested documents
+- AggregateMapper.Expand/ExpandAsync — diffs nested arrays against current state, generates SyncOperation[] (insert/delete)
+- SyncPipelineExtensions — FlattenForSync, ExpandFromSync, ExpandManyFromSync
+- Store-agnostic via IRelatedDataProvider/IAsyncRelatedDataProvider interfaces
 
-**Phase 2 — Expand (bidirectional sync):**
-- CollectionDiffer — diffs nested arrays against existing junction rows
-- AggregateMapper.Expand() — generates SyncOperation[] (insert/delete on junction tables)
-- Unit of Work integration via Birko.Data.Patterns for atomic expand operations
-
-**Dependencies:** Birko.Data.Core, Birko.Data.Stores, Birko.Data.Sync, Birko.Data.Patterns (Phase 2 only)
-
-**Estimated scope:** ~10-15 classes, similar size to Birko.Validation or Birko.Rules
+**Dependencies:** Birko.Data.Core, Birko.Data.Stores, Birko.Helpers
 
 **Important:** Does NOT attempt query translation (SQL joins ↔ ES nested queries). Query logic remains in store-specific repository implementations. This helper handles data shape mapping for sync only.
 
