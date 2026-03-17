@@ -2,7 +2,7 @@
 
 ## Overview
 
-Health checks for database backends. Each check tests connectivity using the simplest possible operation (SQL query, HTTP ping, TCP connect).
+Health checks for infrastructure backends — databases, message brokers, secret vaults, and email servers. Each check tests connectivity using the simplest possible operation (SQL query, HTTP ping, TCP connect).
 
 ## Project Location
 
@@ -33,12 +33,34 @@ Health checks for database backends. Each check tests connectivity using the sim
 - Calls `/build/version` endpoint
 - Reports success based on HTTP status code
 
+### InfluxDbHealthCheck.cs
+- Takes base URL + optional HttpClient
+- Calls `/ping` endpoint
+- Reports latency, degrades above 2s
+
+### VaultHealthCheck.cs
+- Takes base URL + optional HttpClient
+- Calls `/v1/sys/health` endpoint
+- Maps Vault status codes: 200=Healthy, 429/473=Degraded (standby), other=Unhealthy
+
+### MqttHealthCheck.cs
+- Two constructors: host+port TCP check or custom ping func
+- TCP: connects to MQTT broker port (default 1883)
+- Custom func: `Func<CancellationToken, Task<bool>>` for use with MqttMessageQueue.IsConnected
+- Reports latency, degrades above 2s
+
+### SmtpHealthCheck.cs
+- Takes host + port (default 25)
+- TCP connect, reads SMTP 220 banner, sends QUIT
+- Reports banner text and latency, degrades above 2s
+
 ## Dependencies
 
 - **Birko.Health** — `IHealthCheck`, `HealthCheckResult`
 - **System.Data.Common** (for SqlHealthCheck DbConnection)
-- **System.Net.Http** (for ES/RavenDB HttpClient)
+- **System.Net.Http** (for ES/RavenDB/InfluxDB/Vault HttpClient)
+- **System.Net.Sockets** (for MongoDB/MQTT/SMTP TCP checks)
 
 ## Maintenance
 
-- When adding new data backend checks, add to this project and update .projitems
+- When adding new infrastructure backend checks, add to this project and update .projitems
