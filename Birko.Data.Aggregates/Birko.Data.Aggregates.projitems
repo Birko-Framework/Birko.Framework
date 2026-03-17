@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c4d5e6f7-a8b9-4c0d-1e2f-3a4b5c6d7e8f</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Aggregates</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\RelationshipType.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\RelationshipDescriptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ExpressionHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IAggregateDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\RelationshipBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\AggregateDefinition.cs" />
+    <!-- Mapping -->
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\FlattenResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\IRelatedDataProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\SyncOperationType.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\SyncOperation.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\IAggregateMapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\AggregateMapper.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\SyncPipelineExtensions.cs" />
+  </ItemGroup>
+</Project>
