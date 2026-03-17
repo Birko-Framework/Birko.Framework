@@ -2,7 +2,7 @@
 
 ## Overview
 
-Birko.Caching provides a unified async-first caching interface with in-memory and Redis backends.
+Birko.Caching provides a unified async-first caching interface with in-memory, Redis, and hybrid (L1+L2) backends.
 
 ## Core Interface
 
@@ -97,6 +97,61 @@ var result = await cache.GetAsync<User>("user:42");
 - **Prefix removal**: Uses `SCAN` for efficient prefix-based invalidation
 - **ClearAsync**: Flushes database or prefix depending on `InstanceName`
 
+## Hybrid Cache (L1 + L2)
+
+Two-tier cache combining a fast local (L1) memory cache with a distributed (L2) cache for multi-node consistency:
+
+```csharp
+var l1 = new MemoryCache();
+var l2 = new RedisCache(redisSettings);
+
+var options = new HybridCacheOptions
+{
+    L1DefaultExpiration = TimeSpan.FromSeconds(30),  // L1 entries live 30s by default
+    L1MaxExpiration = TimeSpan.FromMinutes(5),       // Cap L1 TTL to limit staleness
+    WriteThrough = true,                              // Write both tiers in parallel
+    FallbackToL1OnL2Failure = true                    // Survive Redis outages
+};
+
+using var cache = new HybridCache(l1, l2, options);
+
+// Set — writes both L1 and L2
+await cache.SetAsync("user:42", user, CacheEntryOptions.Absolute(TimeSpan.FromMinutes(10)));
+
+// Get — checks L1 first, falls back to L2, populates L1 on hit
+var result = await cache.GetAsync<User>("user:42");
+
+// GetOrSet — stampede-safe with two-tier lookup
+var product = await cache.GetOrSetAsync("product:99",
+    async ct => await db.LoadProductAsync(99, ct),
+    CacheEntryOptions.Sliding(TimeSpan.FromMinutes(15)));
+```
+
+### Hybrid Cache Features
+
+- **L1 TTL capping**: Local entries auto-expire (default 5 min max) to limit cross-node staleness
+- **Write-through**: `SetAsync` writes both tiers in parallel for consistency
+- **Stampede prevention**: Per-key `SemaphoreSlim` locks in `GetOrSetAsync`
+- **L2 failure resilience**: Graceful fallback to L1 when distributed cache is unavailable
+- **Non-owning**: `HybridCache` does NOT dispose L1/L2 — the caller owns their lifetime
+
+### Read Flow
+
+```
+1. Check L1 (memory) → hit → return
+2. Check L2 (Redis)  → hit → populate L1 → return
+3. Both miss          → return Miss
+```
+
+### Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `L1DefaultExpiration` | 30 seconds | Default TTL for L1 entries when no options are specified |
+| `L1MaxExpiration` | 5 minutes | Maximum absolute TTL for L1 entries. Set to `null` to use original options |
+| `WriteThrough` | `true` | Write both tiers in parallel (`true`) or L2-first then L1 (`false`) |
+| `FallbackToL1OnL2Failure` | `true` | Silently fall back to L1 when L2 throws an exception |
+
 ## Serialization
 
 `CacheSerializer` provides static `System.Text.Json` serialization for distributed backends. In-memory cache stores objects directly without serialization.
@@ -105,4 +160,5 @@ var result = await cache.GetAsync<User>("user:42");
 
 - [Birko.Caching CLAUDE.md](../Birko.Caching/CLAUDE.md)
 - [Birko.Caching.Redis CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md)
+- [Birko.Caching.Hybrid CLAUDE.md](../Birko.Caching.Hybrid/CLAUDE.md)
 - [Birko.Redis CLAUDE.md](../Birko.Redis/CLAUDE.md)

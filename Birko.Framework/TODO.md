@@ -71,7 +71,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 ### Recommended next for Symbio (priority order)
 
 1. ~~**Birko.Health** (High)~~ ✅ — Implemented 2026-03-17. Core + Data (SQL, ES, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP) + Redis + Azure (Blob, KeyVault) health checks with aggregated runner.
-2. **Birko.Caching.Hybrid** (High) — Symbio uses MemoryCache singleton today. Multi-node deployments need L1 memory + L2 Redis with distributed invalidation for cache consistency across instances in a multi-tenant setup.
+2. ~~**Birko.Caching.Hybrid** (High)~~ ✅ — Implemented 2026-03-17. L1 memory + L2 Redis two-tier cache with write-through, L1 TTL capping, and L2 failure resilience.
 3. ~~**Birko.Storage.AzureBlob** (High)~~ ✅ — Implemented 2026-03-17. REST API with OAuth2, SAS presigned URLs, tenant isolation via PathPrefix.
 4. **Birko.Data.Aggregates** (Medium) — Symbio uses 5 data stores. Aggregate mapper simplifies keeping denormalized ES search indices in sync with relational SQL data, especially for m:n relations (e.g., products ↔ categories).
 5. **Birko.Messaging — Razor templates** (Medium) — Symbio sends email invoices and reservation confirmations via StringTemplateEngine. Razor templates enable proper HTML email layout with loops, conditionals, and partial views.
@@ -332,17 +332,26 @@ Birko.Caching.Redis/
 ---
 
 ### Birko.Caching.Hybrid
-**Status:** Planned | **Priority:** Medium
+**Status:** ✅ Implemented (2026-03-17) | **Priority:** Medium
 
-L1 memory + L2 distributed cache.
+L1 memory + L2 distributed two-tier cache with write-through, L1 TTL capping, stampede prevention, and L2 failure resilience.
+Location: `C:\Source\Birko.Caching.Hybrid\`
 
 ```
 Birko.Caching.Hybrid/
-├── HybridCache.cs                         - Two-tier caching
-└── HybridCacheOptions.cs
+├── HybridCache.cs                         ✅ ICache implementation (L1 check → L2 fallback → populate L1)
+└── HybridCacheOptions.cs                  ✅ L1DefaultExpiration, L1MaxExpiration, WriteThrough, FallbackToL1OnL2Failure
 ```
 
-**Dependencies:** Birko.Caching, Birko.Caching.Redis (or other distributed)
+**Features:**
+- L1 (memory) + L2 (distributed) two-tier caching
+- Write-through: SetAsync writes both tiers in parallel
+- L1 TTL capping: local entries auto-expire to limit cross-node staleness
+- Stampede prevention: per-key SemaphoreSlim locks in GetOrSetAsync
+- L2 failure resilience: graceful fallback to L1 when distributed cache is unavailable
+- Cache-agnostic: works with any ICache implementations (MemoryCache, RedisCache, or custom)
+
+**Dependencies:** Birko.Caching
 
 ---
 
@@ -1725,7 +1734,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | Phase | Core Project | Platform Projects | Status | Symbio Need |
 |-------|--------------|-------------------|--------|-------------|
 | 1 | **Birko.Data.Patterns** | UoW, Paging, Specification, Concurrency | ✅ Complete | Stub UoW needs full repo integration |
-| 2 | **Birko.Caching** | Redis, Hybrid, NCache | ✅ Core+Redis done | Pending: replace Symbio ICacheService stub |
+| 2 | **Birko.Caching** | Redis, Hybrid, NCache | ✅ Core+Redis+Hybrid done | Pending: replace Symbio ICacheService stub |
 | 3 | **Birko.Validation** | (platform-agnostic) | ✅ Done | Pending: integrate into Symbio endpoints |
 | 4 | **Birko.BackgroundJobs** | SQL, Redis | ✅ Core+SQL+Redis done | Pending: replace Symbio raw IHostedService |
 | 5 | **Birko.MessageQueue** | MQTT, InMemory | ✅ Core+MQTT+InMemory done | Pending: replace Symbio direct MQTTnet usage |

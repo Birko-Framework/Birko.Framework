@@ -115,6 +115,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Caching
 - **Birko.Caching** - Unified caching interface (ICache, MemoryCache, CacheSerializer)
 - **Birko.Caching.Redis** - Redis backend (RedisCache)
+- **Birko.Caching.Hybrid** - L1 memory + L2 distributed two-tier cache (HybridCache)
 
 ### Redis
 - **Birko.Redis** - Shared Redis infrastructure (RedisSettings extending RemoteSettings, RedisConnectionManager)
@@ -317,6 +318,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.MessageQueue.MQTT | [../Birko.MessageQueue.MQTT/CLAUDE.md](../Birko.MessageQueue.MQTT/CLAUDE.md) |
 | Birko.Caching | [../Birko.Caching/CLAUDE.md](../Birko.Caching/CLAUDE.md) |
 | Birko.Caching.Redis | [../Birko.Caching.Redis/CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md) |
+| Birko.Caching.Hybrid | [../Birko.Caching.Hybrid/CLAUDE.md](../Birko.Caching.Hybrid/CLAUDE.md) |
+| Birko.Caching.Hybrid.Tests | [../Birko.Caching.Hybrid.Tests/CLAUDE.md](../Birko.Caching.Hybrid.Tests/CLAUDE.md) |
 | Birko.Redis | [../Birko.Redis/CLAUDE.md](../Birko.Redis/CLAUDE.md) |
 | Birko.Security | [../Birko.Security/CLAUDE.md](../Birko.Security/CLAUDE.md) |
 | Birko.Security.Jwt | [../Birko.Security.Jwt/CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md) |
@@ -433,7 +436,7 @@ When adding a new project to the framework, it must be registered in both:
 
 Existing folder groups in both files:
 - **BackgroundJobs/** — Birko.BackgroundJobs
-- **Caching/** — Birko.Caching, Birko.Caching.Redis
+- **Caching/** — Birko.Caching, Birko.Caching.Redis, Birko.Caching.Hybrid
 - **Communication/** — Birko.Communication.*
 - **Data/** — Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
 - **Health/** — Birko.Health, Birko.Health.Data, Birko.Health.Redis, Birko.Health.Azure
