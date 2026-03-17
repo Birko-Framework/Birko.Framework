@@ -171,6 +171,54 @@ var check = new RedisHealthCheck(() => connectionManager.GetConnection());
 
 Returns data: `latencyMs`, `isConnected`.
 
+## InfluxDB Health Check (Birko.Health.Data)
+
+Calls the `/ping` endpoint. Reports latency, degrades above 2 seconds:
+
+```csharp
+var check = new InfluxDbHealthCheck("http://localhost:8086");
+```
+
+Returns data: `url`, `latencyMs`, `statusCode`.
+
+## Vault Health Check (Birko.Health.Data)
+
+Calls the `/v1/sys/health` endpoint. Maps Vault status codes:
+
+```csharp
+var check = new VaultHealthCheck("http://localhost:8200");
+```
+
+- **200** = Healthy (active, unsealed)
+- **429/473** = Degraded (standby)
+- **501/503** = Unhealthy (not initialized / sealed)
+
+Returns data: `url`, `latencyMs`, `statusCode`.
+
+## MQTT Health Check (Birko.Health.Data)
+
+TCP connectivity check or custom ping function:
+
+```csharp
+// TCP connect to broker
+var check = new MqttHealthCheck("mqtt-broker.local", 1883);
+
+// Custom ping (e.g., from MqttMessageQueue.IsConnected)
+var check = new MqttHealthCheck(ct => Task.FromResult(mqttQueue.IsConnected), "MQTT Broker");
+```
+
+Returns data: `latencyMs`, `host`, `port`.
+
+## SMTP Health Check (Birko.Health.Data)
+
+TCP connect + SMTP banner verification (expects 220 greeting):
+
+```csharp
+var check = new SmtpHealthCheck("smtp.example.com", 587);
+```
+
+Returns data: `host`, `port`, `latencyMs`, `banner`.
+
 ## Azure Health Checks (Birko.Health.Azure)
 
 ### AzureBlobHealthCheck
@@ -269,7 +317,7 @@ app.MapGet("/health/live", async () =>
 | Project | Checks | Dependencies |
 |---------|--------|-------------|
 | `Birko.Health` | DiskSpace, Memory, Runner | None |
-| `Birko.Health.Data` | SQL, Elasticsearch, MongoDB, RavenDB | System.Data.Common, System.Net.Http |
+| `Birko.Health.Data` | SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP | System.Data.Common, System.Net.Http, System.Net.Sockets |
 | `Birko.Health.Redis` | Redis PING | StackExchange.Redis |
 | `Birko.Health.Azure` | Azure Blob Storage, Azure Key Vault | Birko.Storage.AzureBlob, Birko.Security.AzureKeyVault |
 

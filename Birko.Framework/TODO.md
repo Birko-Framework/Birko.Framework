@@ -70,7 +70,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 
 ### Recommended next for Symbio (priority order)
 
-1. ~~**Birko.Health** (High)~~ ✅ — Implemented 2026-03-17. Core + Data (SQL, ES, MongoDB, RavenDB) + Redis health checks with aggregated runner.
+1. ~~**Birko.Health** (High)~~ ✅ — Implemented 2026-03-17. Core + Data (SQL, ES, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP) + Redis + Azure (Blob, KeyVault) health checks with aggregated runner.
 2. **Birko.Caching.Hybrid** (High) — Symbio uses MemoryCache singleton today. Multi-node deployments need L1 memory + L2 Redis with distributed invalidation for cache consistency across instances in a multi-tenant setup.
 3. ~~**Birko.Storage.AzureBlob** (High)~~ ✅ — Implemented 2026-03-17. REST API with OAuth2, SAS presigned URLs, tenant isolation via PathPrefix.
 4. **Birko.Data.Aggregates** (Medium) — Symbio uses 5 data stores. Aggregate mapper simplifies keeping denormalized ES search indices in sync with relational SQL data, especially for m:n relations (e.g., products ↔ categories).
@@ -1507,8 +1507,8 @@ Birko.Time/
 ### Birko.Health
 **Status:** ✅ Implemented (2026-03-17) | **Priority:** High
 
-Health check framework with aggregated runner and built-in system/data/Redis checks.
-Locations: `C:\Source\Birko.Health\`, `C:\Source\Birko.Health.Data\`, `C:\Source\Birko.Health.Redis\`
+Health check framework with aggregated runner and built-in system/data/infrastructure/Azure checks.
+Locations: `C:\Source\Birko.Health\`, `C:\Source\Birko.Health.Data\`, `C:\Source\Birko.Health.Redis\`, `C:\Source\Birko.Health.Azure\`
 
 ```
 Birko.Health/
@@ -1529,7 +1529,11 @@ Birko.Health.Data/
 ├── SqlHealthCheck.cs                      ✅ DbConnection + SELECT 1 (any ADO.NET provider)
 ├── ElasticSearchHealthCheck.cs            ✅ Cluster health API (green/yellow/red)
 ├── MongoDbHealthCheck.cs                  ✅ Custom ping func or TCP connect
-└── RavenDbHealthCheck.cs                  ✅ /build/version endpoint
+├── RavenDbHealthCheck.cs                  ✅ /build/version endpoint
+├── InfluxDbHealthCheck.cs                 ✅ /ping endpoint + latency (>2s = Degraded)
+├── VaultHealthCheck.cs                    ✅ /v1/sys/health (200=OK, 429/473=standby, 501/503=unhealthy)
+├── MqttHealthCheck.cs                     ✅ TCP connect or custom ping func + latency
+└── SmtpHealthCheck.cs                     ✅ TCP + SMTP 220 banner + QUIT + latency
 ```
 
 ```
@@ -1537,7 +1541,29 @@ Birko.Health.Redis/
 └── RedisHealthCheck.cs                    ✅ PING + latency measurement (>100ms = Degraded)
 ```
 
-**Dependencies:** None (core), System.Data.Common + System.Net.Http (Data), StackExchange.Redis (Redis)
+```
+Birko.Health.Azure/
+├── AzureBlobHealthCheck.cs                ✅ ListAsync(maxResults:1) probe + latency (>2s = Degraded)
+└── AzureKeyVaultHealthCheck.cs            ✅ ListSecretsAsync() probe + latency (>2s = Degraded)
+```
+
+**Planned health checks (Low Priority):**
+
+When the corresponding communication/queue providers are implemented, add health checks to the appropriate project:
+
+| Health Check | Service | Probe | Target Project |
+|-------------|---------|-------|---------------|
+| `WebSocketHealthCheck` | WebSocket server | TCP connect + WS handshake | Birko.Health.Data |
+| `SseHealthCheck` | SSE endpoint | HTTP GET + event stream check | Birko.Health.Data |
+| `TcpHealthCheck` | Generic TCP endpoint | TCP connect + latency | Birko.Health.Data |
+| `RabbitMqHealthCheck` | RabbitMQ | HTTP management API `/api/healthchecks/node` | Birko.Health.Data |
+| `KafkaHealthCheck` | Apache Kafka | Metadata request to broker | Birko.Health.Data |
+| `AzureServiceBusHealthCheck` | Azure Service Bus | REST API management probe | Birko.Health.Azure |
+| `AwsSqsHealthCheck` | AWS SQS | GetQueueAttributes probe | Birko.Health.Aws (new) |
+
+> **Note:** Bluetooth, Hardware (serial), and generic Network (UDP) health checks are not planned — these are hardware-specific and health depends on physical device availability, not service connectivity.
+
+**Dependencies:** None (core), System.Data.Common + System.Net.Http + System.Net.Sockets (Data), StackExchange.Redis (Redis), Birko.Storage.AzureBlob + Birko.Security.AzureKeyVault (Azure)
 
 ---
 
@@ -1710,7 +1736,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
 | 12 | **Birko.Workflow** | SQL, MongoDB | ⬜ Planned (Low) | Future: reservations, order tracking |
-| 13 | Additional | Time, ~~Health~~, Serialization, Localization, CQRS | ✅ Health done, rest planned (Low) | Future |
+| 13 | Additional | Time, ~~Health~~, Serialization, Localization, CQRS | ✅ Health done (Core+Data+Redis+Azure), rest planned (Low) | Future |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |

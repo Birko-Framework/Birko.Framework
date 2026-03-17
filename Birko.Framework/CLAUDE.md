@@ -149,7 +149,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Health
 - **Birko.Health** - Health check framework (IHealthCheck, HealthCheckRunner, HealthReport, DiskSpaceHealthCheck, MemoryHealthCheck)
-- **Birko.Health.Data** - Database health checks (SQL, Elasticsearch, MongoDB, RavenDB)
+- **Birko.Health.Data** - Infrastructure health checks (SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP)
 - **Birko.Health.Redis** - Redis health check (PING + latency)
 - **Birko.Health.Azure** - Azure health checks (Blob Storage, Key Vault)
 - **Birko.Health.Tests** - Unit tests for health checks (core, system, data, runner)
@@ -459,3 +459,19 @@ Every new public functionality must have corresponding unit tests. When adding n
 - Follow existing test patterns (xUnit + FluentAssertions)
 - Test both success and failure cases
 - Include edge cases and boundary conditions
+
+### Health Check Requirements
+When creating a new project that connects to an external service (database, cache, cloud API, message broker, etc.), **automatically create a corresponding health check**:
+- **Birko.Health.Data** — for database/data store providers (SQL, NoSQL, search, time-series)
+- **Birko.Health.Redis** — for Redis-specific checks
+- **Birko.Health.Azure** — for Azure cloud services (Blob Storage, Key Vault, Service Bus, etc.)
+- **New Birko.Health.X project** — if the service doesn't fit existing health check projects (e.g., Birko.Health.Aws for AWS services)
+
+Health check pattern:
+1. Implement `IHealthCheck` with a lightweight connectivity probe (e.g., list with maxResults=1, ping, SELECT 1)
+2. Dual constructors: `Func<T>` factory and singleton instance
+3. Three-level status: Healthy (OK), Degraded (slow > threshold), Unhealthy (exception)
+4. Include `latencyMs` in the result `Data` dictionary
+5. Add unit tests for constructor validation, factory exception handling, and cancellation
+6. Update `docs/health.md`, the health examples, and the Health tab in Program.cs
+7. Register in solution (.slnx), workspace (.code-workspace), and framework .csproj
