@@ -16,5 +16,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)PathValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExpressionBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CsvParser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)DiffResult.cs" />
   </ItemGroup>
 </Project>
