@@ -68,6 +68,23 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 - **Birko.Messaging** ✅ (Phase 7) — email invoices, reservation confirmations, SMS notifications
 - **Birko.Storage** ✅ (Phase 6) — product images, invoice PDFs, camera snapshots
 
+### Recommended next for Symbio (priority order)
+
+1. **Birko.Health** (High) — Symbio runs 5 database backends (SQL, MongoDB, TimescaleDB, RavenDB, ES) + MQTT + Redis + background jobs. Aggregated health endpoint is essential for production monitoring. Small project, quick win.
+2. **Birko.Caching.Hybrid** (High) — Symbio uses MemoryCache singleton today. Multi-node deployments need L1 memory + L2 Redis with distributed invalidation for cache consistency across instances in a multi-tenant setup.
+3. **Birko.Storage.AzureBlob** (High) — LocalFileStorage works for dev but product images, invoice PDFs, and camera snapshots need cloud storage for production scaling.
+4. **Birko.Data.Aggregates** (Medium) — Symbio uses 5 data stores. Aggregate mapper simplifies keeping denormalized ES search indices in sync with relational SQL data, especially for m:n relations (e.g., products ↔ categories).
+5. **Birko.Messaging — Razor templates** (Medium) — Symbio sends email invoices and reservation confirmations via StringTemplateEngine. Razor templates enable proper HTML email layout with loops, conditionals, and partial views.
+6. **Birko.Workflow** (Medium) — Reservations, order tracking, and device lifecycle likely have ad-hoc state machines today. Formalizing with a workflow engine improves correctness and auditability.
+7. **Birko.MessageQueue.Redis** (Low) — Redis infra already exists. Redis Streams would provide a persistent non-IoT queue without deploying a separate broker (RabbitMQ/Kafka).
+8. **Birko.CQRS** (Low) — Natural next step given EventBus + EventSourcing are integrated. Separates read/write models for complex modules.
+
+### Lower priority for Symbio
+- **Birko.Time** — `DateTimeOffset` covers most needs unless business calendar/working hours become a requirement
+- **Birko.Serialization** — `System.Text.Json` works fine, only needed if MessagePack/Protobuf performance is required
+- **Birko.Localization** — Only if Symbio needs multi-language UI
+- **Birko.MessageQueue.Kafka/RabbitMQ** — MQTT + InMemory covers IoT workloads, only needed at higher scale
+
 ### Symbio-specific features (not in Birko scope)
 - Module discovery/registration system (IModule, ModuleRegistrar, dependency graph)
 - Unified real-time notifier (SSE + WebSocket combined, tenant-aware)
@@ -734,24 +751,27 @@ Birko.Messaging.Twilio/
 ---
 
 ### Birko.Messaging.Razor
-**Status:** Planned | **Priority:** Medium
+**Status:** ✅ Implemented (2026-03-17) | **Priority:** Medium
 
 Razor template engine for rich HTML email and message rendering. Replaces StringTemplateEngine for complex templates with conditionals, loops, and layouts.
+Location: `C:\Source\Birko.Messaging.Razor\`
 
 ```
 Birko.Messaging.Razor/
-├── RazorTemplateEngine.cs                - ITemplateEngine implementation using RazorLight
-├── RazorTemplateOptions.cs               - Template base path, caching, precompilation
-└── RazorFileTemplateProvider.cs          - Load .cshtml templates from disk
+├── RazorTemplateEngine.cs                ✅ ITemplateEngine implementation using RazorLight
+├── RazorTemplateOptions.cs               ✅ Template base path, caching, encoding, default namespaces
+└── RazorFileTemplateProvider.cs          ✅ Load .cshtml templates from disk with caching and traversal protection
 ```
 
 **Features:**
 - Full Razor syntax (conditionals, loops, partials, layouts)
 - Strongly-typed models (`@model OrderConfirmation`)
-- Template caching and precompilation
-- File-based and embedded resource templates
+- Template caching (compiled templates cached for reuse)
+- File-based templates with directory traversal protection
+- IMessageTemplate support (file lookup by name, fallback to inline BodyTemplate)
+- Configurable encoding and default namespaces
 
-**Dependencies:** Birko.Messaging, RazorLight (or Microsoft.AspNetCore.Razor)
+**Dependencies:** Birko.Messaging, RazorLight (NuGet added by consuming project)
 
 ---
 
@@ -1676,7 +1696,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 4 | **Birko.BackgroundJobs** | SQL, Redis | ✅ Core+SQL+Redis done | Pending: replace Symbio raw IHostedService |
 | 5 | **Birko.MessageQueue** | MQTT, InMemory | ✅ Core+MQTT+InMemory done | Pending: replace Symbio direct MQTTnet usage |
 | 6 | **Birko.Storage** | AzureBlob, Aws, Google, Minio | ✅ Core done, providers planned | Local impl done, cloud providers planned |
-| 7 | **Birko.Messaging** | SendGrid, Razor, Mailgun, Twilio, Firebase, Apple | ✅ Core done, providers planned | SMTP email, templates, SMS/push interfaces |
+| 7 | **Birko.Messaging** | SendGrid, Razor, Mailgun, Twilio, Firebase, Apple | ✅ Core+Razor done, others planned | SMTP email, Razor templates, SMS/push interfaces |
 | 8 | **Birko.MessageQueue** | RabbitMQ, Kafka, Azure, Aws, Redis, MassTransit | ⬜ Planned (Medium) | Future: remaining providers |
 | 9 | **Birko.EventBus** | MessageQueue, Outbox, EventSourcing | ✅ Complete | Decoupled module communication |
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |

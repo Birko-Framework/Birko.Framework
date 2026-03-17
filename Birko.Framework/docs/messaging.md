@@ -177,6 +177,103 @@ var body = await engine.RenderAsync(template,
     new { InvoiceNumber = "INV-001", CustomerName = "Alice", Amount = "$99.00" });
 ```
 
+### RazorTemplateEngine (Birko.Messaging.Razor)
+
+Full Razor syntax for complex HTML email templates — conditionals, loops, strongly-typed models, and layouts. Drop-in replacement for `StringTemplateEngine` when `{{placeholder}}` syntax is insufficient.
+
+> **Dependency:** The consuming project must add the [RazorLight](https://github.com/toddams/RazorLight) NuGet package:
+> ```xml
+> <PackageReference Include="RazorLight" Version="2.*" />
+> ```
+> And set `<PreserveCompilationContext>true</PreserveCompilationContext>` in the `.csproj`.
+
+#### Inline Razor Templates
+
+```csharp
+var engine = new RazorTemplateEngine();
+
+var body = await engine.RenderAsync(
+    "Hello @Model.Name, your order @Model.OrderId is ready!",
+    new { Name = "John", OrderId = "ORD-123" });
+```
+
+#### Razor Conditionals and Loops
+
+```csharp
+var body = await engine.RenderAsync(@"
+<h1>Order for @Model.CustomerName</h1>
+<ul>
+@foreach (var item in Model.Items)
+{
+    <li>@item.Name — @item.Price.ToString(""C"")</li>
+}
+</ul>
+@if (Model.IsVip)
+{
+    <p><strong>VIP discount applied!</strong></p>
+}
+<p>Total: @Model.Total.ToString(""C"")</p>",
+    new { CustomerName = "Alice", Items = items, IsVip = true, Total = 99.00m });
+```
+
+#### File-Based .cshtml Templates
+
+```csharp
+var engine = new RazorTemplateEngine(new RazorTemplateOptions
+{
+    TemplateBasePath = "/app/templates/emails",
+    EnableCaching = true,
+    DefaultNamespaces = new[] { "System.Linq" }
+});
+
+// Renders /app/templates/emails/OrderConfirmation.cshtml
+var body = await engine.RenderFileAsync("OrderConfirmation", order);
+
+// Subdirectories supported
+var welcome = await engine.RenderFileAsync("Emails/Welcome", user);
+```
+
+#### With IMessageTemplate
+
+When `TemplateBasePath` is configured, `RenderAsync(IMessageTemplate, ...)` tries to find a file matching the template's `Name` first. If no file exists, it falls back to the inline `BodyTemplate`:
+
+```csharp
+var template = new InvoiceTemplate(); // Name = "invoice"
+// Tries: /app/templates/emails/invoice.cshtml
+// Falls back to: template.BodyTemplate (inline Razor)
+var body = await engine.RenderAsync(template, model);
+```
+
+#### RazorTemplateOptions
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `TemplateBasePath` | `string?` | `null` | Base directory for .cshtml files. `null` = inline-only mode |
+| `FileExtension` | `string` | `".cshtml"` | Template file extension |
+| `EnableCaching` | `bool` | `true` | Cache compiled templates for reuse |
+| `FileEncoding` | `Encoding` | `UTF8` | Encoding for reading template files |
+| `DefaultNamespaces` | `string[]` | `[]` | Namespaces auto-imported in all templates |
+
+#### RazorFileTemplateProvider
+
+Handles file loading separately from the engine. Includes:
+- In-memory content caching (per template name)
+- Directory traversal protection (`../` escape blocked)
+- Path normalization (forward/back slashes, auto-append extension)
+- `InvalidateCache(name)` and `ClearCache()` for cache management
+
+#### Choosing Between Engines
+
+| Feature | StringTemplateEngine | RazorTemplateEngine |
+|---------|---------------------|---------------------|
+| **Syntax** | `{{Property}}` | Full Razor (`@Model.Property`, `@if`, `@foreach`) |
+| **Conditionals** | No | Yes |
+| **Loops** | No | Yes |
+| **Layouts/Partials** | No | Yes |
+| **Dependencies** | None | RazorLight NuGet |
+| **Performance** | Fast (regex replace) | Compiled (first render slower, subsequent fast) |
+| **Use case** | Simple variable replacement | Complex HTML emails with logic |
+
 ## SMS (Interface Only)
 
 ```csharp
@@ -227,16 +324,18 @@ Exception types for programming errors (null args, invalid templates):
 | `InvalidRecipientException` | Invalid recipient address |
 | `TemplateRenderException` | Template rendering failure (missing property, etc.) |
 
-## Provider Projects (Planned)
+## Provider Projects
 
-| Project | Channel | Backend |
-|---------|---------|---------|
-| `Birko.Messaging.SendGrid` | Email | SendGrid API |
-| `Birko.Messaging.Mailgun` | Email | Mailgun API |
-| `Birko.Messaging.Twilio` | SMS | Twilio API |
-| `Birko.Messaging.Firebase` | Push | Firebase Cloud Messaging |
-| `Birko.Messaging.Apple` | Push | Apple Push Notification Service |
+| Project | Channel | Backend | Status |
+|---------|---------|---------|--------|
+| `Birko.Messaging.Razor` | Templates | RazorLight (Razor syntax) | ✅ Implemented |
+| `Birko.Messaging.SendGrid` | Email | SendGrid API | Planned |
+| `Birko.Messaging.Mailgun` | Email | Mailgun API | Planned |
+| `Birko.Messaging.Twilio` | SMS | Twilio API | Planned |
+| `Birko.Messaging.Firebase` | Push | Firebase Cloud Messaging | Planned |
+| `Birko.Messaging.Apple` | Push | Apple Push Notification Service | Planned |
 
 ## See Also
 
 - [Birko.Messaging CLAUDE.md](../../Birko.Messaging/CLAUDE.md)
+- [Birko.Messaging.Razor CLAUDE.md](../../Birko.Messaging.Razor/CLAUDE.md)

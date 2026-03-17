@@ -107,6 +107,7 @@
   </Folder>
   <Folder Name="/Messaging/">
     <Project Path="../Birko.Messaging/Birko.Messaging.shproj" />
+    <Project Path="../Birko.Messaging.Razor/Birko.Messaging.Razor.shproj" />
   </Folder>
   <Folder Name="/Storage/">
     <Project Path="../Birko.Storage/Birko.Storage.shproj" />
@@ -133,6 +134,7 @@
     <Project Path="../Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
     <Project Path="../Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
     <Project Path="../Birko.Messaging.Tests/Birko.Messaging.Tests.csproj" />
+    <Project Path="../Birko.Messaging.Razor.Tests/Birko.Messaging.Razor.Tests.csproj" />
     <Project Path="../Birko.Security.AspNetCore.Tests/Birko.Security.AspNetCore.Tests.csproj" />
     <Project Path="../Birko.Storage.Tests/Birko.Storage.Tests.csproj" />
     <Project Path="../Birko.Telemetry.Tests/Birko.Telemetry.Tests.csproj" />

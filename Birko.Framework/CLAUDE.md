@@ -80,7 +80,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Messaging
 - **Birko.Messaging** - Core messaging interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP email sender, string template engine
+- **Birko.Messaging.Razor** - Razor template engine (RazorLight-based ITemplateEngine, file-based .cshtml templates, caching)
 - **Birko.Messaging.Tests** - Unit tests for messaging (core types, email, templates)
+- **Birko.Messaging.Razor.Tests** - Unit tests for Razor template engine (inline rendering, file templates, caching, error handling)
 
 ### Communication Layer
 - **Birko.Communication** - Base communication interfaces
@@ -262,7 +264,9 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Security.AspNetCore.Tests | [../Birko.Security.AspNetCore.Tests/CLAUDE.md](../Birko.Security.AspNetCore.Tests/CLAUDE.md) |
 | Birko.Storage.Tests | [../Birko.Storage.Tests/CLAUDE.md](../Birko.Storage.Tests/CLAUDE.md) |
 | Birko.Messaging | [../Birko.Messaging/CLAUDE.md](../Birko.Messaging/CLAUDE.md) |
+| Birko.Messaging.Razor | [../Birko.Messaging.Razor/CLAUDE.md](../Birko.Messaging.Razor/CLAUDE.md) |
 | Birko.Messaging.Tests | [../Birko.Messaging.Tests/CLAUDE.md](../Birko.Messaging.Tests/CLAUDE.md) |
+| Birko.Messaging.Razor.Tests | [../Birko.Messaging.Razor.Tests/CLAUDE.md](../Birko.Messaging.Razor.Tests/CLAUDE.md) |
 | Birko.Communication | [../Birko.Communication/CLAUDE.md](../Birko.Communication/CLAUDE.md) |
 | Birko.Communication.Network | [../Birko.Communication.Network/CLAUDE.md](../Birko.Communication.Network/CLAUDE.md) |
 | Birko.Communication.Hardware | [../Birko.Communication.Hardware/CLAUDE.md](../Birko.Communication.Hardware/CLAUDE.md) |
