@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c7d8e9f0-a1b2-4c3d-8e6f-7a8b9c0d1e2f</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Workflow</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\WorkflowStatus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\StateChangeRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowInstance.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowEngine.cs" />
+    <!-- Definition -->
+    <Compile Include="$(MSBuildThisFileDirectory)Definition\StateDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Definition\TransitionDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Definition\WorkflowDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Definition\WorkflowBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Definition\StateBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Definition\TransitionBuilder.cs" />
+    <!-- Execution -->
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\TransitionResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\WorkflowException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\WorkflowInstance.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Execution\WorkflowEngine.cs" />
+    <!-- Visualization -->
+    <Compile Include="$(MSBuildThisFileDirectory)Visualization\IWorkflowDiagramGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Visualization\MermaidDiagramGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Visualization\DotDiagramGenerator.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\WorkflowServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
