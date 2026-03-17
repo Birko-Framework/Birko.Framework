@@ -39,4 +39,4 @@ SQL-to-NoSQL aggregate mapper. Defines aggregate shapes (which related entities 
 
 ## Maintenance
 - When adding new relationship types, update RelationshipType enum and add corresponding logic in AggregateMapper
-- When modifying AbstractModel, ensure FlattenResult and CollectionDiffer still handle Guid correctly
+- When modifying AbstractModel, ensure FlattenResult and the DiffByKey key selector (`e => e.Guid`) still work correctly
