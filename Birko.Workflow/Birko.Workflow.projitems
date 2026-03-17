@@ -15,6 +15,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowDefinition.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowInstance.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowEngine.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IWorkflowInstanceStore.cs" />
     <!-- Definition -->
     <Compile Include="$(MSBuildThisFileDirectory)Definition\StateDefinition.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Definition\TransitionDefinition.cs" />

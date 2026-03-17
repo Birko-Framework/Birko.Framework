@@ -12,7 +12,7 @@ State machine engine for business process automation in the Birko Framework. Pro
 - **State History** — Full transition audit trail via `StateChangeRecord`
 - **Visualization** — Generate Mermaid and Graphviz DOT diagrams from definitions
 - **DI Integration** — `AddWorkflowEngine()` for Microsoft.Extensions.DependencyInjection
-- **Persistence-ready** — Stateless engine + serializable instance state (Create/Restore pattern)
+- **Persistence** — `IWorkflowInstanceStore<TData>` with SQL, ElasticSearch, MongoDB, RavenDB, and JSON providers
 - **Fault handling** — Automatic faulted state on action failures
 
 ## Quick Start

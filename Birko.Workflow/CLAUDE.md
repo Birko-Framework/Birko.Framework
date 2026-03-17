@@ -14,6 +14,7 @@ State machine engine for business process automation. Trigger-based transitions 
 - **IWorkflowDefinition.cs** — Immutable workflow blueprint interface (Name, InitialState, States, Transitions, GetPermittedTriggers)
 - **IWorkflowInstance.cs** — Read-only view of instance state (InstanceId, CurrentState, Status, Data, History)
 - **IWorkflowEngine.cs** — Stateless engine interface (FireAsync, GetPermittedTriggers)
+- **IWorkflowInstanceStore.cs** — Persistence contract for workflow instances (Save, Load, Delete, FindByState/Status/WorkflowName)
 
 ### Definition/ — Builder and immutable definitions
 - **StateDefinition.cs** — State name, description, IsFinal, entry/exit actions
@@ -36,6 +37,15 @@ State machine engine for business process automation. Trigger-based transitions 
 
 ### Extensions/ — DI integration
 - **WorkflowServiceCollectionExtensions.cs** — AddWorkflowEngine() with optional state change publishing
+
+## Persistence Providers
+- **Birko.Workflow.SQL** — SQL persistence via AsyncDataBaseBulkStore (any connector)
+- **Birko.Workflow.ElasticSearch** — Elasticsearch persistence
+- **Birko.Workflow.MongoDB** — MongoDB persistence
+- **Birko.Workflow.RavenDB** — RavenDB persistence
+- **Birko.Workflow.JSON** — JSON file-based (dev/testing)
+
+All implement `IWorkflowInstanceStore<TData>`. Only instances are persisted (not definitions — definitions contain Func delegates).
 
 ## Dependencies
 - None (core is dependency-free)
