@@ -1,0 +1,77 @@
+using System;
+using System.Collections.Generic;
+using System.Text.Json;
+using Birko.Data.Models;
+using Birko.Workflow.Core;
+using Birko.Workflow.Execution;
+
+namespace Birko.Workflow.SQL.Models
+{
+    [Birko.Data.SQL.Attributes.Table("__WorkflowInstances")]
+    public class WorkflowInstanceModel : AbstractModel
+    {
+        [Birko.Data.SQL.Attributes.PrimaryField]
+        [Birko.Data.SQL.Attributes.NamedField("Id")]
+        public override Guid? Guid { get; set; }
+
+        [Birko.Data.SQL.Attributes.NamedField("WorkflowName")]
+        public string WorkflowName { get; set; } = string.Empty;
+
+        [Birko.Data.SQL.Attributes.NamedField("CurrentState")]
+        public string CurrentState { get; set; } = string.Empty;
+
+        [Birko.Data.SQL.Attributes.NamedField("Status")]
+        public int Status { get; set; }
+
+        [Birko.Data.SQL.Attributes.NamedField("DataJson")]
+        public string DataJson { get; set; } = string.Empty;
+
+        [Birko.Data.SQL.Attributes.NamedField("HistoryJson")]
+        public string HistoryJson { get; set; } = "[]";
+
+        [Birko.Data.SQL.Attributes.NamedField("CreatedAt")]
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [Birko.Data.SQL.Attributes.NamedField("UpdatedAt")]
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+        public WorkflowInstance<TData> ToInstance<TData>() where TData : class
+        {
+            var data = JsonSerializer.Deserialize<TData>(DataJson)!;
+            var history = JsonSerializer.Deserialize<List<StateChangeRecord>>(HistoryJson)
+                          ?? new List<StateChangeRecord>();
+
+            return WorkflowInstance<TData>.Restore(
+                Guid ?? System.Guid.NewGuid(),
+                CurrentState,
+                (WorkflowStatus)Status,
+                data,
+                history);
+        }
+
+        public static WorkflowInstanceModel FromInstance<TData>(string workflowName, WorkflowInstance<TData> instance)
+            where TData : class
+        {
+            return new WorkflowInstanceModel
+            {
+                Guid = instance.InstanceId,
+                WorkflowName = workflowName,
+                CurrentState = instance.CurrentState,
+                Status = (int)instance.Status,
+                DataJson = JsonSerializer.Serialize(instance.Data),
+                HistoryJson = JsonSerializer.Serialize(instance.History),
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+        }
+
+        public void UpdateFromInstance<TData>(WorkflowInstance<TData> instance) where TData : class
+        {
+            CurrentState = instance.CurrentState;
+            Status = (int)instance.Status;
+            DataJson = JsonSerializer.Serialize(instance.Data);
+            HistoryJson = JsonSerializer.Serialize(instance.History);
+            UpdatedAt = DateTime.UtcNow;
+        }
+    }
+}
