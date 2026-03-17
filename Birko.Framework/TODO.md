@@ -72,7 +72,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 
 1. ~~**Birko.Health** (High)~~ ✅ — Implemented 2026-03-17. Core + Data (SQL, ES, MongoDB, RavenDB) + Redis health checks with aggregated runner.
 2. **Birko.Caching.Hybrid** (High) — Symbio uses MemoryCache singleton today. Multi-node deployments need L1 memory + L2 Redis with distributed invalidation for cache consistency across instances in a multi-tenant setup.
-3. **Birko.Storage.AzureBlob** (High) — LocalFileStorage works for dev but product images, invoice PDFs, and camera snapshots need cloud storage for production scaling.
+3. ~~**Birko.Storage.AzureBlob** (High)~~ ✅ — Implemented 2026-03-17. REST API with OAuth2, SAS presigned URLs, tenant isolation via PathPrefix.
 4. **Birko.Data.Aggregates** (Medium) — Symbio uses 5 data stores. Aggregate mapper simplifies keeping denormalized ES search indices in sync with relational SQL data, especially for m:n relations (e.g., products ↔ categories).
 5. **Birko.Messaging — Razor templates** (Medium) — Symbio sends email invoices and reservation confirmations via StringTemplateEngine. Razor templates enable proper HTML email layout with loops, conditionals, and partial views.
 6. **Birko.Workflow** (Medium) — Reservations, order tracking, and device lifecycle likely have ad-hoc state machines today. Formalizing with a workflow engine improves correctness and auditability.
@@ -611,18 +611,18 @@ Birko.Storage/
 ---
 
 ### Birko.Storage.AzureBlob
-**Status:** Planned | **Priority:** Medium
+**Status:** ✅ Implemented | **Priority:** Medium
 
-Azure Blob Storage provider.
+Azure Blob Storage provider. Uses REST API directly with OAuth2 client credentials — no Azure.Storage.Blobs SDK dependency.
 
 ```
 Birko.Storage.AzureBlob/
-├── AzureBlobStorage.cs                   - IFileStorage + IPresignedUrlStorage implementation
-├── AzureBlobSettings.cs                  - Extends RemoteSettings (ConnectionString, ContainerName)
-└── AzureBlobPresignedUrlProvider.cs      - SAS token-based presigned URLs
+├── AzureBlobStorage.cs                   - IFileStorage + IPresignedUrlStorage implementation (REST API, OAuth2 Bearer)
+├── AzureBlobSettings.cs                  - Extends RemoteSettings (StorageAccountUri, ContainerName, OAuth2 credentials)
+└── AzureBlobPresignedUrlProvider.cs      - SAS token-based presigned URLs (HMAC-SHA256, account key)
 ```
 
-**Dependencies:** Birko.Storage, Azure.Storage.Blobs
+**Dependencies:** Birko.Storage, Birko.Data.Stores (RemoteSettings)
 
 ---
 
@@ -1703,7 +1703,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 3 | **Birko.Validation** | (platform-agnostic) | ✅ Done | Pending: integrate into Symbio endpoints |
 | 4 | **Birko.BackgroundJobs** | SQL, Redis | ✅ Core+SQL+Redis done | Pending: replace Symbio raw IHostedService |
 | 5 | **Birko.MessageQueue** | MQTT, InMemory | ✅ Core+MQTT+InMemory done | Pending: replace Symbio direct MQTTnet usage |
-| 6 | **Birko.Storage** | AzureBlob, Aws, Google, Minio | ✅ Core done, providers planned | Local impl done, cloud providers planned |
+| 6 | **Birko.Storage** | AzureBlob, Aws, Google, Minio | ✅ Core+AzureBlob done, rest planned | Local + Azure Blob done, other cloud providers planned |
 | 7 | **Birko.Messaging** | SendGrid, Razor, Mailgun, Twilio, Firebase, Apple | ✅ Core+Razor done, others planned | SMTP email, Razor templates, SMS/push interfaces |
 | 8 | **Birko.MessageQueue** | RabbitMQ, Kafka, Azure, Aws, Redis, MassTransit | ⬜ Planned (Medium) | Future: remaining providers |
 | 9 | **Birko.EventBus** | MessageQueue, Outbox, EventSourcing | ✅ Complete | Decoupled module communication |

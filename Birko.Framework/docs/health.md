@@ -171,6 +171,40 @@ var check = new RedisHealthCheck(() => connectionManager.GetConnection());
 
 Returns data: `latencyMs`, `isConnected`.
 
+## Azure Health Checks (Birko.Health.Azure)
+
+### AzureBlobHealthCheck
+
+Probes Azure Blob Storage by listing blobs (maxResults=1). Degrades above 2 seconds:
+
+```csharp
+// From existing storage instance
+var check = new AzureBlobHealthCheck(azureBlobStorage);
+
+// From factory (DI-friendly)
+var check = new AzureBlobHealthCheck(() => serviceProvider.GetRequiredService<AzureBlobStorage>());
+```
+
+Returns data: `latencyMs`.
+
+### AzureKeyVaultHealthCheck
+
+Probes Azure Key Vault by listing secrets. Same threshold pattern:
+
+```csharp
+var check = new AzureKeyVaultHealthCheck(secretProvider);
+
+// From factory
+var check = new AzureKeyVaultHealthCheck(() => serviceProvider.GetRequiredService<AzureKeyVaultSecretProvider>());
+```
+
+Returns data: `latencyMs`.
+
+Both checks support the same three statuses:
+- **Healthy**: responds within 2 seconds
+- **Degraded**: responds but slower than 2 seconds
+- **Unhealthy**: connection failed or exception thrown
+
 ## Custom Health Checks
 
 Implement `IHealthCheck`:
@@ -237,9 +271,11 @@ app.MapGet("/health/live", async () =>
 | `Birko.Health` | DiskSpace, Memory, Runner | None |
 | `Birko.Health.Data` | SQL, Elasticsearch, MongoDB, RavenDB | System.Data.Common, System.Net.Http |
 | `Birko.Health.Redis` | Redis PING | StackExchange.Redis |
+| `Birko.Health.Azure` | Azure Blob Storage, Azure Key Vault | Birko.Storage.AzureBlob, Birko.Security.AzureKeyVault |
 
 ## See Also
 
 - [Birko.Health CLAUDE.md](../../Birko.Health/CLAUDE.md)
 - [Birko.Health.Data CLAUDE.md](../../Birko.Health.Data/CLAUDE.md)
 - [Birko.Health.Redis CLAUDE.md](../../Birko.Health.Redis/CLAUDE.md)
+- [Birko.Health.Azure CLAUDE.md](../../Birko.Health.Azure/CLAUDE.md)

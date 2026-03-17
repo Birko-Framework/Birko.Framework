@@ -113,9 +113,11 @@
     <Project Path="../Birko.Health/Birko.Health.shproj" />
     <Project Path="../Birko.Health.Data/Birko.Health.Data.shproj" />
     <Project Path="../Birko.Health.Redis/Birko.Health.Redis.shproj" />
+    <Project Path="../Birko.Health.Azure/Birko.Health.Azure.shproj" />
   </Folder>
   <Folder Name="/Storage/">
     <Project Path="../Birko.Storage/Birko.Storage.shproj" />
+    <Project Path="../Birko.Storage.AzureBlob/Birko.Storage.AzureBlob.shproj" />
   </Folder>
   <Folder Name="/Telemetry/">
     <Project Path="../Birko.Telemetry/Birko.Telemetry.shproj" />
@@ -142,6 +144,7 @@
     <Project Path="../Birko.Messaging.Razor.Tests/Birko.Messaging.Razor.Tests.csproj" />
     <Project Path="../Birko.Security.AspNetCore.Tests/Birko.Security.AspNetCore.Tests.csproj" />
     <Project Path="../Birko.Storage.Tests/Birko.Storage.Tests.csproj" />
+    <Project Path="../Birko.Storage.AzureBlob.Tests/Birko.Storage.AzureBlob.Tests.csproj" />
     <Project Path="../Birko.Telemetry.Tests/Birko.Telemetry.Tests.csproj" />
     <Project Path="../Birko.Security.BCrypt.Tests/Birko.Security.BCrypt.Tests.csproj" />
     <Project Path="../Birko.Security.Vault.Tests/Birko.Security.Vault.Tests.csproj" />
@@ -149,6 +152,7 @@
     <Project Path="../Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
     <Project Path="../Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
     <Project Path="../Birko.Health.Tests/Birko.Health.Tests.csproj" />
+    <Project Path="../Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
     <Project Path="../Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">

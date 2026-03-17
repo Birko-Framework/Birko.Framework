@@ -141,7 +141,81 @@ if (storage is IPresignedUrlStorage presigned)
 }
 ```
 
-LocalFileStorage does not implement this — cloud providers (Azure, S3, GCS) will.
+LocalFileStorage does not implement this — cloud providers implement both `IFileStorage` and `IPresignedUrlStorage`.
+
+## Azure Blob Storage
+
+`Birko.Storage.AzureBlob` — Azure Blob Storage provider using REST API directly (no Azure SDK dependency).
+
+### Setup
+
+```csharp
+var settings = new AzureBlobSettings(
+    storageAccountUri: "https://myaccount.blob.core.windows.net",
+    containerName: "my-container",
+    tenantId: "your-tenant-id",
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+    pathPrefix: "tenant-123/");
+
+using var storage = new AzureBlobStorage(settings);
+```
+
+Authentication uses OAuth2 client credentials (scope: `https://storage.azure.com/.default`). Tokens are cached and refreshed automatically.
+
+### Usage
+
+All `IFileStorage` methods work identically to LocalFileStorage:
+
+```csharp
+// Upload
+using var stream = File.OpenRead("photo.jpg");
+var reference = await storage.UploadAsync("products/photo.jpg", stream, "image/jpeg");
+
+// Download
+var result = await storage.DownloadAsync("products/photo.jpg");
+if (result.Found) { using var s = result.Value; /* read */ }
+
+// List, Copy, Move, Delete — same as LocalFileStorage
+var files = await storage.ListAsync(prefix: "products/", maxResults: 100);
+```
+
+### Presigned URLs (SAS Tokens)
+
+Requires storage account key for HMAC-SHA256 signing:
+
+```csharp
+storage.AccountName = "myaccount";
+storage.AccountKey = "base64-account-key";
+
+var downloadUrl = await storage.GetDownloadUrlAsync("docs/file.pdf",
+    new PresignedUrlOptions { Expiry = TimeSpan.FromHours(2) });
+
+var uploadUrl = await storage.GetUploadUrlAsync("uploads/new.pdf",
+    new PresignedUrlOptions { ContentType = "application/pdf" });
+```
+
+### HttpClient Injection
+
+```csharp
+// Owned (default) — creates and disposes its own HttpClient
+var storage = new AzureBlobStorage(settings);
+
+// Injected — caller manages lifetime
+var storage = new AzureBlobStorage(settings, httpClient);
+```
+
+### Settings Mapping
+
+| AzureBlobSettings | RemoteSettings | Purpose |
+|-------------------|---------------|---------|
+| `StorageAccountUri` | `Location` | Storage account base URL |
+| `TenantId` | `Name` | Azure AD tenant ID |
+| `ClientId` | `UserName` | Application ID |
+| `ClientSecret` | `Password` | Client secret |
+| `ContainerName` | (new) | Azure container name |
+| `PathPrefix` | (new) | Tenant isolation prefix |
+| `TimeoutSeconds` | (new) | HTTP timeout (default: 30) |
 
 ## Path Security
 
@@ -159,15 +233,16 @@ All paths are validated against traversal attacks:
 | `ContentTypeNotAllowedException` | Content type not in `AllowedContentTypes` |
 | `InvalidPathException` | Path contains traversal or invalid characters |
 
-## Provider Projects (Planned)
+## Provider Projects
 
-| Project | Backend |
-|---------|---------|
-| `Birko.Storage.Azure` | Azure Blob Storage |
-| `Birko.Storage.Aws` | AWS S3 |
-| `Birko.Storage.Google` | Google Cloud Storage |
-| `Birko.Storage.Minio` | MinIO (S3-compatible) |
+| Project | Backend | Status |
+|---------|---------|--------|
+| `Birko.Storage.AzureBlob` | Azure Blob Storage | Implemented |
+| `Birko.Storage.Aws` | AWS S3 | Planned |
+| `Birko.Storage.Google` | Google Cloud Storage | Planned |
+| `Birko.Storage.Minio` | MinIO (S3-compatible) | Planned |
 
 ## See Also
 
 - [Birko.Storage CLAUDE.md](../../Birko.Storage/CLAUDE.md)
+- [Birko.Storage.AzureBlob CLAUDE.md](../../Birko.Storage.AzureBlob/CLAUDE.md)

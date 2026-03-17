@@ -73,6 +73,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Security.Vault.Tests** - Unit tests for HashiCorp Vault secret provider
 - **Birko.Security.AzureKeyVault.Tests** - Unit tests for Azure Key Vault secret provider
 - **Birko.Storage.Tests** - Unit tests for file storage (core types, LocalFileStorage, extensions)
+- **Birko.Storage.AzureBlob.Tests** - Unit tests for Azure Blob Storage (settings, path validation, presigned URLs, constructor validation)
 - **Birko.Telemetry.Tests** - Unit tests for telemetry (conventions, store wrappers, metrics, middleware)
 - **Birko.Telemetry.OpenTelemetry.Tests** - Unit tests for OpenTelemetry integration (options, DI registration, provider resolution)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
@@ -150,10 +151,13 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Health** - Health check framework (IHealthCheck, HealthCheckRunner, HealthReport, DiskSpaceHealthCheck, MemoryHealthCheck)
 - **Birko.Health.Data** - Database health checks (SQL, Elasticsearch, MongoDB, RavenDB)
 - **Birko.Health.Redis** - Redis health check (PING + latency)
+- **Birko.Health.Azure** - Azure health checks (Blob Storage, Key Vault)
 - **Birko.Health.Tests** - Unit tests for health checks (core, system, data, runner)
+- **Birko.Health.Azure.Tests** - Unit tests for Azure health checks (Blob Storage, Key Vault)
 
 ### Storage
 - **Birko.Storage** - File/blob storage abstraction (IFileStorage, LocalFileStorage, StorageResult, FileReference, presigned URL support)
+- **Birko.Storage.AzureBlob** - Azure Blob Storage provider (REST API, OAuth2, SAS presigned URLs, no SDK dependency)
 
 ### Telemetry
 - **Birko.Telemetry** - Thin instrumentation layer: store metrics (duration/count/errors via System.Diagnostics.Metrics), distributed tracing (ActivitySource), correlation ID middleware, store wrapper decorators
@@ -265,14 +269,19 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Health | [../Birko.Health/CLAUDE.md](../Birko.Health/CLAUDE.md) |
 | Birko.Health.Data | [../Birko.Health.Data/CLAUDE.md](../Birko.Health.Data/CLAUDE.md) |
 | Birko.Health.Redis | [../Birko.Health.Redis/CLAUDE.md](../Birko.Health.Redis/CLAUDE.md) |
+| Birko.Health.Azure | [../Birko.Health.Azure/CLAUDE.md](../Birko.Health.Azure/CLAUDE.md) |
 | Birko.Health.Tests | [../Birko.Health.Tests/CLAUDE.md](../Birko.Health.Tests/CLAUDE.md) |
+| Birko.Health.Azure | [../Birko.Health.Azure/CLAUDE.md](../Birko.Health.Azure/CLAUDE.md) |
+| Birko.Health.Azure.Tests | [../Birko.Health.Azure.Tests/CLAUDE.md](../Birko.Health.Azure.Tests/CLAUDE.md) |
 | Birko.Storage | [../Birko.Storage/CLAUDE.md](../Birko.Storage/CLAUDE.md) |
+| Birko.Storage.AzureBlob | [../Birko.Storage.AzureBlob/CLAUDE.md](../Birko.Storage.AzureBlob/CLAUDE.md) |
 | Birko.Telemetry | [../Birko.Telemetry/CLAUDE.md](../Birko.Telemetry/CLAUDE.md) |
 | Birko.Telemetry.OpenTelemetry | [../Birko.Telemetry.OpenTelemetry/CLAUDE.md](../Birko.Telemetry.OpenTelemetry/CLAUDE.md) |
 | Birko.Telemetry.Tests | [../Birko.Telemetry.Tests/CLAUDE.md](../Birko.Telemetry.Tests/CLAUDE.md) |
 | Birko.Telemetry.OpenTelemetry.Tests | [../Birko.Telemetry.OpenTelemetry.Tests/CLAUDE.md](../Birko.Telemetry.OpenTelemetry.Tests/CLAUDE.md) |
 | Birko.Security.AspNetCore.Tests | [../Birko.Security.AspNetCore.Tests/CLAUDE.md](../Birko.Security.AspNetCore.Tests/CLAUDE.md) |
 | Birko.Storage.Tests | [../Birko.Storage.Tests/CLAUDE.md](../Birko.Storage.Tests/CLAUDE.md) |
+| Birko.Storage.AzureBlob.Tests | [../Birko.Storage.AzureBlob.Tests/CLAUDE.md](../Birko.Storage.AzureBlob.Tests/CLAUDE.md) |
 | Birko.Messaging | [../Birko.Messaging/CLAUDE.md](../Birko.Messaging/CLAUDE.md) |
 | Birko.Messaging.Razor | [../Birko.Messaging.Razor/CLAUDE.md](../Birko.Messaging.Razor/CLAUDE.md) |
 | Birko.Messaging.Tests | [../Birko.Messaging.Tests/CLAUDE.md](../Birko.Messaging.Tests/CLAUDE.md) |
@@ -427,7 +436,7 @@ Existing folder groups in both files:
 - **Caching/** — Birko.Caching, Birko.Caching.Redis
 - **Communication/** — Birko.Communication.*
 - **Data/** — Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
-- **Health/** — Birko.Health, Birko.Health.Data, Birko.Health.Redis
+- **Health/** — Birko.Health, Birko.Health.Data, Birko.Health.Redis, Birko.Health.Azure
 - **Data.Migrations/** — Birko.Data.Migrations.*
 - **Data.NoSQL/** — ElasticSearch, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB stores
 - **Data.Patterns/** — Birko.Data.Patterns, EventSourcing, Tenant
@@ -438,7 +447,7 @@ Existing folder groups in both files:
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
 - **Security/** — Birko.Security, Birko.Security.Jwt, Birko.Security.AspNetCore, Birko.Security.BCrypt, Birko.Security.Vault, Birko.Security.AzureKeyVault
-- **Storage/** — Birko.Storage
+- **Storage/** — Birko.Storage, Birko.Storage.AzureBlob
 - **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry
 - **Tests/** — All *.Tests projects
 - **Rules/** — Birko.Rules
