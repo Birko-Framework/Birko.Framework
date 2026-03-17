@@ -68,6 +68,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Structures.Tests** - Unit tests for data structures (AVL tree, BST)
 - **Birko.BackgroundJobs.Tests** - Unit tests for background job processing (queue, dispatcher, executor, processor, scheduler)
 - **Birko.MessageQueue.Tests** - Unit tests for message queue (core, InMemory, MQTT topics, serialization)
+- **Birko.MessageQueue.Redis.Tests** - Unit tests for Redis Streams message queue (settings, queue lifecycle, producer/consumer validation)
 - **Birko.EventBus.Tests** - Unit tests for event bus (core, distributed, outbox, event sourcing)
 - **Birko.Security.AspNetCore.Tests** - Unit tests for ASP.NET Core security integration (JWT auth, ICurrentUser, permissions, tenant resolution, middleware)
 - **Birko.Security.BCrypt.Tests** - Unit tests for BCrypt password hashing
@@ -152,6 +153,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.MessageQueue** - Core interfaces (IMessageQueue, IMessageProducer, IMessageConsumer, IMessageHandler), patterns (Pub/Sub, Point-to-Point), serialization, retry, transactions
 - **Birko.MessageQueue.InMemory** - In-memory channel-based queue (testing/development)
 - **Birko.MessageQueue.MQTT** - MQTT implementation via MQTTnet (IoT, sensors, telemetry)
+- **Birko.MessageQueue.Redis** - Redis Streams implementation (persistent, consumer groups, XACK)
 
 ### Event Bus
 - **Birko.EventBus** - Core interfaces (IEvent, IEventBus, IEventHandler), in-process bus, pipeline behaviors, enrichment, deduplication, DI extensions
@@ -275,6 +277,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Structures.Tests | [../Birko.Structures.Tests/CLAUDE.md](../Birko.Structures.Tests/CLAUDE.md) |
 | Birko.BackgroundJobs.Tests | [../Birko.BackgroundJobs.Tests/CLAUDE.md](../Birko.BackgroundJobs.Tests/CLAUDE.md) |
 | Birko.MessageQueue.Tests | [../Birko.MessageQueue.Tests/CLAUDE.md](../Birko.MessageQueue.Tests/CLAUDE.md) |
+| Birko.MessageQueue.Redis.Tests | [../Birko.MessageQueue.Redis.Tests/CLAUDE.md](../Birko.MessageQueue.Redis.Tests/CLAUDE.md) |
 | Birko.EventBus | [../Birko.EventBus/CLAUDE.md](../Birko.EventBus/CLAUDE.md) |
 | Birko.EventBus.MessageQueue | [../Birko.EventBus.MessageQueue/CLAUDE.md](../Birko.EventBus.MessageQueue/CLAUDE.md) |
 | Birko.EventBus.Outbox | [../Birko.EventBus.Outbox/CLAUDE.md](../Birko.EventBus.Outbox/CLAUDE.md) |
@@ -336,6 +339,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.MessageQueue | [../Birko.MessageQueue/CLAUDE.md](../Birko.MessageQueue/CLAUDE.md) |
 | Birko.MessageQueue.InMemory | [../Birko.MessageQueue.InMemory/CLAUDE.md](../Birko.MessageQueue.InMemory/CLAUDE.md) |
 | Birko.MessageQueue.MQTT | [../Birko.MessageQueue.MQTT/CLAUDE.md](../Birko.MessageQueue.MQTT/CLAUDE.md) |
+| Birko.MessageQueue.Redis | [../Birko.MessageQueue.Redis/CLAUDE.md](../Birko.MessageQueue.Redis/CLAUDE.md) |
 | Birko.Caching | [../Birko.Caching/CLAUDE.md](../Birko.Caching/CLAUDE.md) |
 | Birko.Caching.Redis | [../Birko.Caching.Redis/CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md) |
 | Birko.Caching.Hybrid | [../Birko.Caching.Hybrid/CLAUDE.md](../Birko.Caching.Hybrid/CLAUDE.md) |

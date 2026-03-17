@@ -375,13 +375,78 @@ await queue.Producer.SendAsync("notifications", message);
 |---------|-----------|--------|
 | Birko.MessageQueue.InMemory | In-process channels | Available |
 | Birko.MessageQueue.MQTT | MQTTnet | Available |
-| Birko.MessageQueue.MQTT | MQTTnet | High (Phase 5) |
+| Birko.MessageQueue.Redis | Redis Streams | Available |
 | Birko.MessageQueue.RabbitMQ | AMQP 0-9-1 | Medium (Phase 8) |
 | Birko.MessageQueue.Kafka | Confluent.Kafka | Medium (Phase 8) |
 | Birko.MessageQueue.Azure | Azure Service Bus | Low (Phase 8) |
 | Birko.MessageQueue.Aws | AWS SQS | Low (Phase 8) |
-| Birko.MessageQueue.Redis | Redis Streams | Low (Phase 8) |
 | Birko.MessageQueue.MassTransit | MassTransit wrapper | Low (Phase 8) |
+
+## Redis Streams
+
+`Birko.MessageQueue.Redis` uses Redis Streams (`XADD`, `XREAD`, `XREADGROUP`, `XACK`) for persistent, ordered messaging with consumer group support.
+
+### Setup
+
+```csharp
+var settings = new RedisStreamSettings("localhost", 6379)
+{
+    ConsumerGroup = "my-service",
+    ConsumerName = "worker-1",
+    MaxStreamLength = 10000,       // Trim stream to ~10000 entries
+    StreamPrefix = "myapp:streams" // Key prefix for all streams
+};
+
+var queue = new RedisStreamQueue(settings);
+await queue.ConnectAsync();
+```
+
+### Settings
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| ConsumerGroup | null | XREADGROUP consumer group name (null = use XREAD) |
+| ConsumerName | auto | Consumer name within the group |
+| ReadCount | 10 | Messages per XREAD/XREADGROUP call |
+| BlockMilliseconds | 5000 | Poll interval between reads |
+| MaxStreamLength | null | MAXLEN ~ approximate trimming |
+| AutoCreateConsumerGroup | true | Auto-create group via XGROUP CREATE |
+| StreamPrefix | "birko:mq:stream" | Redis key prefix for stream keys |
+
+### Consumer Groups
+
+Consumer groups distribute messages across multiple consumers:
+
+```csharp
+// Worker 1
+var sub1 = await queue.Consumer.SubscribeAsync("orders", handler,
+    new ConsumerOptions { GroupId = "order-processors" });
+
+// Worker 2 (same group — load balanced)
+var sub2 = await queue.Consumer.SubscribeAsync("orders", handler,
+    new ConsumerOptions { GroupId = "order-processors" });
+```
+
+### Acknowledgment
+
+With consumer groups, unacknowledged messages remain in the pending entries list (PEL) and can be re-delivered:
+
+```csharp
+var sub = await queue.Consumer.SubscribeAsync("orders", async (msg, ct) =>
+{
+    // Process message...
+    await queue.Consumer.AcknowledgeAsync(msg.Id, ct); // XACK
+}, new ConsumerOptions { AckMode = MessageAckMode.ManualAck, GroupId = "processors" });
+```
+
+### Shared Connection
+
+```csharp
+var manager = new RedisConnectionManager(settings);
+var queue1 = new RedisStreamQueue(manager, settings1);
+var queue2 = new RedisStreamQueue(manager, settings2);
+// Both share the same ConnectionMultiplexer
+```
 
 ## Implementing a Custom Backend
 

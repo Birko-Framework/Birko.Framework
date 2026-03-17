@@ -923,7 +923,7 @@ Birko.MessageQueue.Aws/
 ---
 
 ### Birko.MessageQueue.Redis
-**Status:** Planned | **Priority:** Low
+**Status:** Done | **Priority:** Low
 
 Redis Streams implementation (lightweight pub/sub).
 
