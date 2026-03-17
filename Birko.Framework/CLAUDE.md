@@ -114,6 +114,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Rules** - Data-driven rule engine (IRule, Rule, RuleGroup, RuleSet, RuleEvaluator, comparison operators, dictionary/object contexts)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator with all operators)
 
+### Workflow
+- **Birko.Workflow** - State machine engine (WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization)
+- **Birko.Workflow.Tests** - Unit tests for workflow engine (builder validation, transitions, guards, actions, visualization, DI)
+
 ### Caching
 - **Birko.Caching** - Unified caching interface (ICache, MemoryCache, CacheSerializer)
 - **Birko.Caching.Redis** - Redis backend (RedisCache)
@@ -310,6 +314,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Validation | [../Birko.Validation/CLAUDE.md](../Birko.Validation/CLAUDE.md) |
 | Birko.Rules | [../Birko.Rules/CLAUDE.md](../Birko.Rules/CLAUDE.md) |
 | Birko.Rules.Tests | [../Birko.Rules.Tests/CLAUDE.md](../Birko.Rules.Tests/CLAUDE.md) |
+| Birko.Workflow | [../Birko.Workflow/CLAUDE.md](../Birko.Workflow/CLAUDE.md) |
+| Birko.Workflow.Tests | [../Birko.Workflow.Tests/CLAUDE.md](../Birko.Workflow.Tests/CLAUDE.md) |
 | Birko.BackgroundJobs | [../Birko.BackgroundJobs/CLAUDE.md](../Birko.BackgroundJobs/CLAUDE.md) |
 | Birko.BackgroundJobs.SQL | [../Birko.BackgroundJobs.SQL/CLAUDE.md](../Birko.BackgroundJobs.SQL/CLAUDE.md) |
 | Birko.BackgroundJobs.ElasticSearch | [../Birko.BackgroundJobs.ElasticSearch/CLAUDE.md](../Birko.BackgroundJobs.ElasticSearch/CLAUDE.md) |
@@ -396,6 +402,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Telemetry](docs/telemetry.md)
   - [Security](docs/security.md)
   - [Rules Engine](docs/rules.md)
+  - [Workflow Engine](docs/workflow.md)
   - [Health Checks](docs/health.md)
   - [Data Processors](docs/processors.md)
   - [Data Sync](docs/sync.md)
@@ -459,6 +466,7 @@ Existing folder groups in both files:
 - **Tests/** — All *.Tests projects
 - **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
+- **Workflow/** — Birko.Workflow
 
 ### Test Requirements
 Every new public functionality must have corresponding unit tests. When adding new features:

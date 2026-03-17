@@ -74,8 +74,8 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 2. ~~**Birko.Caching.Hybrid** (High)~~ ✅ — Implemented 2026-03-17. L1 memory + L2 Redis two-tier cache with write-through, L1 TTL capping, and L2 failure resilience.
 3. ~~**Birko.Storage.AzureBlob** (High)~~ ✅ — Implemented 2026-03-17. REST API with OAuth2, SAS presigned URLs, tenant isolation via PathPrefix.
 4. ~~**Birko.Data.Aggregates** (Medium)~~ ✅ — Implemented 2026-03-17. Fluent aggregate definitions, flatten (SQL → NoSQL), expand (NoSQL → SQL) with collection diffing, sync pipeline extensions.
-5. **Birko.Messaging — Razor templates** (Medium) — Symbio sends email invoices and reservation confirmations via StringTemplateEngine. Razor templates enable proper HTML email layout with loops, conditionals, and partial views.
-6. **Birko.Workflow** (Medium) — Reservations, order tracking, and device lifecycle likely have ad-hoc state machines today. Formalizing with a workflow engine improves correctness and auditability.
+5. ~~**Birko.Messaging — Razor templates** (Medium)~~ ✅ — Implemented 2026-03-17. RazorLight-based ITemplateEngine, file-based .cshtml templates with caching and traversal protection.
+6. ~~**Birko.Workflow** (Medium)~~ ✅ — Implemented 2026-03-17. WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization. **Persistence (Birko.Workflow.SQL/MongoDB) still planned.**
 7. **Birko.MessageQueue.Redis** (Low) — Redis infra already exists. Redis Streams would provide a persistent non-IoT queue without deploying a separate broker (RabbitMQ/Kafka).
 8. **Birko.CQRS** (Low) — Natural next step given EventBus + EventSourcing are integrated. Separates read/write models for complex modules.
 
@@ -1427,9 +1427,9 @@ Birko.Security.AzureKeyVault/
 > **Symbio impact:** Future need for hotel reservations, production order tracking, order status workflows. Not urgent today.
 
 ### Birko.Workflow
-**Status:** Planned | **Priority:** Low
+**Status:** Done | **Priority:** Low
 
-State machine engine - platform-agnostic core.
+State machine engine - platform-agnostic core. Trigger-based transitions, fluent builder API, guards, actions, Mermaid/DOT visualization, DI extensions.
 
 ```
 Birko.Workflow/
@@ -1744,7 +1744,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 9 | **Birko.EventBus** | MessageQueue, Outbox, EventSourcing | ✅ Complete | Decoupled module communication |
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
-| 12 | **Birko.Workflow** | SQL, MongoDB | ⬜ Planned (Low) | Future: reservations, order tracking |
+| 12 | **Birko.Workflow** | SQL, MongoDB | ✅ Core done, persistence planned | Trigger-based engine, fluent builder, visualization |
 | 13 | Additional | Time, ~~Health~~, Serialization, Localization, CQRS | ✅ Health done (Core+Data+Redis+Azure), rest planned (Low) | Future |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
