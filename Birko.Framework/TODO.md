@@ -70,7 +70,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 
 ### Recommended next for Symbio (priority order)
 
-1. **Birko.Health** (High) — Symbio runs 5 database backends (SQL, MongoDB, TimescaleDB, RavenDB, ES) + MQTT + Redis + background jobs. Aggregated health endpoint is essential for production monitoring. Small project, quick win.
+1. ~~**Birko.Health** (High)~~ ✅ — Implemented 2026-03-17. Core + Data (SQL, ES, MongoDB, RavenDB) + Redis health checks with aggregated runner.
 2. **Birko.Caching.Hybrid** (High) — Symbio uses MemoryCache singleton today. Multi-node deployments need L1 memory + L2 Redis with distributed invalidation for cache consistency across instances in a multi-tenant setup.
 3. **Birko.Storage.AzureBlob** (High) — LocalFileStorage works for dev but product images, invoice PDFs, and camera snapshots need cloud storage for production scaling.
 4. **Birko.Data.Aggregates** (Medium) — Symbio uses 5 data stores. Aggregate mapper simplifies keeping denormalized ES search indices in sync with relational SQL data, especially for m:n relations (e.g., products ↔ categories).
@@ -1505,31 +1505,39 @@ Birko.Time/
 ---
 
 ### Birko.Health
-**Status:** Planned | **Priority:** Low
+**Status:** ✅ Implemented (2026-03-17) | **Priority:** High
 
-Health checks - separate projects per platform.
+Health check framework with aggregated runner and built-in system/data/Redis checks.
+Locations: `C:\Source\Birko.Health\`, `C:\Source\Birko.Health.Data\`, `C:\Source\Birko.Health.Redis\`
 
 ```
 Birko.Health/
 ├── Core/
-│   ├── IHealthCheck.cs
-│   ├── HealthCheckResult.cs
-│   └── HealthStatus.cs
+│   ├── IHealthCheck.cs                    ✅ Single CheckAsync() method
+│   ├── HealthCheckResult.cs               ✅ Readonly struct: Healthy/Degraded/Unhealthy + Data + Duration
+│   ├── HealthStatus.cs                    ✅ Enum: Healthy (0), Degraded (1), Unhealthy (2)
+│   ├── HealthCheckRegistration.cs         ✅ Named registration with Tags, Timeout, Factory
+│   ├── HealthReport.cs                    ✅ Aggregated worst-status, per-check entries
+│   └── HealthCheckRunner.cs              ✅ Concurrent execution, tag filtering, timeout handling
 └── System/
-    ├── DiskSpaceHealthCheck.cs            - Built-in
-    └── MemoryHealthCheck.cs               - Built-in
+    ├── DiskSpaceHealthCheck.cs            ✅ Disk free space (warning/critical MB thresholds)
+    └── MemoryHealthCheck.cs               ✅ Process working set + GC stats
 ```
 
 ```
 Birko.Health.Data/
-├── SqlHealthCheck.cs
-└── MongoDbHealthCheck.cs
+├── SqlHealthCheck.cs                      ✅ DbConnection + SELECT 1 (any ADO.NET provider)
+├── ElasticSearchHealthCheck.cs            ✅ Cluster health API (green/yellow/red)
+├── MongoDbHealthCheck.cs                  ✅ Custom ping func or TCP connect
+└── RavenDbHealthCheck.cs                  ✅ /build/version endpoint
 ```
 
 ```
 Birko.Health.Redis/
-└── RedisHealthCheck.cs
+└── RedisHealthCheck.cs                    ✅ PING + latency measurement (>100ms = Degraded)
 ```
+
+**Dependencies:** None (core), System.Data.Common + System.Net.Http (Data), StackExchange.Redis (Redis)
 
 ---
 
@@ -1702,7 +1710,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
 | 12 | **Birko.Workflow** | SQL, MongoDB | ⬜ Planned (Low) | Future: reservations, order tracking |
-| 13 | Additional | Time, Health, Serialization, Localization, CQRS | ⬜ Planned (Low) | Future |
+| 13 | Additional | Time, ~~Health~~, Serialization, Localization, CQRS | ✅ Health done, rest planned (Low) | Future |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |

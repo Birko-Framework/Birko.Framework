@@ -146,6 +146,12 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.EventBus.Outbox** - Transactional outbox pattern (OutboxEventBus decorator, OutboxProcessor, IOutboxStore, InMemoryOutboxStore)
 - **Birko.EventBus.EventSourcing** - EventStore-to-EventBus bridge (DomainEventPublished, EventStoreEventBus decorator, EventReplayService)
 
+### Health
+- **Birko.Health** - Health check framework (IHealthCheck, HealthCheckRunner, HealthReport, DiskSpaceHealthCheck, MemoryHealthCheck)
+- **Birko.Health.Data** - Database health checks (SQL, Elasticsearch, MongoDB, RavenDB)
+- **Birko.Health.Redis** - Redis health check (PING + latency)
+- **Birko.Health.Tests** - Unit tests for health checks (core, system, data, runner)
+
 ### Storage
 - **Birko.Storage** - File/blob storage abstraction (IFileStorage, LocalFileStorage, StorageResult, FileReference, presigned URL support)
 
@@ -256,6 +262,10 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.EventBus.Outbox | [../Birko.EventBus.Outbox/CLAUDE.md](../Birko.EventBus.Outbox/CLAUDE.md) |
 | Birko.EventBus.EventSourcing | [../Birko.EventBus.EventSourcing/CLAUDE.md](../Birko.EventBus.EventSourcing/CLAUDE.md) |
 | Birko.EventBus.Tests | [../Birko.EventBus.Tests/CLAUDE.md](../Birko.EventBus.Tests/CLAUDE.md) |
+| Birko.Health | [../Birko.Health/CLAUDE.md](../Birko.Health/CLAUDE.md) |
+| Birko.Health.Data | [../Birko.Health.Data/CLAUDE.md](../Birko.Health.Data/CLAUDE.md) |
+| Birko.Health.Redis | [../Birko.Health.Redis/CLAUDE.md](../Birko.Health.Redis/CLAUDE.md) |
+| Birko.Health.Tests | [../Birko.Health.Tests/CLAUDE.md](../Birko.Health.Tests/CLAUDE.md) |
 | Birko.Storage | [../Birko.Storage/CLAUDE.md](../Birko.Storage/CLAUDE.md) |
 | Birko.Telemetry | [../Birko.Telemetry/CLAUDE.md](../Birko.Telemetry/CLAUDE.md) |
 | Birko.Telemetry.OpenTelemetry | [../Birko.Telemetry.OpenTelemetry/CLAUDE.md](../Birko.Telemetry.OpenTelemetry/CLAUDE.md) |
@@ -370,6 +380,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Telemetry](docs/telemetry.md)
   - [Security](docs/security.md)
   - [Rules Engine](docs/rules.md)
+  - [Health Checks](docs/health.md)
   - [Data Processors](docs/processors.md)
   - [Data Sync](docs/sync.md)
   - [Multi-Tenancy](docs/tenant.md)
@@ -416,6 +427,7 @@ Existing folder groups in both files:
 - **Caching/** — Birko.Caching, Birko.Caching.Redis
 - **Communication/** — Birko.Communication.*
 - **Data/** — Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
+- **Health/** — Birko.Health, Birko.Health.Data, Birko.Health.Redis
 - **Data.Migrations/** — Birko.Data.Migrations.*
 - **Data.NoSQL/** — ElasticSearch, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB stores
 - **Data.Patterns/** — Birko.Data.Patterns, EventSourcing, Tenant

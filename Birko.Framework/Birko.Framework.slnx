@@ -109,6 +109,11 @@
     <Project Path="../Birko.Messaging/Birko.Messaging.shproj" />
     <Project Path="../Birko.Messaging.Razor/Birko.Messaging.Razor.shproj" />
   </Folder>
+  <Folder Name="/Health/">
+    <Project Path="../Birko.Health/Birko.Health.shproj" />
+    <Project Path="../Birko.Health.Data/Birko.Health.Data.shproj" />
+    <Project Path="../Birko.Health.Redis/Birko.Health.Redis.shproj" />
+  </Folder>
   <Folder Name="/Storage/">
     <Project Path="../Birko.Storage/Birko.Storage.shproj" />
   </Folder>
@@ -143,6 +148,7 @@
     <Project Path="../Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
     <Project Path="../Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
     <Project Path="../Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
+    <Project Path="../Birko.Health.Tests/Birko.Health.Tests.csproj" />
     <Project Path="../Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
