@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a7b3c1d4-e5f6-4a8b-9c0d-2e1f3a4b5c6d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Storage.AzureBlob</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)AzureBlobSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AzureBlobStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AzureBlobPresignedUrlProvider.cs" />
+  </ItemGroup>
+</Project>
