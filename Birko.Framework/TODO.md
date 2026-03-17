@@ -75,7 +75,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 3. ~~**Birko.Storage.AzureBlob** (High)~~ ✅ — Implemented 2026-03-17. REST API with OAuth2, SAS presigned URLs, tenant isolation via PathPrefix.
 4. ~~**Birko.Data.Aggregates** (Medium)~~ ✅ — Implemented 2026-03-17. Fluent aggregate definitions, flatten (SQL → NoSQL), expand (NoSQL → SQL) with collection diffing, sync pipeline extensions.
 5. ~~**Birko.Messaging — Razor templates** (Medium)~~ ✅ — Implemented 2026-03-17. RazorLight-based ITemplateEngine, file-based .cshtml templates with caching and traversal protection.
-6. ~~**Birko.Workflow** (Medium)~~ ✅ — Implemented 2026-03-17. WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization. **Persistence (Birko.Workflow.SQL/MongoDB) still planned.**
+6. ~~**Birko.Workflow** (Medium)~~ ✅ — Implemented 2026-03-17. WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization. Persistence: SQL, ElasticSearch, MongoDB, RavenDB, JSON providers.
 7. **Birko.MessageQueue.Redis** (Low) — Redis infra already exists. Redis Streams would provide a persistent non-IoT queue without deploying a separate broker (RabbitMQ/Kafka).
 8. **Birko.CQRS** (Low) — Natural next step given EventBus + EventSourcing are integrated. Separates read/write models for complex modules.
 
@@ -1457,32 +1457,96 @@ Birko.Workflow/
 
 ---
 
-### Birko.Workflow.SQL
-**Status:** Planned | **Priority:** Low
+### Birko.Workflow (Core persistence interface)
+**Status:** ✅ Implemented | **Priority:** High
 
-SQL workflow persistence.
+`IWorkflowInstanceStore<TData>` — persistence contract in `Birko.Workflow/Core/`. All providers implement this.
+Persists instances only (not definitions — definitions contain `Func<>` delegates, built in code via `WorkflowBuilder`).
+
+---
+
+### Birko.Workflow.SQL
+**Status:** ✅ Implemented | **Priority:** Low
+
+SQL workflow instance persistence using `AsyncDataBaseBulkStore<DB, WorkflowInstanceModel>`.
 
 ```
 Birko.Workflow.SQL/
-├── SqlWorkflowStore.cs
-└── SqlWorkflowSchema.cs
+├── Models/
+│   └── WorkflowInstanceModel.cs         — AbstractModel + SQL attributes, __WorkflowInstances table
+├── SqlWorkflowInstanceStore.cs          — IWorkflowInstanceStore<TData> generic over DB connector
+└── SqlWorkflowInstanceSchema.cs         — EnsureCreatedAsync / DropAsync
 ```
 
-**Dependencies:** Birko.Workflow, Birko.Data.SQL
+**Dependencies:** Birko.Workflow, Birko.Data.SQL, Birko.Data.Stores
+
+---
+
+### Birko.Workflow.ElasticSearch
+**Status:** ✅ Implemented | **Priority:** Low
+
+Elasticsearch workflow instance persistence using `AsyncElasticSearchStore<ElasticWorkflowInstanceModel>`.
+
+```
+Birko.Workflow.ElasticSearch/
+├── Models/
+│   └── ElasticWorkflowInstanceModel.cs  — AbstractModel + NEST attributes, workflow-instances index
+├── ElasticSearchWorkflowInstanceStore.cs — IWorkflowInstanceStore<TData>
+└── ElasticSearchWorkflowInstanceSchema.cs — Index creation/deletion
+```
+
+**Dependencies:** Birko.Workflow, Birko.Data.ElasticSearch
 
 ---
 
 ### Birko.Workflow.MongoDB
-**Status:** Planned | **Priority:** Low
+**Status:** ✅ Implemented | **Priority:** Low
 
-MongoDB workflow persistence.
+MongoDB workflow instance persistence using `AsyncMongoDBStore<MongoWorkflowInstanceModel>`.
 
 ```
 Birko.Workflow.MongoDB/
-└── MongoWorkflowStore.cs
+├── Models/
+│   └── MongoWorkflowInstanceModel.cs    — AbstractModel + BSON attributes, WorkflowInstances collection
+├── MongoDBWorkflowInstanceStore.cs      — IWorkflowInstanceStore<TData>
+└── MongoDBWorkflowInstanceSchema.cs     — Collection setup
 ```
 
 **Dependencies:** Birko.Workflow, Birko.Data.MongoDB
+
+---
+
+### Birko.Workflow.RavenDB
+**Status:** ✅ Implemented | **Priority:** Low
+
+RavenDB workflow instance persistence using `AsyncRavenDBStore<RavenWorkflowInstanceModel>`.
+
+```
+Birko.Workflow.RavenDB/
+├── Models/
+│   └── RavenWorkflowInstanceModel.cs    — AbstractModel (convention-based, no attributes)
+├── RavenDBWorkflowInstanceStore.cs      — IWorkflowInstanceStore<TData>
+└── RavenDBWorkflowInstanceSchema.cs     — Collection setup
+```
+
+**Dependencies:** Birko.Workflow, Birko.Data.RavenDB
+
+---
+
+### Birko.Workflow.JSON
+**Status:** ✅ Implemented | **Priority:** Low
+
+JSON file-based workflow instance persistence using `AsyncJsonStore<JsonWorkflowInstanceModel>`. Good for development and testing.
+
+```
+Birko.Workflow.JSON/
+├── Models/
+│   └── JsonWorkflowInstanceModel.cs     — AbstractModel + JsonPropertyName attributes
+├── JsonWorkflowInstanceStore.cs         — IWorkflowInstanceStore<TData>
+└── JsonWorkflowInstanceSchema.cs        — Directory setup
+```
+
+**Dependencies:** Birko.Workflow, Birko.Data.JSON
 
 ---
 

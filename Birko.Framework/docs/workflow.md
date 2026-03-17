@@ -118,14 +118,50 @@ Execution order: OnExit (from) → Transition actions → state update → OnEnt
 | `Completed` | Reached a final state |
 | `Faulted` | An action threw an exception |
 
-## Persistence (Restore)
+## Persistence
 
-The engine is stateless — `WorkflowInstance` holds all mutable state. To persist and restore:
+The engine is stateless — `WorkflowInstance` holds all mutable state. Use `IWorkflowInstanceStore<TData>` for persistence:
 
 ```csharp
-// Save: serialize instance.InstanceId, instance.CurrentState, instance.Status, instance.Data, instance.History
+using Birko.Workflow.Core;
 
-// Restore:
+// Save an instance
+await store.SaveAsync("HotelReservation", instance);
+
+// Load and continue
+var instance = await store.LoadAsync(instanceId);
+var result = await engine.FireAsync(workflow, instance!, "checkIn");
+await store.SaveAsync("HotelReservation", instance);
+
+// Query instances
+var active = await store.FindByStatusAsync(WorkflowStatus.Active);
+var pending = await store.FindByStateAsync("Pending");
+var reservations = await store.FindByWorkflowNameAsync("HotelReservation");
+```
+
+### Available Providers
+
+| Provider | Store Type | Settings | Use Case |
+|----------|-----------|----------|----------|
+| **Birko.Workflow.SQL** | `SqlWorkflowInstanceStore<DB, TData>` | `PasswordSettings` | Production SQL databases |
+| **Birko.Workflow.ElasticSearch** | `ElasticSearchWorkflowInstanceStore<TData>` | `ES Settings` | Search-heavy workflows |
+| **Birko.Workflow.MongoDB** | `MongoDBWorkflowInstanceStore<TData>` | `MongoDB Settings` | Document-oriented storage |
+| **Birko.Workflow.RavenDB** | `RavenDBWorkflowInstanceStore<TData>` | `RemoteSettings` | RavenDB deployments |
+| **Birko.Workflow.JSON** | `JsonWorkflowInstanceStore<TData>` | `Settings` | Development/testing |
+
+### SQL Example
+
+```csharp
+using Birko.Workflow.SQL;
+using Birko.Data.SQL.MSSql.Connectors;
+
+var store = new SqlWorkflowInstanceStore<MSSqlConnector, ReservationData>(settings);
+await store.SaveAsync("HotelReservation", instance);
+```
+
+### Manual Restore (without store)
+
+```csharp
 var instance = WorkflowInstance<MyData>.Restore(
     instanceId: savedId,
     currentState: "Confirmed",
@@ -133,7 +169,6 @@ var instance = WorkflowInstance<MyData>.Restore(
     data: loadedData,
     history: savedHistory);
 
-// Continue
 var result = await engine.FireAsync(workflow, instance, "checkIn");
 ```
 
@@ -189,7 +224,17 @@ var triggers = engine.GetPermittedTriggers(workflow, instance);
 | `WorkflowFaultedException` | FireAsync on a Faulted instance |
 | `WorkflowActionException` | An entry/exit/transition action threw (wraps inner exception) |
 
-## Future: Persistence Projects
+## Schema Management
 
-- **Birko.Workflow.SQL** — SQL-based workflow instance persistence
-- **Birko.Workflow.MongoDB** — MongoDB-based workflow instance persistence
+Each provider includes a schema utility for table/index/collection management:
+
+```csharp
+// SQL: Create __WorkflowInstances table
+await SqlWorkflowInstanceSchema.EnsureCreatedAsync<MSSqlConnector>(settings);
+
+// ElasticSearch: Create workflow-instances index
+await ElasticSearchWorkflowInstanceSchema.EnsureCreatedAsync(settings);
+
+// MongoDB: Initialize WorkflowInstances collection
+await MongoDBWorkflowInstanceSchema.EnsureCreatedAsync(settings);
+```

@@ -168,5 +168,10 @@
   </Folder>
   <Folder Name="/Workflow/">
     <Project Path="../Birko.Workflow/Birko.Workflow.shproj" />
+    <Project Path="../Birko.Workflow.SQL/Birko.Workflow.SQL.shproj" />
+    <Project Path="../Birko.Workflow.ElasticSearch/Birko.Workflow.ElasticSearch.shproj" />
+    <Project Path="../Birko.Workflow.MongoDB/Birko.Workflow.MongoDB.shproj" />
+    <Project Path="../Birko.Workflow.RavenDB/Birko.Workflow.RavenDB.shproj" />
+    <Project Path="../Birko.Workflow.JSON/Birko.Workflow.JSON.shproj" />
   </Folder>
 </Solution>

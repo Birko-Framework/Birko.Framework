@@ -115,7 +115,12 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator with all operators)
 
 ### Workflow
-- **Birko.Workflow** - State machine engine (WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization)
+- **Birko.Workflow** - State machine engine (WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization, IWorkflowInstanceStore persistence contract)
+- **Birko.Workflow.SQL** - SQL workflow instance persistence (any SQL connector)
+- **Birko.Workflow.ElasticSearch** - Elasticsearch workflow instance persistence
+- **Birko.Workflow.MongoDB** - MongoDB workflow instance persistence
+- **Birko.Workflow.RavenDB** - RavenDB workflow instance persistence
+- **Birko.Workflow.JSON** - JSON file-based workflow instance persistence (dev/testing)
 - **Birko.Workflow.Tests** - Unit tests for workflow engine (builder validation, transitions, guards, actions, visualization, DI)
 
 ### Caching
@@ -315,6 +320,11 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Rules | [../Birko.Rules/CLAUDE.md](../Birko.Rules/CLAUDE.md) |
 | Birko.Rules.Tests | [../Birko.Rules.Tests/CLAUDE.md](../Birko.Rules.Tests/CLAUDE.md) |
 | Birko.Workflow | [../Birko.Workflow/CLAUDE.md](../Birko.Workflow/CLAUDE.md) |
+| Birko.Workflow.SQL | [../Birko.Workflow.SQL/CLAUDE.md](../Birko.Workflow.SQL/CLAUDE.md) |
+| Birko.Workflow.ElasticSearch | [../Birko.Workflow.ElasticSearch/CLAUDE.md](../Birko.Workflow.ElasticSearch/CLAUDE.md) |
+| Birko.Workflow.MongoDB | [../Birko.Workflow.MongoDB/CLAUDE.md](../Birko.Workflow.MongoDB/CLAUDE.md) |
+| Birko.Workflow.RavenDB | [../Birko.Workflow.RavenDB/CLAUDE.md](../Birko.Workflow.RavenDB/CLAUDE.md) |
+| Birko.Workflow.JSON | [../Birko.Workflow.JSON/CLAUDE.md](../Birko.Workflow.JSON/CLAUDE.md) |
 | Birko.Workflow.Tests | [../Birko.Workflow.Tests/CLAUDE.md](../Birko.Workflow.Tests/CLAUDE.md) |
 | Birko.BackgroundJobs | [../Birko.BackgroundJobs/CLAUDE.md](../Birko.BackgroundJobs/CLAUDE.md) |
 | Birko.BackgroundJobs.SQL | [../Birko.BackgroundJobs.SQL/CLAUDE.md](../Birko.BackgroundJobs.SQL/CLAUDE.md) |
@@ -466,7 +476,7 @@ Existing folder groups in both files:
 - **Tests/** — All *.Tests projects
 - **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
-- **Workflow/** — Birko.Workflow
+- **Workflow/** — Birko.Workflow, Birko.Workflow.SQL, Birko.Workflow.ElasticSearch, Birko.Workflow.MongoDB, Birko.Workflow.RavenDB, Birko.Workflow.JSON
 
 ### Test Requirements
 Every new public functionality must have corresponding unit tests. When adding new features:
