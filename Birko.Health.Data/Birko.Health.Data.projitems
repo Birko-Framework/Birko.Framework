@@ -13,5 +13,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchHealthCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoDbHealthCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RavenDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InfluxDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)VaultHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MqttHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SmtpHealthCheck.cs" />
   </ItemGroup>
 </Project>
