@@ -29,4 +29,5 @@
     <Compile Include="$(MSBuildThisFileDirectory)Processing\JobExecutor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Processing\RecurringJobScheduler.cs" />
   </ItemGroup>
+
 </Project>

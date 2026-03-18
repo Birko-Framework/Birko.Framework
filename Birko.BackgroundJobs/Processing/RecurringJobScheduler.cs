@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Processing
 {
@@ -11,11 +12,13 @@ namespace Birko.BackgroundJobs.Processing
     public class RecurringJobScheduler
     {
         private readonly IJobQueue _queue;
+        private readonly IDateTimeProvider _clock;
         private readonly ConcurrentDictionary<string, RecurringJobDefinition> _definitions = new();
 
-        public RecurringJobScheduler(IJobQueue queue)
+        public RecurringJobScheduler(IJobQueue queue, IDateTimeProvider clock)
         {
             _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         }
 
         /// <summary>
@@ -33,7 +36,7 @@ namespace Birko.BackgroundJobs.Processing
                 JobType = typeof(TJob).AssemblyQualifiedName!,
                 Interval = interval,
                 QueueName = queueName,
-                NextRunAt = DateTime.UtcNow.Add(interval)
+                NextRunAt = _clock.UtcNow.Add(interval)
             };
 
             _definitions.AddOrUpdate(name, definition, (_, _) => definition);
@@ -54,7 +57,7 @@ namespace Birko.BackgroundJobs.Processing
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var now = DateTime.UtcNow;
+                var now = _clock.UtcNow;
 
                 foreach (var kvp in _definitions)
                 {

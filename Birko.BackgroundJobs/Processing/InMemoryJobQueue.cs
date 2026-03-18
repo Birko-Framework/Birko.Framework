@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Processing
 {
@@ -16,9 +17,11 @@ namespace Birko.BackgroundJobs.Processing
         private readonly ConcurrentDictionary<Guid, JobDescriptor> _jobs = new();
         private readonly SemaphoreSlim _lock = new(1, 1);
         private readonly RetryPolicy _retryPolicy;
+        private readonly IDateTimeProvider _clock;
 
-        public InMemoryJobQueue(RetryPolicy? retryPolicy = null)
+        public InMemoryJobQueue(IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
         {
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
         }
 
@@ -33,7 +36,7 @@ namespace Birko.BackgroundJobs.Processing
             await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                var now = DateTime.UtcNow;
+                var now = _clock.UtcNow;
 
                 var candidate = _jobs.Values
                     .Where(j => j.Status == JobStatus.Pending || (j.Status == JobStatus.Scheduled && j.ScheduledAt <= now))
@@ -64,7 +67,7 @@ namespace Birko.BackgroundJobs.Processing
             if (_jobs.TryGetValue(jobId, out var descriptor))
             {
                 descriptor.Status = JobStatus.Completed;
-                descriptor.CompletedAt = DateTime.UtcNow;
+                descriptor.CompletedAt = _clock.UtcNow;
             }
             return Task.CompletedTask;
         }
@@ -81,12 +84,12 @@ namespace Birko.BackgroundJobs.Processing
                 {
                     var delay = _retryPolicy.GetDelay(descriptor.AttemptCount);
                     descriptor.Status = JobStatus.Scheduled;
-                    descriptor.ScheduledAt = DateTime.UtcNow.Add(delay);
+                    descriptor.ScheduledAt = _clock.UtcNow.Add(delay);
                 }
                 else
                 {
                     descriptor.Status = JobStatus.Dead;
-                    descriptor.CompletedAt = DateTime.UtcNow;
+                    descriptor.CompletedAt = _clock.UtcNow;
                 }
             }
             return Task.CompletedTask;
@@ -99,7 +102,7 @@ namespace Birko.BackgroundJobs.Processing
                 if (descriptor.Status == JobStatus.Pending || descriptor.Status == JobStatus.Scheduled)
                 {
                     descriptor.Status = JobStatus.Cancelled;
-                    descriptor.CompletedAt = DateTime.UtcNow;
+                    descriptor.CompletedAt = _clock.UtcNow;
                     return Task.FromResult(true);
                 }
             }
@@ -125,7 +128,7 @@ namespace Birko.BackgroundJobs.Processing
 
         public Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
         {
-            var cutoff = DateTime.UtcNow.Subtract(olderThan);
+            var cutoff = _clock.UtcNow.Subtract(olderThan);
             var count = 0;
 
             var toPurge = _jobs.Values

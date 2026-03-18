@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.BackgroundJobs.Serialization;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Processing
 {
@@ -12,10 +13,12 @@ namespace Birko.BackgroundJobs.Processing
     {
         private readonly IJobQueue _queue;
         private readonly IJobSerializer _serializer;
+        private readonly IDateTimeProvider _clock;
 
-        public JobDispatcher(IJobQueue queue, IJobSerializer? serializer = null)
+        public JobDispatcher(IJobQueue queue, IDateTimeProvider clock, IJobSerializer? serializer = null)
         {
             _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _serializer = serializer ?? new JsonJobSerializer();
         }
 
@@ -52,7 +55,7 @@ namespace Birko.BackgroundJobs.Processing
         /// </summary>
         public Task<Guid> ScheduleAsync<TJob>(TimeSpan delay, CancellationToken cancellationToken = default) where TJob : IJob
         {
-            var now = DateTime.UtcNow;
+            var now = _clock.UtcNow;
             var descriptor = new JobDescriptor
             {
                 JobType = typeof(TJob).AssemblyQualifiedName!,
@@ -70,7 +73,7 @@ namespace Birko.BackgroundJobs.Processing
             where TJob : IJob<TInput>
             where TInput : class
         {
-            var now = DateTime.UtcNow;
+            var now = _clock.UtcNow;
             var descriptor = new JobDescriptor
             {
                 JobType = typeof(TJob).AssemblyQualifiedName!,
