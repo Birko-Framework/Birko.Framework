@@ -128,6 +128,13 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Workflow.JSON** - JSON file-based workflow instance persistence (dev/testing)
 - **Birko.Workflow.Tests** - Unit tests for workflow engine (builder validation, transitions, guards, actions, visualization, DI)
 
+### Serialization
+- **Birko.Serialization** - Unified serialization abstraction (ISerializer, SerializationFormat, SystemJsonSerializer, SystemXmlSerializer)
+- **Birko.Serialization.Newtonsoft** - Newtonsoft.Json implementation (NewtonsoftJsonSerializer)
+- **Birko.Serialization.MessagePack** - MessagePack binary serialization (MessagePackBinarySerializer, ContractlessStandardResolver)
+- **Birko.Serialization.Protobuf** - Protocol Buffers serialization (ProtobufBinarySerializer, protobuf-net)
+- **Birko.Serialization.Tests** - Unit tests for all serializer implementations
+
 ### Caching
 - **Birko.Caching** - Unified caching interface (ICache, MemoryCache, CacheSerializer)
 - **Birko.Caching.Redis** - Redis backend (RedisCache)
@@ -355,6 +362,11 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Security.Vault.Tests | [../Birko.Security.Vault.Tests/CLAUDE.md](../Birko.Security.Vault.Tests/CLAUDE.md) |
 | Birko.Security.AzureKeyVault | [../Birko.Security.AzureKeyVault/CLAUDE.md](../Birko.Security.AzureKeyVault/CLAUDE.md) |
 | Birko.Security.AzureKeyVault.Tests | [../Birko.Security.AzureKeyVault.Tests/CLAUDE.md](../Birko.Security.AzureKeyVault.Tests/CLAUDE.md) |
+| Birko.Serialization | [../Birko.Serialization/CLAUDE.md](../Birko.Serialization/CLAUDE.md) |
+| Birko.Serialization.Newtonsoft | [../Birko.Serialization.Newtonsoft/CLAUDE.md](../Birko.Serialization.Newtonsoft/CLAUDE.md) |
+| Birko.Serialization.MessagePack | [../Birko.Serialization.MessagePack/CLAUDE.md](../Birko.Serialization.MessagePack/CLAUDE.md) |
+| Birko.Serialization.Protobuf | [../Birko.Serialization.Protobuf/CLAUDE.md](../Birko.Serialization.Protobuf/CLAUDE.md) |
+| Birko.Serialization.Tests | [../Birko.Serialization.Tests/CLAUDE.md](../Birko.Serialization.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
@@ -421,6 +433,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [CQRS](docs/cqrs.md)
   - [Health Checks](docs/health.md)
   - [Data Processors](docs/processors.md)
+  - [Serialization](docs/serialization.md)
   - [Data Sync](docs/sync.md)
   - [Multi-Tenancy](docs/tenant.md)
 
@@ -477,6 +490,7 @@ Existing folder groups in both files:
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
 - **Security/** — Birko.Security, Birko.Security.Jwt, Birko.Security.AspNetCore, Birko.Security.BCrypt, Birko.Security.Vault, Birko.Security.AzureKeyVault
+- **Serialization/** — Birko.Serialization, Birko.Serialization.Newtonsoft, Birko.Serialization.MessagePack, Birko.Serialization.Protobuf
 - **Storage/** — Birko.Storage, Birko.Storage.AzureBlob
 - **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry
 - **Tests/** — All *.Tests projects

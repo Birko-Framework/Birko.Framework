@@ -84,7 +84,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 - **Birko.MessageQueue.Kafka/RabbitMQ** — MQTT + InMemory covers IoT workloads, only needed at higher scale
 
 ### Medium priority (newly raised)
-- **Birko.Serialization** (Medium) — Unified serialization abstraction (System.Text.Json, Newtonsoft, MessagePack, Protobuf)
+- ~~**Birko.Serialization** (Medium)~~ ✅ Implemented — Unified serialization abstraction (System.Text.Json, Newtonsoft, MessagePack, Protobuf)
 - **Birko.Localization** (Medium) — Translations, cultures, formatting (JSON, RESX, database providers)
 
 ### Symbio-specific features (not in Birko scope)
@@ -1643,32 +1643,34 @@ When the corresponding communication/queue providers are implemented, add health
 ---
 
 ### Birko.Serialization
-**Status:** Planned | **Priority:** Medium
+**Status:** ✅ Complete | **Priority:** Medium
 
 Serialization - separate projects per format.
 
 ```
 Birko.Serialization/
 ├── Core/
-│   ├── ISerializer.cs
-│   └── SerializationFormat.cs
-└── Json/
-    └── SystemJsonSerializer.cs            - Built-in (System.Text.Json)
+│   ├── ISerializer.cs                     ✅ Unified interface (string + byte[], typed + untyped, ContentType, Format)
+│   └── SerializationFormat.cs             ✅ Enum: Json, MessagePack, Protobuf, Xml
+├── Json/
+│   └── SystemJsonSerializer.cs            ✅ Built-in (System.Text.Json, camelCase default)
+└── Xml/
+    └── SystemXmlSerializer.cs             ✅ Built-in (System.Xml.Serialization, DTD prohibited)
 ```
 
 ```
 Birko.Serialization.Newtonsoft/
-└── NewtonsoftJsonSerializer.cs
+└── NewtonsoftJsonSerializer.cs            ✅ Newtonsoft.Json implementation
 ```
 
 ```
 Birko.Serialization.MessagePack/
-└── MessagePackSerializer.cs
+└── MessagePackBinarySerializer.cs         ✅ MessagePack binary (ContractlessStandardResolver, Base64 string)
 ```
 
 ```
 Birko.Serialization.Protobuf/
-└── ProtobufSerializer.cs
+└── ProtobufBinarySerializer.cs            ✅ protobuf-net binary ([ProtoContract] required, Base64 string)
 ```
 
 ---
@@ -1816,7 +1818,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
 | 12 | **Birko.Workflow** | SQL, ElasticSearch, MongoDB, RavenDB, JSON | ✅ Complete | Trigger-based engine, fluent builder, visualization, all persistence providers |
-| 13 | Additional | Time, ~~Health~~, Serialization, Localization, ~~CQRS~~ | ✅ Health+CQRS done; Serialization+Localization planned (Medium); Time planned (Low) | Future |
+| 13 | Additional | Time, ~~Health~~, ~~Serialization~~, Localization, ~~CQRS~~ | ✅ Health+CQRS+Serialization done; Localization planned (Medium); Time planned (Low) | Future |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |

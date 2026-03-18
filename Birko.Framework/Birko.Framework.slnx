@@ -162,6 +162,7 @@
     <Project Path="../Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />
     <Project Path="../Birko.Workflow.Tests/Birko.Workflow.Tests.csproj" />
     <Project Path="../Birko.CQRS.Tests/Birko.CQRS.Tests.csproj" />
+    <Project Path="../Birko.Serialization.Tests/Birko.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
@@ -171,6 +172,12 @@
   </Folder>
   <Folder Name="/Rules/">
     <Project Path="../Birko.Rules/Birko.Rules.shproj" />
+  </Folder>
+  <Folder Name="/Serialization/">
+    <Project Path="../Birko.Serialization/Birko.Serialization.shproj" />
+    <Project Path="../Birko.Serialization.Newtonsoft/Birko.Serialization.Newtonsoft.shproj" />
+    <Project Path="../Birko.Serialization.MessagePack/Birko.Serialization.MessagePack.shproj" />
+    <Project Path="../Birko.Serialization.Protobuf/Birko.Serialization.Protobuf.shproj" />
   </Folder>
   <Folder Name="/Workflow/">
     <Project Path="../Birko.Workflow/Birko.Workflow.shproj" />
