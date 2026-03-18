@@ -1,0 +1,10 @@
+{
+  "greeting": "Hello",
+  "farewell": "Goodbye",
+  "welcome": "Welcome, {userName}!",
+  "items_count": "You have {0} item(s)",
+  "errors": {
+    "notFound": "Not found",
+    "forbidden": "Access denied"
+  }
+}
