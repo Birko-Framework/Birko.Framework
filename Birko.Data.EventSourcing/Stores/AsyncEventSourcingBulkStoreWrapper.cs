@@ -1,6 +1,7 @@
 using Birko.Data.EventSourcing.Events;
 using Birko.Data.EventSourcing.Models;
 using Birko.Data.Stores;
+using Birko.Time;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,8 +26,10 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         /// <param name="innerStore">The inner async bulk store to wrap.</param>
         /// <param name="eventStore">The async event store for recording events.</param>
-        public AsyncEventSourcingBulkStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, Birko.Serialization.ISerializer? serializer = null)
-            : base(innerStore, eventStore, serializer)
+        /// <param name="serializer">The serializer for event data. Defaults to SystemJsonSerializer.</param>
+        /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
+        public AsyncEventSourcingBulkStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, Birko.Serialization.ISerializer? serializer = null, IDateTimeProvider? clock = null)
+            : base(innerStore, eventStore, serializer, clock)
         {
         }
 
@@ -52,7 +55,8 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Created",
                     _serializer.Serialize(item),
-                    CurrentUserId
+                    CurrentUserId,
+                    _clock
                 );
 
                 events.Add(@event);
@@ -106,7 +110,8 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Updated",
                     _serializer.Serialize(item),
-                    CurrentUserId
+                    CurrentUserId,
+                    _clock
                 );
 
                 events.Add(@event);
@@ -142,7 +147,8 @@ namespace Birko.Data.EventSourcing.Stores
                     newVersion,
                     "Deleted",
                     _serializer.Serialize(item),
-                    CurrentUserId
+                    CurrentUserId,
+                    _clock
                 );
 
                 events.Add(@event);

@@ -1,4 +1,5 @@
 using System;
+using Birko.Time;
 
 namespace Birko.Data.EventSourcing.Events
 {
@@ -34,10 +35,11 @@ namespace Birko.Data.EventSourcing.Events
         /// <summary>
         /// Creates a new domain event for an aggregate.
         /// </summary>
-        public DomainEvent()
+        /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
+        public DomainEvent(IDateTimeProvider? clock = null)
         {
             EventId = Guid.NewGuid();
-            OccurredAt = DateTime.UtcNow;
+            OccurredAt = (clock ?? new SystemDateTimeProvider()).UtcNow;
         }
 
         /// <summary>
@@ -48,14 +50,15 @@ namespace Birko.Data.EventSourcing.Events
         /// <param name="eventType">The type of event.</param>
         /// <param name="eventData">The event data as JSON.</param>
         /// <param name="userId">Optional user ID.</param>
-        public DomainEvent(Guid aggregateId, long version, string eventType, string eventData, Guid? userId = null)
+        /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
+        public DomainEvent(Guid aggregateId, long version, string eventType, string eventData, Guid? userId = null, IDateTimeProvider? clock = null)
         {
             EventId = Guid.NewGuid();
             AggregateId = aggregateId;
             Version = version;
             EventType = eventType;
             EventData = eventData;
-            OccurredAt = DateTime.UtcNow;
+            OccurredAt = (clock ?? new SystemDateTimeProvider()).UtcNow;
             UserId = userId;
         }
     }

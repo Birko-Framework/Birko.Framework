@@ -4,6 +4,7 @@ using Birko.Data.Filters;
 using Birko.Data.Stores;
 using Birko.Serialization;
 using Birko.Serialization.Json;
+using Birko.Time;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +25,7 @@ namespace Birko.Data.EventSourcing.Stores
         protected readonly TStore _innerStore;
         protected readonly IEventStore _eventStore;
         protected readonly ISerializer _serializer;
+        protected readonly IDateTimeProvider _clock;
 
         /// <summary>
         /// Gets the current user ID for event tracking.
@@ -36,11 +38,13 @@ namespace Birko.Data.EventSourcing.Stores
         /// <param name="innerStore">The inner store to wrap.</param>
         /// <param name="eventStore">The event store for recording events.</param>
         /// <param name="serializer">The serializer for event data. Defaults to SystemJsonSerializer.</param>
-        public EventSourcingStoreWrapper(TStore innerStore, IEventStore eventStore, ISerializer? serializer = null)
+        /// <param name="clock">Optional clock provider. Defaults to SystemDateTimeProvider.</param>
+        public EventSourcingStoreWrapper(TStore innerStore, IEventStore eventStore, ISerializer? serializer = null, IDateTimeProvider? clock = null)
         {
             _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
             _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
             _serializer = serializer ?? new SystemJsonSerializer();
+            _clock = clock ?? new SystemDateTimeProvider();
         }
 
         /// <summary>
@@ -59,7 +63,8 @@ namespace Birko.Data.EventSourcing.Stores
                 newVersion,
                 "Created",
                 _serializer.Serialize(item),
-                CurrentUserId
+                CurrentUserId,
+                _clock
             );
 
             // Append event first
@@ -120,7 +125,8 @@ namespace Birko.Data.EventSourcing.Stores
                 newVersion,
                 "Updated",
                 _serializer.Serialize(data),
-                CurrentUserId
+                CurrentUserId,
+                _clock
             );
 
             // Append event first
@@ -155,7 +161,8 @@ namespace Birko.Data.EventSourcing.Stores
                 newVersion,
                 "Deleted",
                 _serializer.Serialize(item),
-                CurrentUserId
+                CurrentUserId,
+                _clock
             );
 
             // Append event first
