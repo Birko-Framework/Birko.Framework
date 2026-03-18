@@ -12,6 +12,7 @@ HashiCorp Vault secret provider — uses Vault HTTP API directly, no VaultSharp 
 
 ## Dependencies
 - Birko.Security (ISecretProvider, SecretResult)
+- Birko.Serialization — ISerializer for API payload serialization (optional, defaults to SystemJsonSerializer)
 - System.Net.Http, System.Text.Json (BCL built-in)
 
 ## Maintenance

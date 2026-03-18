@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +20,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
 {
     private readonly VaultSettings _settings;
     private readonly HttpClient _httpClient;
+    private readonly ISerializer _serializer;
     private readonly bool _ownsHttpClient;
 
     /// <summary>
@@ -30,11 +33,12 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
     /// <summary>
     /// Creates a new Vault secret provider with the specified settings and optional HttpClient.
     /// </summary>
-    public VaultSecretProvider(VaultSettings settings, HttpClient? httpClient)
+    public VaultSecretProvider(VaultSettings settings, HttpClient? httpClient, ISerializer? serializer = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
+        _serializer = serializer ?? new SystemJsonSerializer();
 
         _httpClient.BaseAddress = new Uri(_settings.Address.TrimEnd('/') + "/");
         _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
@@ -93,8 +97,8 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
 
         var path = BuildDataPath(key);
         var payload = _settings.KvVersion == 2
-            ? JsonSerializer.Serialize(new { data = new Dictionary<string, string> { ["value"] = value } })
-            : JsonSerializer.Serialize(new Dictionary<string, string> { ["value"] = value });
+            ? _serializer.Serialize(new { data = new Dictionary<string, string> { ["value"] = value } })
+            : _serializer.Serialize(new Dictionary<string, string> { ["value"] = value });
 
         var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
         var response = await _httpClient.PostAsync($"v1/{path}", content, ct).ConfigureAwait(false);
