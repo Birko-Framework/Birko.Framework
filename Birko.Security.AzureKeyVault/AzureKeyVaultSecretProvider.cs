@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +21,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
 
     private readonly AzureKeyVaultSettings _settings;
     private readonly HttpClient _httpClient;
+    private readonly ISerializer _serializer;
     private readonly bool _ownsHttpClient;
     private string? _accessToken;
     private DateTime _tokenExpiresAt;
@@ -34,7 +37,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     /// <summary>
     /// Creates a new Azure Key Vault secret provider with the specified settings and optional HttpClient.
     /// </summary>
-    public AzureKeyVaultSecretProvider(AzureKeyVaultSettings settings, HttpClient? httpClient)
+    public AzureKeyVaultSecretProvider(AzureKeyVaultSettings settings, HttpClient? httpClient, ISerializer? serializer = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         if (string.IsNullOrWhiteSpace(settings.VaultUri))
@@ -43,6 +46,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
         _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+        _serializer = serializer ?? new SystemJsonSerializer();
     }
 
     /// <inheritdoc />
@@ -77,7 +81,7 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(value);
 
-        var payload = JsonSerializer.Serialize(new { value });
+        var payload = _serializer.Serialize(new { value });
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Put,
             $"{BaseUri}secrets/{key}?api-version={ApiVersion}", ct).ConfigureAwait(false);
         request.Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");

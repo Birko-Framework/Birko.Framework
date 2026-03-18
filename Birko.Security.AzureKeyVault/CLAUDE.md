@@ -12,6 +12,7 @@ Azure Key Vault secret provider — uses Key Vault REST API with OAuth2 client c
 
 ## Dependencies
 - Birko.Security (ISecretProvider, SecretResult)
+- Birko.Serialization — ISerializer for API payload serialization (optional, defaults to SystemJsonSerializer)
 - System.Net.Http, System.Text.Json (BCL built-in)
 
 ## Maintenance
