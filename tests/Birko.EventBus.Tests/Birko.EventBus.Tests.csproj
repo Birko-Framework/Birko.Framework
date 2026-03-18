@@ -21,6 +21,7 @@
     </PackageReference>
   </ItemGroup>
 
+  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
   <Import Project="..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
   <Import Project="..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
@@ -32,5 +33,6 @@
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus.EventSourcing\Birko.EventBus.EventSourcing.projitems" Label="Shared" />
+  <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
 
 </Project>
