@@ -21,6 +21,7 @@
     </PackageReference>
   </ItemGroup>
 
+  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
   <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
   <Import Project="..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
