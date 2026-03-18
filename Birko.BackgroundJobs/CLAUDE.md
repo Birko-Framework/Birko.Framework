@@ -31,7 +31,7 @@ Birko.BackgroundJobs/
 
 ## Dependencies
 
-- None (core only, uses System.Text.Json built-in)
+- Birko.Serialization — JsonJobSerializer delegates to ISerializer internally, accepts ISerializer in constructor
 
 ## Key Design Decisions
 

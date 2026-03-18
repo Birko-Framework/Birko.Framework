@@ -1,5 +1,7 @@
 using System;
 using System.Text.Json;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 
 namespace Birko.BackgroundJobs.Serialization
 {
@@ -8,25 +10,33 @@ namespace Birko.BackgroundJobs.Serialization
     /// </summary>
     public class JsonJobSerializer : IJobSerializer
     {
-        private readonly JsonSerializerOptions _options;
+        private readonly ISerializer _serializer;
 
         public JsonJobSerializer(JsonSerializerOptions? options = null)
         {
-            _options = options ?? new JsonSerializerOptions
+            _serializer = new SystemJsonSerializer(options ?? new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 WriteIndented = false
-            };
+            });
+        }
+
+        /// <summary>
+        /// Creates a job serializer backed by a custom ISerializer.
+        /// </summary>
+        public JsonJobSerializer(ISerializer serializer)
+        {
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         }
 
         public string Serialize(object input)
         {
-            return JsonSerializer.Serialize(input, input.GetType(), _options);
+            return _serializer.Serialize(input);
         }
 
         public object? Deserialize(string data, Type type)
         {
-            return JsonSerializer.Deserialize(data, type, _options);
+            return _serializer.Deserialize(data, type);
         }
     }
 }
