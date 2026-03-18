@@ -28,7 +28,7 @@ public class AzureBlobHealthCheckTests
         var settings = new AzureBlobSettings(
             "https://test.blob.core.windows.net", "container",
             "tenant", "client", "secret");
-        var storage = new AzureBlobStorage(settings);
+        var storage = new AzureBlobStorage(settings, new Birko.Time.SystemDateTimeProvider());
 
         var check = new AzureBlobHealthCheck(() => storage);
 
@@ -42,7 +42,7 @@ public class AzureBlobHealthCheckTests
         var settings = new AzureBlobSettings(
             "https://test.blob.core.windows.net", "container",
             "tenant", "client", "secret");
-        using var storage = new AzureBlobStorage(settings);
+        using var storage = new AzureBlobStorage(settings, new Birko.Time.SystemDateTimeProvider());
 
         var check = new AzureBlobHealthCheck(storage);
 
@@ -67,7 +67,7 @@ public class AzureBlobHealthCheckTests
         var settings = new AzureBlobSettings(
             "https://test.blob.core.windows.net", "container",
             "tenant", "client", "secret");
-        using var storage = new AzureBlobStorage(settings);
+        using var storage = new AzureBlobStorage(settings, new Birko.Time.SystemDateTimeProvider());
         var check = new AzureBlobHealthCheck(storage);
 
         using var cts = new CancellationTokenSource();
