@@ -44,6 +44,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AuditBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditBulkStoreWrapper.cs" />
+    <!-- Decorators: Timestamp -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\TimestampStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\TimestampBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncTimestampStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncTimestampBulkStoreWrapper.cs" />
   </ItemGroup>
 
 </Project>

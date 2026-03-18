@@ -7,6 +7,7 @@ Cross-cutting data patterns for the Birko Framework: Unit of Work, Soft Delete, 
 - Unit of Work pattern with transaction management
 - Soft Delete via decorator wrappers (sets `DeletedAt` instead of deleting)
 - Audit tracking (automatic `CreatedBy`/`UpdatedBy` from context)
+- Timestamp management (automatic `CreatedAt`/`UpdatedAt`/`PrevUpdatedAt` via `IDateTimeProvider`)
 - Paged results with navigation metadata
 - All patterns available in sync, async, and bulk variants
 
@@ -43,6 +44,15 @@ store.Create(customer); // Automatically sets CreatedBy
 store.Update(customer); // Automatically sets UpdatedBy
 ```
 
+### Timestamp Management
+
+```csharp
+var clock = new SystemDateTimeProvider(); // IDateTimeProvider from Birko.Time
+var store = new AsyncTimestampStoreWrapper<Customer>(innerStore, clock);
+store.Create(customer); // Automatically sets CreatedAt + UpdatedAt
+store.Update(customer); // Shifts UpdatedAt to PrevUpdatedAt, sets new UpdatedAt
+```
+
 ### Paging
 
 ```csharp
@@ -76,6 +86,11 @@ await uow.CommitAsync(); // or RollbackAsync()
 - **IAuditable** - Interface with `CreatedBy`, `UpdatedBy` (Guid?)
 - **IAuditContext** - Provides `CurrentUserId`
 - **AuditStoreWrapper\<T\>** / async/bulk variants
+
+### Timestamp
+
+- **ITimestamped** (in Birko.Data.Core) - Interface with `CreatedAt`, `UpdatedAt`, `PrevUpdatedAt`
+- **TimestampStoreWrapper\<T\>** / async/bulk variants
 
 ### Paging
 

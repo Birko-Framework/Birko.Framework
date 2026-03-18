@@ -31,6 +31,13 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `AsyncAuditStoreWrapper<T>` - Async store variant
 - `AsyncAuditBulkStoreWrapper<T>` - Async bulk store variant
 
+### Timestamp
+- `ITimestamped` - Interface in Birko.Data.Core with `CreatedAt`, `UpdatedAt`, `PrevUpdatedAt` (AbstractLogModel implements it)
+- `TimestampStoreWrapper<T>` - Wraps `IStore<T>`, auto-sets timestamps using `IDateTimeProvider` from Birko.Time
+- `TimestampBulkStoreWrapper<T>` - Bulk store variant
+- `AsyncTimestampStoreWrapper<T>` - Async store variant
+- `AsyncTimestampBulkStoreWrapper<T>` - Async bulk store variant
+
 ### Paging
 - `PagedResult<T>` - Sealed class with `Items`, `TotalCount`, `Page`, `PageSize`
   - Computed: `TotalPages`, `HasNextPage`, `HasPreviousPage`
@@ -62,7 +69,7 @@ IStore<T> -> SoftDeleteStoreWrapper<T> -> AuditStoreWrapper<T> -> actual store
 ```
 
 ## Dependencies
-- Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
+- Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories, Birko.Time (for IDateTimeProvider in Timestamp/SoftDelete wrappers)
 
 ## Maintenance
 
