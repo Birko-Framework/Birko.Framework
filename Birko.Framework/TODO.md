@@ -248,14 +248,21 @@ Birko.Data.Patterns/
 │   └── NotSpecification.cs               ✅ Logical NOT
 ├── Validation/
 │   └── (Moved to Birko.Validation)        ✅ See Phase 3
-└── Concurrency/
-    ├── IVersioned.cs                      ✅ Version property for optimistic concurrency
-    ├── ConcurrentUpdateException.cs       ✅ EntityType, EntityId, ExpectedVersion
-    ├── VersionedStoreWrapper.cs           ✅ Sync IStore<T> wrapper
-    └── AsyncVersionedStoreWrapper.cs      ✅ Async IAsyncStore<T> wrapper
+├── Concurrency/
+│   ├── IVersioned.cs                      ✅ Version property for optimistic concurrency
+│   ├── ConcurrentUpdateException.cs       ✅ EntityType, EntityId, ExpectedVersion
+│   ├── VersionedStoreWrapper.cs           ✅ Sync IStore<T> wrapper
+│   └── AsyncVersionedStoreWrapper.cs      ✅ Async IAsyncStore<T> wrapper
+└── Decorators: Timestamp/
+    ├── TimestampStoreWrapper.cs           ✅ Sync IStore<T> wrapper (IDateTimeProvider)
+    ├── TimestampBulkStoreWrapper.cs       ✅ Sync IBulkStore<T> wrapper
+    ├── AsyncTimestampStoreWrapper.cs      ✅ Async IAsyncStore<T> wrapper
+    └── AsyncTimestampBulkStoreWrapper.cs  ✅ Async IAsyncBulkStore<T> wrapper
 ```
 
-**Dependencies:** Birko.Data.Core, Birko.Data.Stores
+**Note:** `ITimestamped` interface lives in Birko.Data.Core (`Birko.Data.Models.ITimestamped`). `AbstractLogModel` implements it — all existing log models gain the interface automatically (non-breaking).
+
+**Dependencies:** Birko.Data.Core, Birko.Data.Stores, Birko.Time
 
 ---
 
@@ -286,6 +293,23 @@ All stores already implement `Read(filter, orderBy, limit, offset)` and `Count(f
 |---------|-------------|
 | `PagedRepositoryWrapper<T>` | Wraps any `IBulkRepository<T>` for sync paging |
 | `AsyncPagedRepositoryWrapper<T>` | Wraps any `IAsyncBulkRepository<T>` for async paging (parallel Read+Count) |
+
+---
+
+### Timestamp Extraction — Consumer Audit
+**Status:** Pending | **Priority:** Medium
+
+`ITimestamped` + `TimestampStoreWrapper` are implemented. `AbstractLogModel` now implements `ITimestamped` (non-breaking). Remaining work is auditing external consumers to adopt the wrapper pattern and remove manual timestamp management.
+
+- [x] Create `ITimestamped` interface in Birko.Data.Core
+- [x] Create `TimestampStoreWrapper` (sync, async, bulk, async-bulk) in Birko.Data.Patterns
+- [x] Make `AbstractLogModel` implement `ITimestamped` (non-breaking)
+- [ ] Audit `Symbio` stores — identify where `CreatedAt`/`UpdatedAt` are set manually, wrap with `TimestampStoreWrapper`
+- [ ] Audit `FisData.Stock` stores — same (models extend `AbstractLogModel`, already implement `ITimestamped` transitively)
+- [ ] Audit `Affiliate` stores — same
+- [ ] Optional: Remove manual `DateTime.UtcNow` assignments in consumer code where `TimestampStoreWrapper` is active
+- [ ] Optional: Consider whether `AbstractLogModel` field defaults (`= DateTime.UtcNow`) should be removed once `TimestampStoreWrapper` is the canonical source of timestamps
+- [ ] Add `Birko.Data.Patterns.Tests` project with unit tests for all Timestamp wrappers
 
 ---
 

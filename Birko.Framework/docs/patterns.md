@@ -103,6 +103,50 @@ await auditedStore.CreateAsync(order);  // order.CreatedBy = currentUserId
 await auditedStore.UpdateAsync(order);  // order.UpdatedBy = currentUserId
 ```
 
+## Timestamp
+
+Automatically manages `CreatedAt`, `UpdatedAt`, and `PrevUpdatedAt` timestamps on store operations.
+
+### Model Interface
+
+```csharp
+// In Birko.Data.Core (Birko.Data.Models namespace)
+public interface ITimestamped
+{
+    DateTime CreatedAt { get; set; }
+    DateTime UpdatedAt { get; set; }
+    DateTime? PrevUpdatedAt { get; set; }
+}
+```
+
+`AbstractLogModel` implements `ITimestamped`, so all existing log models work automatically.
+
+### Store Wrappers
+
+```csharp
+var clock = new SystemDateTimeProvider(); // or any IDateTimeProvider
+var store = new AsyncDataBaseBulkStore<PostgreSQLConnector, Order>();
+var timestampedStore = new AsyncTimestampBulkStoreWrapper<Order>(store, clock);
+
+// Create sets CreatedAt + UpdatedAt to UtcNow, PrevUpdatedAt to null:
+await timestampedStore.CreateAsync(order);
+
+// Update shifts UpdatedAt into PrevUpdatedAt, sets new UpdatedAt:
+await timestampedStore.UpdateAsync(order);
+```
+
+### Stacking with Other Decorators
+
+```csharp
+// Stack: versioning -> audit -> timestamp -> soft delete -> base store
+var store = new AsyncVersionedStoreWrapper<Order>(
+    new AsyncAuditStoreWrapper<Order>(
+        new AsyncTimestampStoreWrapper<Order>(
+            new AsyncSoftDeleteStoreWrapper<Order>(baseStore, clock),
+            clock),
+        auditContext));
+```
+
 ## Paging
 
 Paginated queries with total count for UI pagination.
@@ -242,10 +286,12 @@ All patterns use the decorator pattern and can be composed:
 ```csharp
 var baseStore = new AsyncDataBaseBulkStore<PostgreSQLConnector, Order>();
 
-// Stack: versioning -> audit -> soft delete -> base store
+// Stack: versioning -> audit -> timestamp -> soft delete -> base store
 var store = new AsyncVersionedStoreWrapper<Order>(
     new AsyncAuditStoreWrapper<Order>(
-        new AsyncSoftDeleteStoreWrapper<Order>(baseStore),
+        new AsyncTimestampStoreWrapper<Order>(
+            new AsyncSoftDeleteStoreWrapper<Order>(baseStore, clock),
+            clock),
         auditContext));
 ```
 

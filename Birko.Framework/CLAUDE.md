@@ -36,7 +36,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Data.TimescaleDB.ViewModel** - TimescaleDB ViewModel repositories
 
 ### Data Features
-- **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Paging)
+- **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Timestamp, Paging)
 - **Birko.Data.Migrations** - Database migration framework
 - **Birko.Data.Migrations.SQL** - SQL migrations
 - **Birko.Data.Migrations.ElasticSearch** - Elasticsearch migrations
