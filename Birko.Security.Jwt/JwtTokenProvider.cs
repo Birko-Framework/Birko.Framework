@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Birko.Time;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Birko.Security.Jwt;
@@ -17,10 +18,12 @@ namespace Birko.Security.Jwt;
 public class JwtTokenProvider : ITokenProvider
 {
     private readonly TokenOptions _defaultOptions;
+    private readonly IDateTimeProvider _clock;
 
-    public JwtTokenProvider(TokenOptions options)
+    public JwtTokenProvider(TokenOptions options, IDateTimeProvider? clock = null)
     {
         _defaultOptions = options ?? throw new ArgumentNullException(nameof(options));
+        _clock = clock ?? new SystemDateTimeProvider();
         if (string.IsNullOrWhiteSpace(_defaultOptions.Secret))
             throw new ArgumentException("Secret must be provided.", nameof(options));
     }
@@ -30,7 +33,7 @@ public class JwtTokenProvider : ITokenProvider
         var opts = options ?? _defaultOptions;
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(opts.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expiresAt = DateTime.UtcNow.AddMinutes(opts.ExpirationMinutes);
+        var expiresAt = _clock.UtcNow.AddMinutes(opts.ExpirationMinutes);
 
         var claimsList = claims.Select(c => new Claim(c.Key, c.Value)).ToList();
 
@@ -38,7 +41,7 @@ public class JwtTokenProvider : ITokenProvider
         if (!claims.ContainsKey(JwtRegisteredClaimNames.Jti))
             claimsList.Add(new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()));
         if (!claims.ContainsKey(JwtRegisteredClaimNames.Iat))
-            claimsList.Add(new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
+            claimsList.Add(new Claim(JwtRegisteredClaimNames.Iat, _clock.OffsetUtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64));
 
         var token = new JwtSecurityToken(
             issuer: opts.Issuer,
