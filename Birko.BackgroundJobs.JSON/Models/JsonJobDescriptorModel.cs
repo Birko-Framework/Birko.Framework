@@ -1,5 +1,7 @@
 using System;
 using Birko.Data.Models;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using System.Text.Json.Serialization;
 
 namespace Birko.BackgroundJobs.JSON.Models;
@@ -52,8 +54,11 @@ public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [JsonPropertyName("metadataJson")]
     public string? MetadataJson { get; set; }
 
-    public JobDescriptor ToDescriptor()
+    private static readonly ISerializer DefaultSerializer = new SystemJsonSerializer();
+
+    public JobDescriptor ToDescriptor(ISerializer? serializer = null)
     {
+        var s = serializer ?? DefaultSerializer;
         var descriptor = new JobDescriptor
         {
             Id = Guid ?? System.Guid.NewGuid(),
@@ -74,7 +79,7 @@ public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
         if (!string.IsNullOrEmpty(MetadataJson))
         {
-            var metadata = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(MetadataJson);
+            var metadata = s.Deserialize<System.Collections.Generic.Dictionary<string, string>>(MetadataJson);
             if (metadata != null)
             {
                 descriptor.Metadata = metadata;
@@ -93,6 +98,12 @@ public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
     public void LoadFrom(JobDescriptor data)
     {
+        LoadFrom(data, null);
+    }
+
+    public void LoadFrom(JobDescriptor data, ISerializer? serializer)
+    {
+        var s = serializer ?? DefaultSerializer;
         Guid = data.Id;
         JobType = data.JobType;
         InputType = data.InputType;
@@ -108,7 +119,7 @@ public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
         CompletedAt = data.CompletedAt;
         LastError = data.LastError;
         MetadataJson = data.Metadata.Count > 0
-            ? System.Text.Json.JsonSerializer.Serialize(data.Metadata)
+            ? s.Serialize(data.Metadata)
             : null;
     }
 }

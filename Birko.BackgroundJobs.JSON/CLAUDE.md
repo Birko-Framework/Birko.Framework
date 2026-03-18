@@ -20,6 +20,7 @@ JSON file-based job queue for Birko.BackgroundJobs. Uses `AsyncJsonStore` from B
 - Birko.Data.Core (AbstractModel)
 - Birko.Data.Stores (OrderBy, Settings)
 - Birko.Data.JSON (AsyncJsonStore)
+- Birko.Serialization — ISerializer for job metadata serialization (optional, defaults to SystemJsonSerializer)
 - System.Text.Json
 
 ## Maintenance
