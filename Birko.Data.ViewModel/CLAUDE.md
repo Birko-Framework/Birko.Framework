@@ -18,6 +18,7 @@ This project provides ViewModel pattern implementation for the Birko data layer,
 - **Birko.Data.Core** - Models (AbstractModel, ILoadable, ICopyable)
 - **Birko.Data.Stores** - Store interfaces and settings
 - **Birko.Data.Repositories** - Repository interfaces and abstractions
+- **Birko.Serialization** — ISerializer for ViewModel hash calculation (optional, defaults to SystemJsonSerializer)
 
 ## Usage
 

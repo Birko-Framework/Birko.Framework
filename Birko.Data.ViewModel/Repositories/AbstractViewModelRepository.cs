@@ -1,5 +1,7 @@
 using Birko.Data.Filters;
 using Birko.Data.Stores;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using System;
 using System.Collections.Generic;
 
@@ -19,6 +21,7 @@ namespace Birko.Data.Repositories
 
         private bool _isReadMode = false;
         protected IDictionary<Guid, byte[]> _modelHash = new Dictionary<Guid, byte[]>();
+        protected ISerializer Serializer { get; set; }
         protected IStore<TModel>? Store { get; set; }
 
         /// <summary>
@@ -45,9 +48,10 @@ namespace Birko.Data.Repositories
         /// Initializes a new instance with dependency injection support.
         /// </summary>
         /// <param name="store">The store to use for data operations.</param>
-        public AbstractViewModelRepository(IStore<TModel>? store)
+        public AbstractViewModelRepository(IStore<TModel>? store, ISerializer? serializer = null)
         {
             Store = store;
+            Serializer = serializer ?? new SystemJsonSerializer();
         }
 
         /// <inheritdoc />
@@ -81,7 +85,7 @@ namespace Birko.Data.Repositories
 
         protected virtual byte[] CalculateHash(TModel data)
         {
-            return Helpers.StringHelper.CalculateSHA256Hash(System.Text.Json.JsonSerializer.Serialize(data));
+            return Helpers.StringHelper.CalculateSHA256Hash(Serializer.Serialize(data));
         }
 
         protected virtual void RemoveHash(TModel data)
