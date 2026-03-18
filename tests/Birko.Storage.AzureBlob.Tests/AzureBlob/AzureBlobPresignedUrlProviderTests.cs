@@ -19,7 +19,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "docs/file.txt",
             TestAccountName, TestAccountKey,
-            "r", expiry);
+            "r", expiry, DateTimeOffset.UtcNow);
 
         uri.Should().NotBeNull();
         var query = uri.Query;
@@ -39,7 +39,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "docs/file.txt",
             TestAccountName, TestAccountKey,
-            "w", expiry);
+            "w", expiry, DateTimeOffset.UtcNow);
 
         uri.Query.Should().Contain("sp=w");
     }
@@ -52,7 +52,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "products/photo.jpg",
             TestAccountName, TestAccountKey,
-            "r", expiry);
+            "r", expiry, DateTimeOffset.UtcNow);
 
         uri.AbsolutePath.Should().Be("/test-container/products/photo.jpg");
     }
@@ -65,7 +65,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri + "/", TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", expiry);
+            "r", expiry, DateTimeOffset.UtcNow);
 
         uri.AbsolutePath.Should().Be("/test-container/file.txt");
     }
@@ -78,7 +78,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", expiry,
+            "r", expiry, DateTimeOffset.UtcNow,
             contentDisposition: "attachment; filename=\"report.pdf\"");
 
         uri.Query.Should().Contain("rscd=");
@@ -92,7 +92,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", expiry,
+            "r", expiry, DateTimeOffset.UtcNow,
             contentType: "application/pdf");
 
         uri.Query.Should().Contain("rsct=");
@@ -104,12 +104,12 @@ public class AzureBlobPresignedUrlProviderTests
         var uri1 = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", DateTimeOffset.UtcNow.AddHours(1));
+            "r", DateTimeOffset.UtcNow.AddHours(1), DateTimeOffset.UtcNow);
 
         var uri2 = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", DateTimeOffset.UtcNow.AddHours(2));
+            "r", DateTimeOffset.UtcNow.AddHours(2), DateTimeOffset.UtcNow);
 
         // Different expiry should produce different signatures
         uri1.Query.Should().NotBe(uri2.Query);
@@ -123,12 +123,12 @@ public class AzureBlobPresignedUrlProviderTests
         var readUri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", expiry);
+            "r", expiry, DateTimeOffset.UtcNow);
 
         var writeUri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "w", expiry);
+            "w", expiry, DateTimeOffset.UtcNow);
 
         readUri.Query.Should().NotBe(writeUri.Query);
     }
@@ -141,7 +141,7 @@ public class AzureBlobPresignedUrlProviderTests
         var uri = AzureBlobPresignedUrlProvider.GenerateSasUri(
             TestAccountUri, TestContainer, "file.txt",
             TestAccountName, TestAccountKey,
-            "r", expiry);
+            "r", expiry, DateTimeOffset.UtcNow);
 
         uri.Scheme.Should().Be("https");
     }

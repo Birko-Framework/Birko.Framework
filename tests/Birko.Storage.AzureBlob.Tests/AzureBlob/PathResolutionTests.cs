@@ -1,3 +1,4 @@
+using Birko.Time;
 using FluentAssertions;
 using Xunit;
 
@@ -10,6 +11,7 @@ namespace Birko.Storage.AzureBlob.Tests.AzureBlob;
 public class PathResolutionTests
 {
     private readonly AzureBlobSettings _settings;
+    private readonly IDateTimeProvider _clock = new SystemDateTimeProvider();
 
     public PathResolutionTests()
     {
@@ -24,7 +26,7 @@ public class PathResolutionTests
     [Fact]
     public async Task UploadAsync_PathTraversal_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[] { 1 });
 
         var act = () => storage.UploadAsync("../escape.txt", stream, "text/plain");
@@ -35,7 +37,7 @@ public class PathResolutionTests
     [Fact]
     public async Task UploadAsync_NullByteInPath_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[] { 1 });
 
         var act = () => storage.UploadAsync("file\0.txt", stream, "text/plain");
@@ -46,7 +48,7 @@ public class PathResolutionTests
     [Fact]
     public async Task UploadAsync_EmptyPath_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[] { 1 });
 
         var act = () => storage.UploadAsync("", stream, "text/plain");
@@ -57,7 +59,7 @@ public class PathResolutionTests
     [Fact]
     public async Task UploadAsync_WhitespacePath_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[] { 1 });
 
         var act = () => storage.UploadAsync("   ", stream, "text/plain");
@@ -68,7 +70,7 @@ public class PathResolutionTests
     [Fact]
     public async Task ExistsAsync_PathTraversal_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.ExistsAsync("../../etc/passwd");
 
@@ -78,7 +80,7 @@ public class PathResolutionTests
     [Fact]
     public async Task DeleteAsync_PathTraversal_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.DeleteAsync("foo/../../../bar");
 
@@ -88,7 +90,7 @@ public class PathResolutionTests
     [Fact]
     public void GetDownloadUrlAsync_PathTraversal_ThrowsInvalidPathException()
     {
-        using var storage = new AzureBlobStorage(_settings)
+        using var storage = new AzureBlobStorage(_settings, _clock)
         {
             AccountName = "test",
             AccountKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTE="
@@ -108,7 +110,7 @@ public class PathResolutionTests
             "tenant-id", "client-id", "client-secret",
             pathPrefix: "tenant-42/");
 
-        using var storage = new AzureBlobStorage(settings)
+        using var storage = new AzureBlobStorage(settings, _clock)
         {
             AccountName = "testaccount",
             AccountKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTE="
@@ -128,7 +130,7 @@ public class PathResolutionTests
             "tenant-id", "client-id", "client-secret",
             pathPrefix: "tenant-42");
 
-        using var storage = new AzureBlobStorage(settings)
+        using var storage = new AzureBlobStorage(settings, _clock)
         {
             AccountName = "testaccount",
             AccountKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTE="
@@ -142,7 +144,7 @@ public class PathResolutionTests
     [Fact]
     public async Task GetDownloadUrlAsync_NoPrefix_PathNotPrefixed()
     {
-        using var storage = new AzureBlobStorage(_settings)
+        using var storage = new AzureBlobStorage(_settings, _clock)
         {
             AccountName = "testaccount",
             AccountKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTE="
@@ -156,7 +158,7 @@ public class PathResolutionTests
     [Fact]
     public async Task GetDownloadUrlAsync_LeadingSlashStripped()
     {
-        using var storage = new AzureBlobStorage(_settings)
+        using var storage = new AzureBlobStorage(_settings, _clock)
         {
             AccountName = "testaccount",
             AccountKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTE="
@@ -171,7 +173,7 @@ public class PathResolutionTests
     [Fact]
     public async Task GetDownloadUrlAsync_BackslashNormalized()
     {
-        using var storage = new AzureBlobStorage(_settings)
+        using var storage = new AzureBlobStorage(_settings, _clock)
         {
             AccountName = "testaccount",
             AccountKey = "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleTE="

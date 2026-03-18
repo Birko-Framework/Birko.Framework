@@ -1,4 +1,5 @@
 using System.Net;
+using Birko.Time;
 using FluentAssertions;
 using Xunit;
 
@@ -7,6 +8,7 @@ namespace Birko.Storage.AzureBlob.Tests.AzureBlob;
 public class AzureBlobStorageTests : IDisposable
 {
     private readonly AzureBlobSettings _settings;
+    private readonly IDateTimeProvider _clock = new SystemDateTimeProvider();
 
     public AzureBlobStorageTests()
     {
@@ -26,7 +28,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public void Constructor_NullSettings_ThrowsArgumentNullException()
     {
-        var act = () => new AzureBlobStorage(null!);
+        var act = () => new AzureBlobStorage(null!, _clock);
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("settings");
     }
@@ -36,7 +38,7 @@ public class AzureBlobStorageTests : IDisposable
     {
         var settings = new AzureBlobSettings { ContainerName = "test" };
 
-        var act = () => new AzureBlobStorage(settings);
+        var act = () => new AzureBlobStorage(settings, _clock);
 
         act.Should().Throw<ArgumentException>().WithParameterName("settings");
     }
@@ -46,7 +48,7 @@ public class AzureBlobStorageTests : IDisposable
     {
         var settings = new AzureBlobSettings { StorageAccountUri = "https://test.blob.core.windows.net" };
 
-        var act = () => new AzureBlobStorage(settings);
+        var act = () => new AzureBlobStorage(settings, _clock);
 
         act.Should().Throw<ArgumentException>().WithParameterName("settings");
     }
@@ -54,7 +56,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public void Constructor_ValidSettings_CreatesInstance()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         storage.Should().NotBeNull();
     }
@@ -63,7 +65,7 @@ public class AzureBlobStorageTests : IDisposable
     public void Constructor_WithHttpClient_UsesProvidedClient()
     {
         using var httpClient = new HttpClient();
-        using var storage = new AzureBlobStorage(_settings, httpClient);
+        using var storage = new AzureBlobStorage(_settings, _clock, httpClient);
 
         storage.Should().NotBeNull();
     }
@@ -71,7 +73,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task UploadAsync_NullPath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
 
         var act = () => storage.UploadAsync(null!, stream, "text/plain");
@@ -82,7 +84,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task UploadAsync_NullContent_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.UploadAsync("test.txt", null!, "text/plain");
 
@@ -92,7 +94,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task UploadAsync_DisallowedContentType_ThrowsContentTypeNotAllowed()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
         var options = new StorageOptions { AllowedContentTypes = new[] { "image/jpeg", "image/png" } };
 
@@ -104,7 +106,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task UploadAsync_SeekableStreamExceedsMaxSize_ThrowsFileTooLarge()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
         using var stream = new MemoryStream(new byte[1024]);
         var options = new StorageOptions { MaxFileSize = 100, OverwriteExisting = true };
 
@@ -117,7 +119,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task DownloadAsync_NullPath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.DownloadAsync(null!);
 
@@ -127,7 +129,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task DeleteAsync_NullPath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.DeleteAsync(null!);
 
@@ -137,7 +139,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task ExistsAsync_NullPath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.ExistsAsync(null!);
 
@@ -147,7 +149,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task GetReferenceAsync_NullPath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.GetReferenceAsync(null!);
 
@@ -157,7 +159,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task CopyAsync_NullSourcePath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.CopyAsync(null!, "dest.txt");
 
@@ -167,7 +169,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public async Task CopyAsync_NullDestinationPath_ThrowsArgumentNullException()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.CopyAsync("source.txt", null!);
 
@@ -177,7 +179,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public void GetDownloadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.GetDownloadUrlAsync("test.txt");
 
@@ -187,7 +189,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public void GetUploadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation()
     {
-        using var storage = new AzureBlobStorage(_settings);
+        using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.GetUploadUrlAsync("test.txt");
 
@@ -197,7 +199,7 @@ public class AzureBlobStorageTests : IDisposable
     [Fact]
     public void Dispose_OwnedHttpClient_DisposesClient()
     {
-        var storage = new AzureBlobStorage(_settings);
+        var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.Dispose();
 
@@ -208,7 +210,7 @@ public class AzureBlobStorageTests : IDisposable
     public void Dispose_ExternalHttpClient_DoesNotDisposeClient()
     {
         using var httpClient = new HttpClient();
-        var storage = new AzureBlobStorage(_settings, httpClient);
+        var storage = new AzureBlobStorage(_settings, _clock, httpClient);
         storage.Dispose();
 
         // HttpClient should still be usable after storage disposal
