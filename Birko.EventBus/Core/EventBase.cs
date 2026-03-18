@@ -1,4 +1,5 @@
 using System;
+using Birko.Time;
 
 namespace Birko.EventBus
 {
@@ -8,11 +9,17 @@ namespace Birko.EventBus
     /// </summary>
     public abstract record EventBase : IEvent
     {
+        /// <summary>
+        /// Default clock used when no explicit provider is supplied.
+        /// Replace with a custom implementation for testing.
+        /// </summary>
+        public static IDateTimeProvider DefaultClock { get; set; } = new SystemDateTimeProvider();
+
         /// <inheritdoc />
         public Guid EventId { get; init; } = Guid.NewGuid();
 
         /// <inheritdoc />
-        public DateTime OccurredAt { get; init; } = DateTime.UtcNow;
+        public DateTime OccurredAt { get; init; } = DefaultClock.UtcNow;
 
         /// <summary>
         /// Correlation ID for tracing related events across handlers and services.
