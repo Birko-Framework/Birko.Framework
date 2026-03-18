@@ -32,4 +32,5 @@
     <Compile Include="$(MSBuildThisFileDirectory)Templates\ITemplateEngine.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Templates\StringTemplateEngine.cs" />
   </ItemGroup>
+
 </Project>
