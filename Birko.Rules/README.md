@@ -13,6 +13,7 @@ Data-driven rule engine for the Birko Framework. Define business rules as compos
 - **Negation support** — any rule can be negated
 - **Type-safe comparisons** — numeric promotion, string fallback, null handling
 - **Stateless evaluator** — singleton-safe, no side effects
+- **LINQ expression converter** — convert rules to `Expression<Func<T, bool>>` for any store (SQL, Elasticsearch, MongoDB, JSON)
 
 ## Dependencies
 
@@ -111,6 +112,38 @@ var inRule = new Rule("Status", ComparisonOperator.In, new[] { "Active", "Pendin
 ### Evaluation
 - **IRuleEvaluator** — Evaluate, EvaluateAll, EvaluateMatches
 - **RuleEvaluator** — default stateless implementation
+
+### Expressions
+- **RuleExpressionConverter** — static converter: rules → `Expression<Func<T, bool>>` for LINQ-based stores
+
+## LINQ Expression Conversion
+
+Convert data-driven rules into LINQ expressions that any Birko store accepts:
+
+```csharp
+using Birko.Rules;
+
+// Single rule → expression
+var rule = new Rule("Price", ComparisonOperator.GreaterThan, 100m);
+var expr = RuleExpressionConverter.ToExpression<Product>(rule);
+var results = store.ReadList(expr); // Works with SQL, ES, MongoDB, JSON...
+
+// RuleSet → combined AND expression
+var ruleSet = new RuleSet("Active expensive products",
+    new Rule("IsActive", ComparisonOperator.Equal, true),
+    new Rule("Price", ComparisonOperator.GreaterThan, 50m));
+var expr = RuleExpressionConverter.ToExpression<Product>(ruleSet);
+
+// Nested properties (null-safe)
+var rule = new Rule("Address.City", ComparisonOperator.Equal, "Prague");
+// Generates: x => x.Address != null && x.Address.City == "Prague"
+
+// Automatic value conversion
+var rule = new Rule("CreatedAt", ComparisonOperator.GreaterThan, "2025-01-01"); // string → DateTime
+var rule = new Rule("Id", ComparisonOperator.Equal, "abc-123-..."); // string → Guid
+```
+
+Supports all 16 comparison operators, nested AND/OR groups, negation, disabled rule filtering, case-insensitive property resolution, and type coercion.
 
 ## License
 

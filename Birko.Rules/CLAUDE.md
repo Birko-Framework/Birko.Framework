@@ -19,10 +19,12 @@ Birko.Rules/
 │   ├── IRuleContext.cs           - Interface: TryGetValue(field, out value), HasField(field)
 │   ├── DictionaryRuleContext.cs  - Dictionary<string, object?> context with From() builder
 │   └── ObjectRuleContext.cs      - Generic reflection-based context with ConcurrentDictionary property cache
-└── Evaluation/
-    ├── IRuleEvaluator.cs         - Interface: Evaluate, EvaluateAll, EvaluateMatches, Evaluate(RuleSet)
-    ├── ComparisonHelper.cs       - Internal: type-safe comparison with numeric promotion, string fallback, LIKE patterns
-    └── RuleEvaluator.cs          - Default stateless evaluator (leaf + group evaluation, respects IsEnabled/IsNegated)
+├── Evaluation/
+│   ├── IRuleEvaluator.cs         - Interface: Evaluate, EvaluateAll, EvaluateMatches, Evaluate(RuleSet)
+│   ├── ComparisonHelper.cs       - Internal: type-safe comparison with numeric promotion, string fallback, LIKE patterns
+│   └── RuleEvaluator.cs          - Default stateless evaluator (leaf + group evaluation, respects IsEnabled/IsNegated)
+└── Expressions/
+    └── RuleExpressionConverter.cs - Static converter: IRule/RuleSet/IEnumerable<IRule> → Expression<Func<T, bool>> for any LINQ-based store
 ```
 
 ## Dependencies
@@ -36,6 +38,7 @@ Birko.Rules/
 - **ComparisonHelper** is `internal static` — type-safe comparisons with numeric promotion (int/long/float/double/decimal), DateTime, IComparable, string fallback
 - **ObjectRuleContext\<T\>** caches PropertyInfo per type via ConcurrentDictionary (case-insensitive)
 - **RuleEvaluator** is stateless, singleton-safe
+- **RuleExpressionConverter** is `static` — converts rules to `Expression<Func<T, bool>>` for use with any LINQ-based store (SQL, Elasticsearch, MongoDB, JSON). Supports nested properties with null guards, automatic value conversion (int→decimal, string→DateTime/Guid/enum), case-insensitive property resolution and string comparisons
 
 ## Conventions
 - Namespace: `Birko.Rules`

@@ -26,5 +26,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Evaluation\IRuleEvaluator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Evaluation\ComparisonHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Evaluation\RuleEvaluator.cs" />
+    <!-- Expressions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\RuleExpressionConverter.cs" />
   </ItemGroup>
 </Project>
