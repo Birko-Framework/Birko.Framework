@@ -192,6 +192,7 @@ public class CustomerSummaryProjection
 ## Dependencies
 - Birko.Data.Core
 - Birko.Data.Stores
+- Birko.Serialization — ISerializer for event data serialization (optional, defaults to SystemJsonSerializer)
 - System.Text.Json (or Newtonsoft.Json)
 
 ## Best Practices

@@ -2,6 +2,8 @@ using Birko.Data.EventSourcing.Events;
 using Birko.Data.EventSourcing.Models;
 using Birko.Data.Filters;
 using Birko.Data.Stores;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -21,6 +23,7 @@ namespace Birko.Data.EventSourcing.Stores
     {
         protected readonly TStore _innerStore;
         protected readonly IEventStore _eventStore;
+        protected readonly ISerializer _serializer;
 
         /// <summary>
         /// Gets the current user ID for event tracking.
@@ -32,10 +35,12 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         /// <param name="innerStore">The inner store to wrap.</param>
         /// <param name="eventStore">The event store for recording events.</param>
-        public EventSourcingStoreWrapper(TStore innerStore, IEventStore eventStore)
+        /// <param name="serializer">The serializer for event data. Defaults to SystemJsonSerializer.</param>
+        public EventSourcingStoreWrapper(TStore innerStore, IEventStore eventStore, ISerializer? serializer = null)
         {
             _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
             _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
+            _serializer = serializer ?? new SystemJsonSerializer();
         }
 
         /// <summary>
@@ -53,7 +58,7 @@ namespace Birko.Data.EventSourcing.Stores
                 item.Guid ?? Guid.NewGuid(),
                 newVersion,
                 "Created",
-                System.Text.Json.JsonSerializer.Serialize(item),
+                _serializer.Serialize(item),
                 CurrentUserId
             );
 
@@ -114,7 +119,7 @@ namespace Birko.Data.EventSourcing.Stores
                 data.Guid.Value,
                 newVersion,
                 "Updated",
-                System.Text.Json.JsonSerializer.Serialize(data),
+                _serializer.Serialize(data),
                 CurrentUserId
             );
 
@@ -149,7 +154,7 @@ namespace Birko.Data.EventSourcing.Stores
                 item.Guid.Value,
                 newVersion,
                 "Deleted",
-                System.Text.Json.JsonSerializer.Serialize(item),
+                _serializer.Serialize(item),
                 CurrentUserId
             );
 

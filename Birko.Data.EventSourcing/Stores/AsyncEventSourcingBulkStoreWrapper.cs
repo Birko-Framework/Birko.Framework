@@ -25,8 +25,8 @@ namespace Birko.Data.EventSourcing.Stores
         /// </summary>
         /// <param name="innerStore">The inner async bulk store to wrap.</param>
         /// <param name="eventStore">The async event store for recording events.</param>
-        public AsyncEventSourcingBulkStoreWrapper(TStore innerStore, IAsyncEventStore eventStore)
-            : base(innerStore, eventStore)
+        public AsyncEventSourcingBulkStoreWrapper(TStore innerStore, IAsyncEventStore eventStore, Birko.Serialization.ISerializer? serializer = null)
+            : base(innerStore, eventStore, serializer)
         {
         }
 
@@ -51,7 +51,7 @@ namespace Birko.Data.EventSourcing.Stores
                     item.Guid ?? Guid.NewGuid(),
                     newVersion,
                     "Created",
-                    System.Text.Json.JsonSerializer.Serialize(item),
+                    _serializer.Serialize(item),
                     CurrentUserId
                 );
 
@@ -105,7 +105,7 @@ namespace Birko.Data.EventSourcing.Stores
                     item.Guid.Value,
                     newVersion,
                     "Updated",
-                    System.Text.Json.JsonSerializer.Serialize(item),
+                    _serializer.Serialize(item),
                     CurrentUserId
                 );
 
@@ -141,7 +141,7 @@ namespace Birko.Data.EventSourcing.Stores
                     item.Guid.Value,
                     newVersion,
                     "Deleted",
-                    System.Text.Json.JsonSerializer.Serialize(item),
+                    _serializer.Serialize(item),
                     CurrentUserId
                 );
 
