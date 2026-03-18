@@ -191,9 +191,11 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Processors
 - **Birko.Data.Processors** - Generic stream processor framework: IProcessor/IStreamProcessor interfaces, AbstractProcessor<T> base with event pipeline, XmlProcessor (XmlReader), CsvProcessor + CsvParser (RFC 4180), HttpProcessor (download decorator), ZipProcessor (extraction decorator), decorator composition pattern
 
+### Time
+- **Birko.Time** - Testable clock abstraction (IDateTimeProvider), time zone conversion (ITimeZoneConverter), business calendar (IBusinessCalendar) with holidays and working hours
+- **Birko.Time.Tests** - Unit tests for time utilities (providers, calendars, holidays, working hours, business calendar)
+
 ### Planned Projects (See TODO.md for details)
-- **Birko.Time** - Time zone, business calendar, working hours
-- **Birko.Serialization** - JSON, XML, binary serialization abstraction
 - **Birko.Localization** - Translations and culture support
 
 ## Architecture
@@ -367,6 +369,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Serialization.MessagePack | [../Birko.Serialization.MessagePack/CLAUDE.md](../Birko.Serialization.MessagePack/CLAUDE.md) |
 | Birko.Serialization.Protobuf | [../Birko.Serialization.Protobuf/CLAUDE.md](../Birko.Serialization.Protobuf/CLAUDE.md) |
 | Birko.Serialization.Tests | [../Birko.Serialization.Tests/CLAUDE.md](../Birko.Serialization.Tests/CLAUDE.md) |
+| Birko.Time | [../Birko.Time/CLAUDE.md](../Birko.Time/CLAUDE.md) |
+| Birko.Time.Tests | [../Birko.Time.Tests/CLAUDE.md](../Birko.Time.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
@@ -435,6 +439,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Data Processors](docs/processors.md)
   - [Serialization](docs/serialization.md)
   - [Data Sync](docs/sync.md)
+  - [Time](docs/time.md)
   - [Multi-Tenancy](docs/tenant.md)
 
 ## Maintenance

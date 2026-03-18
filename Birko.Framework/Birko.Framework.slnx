@@ -163,6 +163,10 @@
     <Project Path="../Birko.Workflow.Tests/Birko.Workflow.Tests.csproj" />
     <Project Path="../Birko.CQRS.Tests/Birko.CQRS.Tests.csproj" />
     <Project Path="../Birko.Serialization.Tests/Birko.Serialization.Tests.csproj" />
+    <Project Path="../Birko.Time.Tests/Birko.Time.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Time/">
+    <Project Path="../Birko.Time/Birko.Time.shproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
