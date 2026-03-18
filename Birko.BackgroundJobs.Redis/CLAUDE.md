@@ -16,6 +16,7 @@ Birko.BackgroundJobs.Redis/
 
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, JobStatus, RetryPolicy)
 - Birko.Redis (RedisSettings, RedisConnectionManager)
+- Birko.Serialization — ISerializer for job metadata serialization (optional, defaults to SystemJsonSerializer)
 - StackExchange.Redis (NuGet — added by consuming project)
 
 ## Key Design Decisions

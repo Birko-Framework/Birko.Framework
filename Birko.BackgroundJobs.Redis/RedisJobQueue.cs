@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Redis;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using StackExchange.Redis;
 
 namespace Birko.BackgroundJobs.Redis
@@ -19,6 +20,7 @@ namespace Birko.BackgroundJobs.Redis
         private readonly RedisConnectionManager _connectionManager;
         private readonly RedisSettings _settings;
         private readonly RetryPolicy _retryPolicy;
+        private readonly ISerializer _serializer;
         private readonly bool _ownsConnection;
 
         private string KeyPrefix => _settings.KeyPrefix ?? "birko:jobs";
@@ -41,11 +43,12 @@ namespace Birko.BackgroundJobs.Redis
         /// </summary>
         /// <param name="settings">Redis connection settings.</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
-        public RedisJobQueue(RedisSettings settings, RetryPolicy? retryPolicy = null)
+        public RedisJobQueue(RedisSettings settings, RetryPolicy? retryPolicy = null, ISerializer? serializer = null)
         {
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _connectionManager = new RedisConnectionManager(settings);
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _serializer = serializer ?? new SystemJsonSerializer();
             _ownsConnection = true;
         }
 
@@ -55,11 +58,13 @@ namespace Birko.BackgroundJobs.Redis
         /// <param name="connectionManager">A pre-configured connection manager.</param>
         /// <param name="settings">Redis settings (for key prefix configuration).</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
-        public RedisJobQueue(RedisConnectionManager connectionManager, RedisSettings settings, RetryPolicy? retryPolicy = null)
+        /// <param name="serializer">Serializer for metadata. Defaults to SystemJsonSerializer.</param>
+        public RedisJobQueue(RedisConnectionManager connectionManager, RedisSettings settings, RetryPolicy? retryPolicy = null, ISerializer? serializer = null)
         {
             _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _serializer = serializer ?? new SystemJsonSerializer();
             _ownsConnection = false;
         }
 
@@ -352,7 +357,7 @@ namespace Birko.BackgroundJobs.Redis
 
         #region Serialization
 
-        private static HashEntry[] SerializeDescriptor(JobDescriptor descriptor)
+        private HashEntry[] SerializeDescriptor(JobDescriptor descriptor)
         {
             var entries = new List<HashEntry>
             {
@@ -380,12 +385,12 @@ namespace Birko.BackgroundJobs.Redis
             if (descriptor.LastError != null)
                 entries.Add(new HashEntry("LastError", descriptor.LastError));
             if (descriptor.Metadata.Count > 0)
-                entries.Add(new HashEntry("MetadataJson", JsonSerializer.Serialize(descriptor.Metadata)));
+                entries.Add(new HashEntry("MetadataJson", _serializer.Serialize(descriptor.Metadata)));
 
             return entries.ToArray();
         }
 
-        private static JobDescriptor DeserializeDescriptor(HashEntry[] fields)
+        private JobDescriptor DeserializeDescriptor(HashEntry[] fields)
         {
             var dict = fields.ToDictionary(f => f.Name.ToString(), f => f.Value);
 
@@ -416,7 +421,7 @@ namespace Birko.BackgroundJobs.Redis
                 descriptor.LastError = lastError!;
             if (dict.TryGetValue("MetadataJson", out var metadataJson) && metadataJson.HasValue)
             {
-                var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson.ToString());
+                var metadata = _serializer.Deserialize<Dictionary<string, string>>(metadataJson.ToString());
                 if (metadata != null)
                 {
                     descriptor.Metadata = metadata;
