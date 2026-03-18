@@ -13,4 +13,5 @@
     <Compile Include="$(MSBuildThisFileDirectory)JsonJobQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)JsonJobQueueSchema.cs" />
   </ItemGroup>
+
 </Project>

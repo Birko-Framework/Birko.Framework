@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Birko.BackgroundJobs.JSON.Models;
 using Birko.Data.JSON.Stores;
 using Birko.Data.Stores;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.JSON
 {
@@ -17,24 +18,27 @@ namespace Birko.BackgroundJobs.JSON
     {
         private readonly AsyncJsonStore<JsonJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
+        private readonly IDateTimeProvider _clock;
         private bool _initialized;
 
         /// <summary>
         /// Creates a new JSON job queue.
         /// </summary>
-        public JsonJobQueue(Birko.Data.Stores.Settings settings, RetryPolicy? retryPolicy = null)
+        public JsonJobQueue(Birko.Data.Stores.Settings settings, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
         {
             _store = new AsyncJsonStore<JsonJobDescriptorModel>();
             _store.SetSettings(settings);
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
         }
 
         /// <summary>
         /// Creates a new JSON job queue from an existing store.
         /// </summary>
-        public JsonJobQueue(AsyncJsonStore<JsonJobDescriptorModel> store, RetryPolicy? retryPolicy = null)
+        public JsonJobQueue(AsyncJsonStore<JsonJobDescriptorModel> store, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
         }
 
@@ -56,7 +60,7 @@ namespace Birko.BackgroundJobs.JSON
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var now = DateTime.UtcNow;
+            var now = _clock.UtcNow;
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
 
@@ -90,7 +94,7 @@ namespace Birko.BackgroundJobs.JSON
 
             candidate.Status = (int)JobStatus.Processing;
             candidate.AttemptCount++;
-            candidate.LastAttemptAt = DateTime.UtcNow;
+            candidate.LastAttemptAt = _clock.UtcNow;
 
             await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
 
@@ -105,7 +109,7 @@ namespace Birko.BackgroundJobs.JSON
             if (model == null) return;
 
             model.Status = (int)JobStatus.Completed;
-            model.CompletedAt = DateTime.UtcNow;
+            model.CompletedAt = _clock.UtcNow;
 
             await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
         }
@@ -123,12 +127,12 @@ namespace Birko.BackgroundJobs.JSON
             {
                 var delay = _retryPolicy.GetDelay(model.AttemptCount);
                 model.Status = (int)JobStatus.Scheduled;
-                model.ScheduledAt = DateTime.UtcNow.Add(delay);
+                model.ScheduledAt = _clock.UtcNow.Add(delay);
             }
             else
             {
                 model.Status = (int)JobStatus.Dead;
-                model.CompletedAt = DateTime.UtcNow;
+                model.CompletedAt = _clock.UtcNow;
             }
 
             await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
@@ -149,7 +153,7 @@ namespace Birko.BackgroundJobs.JSON
             if (model == null) return false;
 
             model.Status = (int)JobStatus.Cancelled;
-            model.CompletedAt = DateTime.UtcNow;
+            model.CompletedAt = _clock.UtcNow;
 
             await _store.UpdateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return true;
@@ -183,7 +187,7 @@ namespace Birko.BackgroundJobs.JSON
         {
             await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-            var cutoff = DateTime.UtcNow.Subtract(olderThan);
+            var cutoff = _clock.UtcNow.Subtract(olderThan);
             var completedStatus = (int)JobStatus.Completed;
             var deadStatus = (int)JobStatus.Dead;
             var cancelledStatus = (int)JobStatus.Cancelled;
