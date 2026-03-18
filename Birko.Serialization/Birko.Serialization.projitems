@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d7e8f9a0-b1c2-4d3e-8f5a-6b7c8d9e0f1a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Serialization</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ISerializer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\SerializationFormat.cs" />
+    <!-- Json -->
+    <Compile Include="$(MSBuildThisFileDirectory)Json\SystemJsonSerializer.cs" />
+    <!-- Xml -->
+    <Compile Include="$(MSBuildThisFileDirectory)Xml\SystemXmlSerializer.cs" />
+  </ItemGroup>
+</Project>
