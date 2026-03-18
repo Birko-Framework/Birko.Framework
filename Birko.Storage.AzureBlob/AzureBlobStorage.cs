@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Birko.Time;
 
 namespace Birko.Storage.AzureBlob;
 
@@ -23,6 +24,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
     private const string BlobType = "BlockBlob";
 
     private readonly AzureBlobSettings _settings;
+    private readonly IDateTimeProvider _clock;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private string? _accessToken;
@@ -41,13 +43,14 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
     /// </summary>
     public string? AccountKey { get; set; }
 
-    public AzureBlobStorage(AzureBlobSettings settings) : this(settings, null)
+    public AzureBlobStorage(AzureBlobSettings settings, IDateTimeProvider clock) : this(settings, clock, null)
     {
     }
 
-    public AzureBlobStorage(AzureBlobSettings settings, HttpClient? httpClient)
+    public AzureBlobStorage(AzureBlobSettings settings, IDateTimeProvider clock, HttpClient? httpClient)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
 
         if (string.IsNullOrWhiteSpace(settings.StorageAccountUri))
             throw new ArgumentException("StorageAccountUri is required", nameof(settings));
@@ -276,7 +279,8 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
             AccountName!,
             AccountKey!,
             "r", // read
-            DateTimeOffset.UtcNow.Add(expiry),
+            _clock.OffsetUtcNow.Add(expiry),
+            _clock.OffsetUtcNow,
             options?.ContentDisposition,
             options?.ContentType);
 
@@ -299,7 +303,8 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
             AccountName!,
             AccountKey!,
             "w", // write
-            DateTimeOffset.UtcNow.Add(expiry),
+            _clock.OffsetUtcNow.Add(expiry),
+            _clock.OffsetUtcNow,
             options?.ContentDisposition,
             options?.ContentType);
 
@@ -557,14 +562,14 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
 
     private async Task<string> GetAccessTokenAsync(CancellationToken ct)
     {
-        if (_accessToken != null && DateTime.UtcNow < _tokenExpiresAt.AddMinutes(-5))
+        if (_accessToken != null && _clock.UtcNow < _tokenExpiresAt.AddMinutes(-5))
             return _accessToken;
 
         await _tokenLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             // Double-check after acquiring lock
-            if (_accessToken != null && DateTime.UtcNow < _tokenExpiresAt.AddMinutes(-5))
+            if (_accessToken != null && _clock.UtcNow < _tokenExpiresAt.AddMinutes(-5))
                 return _accessToken;
 
             if (string.IsNullOrEmpty(_settings.TenantId) ||
@@ -594,7 +599,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
                 ?? throw new InvalidOperationException("No access_token in response");
 
             var expiresIn = doc.RootElement.TryGetProperty("expires_in", out var exp) ? exp.GetInt32() : 3600;
-            _tokenExpiresAt = DateTime.UtcNow.AddSeconds(expiresIn);
+            _tokenExpiresAt = _clock.UtcNow.AddSeconds(expiresIn);
 
             return _accessToken;
         }

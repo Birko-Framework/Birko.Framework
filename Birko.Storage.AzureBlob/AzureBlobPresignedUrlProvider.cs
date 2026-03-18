@@ -31,10 +31,11 @@ internal static class AzureBlobPresignedUrlProvider
         string accountKey,
         string permissions,
         DateTimeOffset expiry,
+        DateTimeOffset utcNow,
         string? contentDisposition = null,
         string? contentType = null)
     {
-        var start = DateTimeOffset.UtcNow.AddMinutes(-5); // Clock skew tolerance
+        var start = utcNow.AddMinutes(-5); // Clock skew tolerance
         var version = "2023-11-03";
 
         var canonicalResource = $"/blob/{accountName}/{containerName}/{blobPath}";

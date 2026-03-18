@@ -13,4 +13,5 @@
     <Compile Include="$(MSBuildThisFileDirectory)AzureBlobStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AzureBlobPresignedUrlProvider.cs" />
   </ItemGroup>
+
 </Project>
