@@ -19,6 +19,7 @@
     </PackageReference>
   </ItemGroup>
 
+  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
   <Import Project="..\Birko.Workflow\Birko.Workflow.projitems" Label="Shared" />
 
 </Project>
