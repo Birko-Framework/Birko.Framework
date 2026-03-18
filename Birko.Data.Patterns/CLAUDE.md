@@ -65,7 +65,7 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 ### Decorator Pattern
 Store wrappers use the decorator pattern to add cross-cutting concerns:
 ```
-IStore<T> -> SoftDeleteStoreWrapper<T> -> AuditStoreWrapper<T> -> actual store
+IStore<T> -> SoftDeleteStoreWrapper<T> -> TimestampStoreWrapper<T> -> AuditStoreWrapper<T> -> actual store
 ```
 
 ## Dependencies
