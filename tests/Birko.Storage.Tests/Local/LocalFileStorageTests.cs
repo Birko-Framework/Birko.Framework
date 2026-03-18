@@ -14,7 +14,7 @@ public class LocalFileStorageTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "birko-storage-tests-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(_tempDir);
-        _storage = new LocalFileStorage(new StorageSettings(_tempDir, "test"));
+        _storage = new LocalFileStorage(new StorageSettings(_tempDir, "test"), new Birko.Time.SystemDateTimeProvider());
     }
 
     public void Dispose()
@@ -347,7 +347,7 @@ public class LocalFileStorageTests : IDisposable
     [Fact]
     public async Task PathPrefix_IsAppliedToAllOperations()
     {
-        var prefixedStorage = new LocalFileStorage(new StorageSettings(_tempDir, "test", "tenant-1"));
+        var prefixedStorage = new LocalFileStorage(new StorageSettings(_tempDir, "test", "tenant-1"), new Birko.Time.SystemDateTimeProvider());
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("tenant data"));
         await prefixedStorage.UploadAsync("data.txt", stream, "text/plain");

@@ -14,7 +14,7 @@ public class FileStorageExtensionsTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), "birko-storage-ext-tests-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(_tempDir);
-        _storage = new LocalFileStorage(new StorageSettings(_tempDir, "test"));
+        _storage = new LocalFileStorage(new StorageSettings(_tempDir, "test"), new Birko.Time.SystemDateTimeProvider());
     }
 
     public void Dispose()
