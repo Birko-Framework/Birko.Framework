@@ -115,6 +115,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Rules** - Data-driven rule engine (IRule, Rule, RuleGroup, RuleSet, RuleEvaluator, comparison operators, dictionary/object contexts)
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator with all operators)
 
+### CQRS
+- **Birko.CQRS** - Command Query Responsibility Segregation (ICommand, IQuery, IRequestHandler, IPipelineBehavior, IMediator, Mediator with DI)
+- **Birko.CQRS.Tests** - Unit tests for CQRS (Unit struct, mediator dispatch, pipeline behaviors, DI registration)
+
 ### Workflow
 - **Birko.Workflow** - State machine engine (WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization, IWorkflowInstanceStore persistence contract)
 - **Birko.Workflow.SQL** - SQL workflow instance persistence (any SQL connector)
@@ -181,14 +185,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Data.Processors** - Generic stream processor framework: IProcessor/IStreamProcessor interfaces, AbstractProcessor<T> base with event pipeline, XmlProcessor (XmlReader), CsvProcessor + CsvParser (RFC 4180), HttpProcessor (download decorator), ZipProcessor (extraction decorator), decorator composition pattern
 
 ### Planned Projects (See TODO.md for details)
-- **Birko.Caching.Hybrid** - L1 memory + L2 distributed cache
-- **Birko.Workflow** - State machine and business process automation
 - **Birko.Time** - Time zone, business calendar, working hours
-- **Birko.Health** - Health checks and diagnostics
 - **Birko.Serialization** - JSON, XML, binary serialization abstraction
 - **Birko.Localization** - Translations and culture support
-- **Birko.CQRS** - Command Query Responsibility Segregation
-- **Birko.Data.Aggregates** - SQL ↔ NoSQL aggregate mapper (m:n relations ↔ nested documents) for sync scenarios
 
 ## Architecture
 
@@ -322,6 +321,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Validation | [../Birko.Validation/CLAUDE.md](../Birko.Validation/CLAUDE.md) |
 | Birko.Rules | [../Birko.Rules/CLAUDE.md](../Birko.Rules/CLAUDE.md) |
 | Birko.Rules.Tests | [../Birko.Rules.Tests/CLAUDE.md](../Birko.Rules.Tests/CLAUDE.md) |
+| Birko.CQRS | [../Birko.CQRS/CLAUDE.md](../Birko.CQRS/CLAUDE.md) |
+| Birko.CQRS.Tests | [../Birko.CQRS.Tests/CLAUDE.md](../Birko.CQRS.Tests/CLAUDE.md) |
 | Birko.Workflow | [../Birko.Workflow/CLAUDE.md](../Birko.Workflow/CLAUDE.md) |
 | Birko.Workflow.SQL | [../Birko.Workflow.SQL/CLAUDE.md](../Birko.Workflow.SQL/CLAUDE.md) |
 | Birko.Workflow.ElasticSearch | [../Birko.Workflow.ElasticSearch/CLAUDE.md](../Birko.Workflow.ElasticSearch/CLAUDE.md) |
@@ -417,6 +418,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Security](docs/security.md)
   - [Rules Engine](docs/rules.md)
   - [Workflow Engine](docs/workflow.md)
+  - [CQRS](docs/cqrs.md)
   - [Health Checks](docs/health.md)
   - [Data Processors](docs/processors.md)
   - [Data Sync](docs/sync.md)
@@ -478,6 +480,7 @@ Existing folder groups in both files:
 - **Storage/** — Birko.Storage, Birko.Storage.AzureBlob
 - **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry
 - **Tests/** — All *.Tests projects
+- **CQRS/** — Birko.CQRS
 - **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
 - **Workflow/** — Birko.Workflow, Birko.Workflow.SQL, Birko.Workflow.ElasticSearch, Birko.Workflow.MongoDB, Birko.Workflow.RavenDB, Birko.Workflow.JSON

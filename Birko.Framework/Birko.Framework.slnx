@@ -165,6 +165,9 @@
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
   </Folder>
+  <Folder Name="/CQRS/">
+    <Project Path="../Birko.CQRS/Birko.CQRS.shproj" />
+  </Folder>
   <Folder Name="/Rules/">
     <Project Path="../Birko.Rules/Birko.Rules.shproj" />
   </Folder>

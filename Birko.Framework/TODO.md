@@ -76,8 +76,8 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 4. ~~**Birko.Data.Aggregates** (Medium)~~ ✅ — Implemented 2026-03-17. Fluent aggregate definitions, flatten (SQL → NoSQL), expand (NoSQL → SQL) with collection diffing, sync pipeline extensions.
 5. ~~**Birko.Messaging — Razor templates** (Medium)~~ ✅ — Implemented 2026-03-17. RazorLight-based ITemplateEngine, file-based .cshtml templates with caching and traversal protection.
 6. ~~**Birko.Workflow** (Medium)~~ ✅ — Implemented 2026-03-17. WorkflowBuilder, WorkflowEngine, trigger-based transitions, guards, actions, Mermaid/DOT visualization. Persistence: SQL, ElasticSearch, MongoDB, RavenDB, JSON providers.
-7. **Birko.MessageQueue.Redis** (Low) — Redis infra already exists. Redis Streams would provide a persistent non-IoT queue without deploying a separate broker (RabbitMQ/Kafka).
-8. **Birko.CQRS** (Low) — Natural next step given EventBus + EventSourcing are integrated. Separates read/write models for complex modules.
+7. ~~**Birko.MessageQueue.Redis** (Low)~~ ✅ — Implemented 2026-03-17. Redis Streams with consumer groups, XACK, persistent messaging.
+8. ~~**Birko.CQRS** (Low)~~ ✅ — Implemented 2026-03-17. ICommand/IQuery/IRequest, typed handlers, pipeline behaviors, Mediator with DI integration.
 
 ### Lower priority for Symbio
 - **Birko.Time** — `DateTimeOffset` covers most needs unless business calendar/working hours become a requirement
@@ -1696,27 +1696,32 @@ Birko.Localization.Data/
 ---
 
 ### Birko.CQRS
-**Status:** Planned | **Priority:** Low
+**Status:** ✅ Implemented (2026-03-17) | **Priority:** Low
 
-Command Query Responsibility Segregation - platform-agnostic.
+Command Query Responsibility Segregation - platform-agnostic mediator with typed commands, queries, pipeline behaviors.
+Location: `C:\Source\Birko.CQRS\`
 
 ```
-Birko.CQRS/
+Birko.CQRS/                                (.shproj)
 ├── Core/
-│   ├── ICommand.cs
-│   ├── IQuery.cs
-│   ├── ICommandHandler.cs
-│   ├── IQueryHandler.cs
-│   └── IRequestHandler.cs
+│   ├── IRequest.cs                        ✅ Base marker interface IRequest<TResult>
+│   ├── ICommand.cs                        ✅ ICommand : IRequest<Unit>, ICommand<TResult> : IRequest<TResult>
+│   ├── IQuery.cs                          ✅ IQuery<TResult> : IRequest<TResult>
+│   ├── IRequestHandler.cs                 ✅ Base handler: IRequestHandler<TRequest, TResult>
+│   ├── ICommandHandler.cs                 ✅ ICommandHandler<TCommand>, ICommandHandler<TCommand, TResult>
+│   ├── IQueryHandler.cs                   ✅ IQueryHandler<TQuery, TResult>
+│   └── Unit.cs                            ✅ Void return type struct (Value, Task)
 ├── Pipeline/
-│   ├── ICommandPipeline.cs
-│   ├── IQueryPipeline.cs
-│   └── PipelineBehavior.cs
-└── Mediator/
-    └── Mediator.cs                        - Simple mediator
+│   ├── IPipelineBehavior.cs               ✅ IPipelineBehavior<TRequest, TResult> — Russian-doll middleware
+│   └── RequestPipeline.cs                 ✅ Executes ordered behavior chain around handler
+├── Mediator/
+│   ├── IMediator.cs                       ✅ SendAsync<TResult>(IRequest<TResult>), SendAsync(ICommand)
+│   └── Mediator.cs                        ✅ DI-based handler resolution with cached wrapper types
+└── Extensions/
+    └── CqrsServiceCollectionExtensions.cs ✅ AddCqrs(), AddCommandHandler<>(), AddQueryHandler<>(), AddPipelineBehavior<>()
 ```
 
-**Dependencies:** None
+**Dependencies:** `Microsoft.Extensions.DependencyInjection.Abstractions`
 
 ---
 
@@ -1804,12 +1809,12 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 5 | **Birko.MessageQueue** | MQTT, InMemory | ✅ Core+MQTT+InMemory done | Pending: replace Symbio direct MQTTnet usage |
 | 6 | **Birko.Storage** | AzureBlob, Aws, Google, Minio | ✅ Core+AzureBlob done, rest planned | Local + Azure Blob done, other cloud providers planned |
 | 7 | **Birko.Messaging** | SendGrid, Razor, Mailgun, Twilio, Firebase, Apple | ✅ Core+Razor done, others planned | SMTP email, Razor templates, SMS/push interfaces |
-| 8 | **Birko.MessageQueue** | RabbitMQ, Kafka, Azure, Aws, Redis, MassTransit | ⬜ Planned (Medium) | Future: remaining providers |
+| 8 | **Birko.MessageQueue** | InMemory, MQTT, Redis, RabbitMQ, Kafka, Azure, Aws, MassTransit | ✅ Core+InMemory+MQTT+Redis done, rest planned | Core interfaces, InMemory, MQTT, Redis Streams done |
 | 9 | **Birko.EventBus** | MessageQueue, Outbox, EventSourcing | ✅ Complete | Decoupled module communication |
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
-| 12 | **Birko.Workflow** | SQL, MongoDB | ✅ Core done, persistence planned | Trigger-based engine, fluent builder, visualization |
-| 13 | Additional | Time, ~~Health~~, Serialization, Localization, CQRS | ✅ Health done (Core+Data+Redis+Azure), rest planned (Low) | Future |
+| 12 | **Birko.Workflow** | SQL, ElasticSearch, MongoDB, RavenDB, JSON | ✅ Complete | Trigger-based engine, fluent builder, visualization, all persistence providers |
+| 13 | Additional | Time, ~~Health~~, Serialization, Localization, ~~CQRS~~ | ✅ Health+CQRS done, rest planned (Low) | Future |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |
