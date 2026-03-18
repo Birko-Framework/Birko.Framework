@@ -194,10 +194,72 @@ ComparisonHelper handles type-safe comparisons:
 - **String**: case-insensitive comparison as last resort
 - **Null safety**: null checks for all operators
 
+## LINQ Expression Conversion
+
+`RuleExpressionConverter` bridges rules and stores — converts any `IRule`, `RuleGroup`, `RuleSet`, or `IEnumerable<IRule>` into an `Expression<Func<T, bool>>` that all Birko stores accept (SQL, Elasticsearch, MongoDB, JSON, etc.).
+
+### Basic Usage
+
+```csharp
+using Birko.Rules;
+
+// Single rule → LINQ expression
+var rule = new Rule("Price", ComparisonOperator.GreaterThan, 100m);
+var expr = RuleExpressionConverter.ToExpression<Product>(rule);
+var results = store.ReadList(expr); // Works with any store
+
+// RuleSet → AND-combined expression
+var ruleSet = new RuleSet("Active expensive",
+    new Rule("IsActive", ComparisonOperator.Equal, true),
+    new Rule("Price", ComparisonOperator.GreaterThan, 50m));
+var expr = RuleExpressionConverter.ToExpression<Product>(ruleSet);
+```
+
+### Nested Properties
+
+Nested property paths are null-safe:
+
+```csharp
+var rule = new Rule("Address.City", ComparisonOperator.Equal, "Prague");
+// Generates: x => x.Address != null && x.Address.City == "Prague"
+```
+
+### Value Conversion
+
+Values are automatically converted to match the target property type:
+
+```csharp
+new Rule("CreatedAt", ComparisonOperator.GreaterThan, "2025-01-01") // string → DateTime
+new Rule("Id", ComparisonOperator.Equal, "abc-def-...")              // string → Guid
+new Rule("Price", ComparisonOperator.GreaterThan, 10)                // int → decimal
+new Rule("Status", ComparisonOperator.Equal, "Active")               // string → enum
+```
+
+### Features
+
+- All 16 comparison operators supported
+- AND/OR groups with arbitrary nesting
+- Negation (IsNegated) on rules and groups
+- Disabled rules/groups skipped (returns null)
+- Case-insensitive property resolution and string comparisons
+- SQL LIKE-style wildcards (%, StartsWith, EndsWith, Contains)
+- In/NotIn with collections
+
+### Rules vs SQL Conditions
+
+There are two conversion paths from rules:
+
+| Converter | Output | Use Case |
+|-----------|--------|----------|
+| `RuleExpressionConverter.ToExpression<T>()` | `Expression<Func<T, bool>>` | Any store (SQL, ES, MongoDB, JSON) |
+| `RuleConditionConverter.ToConditions()` | SQL `Condition` tree | SQL-specific (direct WHERE clause) |
+
+The expression converter is the universal path — use it unless you need SQL-specific optimizations.
+
 ## Use Cases
 
 - **IoT alerts**: evaluate sensor readings against threshold rules
 - **Business rules**: apply pricing, discount, or eligibility rules to data
-- **Dynamic filtering**: build query filters from user-defined rules
+- **Dynamic filtering**: build query filters from user-defined rules (now with LINQ expression output for any store)
 - **Access control**: evaluate permissions based on context attributes
 - **Monitoring**: check system metrics against alert thresholds

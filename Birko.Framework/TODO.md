@@ -81,9 +81,11 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 
 ### Lower priority for Symbio
 - **Birko.Time** — `DateTimeOffset` covers most needs unless business calendar/working hours become a requirement
-- **Birko.Serialization** — `System.Text.Json` works fine, only needed if MessagePack/Protobuf performance is required
-- **Birko.Localization** — Only if Symbio needs multi-language UI
 - **Birko.MessageQueue.Kafka/RabbitMQ** — MQTT + InMemory covers IoT workloads, only needed at higher scale
+
+### Medium priority (newly raised)
+- **Birko.Serialization** (Medium) — Unified serialization abstraction (System.Text.Json, Newtonsoft, MessagePack, Protobuf)
+- **Birko.Localization** (Medium) — Translations, cultures, formatting (JSON, RESX, database providers)
 
 ### Symbio-specific features (not in Birko scope)
 - Module discovery/registration system (IModule, ModuleRegistrar, dependency graph)
@@ -1641,7 +1643,7 @@ When the corresponding communication/queue providers are implemented, add health
 ---
 
 ### Birko.Serialization
-**Status:** Planned | **Priority:** Low
+**Status:** Planned | **Priority:** Medium
 
 Serialization - separate projects per format.
 
@@ -1672,7 +1674,7 @@ Birko.Serialization.Protobuf/
 ---
 
 ### Birko.Localization
-**Status:** Planned | **Priority:** Low
+**Status:** Planned | **Priority:** Medium
 
 Translations - separate projects per storage.
 
@@ -1814,7 +1816,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
 | 12 | **Birko.Workflow** | SQL, ElasticSearch, MongoDB, RavenDB, JSON | ✅ Complete | Trigger-based engine, fluent builder, visualization, all persistence providers |
-| 13 | Additional | Time, ~~Health~~, Serialization, Localization, ~~CQRS~~ | ✅ Health+CQRS done, rest planned (Low) | Future |
+| 13 | Additional | Time, ~~Health~~, Serialization, Localization, ~~CQRS~~ | ✅ Health+CQRS done; Serialization+Localization planned (Medium); Time planned (Low) | Future |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |

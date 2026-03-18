@@ -161,6 +161,7 @@
     <Project Path="../Birko.Caching.Hybrid.Tests/Birko.Caching.Hybrid.Tests.csproj" />
     <Project Path="../Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />
     <Project Path="../Birko.Workflow.Tests/Birko.Workflow.Tests.csproj" />
+    <Project Path="../Birko.CQRS.Tests/Birko.CQRS.Tests.csproj" />
   </Folder>
   <Folder Name="/Validation/">
     <Project Path="../Birko.Validation/Birko.Validation.shproj" />
