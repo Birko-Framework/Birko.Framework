@@ -139,14 +139,24 @@ Binary serializers (MessagePack, Protobuf) use **Base64 encoding** for string se
 | Protobuf | Most compact | Fastest | Yes ([ProtoContract]) | No |
 | XML | Large (verbose) | Moderate | No (public types) | Yes |
 
-## Relationship to Existing Serializers
+## Integration with Existing Framework Components
 
-The framework has domain-specific serializers that predate `Birko.Serialization`:
+All framework components that perform serialization now delegate to `ISerializer` internally:
 
-| Existing | Purpose | Can be replaced by |
-|----------|---------|-------------------|
-| `CacheSerializer` (Birko.Caching) | Static cache serialization | `ISerializer` via DI |
-| `IJobSerializer` (Birko.BackgroundJobs) | Job input serialization | Compatible interface |
-| `IMessageSerializer` (Birko.MessageQueue) | Message payload serialization | Compatible interface |
+| Component | How it uses ISerializer |
+|-----------|----------------------|
+| `CacheSerializer` (Birko.Caching) | Delegates to `ISerializer` internally (static API preserved) |
+| `JsonJobSerializer` (Birko.BackgroundJobs) | Wraps `ISerializer`; accepts `ISerializer` in constructor |
+| `JsonMessageSerializer` (Birko.MessageQueue) | Wraps `ISerializer`; accepts `ISerializer` in constructor |
+| `EventSourcingStoreWrapper` (Birko.Data.EventSourcing) | Accepts optional `ISerializer` for event data serialization |
+| `AbstractViewModelRepository` (Birko.Data.ViewModel) | Accepts optional `ISerializer` for change-tracking hash |
+| `RedisJobQueue` (Birko.BackgroundJobs.Redis) | Accepts optional `ISerializer` for metadata serialization |
+| `JsonWorkflowInstanceModel` (Birko.Workflow.JSON) | Accepts optional `ISerializer` for state/history |
+| `TenantMiddleware` (Birko.Data.Tenant) | Accepts optional `ISerializer` for error responses |
+| `SseEvent.FromJson` (Birko.Communication.SSE) | Accepts optional `ISerializer` parameter |
+| `VaultSecretProvider` (Birko.Security.Vault) | Accepts optional `ISerializer` for API payloads |
+| `AzureKeyVaultSecretProvider` (Birko.Security.AzureKeyVault) | Accepts optional `ISerializer` for API payloads |
+
+All optional parameters default to `SystemJsonSerializer` for full backward compatibility.
 
 `Birko.Serialization.ISerializer` is the **unified abstraction** — new code should prefer it.
