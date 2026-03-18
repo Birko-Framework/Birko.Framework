@@ -1707,7 +1707,14 @@ Birko.Localization/                        (.shproj)
     └── CompositeTranslationProvider.cs    ✅ Priority chain (first non-null wins)
 ```
 
-Future: `Birko.Localization.Data/` — DatabaseTranslationProvider (any Birko.Data store)
+```
+Birko.Localization.Data/                   (.shproj)
+├── Models/
+│   └── TranslationModel.cs               ✅ AbstractModel with Key, Culture, Value, Namespace, UpdatedAt
+├── Filters/
+│   └── TranslationFilter.cs              ✅ ByCulture, ByKeyAndCulture, ByNamespaceAndCulture
+└── DatabaseTranslationProvider.cs         ✅ ITranslationProvider over IAsyncBulkReadStore, TTL cache, namespace scoping
+```
 
 ---
 

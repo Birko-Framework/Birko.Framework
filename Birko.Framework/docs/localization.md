@@ -152,20 +152,73 @@ formatter.FormatRelative(past, now);             // "5 minutes ago"
 formatter.FormatRelative(future, now);           // "in 3 hours"
 ```
 
-## Custom Translation Provider
+## Database Translation Provider (Birko.Localization.Data)
 
-Implement `ITranslationProvider` for custom backends (e.g., database):
+`DatabaseTranslationProvider` works with any `IAsyncBulkReadStore<TranslationModel>`:
 
 ```csharp
-public class DatabaseTranslationProvider : ITranslationProvider
+// With any Birko.Data store (SQL, MongoDB, ElasticSearch, JSON, etc.)
+var store = new AsyncDataBaseBulkStore<MsSqlConnector, TranslationModel>();
+store.SetSettings(dbSettings);
+await store.InitAsync();
+
+var provider = new DatabaseTranslationProvider(store);
+var localizer = new Localizer(provider, settings);
+```
+
+### Namespace Scoping
+
+Isolate translations per module:
+
+```csharp
+var ordersProvider = new DatabaseTranslationProvider(store, @namespace: "orders");
+var authProvider = new DatabaseTranslationProvider(store, @namespace: "auth");
+```
+
+### Caching
+
+Built-in TTL cache (default 5 min):
+
+```csharp
+// Custom TTL
+var provider = new DatabaseTranslationProvider(store, cacheDuration: TimeSpan.FromMinutes(30));
+
+// Disable caching
+var provider = new DatabaseTranslationProvider(store, cacheDuration: TimeSpan.Zero);
+
+// Invalidate after writes
+provider.InvalidateCache("sk");  // single culture
+provider.InvalidateCache();       // all cultures
+```
+
+### Composite: Database + JSON Fallback
+
+```csharp
+var composite = new CompositeTranslationProvider(
+    new DatabaseTranslationProvider(store),  // runtime overrides
+    new JsonTranslationProvider("/locales")  // default translations
+);
+```
+
+### TranslationModel
+
+| Property | Type | Description |
+|----------|------|-------------|
+| Guid | Guid? | Unique identifier (inherited from AbstractModel) |
+| Key | string | Translation key |
+| Culture | string | Culture name (e.g., "sk", "en-US") |
+| Value | string | Translated text |
+| Namespace | string? | Optional scope |
+| UpdatedAt | DateTime? | Last modification |
+
+## Custom Translation Provider
+
+Implement `ITranslationProvider` for custom backends:
+
+```csharp
+public class MyProvider : ITranslationProvider
 {
-    private readonly IAsyncStore<Translation> _store;
-
-    public string? GetTranslation(string key, CultureInfo culture)
-    {
-        // Query your store
-    }
-
+    public string? GetTranslation(string key, CultureInfo culture) { ... }
     public IReadOnlyList<CultureInfo> GetSupportedCultures() { ... }
     public IReadOnlyDictionary<string, string> GetAll(CultureInfo culture) { ... }
 }

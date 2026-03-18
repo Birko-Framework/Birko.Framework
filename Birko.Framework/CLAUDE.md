@@ -197,7 +197,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Localization
 - **Birko.Localization** - Translation framework with culture fallback chains, CLDR pluralization, JSON/RESX/InMemory providers
+- **Birko.Localization.Data** - Database-backed translation provider (any Birko.Data store), namespace scoping, TTL cache
 - **Birko.Localization.Tests** - Unit tests for localization (providers, pluralizer, settings, formatters)
+- **Birko.Localization.Data.Tests** - Unit tests for database translation provider (CRUD, namespaces, caching, filters)
 
 ## Architecture
 
@@ -373,7 +375,9 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Time | [../Birko.Time/CLAUDE.md](../Birko.Time/CLAUDE.md) |
 | Birko.Time.Tests | [../Birko.Time.Tests/CLAUDE.md](../Birko.Time.Tests/CLAUDE.md) |
 | Birko.Localization | [../Birko.Localization/CLAUDE.md](../Birko.Localization/CLAUDE.md) |
+| Birko.Localization.Data | [../Birko.Localization.Data/CLAUDE.md](../Birko.Localization.Data/CLAUDE.md) |
 | Birko.Localization.Tests | [../Birko.Localization.Tests/CLAUDE.md](../Birko.Localization.Tests/CLAUDE.md) |
+| Birko.Localization.Data.Tests | [../Birko.Localization.Data.Tests/CLAUDE.md](../Birko.Localization.Data.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
