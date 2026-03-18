@@ -6,12 +6,13 @@ using Xunit;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.Processing;
 using Birko.BackgroundJobs.Serialization;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Tests.Processing
 {
     public class BackgroundJobProcessorTests
     {
-        private readonly InMemoryJobQueue _queue = new();
+        private readonly InMemoryJobQueue _queue = new(new SystemDateTimeProvider());
         private readonly JobExecutor _executor;
 
         public BackgroundJobProcessorTests()

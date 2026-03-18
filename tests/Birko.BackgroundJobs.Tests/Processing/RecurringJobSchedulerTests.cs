@@ -5,17 +5,24 @@ using FluentAssertions;
 using Xunit;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.Processing;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Tests.Processing
 {
     public class RecurringJobSchedulerTests
     {
-        private readonly InMemoryJobQueue _queue = new();
+        private readonly IDateTimeProvider _clock = new SystemDateTimeProvider();
+        private readonly InMemoryJobQueue _queue;
+
+        public RecurringJobSchedulerTests()
+        {
+            _queue = new InMemoryJobQueue(_clock);
+        }
 
         [Fact]
         public void Register_AddsJob()
         {
-            var scheduler = new RecurringJobScheduler(_queue);
+            var scheduler = new RecurringJobScheduler(_queue, _clock);
 
             // Should not throw
             scheduler.Register<SuccessJob>("cleanup", TimeSpan.FromMinutes(5));
@@ -24,7 +31,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public void Remove_RegisteredJob_ReturnsTrue()
         {
-            var scheduler = new RecurringJobScheduler(_queue);
+            var scheduler = new RecurringJobScheduler(_queue, _clock);
             scheduler.Register<SuccessJob>("cleanup", TimeSpan.FromMinutes(5));
 
             var result = scheduler.Remove("cleanup");
@@ -35,7 +42,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public void Remove_UnregisteredJob_ReturnsFalse()
         {
-            var scheduler = new RecurringJobScheduler(_queue);
+            var scheduler = new RecurringJobScheduler(_queue, _clock);
 
             var result = scheduler.Remove("nonexistent");
 
@@ -45,7 +52,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public async Task RunAsync_EnqueuesJobWhenIntervalElapses()
         {
-            var scheduler = new RecurringJobScheduler(_queue);
+            var scheduler = new RecurringJobScheduler(_queue, _clock);
             // Register with a very short interval so it fires quickly
             scheduler.Register<SuccessJob>("fast-job", TimeSpan.FromMilliseconds(100));
 
@@ -72,7 +79,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public async Task RunAsync_StopsOnCancellation()
         {
-            var scheduler = new RecurringJobScheduler(_queue);
+            var scheduler = new RecurringJobScheduler(_queue, _clock);
             scheduler.Register<SuccessJob>("test", TimeSpan.FromHours(1));
 
             using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
@@ -84,7 +91,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public async Task Register_WithQueueName_SetsQueueOnEnqueuedJob()
         {
-            var scheduler = new RecurringJobScheduler(_queue);
+            var scheduler = new RecurringJobScheduler(_queue, _clock);
             scheduler.Register<SuccessJob>("queued-job", TimeSpan.FromMilliseconds(100), "maintenance");
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
@@ -101,7 +108,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public void Constructor_NullQueue_Throws()
         {
-            var act = () => new RecurringJobScheduler(null!);
+            var act = () => new RecurringJobScheduler(null!, _clock);
 
             act.Should().Throw<ArgumentNullException>();
         }

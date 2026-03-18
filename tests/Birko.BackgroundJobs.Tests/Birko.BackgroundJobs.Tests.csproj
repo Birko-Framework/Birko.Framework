@@ -18,6 +18,7 @@
     </PackageReference>
   </ItemGroup>
 
+  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
   <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
   <Import Project="..\Birko.BackgroundJobs\Birko.BackgroundJobs.projitems" Label="Shared" />
 

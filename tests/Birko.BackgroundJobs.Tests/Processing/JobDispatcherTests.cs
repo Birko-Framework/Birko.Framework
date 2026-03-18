@@ -4,17 +4,20 @@ using FluentAssertions;
 using Xunit;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.Processing;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Tests.Processing
 {
     public class JobDispatcherTests
     {
-        private readonly InMemoryJobQueue _queue = new();
+        private readonly IDateTimeProvider _clock = new SystemDateTimeProvider();
+        private readonly InMemoryJobQueue _queue;
         private readonly JobDispatcher _dispatcher;
 
         public JobDispatcherTests()
         {
-            _dispatcher = new JobDispatcher(_queue);
+            _queue = new InMemoryJobQueue(_clock);
+            _dispatcher = new JobDispatcher(_queue, _clock);
         }
 
         [Fact]
@@ -124,7 +127,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public void Constructor_NullQueue_Throws()
         {
-            var act = () => new JobDispatcher(null!);
+            var act = () => new JobDispatcher(null!, _clock);
 
             act.Should().Throw<ArgumentNullException>();
         }

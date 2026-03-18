@@ -4,12 +4,19 @@ using FluentAssertions;
 using Xunit;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.Processing;
+using Birko.Time;
 
 namespace Birko.BackgroundJobs.Tests.Processing
 {
     public class InMemoryJobQueueTests
     {
-        private readonly InMemoryJobQueue _queue = new();
+        private readonly IDateTimeProvider _clock = new SystemDateTimeProvider();
+        private readonly InMemoryJobQueue _queue;
+
+        public InMemoryJobQueueTests()
+        {
+            _queue = new InMemoryJobQueue(_clock);
+        }
 
         private static JobDescriptor CreateDescriptor(string jobType = "TestJob", int priority = 0, string? queueName = null)
         {
@@ -177,7 +184,7 @@ namespace Birko.BackgroundJobs.Tests.Processing
         [Fact]
         public async Task FailAsync_NoRetriesRemaining_MarksDead()
         {
-            var queue = new InMemoryJobQueue(RetryPolicy.None);
+            var queue = new InMemoryJobQueue(_clock, RetryPolicy.None);
             var descriptor = CreateDescriptor();
             descriptor.MaxRetries = 0;
             await queue.EnqueueAsync(descriptor);
