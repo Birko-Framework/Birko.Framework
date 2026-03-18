@@ -85,7 +85,7 @@ Symbio (`C:\Source\Symbio`) is the primary consumer of Birko Framework (33 Birko
 
 ### Medium priority (newly raised)
 - ~~**Birko.Serialization** (Medium)~~ ✅ Implemented — Unified serialization abstraction (System.Text.Json, Newtonsoft, MessagePack, Protobuf)
-- **Birko.Localization** (Medium) — Translations, cultures, formatting (JSON, RESX, database providers)
+- ~~**Birko.Localization** (Medium)~~ ✅ Implemented — Translation framework with culture fallback, CLDR pluralization, JSON/RESX/InMemory providers
 
 ### Symbio-specific features (not in Birko scope)
 - Module discovery/registration system (IModule, ModuleRegistrar, dependency graph)
@@ -1676,26 +1676,38 @@ Birko.Serialization.Protobuf/
 ---
 
 ### Birko.Localization
-**Status:** Planned | **Priority:** Medium
+**Status:** ✅ Implemented (2026-03-18) | **Priority:** Medium
 
-Translations - separate projects per storage.
+Translation framework with culture fallback chains, CLDR pluralization, and multiple storage backends.
+Location: `C:\Source\Birko.Localization\`
 
 ```
-Birko.Localization/
+Birko.Localization/                        (.shproj)
 ├── Core/
-│   ├── ILocalizer.cs
-│   ├── ITranslationProvider.cs
-│   └── CultureInfo.cs
-├── Json/
-│   └── JsonTranslationProvider.cs         - JSON files (built-in)
-└── Resx/
-    └── ResxTranslationProvider.cs         - RESX files (built-in)
+│   ├── ILocalizer.cs                     ✅ Main entry point (Get with named/positional args, HasTranslation)
+│   ├── ITranslationProvider.cs           ✅ Backend contract (GetTranslation, GetSupportedCultures, GetAll)
+│   ├── ICultureResolver.cs               ✅ Current/default culture resolution
+│   ├── IPluralizer.cs                    ✅ CLDR plural form selection
+│   ├── INumberFormatter.cs               ✅ Culture-aware number/currency/percent
+│   ├── IDateFormatter.cs                 ✅ Culture-aware date/relative time
+│   ├── LocalizationSettings.cs           ✅ Immutable config (default culture, fallback, missing-key, prefix)
+│   └── MissingKeyBehavior.cs             ✅ Enum: ReturnKey, ReturnEmpty, ThrowException
+├── Formatting/
+│   └── StringInterpolator.cs             ✅ Named {placeholder} and positional {0} interpolation
+├── Providers/
+│   ├── Localizer.cs                      ✅ Default ILocalizer (exact → parent → default → missing-key)
+│   ├── ThreadCultureResolver.cs          ✅ CultureInfo.CurrentUICulture resolver
+│   ├── CldrPluralizer.cs                 ✅ 30+ languages (sk/cs 3-form, pl, ru, ar 6-form)
+│   ├── NumberFormatter.cs                ✅ .NET CultureInfo number formatting wrapper
+│   └── DateFormatter.cs                  ✅ Short date, custom format, relative time
+└── Translation/
+    ├── InMemoryTranslationProvider.cs     ✅ Dictionary-based with fluent builder (testing)
+    ├── JsonTranslationProvider.cs         ✅ {culture}.json files, flat + nested keys
+    ├── ResxTranslationProvider.cs         ✅ {baseName}.{culture}.resx XML parsing
+    └── CompositeTranslationProvider.cs    ✅ Priority chain (first non-null wins)
 ```
 
-```
-Birko.Localization.Data/
-└── DatabaseTranslationProvider.cs
-```
+Future: `Birko.Localization.Data/` — DatabaseTranslationProvider (any Birko.Data store)
 
 ---
 
@@ -1818,7 +1830,7 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 10 | **Birko.Telemetry** | OpenTelemetry, Prometheus, Seq, Grafana | ✅ Core done, exporters planned | Store instrumentation, correlation ID middleware |
 | 11 | **Birko.Security** | BCrypt, Vault, AzureKeyVault | ✅ Complete | All extensions implemented |
 | 12 | **Birko.Workflow** | SQL, ElasticSearch, MongoDB, RavenDB, JSON | ✅ Complete | Trigger-based engine, fluent builder, visualization, all persistence providers |
-| 13 | Additional | Time, ~~Health~~, ~~Serialization~~, Localization, ~~CQRS~~ | ✅ Health+CQRS+Serialization done; Localization planned (Medium); Time planned (Low) | Future |
+| 13 | Additional | ~~Time~~, ~~Health~~, ~~Serialization~~, ~~Localization~~, ~~CQRS~~ | ✅ All done | Completed |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |

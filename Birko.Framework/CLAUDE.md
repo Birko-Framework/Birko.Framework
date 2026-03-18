@@ -195,8 +195,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Time** - Testable clock abstraction (IDateTimeProvider), time zone conversion (ITimeZoneConverter), business calendar (IBusinessCalendar) with holidays and working hours
 - **Birko.Time.Tests** - Unit tests for time utilities (providers, calendars, holidays, working hours, business calendar)
 
-### Planned Projects (See TODO.md for details)
-- **Birko.Localization** - Translations and culture support
+### Localization
+- **Birko.Localization** - Translation framework with culture fallback chains, CLDR pluralization, JSON/RESX/InMemory providers
+- **Birko.Localization.Tests** - Unit tests for localization (providers, pluralizer, settings, formatters)
 
 ## Architecture
 
@@ -371,6 +372,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Serialization.Tests | [../Birko.Serialization.Tests/CLAUDE.md](../Birko.Serialization.Tests/CLAUDE.md) |
 | Birko.Time | [../Birko.Time/CLAUDE.md](../Birko.Time/CLAUDE.md) |
 | Birko.Time.Tests | [../Birko.Time.Tests/CLAUDE.md](../Birko.Time.Tests/CLAUDE.md) |
+| Birko.Localization | [../Birko.Localization/CLAUDE.md](../Birko.Localization/CLAUDE.md) |
+| Birko.Localization.Tests | [../Birko.Localization.Tests/CLAUDE.md](../Birko.Localization.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
@@ -440,6 +443,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Serialization](docs/serialization.md)
   - [Data Sync](docs/sync.md)
   - [Time](docs/time.md)
+  - [Localization](docs/localization.md)
   - [Multi-Tenancy](docs/tenant.md)
 
 ## Maintenance
