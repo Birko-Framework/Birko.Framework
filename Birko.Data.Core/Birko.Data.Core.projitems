@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\ICopyable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IDefault.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ILoadable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ITimestamped.cs" />
     <!-- ViewModels -->
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ViewModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ModelViewModel.cs" />

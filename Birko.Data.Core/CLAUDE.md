@@ -10,7 +10,8 @@ Core data layer foundation for the Birko Framework. Contains base models, view m
 
 ### Models (`Birko.Data.Models`)
 - **AbstractModel** — Base class for all data entities (Guid property), implements ICopyable and ILoadable<ModelViewModel>
-- **AbstractLogModel** — Extends AbstractModel with audit timestamps (CreatedAt, UpdatedAt, PrevUpdatedAt)
+- **ITimestamped** — Interface for entities with CreatedAt, UpdatedAt, PrevUpdatedAt timestamps
+- **AbstractLogModel** — Extends AbstractModel with audit timestamps, implements ITimestamped
 - **ICopyable\<T\>** — Interface for cloning objects
 - **IDefault** — Interface for marking default items (bool Default)
 - **ILoadable\<T\>** — Generic interface for loading/mapping from another object
