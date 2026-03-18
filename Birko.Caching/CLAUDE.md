@@ -18,7 +18,7 @@ Birko.Caching/
 ```
 
 ## Dependencies
-- None (core only — no external NuGet packages)
+- Birko.Serialization — CacheSerializer delegates to ISerializer internally
 
 ## Usage
 
