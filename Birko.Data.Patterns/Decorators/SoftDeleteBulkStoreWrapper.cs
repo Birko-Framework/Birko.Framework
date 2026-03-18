@@ -1,5 +1,6 @@
 using Birko.Data.Patterns.Models;
 using Birko.Data.Stores;
+using Birko.Time;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +15,7 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
     where TStore : IBulkStore<T>
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
-    public SoftDeleteBulkStoreWrapper(TStore innerStore) : base(innerStore) { }
+    public SoftDeleteBulkStoreWrapper(TStore innerStore, IDateTimeProvider clock) : base(innerStore, clock) { }
 
     public IEnumerable<T> Read()
     {
@@ -41,7 +42,7 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
     /// </summary>
     public void Delete(IEnumerable<T> data)
     {
-        var now = DateTime.UtcNow;
+        var now = _clock.UtcNow;
         var items = data.Select(item => { item.DeletedAt = now; return item; });
         _innerStore.Update(items);
     }

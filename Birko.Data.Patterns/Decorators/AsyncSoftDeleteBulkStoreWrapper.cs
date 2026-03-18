@@ -1,5 +1,6 @@
 using Birko.Data.Patterns.Models;
 using Birko.Data.Stores;
+using Birko.Time;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +17,7 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
-    public AsyncSoftDeleteBulkStoreWrapper(TStore innerStore) : base(innerStore) { }
+    public AsyncSoftDeleteBulkStoreWrapper(TStore innerStore, IDateTimeProvider clock) : base(innerStore, clock) { }
 
     public Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
     {
@@ -43,7 +44,7 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
     /// </summary>
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
-        var now = DateTime.UtcNow;
+        var now = _clock.UtcNow;
         var items = data.Select(item => { item.DeletedAt = now; return item; });
         return _innerStore.UpdateAsync(items, ct: ct);
     }

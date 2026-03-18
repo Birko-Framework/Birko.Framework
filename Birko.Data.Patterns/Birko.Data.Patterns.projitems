@@ -45,4 +45,5 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncAuditBulkStoreWrapper.cs" />
   </ItemGroup>
+
 </Project>

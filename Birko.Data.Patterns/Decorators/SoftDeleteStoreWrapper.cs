@@ -1,5 +1,6 @@
 using Birko.Data.Patterns.Models;
 using Birko.Data.Stores;
+using Birko.Time;
 using System;
 using System.Linq.Expressions;
 
@@ -15,10 +16,12 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
     protected readonly TStore _innerStore;
+    protected readonly IDateTimeProvider _clock;
 
-    public SoftDeleteStoreWrapper(TStore innerStore)
+    public SoftDeleteStoreWrapper(TStore innerStore, IDateTimeProvider clock)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     public T? Read(Guid guid)
@@ -53,7 +56,7 @@ public class SoftDeleteStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     /// </summary>
     public void Delete(T data)
     {
-        data.DeletedAt = DateTime.UtcNow;
+        data.DeletedAt = _clock.UtcNow;
         _innerStore.Update(data);
     }
 

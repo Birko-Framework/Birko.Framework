@@ -1,5 +1,6 @@
 using Birko.Data.Patterns.Models;
 using Birko.Data.Stores;
+using Birko.Time;
 using System;
 using System.Linq.Expressions;
 using System.Threading;
@@ -15,10 +16,12 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
     where T : Data.Models.AbstractModel, ISoftDeletable
 {
     protected readonly TStore _innerStore;
+    protected readonly IDateTimeProvider _clock;
 
-    public AsyncSoftDeleteStoreWrapper(TStore innerStore)
+    public AsyncSoftDeleteStoreWrapper(TStore innerStore, IDateTimeProvider clock)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
     public async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
@@ -53,7 +56,7 @@ public class AsyncSoftDeleteStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrap
     /// </summary>
     public Task DeleteAsync(T data, CancellationToken ct = default)
     {
-        data.DeletedAt = DateTime.UtcNow;
+        data.DeletedAt = _clock.UtcNow;
         return _innerStore.UpdateAsync(data, ct: ct);
     }
 
