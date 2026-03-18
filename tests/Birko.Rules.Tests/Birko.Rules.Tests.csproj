@@ -26,6 +26,7 @@
   <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
   <Import Project="..\Birko.Validation\Birko.Validation.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
+  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
   <Import Project="..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
 
 </Project>
