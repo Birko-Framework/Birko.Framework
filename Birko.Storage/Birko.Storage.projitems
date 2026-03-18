@@ -23,4 +23,5 @@
     <!-- Extensions -->
     <Compile Include="$(MSBuildThisFileDirectory)Extensions\FileStorageExtensions.cs" />
   </ItemGroup>
+
 </Project>

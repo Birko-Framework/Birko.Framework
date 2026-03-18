@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Helpers;
+using Birko.Time;
 
 namespace Birko.Storage.Local;
 
@@ -20,11 +21,13 @@ public sealed class LocalFileStorage : IFileStorage
     private const string MetaSuffix = ".meta.json";
 
     private readonly StorageSettings _settings;
+    private readonly IDateTimeProvider _clock;
     private readonly string _basePath;
 
-    public LocalFileStorage(StorageSettings settings)
+    public LocalFileStorage(StorageSettings settings, IDateTimeProvider clock)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
 
         if (string.IsNullOrWhiteSpace(settings.Location))
         {
@@ -83,7 +86,7 @@ public sealed class LocalFileStorage : IFileStorage
 
         etag = await ComputeETagAsync(resolvedPath, ct).ConfigureAwait(false);
 
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.OffsetUtcNow;
         var metadata = effectiveOptions.Metadata ?? new Dictionary<string, string>();
 
         var reference = new FileReference
@@ -258,8 +261,8 @@ public sealed class LocalFileStorage : IFileStorage
             FileName = Path.GetFileName(destinationPath),
             ContentType = sourceRef?.ContentType ?? string.Empty,
             Size = info.Length,
-            CreatedAt = DateTimeOffset.UtcNow,
-            LastModifiedAt = DateTimeOffset.UtcNow,
+            CreatedAt = _clock.OffsetUtcNow,
+            LastModifiedAt = _clock.OffsetUtcNow,
             ETag = etag,
             Metadata = effectiveOptions.Metadata != null
                 ? new Dictionary<string, string>(effectiveOptions.Metadata)
