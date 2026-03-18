@@ -1,3 +1,5 @@
+using System;
+
 namespace Birko.Time;
 
 /// <summary>
