@@ -71,6 +71,7 @@ Middleware/
 - **Birko.Data.Core** — AbstractModel
 - **Birko.Data.Stores** — IStore, IAsyncStore, IBulkStore, IAsyncBulkStore, IStoreWrapper, StoreDataDelegate, OrderBy
 - **Birko.Data.Filters** — IFilter, ModelByGuid
+- **Birko.Serialization** — ISerializer for error response serialization in TenantMiddleware (optional, defaults to SystemJsonSerializer)
 - **Microsoft.AspNetCore.Http** — HttpContext, RequestDelegate (for middleware)
 - **Microsoft.Extensions.DependencyInjection** — ServiceCollection extensions
 

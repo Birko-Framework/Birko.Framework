@@ -1,11 +1,12 @@
 using Birko.Data.Tenant.Models;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Net;
-using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Birko.Data.Tenant.Middleware;
@@ -18,6 +19,7 @@ public class TenantMiddleware
     private readonly RequestDelegate _next;
     private readonly ITenantContext _tenantContext;
     private readonly TenantMiddlewareOptions _options;
+    private readonly ISerializer _serializer;
 
     /// <summary>
     /// Create a new tenant middleware
@@ -25,8 +27,10 @@ public class TenantMiddleware
     public TenantMiddleware(
         RequestDelegate next,
         ITenantContext tenantContext,
-        TenantMiddlewareOptions? options = null)
+        TenantMiddlewareOptions? options = null,
+        ISerializer? serializer = null)
     {
+        _serializer = serializer ?? new SystemJsonSerializer();
         _next = next ?? throw new ArgumentNullException(nameof(next));
         _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
         _options = options ?? new TenantMiddlewareOptions();
@@ -61,7 +65,7 @@ public class TenantMiddleware
                 message = _options.TenantRequiredMessage ?? "A valid tenant identifier is required"
             };
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(error));
+            await context.Response.WriteAsync(_serializer.Serialize(error));
             return;
         }
 
