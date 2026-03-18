@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.MessageQueue.Serialization;
+using Birko.Time;
 using MQTTnet;
 using MQTTnet.Client;
 
@@ -40,7 +41,8 @@ namespace Birko.MessageQueue.Mqtt
         /// </summary>
         /// <param name="options">MQTT connection options.</param>
         /// <param name="serializer">Message serializer. Defaults to JsonMessageSerializer.</param>
-        public MqttMessageQueue(MqttSettings options, IMessageSerializer? serializer = null)
+        /// <param name="clock">Date/time provider. Defaults to SystemDateTimeProvider.</param>
+        public MqttMessageQueue(MqttSettings options, IMessageSerializer? serializer = null, IDateTimeProvider? clock = null)
         {
             _options = options ?? throw new ArgumentNullException(nameof(options));
             var ser = serializer ?? new JsonMessageSerializer();
@@ -49,7 +51,7 @@ namespace Birko.MessageQueue.Mqtt
             _client = factory.CreateMqttClient();
 
             _producer = new MqttProducer(_client, ser, _options);
-            _consumer = new MqttConsumer(_client, ser, _options);
+            _consumer = new MqttConsumer(_client, ser, _options, clock);
 
             _client.DisconnectedAsync += OnDisconnectedAsync;
             _client.ConnectedAsync += OnConnectedAsync;

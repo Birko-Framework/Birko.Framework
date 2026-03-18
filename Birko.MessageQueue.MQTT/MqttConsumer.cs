@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.MessageQueue.Serialization;
+using Birko.Time;
 using MQTTnet;
 using MQTTnet.Client;
 
@@ -17,15 +18,17 @@ namespace Birko.MessageQueue.Mqtt
         private readonly IMqttClient _client;
         private readonly IMessageSerializer _serializer;
         private readonly MqttSettings _options;
+        private readonly IDateTimeProvider _clock;
         private readonly ConcurrentDictionary<string, Func<QueueMessage, CancellationToken, Task>> _handlers = new();
         private bool _disposed;
         private bool _eventAttached;
 
-        internal MqttConsumer(IMqttClient client, IMessageSerializer serializer, MqttSettings options)
+        internal MqttConsumer(IMqttClient client, IMessageSerializer serializer, MqttSettings options, IDateTimeProvider? clock = null)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _clock = clock ?? new SystemDateTimeProvider();
         }
 
         public async Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
@@ -106,7 +109,7 @@ namespace Birko.MessageQueue.Mqtt
             var message = new QueueMessage
             {
                 Body = body,
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = _clock.OffsetUtcNow
             };
 
             // Try exact match first, then wildcard matches

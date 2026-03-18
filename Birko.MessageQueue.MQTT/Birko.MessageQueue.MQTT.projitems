@@ -18,4 +18,5 @@
     <Compile Include="$(MSBuildThisFileDirectory)MqttLastWill.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttTopic.cs" />
   </ItemGroup>
+
 </Project>
