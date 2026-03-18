@@ -18,6 +18,7 @@ dotnet test
 - Core types (Rule, RuleGroup, RuleSet, RuleResult)
 - Contexts (DictionaryRuleContext, ObjectRuleContext)
 - Evaluator (all comparison operators, groups, nesting, negation, severity, disabled rules)
+- Expression converter (all operators, value coercion, nested properties, null guards, groups, RuleSet, disabled rules)
 
 ## License
 
