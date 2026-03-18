@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c4a7e1b3-d5f2-4e8a-9c6b-0a3d7f1e5b92</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.CQRS</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Core -->
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ICommand.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IQuery.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IRequestHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\ICommandHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IQueryHandler.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\Unit.cs" />
+    <!-- Pipeline -->
+    <Compile Include="$(MSBuildThisFileDirectory)Pipeline\IPipelineBehavior.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Pipeline\RequestPipeline.cs" />
+    <!-- Mediator -->
+    <Compile Include="$(MSBuildThisFileDirectory)Mediator\IMediator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mediator\Mediator.cs" />
+    <!-- Extensions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\CqrsServiceCollectionExtensions.cs" />
+  </ItemGroup>
+</Project>
