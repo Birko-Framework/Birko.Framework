@@ -1,6 +1,7 @@
 using System;
 using System.Text;
-using System.Text.Json;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 
 namespace Birko.Communication.SSE
 {
@@ -81,14 +82,17 @@ namespace Birko.Communication.SSE
             };
         }
 
+        private static readonly ISerializer DefaultSerializer = new SystemJsonSerializer();
+
         /// <summary>
-        /// Creates a new SSE event with JSON serialized data
+        /// Creates a new SSE event with serialized data.
         /// </summary>
-        public static SseEvent FromJson<T>(T data, string? @event = null, string? id = null)
+        public static SseEvent FromJson<T>(T data, string? @event = null, string? id = null, ISerializer? serializer = null)
         {
+            var s = serializer ?? DefaultSerializer;
             return new SseEvent
             {
-                Data = JsonSerializer.Serialize(data),
+                Data = s.Serialize(data!),
                 Event = @event,
                 Id = id ?? Guid.NewGuid().ToString()
             };

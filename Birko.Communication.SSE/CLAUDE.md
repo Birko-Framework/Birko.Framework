@@ -65,6 +65,7 @@ client.AddHeader("Accept", "text/event-stream");
 
 ## Dependencies
 - Birko.Communication
+- Birko.Serialization — ISerializer for SseEvent.FromJson helper (optional, defaults to SystemJsonSerializer)
 - System.Net.Http
 
 ## Use Cases
