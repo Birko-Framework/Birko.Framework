@@ -52,7 +52,7 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 | ITransactionalProducer.cs | Begin/Commit/Rollback for atomic message batches |
 
 ## Dependencies
-- None (core only, uses System.Text.Json built-in)
+- Birko.Serialization — JsonMessageSerializer delegates to ISerializer internally, accepts ISerializer in constructor
 
 ## Design Decisions
 - **IMessageQueue combines Producer + Consumer** — Most brokers share a single connection for both. Implementations can expose only Producer or Consumer if needed.
