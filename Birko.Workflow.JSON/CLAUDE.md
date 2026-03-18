@@ -12,4 +12,5 @@ JSON file-based workflow instance persistence using AsyncJsonStore. For developm
 - **JsonWorkflowInstanceSchema.cs** — Static EnsureCreatedAsync/DropAsync
 
 ## Dependencies
-Birko.Workflow, Birko.Data.JSON
+- Birko.Workflow, Birko.Data.JSON
+- Birko.Serialization — ISerializer for workflow state/history serialization (optional, defaults to SystemJsonSerializer)
