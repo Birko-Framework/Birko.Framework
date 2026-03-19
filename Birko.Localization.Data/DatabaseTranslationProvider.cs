@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Localization.Data;
 
