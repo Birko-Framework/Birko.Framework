@@ -3,6 +3,7 @@ using Birko.Data.Localization.Decorators;
 using Birko.Data.Localization.Models;
 using Birko.Data.Localization.Tests.TestResources;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using FluentAssertions;
 using Xunit;
 
