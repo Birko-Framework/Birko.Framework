@@ -54,12 +54,30 @@ Health checks for infrastructure backends — databases, message brokers, secret
 - TCP connect, reads SMTP 220 banner, sends QUIT
 - Reports banner text and latency, degrades above 2s
 
+### WebSocketHealthCheck.cs
+- Two constructors: URI string or custom ping func
+- URI: performs WebSocket handshake (HTTP Upgrade), then closes gracefully
+- Custom func: `Func<CancellationToken, Task<bool>>` for use with existing connection
+- Reports latency, degrades above 2s
+
+### TcpHealthCheck.cs
+- Takes host + port (1–65535)
+- Simple TCP connect test, no protocol-specific logic
+- Reports latency, degrades above 2s
+
+### SseHealthCheck.cs
+- Takes URL + optional HttpClient
+- Sends HTTP GET with `Accept: text/event-stream`, reads response headers only
+- Verifies response content type is `text/event-stream` (Degraded if wrong)
+- Reports latency, degrades above 2s
+
 ## Dependencies
 
 - **Birko.Health** — `IHealthCheck`, `HealthCheckResult`
 - **System.Data.Common** (for SqlHealthCheck DbConnection)
 - **System.Net.Http** (for ES/RavenDB/InfluxDB/Vault HttpClient)
 - **System.Net.Sockets** (for MongoDB/MQTT/SMTP TCP checks)
+- **System.Net.WebSockets** (for WebSocket handshake check)
 
 ## Maintenance
 

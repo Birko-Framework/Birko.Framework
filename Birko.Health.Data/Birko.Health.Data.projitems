@@ -17,5 +17,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)VaultHealthCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttHealthCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SmtpHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)WebSocketHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SseHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TcpHealthCheck.cs" />
   </ItemGroup>
 </Project>
