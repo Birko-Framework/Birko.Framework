@@ -25,8 +25,31 @@ SQL view generation framework for creating database views from entity attributes
 - `ViewBuilder` - View query builder
 - `ViewDefinition` - View metadata
 
-### Connectors
-- Database-specific view creation
+### Connectors — Query-Time (on-the-fly SELECT)
+- `AbstractConnector_CreateSelectCommand.cs` — Builds SELECT command from view metadata
+- `AbstractConnector_SelectView.cs` — SelectView methods for querying view data
+- `AbstractConnector_SelectViewCount.cs` — Count queries against views
+
+### Connectors — DDL (persistent CREATE/DROP VIEW)
+- `AbstractConnectorBase_View.cs` — `BuildViewSelectSql`, `BuildCreateViewSql` (virtual), `BuildViewJoinConditionSql`
+- `AbstractConnector_CreateView.cs` — Sync: `CreateView`, `DropView`, `RecreateView`, `ViewExists`, `CreateViewIfNotExists`, `CreateViews`, `DropViews`
+- `AbstractAsyncConnector_CreateView.cs` — Async equivalents: `CreateViewAsync`, `DropViewAsync`, `RecreateViewAsync`, `ViewExistsAsync`, `CreateViewIfNotExistsAsync`, `CreateViewsAsync`, `DropViewsAsync`
+
+### Provider-Specific Overrides (separate projects)
+- **Birko.Data.SQL.MSSql.View** — `CREATE OR ALTER VIEW`, `sys.views` catalog
+- **Birko.Data.SQL.PostgreSQL.View** — `information_schema.views`, materialized view support
+- **Birko.Data.SQL.MySQL.View** — `information_schema.VIEWS` with `TABLE_SCHEMA` scoping
+- **Birko.Data.SQL.SqLite.View** — `CREATE VIEW IF NOT EXISTS`, `sqlite_master` catalog
+
+### DataBase
+- `DataBase_View.cs` — View metadata loading and caching
+
+### Fields
+- `FunctionField.cs` — Base aggregate function field
+- `BooleanFunction.cs`, `CharFunction.cs`, `DateTimeFunction.cs`, `DecimalFunction.cs`, `GuidFunction.cs`, `IntegerFunction.cs`, `StringFunction.cs` — Type-specific function fields
+
+### Tables
+- `View.cs` — View metadata model (tables, joins, fields, aggregate detection)
 
 ## Creating a View
 

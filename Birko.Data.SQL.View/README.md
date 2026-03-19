@@ -82,9 +82,60 @@ public class UserStatsView { /* ... */ }
 - **ViewBuilder** - View query builder
 - **ViewDefinition** - View metadata
 
+## Persistent View DDL
+
+In addition to on-the-fly SELECT generation, the framework supports creating and managing actual database VIEW objects.
+
+### Create / Drop Views
+
+```csharp
+// Sync
+connector.CreateView(typeof(CustomerOrderView));
+connector.CreateViewIfNotExists(typeof(CustomerOrderView));
+connector.DropView("customer_orders_view");
+connector.RecreateView(typeof(CustomerOrderView));
+
+// Async
+await connector.CreateViewAsync(typeof(CustomerOrderView));
+await connector.CreateViewIfNotExistsAsync(typeof(CustomerOrderView));
+await connector.DropViewAsync("customer_orders_view");
+await connector.RecreateViewAsync(typeof(CustomerOrderView));
+```
+
+### Check View Existence
+
+```csharp
+bool exists = connector.ViewExists("customer_orders_view");
+bool exists = await connector.ViewExistsAsync("customer_orders_view");
+```
+
+### Batch Operations
+
+```csharp
+connector.CreateViews(new[] { typeof(View1), typeof(View2) });
+connector.DropViews(new[] { "view1", "view2" });
+```
+
+### Database-Specific Behavior
+
+Each SQL provider has a separate view project with DDL overrides:
+
+| Provider | CREATE syntax | ViewExists catalog |
+|----------|--------------|-------------------|
+| [MSSql](../Birko.Data.SQL.MSSql.View/) | `CREATE OR ALTER VIEW` | `sys.views` |
+| [PostgreSQL](../Birko.Data.SQL.PostgreSQL.View/) | `CREATE OR REPLACE VIEW` | `information_schema.views` |
+| [MySQL](../Birko.Data.SQL.MySQL.View/) | `CREATE OR REPLACE VIEW` | `information_schema.VIEWS` |
+| [SQLite](../Birko.Data.SQL.SqLite.View/) | `CREATE VIEW IF NOT EXISTS` | `sqlite_master` |
+
+PostgreSQL also supports materialized views via `CreateMaterializedView`, `RefreshMaterializedView`, and `DropMaterializedView`.
+
 ## Related Projects
 
 - [Birko.Data.SQL](../Birko.Data.SQL/) - SQL base classes
+- [Birko.Data.SQL.MSSql.View](../Birko.Data.SQL.MSSql.View/) - SQL Server view DDL
+- [Birko.Data.SQL.PostgreSQL.View](../Birko.Data.SQL.PostgreSQL.View/) - PostgreSQL view DDL
+- [Birko.Data.SQL.MySQL.View](../Birko.Data.SQL.MySQL.View/) - MySQL view DDL
+- [Birko.Data.SQL.SqLite.View](../Birko.Data.SQL.SqLite.View/) - SQLite view DDL
 
 ## License
 
