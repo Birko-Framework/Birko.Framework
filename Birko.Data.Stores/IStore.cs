@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using Birko.Configuration;
 
 namespace Birko.Data.Stores
 {

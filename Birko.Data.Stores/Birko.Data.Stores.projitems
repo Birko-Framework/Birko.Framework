@@ -8,7 +8,7 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
   </PropertyGroup>
-  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Settings\Birko.Settings.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)IStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAsyncStore.cs" />

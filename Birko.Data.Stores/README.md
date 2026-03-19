@@ -1,6 +1,6 @@
 # Birko.Data.Stores
 
-Store abstractions for the Birko Framework. Contains store interfaces, abstract implementations, settings hierarchy, ordering, and service locator.
+Store abstractions for the Birko Framework. Contains store interfaces, abstract implementations, ordering, and service locator. Settings hierarchy (Settings, PasswordSettings, RemoteSettings) is provided by `Birko.Settings` and imported transitively.
 
 ## Store Hierarchy
 
@@ -36,7 +36,7 @@ This is a shared project (`.shproj`). Import it in your `.csproj`:
 <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
 ```
 
-**Note:** Birko.Data.Stores requires Birko.Data.Core.
+**Note:** Birko.Data.Stores requires Birko.Data.Core. Settings classes are imported transitively from Birko.Settings (namespace `Birko.Configuration`).
 
 ## License
 

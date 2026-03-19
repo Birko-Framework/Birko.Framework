@@ -22,8 +22,8 @@ Store abstractions for the Birko Framework. Contains store interfaces, abstract 
 - **AbstractBulkStore\<T\>** — Extends AbstractStore with bulk operations and ordering
 - **AbstractAsyncBulkStore\<T\>** — Extends AbstractAsyncStore with bulk operations
 
-### Settings (via Birko.Settings)
-Settings classes have been extracted to **Birko.Settings** shared project and are transitively imported:
+### Settings (via Birko.Settings (namespace `Birko.Configuration`))
+Settings classes have been extracted to **Birko.Settings (namespace `Birko.Configuration`)** shared project and are transitively imported:
 - **Settings** — Base settings (Location, Name), implements ISettings
 - **PasswordSettings** — Extends Settings with Password
 - **RemoteSettings** — Extends PasswordSettings with UserName, Port, UseSecure
@@ -34,7 +34,7 @@ Settings classes have been extracted to **Birko.Settings** shared project and ar
 - **StoreExtensions** — Helper methods for unwrapping store decorators
 
 ## Dependencies
-- **Birko.Settings** — Settings hierarchy (Settings, PasswordSettings, RemoteSettings) — imported transitively
+- **Birko.Settings (namespace `Birko.Configuration`)** — Settings hierarchy (Settings, PasswordSettings, RemoteSettings) — imported transitively
 - **Birko.Data.Core** — Models (AbstractModel), Filters (ModelByGuid), ILoadable (used by Settings)
 
 ## Maintenance
