@@ -57,7 +57,11 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.EventSourcing** - Event sourcing pattern implementation
 - **Birko.Structures** - Data structures (trees, etc.)
-- **Birko.Data.SQL.View** - SQL view generation
+- **Birko.Data.SQL.View** - SQL view generation and persistent view DDL (CREATE/DROP VIEW)
+- **Birko.Data.SQL.MSSql.View** - SQL Server-specific view DDL (CREATE OR ALTER VIEW, sys.views)
+- **Birko.Data.SQL.PostgreSQL.View** - PostgreSQL-specific view DDL (materialized views, information_schema)
+- **Birko.Data.SQL.MySQL.View** - MySQL-specific view DDL (information_schema.VIEWS)
+- **Birko.Data.SQL.SqLite.View** - SQLite-specific view DDL (CREATE VIEW IF NOT EXISTS, sqlite_master)
 - **Birko.Helpers** - Data helper utilities
 - **Birko.Data.Processors** - Generic stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Data.Repositories** - Shared repository project (reserved)
@@ -263,6 +267,10 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Data.SQL.MySQL | [../Birko.Data.SQL.MySQL/CLAUDE.md](../Birko.Data.SQL.MySQL/CLAUDE.md) |
 | Birko.Data.SQL.SqLite | [../Birko.Data.SQL.SqLite/CLAUDE.md](../Birko.Data.SQL.SqLite/CLAUDE.md) |
 | Birko.Data.SQL.View | [../Birko.Data.SQL.View/CLAUDE.md](../Birko.Data.SQL.View/CLAUDE.md) |
+| Birko.Data.SQL.MSSql.View | [../Birko.Data.SQL.MSSql.View/CLAUDE.md](../Birko.Data.SQL.MSSql.View/CLAUDE.md) |
+| Birko.Data.SQL.PostgreSQL.View | [../Birko.Data.SQL.PostgreSQL.View/CLAUDE.md](../Birko.Data.SQL.PostgreSQL.View/CLAUDE.md) |
+| Birko.Data.SQL.MySQL.View | [../Birko.Data.SQL.MySQL.View/CLAUDE.md](../Birko.Data.SQL.MySQL.View/CLAUDE.md) |
+| Birko.Data.SQL.SqLite.View | [../Birko.Data.SQL.SqLite.View/CLAUDE.md](../Birko.Data.SQL.SqLite.View/CLAUDE.md) |
 | Birko.Data.SQL.ViewModel | [../Birko.Data.SQL.ViewModel/CLAUDE.md](../Birko.Data.SQL.ViewModel/CLAUDE.md) |
 | Birko.Data.JSON | [../Birko.Data.JSON/CLAUDE.md](../Birko.Data.JSON/CLAUDE.md) |
 | Birko.Data.ElasticSearch | [../Birko.Data.ElasticSearch/CLAUDE.md](../Birko.Data.ElasticSearch/CLAUDE.md) |
