@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Birko.BackgroundJobs.MongoDB.Models;
 using Birko.Data.MongoDB.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.BackgroundJobs.MongoDB
 {
