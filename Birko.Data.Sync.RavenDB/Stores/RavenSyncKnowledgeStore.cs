@@ -3,6 +3,7 @@ using Birko.Data.Sync.RavenDB.Models;
 using Birko.Data.Sync.Stores;
 using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using System.Linq;
 using System.Linq.Expressions;
 using Birko.Data.Models;
