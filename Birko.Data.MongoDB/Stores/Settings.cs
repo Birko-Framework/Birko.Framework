@@ -7,7 +7,7 @@ namespace Birko.Data.MongoDB.Stores
     /// MongoDB-specific settings for database connection.
     /// Extends RemoteSettings — inherits Location (host), Port, UserName, Password, UseSecure from the framework hierarchy.
     /// </summary>
-    public class Settings : Data.Stores.RemoteSettings, Data.Models.ILoadable<Settings>
+    public class Settings : Birko.Configuration.RemoteSettings, Data.Models.ILoadable<Settings>
     {
         /// <summary>
         /// Gets or sets the authentication database name (default: admin).
@@ -102,13 +102,13 @@ namespace Birko.Data.MongoDB.Stores
         {
             if (data != null)
             {
-                base.LoadFrom((Data.Stores.RemoteSettings)data);
+                base.LoadFrom((Birko.Configuration.RemoteSettings)data);
                 AuthDatabase = data.AuthDatabase;
                 ReplicaSet = data.ReplicaSet;
             }
         }
 
-        public override void LoadFrom(Data.Stores.Settings data)
+        public override void LoadFrom(Birko.Configuration.Settings data)
         {
             if (data is Settings mongoData)
             {

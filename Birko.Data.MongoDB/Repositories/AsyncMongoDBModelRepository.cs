@@ -1,4 +1,5 @@
 using Birko.Data.Stores;
+using Birko.Configuration;
 using global::MongoDB.Driver;
 using System;
 using System.Threading;
