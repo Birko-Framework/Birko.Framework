@@ -16,7 +16,7 @@ namespace Birko.Data.SQL.Tests.Connectors
 
         public AbstractConnectorConditionBuilderTests()
         {
-            _connectorMock = new Mock<AbstractConnector>(new Birko.Data.Stores.PasswordSettings());
+            _connectorMock = new Mock<AbstractConnector>(new Birko.Configuration.PasswordSettings());
             _command = new TestDbCommand();
             _connectorMock.CallBase = true;
         }

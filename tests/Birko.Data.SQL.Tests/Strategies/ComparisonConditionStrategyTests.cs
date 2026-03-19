@@ -21,7 +21,7 @@ namespace Birko.Data.SQL.Tests.Strategies
         {
             _strategy = new ComparisonConditionStrategy();
             _command = new TestDbCommand();
-            _connectorMock = new Mock<AbstractConnector>(new Birko.Data.Stores.PasswordSettings()) { CallBase = true };
+            _connectorMock = new Mock<AbstractConnector>(new Birko.Configuration.PasswordSettings()) { CallBase = true };
             _context = new SqlBuilderContext(_connectorMock.Object);
         }
 
