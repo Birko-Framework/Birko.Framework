@@ -12,5 +12,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\IDataBaseRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\DataBaseRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncDataBaseRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\IDataBaseRepository.cs" />
   </ItemGroup>
 </Project>
