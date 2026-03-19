@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Xunit;
+using Birko;
 using Birko.BackgroundJobs;
 using Birko.BackgroundJobs.Processing;
 using Birko.Time;
