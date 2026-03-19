@@ -28,9 +28,10 @@ All types are in namespace `Birko.Configuration` (avoids collision with local `S
 Consumers that only need settings (not full store abstractions) can import this project instead of `Birko.Data.Stores`:
 
 ```xml
-<Import Project="..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
 <Import Project="..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
 ```
+
+Birko.Configuration transitively imports Birko.Contracts, so a single import is sufficient.
 
 ```csharp
 using Birko.Configuration;
