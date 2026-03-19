@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d5e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f9a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ILoadable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ICopyable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IDefault.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ITimestamped.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IGuidEntity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ILogEntity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Retry\RetryPolicy.cs" />
+  </ItemGroup>
+</Project>
