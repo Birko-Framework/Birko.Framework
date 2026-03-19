@@ -31,7 +31,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Serialization\JsonMessageSerializer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Serialization\EncryptingMessageSerializer.cs" />
     <!-- Retry -->
-    <Compile Include="$(MSBuildThisFileDirectory)Retry\RetryPolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Retry\DeadLetterOptions.cs" />
     <!-- Transactions -->
     <Compile Include="$(MSBuildThisFileDirectory)Transactions\ITransactionalProducer.cs" />

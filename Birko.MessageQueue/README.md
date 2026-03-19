@@ -12,7 +12,7 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 - **Pluggable serialization** — IMessageSerializer with JSON default
 - **Encrypted serialization** — EncryptingMessageSerializer decorator (works with Birko.Security AES)
 - **Message fingerprinting** — SHA256 content hashing for deduplication
-- **Retry policies** — Exponential backoff with configurable limits
+- **Retry policies** — Exponential backoff with configurable limits (RetryPolicy from Birko.Contracts, shared across framework)
 - **Dead letter queues** — Configurable DLQ routing for failed messages
 - **Transactional sends** — ITransactionalProducer for atomic message batches
 - **Manual/auto acknowledgment** — Control when messages are considered processed
@@ -136,7 +136,8 @@ var dlqOptions = new DeadLetterOptions
 
 ## Dependencies
 
-None — core interfaces only. Uses System.Text.Json (built-in) for the default serializer.
+- Birko.Contracts (provides RetryPolicy, shared across framework)
+- System.Text.Json (built-in) for the default serializer
 
 ## License
 

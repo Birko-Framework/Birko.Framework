@@ -43,7 +43,6 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 ### Retry/ — Failure handling
 | File | Description |
 |------|-------------|
-| RetryPolicy.cs | Exponential backoff configuration |
 | DeadLetterOptions.cs | DLQ routing (suffix-based or explicit destination) |
 
 ### Transactions/ — Transactional messaging
@@ -52,6 +51,7 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 | ITransactionalProducer.cs | Begin/Commit/Rollback for atomic message batches |
 
 ## Dependencies
+- Birko.Contracts — imported via projitems, provides RetryPolicy (namespace `Birko`)
 - Birko.Serialization — JsonMessageSerializer delegates to ISerializer internally, accepts ISerializer in constructor
 
 ## Design Decisions
@@ -59,7 +59,7 @@ Core message queue abstractions for the Birko Framework. Provides interfaces for
 - **ISubscription pattern** — Push-based subscription returns a disposable handle, matching how most brokers work (callbacks, not polling).
 - **IReceiver adds pull-based receive** — Point-to-point pattern adds explicit ReceiveAsync for request-reply and batch processing scenarios.
 - **Serialization is pluggable** — Each implementation can use its own serializer. ContentType header enables mixed formats.
-- **RetryPolicy is separate from ConsumerOptions** — Retry is implementation-specific (some brokers handle it natively).
+- **RetryPolicy comes from Birko.Contracts** — Shared across framework (BackgroundJobs, MessageQueue, etc.). Retry is separate from ConsumerOptions because it's implementation-specific (some brokers handle it natively).
 - **EncryptingMessageSerializer uses delegates** — Takes `Func<string,string>` encrypt/decrypt instead of depending on Birko.Security directly. Wires easily with `AesEncryptionProvider`.
 - **MessageFingerprint uses System.Security.Cryptography** — SHA256, no external deps. Useful for idempotency keys and deduplication.
 
