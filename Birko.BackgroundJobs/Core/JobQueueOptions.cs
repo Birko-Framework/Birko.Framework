@@ -1,4 +1,5 @@
 using System;
+using Birko;
 
 namespace Birko.BackgroundJobs
 {
@@ -25,7 +26,11 @@ namespace Birko.BackgroundJobs
         /// <summary>
         /// Default retry policy for jobs that don't specify their own.
         /// </summary>
-        public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.Default;
+        public RetryPolicy RetryPolicy { get; set; } = new()
+        {
+            BaseDelay = TimeSpan.FromSeconds(30),
+            MaxDelay = TimeSpan.FromHours(1)
+        };
 
         /// <summary>
         /// Maximum time a single job is allowed to run before being cancelled.
