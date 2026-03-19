@@ -8,6 +8,7 @@ using Birko.Data.Sync.Models;
 using Birko.Data.Sync.Stores;
 using Birko.Data.Tenant.Models;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Data.Sync.Tenant.Models;
 
 namespace Birko.Data.Sync.Tenant.Providers;
