@@ -6,6 +6,7 @@ using System.Linq.Expressions;
 using System.Text.Json;
 
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Data.JSON.Stores
 {

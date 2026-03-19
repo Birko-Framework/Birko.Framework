@@ -5,6 +5,7 @@ using System.Linq;
 using Birko.Helpers;
 
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Data.JSON.Stores
 {

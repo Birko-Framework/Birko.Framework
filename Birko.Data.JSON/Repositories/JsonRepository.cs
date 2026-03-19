@@ -1,5 +1,6 @@
 using Birko.Data.JSON.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using System;
 
 namespace Birko.Data.JSON.Repositories
