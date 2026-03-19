@@ -15,7 +15,7 @@ using RemoteSettings = Birko.Configuration.RemoteSettings;
 
 namespace Birko.Data.SQL.Connectors
 {
-    public class MSSqlConnector : AbstractConnector
+    public partial class MSSqlConnector : AbstractConnector
     {
         public MSSqlConnector(Birko.Configuration.RemoteSettings settings) : base(settings)
         {
