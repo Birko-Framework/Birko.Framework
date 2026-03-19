@@ -1,5 +1,6 @@
 using Birko.Data.Repositories;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Data.Tenant.Models;
 using Birko.Data.Tenant.Stores;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,4 +1,5 @@
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Data.Tenant.Models;
 
 namespace Birko.Data.Tenant.Stores;
