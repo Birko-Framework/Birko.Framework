@@ -56,7 +56,7 @@ namespace Birko.Data.InfluxDB.Stores
         /// Sets the connection settings via the ISettings interface.
         /// </summary>
         /// <param name="settings">The settings to use.</param>
-        public virtual void SetSettings(Data.Stores.ISettings settings)
+        public virtual void SetSettings(Birko.Configuration.ISettings settings)
         {
             if (settings is Settings influxSettings)
             {

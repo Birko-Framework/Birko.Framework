@@ -5,7 +5,7 @@ namespace Birko.Data.InfluxDB.Stores
     /// <summary>
     /// InfluxDB-specific settings for database connection.
     /// </summary>
-    public class Settings : Data.Stores.Settings, Data.Models.ILoadable<Settings>
+    public class Settings : Birko.Configuration.Settings, Data.Models.ILoadable<Settings>
     {
         /// <summary>
         /// Gets or sets the authentication token for InfluxDB.
