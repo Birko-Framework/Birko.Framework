@@ -10,8 +10,8 @@ using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Fields;
 using Npgsql;
-using PasswordSettings = Birko.Data.Stores.PasswordSettings;
-using RemoteSettings = Birko.Data.Stores.RemoteSettings;
+using PasswordSettings = Birko.Configuration.PasswordSettings;
+using RemoteSettings = Birko.Configuration.RemoteSettings;
 
 namespace Birko.Data.SQL.Connectors
 {

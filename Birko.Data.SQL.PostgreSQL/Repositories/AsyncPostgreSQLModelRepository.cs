@@ -2,9 +2,10 @@ using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.PostgreSQL.Stores;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using System;
-using PasswordSettings = Birko.Data.Stores.PasswordSettings;
-using RemoteSettings = Birko.Data.Stores.RemoteSettings;
+using PasswordSettings = Birko.Configuration.PasswordSettings;
+using RemoteSettings = Birko.Configuration.RemoteSettings;
 using System.Threading;
 using System.Threading.Tasks;
 
