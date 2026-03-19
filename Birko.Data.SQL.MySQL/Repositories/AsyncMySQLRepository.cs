@@ -1,12 +1,13 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Data.SQL.MySQL.Stores;
 using Birko.Data.SQL.Stores;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using PasswordSettings = Birko.Data.Stores.PasswordSettings;
-using RemoteSettings = Birko.Data.Stores.RemoteSettings;
+using PasswordSettings = Birko.Configuration.PasswordSettings;
+using RemoteSettings = Birko.Configuration.RemoteSettings;
 
 namespace Birko.Data.SQL.Repositories
 {
