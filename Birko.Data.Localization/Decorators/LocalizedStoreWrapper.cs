@@ -2,6 +2,7 @@ using Birko.Data.Localization.Expressions;
 using Birko.Data.Localization.Filters;
 using Birko.Data.Localization.Models;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
