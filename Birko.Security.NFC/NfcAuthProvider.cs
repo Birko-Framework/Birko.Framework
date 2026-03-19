@@ -108,6 +108,12 @@ namespace Birko.Security.NFC
                 throw new InvalidOperationException($"Tag {normalizedUid} is already enrolled for user {existing.UserId}.");
             }
 
+            // Remove old inactive mapping so we can re-enroll
+            if (existing != null && !existing.IsActive)
+            {
+                await _store.DeleteAsync(normalizedUid, cancellationToken).ConfigureAwait(false);
+            }
+
             // Check max tags per user
             if (_settings.MaxTagsPerUser > 0)
             {
