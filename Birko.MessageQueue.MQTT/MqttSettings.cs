@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography.X509Certificates;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.MessageQueue.Mqtt
 {
