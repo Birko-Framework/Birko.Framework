@@ -62,7 +62,7 @@ public class VaultSettingsTests
     public void ExtendsPasswordSettings()
     {
         var settings = new VaultSettings();
-        settings.Should().BeAssignableTo<Birko.Data.Stores.PasswordSettings>();
-        settings.Should().BeAssignableTo<Birko.Data.Stores.ISettings>();
+        settings.Should().BeAssignableTo<Birko.Configuration.PasswordSettings>();
+        settings.Should().BeAssignableTo<Birko.Configuration.ISettings>();
     }
 }
