@@ -8,7 +8,7 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Configuration</Import_RootNamespace>
   </PropertyGroup>
-  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <!-- Birko.Contracts (ILoadable<T> etc.) imported by consumers via Birko.Data.Core -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Settings.cs" />
   </ItemGroup>
