@@ -3,6 +3,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using Birko.Data.Repositories;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Data.Patterns.Paging;
 

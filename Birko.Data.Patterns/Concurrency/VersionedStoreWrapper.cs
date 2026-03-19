@@ -2,6 +2,7 @@ using System;
 using System.Linq.Expressions;
 using Birko.Data.Models;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Data.Patterns.Concurrency;
 

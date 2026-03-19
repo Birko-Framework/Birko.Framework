@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Repositories;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Data.Patterns.Paging;
 

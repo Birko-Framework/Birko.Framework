@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Models;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Data.Patterns.Concurrency;
 
