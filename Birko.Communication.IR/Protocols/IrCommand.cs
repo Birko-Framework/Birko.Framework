@@ -42,6 +42,12 @@ namespace Birko.Communication.IR.Protocols
         /// </summary>
         public int Toggle { get; set; }
 
+        /// <summary>
+        /// Optional extended data for protocols that need more than address+command
+        /// (e.g., Samsung AC 14-byte frames).
+        /// </summary>
+        public byte[]? ExtendedData { get; set; }
+
         public override string ToString()
         {
             if (IsRepeat)

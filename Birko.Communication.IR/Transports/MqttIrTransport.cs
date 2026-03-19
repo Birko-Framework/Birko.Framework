@@ -19,7 +19,9 @@ namespace Birko.Communication.IR.Transports
         public string Name => "MQTT";
         public bool IsConnected => false;
 
+#pragma warning disable CS0067 // Event is never used (stub implementation)
         public event EventHandler<IrTiming>? OnReceived;
+#pragma warning restore CS0067
 
         /// <param name="brokerUri">MQTT broker URI (e.g., "mqtt://192.168.1.1:1883").</param>
         /// <param name="topicPrefix">Topic prefix (e.g., "esphome/ir_blaster" or "tasmota/ir").</param>

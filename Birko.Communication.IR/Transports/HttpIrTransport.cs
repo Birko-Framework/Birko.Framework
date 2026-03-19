@@ -24,7 +24,9 @@ namespace Birko.Communication.IR.Transports
         public string Name => "HTTP";
         public bool IsConnected => _isConnected;
 
+#pragma warning disable CS0067 // Event is never used (receive not supported via HTTP)
         public event EventHandler<IrTiming>? OnReceived;
+#pragma warning restore CS0067
 
         /// <summary>
         /// Create an HTTP IR transport targeting an ESPHome device.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO.Ports;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,8 +42,8 @@ namespace Birko.Communication.IR.Transports
                 Name = portName,
                 BaudRate = baudRate,
                 DataBits = 8,
-                Parity = 0,
-                StopBits = 1
+                Parity = Parity.None,
+                StopBits = System.IO.Ports.StopBits.One
             };
             _serial = new Serial(settings);
         }

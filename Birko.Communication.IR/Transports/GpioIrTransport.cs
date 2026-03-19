@@ -16,7 +16,9 @@ namespace Birko.Communication.IR.Transports
         public string Name => "GPIO";
         public bool IsConnected => false;
 
+#pragma warning disable CS0067 // Event is never used (stub implementation)
         public event EventHandler<IrTiming>? OnReceived;
+#pragma warning restore CS0067
 
         /// <param name="devicePath">LIRC device path (default "/dev/lirc0").</param>
         public GpioIrTransport(string devicePath = "/dev/lirc0")
