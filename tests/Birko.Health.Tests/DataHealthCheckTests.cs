@@ -183,6 +183,114 @@ public class DataHealthCheckTests
         result.Status.Should().Be(HealthStatus.Unhealthy);
     }
 
+    // ── WebSocket ──
+
+    [Fact]
+    public void WebSocketHealthCheck_EmptyUri_ThrowsArgumentException()
+    {
+        var act = () => new WebSocketHealthCheck("");
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void WebSocketHealthCheck_NullPingFunc_ThrowsArgumentNullException()
+    {
+        var act = () => new WebSocketHealthCheck((Func<System.Threading.CancellationToken, Task<bool>>)null!);
+
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public async Task WebSocketHealthCheck_CustomPingReturnsTrue_ReturnsHealthy()
+    {
+        var check = new WebSocketHealthCheck(ct => Task.FromResult(true));
+
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Data.Should().ContainKey("latencyMs");
+    }
+
+    [Fact]
+    public async Task WebSocketHealthCheck_CustomPingReturnsFalse_ReturnsUnhealthy()
+    {
+        var check = new WebSocketHealthCheck(ct => Task.FromResult(false));
+
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+    }
+
+    [Fact]
+    public async Task WebSocketHealthCheck_InvalidUri_ReturnsUnhealthy()
+    {
+        var check = new WebSocketHealthCheck("ws://invalid-host-that-does-not-exist.local:9999");
+
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Contain("failed");
+    }
+
+    // ── TCP ──
+
+    [Fact]
+    public void TcpHealthCheck_EmptyHost_ThrowsArgumentException()
+    {
+        var act = () => new TcpHealthCheck("", 80);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void TcpHealthCheck_InvalidPort_ThrowsArgumentOutOfRangeException()
+    {
+        var act = () => new TcpHealthCheck("localhost", 0);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void TcpHealthCheck_PortTooHigh_ThrowsArgumentOutOfRangeException()
+    {
+        var act = () => new TcpHealthCheck("localhost", 70000);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public async Task TcpHealthCheck_InvalidHost_ReturnsUnhealthy()
+    {
+        var check = new TcpHealthCheck("invalid-host-that-does-not-exist.local", 9999);
+
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Contain("failed");
+    }
+
+    // ── SSE ──
+
+    [Fact]
+    public void SseHealthCheck_EmptyUrl_ThrowsArgumentException()
+    {
+        var act = () => new SseHealthCheck("");
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task SseHealthCheck_InvalidUrl_ReturnsUnhealthy()
+    {
+        var check = new SseHealthCheck("http://invalid-host-that-does-not-exist.local:9999/events");
+
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Contain("failed");
+    }
+
     // ── SMTP ──
 
     [Fact]
