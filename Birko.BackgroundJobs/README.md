@@ -9,7 +9,7 @@ Core interfaces and in-memory implementation for background job processing in th
 - **Job dispatcher** — Fluent API for enqueuing, scheduling, and cancelling jobs
 - **Background processor** — Concurrent job processor with configurable concurrency, polling, and timeouts
 - **Recurring jobs** — Interval-based recurring job scheduler
-- **Retry with backoff** — Configurable retry policy with exponential backoff
+- **Retry with backoff** — Configurable retry policy with exponential backoff (RetryPolicy from Birko.Contracts, shared across framework; BackgroundJobs defaults to 30s base delay / 1h max via JobQueueOptions)
 - **Job serialization** — Pluggable serialization (JSON default) for job inputs
 - **Priority queues** — Jobs can be prioritized (higher priority = processed first)
 - **Named queues** — Route jobs to specific queues for workload isolation
@@ -18,6 +18,7 @@ Core interfaces and in-memory implementation for background job processing in th
 ## Dependencies
 
 - .NET 10.0+
+- Birko.Contracts (provides RetryPolicy, shared across framework)
 - System.Text.Json (built-in)
 
 ## Usage
@@ -130,8 +131,8 @@ await scheduler.RunAsync(cancellationToken);
 | `JobContext` | Runtime context passed to executing jobs |
 | `JobResult` | Execution result (success/failure, duration) |
 | `JobStatus` | Job lifecycle enum |
-| `JobQueueOptions` | Processor configuration |
-| `RetryPolicy` | Retry strategy with exponential backoff |
+| `JobQueueOptions` | Processor configuration (overrides RetryPolicy defaults to 30s/1h) |
+| `RetryPolicy` | Retry strategy with exponential backoff (from Birko.Contracts) |
 
 ### Processing
 | Type | Description |

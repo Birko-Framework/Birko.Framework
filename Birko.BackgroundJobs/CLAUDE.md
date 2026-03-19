@@ -14,10 +14,9 @@ Birko.BackgroundJobs/
 │   ├── IJobQueue.cs               - Job storage: enqueue, dequeue, complete, fail, cancel, purge
 │   ├── JobContext.cs              - Runtime context (JobId, AttemptNumber, EnqueuedAt, Metadata)
 │   ├── JobDescriptor.cs          - Full job description (type, input, status, retries, priority)
-│   ├── JobQueueOptions.cs        - Processor config (concurrency, polling, timeout, retention)
+│   ├── JobQueueOptions.cs        - Processor config (concurrency, polling, timeout, retention); overrides RetryPolicy defaults to 30s base / 1h max
 │   ├── JobResult.cs              - Execution result (Success/Failed, Duration, Error)
-│   ├── JobStatus.cs              - Lifecycle enum: Pending→Scheduled→Processing→Completed/Failed/Dead/Cancelled
-│   └── RetryPolicy.cs            - Exponential backoff retry configuration
+│   └── JobStatus.cs              - Lifecycle enum: Pending→Scheduled→Processing→Completed/Failed/Dead/Cancelled
 ├── Serialization/
 │   ├── IJobSerializer.cs         - Serialize/deserialize job inputs
 │   └── JsonJobSerializer.cs      - System.Text.Json implementation
@@ -31,6 +30,7 @@ Birko.BackgroundJobs/
 
 ## Dependencies
 
+- Birko.Contracts — imported via projitems, provides RetryPolicy (namespace `Birko`)
 - Birko.Serialization — JsonJobSerializer delegates to ISerializer internally, accepts ISerializer in constructor
 
 ## Key Design Decisions
