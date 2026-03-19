@@ -1,5 +1,6 @@
 using Birko.Data.Models;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Linq;
