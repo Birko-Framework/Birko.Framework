@@ -8,9 +8,9 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Time</Import_RootNamespace>
   </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
   <ItemGroup>
     <!-- Core -->
-    <Compile Include="$(MSBuildThisFileDirectory)Core\IDateTimeProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\ITimeZoneConverter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IBusinessCalendar.cs" />
     <!-- Calendars -->
@@ -20,8 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Calendars\WorkingHours.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Calendars\BusinessCalendar.cs" />
     <!-- Providers -->
-    <Compile Include="$(MSBuildThisFileDirectory)Providers\SystemDateTimeProvider.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Providers\TestDateTimeProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\TimeZoneConverter.cs" />
   </ItemGroup>
 </Project>

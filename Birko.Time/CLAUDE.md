@@ -1,7 +1,7 @@
 # Birko.Time
 
 ## Overview
-Time utilities — testable clock abstraction, time zone conversion, and business calendar with holiday/working hours support.
+Time zone conversion and business calendar with holiday/working hours support. Imports Birko.Time.Abstractions for the clock abstraction (IDateTimeProvider and its implementations).
 
 ## Project Location
 `C:\Source\Birko.Time\` (shared project, .shproj/.projitems)
@@ -9,7 +9,6 @@ Time utilities — testable clock abstraction, time zone conversion, and busines
 ## Components
 
 ### Core Interfaces (`Core/`)
-- **IDateTimeProvider** — Abstraction over system clock: `UtcNow`, `OffsetUtcNow`, `Today`
 - **ITimeZoneConverter** — Time zone conversion: `Convert`, `ConvertToUtc`, `ConvertFromUtc`, `GetTimeZone`, `GetAvailableTimeZones`
 - **IBusinessCalendar** — Business calendar: `IsBusinessDay`, `IsHoliday`, `IsWorkingTime`, `AddBusinessDays`, `CountBusinessDays`, `GetWorkingHours`, `GetHolidays`
 
@@ -21,15 +20,16 @@ Time utilities — testable clock abstraction, time zone conversion, and busines
 - **BusinessCalendar** — `IBusinessCalendar` implementation combining `WorkingHours` + `HolidayCalendar` + `TimeZoneInfo`
 
 ### Providers (`Providers/`)
-- **SystemDateTimeProvider** — Production `IDateTimeProvider` using system clock
-- **TestDateTimeProvider** — Controllable clock with `SetTime()` and `Advance()` for testing
 - **TimeZoneConverter** — `ITimeZoneConverter` using `System.TimeZoneInfo` (Windows + IANA IDs)
 
 ## Namespace
 All types in `Birko.Time` (flat namespace, no sub-namespaces).
 
 ## Dependencies
-None.
+- **Birko.Time.Abstractions** — Imported via .projitems. Provides `IDateTimeProvider`, `SystemDateTimeProvider`, `TestDateTimeProvider`.
+
+## Notes
+- `IDateTimeProvider`, `SystemDateTimeProvider`, and `TestDateTimeProvider` were extracted to Birko.Time.Abstractions so lightweight consumers can depend on the clock abstraction without pulling in calendars/time zones.
 
 ## Tests
 `C:\Source\Birko.Time.Tests\` — xUnit + FluentAssertions, 80 tests covering all components.
