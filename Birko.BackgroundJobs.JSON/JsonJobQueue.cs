@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Birko.BackgroundJobs.JSON.Models;
 using Birko.Data.JSON.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Time;
 
 namespace Birko.BackgroundJobs.JSON
@@ -24,7 +25,7 @@ namespace Birko.BackgroundJobs.JSON
         /// <summary>
         /// Creates a new JSON job queue.
         /// </summary>
-        public JsonJobQueue(Birko.Data.Stores.Settings settings, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
+        public JsonJobQueue(Birko.Configuration.Settings settings, IDateTimeProvider clock, RetryPolicy? retryPolicy = null)
         {
             _store = new AsyncJsonStore<JsonJobDescriptorModel>();
             _store.SetSettings(settings);
