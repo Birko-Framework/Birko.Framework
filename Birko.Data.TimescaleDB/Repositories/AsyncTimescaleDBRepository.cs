@@ -1,5 +1,6 @@
 using Birko.Data.SQL.Connectors;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Data.SQL.Stores;
 using Birko.Data.SQL.TimescaleDB.Stores;
 using System;

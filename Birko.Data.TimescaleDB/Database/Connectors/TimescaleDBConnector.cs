@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Birko.Data.SQL.Connectors;
 using Npgsql;
-using RemoteSettings = Birko.Data.Stores.RemoteSettings;
+using RemoteSettings = Birko.Configuration.RemoteSettings;
 using TimescaleDBSettings = Birko.Data.SQL.TimescaleDB.Stores.TimescaleDBSettings;
 
 namespace Birko.Data.SQL.Connectors
