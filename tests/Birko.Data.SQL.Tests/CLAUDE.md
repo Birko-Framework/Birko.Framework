@@ -33,6 +33,12 @@ Unit tests for the Birko.Data.SQL project - SQL connector condition builders, st
 - `LikeConditionStrategyTests.cs` - LIKE pattern matching (StartsWith, EndsWith)
 - `NullConditionStrategyTests.cs` - IS NULL/IS NOT NULL conditions
 
+### Views
+- `Views/ViewDdlTests.cs` - View DDL SQL generation (LoadView metadata, JOIN types, BuildViewSelectSql, BuildCreateViewSql per-provider syntax, aggregate fields, error cases)
+
+### TestResources/Views
+- `Views/CustomerOrderView.cs` - Test view fixtures (INNER JOIN with COUNT/SUM, LEFT OUTER JOIN with COUNT)
+
 ### DataBase (Expression Parsing)
 - `DataBase/ExpressionTests.cs` - SQL expression parsing (fields, values, arithmetic, functions)
 - `DataBase/WhereExpressionTests.cs` - WHERE condition expression parsing
