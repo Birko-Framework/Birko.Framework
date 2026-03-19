@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Birko.BackgroundJobs.RavenDB.Models;
 using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.BackgroundJobs.RavenDB
 {
