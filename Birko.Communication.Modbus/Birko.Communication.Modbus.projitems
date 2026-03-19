@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F80</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.Modbus</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\ModbusFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\ModbusFrame.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\ModbusClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\ModbusException.cs" />
+  </ItemGroup>
+</Project>
