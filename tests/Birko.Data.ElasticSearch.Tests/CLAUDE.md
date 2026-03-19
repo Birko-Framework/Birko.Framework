@@ -13,6 +13,10 @@ Unit tests for the Birko.Data.ElasticSearch project - expression parsing and que
 
 ## Test Structure
 - `ExpressionTests.cs` - Elasticsearch expression parsing tests (TermQuery, RangeQuery, nested Any)
+- `IndexInfoTests.cs` - IndexInfo DTO construction and property tests
+- `ReindexResultTests.cs` - ReindexResult DTO construction, success/failure states, failures list
+- `IndexManagerTests.cs` - IndexManager unit tests (create, delete, exists, settings, mappings, aliases, templates, cache/refresh/flush)
+- `ReindexHelperTests.cs` - ReindexHelper unit tests (basic reindex, reindex with script, zero-downtime alias swap)
 - `TestResources/Models/DateModel.cs` - Test fixture model
 
 ## Dependencies
