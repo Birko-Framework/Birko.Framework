@@ -3,6 +3,7 @@ using System.Linq;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.Sql.Models;
 using Birko.Data.Sync.Stores;
