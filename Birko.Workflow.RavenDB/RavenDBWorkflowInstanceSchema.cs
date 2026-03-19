@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Workflow.RavenDB.Models;
 
 namespace Birko.Workflow.RavenDB
