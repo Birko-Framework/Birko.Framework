@@ -8,6 +8,7 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
   </PropertyGroup>
+  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Settings\Birko.Settings.projitems" Label="Shared" />
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)IStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAsyncStore.cs" />
@@ -19,7 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)AbstractAsyncBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ITransactionalStore.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Settings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OrderBy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreLocator.cs" />
