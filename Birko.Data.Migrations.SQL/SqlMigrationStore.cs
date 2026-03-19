@@ -40,7 +40,7 @@ namespace Birko.Data.Migrations.SQL
         /// <summary>
         /// Initializes a new instance of the SqlMigrationStore class with PasswordSettings.
         /// </summary>
-        public SqlMigrationStore(Func<DbConnection> connectionFactory, Data.Stores.RemoteSettings remoteSettings)
+        public SqlMigrationStore(Func<DbConnection> connectionFactory, Birko.Configuration.RemoteSettings remoteSettings)
             : this(connectionFactory, new SqlMigrationSettings
             {
                 Location = remoteSettings.Location,
