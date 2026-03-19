@@ -69,6 +69,18 @@ Consumer infrared (38 kHz modulated) communication for remote control — **not*
 - **Device profiles** — IDeviceProfile codebook per device model:
   - **SamsungAcProfile** — Samsung AC (modes, temp 16–30 °C, fan speeds, swing, Wind-Free)
 
+### Birko.Communication.NFC
+NFC/RFID tag communication with pluggable transports and protocol handlers:
+- **NfcReaderPort** — extends AbstractPort with async tag read, continuous polling, APDU passthrough
+- **Pluggable transports** via INfcTransport:
+  - **SerialNfcTransport** — UART readers (PN532, ACR122U serial mode)
+  - **HttpNfcTransport** — REST API bridges (ESP32, Raspberry Pi)
+  - **HidNfcTransport** — HID keyboard-emulation readers (enterprise badge readers)
+- **Protocols** — INfcProtocol tag data parsing:
+  - **Iso14443AProtocol** — SAK-based tag classification (MIFARE Classic/Ultralight/DESFire, NTAG)
+  - **NdefProtocol** — NDEF message parser (URI, Text, TLV wrapper)
+- **Models** — NfcTagData (UID, type, NDEF records), NdefRecord (URI/Text extraction), NfcTagType enum
+
 ## Usage
 
 ### Consumer IR via Serial Transport
@@ -209,3 +221,61 @@ client.Open();
 // Read holding registers (function code 03)
 var registers = await client.ReadHoldingRegistersAsync(slaveId: 1, startAddress: 0, count: 10);
 ```
+
+### NFC Tag Reading
+
+```csharp
+using Birko.Communication.NFC.Ports;
+using Birko.Communication.NFC.Transports;
+using Birko.Communication.NFC.Protocols;
+
+var settings = new NfcReaderSettings
+{
+    Name = "Badge Reader",
+    TransportType = "hid"
+};
+
+using var transport = new HidNfcTransport();
+var port = new NfcReaderPort(settings, transport);
+port.RegisterProtocol(new Iso14443AProtocol());
+port.RegisterProtocol(new NdefProtocol());
+
+port.Open();
+port.OnTagDetected += (sender, tag) =>
+    Console.WriteLine($"Tag: {tag.TagType} UID={tag.Uid}");
+
+await port.StartPollingAsync();
+```
+
+### NFC Authentication
+
+```csharp
+using Birko.Security.NFC;
+
+var store = new InMemoryNfcTagMappingStore();
+var auth = new NfcAuthProvider(store);
+
+// Enroll a badge
+await auth.EnrollAsync(userId, "04A1B2C3", "Office badge", "John Doe");
+
+// Authenticate on tap
+var result = await auth.AuthenticateAsync("04A1B2C3");
+if (result.IsAuthenticated)
+    Console.WriteLine($"Welcome, {result.UserName}!");
+```
+
+## See Also
+
+- [Birko.Communication](https://github.com/birko/Birko.Communication)
+- [Birko.Communication.Network](https://github.com/birko/Birko.Communication.Network)
+- [Birko.Communication.Hardware](https://github.com/birko/Birko.Communication.Hardware)
+- [Birko.Communication.Bluetooth](https://github.com/birko/Birko.Communication.Bluetooth)
+- [Birko.Communication.WebSocket](https://github.com/birko/Birko.Communication.WebSocket)
+- [Birko.Communication.REST](https://github.com/birko/Birko.Communication.REST)
+- [Birko.Communication.SOAP](https://github.com/birko/Birko.Communication.SOAP)
+- [Birko.Communication.SSE](https://github.com/birko/Birko.Communication.SSE)
+- [Birko.Communication.Modbus](https://github.com/birko/Birko.Communication.Modbus)
+- [Birko.Communication.OAuth](https://github.com/birko/Birko.Communication.OAuth)
+- [Birko.Communication.Camera](https://github.com/birko/Birko.Communication.Camera)
+- [Birko.Communication.IR](https://github.com/birko/Birko.Communication.IR)
+- [Birko.Communication.NFC](https://github.com/birko/Birko.Communication.NFC)

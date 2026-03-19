@@ -11,7 +11,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Data synchronization across stores
 - Multi-tenancy support
 - Event sourcing pattern
-- Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network)
+- Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, Camera, IR, NFC)
 - Domain model libraries (Product, Category, SEO, Accounting, Customers, Users, Warehouse)
 - Fluent validation framework
 - Caching with in-memory and Redis backends
@@ -99,6 +99,11 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Communication.Network | Network communication |
 | Birko.Communication.Hardware | Hardware communication |
 | Birko.Communication.Bluetooth | Bluetooth communication |
+| Birko.Communication.Modbus | Modbus RTU/TCP communication (serial/network, function codes 01-06/15-16) |
+| Birko.Communication.OAuth | OAuth2 client (Client Credentials, Auth Code, PKCE, Device Code) |
+| Birko.Communication.Camera | Camera frame capture (FFmpeg-based JPEG snapshots) |
+| Birko.Communication.IR | Consumer IR (NEC, Samsung, RC5 protocols, pluggable transports) |
+| Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
 
 ### Cross-Cutting
 
@@ -114,6 +119,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Security.BCrypt | BCrypt password hashing (pure C#, configurable work factor) |
 | Birko.Security.Vault | HashiCorp Vault secret provider (KV v1/v2, HTTP API) |
 | Birko.Security.AzureKeyVault | Azure Key Vault secret provider (OAuth2, REST API) |
+| Birko.Security.NFC | NFC-based authentication (tag-to-user mapping, JWT integration) |
 | Birko.BackgroundJobs | Background job processing framework |
 | Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
 | Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
@@ -159,6 +165,11 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
 | Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
 | Birko.Telemetry.OpenTelemetry.Tests | OpenTelemetry integration tests (options, DI, providers) |
+| Birko.Communication.Modbus.Tests | Modbus communication tests (RTU/TCP framing, CRC, error handling) |
+| Birko.Communication.OAuth.Tests | OAuth2 client tests (settings, token, PKCE, flows) |
+| Birko.Communication.IR.Tests | IR communication tests (NEC/Samsung/RC5 encode/decode, IrTiming) |
+| Birko.Communication.NFC.Tests | NFC communication tests (tag data, NDEF parsing, ISO 14443A, HID transport) |
+| Birko.Security.NFC.Tests | NFC authentication tests (enroll/authenticate/revoke, normalization, store) |
 
 ## Architecture
 

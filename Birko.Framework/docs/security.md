@@ -301,6 +301,37 @@ await akv.SetSecretAsync("db-password", "s3cret");
 var password = await akv.GetSecretAsync("db-password");
 ```
 
+### NFC Authentication
+
+Birko.Security.NFC maps NFC tag UIDs to user identities and optionally issues JWT tokens.
+
+```csharp
+using Birko.Security.NFC;
+
+var store = new InMemoryNfcTagMappingStore();
+var auth = new NfcAuthProvider(store, tokenProvider: jwtProvider, tokenOptions: tokenOptions);
+
+// Enroll a card
+await auth.EnrollAsync(userId, "04A1B2C3", "Office badge", "John Doe", "john@example.com");
+
+// Authenticate on tap
+var result = await auth.AuthenticateAsync("04A1B2C3");
+if (result.IsAuthenticated)
+{
+    Console.WriteLine($"Welcome {result.UserName}, JWT: {result.Token?.Token}");
+}
+
+// Manage cards
+await auth.RevokeAsync("04A1B2C3");
+var tags = await auth.GetUserTagsAsync(userId);
+```
+
+Features:
+- UID normalization (case-insensitive, strips separators)
+- Configurable max tags per user, tag expiration, usage tracking
+- `INfcTagMappingStore` persistence interface (implement with any Birko.Data store)
+- `InMemoryNfcTagMappingStore` included for testing
+
 ## See Also
 
 - [Birko.Security](https://github.com/birko/Birko.Security)
@@ -309,3 +340,4 @@ var password = await akv.GetSecretAsync("db-password");
 - [Birko.Security.BCrypt](https://github.com/birko/Birko.Security.BCrypt)
 - [Birko.Security.Vault](https://github.com/birko/Birko.Security.Vault)
 - [Birko.Security.AzureKeyVault](https://github.com/birko/Birko.Security.AzureKeyVault)
+- [Birko.Security.NFC](https://github.com/birko/Birko.Security.NFC)

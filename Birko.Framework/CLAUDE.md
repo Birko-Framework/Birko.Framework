@@ -83,6 +83,9 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Rules.Tests** - Unit tests for rule engine (core types, contexts, evaluator)
 - **Birko.Data.Processors.Tests** - Unit tests for data processors (CSV parser, XML/CSV/ZIP processors, HTTP transport, event wiring)
 - **Birko.Data.Aggregates.Tests** - Unit tests for aggregate mapper (definitions, flatten, expand, diff, sync extensions)
+- **Birko.Communication.IR.Tests** - Unit tests for IR communication (NEC/Samsung/RC5 protocol encode/decode, raw protocol, IrTiming, IrCommand)
+- **Birko.Communication.NFC.Tests** - Unit tests for NFC communication (tag data, NDEF records/parsing, ISO 14443A classification, HID transport, settings)
+- **Birko.Security.NFC.Tests** - Unit tests for NFC authentication (auth provider, enroll/authenticate/revoke, UID normalization, expiration, in-memory store)
 
 ### Messaging
 - **Birko.Messaging** - Core messaging interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP email sender, string template engine
@@ -103,6 +106,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Communication.OAuth** - OAuth2 client (Client Credentials, Authorization Code, PKCE, Device Code, Refresh Token, DelegatingHandler)
 - **Birko.Communication.Camera** - Camera frame capture (ICameraSource, FFmpeg-based JPEG snapshots)
 - **Birko.Communication.IR** - Consumer IR (38 kHz, NEC/Samsung/RC5 protocols, pluggable transports: Serial, HTTP, MQTT, GPIO)
+- **Birko.Communication.NFC** - NFC/RFID tag reading (ISO 14443A, NDEF, pluggable transports: Serial, HTTP, HID keyboard emulation)
 
 ### Models
 - **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue)
@@ -156,6 +160,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Security.AzureKeyVault** - Azure Key Vault secret provider (ISecretProvider, OAuth2 client credentials, REST API, AzureKeyVaultSettings extends RemoteSettings)
 - **Birko.Security.Jwt** - JWT implementation of ITokenProvider
 - **Birko.Security.AspNetCore** - ASP.NET Core integration: JWT Bearer authentication setup, ICurrentUser from claims, ClaimsPermissionChecker, tenant resolution middleware (header/subdomain), Minimal API permission endpoint filters, one-line DI via AddBirkoSecurity()
+- **Birko.Security.NFC** - NFC-based authentication (tag-to-user mapping, enrollment, revocation, JWT integration via ITokenProvider)
 
 ### Background Jobs
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, recurring scheduler
@@ -339,6 +344,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Communication.OAuth | [../Birko.Communication.OAuth/CLAUDE.md](../Birko.Communication.OAuth/CLAUDE.md) |
 | Birko.Communication.Camera | [../Birko.Communication.Camera/CLAUDE.md](../Birko.Communication.Camera/CLAUDE.md) |
 | Birko.Communication.IR | [../Birko.Communication.IR/CLAUDE.md](../Birko.Communication.IR/CLAUDE.md) |
+| Birko.Communication.NFC | [../Birko.Communication.NFC/CLAUDE.md](../Birko.Communication.NFC/CLAUDE.md) |
 | Birko.Models | [../Birko.Models/CLAUDE.md](../Birko.Models/CLAUDE.md) |
 | Birko.Models.Product | [../Birko.Models.Product/CLAUDE.md](../Birko.Models.Product/CLAUDE.md) |
 | Birko.Models.Category | [../Birko.Models.Category/CLAUDE.md](../Birko.Models.Category/CLAUDE.md) |
@@ -384,6 +390,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Security.Vault.Tests | [../Birko.Security.Vault.Tests/CLAUDE.md](../Birko.Security.Vault.Tests/CLAUDE.md) |
 | Birko.Security.AzureKeyVault | [../Birko.Security.AzureKeyVault/CLAUDE.md](../Birko.Security.AzureKeyVault/CLAUDE.md) |
 | Birko.Security.AzureKeyVault.Tests | [../Birko.Security.AzureKeyVault.Tests/CLAUDE.md](../Birko.Security.AzureKeyVault.Tests/CLAUDE.md) |
+| Birko.Security.NFC | [../Birko.Security.NFC/CLAUDE.md](../Birko.Security.NFC/CLAUDE.md) |
 | Birko.Serialization | [../Birko.Serialization/CLAUDE.md](../Birko.Serialization/CLAUDE.md) |
 | Birko.Serialization.Newtonsoft | [../Birko.Serialization.Newtonsoft/CLAUDE.md](../Birko.Serialization.Newtonsoft/CLAUDE.md) |
 | Birko.Serialization.MessagePack | [../Birko.Serialization.MessagePack/CLAUDE.md](../Birko.Serialization.MessagePack/CLAUDE.md) |
@@ -400,6 +407,9 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Data.Localization.Tests | [../Birko.Data.Localization.Tests/CLAUDE.md](../Birko.Data.Localization.Tests/CLAUDE.md) |
 | Birko.Communication.Modbus.Tests | [../Birko.Communication.Modbus.Tests/CLAUDE.md](../Birko.Communication.Modbus.Tests/CLAUDE.md) |
 | Birko.Communication.OAuth.Tests | [../Birko.Communication.OAuth.Tests/CLAUDE.md](../Birko.Communication.OAuth.Tests/CLAUDE.md) |
+| Birko.Communication.IR.Tests | [../Birko.Communication.IR.Tests/CLAUDE.md](../Birko.Communication.IR.Tests/CLAUDE.md) |
+| Birko.Communication.NFC.Tests | [../Birko.Communication.NFC.Tests/CLAUDE.md](../Birko.Communication.NFC.Tests/CLAUDE.md) |
+| Birko.Security.NFC.Tests | [../Birko.Security.NFC.Tests/CLAUDE.md](../Birko.Security.NFC.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
@@ -541,7 +551,7 @@ Existing folder groups in both files:
 - **Helpers/** — Birko.Helpers, Birko.Structures
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
-- **Security/** — Birko.Security, Birko.Security.Jwt, Birko.Security.AspNetCore, Birko.Security.BCrypt, Birko.Security.Vault, Birko.Security.AzureKeyVault
+- **Security/** — Birko.Security, Birko.Security.Jwt, Birko.Security.AspNetCore, Birko.Security.BCrypt, Birko.Security.Vault, Birko.Security.AzureKeyVault, Birko.Security.NFC
 - **Serialization/** — Birko.Serialization, Birko.Serialization.Newtonsoft, Birko.Serialization.MessagePack, Birko.Serialization.Protobuf
 - **Storage/** — Birko.Storage, Birko.Storage.AzureBlob
 - **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry

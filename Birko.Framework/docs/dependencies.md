@@ -55,6 +55,28 @@ Only 4 projitems-level import chains exist:
 ┌──────────────────────────────────────────────────────────────────────┐
 │  SQL Providers: MSSql, PostgreSQL, MySQL, SqLite, View, TimescaleDB  │
 └──────────────────────────────────────────────────────────────────────┘
+
+───────────────────── Communication Subtree ─────────────────────
+
+┌──────────────────────┐
+│  Birko.Communication │ (zero-dep root)
+└──────────┬───────────┘
+           │
+           ├──► Network, Hardware, Bluetooth, WebSocket, REST, SOAP, SSE
+           ├──► Modbus, Camera, NFC
+           │
+           └──► Communication.IR (← Communication, Communication.Hardware)
+
+───────────────────── Security Subtree ──────────────────────────
+
+┌──────────────────────┐
+│  Birko.Security      │ (zero-dep root)
+└──────────┬───────────┘
+           │
+           ├──► Security.BCrypt, Security.Jwt, Security.NFC
+           ├──► Security.Vault (← Security, Serialization)
+           ├──► Security.AzureKeyVault (← Security, Serialization)
+           └──► Security.AspNetCore (← Security, Security.Jwt, Data.Tenant)
 ```
 
 ---
@@ -193,6 +215,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Security.AspNetCore** | Birko.Data.Tenant, Birko.Security, Birko.Security.Jwt |
 | **Birko.Security.Vault** | Birko.Security, Birko.Serialization |
 | **Birko.Security.AzureKeyVault** | Birko.Security, Birko.Serialization |
+| **Birko.Security.NFC** | Birko.Security |
 
 ## Storage
 
@@ -240,6 +263,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Communication.Camera** | Birko.Communication |
 | **Birko.Communication.OAuth** | Birko.Configuration |
 | **Birko.Communication.IR** | Birko.Communication, Birko.Communication.Hardware |
+| **Birko.Communication.NFC** | Birko.Communication |
 
 ## Message Queue
 
