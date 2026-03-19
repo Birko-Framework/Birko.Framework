@@ -42,7 +42,61 @@ Camera frame capture abstraction:
   - Cross-platform: Linux (v4l2), Windows (dshow), macOS (avfoundation)
   - No NuGet dependencies — requires FFmpeg installed on the system
 
+### Birko.Communication.OAuth
+OAuth2 client library supporting multiple grant types with automatic token caching and refresh:
+- **Client Credentials** — machine-to-machine authentication
+- **Authorization Code** — server-side web apps with confidential client
+- **Authorization Code + PKCE** — public clients (SPAs, mobile, CLI)
+- **Device Code** — input-constrained devices (CLI, IoT, smart TV)
+- **Refresh Token** — automatic and manual token refresh
+- **OAuthDelegatingHandler** — automatic Bearer token injection for HttpClient with 401 retry
+- **PkceChallenge** — built-in SHA-256 PKCE challenge pair generation
+- **OAuthSettings** — extends `RemoteSettings` (ClientId=UserName, ClientSecret=Password, TokenEndpoint=Location)
+
 ## Usage
+
+### OAuth2 Client Credentials
+
+```csharp
+using Birko.Communication.OAuth;
+
+var settings = new OAuthSettings
+{
+    TokenEndpoint = "https://auth.example.com/oauth/token",
+    ClientId = "my-client-id",
+    ClientSecret = "my-client-secret",
+    Scope = "api.read api.write",
+    GrantType = OAuthGrantType.ClientCredentials
+};
+
+using var oauthClient = new OAuthClient(settings);
+var token = await oauthClient.GetTokenAsync(); // Cached + auto-refreshed
+
+// Use with HttpClient via DelegatingHandler
+var httpClient = new HttpClient(new OAuthDelegatingHandler(oauthClient)
+{
+    InnerHandler = new HttpClientHandler()
+});
+var response = await httpClient.GetAsync("https://api.example.com/data");
+```
+
+### OAuth2 Device Code Flow
+
+```csharp
+var settings = new OAuthSettings
+{
+    TokenEndpoint = "https://auth.example.com/oauth/token",
+    DeviceAuthorizationEndpoint = "https://auth.example.com/oauth/device/code",
+    ClientId = "my-device-client",
+    Scope = "openid profile",
+    GrantType = OAuthGrantType.DeviceCode
+};
+
+using var client = new OAuthClient(settings);
+var deviceAuth = await client.RequestDeviceAuthorizationAsync();
+Console.WriteLine($"Visit {deviceAuth.VerificationUri} and enter code: {deviceAuth.UserCode}");
+var token = await client.PollDeviceTokenAsync(deviceAuth.DeviceCode);
+```
 
 ### Camera Capture
 

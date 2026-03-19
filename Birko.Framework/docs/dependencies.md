@@ -238,6 +238,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Communication.SSE** | Birko.Communication, Birko.Serialization |
 | **Birko.Communication.Modbus** | Birko.Communication |
 | **Birko.Communication.Camera** | Birko.Communication |
+| **Birko.Communication.OAuth** | Birko.Configuration |
 
 ## Message Queue
 

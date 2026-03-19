@@ -100,6 +100,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Communication.SOAP** - SOAP client
 - **Birko.Communication.SSE** - Server-Sent Events
 - **Birko.Communication.Modbus** - Modbus RTU/TCP communication (serial/network, function codes 01-06/15-16)
+- **Birko.Communication.OAuth** - OAuth2 client (Client Credentials, Authorization Code, PKCE, Device Code, Refresh Token, DelegatingHandler)
 - **Birko.Communication.Camera** - Camera frame capture (ICameraSource, FFmpeg-based JPEG snapshots)
 
 ### Models
@@ -208,6 +209,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Localization.Data.Tests** - Unit tests for database translation provider (CRUD, namespaces, caching, filters)
 - **Birko.Data.Localization.Tests** - Unit tests for entity localization (model, filter, sync/async wrapper tests)
 - **Birko.Communication.Modbus.Tests** - Unit tests for Modbus communication (RTU/TCP framing, function codes, CRC, error handling)
+- **Birko.Communication.OAuth.Tests** - Unit tests for OAuth2 client (settings, token, PKCE, flows, DelegatingHandler)
 
 ## Architecture
 
@@ -333,6 +335,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Communication.SOAP | [../Birko.Communication.SOAP/CLAUDE.md](../Birko.Communication.SOAP/CLAUDE.md) |
 | Birko.Communication.SSE | [../Birko.Communication.SSE/CLAUDE.md](../Birko.Communication.SSE/CLAUDE.md) |
 | Birko.Communication.Modbus | [../Birko.Communication.Modbus/CLAUDE.md](../Birko.Communication.Modbus/CLAUDE.md) |
+| Birko.Communication.OAuth | [../Birko.Communication.OAuth/CLAUDE.md](../Birko.Communication.OAuth/CLAUDE.md) |
 | Birko.Communication.Camera | [../Birko.Communication.Camera/CLAUDE.md](../Birko.Communication.Camera/CLAUDE.md) |
 | Birko.Models | [../Birko.Models/CLAUDE.md](../Birko.Models/CLAUDE.md) |
 | Birko.Models.Product | [../Birko.Models.Product/CLAUDE.md](../Birko.Models.Product/CLAUDE.md) |
@@ -394,6 +397,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Data.Localization | [../Birko.Data.Localization/CLAUDE.md](../Birko.Data.Localization/CLAUDE.md) |
 | Birko.Data.Localization.Tests | [../Birko.Data.Localization.Tests/CLAUDE.md](../Birko.Data.Localization.Tests/CLAUDE.md) |
 | Birko.Communication.Modbus.Tests | [../Birko.Communication.Modbus.Tests/CLAUDE.md](../Birko.Communication.Modbus.Tests/CLAUDE.md) |
+| Birko.Communication.OAuth.Tests | [../Birko.Communication.OAuth.Tests/CLAUDE.md](../Birko.Communication.OAuth.Tests/CLAUDE.md) |
 
 ## Key Patterns
 

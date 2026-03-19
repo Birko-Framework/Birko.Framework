@@ -270,6 +270,9 @@ Unified interfaces for email, SMS, and push notifications:
 - **REST** - `RestClient` (string-based responses)
 - **SOAP** - SOAP client
 - **SSE** - Server-Sent Events with middleware
+- **Modbus** - Modbus RTU/TCP (serial/network)
+- **Camera** - FFmpeg-based JPEG frame capture
+- **OAuth** - OAuth2 client (Client Credentials, Auth Code, PKCE, Device Code) with automatic token caching and `OAuthDelegatingHandler`
 
 ### 13. Security Layer — ASP.NET Core Integration (Birko.Security.AspNetCore)
 Bridges Birko.Security into ASP.NET Core:

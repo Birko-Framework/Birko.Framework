@@ -197,7 +197,8 @@ Pluggable random number generation with testable abstractions.
 ### Birko.Communication
 - [ ] GraphQL client
 - [ ] gRPC support
-- [ ] OAuth2 helpers in Authentication
+- [x] OAuth2 client (Birko.Communication.OAuth) — Client Credentials, Auth Code, PKCE, Device Code, Refresh Token, DelegatingHandler
+- [ ] OAuth2 server (Birko.Security.OAuth.Server) — Token endpoint, authorization endpoint, client registration, consent management (needs Birko.Data.Stores for token/client persistence)
 
 ### Birko.Models
 - [ ] More base model types
