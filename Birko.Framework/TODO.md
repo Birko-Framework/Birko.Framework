@@ -186,8 +186,8 @@ Pluggable random number generation with testable abstractions.
 - [ ] Database-specific optimizations
 
 ### Birko.Data.ElasticSearch
-- [ ] Index management utilities
-- [ ] Re-indexing helpers
+- [x] Index management utilities
+- [x] Re-indexing helpers
 - [ ] Search result highlighting
 
 ### Birko.Data.MongoDB
