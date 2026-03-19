@@ -8,7 +8,6 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.BackgroundJobs</Import_RootNamespace>
   </PropertyGroup>
-  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
   <ItemGroup>
     <!-- Core -->
     <Compile Include="$(MSBuildThisFileDirectory)Core\IJob.cs" />
