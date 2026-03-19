@@ -48,14 +48,14 @@ public class OAuthClient : IOAuthClient
     /// <inheritdoc />
     public async Task<OAuthToken> GetTokenAsync(CancellationToken ct = default)
     {
-        if (_cachedToken != null && !_cachedToken.IsExpired(_settings.TokenExpiryBufferSeconds))
+        if (_cachedToken != null && !_cachedToken.IsExpiredWithBuffer(_settings.TokenExpiryBufferSeconds))
             return _cachedToken;
 
         await _tokenLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             // Double-check after acquiring lock
-            if (_cachedToken != null && !_cachedToken.IsExpired(_settings.TokenExpiryBufferSeconds))
+            if (_cachedToken != null && !_cachedToken.IsExpiredWithBuffer(_settings.TokenExpiryBufferSeconds))
                 return _cachedToken;
 
             // Try refresh token first if available

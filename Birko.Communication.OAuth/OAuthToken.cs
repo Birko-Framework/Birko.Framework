@@ -43,9 +43,9 @@ public class OAuthToken
     public bool IsExpired => DateTime.UtcNow >= ExpiresAt;
 
     /// <summary>
-    /// Whether the access token has expired considering the specified buffer.
+    /// Whether the access token has expired considering the specified buffer in seconds.
     /// </summary>
-    public bool IsExpired(int bufferSeconds) => DateTime.UtcNow >= ExpiresAt.AddSeconds(-bufferSeconds);
+    public bool IsExpiredWithBuffer(int bufferSeconds) => DateTime.UtcNow >= ExpiresAt.AddSeconds(-bufferSeconds);
 }
 
 /// <summary>
