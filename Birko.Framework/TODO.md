@@ -126,9 +126,9 @@ Add when corresponding providers are implemented:
 
 | Health Check | Service | Probe | Target Project |
 |-------------|---------|-------|---------------|
-| WebSocketHealthCheck | WebSocket server | TCP + WS handshake | Birko.Health.Data |
-| SseHealthCheck | SSE endpoint | HTTP GET + event stream | Birko.Health.Data |
-| TcpHealthCheck | Generic TCP | TCP connect + latency | Birko.Health.Data |
+| ~~WebSocketHealthCheck~~ | ~~WebSocket server~~ | ~~TCP + WS handshake~~ | ~~Birko.Health.Data~~ |
+| ~~SseHealthCheck~~ | ~~SSE endpoint~~ | ~~HTTP GET + event stream~~ | ~~Birko.Health.Data~~ |
+| ~~TcpHealthCheck~~ | ~~Generic TCP~~ | ~~TCP connect + latency~~ | ~~Birko.Health.Data~~ |
 | RabbitMqHealthCheck | RabbitMQ | HTTP management API | Birko.Health.Data |
 | KafkaHealthCheck | Apache Kafka | Metadata request | Birko.Health.Data |
 | AzureServiceBusHealthCheck | Azure Service Bus | REST API probe | Birko.Health.Azure |
