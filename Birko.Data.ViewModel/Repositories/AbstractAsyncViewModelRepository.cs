@@ -1,5 +1,6 @@
 using Birko.Data.Filters;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Serialization;
 using Birko.Serialization.Json;
 using System;
