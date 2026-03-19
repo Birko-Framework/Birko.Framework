@@ -37,6 +37,7 @@
     <Project Path="../Birko.Communication.Modbus/Birko.Communication.Modbus.shproj" />
     <Project Path="../Birko.Communication.Camera/Birko.Communication.Camera.shproj" />
     <Project Path="../Birko.Communication.OAuth/Birko.Communication.OAuth.shproj" />
+    <Project Path="../Birko.Communication.IR/Birko.Communication.IR.shproj" />
   </Folder>
   <Folder Name="/Data/">
     <Project Path="../Birko.Contracts/Birko.Contracts.shproj" />

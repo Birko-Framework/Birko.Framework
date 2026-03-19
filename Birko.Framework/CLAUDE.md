@@ -102,6 +102,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Communication.Modbus** - Modbus RTU/TCP communication (serial/network, function codes 01-06/15-16)
 - **Birko.Communication.OAuth** - OAuth2 client (Client Credentials, Authorization Code, PKCE, Device Code, Refresh Token, DelegatingHandler)
 - **Birko.Communication.Camera** - Camera frame capture (ICameraSource, FFmpeg-based JPEG snapshots)
+- **Birko.Communication.IR** - Consumer IR (38 kHz, NEC/Samsung/RC5 protocols, pluggable transports: Serial, HTTP, MQTT, GPIO)
 
 ### Models
 - **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue)
@@ -337,6 +338,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Communication.Modbus | [../Birko.Communication.Modbus/CLAUDE.md](../Birko.Communication.Modbus/CLAUDE.md) |
 | Birko.Communication.OAuth | [../Birko.Communication.OAuth/CLAUDE.md](../Birko.Communication.OAuth/CLAUDE.md) |
 | Birko.Communication.Camera | [../Birko.Communication.Camera/CLAUDE.md](../Birko.Communication.Camera/CLAUDE.md) |
+| Birko.Communication.IR | [../Birko.Communication.IR/CLAUDE.md](../Birko.Communication.IR/CLAUDE.md) |
 | Birko.Models | [../Birko.Models/CLAUDE.md](../Birko.Models/CLAUDE.md) |
 | Birko.Models.Product | [../Birko.Models.Product/CLAUDE.md](../Birko.Models.Product/CLAUDE.md) |
 | Birko.Models.Category | [../Birko.Models.Category/CLAUDE.md](../Birko.Models.Category/CLAUDE.md) |

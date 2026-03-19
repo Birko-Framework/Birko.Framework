@@ -239,6 +239,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Communication.Modbus** | Birko.Communication |
 | **Birko.Communication.Camera** | Birko.Communication |
 | **Birko.Communication.OAuth** | Birko.Configuration |
+| **Birko.Communication.IR** | Birko.Communication, Birko.Communication.Hardware |
 
 ## Message Queue
 

@@ -53,7 +53,78 @@ OAuth2 client library supporting multiple grant types with automatic token cachi
 - **PkceChallenge** — built-in SHA-256 PKCE challenge pair generation
 - **OAuthSettings** — extends `RemoteSettings` (ClientId=UserName, ClientSecret=Password, TokenEndpoint=Location)
 
+### Birko.Communication.IR
+Consumer infrared (38 kHz modulated) communication for remote control — **not** IrDA/IrCOMM (see `Birko.Communication.Hardware.Ports.Infraport` for serial IrCOMM):
+- **InfraredPort** — extends AbstractPort with async send/receive and learning mode
+- **Pluggable transports** via IIrTransport:
+  - **SerialIrTransport** — USB-UART + IR LED on microcontroller (Arduino/ESP32)
+  - **HttpIrTransport** — ESPHome REST API (remote_transmitter)
+  - **MqttIrTransport** — ESPHome/Tasmota MQTT (stub)
+  - **GpioIrTransport** — Linux /dev/lirc0, Raspberry Pi (stub)
+- **Protocols** — IIrProtocol encode/decode between commands and raw timings:
+  - **NecProtocol** — standard (8-bit address) and extended (16-bit), 38 kHz, 562.5 μs unit
+  - **SamsungProtocol** — 32-bit TV remote (address repeated, command complemented)
+  - **Rc5Protocol** — Philips Manchester-encoded 14-bit (36 kHz)
+  - **RawProtocol** — capture & replay for unknown protocols (learning mode)
+- **Device profiles** — IDeviceProfile codebook per device model:
+  - **SamsungAcProfile** — Samsung AC (modes, temp 16–30 °C, fan speeds, swing, Wind-Free)
+
 ## Usage
+
+### Consumer IR via Serial Transport
+
+```csharp
+using Birko.Communication.IR.Ports;
+using Birko.Communication.IR.Transports;
+using Birko.Communication.IR.Protocols;
+
+var settings = new InfraredSettings
+{
+    Name = "LivingRoom IR",
+    TransportType = "serial",
+    ConnectionString = "COM3"
+};
+
+var transport = new SerialIrTransport("COM3", 115200);
+var port = new InfraredPort(settings, transport);
+port.Open();
+
+var nec = new NecProtocol();
+await port.SendCommandAsync(nec, new IrCommand { Address = 0x04, Command = 0x02 });
+port.Close();
+```
+
+### Samsung AC Control
+
+```csharp
+using Birko.Communication.IR.Devices;
+using Birko.Communication.IR.Transports;
+
+var transport = new HttpIrTransport("http://192.168.1.100");
+await transport.ConnectAsync();
+
+var ac = new SamsungAcProfile();
+ac.SetTemperature(22);
+ac.SetMode(SamsungAcMode.Cool);
+
+var timing = ac.GetTiming("PowerOn");
+await transport.TransmitAsync(timing!);
+```
+
+### IR Learning Mode
+
+```csharp
+port.RegisterProtocol(new NecProtocol());
+port.RegisterProtocol(new SamsungProtocol());
+port.RegisterProtocol(new RawProtocol()); // catch-all
+
+port.OnCommandReceived += (sender, cmd) =>
+    Console.WriteLine($"Received: {cmd}");
+
+await port.StartLearningAsync();
+// Point remote at receiver and press buttons...
+await port.StopLearningAsync();
+```
 
 ### OAuth2 Client Credentials
 
