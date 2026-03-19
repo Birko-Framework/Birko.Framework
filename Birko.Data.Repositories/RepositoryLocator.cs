@@ -88,7 +88,7 @@ namespace Birko.Data.Repositories
         /// <returns>The repository instance.</returns>
         public static TRepository GetRepository<TRepository, TSettings>(TSettings settings)
             where TRepository : IBaseRepository
-            where TSettings : Stores.ISettings
+            where TSettings : Configuration.ISettings
         {
             var id = settings?.GetId() ?? string.Empty;
             var type = typeof(TRepository);
@@ -148,7 +148,7 @@ namespace Birko.Data.Repositories
         /// <param name="settings">The settings used when creating the repository.</param>
         public static void Destroy<TRepository, TSettings>(TSettings settings)
             where TRepository : IBaseRepository
-            where TSettings : Stores.ISettings
+            where TSettings : Configuration.ISettings
         {
             Destroy<TRepository>(settings?.GetId());
         }
