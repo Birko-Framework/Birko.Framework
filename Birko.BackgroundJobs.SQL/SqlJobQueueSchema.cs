@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.BackgroundJobs.SQL.Models;
 
 namespace Birko.BackgroundJobs.SQL

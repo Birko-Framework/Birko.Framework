@@ -7,6 +7,7 @@ using Birko.BackgroundJobs.SQL.Models;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.BackgroundJobs.SQL
 {
