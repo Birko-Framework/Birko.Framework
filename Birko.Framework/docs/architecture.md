@@ -6,11 +6,20 @@ Birko Framework is designed as a modular, layered architecture supporting multip
 
 ## Layers
 
+### 0. Contracts Layer (Birko.Contracts)
+
+Zero-dependency foundation providing pure interfaces and shared utilities:
+- **Model interfaces:** `ILoadable<T>`, `ICopyable<T>`, `IDefault`, `ITimestamped` (namespace `Birko.Data.Models`)
+- **Entity interfaces:** `IGuidEntity` (Guid? property), `ILogEntity` (extends IGuidEntity + ITimestamped) — enable bidirectional Model↔ViewModel mapping without circular type references
+- **Retry:** `RetryPolicy` — configurable exponential backoff, shared by BackgroundJobs and MessageQueue (namespace `Birko`)
+
 ### 1. Models Layer
 
 #### Base Models (Birko.Data.Core)
-- `AbstractModel` - Base entity with `Guid?` identifier
-- `AbstractLogModel` - Extends AbstractModel with `CreatedAt`, `UpdatedAt`, `PrevUpdatedAt` timestamps
+- `AbstractModel` - Base entity implementing `IGuidEntity`, `ICopyable<AbstractModel>`, `ILoadable<IGuidEntity>`
+- `AbstractLogModel` - Extends AbstractModel, implements `ITimestamped`, `ILoadable<ILogEntity>`
+
+Models reference `IGuidEntity`/`ILogEntity` interfaces (from Birko.Contracts), not ViewModel types. ViewModels reference Model types. This breaks the circular dependency.
 
 #### Business Models (Birko.Models)
 - **Birko.Models** - Base models (`AbstractPercentage`, `AbstractTree`, `ValueData`, `SourceValue`)
@@ -105,8 +114,8 @@ SQL-specific repositories:
 #### ViewModel Layer
 
 ```
-ViewModel -> ModelViewModel (adds Guid) -> LogViewModel (adds timestamps)
-AbstractLogViewModel extends ViewModel directly (NO Guid)
+ViewModel -> ModelViewModel (adds Guid, implements IGuidEntity) -> LogViewModel (adds timestamps, implements ILogEntity)
+AbstractLogViewModel extends ViewModel directly (implements ILogEntity with Guid)
 ```
 
 ViewModel repositories provide mapping between models and view models:
@@ -295,7 +304,9 @@ Thin instrumentation over .NET built-in APIs (`System.Diagnostics.Metrics`, `Sys
 - **Birko.Helpers** - StringHelper, HtmlHelper, ObjectHelper, EnumerableHelper, PathValidator
 - **Birko.Structures** - Generic data structures (Tree, AVLTree, BinaryNode)
 
-## Settings Chain
+## Settings Chain (Birko.Configuration)
+
+Settings classes live in the `Birko.Configuration` shared project (namespace `Birko.Configuration`). `Birko.Data.Stores` imports them transitively. Lightweight consumers (MessageQueue, Communication) can import `Birko.Configuration` directly without pulling in the full store abstraction layer. `Birko.Configuration` imports `Birko.Contracts` for `ILoadable<T>`.
 
 ```
 ISettings (GetId)
@@ -324,12 +335,21 @@ ISettings (GetId)
 ## Dependency Flow
 
 ```
-Models -> Data Interfaces -> Abstract Classes -> Provider Implementations
-                                           -> Repositories
-                                           -> ViewModel Repositories
-                                           -> Features (Migrations, Sync, Tenant, EventSourcing, Patterns)
-                                           -> Validation, Caching, Security, MessageQueue, EventBus
-                                           -> Storage, Messaging, Telemetry
+Birko.Contracts (zero deps)
+  -> Birko.Configuration (settings)
+  -> Birko.Data.Core (models, ViewModels, filters)
+       -> Birko.Data.Stores (store interfaces, imports Configuration)
+            -> Birko.Data.Repositories (repository interfaces)
+            -> Provider Implementations (SQL, NoSQL, JSON)
+            -> ViewModel Repositories
+            -> Features (Migrations, Sync, Tenant, EventSourcing, Patterns)
+  -> Birko.BackgroundJobs (RetryPolicy from Contracts)
+  -> Birko.MessageQueue (RetryPolicy from Contracts)
+
+Birko.Time.Abstractions (zero deps)
+  -> Birko.Time (calendars, working hours)
+
+Validation, Caching, Security, EventBus, Storage, Messaging, Telemetry
 ```
 
 ## Extensibility

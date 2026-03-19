@@ -67,7 +67,7 @@ email.ToString(); // "John Doe <user@example.com>"
 
 ### EmailSettings
 
-Extends `RemoteSettings` from Birko.Data.Stores (inherits Host/Port/UserName/Password/UseSecure):
+Extends `RemoteSettings` from Birko.Settings (namespace `Birko.Configuration`) (inherits Host/Port/UserName/Password/UseSecure):
 
 ```csharp
 var settings = new EmailSettings("smtp.example.com", 587, "user", "pass")

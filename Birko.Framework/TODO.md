@@ -304,10 +304,12 @@ All stores already implement `Read(filter, orderBy, limit, offset)` and `Count(f
 - [x] Create `ITimestamped` interface in Birko.Data.Core
 - [x] Create `TimestampStoreWrapper` (sync, async, bulk, async-bulk) in Birko.Data.Patterns
 - [x] Make `AbstractLogModel` implement `ITimestamped` (non-breaking)
-- [ ] Audit `Symbio` stores — identify where `CreatedAt`/`UpdatedAt` are set manually, wrap with `TimestampStoreWrapper`
-- [ ] Audit `FisData.Stock` stores — same (models extend `AbstractLogModel`, already implement `ITimestamped` transitively)
-- [ ] Audit `Affiliate` stores — same
-- [ ] Optional: Remove manual `DateTime.UtcNow` assignments in consumer code where `TimestampStoreWrapper` is active
+- [x] Audit `Symbio` stores — **1 file:** `RepositoryBase.cs` lines 60-61/68-69 set CreatedAt/UpdatedAt/PrevUpdatedAt manually. Clean swap: wrap inner store with `TimestampStoreWrapper`, remove 4 lines.
+- [x] Audit `FisData.Stock` stores — **No manual assignments.** Models extend AbstractDatabaseLogModel, rely on field defaults. No action needed; `TimestampStoreWrapper` will take over when stores are wrapped.
+- [x] Audit `Affiliate` stores — **2 files:** `AdminCategoryController.cs` (line 128) and `AdminSEO.cs` (line 186) manually preserve `CreatedAt` during updates (save/restore pattern). With `TimestampStoreWrapper`, Create is the only path that sets `CreatedAt`, so the workaround becomes unnecessary.
+- [x] Symbio: Wrapped `RepositoryBase` inner store with `AsyncTimestampBulkStoreWrapper`, removed manual timestamp lines from CreateAsync/UpdateAsync
+- [x] Affiliate: Simplified `AdminCategoryController` + `AdminSEO` — restore CreatedAt directly on item instead of via storeDelegate, added explicit PrevUpdatedAt/UpdatedAt management. Full TimestampStoreWrapper integration deferred (requires RepositoryLocator changes). Added `Birko.Time.projitems` import to `Affiliate.csproj`
+- [x] Birko.Time: Added explicit `using System;` / `using System.Collections.Generic;` / `using System.Linq;` to all shared project files (required for consumers without ImplicitUsings)
 - [ ] Optional: Consider whether `AbstractLogModel` field defaults (`= DateTime.UtcNow`) should be removed once `TimestampStoreWrapper` is the canonical source of timestamps
 - [ ] Add `Birko.Data.Patterns.Tests` project with unit tests for all Timestamp wrappers
 
@@ -1845,6 +1847,126 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 
 ---
 
+## Phase 14: Structures & Randomization (Low Priority)
+
+### Birko.Structures — Additional Data Structures
+**Status:** Planned | **Priority:** Low
+
+Extend existing tree structures (AVL, BST, generic Tree) with additional general-purpose data structures.
+Location: `C:\Source\Birko.Structures\`
+
+**Currently implemented:**
+- `Trees/` — Tree, AVLTree, BinaryNode, BinarySearchNode, Node
+- `Extensions/Trees/` — BinaryNodeExtensions, NodeExtensions, TreeExtensions
+
+**Planned additions:**
+
+```
+Birko.Structures/
+├── Trees/                               (existing)
+│   ├── Tree.cs                          ✅ Generic tree
+│   ├── AVLTree.cs                       ✅ Self-balancing AVL tree
+│   ├── BinaryNode.cs                    ✅ Binary node
+│   ├── BinarySearchNode.cs             ✅ BST node
+│   ├── Node.cs                          ✅ Generic node
+│   └── IntervalTree.cs                 [ ] Overlapping interval queries (scheduling, calendar conflicts)
+├── Graphs/
+│   ├── Graph.cs                        [ ] Undirected graph (adjacency list)
+│   ├── DirectedGraph.cs                [ ] Directed graph with topological sort
+│   ├── WeightedGraph.cs                [ ] Weighted edges, Dijkstra shortest path
+│   ├── GraphNode.cs                    [ ] Graph vertex with adjacency
+│   └── GraphEdge.cs                    [ ] Typed edge (weight, label)
+├── Heaps/
+│   ├── BinaryHeap.cs                   [ ] Generic binary heap (min/max configurable)
+│   ├── MinHeap.cs                      [ ] Min-heap convenience wrapper
+│   └── MaxHeap.cs                      [ ] Max-heap convenience wrapper
+├── Tries/
+│   ├── Trie.cs                         [ ] Prefix tree (autocomplete, dictionary lookup)
+│   └── CompressedTrie.cs              [ ] Radix tree (memory-efficient prefix tree)
+├── Caches/
+│   └── LruCache.cs                     [ ] Least-recently-used eviction (linked list + dictionary)
+├── Filters/
+│   └── BloomFilter.cs                  [ ] Probabilistic membership test (deduplication, cache prefetch)
+├── Buffers/
+│   └── RingBuffer.cs                   [ ] Fixed-size circular FIFO (logging, telemetry sampling, sliding windows)
+├── Sets/
+│   └── DisjointSet.cs                  [ ] Union-Find with path compression (grouping, clustering, connected components)
+├── Lists/
+│   ├── SkipList.cs                     [ ] O(log n) ordered list (simpler concurrency than balanced trees)
+│   └── Deque.cs                        [ ] Double-ended queue (work-stealing patterns)
+└── Extensions/
+    ├── Trees/                           (existing)
+    ├── GraphExtensions.cs              [ ] BFS, DFS, shortest path, cycle detection
+    └── HeapExtensions.cs               [ ] HeapSort, TopK helpers
+```
+
+**Use cases within Birko Framework:**
+- **Graph** — Workflow engine routing, dependency resolution, migration ordering
+- **Priority Queue / Heap** — Background job scheduling, event ordering
+- **Trie** — Autocomplete, localization key lookup
+- **LRU Cache** — Lightweight in-memory eviction without full Birko.Caching dependency
+- **Bloom Filter** — Deduplication in event bus, cache prefetch decisions
+- **Ring Buffer** — Telemetry sampling, sliding window metrics
+- **Interval Tree** — Business calendar overlap detection, time-range queries
+- **Disjoint Set** — Tenant grouping, data sync partitioning
+- **Skip List** — Concurrent ordered collections
+
+**Dependencies:** None
+
+---
+
+### Birko.Random — Random Number Generators
+**Status:** Planned | **Priority:** Low
+
+Pluggable random number generation with testable abstractions and multiple algorithm implementations.
+Location: `C:\Source\Birko.Random\`
+
+```
+Birko.Random/                             (.shproj)
+├── Core/
+│   ├── IRandomProvider.cs              [ ] Interface: Next, NextDouble, NextBytes, NextInRange, Seed
+│   └── RandomProviderExtensions.cs     [ ] Shuffle, Pick, WeightedPick, Sample, NextGaussian, NextEnum
+├── Providers/
+│   ├── SystemRandomProvider.cs         [ ] Wrapper around System.Random (general purpose)
+│   ├── CryptoRandomProvider.cs         [ ] Wrapper around RandomNumberGenerator (cryptographic, secure tokens)
+│   ├── XorShiftProvider.cs             [ ] XorShift128+ (fast, non-cryptographic, game/simulation)
+│   ├── MersenneTwisterProvider.cs      [ ] MT19937 (statistical quality, Monte Carlo simulations)
+│   ├── SplitMixProvider.cs             [ ] SplitMix64 (fast seeding, hash-based)
+│   └── TestRandomProvider.cs           [ ] Deterministic sequence for unit testing
+├── Distributions/
+│   ├── IDistribution.cs               [ ] Interface: Sample(), Mean, Variance
+│   ├── UniformDistribution.cs          [ ] Uniform [min, max)
+│   ├── NormalDistribution.cs           [ ] Gaussian (Box-Muller transform)
+│   ├── ExponentialDistribution.cs      [ ] Exponential (Poisson process inter-arrival times)
+│   ├── PoissonDistribution.cs          [ ] Poisson (event counting)
+│   └── BernoulliDistribution.cs        [ ] Bernoulli (coin flip with probability p)
+├── Sequences/
+│   ├── ISequenceGenerator.cs           [ ] Interface: NextId, NextString, NextHex
+│   ├── GuidGenerator.cs               [ ] v4 UUID (random), v7 UUID (time-ordered)
+│   ├── NanoIdGenerator.cs              [ ] URL-friendly unique IDs (configurable alphabet/length)
+│   ├── SnowflakeGenerator.cs           [ ] Twitter Snowflake IDs (timestamp + worker + sequence)
+│   └── TokenGenerator.cs              [ ] Secure random tokens (hex, base64, alphanumeric, configurable length)
+└── Noise/
+    ├── INoiseGenerator.cs              [ ] Interface: Value(x), Value(x,y), Value(x,y,z)
+    ├── PerlinNoise.cs                  [ ] Classic Perlin noise (terrain, textures)
+    └── SimplexNoise.cs                 [ ] Simplex noise (faster, fewer artifacts)
+```
+
+**Use cases within Birko Framework:**
+- **IRandomProvider** — Testable randomness (inject TestRandomProvider in tests)
+- **CryptoRandomProvider** — Secure token generation in Birko.Security
+- **Distributions** — Load testing, simulation, retry jitter (exponential backoff with jitter)
+- **GuidGenerator v7** — Time-ordered UUIDs for better database index performance
+- **NanoIdGenerator** — Short, URL-safe IDs for public-facing resources
+- **SnowflakeGenerator** — Distributed unique ID generation (multi-node background jobs)
+- **TokenGenerator** — API keys, password reset tokens, session IDs
+- **Noise** — Procedural content, test data generation, simulation
+- **TestRandomProvider** — Deterministic sequences for reproducible unit tests
+
+**Dependencies:** None (core), `System.Security.Cryptography` (CryptoRandomProvider)
+
+---
+
 ## Summary of Projects
 
 | Phase | Core Project | Platform Projects | Status | Symbio Need |
@@ -1863,6 +1985,8 @@ Design note: `AbstractProcessor.ProcessAsync()` is already async and `Cancellati
 | 12 | **Birko.Workflow** | SQL, ElasticSearch, MongoDB, RavenDB, JSON | ✅ Complete | Trigger-based engine, fluent builder, visualization, all persistence providers |
 | 13 | Additional | ~~Time~~, ~~Health~~, ~~Serialization~~, ~~Localization~~, ~~CQRS~~ | ✅ All done | Completed |
 | 13 | **Birko.Data.Processors** `[Affiliate]` | (platform-agnostic) | ✅ Implemented | Affiliate Import extraction |
+| 14 | **Birko.Structures** | Graphs, Heaps, Tries, Buffers, Filters, Sets | Planned | Workflow routing, job scheduling, deduplication |
+| 14 | **Birko.Random** | Providers, Distributions, Sequences, Noise | Planned | Secure tokens, test determinism, distributed IDs |
 | — | **Birko.Data.Migrations** | SQL, MongoDB, RavenDB, ElasticSearch, InfluxDB, TimescaleDB | ✅ Done | Integrated (Symbio extends with module-awareness) |
 | — | **Birko.Data.Sync** | Sql, MongoDb, RavenDB, ElasticSearch, Json, Tenant | ✅ Done | Available |
 | — | **Birko.Data.Aggregates** | (platform-agnostic) | ✅ Implemented | SQL ↔ NoSQL aggregate mapping for sync |
@@ -1964,13 +2088,18 @@ public class ProductAggregate : AggregateDefinition<Product>
 ## Technical Debt
 
 - [x] **Birko.Data 3-way split** — Replace `Birko.Data` with three focused shared projects:
-  - **Birko.Data.Core** — Models (AbstractModel, AbstractLogModel, ICopyable, IDefault, ILoadable), ViewModels (ViewModel, ModelViewModel, LogViewModel, AbstractLogViewModel), Filters (IFilter, ModelByGuid, ModelsByGuid), Exceptions (StoreException). Foundation layer everything depends on.
-  - **Birko.Data.Stores** — Store interfaces (IStore, IAsyncStore, IBulkStore, IAsyncBulkStore), abstract implementations, Settings chain (Settings → PasswordSettings → RemoteSettings), OrderBy, StoreLocator, StoreExtensions, IStoreWrapper, ITransactionalStore. Depends on Birko.Data.Core.
-  - **Birko.Data.Repositories** (directory exists, currently empty) — Repository interfaces, abstract implementations, RepositoryLocator, ServiceCollectionExtensions. Depends on Birko.Data.Core + Birko.Data.Stores.
+  - **Birko.Data.Core** — Models (AbstractModel, AbstractLogModel), ViewModels (ViewModel, ModelViewModel, LogViewModel, AbstractLogViewModel), Filters (IFilter, ModelByGuid, ModelsByGuid), Exceptions (StoreException). Foundation layer, imports Birko.Contracts.
+  - **Birko.Data.Stores** — Store interfaces (IStore, IAsyncStore, IBulkStore, IAsyncBulkStore), abstract implementations, OrderBy, StoreLocator, StoreExtensions, IStoreWrapper, ITransactionalStore. Imports Birko.Configuration (which imports Birko.Contracts). Depends on Birko.Data.Core.
+  - **Birko.Data.Repositories** — Repository interfaces, abstract implementations, RepositoryLocator, ServiceCollectionExtensions. Depends on Birko.Data.Core + Birko.Data.Stores.
   - Lightweight consumers (Birko.Storage, Birko.Caching, Birko.Models.*) would only reference Birko.Data.Core instead of pulling in all store/repository abstractions.
-  - All downstream projects (Affiliate, FisData, Symbio, Birko.Data.SQL, etc.) update `.projitems` imports accordingly.
-- [ ] **Models ↔ ViewModels circular dependency** — AbstractModel implements `ILoadable<ModelViewModel>` and AbstractLogModel implements `ILoadable<LogViewModel>`, creating a circular reference between Models/ and ViewModels/. Currently kept together in Birko.Data.Core (Option A). Future cleanup: remove ILoadable from Models (make mapping one-directional, ViewModels know about Models but not vice versa) to allow separating Models into a standalone project for pure DTO scenarios.
-- [ ] **RetryPolicy duplication** — `Birko.BackgroundJobs.RetryPolicy` and `Birko.MessageQueue.Retry.RetryPolicy` are near-identical classes (only defaults differ). Consider extracting to a shared location (e.g., `Birko.Core`) if more projects need retry logic.
+  - All downstream projects (Affiliate, FisData, Symbio, DraCode) updated `.projitems` imports accordingly.
+- [x] **Lightweight interface extractions** — Further split to reduce dependency weight:
+  - **Birko.Contracts** — Pure interfaces (ILoadable, ICopyable, IDefault, ITimestamped) extracted from Birko.Data.Core. Zero dependencies. Namespace `Birko.Data.Models`.
+  - **Birko.Configuration** — Settings hierarchy (Settings, PasswordSettings, RemoteSettings) renamed from Birko.Settings to match namespace `Birko.Configuration`. Imports Birko.Contracts.
+  - **Birko.Time.Abstractions** — Clock abstraction (IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider) extracted from Birko.Time. Zero dependencies. Namespace `Birko.Time`.
+  - Consumer apps (Symbio, Affiliate, DraCode, FisData.Stock.Core) updated: `Birko.Data.Stores.Settings/ISettings/PasswordSettings/RemoteSettings` → `Birko.Configuration.*`.
+- [x] **Models ↔ ViewModels circular dependency** — Resolved via `IGuidEntity` and `ILogEntity` interfaces in Birko.Contracts. AbstractModel now implements `ILoadable<IGuidEntity>` (was `ILoadable<ModelViewModel>`), AbstractLogModel implements `ILoadable<ILogEntity>` (was `ILoadable<LogViewModel>`). ViewModels implement the same interfaces, so bidirectional mapping works without Models referencing ViewModel types. DraCode entities updated (`LoadFrom(ModelViewModel)` → `LoadFrom(IGuidEntity)`).
+- [x] **RetryPolicy duplication** — Extracted shared `Birko.RetryPolicy` to Birko.Contracts (namespace `Birko`). Defaults: 3 retries, 5s base, 5min max with exponential backoff. BackgroundJobs overrides defaults to 30s/1h in `JobQueueOptions`. Both projects now import Birko.Contracts and removed their local copies.
 - [ ] **MqttExtensions.cs** — MQTT v5 features (topic aliases for bandwidth optimization, user properties for custom metadata). Low priority unless Symbio IoT has high-frequency sensors where topic alias savings matter.
 - [x] **Rename TenantId → TenantGuid** — Renamed throughout the framework for consistency with Guid suffix convention. Affected: `ITenant`, `ITenantContext`, `TenantContext`, tenant store wrappers, tenant middleware, tenant sync, `ICurrentUser`, `JwtClaimNames`, `ClaimMappingOptions`, `EventContext`, `OutboxEntry`, `EventEnvelope`, `IRoleProvider`, and all related tests/examples. Wire-format strings preserved (`"tenant_id"` claim, `"X-Tenant-Id"` header). Downstream consumers (Symbio, FisData, Affiliate) need updating.
 
@@ -1984,4 +2113,4 @@ For implementation questions, refer to:
 
 ---
 
-**Last Updated:** 2026-03-18
+**Last Updated:** 2026-03-19

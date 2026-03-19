@@ -38,7 +38,9 @@
     <Project Path="../Birko.Communication.Camera/Birko.Communication.Camera.shproj" />
   </Folder>
   <Folder Name="/Data/">
+    <Project Path="../Birko.Contracts/Birko.Contracts.shproj" />
     <Project Path="../Birko.Data.Core/Birko.Data.Core.shproj" />
+    <Project Path="../Birko.Configuration/Birko.Configuration.shproj" />
     <Project Path="../Birko.Data.Stores/Birko.Data.Stores.shproj" />
     <Project Path="../Birko.Data.Repositories/Birko.Data.Repositories.shproj" />
   </Folder>
@@ -172,6 +174,7 @@
     <Project Path="../Birko.Communication.Modbus.Tests/Birko.Communication.Modbus.Tests.csproj" />
   </Folder>
   <Folder Name="/Time/">
+    <Project Path="../Birko.Time.Abstractions/Birko.Time.Abstractions.shproj" />
     <Project Path="../Birko.Time/Birko.Time.shproj" />
   </Folder>
   <Folder Name="/Validation/">

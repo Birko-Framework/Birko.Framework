@@ -7,8 +7,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 
 ### Core Projects
 - **Birko.Framework** - Main framework application (.NET 10.0, shared projects via .projitems)
-- **Birko.Data.Core** - Models, ViewModels, Filters, Exceptions (foundation layer)
-- **Birko.Data.Stores** - Store interfaces/abstractions, Settings, OrderBy, StoreLocator
+- **Birko.Contracts** - Pure interfaces (ILoadable, ICopyable, IDefault, ITimestamped) with zero dependencies
+- **Birko.Data.Core** - Models, ViewModels, Filters, Exceptions (foundation layer, imports Birko.Contracts)
+- **Birko.Configuration** - Settings hierarchy (Settings, PasswordSettings, RemoteSettings) in namespace `Birko.Configuration`, imports Birko.Contracts
+- **Birko.Data.Stores** - Store interfaces/abstractions, OrderBy, StoreLocator (imports Birko.Configuration transitively)
 - **Birko.Data.Repositories** - Repository interfaces/abstractions, RepositoryLocator, DI extensions
 - **Birko.Models** - Base models and extensions
 
@@ -194,7 +196,8 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Data.Processors** - Generic stream processor framework: IProcessor/IStreamProcessor interfaces, AbstractProcessor<T> base with event pipeline, XmlProcessor (XmlReader), CsvProcessor + CsvParser (RFC 4180), HttpProcessor (download decorator), ZipProcessor (extraction decorator), decorator composition pattern
 
 ### Time
-- **Birko.Time** - Testable clock abstraction (IDateTimeProvider), time zone conversion (ITimeZoneConverter), business calendar (IBusinessCalendar) with holidays and working hours
+- **Birko.Time.Abstractions** - Clock abstraction (IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider) with zero dependencies
+- **Birko.Time** - Time zone conversion (ITimeZoneConverter), business calendar (IBusinessCalendar) with holidays and working hours (imports Birko.Time.Abstractions)
 - **Birko.Time.Tests** - Unit tests for time utilities (providers, calendars, holidays, working hours, business calendar)
 
 ### Localization
@@ -239,7 +242,9 @@ Each project has its own CLAUDE.md with specific details:
 
 | Project | CLAUDE.md Location |
 |---------|-------------------|
+| Birko.Contracts | [../Birko.Contracts/CLAUDE.md](../Birko.Contracts/CLAUDE.md) |
 | Birko.Data.Core | [../Birko.Data.Core/CLAUDE.md](../Birko.Data.Core/CLAUDE.md) |
+| Birko.Configuration | [../Birko.Configuration/CLAUDE.md](../Birko.Configuration/CLAUDE.md) |
 | Birko.Data.Stores | [../Birko.Data.Stores/CLAUDE.md](../Birko.Data.Stores/CLAUDE.md) |
 | Birko.Data.Repositories | [../Birko.Data.Repositories/CLAUDE.md](../Birko.Data.Repositories/CLAUDE.md) |
 | Birko.Data.Processors | [../Birko.Data.Processors/CLAUDE.md](../Birko.Data.Processors/CLAUDE.md) |
@@ -379,6 +384,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Serialization.MessagePack | [../Birko.Serialization.MessagePack/CLAUDE.md](../Birko.Serialization.MessagePack/CLAUDE.md) |
 | Birko.Serialization.Protobuf | [../Birko.Serialization.Protobuf/CLAUDE.md](../Birko.Serialization.Protobuf/CLAUDE.md) |
 | Birko.Serialization.Tests | [../Birko.Serialization.Tests/CLAUDE.md](../Birko.Serialization.Tests/CLAUDE.md) |
+| Birko.Time.Abstractions | [../Birko.Time.Abstractions/CLAUDE.md](../Birko.Time.Abstractions/CLAUDE.md) |
 | Birko.Time | [../Birko.Time/CLAUDE.md](../Birko.Time/CLAUDE.md) |
 | Birko.Time.Tests | [../Birko.Time.Tests/CLAUDE.md](../Birko.Time.Tests/CLAUDE.md) |
 | Birko.Localization | [../Birko.Localization/CLAUDE.md](../Birko.Localization/CLAUDE.md) |
@@ -391,9 +397,24 @@ Each project has its own CLAUDE.md with specific details:
 
 ## Key Patterns
 
-### Settings Chain
+### Settings Chain (Birko.Configuration)
 ```
-Settings -> PasswordSettings -> RemoteSettings
+ISettings (GetId)
+    -> Settings (Location, Name)
+        -> PasswordSettings (+Password)
+            -> RemoteSettings (+UserName, +Port, +UseSecure)
+```
+
+### Dependency Flow
+```
+Birko.Contracts (zero deps: ILoadable, ICopyable, IDefault, ITimestamped, IGuidEntity, ILogEntity, RetryPolicy)
+  -> Birko.Configuration (Settings hierarchy, namespace Birko.Configuration)
+  -> Birko.Data.Core (AbstractModel, ViewModels, Filters, Exceptions)
+       -> Birko.Data.Stores (store interfaces, imports Configuration)
+            -> Birko.Data.Repositories
+
+Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider)
+  -> Birko.Time (calendars, working hours, time zones)
 ```
 
 ### Reference Implementations
@@ -460,6 +481,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Localization](docs/localization.md)
   - [Multi-Tenancy](docs/tenant.md)
   - [Communication](docs/communication.md)
+  - [Dependency Tree](docs/dependencies.md)
 
 ## Maintenance
 
@@ -502,7 +524,7 @@ Existing folder groups in both files:
 - **BackgroundJobs/** — Birko.BackgroundJobs
 - **Caching/** — Birko.Caching, Birko.Caching.Redis, Birko.Caching.Hybrid
 - **Communication/** — Birko.Communication.*
-- **Data/** — Birko.Data.Core, Birko.Data.Stores, Birko.Data.Repositories
+- **Data/** — Birko.Contracts, Birko.Data.Core, Birko.Configuration, Birko.Data.Stores, Birko.Data.Repositories
 - **Health/** — Birko.Health, Birko.Health.Data, Birko.Health.Redis, Birko.Health.Azure
 - **Data.Migrations/** — Birko.Data.Migrations.*
 - **Data.NoSQL/** — ElasticSearch, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB stores
@@ -521,6 +543,7 @@ Existing folder groups in both files:
 - **CQRS/** — Birko.CQRS
 - **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
+- **Time/** — Birko.Time.Abstractions, Birko.Time
 - **Workflow/** — Birko.Workflow, Birko.Workflow.SQL, Birko.Workflow.ElasticSearch, Birko.Workflow.MongoDB, Birko.Workflow.RavenDB, Birko.Workflow.JSON
 
 ### Test Requirements

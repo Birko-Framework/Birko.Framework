@@ -282,7 +282,9 @@ Provider connectors (all in `Birko.Data.SQL.Connectors` namespace):
 - `MySQLConnector` - MySQL
 - `SqLiteConnector` - SQLite
 
-## Settings
+## Settings (Birko.Settings)
+
+Settings classes live in the `Birko.Settings` shared project (namespace `Birko.Configuration`). They are transitively imported by `Birko.Data.Stores`.
 
 ### Settings Chain
 
