@@ -10,14 +10,14 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Fields;
-using PasswordSettings = Birko.Data.Stores.PasswordSettings;
-using RemoteSettings = Birko.Data.Stores.RemoteSettings;
+using PasswordSettings = Birko.Configuration.PasswordSettings;
+using RemoteSettings = Birko.Configuration.RemoteSettings;
 
 namespace Birko.Data.SQL.Connectors
 {
     public class MSSqlConnector : AbstractConnector
     {
-        public MSSqlConnector(Data.Stores.RemoteSettings settings) : base(settings)
+        public MSSqlConnector(Birko.Configuration.RemoteSettings settings) : base(settings)
         {
             OnException += MSSqlConnector_OnException;
         }

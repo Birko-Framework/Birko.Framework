@@ -26,11 +26,11 @@ namespace Birko.Data.SQL.MSSql.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The remote settings to use.</param>
-        public void SetSettings(Data.Stores.RemoteSettings settings)
+        public void SetSettings(Birko.Configuration.RemoteSettings settings)
         {
             if (settings != null)
             {
-                var pwSettings = new Data.Stores.PasswordSettings
+                var pwSettings = new Birko.Configuration.PasswordSettings
                 {
                     Location = settings.Location,
                     Name = settings.Name,
@@ -44,9 +44,9 @@ namespace Birko.Data.SQL.MSSql.Stores
         /// Sets the connection settings.
         /// </summary>
         /// <param name="settings">The password settings to use.</param>
-        public override void SetSettings(Data.Stores.PasswordSettings settings)
+        public override void SetSettings(Birko.Configuration.PasswordSettings settings)
         {
-            if (settings is Data.Stores.RemoteSettings remote)
+            if (settings is Birko.Configuration.RemoteSettings remote)
             {
                 SetSettings(remote);
             }
