@@ -1,6 +1,7 @@
 using Birko.Data.Models;
 using Birko.Data.Patterns.Concurrency;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using FluentAssertions;
 using System;
 using System.Collections.Generic;

@@ -2,6 +2,7 @@ using Birko.Data.Models;
 using Birko.Data.Patterns.Paging;
 using Birko.Data.Repositories;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using FluentAssertions;
 using System;
 using System.Collections.Generic;
