@@ -193,6 +193,8 @@ Pluggable random number generation with testable abstractions.
 ### Birko.Data.MongoDB
 - [ ] Change stream support
 - [ ] Aggregation pipeline builders
+- [ ] Index management utilities (create, drop, list, ensure, compound/text/geospatial indexes)
+- [ ] TTL index support for auto-expiring documents
 
 ### Birko.Communication
 - [ ] GraphQL client
@@ -203,6 +205,54 @@ Pluggable random number generation with testable abstractions.
 ### Birko.Models
 - [ ] More base model types
 - [ ] ViewModel to Model mapping utilities
+
+---
+
+## Decisions Pending
+
+### Birko.Data.RavenDB — Map/Reduce Index Management
+**Status:** Undecided | **Priority:** Medium
+
+RavenDB Map/Reduce indexes pre-compute aggregations that are queryable like collections. Current RavenDB support has basic `CreateIndexAsync()`/`DropIndexAsync()` in `AsyncRavenDBStore` and migration helpers, but no comprehensive index management.
+
+**Key insight:** SQL.View is currently query-time only (generates SELECT+JOIN on-the-fly, no persistent DB views). RavenDB indexes are the opposite — they are persistent server-side objects that pre-compute results. This makes RavenDB indexes more performant for repeated aggregation queries.
+
+**Option A: IndexManager + manual index definitions (recommended)**
+- IndexManager: deploy, list, delete, reset, get stats, check staleness, wait for non-stale
+- Query helpers for Map/Reduce results with expression-based filters
+- Users define indexes via `AbstractIndexCreationTask` classes (RavenDB's native pattern)
+- Bulk deploy indexes from assembly
+- Pro: Simpler, leverages existing RavenDB patterns, pre-computed results
+- Con: No declarative attribute magic
+
+**Option B: Attribute-driven index definitions (like SQL.View pattern)**
+- `MapIndexAttribute`, `MapReduceIndexAttribute`, `IndexFieldAttribute`, `AggregateFieldAttribute`
+- Auto-generates `AbstractIndexCreationTask` from attributes
+- IndexManager for lifecycle + query helpers
+- Pro: Declarative, consistent pattern across framework
+- Con: More complex, RavenDB Map/Reduce only supports single-collection grouping (no cross-collection joins)
+
+**Comparison:**
+| SQL.View (current) | RavenDB Map/Reduce |
+|---|---|
+| Query-time SELECT with JOINs (no DDL) | Persistent server-side indexes |
+| Re-executes full query every time | Pre-computed, updated incrementally |
+| Cross-table JOINs | Single-collection grouping only |
+| COUNT/SUM/AVG/MIN/MAX via attributes | Reduce aggregation functions |
+
+### Birko.Data.SQL.View — Persistent View Support
+**Status:** In Progress | **Priority:** Medium
+
+SQL.View currently only generates SELECT queries on-the-fly from attributes. It should also support creating/managing actual database VIEW objects for performance and reuse.
+
+**Features:**
+- [x] `CREATE VIEW` / `CREATE OR REPLACE VIEW` generation from existing attribute definitions
+- [x] `DROP VIEW` support
+- [x] Database-specific syntax (MSSql, PostgreSQL, MySQL, SQLite differences) — separate projects: Birko.Data.SQL.{MSSql,PostgreSQL,MySQL,SqLite}.View
+- [x] View existence check before create
+- [ ] Integration with migration framework (create/drop views in migrations)
+- [ ] Option to query against persistent view vs on-the-fly SELECT (automatic fallback)
+- [ ] Materialized view support where available (PostgreSQL `CREATE MATERIALIZED VIEW` — partially done, MSSql indexed views)
 
 ---
 

@@ -77,6 +77,10 @@
     <Project Path="../Birko.Data.SQL.PostgreSQL/Birko.Data.SQL.PostgreSQL.shproj" Id="7b8f9a11-c227-4a8d-b536-54126c998bbb" />
     <Project Path="../Birko.Data.SQL.SqLite/Birko.Data.SQL.SqLite.shproj" />
     <Project Path="../Birko.Data.SQL.View/Birko.Data.SQL.View.shproj" />
+    <Project Path="../Birko.Data.SQL.MSSql.View/Birko.Data.SQL.MSSql.View.shproj" />
+    <Project Path="../Birko.Data.SQL.PostgreSQL.View/Birko.Data.SQL.PostgreSQL.View.shproj" />
+    <Project Path="../Birko.Data.SQL.MySQL.View/Birko.Data.SQL.MySQL.View.shproj" />
+    <Project Path="../Birko.Data.SQL.SqLite.View/Birko.Data.SQL.SqLite.View.shproj" />
   </Folder>
   <Folder Name="/Data.Sync/">
     <Project Path="../Birko.Data.Sync/Birko.Data.Sync.shproj" />
