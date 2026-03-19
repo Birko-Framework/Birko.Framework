@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Birko.BackgroundJobs.ElasticSearch.Models;
 using Birko.Data.ElasticSearch.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.BackgroundJobs.ElasticSearch
 {
