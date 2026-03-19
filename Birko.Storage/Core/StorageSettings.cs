@@ -1,9 +1,10 @@
 using Birko.Data.Stores;
+using Birko.Configuration;
 
 namespace Birko.Storage;
 
 /// <summary>
-/// Settings for storage providers. Extends Birko.Data.Stores.Settings.
+/// Settings for storage providers. Extends Birko.Configuration.Settings.
 /// Location = base directory (local) or endpoint (cloud). Name = logical storage name.
 /// </summary>
 public class StorageSettings : Settings, Birko.Data.Models.ILoadable<StorageSettings>
