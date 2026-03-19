@@ -57,7 +57,7 @@ public class AzureKeyVaultSettingsTests
     public void ExtendsRemoteSettings()
     {
         var settings = new AzureKeyVaultSettings();
-        settings.Should().BeAssignableTo<Birko.Data.Stores.RemoteSettings>();
-        settings.Should().BeAssignableTo<Birko.Data.Stores.ISettings>();
+        settings.Should().BeAssignableTo<Birko.Configuration.RemoteSettings>();
+        settings.Should().BeAssignableTo<Birko.Configuration.ISettings>();
     }
 }
