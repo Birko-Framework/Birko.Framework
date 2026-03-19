@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.MongoDB.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.MongoDB.Models;
