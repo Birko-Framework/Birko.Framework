@@ -1,11 +1,11 @@
-﻿using Birko.Data.Models;
+using Birko.Data.Models;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace Birko.Data.ViewModels
 {
-    public abstract class LogViewModel : ModelViewModel, ILoadable<AbstractLogModel>, ILoadable<LogViewModel>
+    public abstract class LogViewModel : ModelViewModel, ILogEntity, ILoadable<ILogEntity>, ILoadable<LogViewModel>
     {
         public const string CreatedAtProperty = "CreatedAt";
         public const string UpdatedAtProperty = "UpdatedAt";
@@ -53,7 +53,7 @@ namespace Birko.Data.ViewModels
             }
         }
 
-        public void LoadFrom(AbstractLogModel data)
+        public void LoadFrom(ILogEntity data)
         {
             base.LoadFrom(data);
             if (data != null)

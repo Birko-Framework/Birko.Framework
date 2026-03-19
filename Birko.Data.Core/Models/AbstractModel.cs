@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using Birko.Data.ViewModels;
 
 namespace Birko.Data.Models
 {
-    public abstract partial class AbstractModel : ICopyable<AbstractModel>, ILoadable<ModelViewModel>
+    public abstract partial class AbstractModel : IGuidEntity, ICopyable<AbstractModel>, ILoadable<IGuidEntity>
     {
         public virtual Guid? Guid { get; set; } = null;
 
@@ -18,7 +17,7 @@ namespace Birko.Data.Models
             return clone!;
         }
 
-        public virtual void LoadFrom(ModelViewModel data)
+        public virtual void LoadFrom(IGuidEntity data)
         {
             if (data != null)
             {

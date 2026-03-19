@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using Birko.Data.ViewModels;
 
 namespace Birko.Data.Models
 {
-    public abstract partial class AbstractLogModel : AbstractModel, ICopyable<AbstractLogModel>, ILoadable<ViewModels.LogViewModel>, ITimestamped
+    public abstract partial class AbstractLogModel : AbstractModel, ICopyable<AbstractLogModel>, ILoadable<ILogEntity>, ITimestamped
     {
         public virtual DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -23,7 +22,7 @@ namespace Birko.Data.Models
             return clone!;
         }
 
-        public void LoadFrom(LogViewModel data)
+        public void LoadFrom(ILogEntity data)
         {
             base.LoadFrom(data);
             if(data != null)

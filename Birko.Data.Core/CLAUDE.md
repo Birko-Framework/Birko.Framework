@@ -1,29 +1,28 @@
 # Birko.Data.Core
 
 ## Overview
-Core data layer foundation for the Birko Framework. Contains base models, view models, filters, and exceptions that all data projects depend on.
+Core data layer foundation for the Birko Framework. Contains base models, view models, filters, and exceptions. Imports Birko.Contracts for shared interfaces (IGuidEntity, ILogEntity, ILoadable, ICopyable, ITimestamped, IDefault).
 
 ## Project Location
-`C:\Source\Birko.Data.Core\`
+`C:\Source\Birko.Data.Core\` (shared project, .shproj/.projitems)
+
+## Namespace
+`Birko.Data` with sub-namespaces: `Birko.Data.Models`, `Birko.Data.ViewModels`, `Birko.Data.Filters`, `Birko.Data.Exceptions`.
 
 ## Components
 
 ### Models (`Birko.Data.Models`)
-- **AbstractModel** — Base class for all data entities (Guid property), implements ICopyable and ILoadable<ModelViewModel>
-- **ITimestamped** — Interface for entities with CreatedAt, UpdatedAt, PrevUpdatedAt timestamps
-- **AbstractLogModel** — Extends AbstractModel with audit timestamps, implements ITimestamped
-- **ICopyable\<T\>** — Interface for cloning objects
-- **IDefault** — Interface for marking default items (bool Default)
-- **ILoadable\<T\>** — Generic interface for loading/mapping from another object
+- **AbstractModel** — Base entity with Guid property, implements `IGuidEntity`, `ICopyable<AbstractModel>`, `ILoadable<IGuidEntity>`
+- **AbstractLogModel** — Extends AbstractModel with CreatedAt/UpdatedAt/PrevUpdatedAt timestamps, implements `ITimestamped`, `ILoadable<ILogEntity>`
 
 ### ViewModels (`Birko.Data.ViewModels`)
 - **ViewModel** — Base class with INotifyPropertyChanged support
-- **ModelViewModel** — Extends ViewModel with Guid, implements ILoadable<AbstractModel>
-- **LogViewModel** — Extends ModelViewModel with audit timestamps
-- **AbstractLogViewModel** — Extends ViewModel with audit timestamps (no Guid)
+- **ModelViewModel** — Extends ViewModel with Guid, implements `IGuidEntity`, `ILoadable<IGuidEntity>`, `ILoadable<ModelViewModel>`
+- **LogViewModel** — Extends ModelViewModel with audit timestamps, implements `ILogEntity`, `ILoadable<ILogEntity>`, `ILoadable<LogViewModel>`
+- **AbstractLogViewModel** — Extends ViewModel directly (no Guid/ModelViewModel), implements `ILogEntity`
 
 ### Filters (`Birko.Data.Filters`)
-- **IFilter\<TModel\>** — Generic filter interface returning Expression<Func<TModel, bool>>
+- **IFilter\<TModel\>** — Generic filter interface returning `Expression<Func<TModel, bool>>`
 - **ModelByGuid\<TModel\>** — Filter for single GUID lookup
 - **ModelsByGuid\<TModel\>** — Filter for multiple GUID lookup
 
@@ -31,11 +30,10 @@ Core data layer foundation for the Birko Framework. Contains base models, view m
 - **StoreException** — Custom exception for store operations
 
 ## Dependencies
-- None (standalone foundation project)
+- **Birko.Contracts** — Imported via .projitems. Provides `IGuidEntity`, `ILogEntity`, `ITimestamped`, `ILoadable<T>`, `ICopyable<T>`, `IDefault`.
 
-## Notes
-- Models and ViewModels have a circular dependency via ILoadable (AbstractModel ↔ ModelViewModel). This is by design — see Technical Debt in TODO.md.
-- All namespaces remain `Birko.Data.*` for backward compatibility.
+## Key Design
+Models reference `IGuidEntity`/`ILogEntity` interfaces (from Birko.Contracts), NOT ViewModel types. ViewModels reference Model types. This breaks the circular dependency that previously existed between Models and ViewModels via ILoadable.
 
 ## Maintenance
 

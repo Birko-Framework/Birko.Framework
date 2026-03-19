@@ -1,11 +1,11 @@
-﻿using Birko.Data.Models;
+using Birko.Data.Models;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace Birko.Data.ViewModels
 {
-    public abstract class ModelViewModel : ViewModel, ILoadable<AbstractModel>, ILoadable<ModelViewModel>
+    public abstract class ModelViewModel : ViewModel, IGuidEntity, ILoadable<IGuidEntity>, ILoadable<ModelViewModel>
     {
         public const string GuidProperty = "Guid";
 
@@ -23,7 +23,7 @@ namespace Birko.Data.ViewModels
             }
         }
 
-        public void LoadFrom(AbstractModel data)
+        public void LoadFrom(IGuidEntity data)
         {
             if (data != null)
             {

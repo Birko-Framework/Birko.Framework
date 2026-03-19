@@ -3,11 +3,25 @@ using System;
 
 namespace Birko.Data.ViewModels
 {
-    public abstract class AbstractLogViewModel : ViewModel, ILoadable<AbstractLogModel>, ILoadable<AbstractLogViewModel>
+    public abstract class AbstractLogViewModel : ViewModel, ILogEntity, ILoadable<ILogEntity>, ILoadable<AbstractLogViewModel>
     {
         public const string CreatedAtProperty = "CreatedAt";
         public const string UpdatedAtProperty = "UpdatedAt";
         public const string PrevUpdatedAtProperty = "PrevUpdatedAt";
+
+        private Guid? _guid;
+        public Guid? Guid
+        {
+            get => _guid;
+            set
+            {
+                if (_guid != value)
+                {
+                    _guid = value;
+                    RaisePropertyChanged(nameof(Guid));
+                }
+            }
+        }
 
         private DateTime _createdAt = DateTime.UtcNow;
         public DateTime CreatedAt
@@ -51,10 +65,11 @@ namespace Birko.Data.ViewModels
             }
         }
 
-        public virtual void LoadFrom(AbstractLogModel data)
+        public virtual void LoadFrom(ILogEntity data)
         {
             if (data != null)
             {
+                Guid = data.Guid;
                 CreatedAt = data.CreatedAt;
                 UpdatedAt = data.UpdatedAt;
                 PrevUpdatedAt = data.PrevUpdatedAt;
@@ -65,6 +80,7 @@ namespace Birko.Data.ViewModels
         {
             if (data != null)
             {
+                Guid = data.Guid;
                 CreatedAt = data.CreatedAt;
                 UpdatedAt = data.UpdatedAt;
                 PrevUpdatedAt = data.PrevUpdatedAt;
