@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Connectors
     /// <summary>
     /// MySQL database connector.
     /// </summary>
-    public class MySQLConnector : AbstractConnector
+    public partial class MySQLConnector : AbstractConnector
     {
         /// <summary>
         /// Initializes a new instance of the MySQLConnector class.
