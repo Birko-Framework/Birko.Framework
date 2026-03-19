@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b7e3a1c4-d2f5-4e8a-9b6c-1d3f5e7a9b2c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.NFC</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\NfcTagType.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\NfcTagData.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\NdefRecord.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\NfcReaderSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Ports\NfcReaderPort.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Transports\INfcTransport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Transports\SerialNfcTransport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Transports\HttpNfcTransport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Transports\HidNfcTransport.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\INfcProtocol.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\Iso14443AProtocol.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Protocols\NdefProtocol.cs" />
+  </ItemGroup>
+</Project>
