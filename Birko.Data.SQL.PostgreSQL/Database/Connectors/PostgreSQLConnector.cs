@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Connectors
     /// <summary>
     /// PostgreSQL database connector.
     /// </summary>
-    public class PostgreSQLConnector : AbstractConnector
+    public partial class PostgreSQLConnector : AbstractConnector
     {
         /// <summary>
         /// Initializes a new instance of the PostgreSQLConnector class.
