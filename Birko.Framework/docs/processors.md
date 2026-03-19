@@ -309,4 +309,4 @@ Sync methods use `OnItemProcessedSync`/`OnProcessFinishedSync` delegates. Async 
 
 - [Background Jobs](background-jobs.md) — Job queue, scheduling, retry
 - [Store Implementation](store-implementation.md) — Data stores for persisting processed items
-- [Birko.Data.Processors CLAUDE.md](../../Birko.Data.Processors/CLAUDE.md) — Project details
+- [Birko.Data.Processors](https://github.com/birko/Birko.Data.Processors)

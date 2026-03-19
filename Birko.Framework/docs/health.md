@@ -323,7 +323,7 @@ app.MapGet("/health/live", async () =>
 
 ## See Also
 
-- [Birko.Health CLAUDE.md](../../Birko.Health/CLAUDE.md)
-- [Birko.Health.Data CLAUDE.md](../../Birko.Health.Data/CLAUDE.md)
-- [Birko.Health.Redis CLAUDE.md](../../Birko.Health.Redis/CLAUDE.md)
-- [Birko.Health.Azure CLAUDE.md](../../Birko.Health.Azure/CLAUDE.md)
+- [Birko.Health](https://github.com/birko/Birko.Health)
+- [Birko.Health.Data](https://github.com/birko/Birko.Health.Data)
+- [Birko.Health.Redis](https://github.com/birko/Birko.Health.Redis)
+- [Birko.Health.Azure](https://github.com/birko/Birko.Health.Azure)

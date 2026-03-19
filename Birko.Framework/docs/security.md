@@ -303,9 +303,9 @@ var password = await akv.GetSecretAsync("db-password");
 
 ## See Also
 
-- [Birko.Security CLAUDE.md](../Birko.Security/CLAUDE.md)
-- [Birko.Security.Jwt CLAUDE.md](../Birko.Security.Jwt/CLAUDE.md)
-- [Birko.Security.AspNetCore CLAUDE.md](../Birko.Security.AspNetCore/CLAUDE.md)
-- [Birko.Security.BCrypt CLAUDE.md](../Birko.Security.BCrypt/CLAUDE.md)
-- [Birko.Security.Vault CLAUDE.md](../Birko.Security.Vault/CLAUDE.md)
-- [Birko.Security.AzureKeyVault CLAUDE.md](../Birko.Security.AzureKeyVault/CLAUDE.md)
+- [Birko.Security](https://github.com/birko/Birko.Security)
+- [Birko.Security.Jwt](https://github.com/birko/Birko.Security.Jwt)
+- [Birko.Security.AspNetCore](https://github.com/birko/Birko.Security.AspNetCore)
+- [Birko.Security.BCrypt](https://github.com/birko/Birko.Security.BCrypt)
+- [Birko.Security.Vault](https://github.com/birko/Birko.Security.Vault)
+- [Birko.Security.AzureKeyVault](https://github.com/birko/Birko.Security.AzureKeyVault)

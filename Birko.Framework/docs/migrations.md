@@ -212,10 +212,10 @@ public enum MigrationDirection
 
 ## See Also
 
-- [Birko.Data.Migrations CLAUDE.md](../Birko.Data.Migrations/CLAUDE.md)
-- [Birko.Data.Migrations.SQL CLAUDE.md](../Birko.Data.Migrations.SQL/CLAUDE.md)
-- [Birko.Data.Migrations.ElasticSearch CLAUDE.md](../Birko.Data.Migrations.ElasticSearch/CLAUDE.md)
-- [Birko.Data.Migrations.MongoDB CLAUDE.md](../Birko.Data.Migrations.MongoDB/CLAUDE.md)
-- [Birko.Data.Migrations.RavenDB CLAUDE.md](../Birko.Data.Migrations.RavenDB/CLAUDE.md)
-- [Birko.Data.Migrations.InfluxDB CLAUDE.md](../Birko.Data.Migrations.InfluxDB/CLAUDE.md)
-- [Birko.Data.Migrations.TimescaleDB CLAUDE.md](../Birko.Data.Migrations.TimescaleDB/CLAUDE.md)
+- [Birko.Data.Migrations](https://github.com/birko/Birko.Data.Migrations)
+- [Birko.Data.Migrations.SQL](https://github.com/birko/Birko.Data.Migrations.SQL)
+- [Birko.Data.Migrations.ElasticSearch](https://github.com/birko/Birko.Data.Migrations.ElasticSearch)
+- [Birko.Data.Migrations.MongoDB](https://github.com/birko/Birko.Data.Migrations.MongoDB)
+- [Birko.Data.Migrations.RavenDB](https://github.com/birko/Birko.Data.Migrations.RavenDB)
+- [Birko.Data.Migrations.InfluxDB](https://github.com/birko/Birko.Data.Migrations.InfluxDB)
+- [Birko.Data.Migrations.TimescaleDB](https://github.com/birko/Birko.Data.Migrations.TimescaleDB)

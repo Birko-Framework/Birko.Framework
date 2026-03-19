@@ -337,5 +337,5 @@ Exception types for programming errors (null args, invalid templates):
 
 ## See Also
 
-- [Birko.Messaging CLAUDE.md](../../Birko.Messaging/CLAUDE.md)
-- [Birko.Messaging.Razor CLAUDE.md](../../Birko.Messaging.Razor/CLAUDE.md)
+- [Birko.Messaging](https://github.com/birko/Birko.Messaging)
+- [Birko.Messaging.Razor](https://github.com/birko/Birko.Messaging.Razor)

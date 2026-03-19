@@ -244,5 +244,5 @@ All paths are validated against traversal attacks:
 
 ## See Also
 
-- [Birko.Storage CLAUDE.md](../../Birko.Storage/CLAUDE.md)
-- [Birko.Storage.AzureBlob CLAUDE.md](../../Birko.Storage.AzureBlob/CLAUDE.md)
+- [Birko.Storage](https://github.com/birko/Birko.Storage)
+- [Birko.Storage.AzureBlob](https://github.com/birko/Birko.Storage.AzureBlob)

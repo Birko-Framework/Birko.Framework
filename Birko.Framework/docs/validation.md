@@ -112,4 +112,4 @@ RuleFor(x => x.StartDate)
 
 ## See Also
 
-- [Birko.Validation CLAUDE.md](../Birko.Validation/CLAUDE.md)
+- [Birko.Validation](https://github.com/birko/Birko.Validation)

@@ -158,7 +158,7 @@ var product = await cache.GetOrSetAsync("product:99",
 
 ## See Also
 
-- [Birko.Caching CLAUDE.md](../Birko.Caching/CLAUDE.md)
-- [Birko.Caching.Redis CLAUDE.md](../Birko.Caching.Redis/CLAUDE.md)
-- [Birko.Caching.Hybrid CLAUDE.md](../Birko.Caching.Hybrid/CLAUDE.md)
-- [Birko.Redis CLAUDE.md](../Birko.Redis/CLAUDE.md)
+- [Birko.Caching](https://github.com/birko/Birko.Caching)
+- [Birko.Caching.Redis](https://github.com/birko/Birko.Caching.Redis)
+- [Birko.Caching.Hybrid](https://github.com/birko/Birko.Caching.Hybrid)
+- [Birko.Redis](https://github.com/birko/Birko.Redis)

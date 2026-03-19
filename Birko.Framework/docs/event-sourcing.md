@@ -149,4 +149,4 @@ public Customer GetAtTime(Guid id, DateTime timestamp)
 
 ## See Also
 
-- [Birko.Data.EventSourcing CLAUDE.md](../Birko.Data.EventSourcing/CLAUDE.md)
+- [Birko.Data.EventSourcing](https://github.com/birko/Birko.Data.EventSourcing)

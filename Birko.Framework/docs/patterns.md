@@ -297,4 +297,4 @@ var store = new AsyncVersionedStoreWrapper<Order>(
 
 ## See Also
 
-- [Birko.Data.Patterns CLAUDE.md](../Birko.Data.Patterns/CLAUDE.md)
+- [Birko.Data.Patterns](https://github.com/birko/Birko.Data.Patterns)
