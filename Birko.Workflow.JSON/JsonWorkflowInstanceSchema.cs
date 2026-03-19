@@ -7,14 +7,14 @@ namespace Birko.Workflow.JSON
 {
     public static class JsonWorkflowInstanceSchema
     {
-        public static async Task EnsureCreatedAsync(Birko.Data.Stores.Settings settings, CancellationToken cancellationToken = default)
+        public static async Task EnsureCreatedAsync(Birko.Configuration.Settings settings, CancellationToken cancellationToken = default)
         {
             var store = new AsyncJsonStore<JsonWorkflowInstanceModel>();
             store.SetSettings(settings);
             await store.InitAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        public static async Task DropAsync(Birko.Data.Stores.Settings settings, CancellationToken cancellationToken = default)
+        public static async Task DropAsync(Birko.Configuration.Settings settings, CancellationToken cancellationToken = default)
         {
             var store = new AsyncJsonStore<JsonWorkflowInstanceModel>();
             store.SetSettings(settings);

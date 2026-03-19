@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.JSON.Stores;
 using Birko.Data.Stores;
+using Birko.Configuration;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.JSON.Models;
@@ -21,7 +22,7 @@ namespace Birko.Workflow.JSON
         private readonly AsyncJsonStore<JsonWorkflowInstanceModel> _store;
         private bool _initialized;
 
-        public JsonWorkflowInstanceStore(Birko.Data.Stores.Settings settings)
+        public JsonWorkflowInstanceStore(Birko.Configuration.Settings settings)
         {
             _store = new AsyncJsonStore<JsonWorkflowInstanceModel>();
             _store.SetSettings(settings);
