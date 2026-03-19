@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a7c3e1d5-4b9f-4a2e-8c6d-3f5b1a9e7d02</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Localization</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Models / Interfaces -->
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ILocalizable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\EntityTranslationModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\IEntityLocalizationContext.cs" />
+    <!-- Filters -->
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\EntityTranslationFilter.cs" />
+    <!-- Expressions -->
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\LocalizedExpressionVisitor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\LocalizedFilterHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\LocalizedOrderByHelper.cs" />
+    <!-- Decorators -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\LocalizedBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncLocalizedBulkStoreWrapper.cs" />
+  </ItemGroup>
+
+</Project>
