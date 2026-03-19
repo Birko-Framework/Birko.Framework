@@ -1949,6 +1949,8 @@ public class ProductAggregate : AggregateDefinition<Product>
 - [ ] Add aggregation pipeline builders
 
 #### Birko.Communication
+- [x] Add Modbus RTU/TCP communication (Birko.Communication.Modbus)
+- [x] Add Camera frame capture (Birko.Communication.Camera)
 - [ ] Add GraphQL client
 - [ ] Add gRPC support
 - [ ] Add OAuth2 helpers in Authentication

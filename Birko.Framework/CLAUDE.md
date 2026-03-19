@@ -97,6 +97,8 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Communication.REST** - REST API client
 - **Birko.Communication.SOAP** - SOAP client
 - **Birko.Communication.SSE** - Server-Sent Events
+- **Birko.Communication.Modbus** - Modbus RTU/TCP communication (serial/network, function codes 01-06/15-16)
+- **Birko.Communication.Camera** - Camera frame capture (ICameraSource, FFmpeg-based JPEG snapshots)
 
 ### Models
 - **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue)
@@ -202,6 +204,7 @@ Birko Framework is a modular .NET framework providing data access, communication
 - **Birko.Localization.Tests** - Unit tests for localization (providers, pluralizer, settings, formatters)
 - **Birko.Localization.Data.Tests** - Unit tests for database translation provider (CRUD, namespaces, caching, filters)
 - **Birko.Data.Localization.Tests** - Unit tests for entity localization (model, filter, sync/async wrapper tests)
+- **Birko.Communication.Modbus.Tests** - Unit tests for Modbus communication (RTU/TCP framing, function codes, CRC, error handling)
 
 ## Architecture
 
@@ -324,6 +327,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Communication.REST | [../Birko.Communication.REST/CLAUDE.md](../Birko.Communication.REST/CLAUDE.md) |
 | Birko.Communication.SOAP | [../Birko.Communication.SOAP/CLAUDE.md](../Birko.Communication.SOAP/CLAUDE.md) |
 | Birko.Communication.SSE | [../Birko.Communication.SSE/CLAUDE.md](../Birko.Communication.SSE/CLAUDE.md) |
+| Birko.Communication.Modbus | [../Birko.Communication.Modbus/CLAUDE.md](../Birko.Communication.Modbus/CLAUDE.md) |
+| Birko.Communication.Camera | [../Birko.Communication.Camera/CLAUDE.md](../Birko.Communication.Camera/CLAUDE.md) |
 | Birko.Models | [../Birko.Models/CLAUDE.md](../Birko.Models/CLAUDE.md) |
 | Birko.Models.Product | [../Birko.Models.Product/CLAUDE.md](../Birko.Models.Product/CLAUDE.md) |
 | Birko.Models.Category | [../Birko.Models.Category/CLAUDE.md](../Birko.Models.Category/CLAUDE.md) |
@@ -382,6 +387,7 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Localization.Data.Tests | [../Birko.Localization.Data.Tests/CLAUDE.md](../Birko.Localization.Data.Tests/CLAUDE.md) |
 | Birko.Data.Localization | [../Birko.Data.Localization/CLAUDE.md](../Birko.Data.Localization/CLAUDE.md) |
 | Birko.Data.Localization.Tests | [../Birko.Data.Localization.Tests/CLAUDE.md](../Birko.Data.Localization.Tests/CLAUDE.md) |
+| Birko.Communication.Modbus.Tests | [../Birko.Communication.Modbus.Tests/CLAUDE.md](../Birko.Communication.Modbus.Tests/CLAUDE.md) |
 
 ## Key Patterns
 
@@ -453,6 +459,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Time](docs/time.md)
   - [Localization](docs/localization.md)
   - [Multi-Tenancy](docs/tenant.md)
+  - [Communication](docs/communication.md)
 
 ## Maintenance
 
