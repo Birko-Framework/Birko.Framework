@@ -235,3 +235,100 @@ var settings = LocalizationSettings.Default
 ```
 
 All settings are immutable — `With*()` methods return new instances.
+
+## Entity Localization (Birko.Data.Localization)
+
+For translating entity fields stored in the database (e.g., product names, category descriptions), use `Birko.Data.Localization`. It provides store decorator wrappers that transparently manage translations.
+
+### How It Works
+
+- Entities store default-language values in their own fields
+- Translations for other languages live in a separate `EntityTranslationModel` store
+- On **read**, the wrapper checks the current culture and overlays translations onto localizable fields
+- On **create/update**, the wrapper persists translations for the current culture (if non-default)
+- On **delete**, all associated translations are cleaned up
+
+### 1. Implement ILocalizable
+
+```csharp
+public class Product : AbstractLogModel, ILocalizable
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string SKU { get; set; } = string.Empty; // not localized
+
+    public IReadOnlyList<string> GetLocalizableFields()
+        => new[] { nameof(Name), nameof(Description) };
+}
+```
+
+### 2. Implement IEntityLocalizationContext
+
+```csharp
+public class HttpLocalizationContext : IEntityLocalizationContext
+{
+    private readonly IHttpContextAccessor _accessor;
+    public HttpLocalizationContext(IHttpContextAccessor accessor) => _accessor = accessor;
+
+    public CultureInfo CurrentCulture => CultureInfo.CurrentUICulture;
+    public CultureInfo DefaultCulture => new CultureInfo("en");
+}
+```
+
+### 3. Wrap Your Store
+
+```csharp
+// Create the translation store (any Birko.Data backend)
+var translationStore = new AsyncDataBaseBulkStore<MsSqlConnector, EntityTranslationModel>();
+
+// Wrap the entity store
+var localizedStore = new AsyncLocalizedStoreWrapper<IAsyncStore<Product>, Product>(
+    productStore,
+    translationStore,
+    localizationContext);
+
+// Reads automatically return translated fields
+var product = await localizedStore.ReadAsync(productGuid);
+```
+
+### 4. Decorator Composition
+
+```csharp
+IAsyncStore<Product> store = productStore;
+store = new AsyncTimestampStoreWrapper<...>(store, clock);
+store = new AsyncAuditStoreWrapper<...>(store, auditContext);
+store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext);
+```
+
+### Available Wrappers
+
+| Wrapper | Interface | Description |
+|---------|-----------|-------------|
+| `LocalizedStoreWrapper` | `IStore<T>` | Sync singular |
+| `AsyncLocalizedStoreWrapper` | `IAsyncStore<T>` | Async singular |
+| `LocalizedBulkStoreWrapper` | `IBulkStore<T>` | Sync bulk |
+| `AsyncLocalizedBulkStoreWrapper` | `IAsyncBulkStore<T>` | Async bulk |
+
+### EntityTranslationModel
+
+| Property | Type | Description |
+|----------|------|-------------|
+| Guid | Guid? | Unique identifier (inherited) |
+| EntityGuid | Guid | The entity this translation belongs to |
+| EntityType | string | Type name (e.g., "Product") |
+| FieldName | string | Property name (e.g., "Name") |
+| Culture | string | Culture code (e.g., "sk") |
+| Value | string | Translated value |
+| UpdatedAt | DateTime? | Last modification |
+
+### EntityTranslationFilter
+
+Query builder with static factories:
+
+```csharp
+EntityTranslationFilter.ByEntity(entityGuid);
+EntityTranslationFilter.ByEntityAndCulture(entityGuid, "sk");
+EntityTranslationFilter.ByEntityFieldAndCulture(entityGuid, "Name", "sk");
+EntityTranslationFilter.ByEntityType("Product");
+EntityTranslationFilter.ByEntityTypeAndCulture("Product", "sk");
+```

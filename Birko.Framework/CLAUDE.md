@@ -198,8 +198,10 @@ Birko Framework is a modular .NET framework providing data access, communication
 ### Localization
 - **Birko.Localization** - Translation framework with culture fallback chains, CLDR pluralization, JSON/RESX/InMemory providers
 - **Birko.Localization.Data** - Database-backed translation provider (any Birko.Data store), namespace scoping, TTL cache
+- **Birko.Data.Localization** - Entity-level localization: ILocalizable interface, EntityTranslationModel, store decorator wrappers (sync/async, singular/bulk)
 - **Birko.Localization.Tests** - Unit tests for localization (providers, pluralizer, settings, formatters)
 - **Birko.Localization.Data.Tests** - Unit tests for database translation provider (CRUD, namespaces, caching, filters)
+- **Birko.Data.Localization.Tests** - Unit tests for entity localization (model, filter, sync/async wrapper tests)
 
 ## Architecture
 
@@ -378,6 +380,8 @@ Each project has its own CLAUDE.md with specific details:
 | Birko.Localization.Data | [../Birko.Localization.Data/CLAUDE.md](../Birko.Localization.Data/CLAUDE.md) |
 | Birko.Localization.Tests | [../Birko.Localization.Tests/CLAUDE.md](../Birko.Localization.Tests/CLAUDE.md) |
 | Birko.Localization.Data.Tests | [../Birko.Localization.Data.Tests/CLAUDE.md](../Birko.Localization.Data.Tests/CLAUDE.md) |
+| Birko.Data.Localization | [../Birko.Data.Localization/CLAUDE.md](../Birko.Data.Localization/CLAUDE.md) |
+| Birko.Data.Localization.Tests | [../Birko.Data.Localization.Tests/CLAUDE.md](../Birko.Data.Localization.Tests/CLAUDE.md) |
 
 ## Key Patterns
 

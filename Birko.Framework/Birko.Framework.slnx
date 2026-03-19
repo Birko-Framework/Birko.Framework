@@ -166,6 +166,7 @@
     <Project Path="../Birko.Time.Tests/Birko.Time.Tests.csproj" />
     <Project Path="../Birko.Localization.Tests/Birko.Localization.Tests.csproj" />
     <Project Path="../Birko.Localization.Data.Tests/Birko.Localization.Data.Tests.csproj" />
+    <Project Path="../Birko.Data.Localization.Tests/Birko.Data.Localization.Tests.csproj" />
   </Folder>
   <Folder Name="/Time/">
     <Project Path="../Birko.Time/Birko.Time.shproj" />
@@ -182,6 +183,7 @@
   <Folder Name="/Localization/">
     <Project Path="../Birko.Localization/Birko.Localization.shproj" />
     <Project Path="../Birko.Localization.Data/Birko.Localization.Data.shproj" />
+    <Project Path="../Birko.Data.Localization/Birko.Data.Localization.shproj" />
   </Folder>
   <Folder Name="/Serialization/">
     <Project Path="../Birko.Serialization/Birko.Serialization.shproj" />
