@@ -35,6 +35,41 @@ namespace Birko.Data.SQL.Connectors
         }
 
 
+        /// <summary>
+        /// Detects SQL Server transient errors: deadlocks (1205), timeouts (-2),
+        /// transport-level errors (20), login failures (64), resource busy (49920), etc.
+        /// </summary>
+        public override bool IsTransientException(Exception ex)
+        {
+            if (base.IsTransientException(ex)) return true;
+            if (ex is SqlException sqlEx)
+            {
+                foreach (SqlError error in sqlEx.Errors)
+                {
+                    switch (error.Number)
+                    {
+                        case -2:     // Timeout
+                        case 20:     // Transport-level error
+                        case 64:     // Connection was established but login failed
+                        case 233:    // Connection closed by server
+                        case 1205:   // Deadlock victim
+                        case 10053:  // Transport-level error (network)
+                        case 10054:  // Connection reset by peer
+                        case 10060:  // Network timeout
+                        case 40143:  // Connection could not be initialized
+                        case 40197:  // Service error processing request
+                        case 40501:  // Service busy
+                        case 40613:  // Database unavailable
+                        case 49918:  // Not enough resources
+                        case 49919:  // Cannot process request (too many operations)
+                        case 49920:  // Cannot process request (too many operations)
+                            return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         public override string QuoteIdentifier(string identifier)
         {
             return "[" + identifier.Replace("]", "]]") + "]";
