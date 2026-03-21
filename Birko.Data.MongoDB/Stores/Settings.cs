@@ -80,6 +80,10 @@ namespace Birko.Data.MongoDB.Stores
                 queryParams.Add("tls=true");
             }
 
+            // Enable retry for transient failures (MongoDB 3.6+)
+            queryParams.Add("retryWrites=true");
+            queryParams.Add("retryReads=true");
+
             if (queryParams.Count > 0)
             {
                 connectionString += "?" + string.Join("&", queryParams);
