@@ -2,6 +2,7 @@ using Birko.Data.Models;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using Raven.Client.Documents;
+using Raven.Client.Documents.Conventions;
 using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Operations.Indexes;
 using Raven.Client.ServerWide;
@@ -87,6 +88,12 @@ public class RavenDBStore<T>
     }
 
     /// <summary>
+    /// Request timeout for RavenDB operations. Default is 30 seconds.
+    /// Set before calling SetSettings to take effect.
+    /// </summary>
+    public static TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Sets the connection settings via the ISettings interface.
     /// </summary>
     /// <param name="settings">The settings to use.</param>
@@ -97,7 +104,11 @@ public class RavenDBStore<T>
             _documentStore = new DocumentStore
             {
                 Urls = new[] { remote.Location },
-                Database = remote.Name
+                Database = remote.Name,
+                Conventions = new DocumentConventions
+                {
+                    RequestTimeout = RequestTimeout
+                }
             };
             _documentStore.Initialize();
         }
