@@ -6,9 +6,9 @@ namespace Birko.Data.Models
 {
     public abstract partial class AbstractLogModel : AbstractModel, ICopyable<AbstractLogModel>, ILoadable<ILogEntity>, ITimestamped
     {
-        public virtual DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public virtual DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-        public virtual DateTime? PrevUpdatedAt { get; set; } = null;
+        public virtual DateTime CreatedAt { get; set; }
+        public virtual DateTime UpdatedAt { get; set; }
+        public virtual DateTime? PrevUpdatedAt { get; set; }
 
         public AbstractLogModel CopyTo(AbstractLogModel? clone = null)
         {
