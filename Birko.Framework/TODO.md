@@ -54,11 +54,11 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 
 ## Remaining Work
 
-### Birko.Data.Patterns — Timestamp Audit (Pending)
+### Birko.Data.Patterns — Timestamp Audit (Done)
 **Priority:** Medium
 
-- [ ] Consider removing `AbstractLogModel` field defaults (`= DateTime.UtcNow`) now that `TimestampStoreWrapper` is the canonical timestamp source
-- [ ] Add `Birko.Data.Patterns.Tests` project with unit tests for all Timestamp wrappers
+- [x] Removed `AbstractLogModel` field defaults (`= DateTime.UtcNow`) — `TimestampStoreWrapper` is the canonical timestamp source
+- [x] Added unit tests for Timestamp, SoftDelete, and Audit wrappers in `Birko.Data.Tests/Decorators/`
 
 ---
 
