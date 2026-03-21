@@ -1,4 +1,7 @@
 using System;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Birko.Data.InfluxDB.Stores
 {
@@ -49,12 +52,31 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <summary>
+        /// Retry policy for transient InfluxDB failures (HTTP errors, timeouts).
+        /// Default is no retries. Set to RetryPolicy.Default for 3 retries with exponential backoff.
+        /// </summary>
+        public RetryPolicy RetryPolicy { get; set; } = RetryPolicy.None;
+
+        /// <summary>
         /// Gets the InfluxDB connection string (server URL).
         /// </summary>
         /// <returns>The server URL.</returns>
         public virtual string GetConnectionString()
         {
             return Location;
+        }
+
+        /// <summary>
+        /// Determines whether an exception from InfluxDB is transient and should be retried.
+        /// </summary>
+        public virtual bool IsTransientException(Exception ex)
+        {
+            if (ex is TimeoutException) return true;
+            if (ex is HttpRequestException) return true;
+            if (ex is TaskCanceledException tce && tce.InnerException is TimeoutException) return true;
+            // InfluxDB API errors with 429 (too many requests) or 503 (service unavailable)
+            if (ex.Message.Contains("429") || ex.Message.Contains("503") || ex.Message.Contains("unavailable")) return true;
+            return false;
         }
 
         /// <inheritdoc />

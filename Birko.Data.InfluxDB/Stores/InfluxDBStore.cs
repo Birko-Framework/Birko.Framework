@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading;
 
 namespace Birko.Data.InfluxDB.Stores
 {
@@ -119,13 +120,16 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                var queryApi = Client.GetQueryApi();
-                var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
-                if (records != null && records.Count > 0 && records[0].Records.Count > 0)
+                return ExecuteWithRetry(() =>
                 {
-                    return MapRecordToModel(records[0].Records.Last());
-                }
-                return null;
+                    var queryApi = Client.GetQueryApi();
+                    var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
+                    if (records != null && records.Count > 0 && records[0].Records.Count > 0)
+                    {
+                        return MapRecordToModel(records[0].Records.Last());
+                    }
+                    return null;
+                });
             }
             catch (Exception ex)
             {
@@ -146,19 +150,22 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                var queryApi = Client.GetQueryApi();
-                var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
-                if (records != null && records.Count > 0 && records[0].Records.Count > 0)
+                return ExecuteWithRetry(() =>
                 {
-                    var items = records[0].Records.Select(r => MapRecordToModel(r)).Where(x => x != null)!;
-                    if (filter != null)
+                    var queryApi = Client.GetQueryApi();
+                    var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
+                    if (records != null && records.Count > 0 && records[0].Records.Count > 0)
                     {
-                        var compiled = filter.Compile();
-                        return items.FirstOrDefault(x => x != null && compiled(x));
+                        var items = records[0].Records.Select(r => MapRecordToModel(r)).Where(x => x != null)!;
+                        if (filter != null)
+                        {
+                            var compiled = filter.Compile();
+                            return items.FirstOrDefault(x => x != null && compiled(x));
+                        }
+                        return items.FirstOrDefault();
                     }
-                    return items.FirstOrDefault();
-                }
-                return null;
+                    return null;
+                });
             }
             catch (Exception ex)
             {
@@ -187,17 +194,20 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                var queryApi = Client.GetQueryApi();
-                var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
-                if (records != null && records.Count > 0 && records[0].Records.Count > 0)
+                return ExecuteWithRetry(() =>
                 {
-                    var countValue = records[0].Records[0].GetValue();
-                    if (countValue != null)
+                    var queryApi = Client.GetQueryApi();
+                    var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
+                    if (records != null && records.Count > 0 && records[0].Records.Count > 0)
                     {
-                        return Convert.ToInt64(countValue);
+                        var countValue = records[0].Records[0].GetValue();
+                        if (countValue != null)
+                        {
+                            return Convert.ToInt64(countValue);
+                        }
                     }
-                }
-                return 0;
+                    return 0L;
+                });
             }
             catch (Exception ex)
             {
@@ -216,10 +226,13 @@ namespace Birko.Data.InfluxDB.Stores
             try
             {
                 var point = ModelToPoint(data);
-                using (var writeApi = Client.GetWriteApi())
+                ExecuteWithRetry(() =>
                 {
-                    writeApi.WritePoint(point, _settings.Bucket, _settings.Organization);
-                }
+                    using (var writeApi = Client.GetWriteApi())
+                    {
+                        writeApi.WritePoint(point, _settings.Bucket, _settings.Organization);
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -239,10 +252,13 @@ namespace Birko.Data.InfluxDB.Stores
             try
             {
                 var point = ModelToPoint(data);
-                using (var writeApi = Client.GetWriteApi())
+                ExecuteWithRetry(() =>
                 {
-                    writeApi.WritePoint(point, _settings.Bucket, _settings.Organization);
-                }
+                    using (var writeApi = Client.GetWriteApi())
+                    {
+                        writeApi.WritePoint(point, _settings.Bucket, _settings.Organization);
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -257,14 +273,17 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                var deleteApi = Client.GetDeleteApi();
-                var predicate = $"_measurement=\"{MeasurementName}\" AND Guid=\"{data.Guid}\"";
-                deleteApi.Delete(
-                    DateTime.UnixEpoch,
-                    DateTime.UtcNow.AddYears(1),
-                    predicate,
-                    _settings.Bucket,
-                    _settings.Organization).GetAwaiter().GetResult();
+                ExecuteWithRetry(() =>
+                {
+                    var deleteApi = Client.GetDeleteApi();
+                    var predicate = $"_measurement=\"{MeasurementName}\" AND Guid=\"{data.Guid}\"";
+                    deleteApi.Delete(
+                        DateTime.UnixEpoch,
+                        DateTime.UtcNow.AddYears(1),
+                        predicate,
+                        _settings.Bucket,
+                        _settings.Organization).GetAwaiter().GetResult();
+                });
             }
             catch (Exception ex)
             {
@@ -306,30 +325,33 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                var queryApi = Client.GetQueryApi();
-                var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
-                var items = new List<T>();
-                if (records != null)
+                return ExecuteWithRetry(() =>
                 {
-                    foreach (var table in records)
+                    var queryApi = Client.GetQueryApi();
+                    var records = queryApi.QueryAsync(flux, _settings.Organization).GetAwaiter().GetResult();
+                    var items = new List<T>();
+                    if (records != null)
                     {
-                        foreach (var record in table.Records)
+                        foreach (var table in records)
                         {
-                            var model = MapRecordToModel(record);
-                            if (model != null)
+                            foreach (var record in table.Records)
                             {
-                                items.Add(model);
+                                var model = MapRecordToModel(record);
+                                if (model != null)
+                                {
+                                    items.Add(model);
+                                }
                             }
                         }
                     }
-                }
 
-                if (filter != null)
-                {
-                    var compiled = filter.Compile();
-                    return items.Where(compiled).ToList();
-                }
-                return items;
+                    if (filter != null)
+                    {
+                        var compiled = filter.Compile();
+                        return (IEnumerable<T>)items.Where(compiled).ToList();
+                    }
+                    return (IEnumerable<T>)items;
+                });
             }
             catch (Exception ex)
             {
@@ -355,10 +377,13 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                using (var writeApi = Client.GetWriteApi())
+                ExecuteWithRetry(() =>
                 {
-                    writeApi.WritePoints(points, _settings.Bucket, _settings.Organization);
-                }
+                    using (var writeApi = Client.GetWriteApi())
+                    {
+                        writeApi.WritePoints(points, _settings.Bucket, _settings.Organization);
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -383,10 +408,13 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                using (var writeApi = Client.GetWriteApi())
+                ExecuteWithRetry(() =>
                 {
-                    writeApi.WritePoints(points, _settings.Bucket, _settings.Organization);
-                }
+                    using (var writeApi = Client.GetWriteApi())
+                    {
+                        writeApi.WritePoints(points, _settings.Bucket, _settings.Organization);
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -408,21 +436,78 @@ namespace Birko.Data.InfluxDB.Stores
 
             try
             {
-                var deleteApi = Client.GetDeleteApi();
-                foreach (var guid in guids)
+                ExecuteWithRetry(() =>
                 {
-                    var predicate = $"_measurement=\"{MeasurementName}\" AND Guid=\"{guid}\"";
-                    deleteApi.Delete(
-                        DateTime.UnixEpoch,
-                        DateTime.UtcNow.AddYears(1),
-                        predicate,
-                        _settings.Bucket,
-                        _settings.Organization).GetAwaiter().GetResult();
-                }
+                    var deleteApi = Client.GetDeleteApi();
+                    foreach (var guid in guids)
+                    {
+                        var predicate = $"_measurement=\"{MeasurementName}\" AND Guid=\"{guid}\"";
+                        deleteApi.Delete(
+                            DateTime.UnixEpoch,
+                            DateTime.UtcNow.AddYears(1),
+                            predicate,
+                            _settings.Bucket,
+                            _settings.Organization).GetAwaiter().GetResult();
+                    }
+                });
             }
             catch (Exception ex)
             {
                 throw new InvalidOperationException($"Failed to bulk delete from InfluxDB", ex);
+            }
+        }
+
+        #endregion
+
+        #region Retry
+
+        /// <summary>
+        /// Executes an action with retry logic for transient InfluxDB failures.
+        /// </summary>
+        protected void ExecuteWithRetry(Action action)
+        {
+            if (_settings == null || _settings.RetryPolicy.MaxRetries <= 0)
+            {
+                action();
+                return;
+            }
+
+            var policy = _settings.RetryPolicy;
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    action();
+                    return;
+                }
+                catch (Exception ex) when (attempt < policy.MaxRetries && _settings.IsTransientException(ex))
+                {
+                    Thread.Sleep(policy.GetDelay(attempt + 1));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Executes a function with retry logic for transient InfluxDB failures.
+        /// </summary>
+        protected TResult ExecuteWithRetry<TResult>(Func<TResult> action)
+        {
+            if (_settings == null || _settings.RetryPolicy.MaxRetries <= 0)
+            {
+                return action();
+            }
+
+            var policy = _settings.RetryPolicy;
+            for (int attempt = 0; ; attempt++)
+            {
+                try
+                {
+                    return action();
+                }
+                catch (Exception ex) when (attempt < policy.MaxRetries && _settings.IsTransientException(ex))
+                {
+                    Thread.Sleep(policy.GetDelay(attempt + 1));
+                }
             }
         }
 
