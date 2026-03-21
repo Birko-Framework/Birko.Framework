@@ -181,7 +181,7 @@ Pluggable random number generation with testable abstractions.
 
 ### Birko.Data.SQL
 - [x] Index management (SqlIndexManager + PostgreSql, MSSql, SqLite, MySql dialect subclasses)
-- [ ] Connection resiliency and retry logic
+- [x] Connection resiliency and retry logic (RetryPolicy on AbstractConnectorBase, provider-specific IsTransientException)
 - [ ] Bulk copy for all SQL providers (currently MSSql only)
 - [ ] Query caching for frequently executed queries
 - [ ] Database-specific optimizations
@@ -190,13 +190,21 @@ Pluggable random number generation with testable abstractions.
 - [x] Index management utilities
 - [x] Re-indexing helpers
 - [x] IIndexManager adapter (ElasticSearchIndexManagerAdapter)
+- [x] Connection resiliency (MaxRetries + RequestTimeout on ConnectionSettings)
 - [ ] Search result highlighting
 
 ### Birko.Data.MongoDB
 - [x] Index management utilities (MongoDBIndexManager — create, drop, list, exists, info, compound/text/geospatial indexes)
 - [x] TTL index support for auto-expiring documents
+- [x] Connection resiliency (retryWrites=true, retryReads=true in connection string)
 - [ ] Change stream support
 - [ ] Aggregation pipeline builders
+
+### Birko.Data.RavenDB
+- [x] Connection resiliency (RequestTimeout on DocumentConventions)
+
+### Birko.Data.InfluxDB
+- [x] Connection resiliency (RetryPolicy on Settings, transient error detection, sync/async retry wrappers on all CRUD operations)
 
 ### Birko.Communication
 - [ ] GraphQL client
