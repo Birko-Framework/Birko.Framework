@@ -199,6 +199,23 @@ namespace Birko.Data.SQL.Connectors
             }, true);
         }
 
+        public override string CreateIndexSql(string tableName, Tables.IndexDefinition index)
+        {
+            var columns = string.Join(", ", index.Columns.Select(c =>
+                QuoteIdentifier(c.ColumnName) + (c.IsDescending ? " DESC" : "")));
+
+            var indexName = index.Name.Replace("'", "''");
+            return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{tableName.Replace("'", "''")}')) "
+                 + $"CREATE INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+        }
+
+        public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
+        {
+            var indexName = index.Name.Replace("'", "''");
+            return $"IF EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{tableName.Replace("'", "''")}')) "
+                 + $"DROP INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)}";
+        }
+
         #region Native Bulk Operations
 
         public void BulkInsert(Type type, IEnumerable<object> models)
