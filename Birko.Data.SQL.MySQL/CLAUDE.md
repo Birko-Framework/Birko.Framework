@@ -25,6 +25,12 @@ MySQL implementation of Birko.Data.SQL stores and repositories.
 - `AsyncMySQLRepository<T>` - Async repository
 - `AsyncMySQLBulkRepository<T>` - Async bulk repository
 
+### Bulk Operations
+- Multi-value INSERT batching for optimized bulk inserts
+- Batches multiple rows into single `INSERT INTO ... VALUES (...), (...), ...` statements
+- Configurable batch size for memory/performance tuning
+- Significantly faster than individual INSERT statements
+
 ### Connector
 - `MySQLConnector` - MySQL connection management
 

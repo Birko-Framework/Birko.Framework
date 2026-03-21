@@ -6,6 +6,7 @@ MySQL implementation of Birko.Data.SQL stores and repositories.
 
 - MySQL stores (sync/async, single/bulk)
 - Bulk operations using MySQL bulk loader
+- Optimized multi-value INSERT batching
 - MySQL connector management
 - ON DUPLICATE KEY UPDATE (upsert) support
 
@@ -38,6 +39,29 @@ public class CustomerStore : MySQLStore<Customer>
         cmd.Parameters.AddWithValue("@Email", item.Email);
         cmd.ExecuteNonQuery();
         return item.Id;
+    }
+}
+```
+
+### Multi-Value INSERT Batching
+
+MySQL bulk stores use optimized multi-value INSERT statements for efficient batch operations:
+
+```csharp
+using Birko.Data.SQL.MySQL.Stores;
+
+public class CustomerBulkStore : AsyncMySQLBulkStore<Customer>
+{
+    public override async Task CreateAsync(IEnumerable<Customer> data,
+        StoreDataDelegate<Customer>? storeDelegate = null,
+        CancellationToken ct = default)
+    {
+        // Automatically batches into multi-value INSERT statements:
+        // INSERT INTO customers (id, name, email) VALUES
+        //   (@Id0, @Name0, @Email0),
+        //   (@Id1, @Name1, @Email1),
+        //   ...
+        await base.CreateAsync(data, storeDelegate, ct);
     }
 }
 ```

@@ -20,6 +20,8 @@ namespace Birko.Data.SQL.Connectors
     /// </summary>
     public partial class MySQLConnector : AbstractConnector
     {
+        private const int BulkInsertBatchSize = 1000;
+
         /// <summary>
         /// Initializes a new instance of the MySQLConnector class.
         /// </summary>
@@ -242,33 +244,57 @@ namespace Birko.Data.SQL.Connectors
             if (!fields.Any())
                 return;
 
+            var fieldCount = fields.Count;
+            var maxBatchSize = Math.Min(BulkInsertBatchSize, 65535 / fieldCount);
+            if (maxBatchSize < 1)
+                maxBatchSize = 1;
+
+            var columnNames = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
+            var modelList = models as IList<object> ?? models.ToList();
+
             using var connection = (MySqlConnection)CreateConnection(_settings);
             connection.Open();
             using var transaction = connection.BeginTransaction();
             string? commandText = null;
             try
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-
-                var columnNames = string.Join(", ", fields.Select(f => f.Name));
-                var paramNames = string.Join(", ", fields.Select(f => "@INS_" + f.Name.Replace(".", "")));
-                command.CommandText = "INSERT INTO " + QuoteIdentifier(table.Name)
-                    + " (" + columnNames + ") VALUES (" + paramNames + ")";
-                commandText = command.CommandText;
-
-                foreach (var field in fields)
+                for (var batchStart = 0; batchStart < modelList.Count; batchStart += maxBatchSize)
                 {
-                    command.Parameters.Add(new MySqlParameter("@INS_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
+                    var batchEnd = Math.Min(batchStart + maxBatchSize, modelList.Count);
+                    var batchCount = batchEnd - batchStart;
 
-                foreach (var model in models)
-                {
-                    foreach (var field in fields)
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
+
+                    var sb = new StringBuilder();
+                    sb.Append("INSERT INTO ");
+                    sb.Append(QuoteIdentifier(table.Name));
+                    sb.Append(" (");
+                    sb.Append(columnNames);
+                    sb.Append(") VALUES ");
+
+                    for (var rowIdx = 0; rowIdx < batchCount; rowIdx++)
                     {
-                        command.Parameters["@INS_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        if (rowIdx > 0)
+                            sb.Append(", ");
+
+                        sb.Append('(');
+                        for (var fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
+                        {
+                            if (fieldIdx > 0)
+                                sb.Append(", ");
+
+                            var paramName = "@P" + rowIdx + "_" + fieldIdx;
+                            sb.Append(paramName);
+
+                            var model = modelList[batchStart + rowIdx];
+                            command.Parameters.Add(new MySqlParameter(paramName, fields[fieldIdx].Write(model) ?? DBNull.Value));
+                        }
+                        sb.Append(')');
                     }
+
+                    command.CommandText = sb.ToString();
+                    commandText = command.CommandText;
                     command.ExecuteNonQuery();
                 }
 
@@ -294,34 +320,59 @@ namespace Birko.Data.SQL.Connectors
             if (!fields.Any())
                 return;
 
+            var fieldCount = fields.Count;
+            var maxBatchSize = Math.Min(BulkInsertBatchSize, 65535 / fieldCount);
+            if (maxBatchSize < 1)
+                maxBatchSize = 1;
+
+            var columnNames = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
+            var modelList = models as IList<object> ?? models.ToList();
+
             using var connection = (MySqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
             using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
             string? commandText = null;
             try
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = (MySqlTransaction)transaction;
-
-                var columnNames = string.Join(", ", fields.Select(f => f.Name));
-                var paramNames = string.Join(", ", fields.Select(f => "@INS_" + f.Name.Replace(".", "")));
-                command.CommandText = "INSERT INTO " + QuoteIdentifier(table.Name)
-                    + " (" + columnNames + ") VALUES (" + paramNames + ")";
-                commandText = command.CommandText;
-
-                foreach (var field in fields)
-                {
-                    command.Parameters.Add(new MySqlParameter("@INS_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                await command.PrepareAsync(ct).ConfigureAwait(false);
-
-                foreach (var model in models)
+                for (var batchStart = 0; batchStart < modelList.Count; batchStart += maxBatchSize)
                 {
                     ct.ThrowIfCancellationRequested();
-                    foreach (var field in fields)
+
+                    var batchEnd = Math.Min(batchStart + maxBatchSize, modelList.Count);
+                    var batchCount = batchEnd - batchStart;
+
+                    using var command = connection.CreateCommand();
+                    command.Transaction = (MySqlTransaction)transaction;
+
+                    var sb = new StringBuilder();
+                    sb.Append("INSERT INTO ");
+                    sb.Append(QuoteIdentifier(table.Name));
+                    sb.Append(" (");
+                    sb.Append(columnNames);
+                    sb.Append(") VALUES ");
+
+                    for (var rowIdx = 0; rowIdx < batchCount; rowIdx++)
                     {
-                        command.Parameters["@INS_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        if (rowIdx > 0)
+                            sb.Append(", ");
+
+                        sb.Append('(');
+                        for (var fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
+                        {
+                            if (fieldIdx > 0)
+                                sb.Append(", ");
+
+                            var paramName = "@P" + rowIdx + "_" + fieldIdx;
+                            sb.Append(paramName);
+
+                            var model = modelList[batchStart + rowIdx];
+                            command.Parameters.Add(new MySqlParameter(paramName, fields[fieldIdx].Write(model) ?? DBNull.Value));
+                        }
+                        sb.Append(')');
                     }
+
+                    command.CommandText = sb.ToString();
+                    commandText = command.CommandText;
                     await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                 }
 
