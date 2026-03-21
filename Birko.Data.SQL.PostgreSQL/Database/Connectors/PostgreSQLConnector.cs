@@ -29,6 +29,33 @@ namespace Birko.Data.SQL.Connectors
             OnException += PostgreSQLConnector_OnException;
         }
 
+        /// <summary>
+        /// Detects PostgreSQL transient errors: deadlocks (40P01), serialization failures (40001),
+        /// connection exceptions (08xxx), insufficient resources (53xxx), operator intervention (57xxx).
+        /// </summary>
+        public override bool IsTransientException(Exception ex)
+        {
+            if (base.IsTransientException(ex)) return true;
+            if (ex is NpgsqlException npgsqlEx && npgsqlEx is PostgresException pgEx)
+            {
+                var code = pgEx.SqlState;
+                if (code != null)
+                {
+                    // Class 08 — Connection Exception
+                    if (code.StartsWith("08")) return true;
+                    // Class 40 — Transaction Rollback (deadlock, serialization failure)
+                    if (code.StartsWith("40")) return true;
+                    // Class 53 — Insufficient Resources (disk full, out of memory, too many connections)
+                    if (code.StartsWith("53")) return true;
+                    // Class 57 — Operator Intervention (crash recovery, cannot connect now)
+                    if (code.StartsWith("57")) return true;
+                }
+            }
+            // Npgsql wrapper exceptions (broken connection)
+            if (ex is NpgsqlException && ex.InnerException is System.IO.IOException) return true;
+            return false;
+        }
+
         private void PostgreSQLConnector_OnException(Exception ex, string? commandText)
         {
             if (!IsInitializing && ex.Message.Contains("does not exist"))
