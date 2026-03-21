@@ -163,7 +163,7 @@ public class TimestampStoreWrapperTests
         wrapper.Create(model);
 
         var laterTime = FixedTime.AddHours(1);
-        clock.SetUtcNow(laterTime);
+        clock.SetTime(laterTime);
         wrapper.Update(model);
 
         model.PrevUpdatedAt.Should().Be(FixedTime);
@@ -182,11 +182,11 @@ public class TimestampStoreWrapperTests
         wrapper.Create(model);
 
         var time2 = FixedTime.AddHours(1);
-        clock.SetUtcNow(time2);
+        clock.SetTime(time2);
         wrapper.Update(model);
 
         var time3 = FixedTime.AddHours(2);
-        clock.SetUtcNow(time3);
+        clock.SetTime(time3);
         wrapper.Update(model);
 
         model.PrevUpdatedAt.Should().Be(time2);
@@ -224,7 +224,7 @@ public class TimestampStoreWrapperTests
         wrapper.Create(model);
 
         var laterTime = FixedTime.AddHours(1);
-        clock.SetUtcNow(laterTime);
+        clock.SetTime(laterTime);
         wrapper.Save(model);
 
         model.PrevUpdatedAt.Should().Be(FixedTime);
@@ -331,7 +331,7 @@ public class TimestampStoreWrapperTests
         wrapper.Create(items);
 
         var laterTime = FixedTime.AddHours(1);
-        clock.SetUtcNow(laterTime);
+        clock.SetTime(laterTime);
         wrapper.Update(items);
 
         foreach (var item in items)
