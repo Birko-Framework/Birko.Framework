@@ -29,6 +29,31 @@ namespace Birko.Data.SQL.Connectors
             OnException += MySQLConnector_OnException;
         }
 
+        /// <summary>
+        /// Detects MySQL transient errors: deadlocks (1213), lock wait timeout (1205),
+        /// server gone (2006), lost connection (2013), too many connections (1040).
+        /// </summary>
+        public override bool IsTransientException(Exception ex)
+        {
+            if (base.IsTransientException(ex)) return true;
+            if (ex is MySqlException mysqlEx)
+            {
+                switch ((int)mysqlEx.ErrorCode)
+                {
+                    case 1040:  // Too many connections
+                    case 1205:  // Lock wait timeout exceeded
+                    case 1213:  // Deadlock found
+                    case 1317:  // Query execution was interrupted
+                    case 2002:  // Can't connect to local MySQL server
+                    case 2003:  // Can't connect to MySQL server
+                    case 2006:  // MySQL server has gone away
+                    case 2013:  // Lost connection during query
+                        return true;
+                }
+            }
+            return false;
+        }
+
         private void MySQLConnector_OnException(Exception ex, string? commandText)
         {
             if (!IsInitializing && (ex.Message.Contains("doesn't exist") || ex.Message.Contains("Table") && ex.Message.Contains("doesn't exist")))
