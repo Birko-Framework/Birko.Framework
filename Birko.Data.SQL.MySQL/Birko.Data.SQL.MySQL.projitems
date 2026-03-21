@@ -19,5 +19,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MySQLModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMySQLModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\MySqlIndexManager.cs" />
   </ItemGroup>
 </Project>
