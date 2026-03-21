@@ -27,7 +27,7 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 
 | Project | Status | Notes |
 |---------|--------|-------|
-| Birko.Data.Patterns | Done | UoW, Paging, Specification, SoftDelete, Audit, Timestamp, Concurrency |
+| Birko.Data.Patterns | Done | UoW, Paging, Specification, SoftDelete, Audit, Timestamp, Concurrency, IndexManagement |
 | Birko.Caching + Redis + Hybrid | Done | ICache, MemoryCache, RedisCache, HybridCache |
 | Birko.Validation | Done | Fluent validators, store wrappers |
 | Birko.BackgroundJobs + SQL + Redis | Done | Job queue, processor, dispatcher, scheduler |
@@ -180,6 +180,7 @@ Pluggable random number generation with testable abstractions.
 ## Existing Project Enhancements
 
 ### Birko.Data.SQL
+- [x] Index management (SqlIndexManager + PostgreSql, MSSql, SqLite, MySql dialect subclasses)
 - [ ] Connection resiliency and retry logic
 - [ ] Bulk copy for all SQL providers (currently MSSql only)
 - [ ] Query caching for frequently executed queries
@@ -188,13 +189,14 @@ Pluggable random number generation with testable abstractions.
 ### Birko.Data.ElasticSearch
 - [x] Index management utilities
 - [x] Re-indexing helpers
+- [x] IIndexManager adapter (ElasticSearchIndexManagerAdapter)
 - [ ] Search result highlighting
 
 ### Birko.Data.MongoDB
+- [x] Index management utilities (MongoDBIndexManager — create, drop, list, exists, info, compound/text/geospatial indexes)
+- [x] TTL index support for auto-expiring documents
 - [ ] Change stream support
 - [ ] Aggregation pipeline builders
-- [ ] Index management utilities (create, drop, list, ensure, compound/text/geospatial indexes)
-- [ ] TTL index support for auto-expiring documents
 
 ### Birko.Communication
 - [ ] GraphQL client
@@ -211,34 +213,14 @@ Pluggable random number generation with testable abstractions.
 ## Decisions Pending
 
 ### Birko.Data.RavenDB — Map/Reduce Index Management
-**Status:** Undecided | **Priority:** Medium
+**Status:** ✅ Done (Option A implemented) | **Priority:** Medium
 
-RavenDB Map/Reduce indexes pre-compute aggregations that are queryable like collections. Current RavenDB support has basic `CreateIndexAsync()`/`DropIndexAsync()` in `AsyncRavenDBStore` and migration helpers, but no comprehensive index management.
+RavenDBIndexManager implements IIndexManager with full lifecycle: create (from IndexDefinition or AbstractIndexCreationTask), drop, list, exists, info, reset, enable/disable, priority, stale detection. Map/reduce supported via Properties dict (`Map`, `Reduce` keys).
 
-**Key insight:** SQL.View is currently query-time only (generates SELECT+JOIN on-the-fly, no persistent DB views). RavenDB indexes are the opposite — they are persistent server-side objects that pre-compute results. This makes RavenDB indexes more performant for repeated aggregation queries.
-
-**Option A: IndexManager + manual index definitions (recommended)**
-- IndexManager: deploy, list, delete, reset, get stats, check staleness, wait for non-stale
-- Query helpers for Map/Reduce results with expression-based filters
-- Users define indexes via `AbstractIndexCreationTask` classes (RavenDB's native pattern)
-- Bulk deploy indexes from assembly
-- Pro: Simpler, leverages existing RavenDB patterns, pre-computed results
-- Con: No declarative attribute magic
-
-**Option B: Attribute-driven index definitions (like SQL.View pattern)**
-- `MapIndexAttribute`, `MapReduceIndexAttribute`, `IndexFieldAttribute`, `AggregateFieldAttribute`
-- Auto-generates `AbstractIndexCreationTask` from attributes
-- IndexManager for lifecycle + query helpers
-- Pro: Declarative, consistent pattern across framework
-- Con: More complex, RavenDB Map/Reduce only supports single-collection grouping (no cross-collection joins)
-
-**Comparison:**
-| SQL.View (current) | RavenDB Map/Reduce |
-|---|---|
-| Query-time SELECT with JOINs (no DDL) | Persistent server-side indexes |
-| Re-executes full query every time | Pre-computed, updated incrementally |
-| Cross-table JOINs | Single-collection grouping only |
-| COUNT/SUM/AVG/MIN/MAX via attributes | Reduce aggregation functions |
+**Remaining enhancements:**
+- [ ] Bulk deploy indexes from assembly
+- [ ] Query helpers for Map/Reduce results with expression-based filters
+- [ ] Attribute-driven index definitions (Option B — deferred, low priority)
 
 ### Birko.Data.SQL.View — Persistent View Support
 **Status:** In Progress | **Priority:** Medium
@@ -256,28 +238,47 @@ SQL.View currently only generates SELECT queries on-the-fly from attributes. It 
 
 ---
 
+## Test Coverage Gaps
+
+### Phase 1 — High Priority (Core Data Layer)
+- [ ] Birko.Validation.Tests — fluent validation rules, validator composition
+- [ ] Birko.Data.Patterns.Tests — Unit of Work, Soft Delete, Audit, Timestamp, Paging patterns
+- [ ] Birko.Data.Sync.Tests — core sync framework + at least Birko.Data.Sync.Sql.Tests
+
+### Phase 2 — Medium Priority (Platform Implementations)
+- [ ] Birko.BackgroundJobs.SQL.Tests + Birko.BackgroundJobs.Redis.Tests
+- [ ] Birko.Workflow.SQL.Tests
+- [ ] Birko.EventBus.Outbox.Tests
+- [ ] Birko.Communication.Camera.Tests
+
+### Phase 3 — Infrastructure
+- [ ] Birko.Data.Migrations.SQL.Tests
+- [ ] Birko.Caching.Redis.Tests
+- [ ] Birko.Communication.REST.Tests + Birko.Communication.WebSocket.Tests
+
+### Phase 4 — Lower Priority
+- [ ] Birko.Models.* — lightweight validation tests for model projects
+- [ ] Birko.Data.*.ViewModel — CRUD pattern tests for ViewModel repositories
+- [ ] Birko.Configuration, Birko.Contracts — mostly simple DTOs, low risk
+
+---
+
 ## Technical Debt
 
 - [ ] **MqttExtensions.cs** — MQTT v5 features (topic aliases, user properties). Low priority unless high-frequency IoT sensors need bandwidth optimization.
 
 ---
 
-## Symbio Alignment
+## Consumer Projects
 
-Symbio (`C:\Source\Symbio`) is the primary consumer (33 Birko projects referenced).
+See [docs/consumers.md](docs/consumers.md) for detailed per-project breakdown.
 
-**Already integrated:** All core data access, patterns, tenant, migrations, security, communication, caching, validation, background jobs, message queue, event bus, storage, messaging.
-
-**Lower priority for Symbio:**
-- **Birko.Time** — `DateTimeOffset` covers most needs unless business calendar/working hours required
-- **Birko.MessageQueue.Kafka/RabbitMQ** — MQTT + InMemory covers IoT workloads, only needed at higher scale
-
-**Symbio-specific features (not in Birko scope):**
-- Module discovery/registration (IModule, ModuleRegistrar, dependency graph)
-- Unified real-time notifier (SSE + WebSocket combined, tenant-aware)
-- Time-series store abstraction (generic over TimescaleDB)
-- Module-aware migration runner (topological dependency sorting)
-- SQL dialect abstraction (PostgreSqlDialect, MsSqlDialect)
+| Consumer | Birko Projects | Primary Data Store |
+|----------|---------------|-------------------|
+| Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES |
+| DraCode | 26 | SQLite |
+| Affiliate | 22 | Elasticsearch, InfluxDB |
+| FisData.Stock | 0 | *(inactive — models extracted to Birko.Models.*)* |
 
 ---
 
@@ -287,7 +288,8 @@ For implementation details, refer to:
 - [CLAUDE.md](./CLAUDE.md) — Framework overview
 - Individual project CLAUDE.md files
 - [docs/](docs/) folder for detailed documentation
+- [docs/consumers.md](docs/consumers.md) — Consumer project reference
 
 ---
 
-**Last Updated:** 2026-03-19
+**Last Updated:** 2026-03-20

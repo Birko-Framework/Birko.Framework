@@ -506,6 +506,7 @@ Extracted reusable models from FisData.Stock into framework:
   - [Multi-Tenancy](docs/tenant.md)
   - [Communication](docs/communication.md)
   - [Dependency Tree](docs/dependencies.md)
+  - [Consumer Projects](docs/consumers.md)
 
 ## Maintenance
 
