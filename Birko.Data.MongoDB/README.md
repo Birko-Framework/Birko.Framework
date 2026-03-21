@@ -56,6 +56,33 @@ var results = collection.Find(filter).ToList();
 - **MongoDBRepository\<T\>** / **MongoDBBulkRepository\<T\>**
 - **AsyncMongoDBRepository\<T\>** / **AsyncMongoDBBulkRepository\<T\>**
 
+### Index Management
+
+```csharp
+using Birko.Data.MongoDB.IndexManagement;
+using Birko.Data.Patterns.IndexManagement;
+
+var indexManager = new MongoDBIndexManager(mongoClient);
+
+// Create index via uniform IIndexManager interface
+await indexManager.CreateAsync(new IndexDefinition
+{
+    Name = "idx_email",
+    Fields = new[] { IndexField.Ascending("Email") },
+    Unique = true
+}, scope: "Users");
+
+// List all indexes on a collection
+var indexes = await indexManager.ListAsync(scope: "Users");
+
+// MongoDB-specific helpers
+await indexManager.CreateTtlIndexAsync("Sessions", "ExpiresAt", TimeSpan.FromHours(24));
+await indexManager.CreateTextIndexAsync("Products", "idx_search", new[] { "Name", "Description" });
+await indexManager.CreateCompoundIndexAsync("Orders", "idx_user_date",
+    new[] { IndexField.Ascending("UserId"), IndexField.Descending("CreatedAt") });
+await indexManager.DropAllAsync("TempCollection");
+```
+
 ## Related Projects
 
 - [Birko.Data.Core](../Birko.Data.Core/) - Models and core types

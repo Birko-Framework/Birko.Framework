@@ -21,5 +21,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\MongoDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMongoDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\MongoDbUnitOfWork.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\MongoDBIndexManager.cs" />
   </ItemGroup>
 </Project>
