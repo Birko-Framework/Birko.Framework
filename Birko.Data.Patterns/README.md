@@ -96,6 +96,54 @@ await uow.CommitAsync(); // or RollbackAsync()
 
 - **PagedResult\<T\>** - `Items`, `TotalCount`, `Page`, `PageSize`, `TotalPages`, `HasNextPage`, `HasPreviousPage`
 
+### Index Management
+
+Provider-agnostic abstractions for managing database indexes across all providers (SQL, MongoDB, RavenDB, ElasticSearch).
+
+```csharp
+// Uniform interface — works with any provider
+IIndexManager indexManager = GetProviderIndexManager();
+
+// Create an index
+await indexManager.CreateAsync(new IndexDefinition
+{
+    Name = "idx_user_email",
+    Fields = new[] { IndexField.Ascending("Email") },
+    Unique = true
+}, scope: "Users"); // scope = table/collection name
+
+// List all indexes
+var indexes = await indexManager.ListAsync(scope: "Users");
+
+// Check existence / get info / drop
+bool exists = await indexManager.ExistsAsync("idx_user_email", scope: "Users");
+IndexInfo? info = await indexManager.GetInfoAsync("idx_user_email", scope: "Users");
+await indexManager.DropAsync("idx_user_email", scope: "Users");
+```
+
+**Models:**
+- **IndexDefinition** — Name, Fields, Unique, Sparse, ExpireAfter, Properties
+- **IndexField** — Name, IsDescending (bool), FieldType (Standard/Text/Geo2d/Geo2dSphere/Hashed)
+  - Static factories: `Ascending()`, `Descending()`, `Text()`, `Hashed()`, `Geo2dSphere()`
+- **IndexInfo** — Name, Fields, Unique, Sparse, ExpireAfter, SizeInBytes, State, Properties
+- **IndexManagementException** — Typed exception with IndexName + Scope
+
+**Provider implementations:**
+- `SqlIndexManager` (base) + `PostgreSqlIndexManager`, `MSSqlIndexManager`, `SqLiteIndexManager`, `MySqlIndexManager`
+- `MongoDBIndexManager` — full CRUD + TTL, text, compound, geo indexes
+- `RavenDBIndexManager` — full CRUD + reset, enable/disable, priority, stale detection
+- `ElasticSearchIndexManagerAdapter` — wraps existing IndexManager, exposes `.Native` for ES-specific features
+
+### Specification
+
+- **ISpecification\<T\>** — `IsSatisfiedBy(T)`, composable with `And()`, `Or()`, `Not()`
+- **RuleSpecification\<T\>** — Bridges Birko.Rules `IRule` to the Specification pattern
+
+### Concurrency
+
+- **IVersioned** — Interface with `Version` (int) for optimistic concurrency
+- **VersionedStoreWrapper\<T\>** / async — Checks version on update, throws `ConcurrentUpdateException`
+
 ## Related Projects
 
 - [Birko.Data.Core](../Birko.Data.Core/) - Models and core types

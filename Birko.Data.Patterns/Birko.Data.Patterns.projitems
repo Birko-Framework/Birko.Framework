@@ -49,6 +49,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\TimestampBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncTimestampStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncTimestampBulkStoreWrapper.cs" />
+    <!-- IndexManagement -->
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexInfo.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexManagementException.cs" />
   </ItemGroup>
 
 </Project>
