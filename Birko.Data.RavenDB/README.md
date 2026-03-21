@@ -59,6 +59,39 @@ using (var session = Store.OpenSession())
 - **RavenDBRepository\<T\>** / **RavenDBBulkRepository\<T\>**
 - **AsyncRavenDBRepository\<T\>** / **AsyncRavenDBBulkRepository\<T\>**
 
+### Index Management
+
+```csharp
+using Birko.Data.RavenDB.IndexManagement;
+using Birko.Data.Patterns.IndexManagement;
+
+var indexManager = new RavenDBIndexManager(documentStore);
+
+// Create index via uniform IIndexManager interface
+await indexManager.CreateAsync(new IndexDefinition
+{
+    Name = "Orders/ByCustomer",
+    Fields = new[] { IndexField.Ascending("CustomerId") },
+    Properties = new Dictionary<string, object>
+    {
+        ["Map"] = "from o in docs.Orders select new { o.CustomerId, o.Total }"
+    }
+});
+
+// List all indexes, check stale
+var indexes = await indexManager.ListAsync();
+var stale = await indexManager.GetStaleIndexesAsync();
+
+// RavenDB-specific: reset, enable/disable, priority
+await indexManager.ResetAsync("Orders/ByCustomer");
+await indexManager.DisableAsync("Orders/ByCustomer");
+await indexManager.EnableAsync("Orders/ByCustomer");
+await indexManager.SetPriorityAsync("Orders/ByCustomer", IndexPriority.High);
+
+// Deploy from AbstractIndexCreationTask
+await indexManager.CreateFromTaskAsync<Orders_ByCustomer>();
+```
+
 ## Related Projects
 
 - [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
