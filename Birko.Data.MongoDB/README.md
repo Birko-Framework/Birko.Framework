@@ -8,6 +8,8 @@ MongoDB document-based storage implementation for the Birko Framework.
 - Bulk operations with InsertMany/BulkWrite
 - Flexible schema with embedded documents
 - Multi-document transactions (MongoDB 4.0+)
+- Change Streams for real-time data change notifications
+- Aggregation Pipeline Builder for complex data transformations
 - Index management
 
 ## Installation
@@ -55,6 +57,49 @@ var results = collection.Find(filter).ToList();
 
 - **MongoDBRepository\<T\>** / **MongoDBBulkRepository\<T\>**
 - **AsyncMongoDBRepository\<T\>** / **AsyncMongoDBBulkRepository\<T\>**
+
+### Change Streams
+
+Monitor real-time data changes on collections:
+
+```csharp
+using Birko.Data.MongoDB.Stores;
+
+// Watch for changes on a collection
+var pipeline = new EmptyPipelineDefinition<ChangeStreamDocument<Customer>>()
+    .Match(change => change.OperationType == ChangeStreamOperationType.Insert
+                  || change.OperationType == ChangeStreamOperationType.Update);
+
+using var cursor = await collection.WatchAsync(pipeline);
+
+await foreach (var change in cursor.ToAsyncEnumerable())
+{
+    Console.WriteLine($"Operation: {change.OperationType}, Key: {change.DocumentKey}");
+    var updatedDoc = change.FullDocument;
+    // Process the change...
+}
+```
+
+### Aggregation Pipeline Builder
+
+Build complex data transformation and analysis queries:
+
+```csharp
+using MongoDB.Driver;
+
+var pipeline = collection.Aggregate()
+    .Match(c => c.IsActive)
+    .Group(c => c.Region, g => new
+    {
+        Region = g.Key,
+        TotalOrders = g.Sum(c => c.OrderCount),
+        AverageSpend = g.Average(c => c.TotalSpend)
+    })
+    .SortByDescending(r => r.TotalOrders)
+    .Limit(10);
+
+var results = await pipeline.ToListAsync();
+```
 
 ### Index Management
 

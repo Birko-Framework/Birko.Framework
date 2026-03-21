@@ -26,6 +26,18 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - `AsyncMongoDBRepository<T>` - Async repository
 - `AsyncMongoDBBulkRepository<T>` - Async bulk repository
 
+### Change Streams
+- Real-time data change notifications via MongoDB Change Streams
+- Supports filtering by operation type (insert, update, delete, replace)
+- Uses `WatchAsync` on collections for async enumeration of changes
+- Requires MongoDB replica set or sharded cluster
+
+### Aggregation Pipeline
+- `Aggregate()` fluent pipeline builder for complex data transformations
+- Supports `Match`, `Group`, `Sort`, `Limit`, `Project`, `Unwind`, `Lookup` stages
+- Type-safe projections and grouping expressions
+- Executes server-side for efficient data processing
+
 ## Connection
 
 Connection string format:

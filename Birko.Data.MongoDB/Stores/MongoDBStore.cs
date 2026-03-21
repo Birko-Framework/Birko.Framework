@@ -1,4 +1,7 @@
 using Birko.Data.Filters;
+using Birko.Data.MongoDB.Aggregation;
+using Birko.Data.MongoDB.ChangeStreams;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using System;
 using System.Collections.Generic;
@@ -269,6 +272,110 @@ namespace Birko.Data.MongoDB.Stores
                 Collection.DeleteMany(TransactionContext, filter);
             else
                 Collection.DeleteMany(filter);
+        }
+
+        #endregion
+
+        #region Change Streams
+
+        /// <summary>
+        /// Watches the collection for changes and yields change events as they arrive.
+        /// This is a blocking operation. Requires a MongoDB replica set or sharded cluster.
+        /// </summary>
+        /// <param name="options">Optional change stream configuration.</param>
+        /// <returns>An enumerable of change stream events.</returns>
+        public IEnumerable<ChangeStreamEvent<T>> Watch(ChangeStreams.ChangeStreamOptions? options = null)
+        {
+            if (Collection == null)
+            {
+                yield break;
+            }
+
+            var driverOptions = new global::MongoDB.Driver.ChangeStreamOptions();
+            if (options != null)
+            {
+                driverOptions.FullDocument = options.FullDocument;
+
+                if (options.BatchSize.HasValue)
+                {
+                    driverOptions.BatchSize = options.BatchSize.Value;
+                }
+
+                if (options.MaxAwaitTime.HasValue)
+                {
+                    driverOptions.MaxAwaitTime = options.MaxAwaitTime.Value;
+                }
+
+                if (options.ResumeAfter != null)
+                {
+                    driverOptions.ResumeAfter = options.ResumeAfter;
+                }
+
+                if (options.StartAfter != null)
+                {
+                    driverOptions.StartAfter = options.StartAfter;
+                }
+            }
+
+            using var cursor = Collection.Watch(driverOptions);
+
+            while (cursor.MoveNext())
+            {
+                foreach (var change in cursor.Current)
+                {
+                    yield return MapChangeStreamDocument(change);
+                }
+            }
+        }
+
+        private static ChangeStreamEvent<T> MapChangeStreamDocument(ChangeStreamDocument<T> change)
+        {
+            var evt = new ChangeStreamEvent<T>
+            {
+                FullDocument = change.FullDocument,
+                ClusterTime = change.ClusterTime,
+                ResumeToken = change.ResumeToken
+            };
+
+            evt.OperationType = change.OperationType switch
+            {
+                global::MongoDB.Driver.ChangeStreamOperationType.Insert => ChangeStreams.ChangeStreamOperationType.Insert,
+                global::MongoDB.Driver.ChangeStreamOperationType.Update => ChangeStreams.ChangeStreamOperationType.Update,
+                global::MongoDB.Driver.ChangeStreamOperationType.Replace => ChangeStreams.ChangeStreamOperationType.Replace,
+                global::MongoDB.Driver.ChangeStreamOperationType.Delete => ChangeStreams.ChangeStreamOperationType.Delete,
+                global::MongoDB.Driver.ChangeStreamOperationType.Invalidate => ChangeStreams.ChangeStreamOperationType.Invalidate,
+                global::MongoDB.Driver.ChangeStreamOperationType.Drop => ChangeStreams.ChangeStreamOperationType.Drop,
+                _ => ChangeStreams.ChangeStreamOperationType.Invalidate
+            };
+
+            if (change.DocumentKey != null && change.DocumentKey.Contains("_id"))
+            {
+                var idValue = change.DocumentKey["_id"];
+                if (idValue.IsGuid)
+                {
+                    evt.DocumentKey = idValue.AsGuid;
+                }
+            }
+
+            return evt;
+        }
+
+        #endregion
+
+        #region Aggregation
+
+        /// <summary>
+        /// Creates a new aggregation pipeline builder bound to this store's collection.
+        /// </summary>
+        /// <returns>A new <see cref="AggregationPipelineBuilder{T}"/> instance.</returns>
+        public AggregationPipelineBuilder<T> Aggregate()
+        {
+            if (Collection == null)
+            {
+                throw new InvalidOperationException("Cannot create aggregation pipeline: store is not configured. Call SetSettings first.");
+            }
+
+            return new AggregationPipelineBuilder<T>(Collection);
         }
 
         #endregion
