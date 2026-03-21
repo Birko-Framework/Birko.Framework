@@ -12,13 +12,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Product.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ProductBySlug.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ProductList.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ProductPartnerCode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IProductManufacturer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IProductTags.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IProductProperties.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Product.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ProductPartnerCode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\IProductTags.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\IProductProperties.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\IProductManufacturer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Product.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ProductPartnerCode.cs" />
   </ItemGroup>
 </Project>
