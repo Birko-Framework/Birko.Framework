@@ -156,6 +156,59 @@ var product = await cache.GetOrSetAsync("product:99",
 
 `CacheSerializer` provides static `System.Text.Json` serialization for distributed backends. In-memory cache stores objects directly without serialization.
 
+## SQL Query Caching Integration
+
+Birko.Data.SQL provides a caching decorator that integrates with the caching layer to cache SQL query results with automatic invalidation on writes.
+
+### CachedAsyncDataBaseBulkStore
+
+Wraps any `AsyncDataBaseBulkStore` to add transparent read caching:
+
+```csharp
+using Birko.Data.SQL.Stores;
+using Birko.Data.SQL.Caching;
+
+var cacheOptions = new SqlCacheOptions
+{
+    DefaultExpiration = TimeSpan.FromMinutes(10),
+    KeyPrefix = "customers"
+};
+
+var innerStore = new AsyncPostgreSQLBulkStore<Customer>();
+var cachedStore = new CachedAsyncDataBaseBulkStore<NpgsqlConnection, Customer>(
+    innerStore, cache, cacheOptions);
+
+// Reads are cached automatically
+var customer = await cachedStore.ReadAsync(customerId);
+
+// Writes invalidate affected cache entries
+await cachedStore.CreateAsync(newCustomer);
+await cachedStore.UpdateAsync(existingCustomer);
+await cachedStore.DeleteAsync(customer);
+```
+
+### Cache Key Generation
+
+`SqlCacheKeyBuilder` produces deterministic cache keys from:
+- Entity type name
+- Query filter expressions
+- Pagination parameters (limit, offset)
+- Sort expressions
+
+### Invalidation Strategy
+
+Write operations (`CreateAsync`, `UpdateAsync`, `DeleteAsync`) automatically invalidate:
+- The specific entity key (by ID)
+- Prefix-based invalidation of list/query caches for the entity type
+
+### Configuration
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `DefaultExpiration` | 10 minutes | TTL for cached query results |
+| `KeyPrefix` | Entity type name | Prefix for all cache keys of this store |
+| `InvalidateOnWrite` | `true` | Automatically invalidate cache on write operations |
+
 ## See Also
 
 - [Birko.Caching](https://github.com/birko/Birko.Caching)

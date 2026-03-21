@@ -182,8 +182,8 @@ Pluggable random number generation with testable abstractions.
 ### Birko.Data.SQL
 - [x] Index management (SqlIndexManager + PostgreSql, MSSql, SqLite, MySql dialect subclasses)
 - [x] Connection resiliency and retry logic (RetryPolicy on AbstractConnectorBase, provider-specific IsTransientException)
-- [ ] Bulk copy for all SQL providers (currently MSSql only)
-- [ ] Query caching for frequently executed queries
+- [x] Bulk copy for all SQL providers (MSSql: SqlBulkCopy, PostgreSQL: COPY binary protocol, MySQL: multi-value INSERT batching, SQLite: transaction-batched prepared statements)
+- [x] Query caching for frequently executed queries (CachedAsyncDataBaseBulkStore decorator with ICache integration, SHA256 key builder, table-prefix invalidation on writes)
 - [ ] Database-specific optimizations
 
 ### Birko.Data.ElasticSearch
@@ -191,14 +191,14 @@ Pluggable random number generation with testable abstractions.
 - [x] Re-indexing helpers
 - [x] IIndexManager adapter (ElasticSearchIndexManagerAdapter)
 - [x] Connection resiliency (MaxRetries + RequestTimeout on ConnectionSettings)
-- [ ] Search result highlighting
+- [x] Search result highlighting (HighlightOptions, SearchResult<T>, HighlightedSearchResults<T>, SearchWithHighlights sync/async with NEST Highlight API)
 
 ### Birko.Data.MongoDB
 - [x] Index management utilities (MongoDBIndexManager — create, drop, list, exists, info, compound/text/geospatial indexes)
 - [x] TTL index support for auto-expiring documents
 - [x] Connection resiliency (retryWrites=true, retryReads=true in connection string)
-- [ ] Change stream support
-- [ ] Aggregation pipeline builders
+- [x] Change stream support (ChangeStreamEvent<T>, ChangeStreamOptions, WatchAsync/Watch on stores, resume token support)
+- [x] Aggregation pipeline builders (AggregationPipelineBuilder<T> with fluent Match/Group/Sort/Project/Limit/Skip/Unwind/Lookup/Count/AddFields, ToListAsync/FirstOrDefaultAsync execution)
 
 ### Birko.Data.RavenDB
 - [x] Connection resiliency (RequestTimeout on DocumentConventions)

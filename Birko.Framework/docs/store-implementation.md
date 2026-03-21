@@ -357,6 +357,26 @@ store.AddOnInit((connector) => {
 10. **CancellationToken**: All async methods accept `CancellationToken ct = default`
 11. **Connector property**: `protected set` - derived classes can modify
 
+## Caching Decorator
+
+`CachedAsyncDataBaseBulkStore<DB,T>` wraps any async bulk SQL store to add transparent query caching with automatic invalidation. See the [Caching Guide](caching.md#sql-query-caching-integration) for configuration details.
+
+```csharp
+var cachedStore = new CachedAsyncDataBaseBulkStore<NpgsqlConnection, Customer>(
+    innerStore, cache, new SqlCacheOptions { DefaultExpiration = TimeSpan.FromMinutes(10) });
+```
+
+## Provider-Specific Bulk Optimizations
+
+Each SQL provider implements bulk operations using the most efficient mechanism available:
+
+| Provider | Bulk Strategy | Description |
+|----------|--------------|-------------|
+| PostgreSQL | Npgsql COPY binary protocol | Streams rows in binary format, bypassing SQL parsing |
+| MySQL | Multi-value INSERT batching | Batches rows into `INSERT INTO ... VALUES (...), (...), ...` |
+| MSSQL | SqlBulkCopy | Uses SQL Server's native bulk copy API |
+| SQLite | Transaction batching | Groups inserts within a single transaction |
+
 ## Reference Implementations
 
 - **JSON Store** (`Birko.Data.JSON`) - Simple file-based implementation
