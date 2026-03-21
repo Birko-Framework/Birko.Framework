@@ -10,6 +10,7 @@ using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Fields;
 using Npgsql;
+using NpgsqlTypes;
 using PasswordSettings = Birko.Configuration.PasswordSettings;
 using RemoteSettings = Birko.Configuration.RemoteSettings;
 
@@ -246,6 +247,28 @@ namespace Birko.Data.SQL.Connectors
 
         #region Native Bulk Operations
 
+        private static NpgsqlDbType DbTypeToNpgsqlDbType(DbType dbType)
+        {
+            return dbType switch
+            {
+                DbType.Boolean => NpgsqlDbType.Boolean,
+                DbType.Byte or DbType.SByte => NpgsqlDbType.Smallint,
+                DbType.Single => NpgsqlDbType.Real,
+                DbType.Int16 or DbType.UInt16 => NpgsqlDbType.Smallint,
+                DbType.Int32 or DbType.UInt32 => NpgsqlDbType.Integer,
+                DbType.Int64 or DbType.UInt64 => NpgsqlDbType.Bigint,
+                DbType.Decimal or DbType.VarNumeric or DbType.Currency => NpgsqlDbType.Numeric,
+                DbType.Double => NpgsqlDbType.Double,
+                DbType.Guid => NpgsqlDbType.Uuid,
+                DbType.Date => NpgsqlDbType.Date,
+                DbType.Time => NpgsqlDbType.Time,
+                DbType.DateTime or DbType.DateTime2 => NpgsqlDbType.Timestamp,
+                DbType.DateTimeOffset => NpgsqlDbType.TimestampTz,
+                DbType.Binary or DbType.Object => NpgsqlDbType.Bytea,
+                _ => NpgsqlDbType.Text,
+            };
+        }
+
         public void BulkInsert(Type type, IEnumerable<object> models)
         {
             if (models == null || !models.Any())
@@ -259,42 +282,36 @@ namespace Birko.Data.SQL.Connectors
             if (!fields.Any())
                 return;
 
+            var columnList = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
+            var copyCommand = "COPY " + QuoteIdentifier(table.Name)
+                + " (" + columnList + ") FROM STDIN (FORMAT BINARY)";
+
             using var connection = (NpgsqlConnection)CreateConnection(_settings);
             connection.Open();
-            using var transaction = connection.BeginTransaction();
-            string? commandText = null;
             try
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-
-                var columnNames = string.Join(", ", fields.Select(f => f.Name));
-                var paramNames = string.Join(", ", fields.Select(f => "@INS_" + f.Name.Replace(".", "")));
-                command.CommandText = "INSERT INTO " + QuoteIdentifier(table.Name)
-                    + " (" + columnNames + ") VALUES (" + paramNames + ")";
-                commandText = command.CommandText;
-
-                foreach (var field in fields)
-                {
-                    command.Parameters.Add(new NpgsqlParameter("@INS_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
-
+                using var writer = connection.BeginBinaryImport(copyCommand);
                 foreach (var model in models)
                 {
+                    writer.StartRow();
                     foreach (var field in fields)
                     {
-                        command.Parameters["@INS_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        var value = field.Write(model);
+                        if (value == null)
+                        {
+                            writer.WriteNull();
+                        }
+                        else
+                        {
+                            writer.Write(value, DbTypeToNpgsqlDbType(field.Type));
+                        }
                     }
-                    command.ExecuteNonQuery();
                 }
-
-                transaction.Commit();
+                writer.Complete();
             }
             catch (Exception ex)
             {
-                transaction.Rollback();
-                InitException(ex, commandText ?? "BulkInsert into " + table.Name);
+                InitException(ex, copyCommand);
             }
         }
 
@@ -311,48 +328,41 @@ namespace Birko.Data.SQL.Connectors
             if (!fields.Any())
                 return;
 
+            var columnList = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
+            var copyCommand = "COPY " + QuoteIdentifier(table.Name)
+                + " (" + columnList + ") FROM STDIN (FORMAT BINARY)";
+
             using var connection = (NpgsqlConnection)CreateConnection(_settings);
             await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
             try
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = (NpgsqlTransaction)transaction;
-
-                var columnNames = string.Join(", ", fields.Select(f => f.Name));
-                var paramNames = string.Join(", ", fields.Select(f => "@INS_" + f.Name.Replace(".", "")));
-                command.CommandText = "INSERT INTO " + QuoteIdentifier(table.Name)
-                    + " (" + columnNames + ") VALUES (" + paramNames + ")";
-                commandText = command.CommandText;
-
-                foreach (var field in fields)
-                {
-                    command.Parameters.Add(new NpgsqlParameter("@INS_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                await command.PrepareAsync(ct).ConfigureAwait(false);
-
+                await using var writer = await connection.BeginBinaryImportAsync(copyCommand, ct).ConfigureAwait(false);
                 foreach (var model in models)
                 {
                     ct.ThrowIfCancellationRequested();
+                    await writer.StartRowAsync(ct).ConfigureAwait(false);
                     foreach (var field in fields)
                     {
-                        command.Parameters["@INS_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        var value = field.Write(model);
+                        if (value == null)
+                        {
+                            await writer.WriteNullAsync(ct).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await writer.WriteAsync(value, DbTypeToNpgsqlDbType(field.Type), ct).ConfigureAwait(false);
+                        }
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                 }
-
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
+                await writer.CompleteAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkInsertAsync into " + table.Name);
+                InitException(ex, copyCommand);
             }
         }
 

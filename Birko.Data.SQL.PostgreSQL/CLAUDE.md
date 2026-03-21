@@ -25,6 +25,12 @@ PostgreSQL implementation of Birko.Data.SQL stores and repositories.
 - `AsyncPostgreSQLRepository<T>` - Async repository
 - `AsyncPostgreSQLBulkRepository<T>` - Async bulk repository
 
+### Bulk Insert via COPY Protocol
+- `BulkInsert` / `BulkInsertAsync` - Native Npgsql COPY binary protocol for high-throughput bulk inserts
+- Uses `BeginBinaryImport` / `BeginBinaryImportAsync` on the connector
+- Bypasses SQL parsing for significantly faster bulk data loading
+- Supports typed writes with `NpgsqlDbType` for type safety
+
 ### Connector
 - `PostgreSQLConnector` - PostgreSQL connection management
 

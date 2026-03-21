@@ -7,6 +7,7 @@ PostgreSQL implementation of Birko.Data.SQL stores and repositories.
 - PostgreSQL stores (sync/async, single/bulk)
 - Bulk operations using COPY command
 - Native support for UUID, JSONB, arrays
+- Native bulk insert via Npgsql COPY binary protocol
 - PostgreSQL connector management
 
 ## Installation
@@ -38,6 +39,36 @@ public class CustomerStore : PostgreSQLStore<Customer>
         cmd.Parameters.AddWithValue(item.Email);
         cmd.ExecuteNonQuery();
         return item.Id;
+    }
+}
+```
+
+### Bulk Insert via COPY Protocol
+
+PostgreSQL's COPY binary protocol provides high-throughput bulk inserts, bypassing SQL parsing overhead:
+
+```csharp
+using Birko.Data.SQL.PostgreSQL.Stores;
+
+public class CustomerBulkStore : AsyncPostgreSQLBulkStore<Customer>
+{
+    public override async Task CreateAsync(IEnumerable<Customer> data,
+        StoreDataDelegate<Customer>? storeDelegate = null,
+        CancellationToken ct = default)
+    {
+        await using var writer = await Connector.BeginBinaryImportAsync(
+            "COPY customers (id, name, email) FROM STDIN (FORMAT BINARY)", ct);
+
+        foreach (var item in data)
+        {
+            storeDelegate?.Invoke(item);
+            await writer.StartRowAsync(ct);
+            await writer.WriteAsync(item.Id, NpgsqlTypes.NpgsqlDbType.Uuid, ct);
+            await writer.WriteAsync(item.Name, NpgsqlTypes.NpgsqlDbType.Text, ct);
+            await writer.WriteAsync(item.Email, NpgsqlTypes.NpgsqlDbType.Text, ct);
+        }
+
+        await writer.CompleteAsync(ct);
     }
 }
 ```
