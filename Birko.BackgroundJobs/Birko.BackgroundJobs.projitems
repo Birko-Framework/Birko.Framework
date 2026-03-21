@@ -16,6 +16,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\JobContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\JobDescriptor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\JobQueueOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\RetryPolicy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\JobResult.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\JobStatus.cs" />
     <!-- Serialization -->
