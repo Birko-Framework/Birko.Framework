@@ -18,5 +18,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\AbstractPercentage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\AbstractTree.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ValueData.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ValueObjects\Money.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ValueObjects\MoneyWithTax.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ValueObjects\Percentage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ValueObjects\PostalAddress.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ValueObjects\Quantity.cs" />
   </ItemGroup>
 </Project>
