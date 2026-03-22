@@ -6,6 +6,11 @@ SQL Server-specific view DDL support for the Birko.Data.SQL.View framework.
 
 - **CREATE OR ALTER VIEW** syntax (requires SQL Server 2016 SP1+)
 - **ViewExists** check via `sys.views` catalog
+- **Indexed views** support:
+  - `CreateIndexedView` (CREATE VIEW with SCHEMABINDING + clustered index)
+  - `DropIndexedView` (drops clustered index then drops view)
+  - `IndexedViewExists` check
+  - Async variants: `CreateIndexedViewAsync`, `DropIndexedViewAsync`, `IndexedViewExistsAsync`
 - Inherits all base view operations from Birko.Data.SQL.View (CreateView, DropView, RecreateView, CreateViewIfNotExists, CreateViews, DropViews)
 
 ## Usage
@@ -22,6 +27,28 @@ bool exists = connector.ViewExists("customer_orders_view");
 // Async equivalents
 await connector.CreateViewAsync(typeof(CustomerOrderView));
 bool exists = await connector.ViewExistsAsync("customer_orders_view");
+
+// Indexed views (SQL Server only)
+connector.CreateIndexedView(typeof(OrderTotalsView), "IX_OrderTotals_Clustered");
+bool indexedExists = connector.IndexedViewExists("order_totals_view");
+connector.DropIndexedView("order_totals_view", "IX_OrderTotals_Clustered");
+
+// Async indexed view equivalents
+await connector.CreateIndexedViewAsync(typeof(OrderTotalsView), "IX_OrderTotals_Clustered");
+bool indexedExists = await connector.IndexedViewExistsAsync("order_totals_view");
+await connector.DropIndexedViewAsync("order_totals_view", "IX_OrderTotals_Clustered");
+```
+
+### Indexed Views
+
+SQL Server indexed views use `WITH SCHEMABINDING` and a unique clustered index to materialize the view results on disk. This provides significant performance improvements for aggregate queries.
+
+```csharp
+// Creates a view with SCHEMABINDING and a unique clustered index
+connector.CreateIndexedView(typeof(OrderTotalsView), "IX_OrderTotals_Clustered");
+
+// DropIndexedView drops the clustered index first, then drops the view
+connector.DropIndexedView("order_totals_view", "IX_OrderTotals_Clustered");
 ```
 
 ## Dependencies
