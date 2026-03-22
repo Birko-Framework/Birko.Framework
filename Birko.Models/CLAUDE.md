@@ -27,6 +27,13 @@ Base abstract models, ViewModels, and extensions for the Birko Framework. Provid
   - `GetValue<T>(this IEnumerable<SourceValue<T>>, string source)` — Find value by source string
   - `SetValue<T>(this SourceValue<T>[], string source, T value)` — Update or append value in array
 
+### Value Objects (`Birko.Models.ValueObjects`)
+- **Money** — Immutable: Amount + CurrencyCode. Arithmetic (Add, Subtract, Multiply, Round), equality, currency safety
+- **MoneyWithTax** — Immutable: Price + PriceVAT + VAT. Factory methods: `FromNetAndVat`, `FromGrossAndVat`
+- **Percentage** — Immutable: decimal Value. `ApplyTo(amount)`, `AddTo(amount)`. Implicit conversion to decimal
+- **PostalAddress** — Immutable: Street, StreetNumber, City, Zip, Country, State
+- **Quantity** — Immutable: Amount + Unit. Arithmetic with unit safety
+
 ## File Structure
 ```
 Models/
@@ -34,6 +41,12 @@ Models/
 ├── AbstractTree.cs
 ├── SourceValue.cs
 └── ValueData.cs
+ValueObjects/
+├── Money.cs
+├── MoneyWithTax.cs
+├── Percentage.cs
+├── PostalAddress.cs
+└── Quantity.cs
 ViewModels/
 ├── AbstractPercentage.cs
 ├── AbstractTree.cs
@@ -54,6 +67,7 @@ Extensions/
 - **Virtual properties and methods:** Allow derived classes to override behavior
 
 ## Specialized Model Projects
+- [Birko.Models.Contracts](../Birko.Models.Contracts/CLAUDE.md)
 - [Birko.Models.Product](../Birko.Models.Product/CLAUDE.md)
 - [Birko.Models.Category](../Birko.Models.Category/CLAUDE.md)
 - [Birko.Models.SEO](../Birko.Models.SEO/CLAUDE.md)

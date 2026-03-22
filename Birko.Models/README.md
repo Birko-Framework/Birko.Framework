@@ -10,6 +10,7 @@ Base abstract models, ViewModels, and extensions for the Birko Framework.
 - Generic SourceValue for key-value pairs with source tracking
 - Parallel ViewModel implementations with INotifyPropertyChanged
 - Extension methods for SourceValue collections
+- Immutable value objects: Money, MoneyWithTax, Percentage, PostalAddress, Quantity
 
 ## Installation
 
@@ -113,6 +114,7 @@ values = values.SetValue("de", "Hallo"); // Appends new entry
 
 ## Related Projects
 
+- [Birko.Models.Contracts](../Birko.Models.Contracts/) - Domain contract interfaces
 - [Birko.Models.Product](../Birko.Models.Product/) - Product models
 - [Birko.Models.Category](../Birko.Models.Category/) - Category models
 - [Birko.Models.SEO](../Birko.Models.SEO/) - SEO models
