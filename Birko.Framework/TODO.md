@@ -179,12 +179,11 @@ Pluggable random number generation with testable abstractions.
 
 ## Existing Project Enhancements
 
-### Birko.Data.SQL
+### Birko.Data.SQL (Done)
 - [x] Index management (SqlIndexManager + PostgreSql, MSSql, SqLite, MySql dialect subclasses)
 - [x] Connection resiliency and retry logic (RetryPolicy on AbstractConnectorBase, provider-specific IsTransientException)
 - [x] Bulk copy for all SQL providers (MSSql: SqlBulkCopy, PostgreSQL: COPY binary protocol, MySQL: multi-value INSERT batching, SQLite: transaction-batched prepared statements)
 - [x] Query caching for frequently executed queries (CachedAsyncDataBaseBulkStore decorator with ICache integration, SHA256 key builder, table-prefix invalidation on writes)
-- [ ] Database-specific optimizations
 
 ### Birko.Data.ElasticSearch
 - [x] Index management utilities
@@ -212,9 +211,71 @@ Pluggable random number generation with testable abstractions.
 - [x] OAuth2 client (Birko.Communication.OAuth) — Client Credentials, Auth Code, PKCE, Device Code, Refresh Token, DelegatingHandler
 - [ ] OAuth2 server (Birko.Security.OAuth.Server) — Token endpoint, authorization endpoint, client registration, consent management (needs Birko.Data.Stores for token/client persistence)
 
-### Birko.Models
-- [ ] More base model types
-- [ ] ViewModel to Model mapping utilities
+### Birko.Models — Restructuring
+**Status:** Planned | **Priority:** High
+
+Current problems:
+- SQL attributes (`[Table]`, `[UniqueField]`, `[PrecisionField]`) baked into domain models
+- `Product` has no variants (variants are in Warehouse — wrong domain boundary)
+- `Repository` name clashes with data access pattern (means warehouse location)
+- `WareHouseDocumentItem` has 15+ embedded price fields (pricing should be composable)
+- `Product` and `Item` duplicate properties (Code, BarCode, Name) with no shared contract
+- Inconsistent base classes (`Product` → `AbstractLogModel`, `Item` → `AbstractDatabaseLogModel`)
+- 1:1 Model↔ViewModel mirroring creates massive duplication
+
+**Phase A — Contracts & Value Objects (non-breaking)**
+
+New project `Birko.Models.Contracts/`:
+- [ ] `ICatalogItem` — Name, Code, BarCode, Description
+- [ ] `IPriceable` — Price, PriceVAT, VAT, Currency
+- [ ] `IVariantable` — Variants collection
+- [ ] `ICategorizeable` — CategoryId
+- [ ] `IBatchable` — BatchNumber, ExpiryDate
+- [ ] `ILocatable` — LocationId (warehouse/building)
+- [ ] `IHierarchical` — ParentId, Path (replaces AbstractTree)
+- [ ] `IDocument` / `IDocumentLine` — DocumentNumber, Status, Lines / Quantity, UnitPrice
+- [ ] `IContactable` / `IAddressable` — Phone, Email / Street, City, ZIP, Country
+
+New value objects in `Birko.Models/ValueObjects/`:
+- [ ] `Money` — Amount + CurrencyCode (replaces scattered decimals)
+- [ ] `MoneyWithTax` — Price + PriceVAT + VAT (replaces ValueData)
+- [ ] `Percentage` — Value decimal (replaces AbstractPercentage)
+- [ ] `PostalAddress` — Street, City, Zip, Country, State (immutable record)
+- [ ] `Quantity` — Amount + Unit
+
+Have old models implement new contracts for gradual compatibility.
+
+**Phase B — Clean domain model projects (parallel to old)**
+
+| New Project | Replaces | Key Changes |
+|-------------|----------|-------------|
+| `Birko.Models.Catalog` | Birko.Models.Product + Category | Product with variants, attributes, categories. No SQL attributes. |
+| `Birko.Models.Inventory` | Birko.Models.Warehouse | StockItem, StockMovement, StorageLocation (renamed from Repository), ReceiptDocument, IssueDocument, TransferDocument. Pricing extracted. |
+| `Birko.Models.Pricing` | Pricing fields from Warehouse + Accounting | PriceGroup, PriceList, PriceListEntry, Tax, Currency, Discount. Uses Money value object. |
+
+Refactor existing:
+| Project | Changes |
+|---------|---------|
+| `Birko.Models.Users` | Remove SQL attributes, rename Agenda→Tenant |
+| `Birko.Models.Customers` | Remove SQL attributes, use PostalAddress value object |
+| `Birko.Models.Accounting` | Keep Tax, Currency, MeasureUnit. Move PriceGroup to Pricing. |
+
+**Phase C — SQL separation**
+
+New project `Birko.Models.SQL/`:
+- [ ] SQL mapping via partial classes or fluent `ModelMap<T>.ToTable("X").HasUnique(p => p.SKU)` configuration
+- [ ] All `[Table]`, `[UniqueField]`, `[PrecisionField]`, `[ScaleField]` attributes move here
+- [ ] Models extend clean `AuditableModel` instead of `AbstractDatabaseLogModel`
+
+**Migration path:**
+1. Phase A — additive, zero breakage. Old models implement new contracts.
+2. Phase B — new projects live alongside old. New consumers (Symbio) adopt new. Old consumers keep old.
+3. Phase C — extract SQL. Old models become thin wrappers / deprecated.
+
+**Consumer impact:**
+- Symbio: Can adopt Contracts + Value Objects immediately (Phase A). Phase B models align with Symbio's existing entity design.
+- DraCode: No breakage — old models stay until manual migration.
+- Affiliate: No breakage — old models stay.
 
 ---
 
@@ -226,8 +287,8 @@ Pluggable random number generation with testable abstractions.
 RavenDBIndexManager implements IIndexManager with full lifecycle: create (from IndexDefinition or AbstractIndexCreationTask), drop, list, exists, info, reset, enable/disable, priority, stale detection. Map/reduce supported via Properties dict (`Map`, `Reduce` keys).
 
 **Remaining enhancements:**
-- [ ] Bulk deploy indexes from assembly
-- [ ] Query helpers for Map/Reduce results with expression-based filters
+- [x] Bulk deploy indexes from assembly (DeployFromAssemblyAsync — scans assembly for AbstractIndexCreationTask types)
+- [x] Query helpers for Map/Reduce results with expression-based filters (QueryMapReduceAsync, QueryMapReduceFirstAsync, CountMapReduceAsync)
 - [ ] Attribute-driven index definitions (Option B — deferred, low priority)
 
 ### Birko.Data.SQL.View — Persistent View Support (Done)

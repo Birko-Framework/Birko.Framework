@@ -139,6 +139,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
 - Birko.Random.Tests
+- Birko.Data.RavenDB.Tests
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.
