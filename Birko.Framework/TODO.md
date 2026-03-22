@@ -230,12 +230,9 @@ RavenDBIndexManager implements IIndexManager with full lifecycle: create (from I
 - [ ] Query helpers for Map/Reduce results with expression-based filters
 - [ ] Attribute-driven index definitions (Option B — deferred, low priority)
 
-### Birko.Data.SQL.View — Persistent View Support
-**Status:** In Progress | **Priority:** Medium
+### Birko.Data.SQL.View — Persistent View Support (Done)
+**Status:** Done | **Priority:** Medium
 
-SQL.View currently only generates SELECT queries on-the-fly from attributes. It should also support creating/managing actual database VIEW objects for performance and reuse.
-
-**Features:**
 - [x] `CREATE VIEW` / `CREATE OR REPLACE VIEW` generation from existing attribute definitions
 - [x] `DROP VIEW` support
 - [x] Database-specific syntax (MSSql, PostgreSQL, MySQL, SQLite differences) — separate projects: Birko.Data.SQL.{MSSql,PostgreSQL,MySQL,SqLite}.View
