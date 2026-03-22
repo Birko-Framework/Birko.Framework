@@ -29,8 +29,7 @@ Models reference `IGuidEntity`/`ILogEntity` interfaces (from Birko.Contracts), n
 - **Birko.Models.SEO** - SEO-specific models
 - **Birko.Models.Accounting** - Currency, Tax, PriceGroup, MeasureUnit (legacy — use Pricing for new consumers)
 - **Birko.Models.Customers** - Address, Customer, InvoiceAddress (implements IAddressable, IContactable)
-- **Birko.Models.Users** - User, UserAgenda, Agenda
-- **Birko.Models.Warehouse** - Item, ItemVariant, Repository, WareHouseDocument (legacy — use Inventory for new consumers)
+- **Birko.Models.Users** - User, Tenant, UserTenant, Role, UserRole, UserLogin, UserProfile
 - **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
 - **Birko.Models.Pricing** - Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount (clean, no SQL attrs)
 - **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry)

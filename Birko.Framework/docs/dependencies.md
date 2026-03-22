@@ -126,8 +126,10 @@ Only 4 projitems-level import chains exist:
 | **Birko.Models.Customers** | Birko.Data.Core, Birko.Models.Accounting |
 | **Birko.Models.Product** | Birko.Models |
 | **Birko.Models.SEO** | Birko.Models |
-| **Birko.Models.Users** | Birko.Data.Core, Birko.Data.SQL |
-| **Birko.Models.Warehouse** | Birko.Data.Core, Birko.Models, Birko.Models.Accounting, Birko.Models.Category, Birko.Models.Users |
+| **Birko.Models.Users** | Birko.Data.Core |
+| **Birko.Models.Inventory** | Birko.Data.Core, Birko.Models.Contracts |
+| **Birko.Models.Pricing** | Birko.Data.Core, Birko.Models.Contracts |
+| **Birko.Models.SQL** | Birko.Models.Inventory, Birko.Models.Users, Birko.Models.Customers, Birko.Models.Accounting |
 
 ## SQL Data Layer
 

@@ -83,8 +83,7 @@ Three-phase restructuring of the model layer:
 Extracted reusable models from FisData.Stock:
 - **Birko.Models.Accounting** — Currency, Tax, PriceGroup, MeasureUnit
 - **Birko.Models.Customers** — Address, Customer, InvoiceAddress
-- **Birko.Models.Users** — User, UserAgenda, Agenda
-- **Birko.Models.Warehouse** — Item, ItemVariant, Repository, WareHouseDocument
+- **Birko.Models.Users** — User, Tenant (formerly Agenda), UserTenant
 - **Birko.Models** — Added AbstractPercentage, AbstractTree, ValueData
 
 #### Recent Fixes (2026-03-05)

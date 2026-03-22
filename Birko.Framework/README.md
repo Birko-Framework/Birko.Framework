@@ -79,13 +79,17 @@ A modular .NET framework providing data access, communication, and model infrast
 
 | Project | Description |
 |---------|-------------|
+| Birko.Models.Contracts | Domain interfaces (ICatalogItem, IPriceable, IHierarchical, etc.) |
+| Birko.Models | Base models + Value Objects (Money, MoneyWithTax, Percentage, PostalAddress, Quantity) |
 | Birko.Models.Product | Product, variants, images, pricing |
 | Birko.Models.Category | Categories with hierarchical tree support |
 | Birko.Models.SEO | SEO metadata, URL aliases, sitemaps |
 | Birko.Models.Accounting | Currency, Tax, PriceGroup, MeasureUnit |
-| Birko.Models.Customers | Address, Customer, InvoiceAddress |
-| Birko.Models.Users | User, UserLogin, UserProfile, Role, RolePermission, UserRole, Agenda |
-| Birko.Models.Warehouse | Items, variants, repositories, documents |
+| Birko.Models.Customers | Address, Customer, InvoiceAddress, ContactPerson |
+| Birko.Models.Users | User, UserLogin, UserProfile, Role, Tenant, UserTenant |
+| Birko.Models.Inventory | StockItem, StockItemVariant, StorageLocation, InventoryDocument |
+| Birko.Models.Pricing | Currency, Tax, PriceGroup, PriceList, Discount |
+| Birko.Models.SQL | Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry) |
 
 ### Communication
 

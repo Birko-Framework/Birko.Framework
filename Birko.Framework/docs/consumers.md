@@ -228,8 +228,8 @@ FisData.Stock.Core models were refactored in March 2026 to extend Birko.Models.*
 **Models extracted to Birko Framework:**
 - Birko.Models.Accounting (Currency, Tax, PriceGroup, MeasureUnit)
 - Birko.Models.Customers (Address, Customer, InvoiceAddress)
-- Birko.Models.Users (User, Agenda, UserAgenda)
-- Birko.Models.Warehouse (Item, ItemVariant, Repository, WareHouseDocument)
+- Birko.Models.Users (User, Tenant, UserTenant)
+- Birko.Models.Inventory (StockItem, StockItemVariant, StorageLocation, InventoryDocument — replaced Warehouse)
 
 **FisData-specific models** (not in Birko): UserAuthentication, CustomerInvoiceAddress, Property, ItemRepositoryInventory/Movement variants.
 
