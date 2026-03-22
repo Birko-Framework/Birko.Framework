@@ -62,7 +62,6 @@
 - **Birko.Models.Accounting** - Currency, Tax, PriceGroup, MeasureUnit
 - **Birko.Models.Customers** - Address, Customer, InvoiceAddress
 - **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Agenda
-- **Birko.Models.Warehouse** - Item, ItemVariant, Repository, WareHouseDocument (legacy — use Inventory for new consumers)
 - **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
 - **Birko.Models.Pricing** - Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount (clean, no SQL attrs)
 - **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry) — replaces attribute-based mapping

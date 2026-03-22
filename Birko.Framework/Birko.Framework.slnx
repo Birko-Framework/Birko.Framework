@@ -121,7 +121,6 @@
     <Project Path="../Birko.Models.SEO/Birko.Models.SEO.shproj" />
     <Project Path="../Birko.Models.SQL/Birko.Models.SQL.shproj" />
     <Project Path="../Birko.Models.Users/Birko.Models.Users.shproj" />
-    <Project Path="../Birko.Models.Warehouse/Birko.Models.Warehouse.shproj" />
   </Folder>
   <Folder Name="/Redis/">
     <Project Path="../Birko.Redis/Birko.Redis.shproj" />

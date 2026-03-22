@@ -214,14 +214,13 @@ Pluggable random number generation with testable abstractions.
 ### Birko.Models — Restructuring
 **Status:** Done (Phase A+B+C) | **Priority:** ~~Next~~ Complete
 
-Current problems:
-- SQL attributes (`[Table]`, `[UniqueField]`, `[PrecisionField]`) baked into domain models
-- `Product` has no variants (variants are in Warehouse — wrong domain boundary)
-- `Repository` name clashes with data access pattern (means warehouse location)
-- `WareHouseDocumentItem` has 15+ embedded price fields (pricing should be composable)
-- `Product` and `Item` duplicate properties (Code, BarCode, Name) with no shared contract
-- Inconsistent base classes (`Product` → `AbstractLogModel`, `Item` → `AbstractDatabaseLogModel`)
-- 1:1 Model↔ViewModel mirroring creates massive duplication
+Previous problems (all resolved):
+- ~~SQL attributes baked into domain models~~ → removed from Accounting, Users, Customers; fluent mappings in Models.SQL
+- ~~`Repository` name clashes~~ → renamed to StorageLocation in Inventory
+- ~~`WareHouseDocumentItem` 15+ price fields~~ → InventoryDocumentLine with clean pricing
+- ~~No shared contract~~ → ICatalogItem, IPriceable, etc. in Models.Contracts
+- ~~Inconsistent base classes~~ → all use AbstractLogModel now
+- ~~Agenda naming~~ → renamed to Tenant in Users
 
 **Phase A — Contracts & Value Objects (Done)**
 
@@ -264,12 +263,12 @@ Contracts added to existing (kept separate, not merged):
 | `Birko.Models.Product` | Implements `ICatalogItem` |
 | `Birko.Models.Category` | Implements `IHierarchical`, added `ParentGuid` |
 
-Existing projects unchanged for backward compatibility:
-| Project | Status |
-|---------|--------|
-| `Birko.Models.Users` | Unchanged — Agenda→Tenant rename deferred to Phase C |
-| `Birko.Models.Customers` | Unchanged — PostalAddress adoption deferred to Phase C |
-| `Birko.Models.Accounting` | Unchanged — PriceGroup duplicated in Pricing for new consumers |
+Existing projects refactored:
+| Project | Changes |
+|---------|---------|
+| `Birko.Models.Users` | SQL attrs removed, `AbstractLogModel`, Agenda→Tenant, UserAgenda→UserTenant, IRelatedToAgenda→IRelatedToTenant |
+| `Birko.Models.Customers` | SQL attrs removed, `AbstractLogModel`, Customer uses `Pricing.PriceGroup` (not Accounting), `Address.ToPostalAddress()` added |
+| `Birko.Models.Accounting` | SQL attrs removed, `AbstractLogModel`/`AbstractPercentage`, Currency.From/To→FromRate/ToRate |
 
 **Phase C — SQL separation (Done)**
 
@@ -277,8 +276,9 @@ New project `Birko.Models.SQL/`:
 - [x] Fluent `ModelMap<T>` API: `ToTable("X")`, `HasUnique()`, `HasPrimary()`, `Property().HasPrecision()` etc.
 - [x] `IModelMapping<T>` interface for defining mappings
 - [x] `ModelMapRegistry` with assembly scanning and caching
-- [x] Example mappings: StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping
-- [x] New clean models (Inventory, Pricing) use `AbstractLogModel` — no `AbstractDatabaseLogModel` dependency
+- [x] Mappings for all model projects: Inventory, Pricing, Users, Customers, Accounting
+- [x] All models use `AbstractLogModel` — no `AbstractDatabaseLogModel` dependency
+- [x] Warehouse models use explicit interface for IRelatedToTenant.TenantGuid→AgendaGuid mapping
 
 **Migration path:**
 1. Phase A — additive, zero breakage. Old models implement new contracts.
