@@ -61,6 +61,8 @@ namespace Birko.Data.SQL.Connectors
             {
                 await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             }, true).ConfigureAwait(false);
+
+            InvalidateViewExistsCache(name!);
         }
 
         /// <summary>
@@ -93,6 +95,8 @@ namespace Birko.Data.SQL.Connectors
             {
                 await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             }, true).ConfigureAwait(false);
+
+            InvalidateViewExistsCache(viewName);
         }
 
         /// <summary>

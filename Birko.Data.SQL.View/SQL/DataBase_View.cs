@@ -153,6 +153,22 @@ namespace Birko.Data.SQL
                     }
                     if (view.Tables != null)
                     {
+                        // Copy QueryMode and Name from the first ViewAttribute that has them set
+                        var firstAttr = attrs.Cast<ViewAttribute>().FirstOrDefault();
+                        if (firstAttr != null)
+                        {
+                            view.QueryMode = firstAttr.QueryMode;
+                            if (!string.IsNullOrEmpty(firstAttr.Name))
+                            {
+                                view.Name = firstAttr.Name;
+                            }
+                        }
+                        // If Name is still null, derive from table names
+                        if (string.IsNullOrEmpty(view.Name) && view.Tables.Any())
+                        {
+                            view.Name = string.Join(string.Empty, view.Tables.Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).Distinct());
+                        }
+
                         _fieldsCache.TryAdd(type, view.Tables.SelectMany(x => x.Fields.Values).ToArray());
                         _viewCache.Add(type, view);
                     }

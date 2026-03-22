@@ -8,9 +8,14 @@ namespace Birko.Data.SQL.Tables
 {
     public class View
     {
-        public string? Name { get; private set; }
+        public string? Name { get; internal set; }
         public IEnumerable<Table> Tables { get; private set; } = null!;
         public IEnumerable<Conditions.Join>? Join { get; private set; }
+
+        /// <summary>
+        /// Controls how queries for this view are executed.
+        /// </summary>
+        public ViewQueryMode QueryMode { get; internal set; } = ViewQueryMode.OnTheFly;
 
         public View(IEnumerable<Table>? tables = null, IEnumerable<Conditions.Join>? join = null, string? name = null)
         {
@@ -140,6 +145,30 @@ namespace Birko.Data.SQL.Tables
         public bool HasAggregateFields()
         {
             return Tables?.Any(x => x?.HasAggregateFields() ?? false) ?? false;
+        }
+
+        /// <summary>
+        /// Gets field names for querying a persistent view (no table prefix, just column names).
+        /// Uses the field's Name property since the persistent view columns match field names.
+        /// </summary>
+        public IDictionary<int, string> GetPersistentViewSelectFields()
+        {
+            var result = new Dictionary<int, string>();
+            int i = 0;
+            foreach (var table in Tables)
+            {
+                if (table?.Fields == null)
+                {
+                    continue;
+                }
+
+                foreach (var field in table.Fields.Values)
+                {
+                    result.Add(i, field.Name);
+                    i++;
+                }
+            }
+            return result;
         }
     }
 }

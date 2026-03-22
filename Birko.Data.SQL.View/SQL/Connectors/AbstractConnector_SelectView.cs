@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -26,10 +26,10 @@ namespace Birko.Data.SQL.Connectors
         }
 
         public IEnumerable<object> SelectView
-            (Type type, 
+            (Type type,
             IEnumerable<Conditions.Condition>? conditions = null,
-            IDictionary<string, bool>? orderFields = null, 
-            int? limit = null, 
+            IDictionary<string, bool>? orderFields = null,
+            int? limit = null,
             int? offset = null
         )
         {
@@ -45,8 +45,8 @@ namespace Birko.Data.SQL.Connectors
         public IEnumerable<object> Select(
             Tables.View view,
             Func<IDictionary<int, string>, DbDataReader, object>? transformFunction = null,
-            LambdaExpression? expr = null, 
-            IDictionary<string, bool>? orderFields = null, 
+            LambdaExpression? expr = null,
+            IDictionary<string, bool>? orderFields = null,
             int? limit = null,
             int? offset = null
         )
@@ -62,7 +62,7 @@ namespace Birko.Data.SQL.Connectors
             Func<IDictionary<int, string>, DbDataReader, object>? transformFunction = null,
             LambdaExpression? expr = null,
             IDictionary<Expression<Func<T, P>>, bool>? orderFields = null,
-            int? limit = null, 
+            int? limit = null,
             int? offset = null
         )
         {
@@ -76,11 +76,27 @@ namespace Birko.Data.SQL.Connectors
             Tables.View view,
             Func<IDictionary<int, string>, DbDataReader, object>? transformFunction = null,
             IEnumerable<Conditions.Condition>? conditions = null,
-            IDictionary<string, bool>? orderFields = null, 
+            IDictionary<string, bool>? orderFields = null,
             int? limit = null,
             int? offset = null)
         {
-            if (view != null)
+            if (view == null)
+            {
+                yield break;
+            }
+
+            var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
+
+            if (usePersistent)
+            {
+                foreach (var items in RunReaderCommand((command) => {
+                    command = CreatePersistentViewSelectCommand(command, view, conditions, orderFields, limit, offset);
+                }, (reader) => new object[1] { transformFunction?.Invoke(view.GetPersistentViewSelectFields(), reader)! }))
+                {
+                    yield return items?.FirstOrDefault()!;
+                }
+            }
+            else
             {
                 foreach (var items in RunReaderCommand((command) => {
                     command = CreateSelectCommand(command, view, conditions, orderFields, limit, offset);

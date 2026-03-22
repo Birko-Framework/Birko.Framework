@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -26,7 +26,36 @@ namespace Birko.Data.SQL.Connectors
 
         public long SelectCount(Tables.View view, IEnumerable<Conditions.Condition>? conditions = null)
         {
+            if (view == null)
+            {
+                return 0;
+            }
+
+            var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
+
+            if (usePersistent && !string.IsNullOrEmpty(view.Name))
+            {
+                return SelectCountPersistentView(view.Name!, conditions);
+            }
+
             return SelectCount(view.Tables.Select(x => x.Name), view.Join, conditions);
+        }
+
+        private long SelectCountPersistentView(string viewName, IEnumerable<Conditions.Condition>? conditions = null)
+        {
+            long count = 0;
+            DoCommand((command) =>
+            {
+                command = CreatePersistentViewSelectCountCommand(command, viewName, conditions);
+            }, (command) =>
+            {
+                var result = command.ExecuteScalar();
+                if (result != null && result != DBNull.Value)
+                {
+                    count = Convert.ToInt64(result);
+                }
+            });
+            return count;
         }
     }
 }

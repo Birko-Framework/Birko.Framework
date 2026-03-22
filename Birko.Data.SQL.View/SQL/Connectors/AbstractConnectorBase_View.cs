@@ -1,11 +1,131 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 
 namespace Birko.Data.SQL.Connectors
 {
     public abstract partial class AbstractConnectorBase
     {
+        /// <summary>
+        /// Cache for persistent view existence checks. Maps view name to whether the view exists.
+        /// Thread-safe for concurrent access.
+        /// </summary>
+        private readonly ConcurrentDictionary<string, bool> _viewExistsCache = new();
+
+        /// <summary>
+        /// Checks whether a persistent view should be used based on the view's QueryMode
+        /// and (for Auto mode) the cached view existence status.
+        /// </summary>
+        /// <param name="view">The view metadata.</param>
+        /// <param name="checkViewExists">Function to check if the view exists in the database (used only for Auto mode).</param>
+        /// <returns>True if the persistent view should be queried directly; false for on-the-fly SELECT.</returns>
+        protected bool ShouldUsePersistentView(Tables.View view, Func<string, bool> checkViewExists)
+        {
+            if (view.QueryMode == ViewQueryMode.OnTheFly)
+            {
+                return false;
+            }
+
+            if (view.QueryMode == ViewQueryMode.Persistent)
+            {
+                return true;
+            }
+
+            // Auto mode: check cache, then database
+            var viewName = view.Name;
+            if (string.IsNullOrEmpty(viewName))
+            {
+                return false;
+            }
+
+            return _viewExistsCache.GetOrAdd(viewName!, name => checkViewExists(name));
+        }
+
+        /// <summary>
+        /// Creates a SELECT command targeting a persistent database VIEW (no joins needed).
+        /// </summary>
+        protected DbCommand CreatePersistentViewSelectCommand(
+            DbCommand command,
+            Tables.View view,
+            IEnumerable<Conditions.Condition>? conditions = null,
+            IDictionary<string, bool>? orderFields = null,
+            int? limit = null,
+            int? offset = null)
+        {
+            var viewName = view.Name;
+            if (string.IsNullOrEmpty(viewName))
+            {
+                throw new InvalidOperationException("View name cannot be empty for persistent view query.");
+            }
+
+            var fields = view.GetPersistentViewSelectFields();
+            if (fields == null || !fields.Any())
+            {
+                throw new InvalidOperationException("View must have at least one field.");
+            }
+
+            command.CommandText = "SELECT " + string.Join(", ", fields.Values.Select(f => QuoteIdentifier(f)))
+                + " FROM " + QuoteIdentifier(viewName!);
+
+            AddWhere(conditions, command);
+
+            if (orderFields != null && orderFields.Any())
+            {
+                command.CommandText += " ORDER BY " + string.Join(", ", orderFields.Select(kvp =>
+                    string.Format("{0} {1}", kvp.Key, kvp.Value ? "DESC" : "ASC")));
+            }
+
+            if (limit != null)
+            {
+                command.CommandText += LimitOffsetDefinition(command, limit, offset) ?? string.Empty;
+            }
+
+            return command;
+        }
+
+        /// <summary>
+        /// Creates a SELECT COUNT(*) command targeting a persistent database VIEW.
+        /// </summary>
+        protected DbCommand CreatePersistentViewSelectCountCommand(
+            DbCommand command,
+            string viewName,
+            IEnumerable<Conditions.Condition>? conditions = null)
+        {
+            if (string.IsNullOrEmpty(viewName))
+            {
+                throw new InvalidOperationException("View name cannot be empty for persistent view count query.");
+            }
+
+            command.CommandText = "SELECT COUNT(*) FROM " + QuoteIdentifier(viewName);
+
+            AddWhere(conditions, command);
+
+            return command;
+        }
+
+        /// <summary>
+        /// Clears the cached view existence results. Call this after creating or dropping views
+        /// to ensure Auto mode re-checks view existence.
+        /// </summary>
+        public void ClearViewExistsCache()
+        {
+            _viewExistsCache.Clear();
+        }
+
+        /// <summary>
+        /// Removes a specific view name from the existence cache.
+        /// </summary>
+        public void InvalidateViewExistsCache(string viewName)
+        {
+            if (string.IsNullOrEmpty(viewName))
+            {
+                return;
+            }
+
+            _viewExistsCache.TryRemove(viewName, out _);
+        }
         /// <summary>
         /// Builds the CREATE VIEW SQL statement.
         /// Override in database-specific connectors for syntax differences.

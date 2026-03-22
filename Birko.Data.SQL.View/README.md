@@ -82,6 +82,34 @@ public class UserStatsView { /* ... */ }
 - **ViewBuilder** - View query builder
 - **ViewDefinition** - View metadata
 
+## View Query Modes
+
+The framework supports multiple query modes via the `ViewQueryMode` enum:
+
+| Mode | Description |
+|------|-------------|
+| `OnTheFly` | Generates a SELECT statement at query time without creating a database view object. Default mode. |
+| `Persistent` | Queries an existing database VIEW object (must be created first via DDL methods). |
+| `Auto` | Uses the persistent view if it exists, otherwise falls back to on-the-fly generation. |
+
+```csharp
+// Query a persistent view directly
+var results = connector.SelectView<CustomerOrderView>(ViewQueryMode.Persistent);
+
+// Auto mode: uses persistent view if available, on-the-fly otherwise
+var results = connector.SelectView<CustomerOrderView>(ViewQueryMode.Auto);
+```
+
+## Materialized View Types
+
+The `MaterializedViewType` enum identifies the materialization strategy across providers:
+
+| Type | Provider | Description |
+|------|----------|-------------|
+| `None` | All | Standard (non-materialized) view |
+| `Materialized` | PostgreSQL | PostgreSQL MATERIALIZED VIEW with explicit refresh |
+| `Indexed` | SQL Server | Indexed view with SCHEMABINDING and clustered index |
+
 ## Persistent View DDL
 
 In addition to on-the-fly SELECT generation, the framework supports creating and managing actual database VIEW objects.

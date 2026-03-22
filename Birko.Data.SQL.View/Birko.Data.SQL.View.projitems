@@ -17,6 +17,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\SumField.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\View.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ViewField.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewQueryMode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateSelectCommand.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectViewCount.cs" />
@@ -33,5 +34,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnectorBase_View.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_CreateView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MaterializedViewType.cs" />
   </ItemGroup>
 </Project>

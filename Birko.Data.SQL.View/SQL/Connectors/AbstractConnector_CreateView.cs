@@ -58,6 +58,8 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.ExecuteNonQuery();
             }, true);
+
+            InvalidateViewExistsCache(name!);
         }
 
         /// <summary>
@@ -89,6 +91,8 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.ExecuteNonQuery();
             }, true);
+
+            InvalidateViewExistsCache(viewName);
         }
 
         /// <summary>
