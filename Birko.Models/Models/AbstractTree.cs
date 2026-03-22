@@ -14,8 +14,11 @@ namespace Birko.Models
         : AbstractLogModel
         , ITreePath
         , Birko.Data.Models.ILoadable<ViewModels.AbstractTree>
+        , Birko.Models.Contracts.IHierarchical
     {
         public const string PathSeparator = "/";
+
+        public virtual Guid? ParentGuid { get; set; }
 
         public virtual string Path { get; set; } = null!;
 

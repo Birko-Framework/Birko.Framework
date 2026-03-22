@@ -18,6 +18,7 @@ namespace Birko.Models
         : AbstractLogModel
         , IValueData
         , ILoadable<ValueData>
+        , Birko.Models.Contracts.IPriceable
     {
         public const int StoreDecimalPlaces = 6;
         public const int StoreDecimalPrecision = 22;
