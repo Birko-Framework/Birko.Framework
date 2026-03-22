@@ -6,6 +6,7 @@ namespace Birko.Models.Contracts
     public interface IAddressable
     {
         string Street { get; set; }
+        string StreetNumber { get; set; }
         string City { get; set; }
         string ZIP { get; set; }
         string Country { get; set; }
