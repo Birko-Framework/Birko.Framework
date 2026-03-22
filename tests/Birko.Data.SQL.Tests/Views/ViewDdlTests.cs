@@ -124,7 +124,7 @@ namespace Birko.Data.SQL.Tests.Views
         [Fact]
         public void BuildViewSelectSql_NoJoins_ThrowsInvalidOperationException()
         {
-            var view = new View();
+            var view = new Tables.View();
             var connector = new TestViewConnector(TestSettings);
 
             var act = () => connector.TestBuildViewSelectSql(view);
@@ -137,7 +137,7 @@ namespace Birko.Data.SQL.Tests.Views
         private class TestViewConnector : AbstractConnectorBase
         {
             public TestViewConnector(PasswordSettings settings) : base(settings) { }
-            public string TestBuildViewSelectSql(View view) => BuildViewSelectSql(view);
+            public string TestBuildViewSelectSql(Tables.View view) => BuildViewSelectSql(view);
             public string TestBuildCreateViewSql(string name, string select) => BuildCreateViewSql(name, select);
 
             public override string QuoteIdentifier(string identifier) => "\"" + identifier + "\"";

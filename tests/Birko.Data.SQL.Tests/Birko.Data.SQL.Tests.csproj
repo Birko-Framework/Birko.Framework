@@ -30,6 +30,12 @@
   <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.SQL\Birko.Data.SQL.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
+  <!-- Include only specific files from shared projects that have external dependencies -->
+  <ItemGroup>
+    <Compile Include="..\Birko.Data.SQL.View.Migrations\Migrations\ViewSqlGenerator.cs" Link="SharedSources\ViewSqlGenerator.cs" />
+    <Compile Include="..\Birko.Data.SQL.Caching\Caching\SqlCacheKeyBuilder.cs" Link="SharedSources\SqlCacheKeyBuilder.cs" />
+    <Compile Include="..\Birko.Data.SQL.Caching\Caching\SqlCacheOptions.cs" Link="SharedSources\SqlCacheOptions.cs" />
+  </ItemGroup>
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
