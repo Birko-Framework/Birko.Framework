@@ -212,7 +212,7 @@ Pluggable random number generation with testable abstractions.
 - [ ] OAuth2 server (Birko.Security.OAuth.Server) — Token endpoint, authorization endpoint, client registration, consent management (needs Birko.Data.Stores for token/client persistence)
 
 ### Birko.Models — Restructuring
-**Status:** Planned | **Priority:** High
+**Status:** Planned | **Priority:** Next
 
 Current problems:
 - SQL attributes (`[Table]`, `[UniqueField]`, `[PrecisionField]`) baked into domain models
