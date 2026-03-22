@@ -5,13 +5,25 @@ using System.Text;
 
 namespace Birko.Models.Product
 {
-    public class Product : Data.Models.AbstractLogModel, Data.Models.ILoadable<Birko.Models.Product.ViewModels.Product>
+    public class Product
+        : Data.Models.AbstractLogModel
+        , Data.Models.ILoadable<Birko.Models.Product.ViewModels.Product>
+        , Birko.Models.Contracts.ICatalogItem
     {
         public string SKUCode { get; set; } = null!;
 
         public string BarCode { get; set; } = null!;
 
         public string Name { get; set; } = null!;
+
+        /// <summary>
+        /// ICatalogItem.Code — maps to SKUCode.
+        /// </summary>
+        string Contracts.ICatalogItem.Code
+        {
+            get => SKUCode;
+            set => SKUCode = value;
+        }
 
         public string Slug { get; set; } = null!;
 
