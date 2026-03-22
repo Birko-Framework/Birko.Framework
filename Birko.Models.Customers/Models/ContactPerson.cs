@@ -12,6 +12,7 @@ namespace Birko.Models.Customers
         : AbstractDatabaseLogModel
         , IRelatedToCustomer
         , ILoadable<ViewModels.ContactPerson>
+        , Birko.Models.Contracts.IContactable
     {
         public Guid? CustomerGuid { get; set; }
 

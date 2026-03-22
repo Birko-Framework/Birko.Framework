@@ -14,6 +14,8 @@ namespace Birko.Models.Customers
         : Birko.Data.Models.AbstractDatabaseLogModel
         , Birko.Data.Models.ILoadable<ViewModels.Address>
         , ICopyable<Address>
+        , Birko.Models.Contracts.IAddressable
+        , Birko.Models.Contracts.IContactable
     {
         public string Name { get; set; } = string.Empty;
         public string Street { get; set; } = string.Empty;
