@@ -1,16 +1,14 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Users
 {
     /// <summary>
-    /// Assigns a Role to a User, optionally scoped to an Agenda.
-    /// AgendaGuid = null means the role is global.
-    /// AgendaGuid set means the user has this role only within that agenda.
+    /// Assigns a Role to a User, optionally scoped to a Tenant.
+    /// TenantGuid = null means the role is global.
+    /// TenantGuid set means the user has this role only within that tenant.
     /// </summary>
-    [Table("UserRoles")]
-    public class UserRole : Birko.Data.Models.AbstractDatabaseLogModel
+    public class UserRole : Birko.Data.Models.AbstractLogModel
         , Birko.Data.Models.ILoadable<ViewModels.UserRole>
         , IRelatedToUser
         , IRelatedToRole
@@ -19,9 +17,9 @@ namespace Birko.Models.Users
         public Guid RoleGuid { get; set; }
 
         /// <summary>
-        /// Optional agenda scope. Null = global role assignment.
+        /// Optional tenant scope. Null = global role assignment.
         /// </summary>
-        public Guid? AgendaGuid { get; set; }
+        public Guid? TenantGuid { get; set; }
 
         public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
 
@@ -45,7 +43,7 @@ namespace Birko.Models.Users
         {
             base.LoadFrom(data);
             if (data == null) return;
-            AgendaGuid = data.AgendaGuid;
+            TenantGuid = data.TenantGuid;
             GrantedAt = data.GrantedAt;
         }
     }

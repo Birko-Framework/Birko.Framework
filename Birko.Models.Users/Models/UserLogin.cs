@@ -1,5 +1,4 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Users
@@ -13,8 +12,7 @@ namespace Birko.Models.Users
     /// Authentication method linked to a User. One user can have multiple logins
     /// (e.g. local password + Google OAuth + Apple Sign-In).
     /// </summary>
-    [Table("UserLogins")]
-    public class UserLogin : Birko.Data.Models.AbstractDatabaseLogModel
+    public class UserLogin : Birko.Data.Models.AbstractLogModel
         , Birko.Data.Models.ILoadable<ViewModels.UserLogin>
         , IRelatedToUser
     {
@@ -23,14 +21,12 @@ namespace Birko.Models.Users
         /// <summary>
         /// Authentication provider: "local", "google", "apple", "microsoft", "facebook", "github", etc.
         /// </summary>
-        [PrecisionField(50)]
         public string Provider { get; set; } = null!;
 
         /// <summary>
         /// Unique key from the provider. For "local" this is the email/username.
         /// For OAuth this is the external user ID (sub claim).
         /// </summary>
-        [PrecisionField(256)]
         public string ProviderKey { get; set; } = null!;
 
         /// <summary>
@@ -41,7 +37,6 @@ namespace Birko.Models.Users
         /// <summary>
         /// JWT refresh token for this login method.
         /// </summary>
-        [PrecisionField(512)]
         public string? RefreshToken { get; set; }
 
         public DateTime? RefreshTokenExpiry { get; set; }
@@ -49,13 +44,11 @@ namespace Birko.Models.Users
         /// <summary>
         /// Display name from the provider (e.g. "John via Google").
         /// </summary>
-        [PrecisionField(256)]
         public string? DisplayName { get; set; }
 
         /// <summary>
         /// Whether this login method has been verified (email confirmed for local, always true for OAuth).
         /// </summary>
-        [NamedField("IsVerified")]
         public bool IsVerified { get; set; }
 
         /// <summary>

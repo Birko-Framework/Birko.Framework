@@ -1,5 +1,4 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Users
@@ -8,50 +7,40 @@ namespace Birko.Models.Users
     /// Personal information for a User (1:1). Separated from User for privacy/GDPR
     /// (easier export/delete) and lazy-loading (most API calls don't need profile data).
     /// </summary>
-    [Table("UserProfiles")]
-    public class UserProfile : Birko.Data.Models.AbstractDatabaseLogModel
+    public class UserProfile : Birko.Data.Models.AbstractLogModel
         , Birko.Data.Models.ILoadable<ViewModels.UserProfile>
         , IRelatedToUser
     {
-        [UniqueField]
         public Guid UserGuid { get; set; }
 
-        [PrecisionField(100)]
         public string? FirstName { get; set; }
 
-        [PrecisionField(100)]
         public string? LastName { get; set; }
 
         /// <summary>
         /// Preferred display name. Falls back to FirstName + LastName if null.
         /// </summary>
-        [PrecisionField(200)]
         public string? DisplayName { get; set; }
 
-        [PrecisionField(20)]
         public string? Phone { get; set; }
 
         /// <summary>
         /// URL or storage path to the user's avatar image.
         /// </summary>
-        [PrecisionField(500)]
         public string? AvatarUrl { get; set; }
 
         /// <summary>
         /// Preferred locale/language code (e.g. "sk", "en", "cs").
         /// </summary>
-        [PrecisionField(10)]
         public string? Locale { get; set; }
 
         /// <summary>
         /// IANA time zone identifier (e.g. "Europe/Bratislava").
         /// </summary>
-        [PrecisionField(50)]
         public string? TimeZone { get; set; }
 
         public DateTime? DateOfBirth { get; set; }
 
-        [PrecisionField(500)]
         public string? Bio { get; set; }
 
         /// <summary>

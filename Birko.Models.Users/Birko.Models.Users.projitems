@@ -9,29 +9,29 @@
     <Import_RootNamespace>Birko.Models.Users</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Filters\Agenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\RolePermission.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\Tenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\User.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Filters\UserAgenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\UserLogin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\UserProfile.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\UserRole.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Models\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\UserTenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\RolePermission.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\Tenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\User.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Models\UserAgenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\UserLogin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\UserProfile.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\UserRole.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Agenda.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\UserTenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\RolePermission.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Tenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\User.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserAgenda.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserLogin.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserProfile.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserRole.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\UserTenant.cs" />
   </ItemGroup>
 </Project>

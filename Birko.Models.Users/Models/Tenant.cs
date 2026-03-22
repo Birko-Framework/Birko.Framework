@@ -1,33 +1,27 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Users
 {
-    public interface IRelatedToAgenda : Birko.Data.Models.ILoadable<ViewModels.Agenda>
+    public interface IRelatedToTenant : Birko.Data.Models.ILoadable<ViewModels.Tenant>
     {
-        Guid AgendaGuid { get; set; }
+        Guid TenantGuid { get; set; }
     }
 
-    [Table("Agendas")]
-    public class Agenda
-        : Birko.Data.Models.AbstractDatabaseLogModel
-        , Birko.Data.Models.ILoadable<ViewModels.Agenda>
+    public class Tenant
+        : Birko.Data.Models.AbstractLogModel
+        , Birko.Data.Models.ILoadable<ViewModels.Tenant>
         , IDefault
     {
-        [PrecisionField(256)]
         public string Name { get; set; } = null!;
 
-        [PrecisionField(1000)]
         public string? Description { get; set; }
 
-        [NamedField("IsDefault")]
         public bool Default { get; set; } = false;
 
-        [NamedField("IsActive")]
         public bool IsActive { get; set; } = true;
 
-        public virtual void LoadFrom(ViewModels.Agenda data)
+        public virtual void LoadFrom(ViewModels.Tenant data)
         {
             base.LoadFrom(data);
             if (data == null) return;

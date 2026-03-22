@@ -8,10 +8,10 @@ namespace Birko.Models.Users.Filters
     {
         public Guid? UserGuid { get; set; }
         public Guid? RoleGuid { get; set; }
-        public Guid? AgendaGuid { get; set; }
+        public Guid? TenantGuid { get; set; }
 
         /// <summary>
-        /// When true, only return global role assignments (AgendaGuid is null).
+        /// When true, only return global role assignments (TenantGuid is null).
         /// </summary>
         public bool? GlobalOnly { get; set; }
 
@@ -31,15 +31,15 @@ namespace Birko.Models.Users.Filters
                 result = Combine(result, x => x.RoleGuid == guid);
             }
 
-            if (AgendaGuid.HasValue)
+            if (TenantGuid.HasValue)
             {
-                var guid = AgendaGuid.Value;
-                result = Combine(result, x => x.AgendaGuid == guid);
+                var guid = TenantGuid.Value;
+                result = Combine(result, x => x.TenantGuid == guid);
             }
 
             if (GlobalOnly.HasValue && GlobalOnly.Value)
             {
-                result = Combine(result, x => x.AgendaGuid == null);
+                result = Combine(result, x => x.TenantGuid == null);
             }
 
             return result;

@@ -3,15 +3,15 @@ using System.Linq;
 
 namespace Birko.Models.Users.ViewModels
 {
-    public class UserAgenda : Birko.Data.ViewModels.LogViewModel
+    public class UserTenant : Birko.Data.ViewModels.LogViewModel
     {
         public const string IsOwnerProperty = "IsOwner";
         public const string JoinedAtProperty = "JoinedAt";
-        public const string UserAgendaObjectProperty = "UserAgenda";
+        public const string UserTenantObjectProperty = "UserTenant";
 
-        public UserAgenda()
+        public UserTenant()
         {
-            PropertyChanged += UserAgenda_PropertyChanged;
+            PropertyChanged += UserTenant_PropertyChanged;
         }
 
         private bool _isOwner;
@@ -42,11 +42,11 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private void UserAgenda_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void UserTenant_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { IsOwnerProperty, JoinedAtProperty }.Contains(e.PropertyName))
             {
-                RaisePropertyChanged(UserAgendaObjectProperty);
+                RaisePropertyChanged(UserTenantObjectProperty);
             }
         }
     }

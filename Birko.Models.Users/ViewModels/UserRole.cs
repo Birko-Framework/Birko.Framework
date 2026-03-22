@@ -5,7 +5,7 @@ namespace Birko.Models.Users.ViewModels
 {
     public class UserRole : Birko.Data.ViewModels.LogViewModel
     {
-        public const string AgendaGuidProperty = "AgendaGuid";
+        public const string TenantGuidProperty = "TenantGuid";
         public const string GrantedAtProperty = "GrantedAt";
         public const string UserRoleObjectProperty = "UserRole";
 
@@ -14,16 +14,16 @@ namespace Birko.Models.Users.ViewModels
             PropertyChanged += UserRole_PropertyChanged;
         }
 
-        private Guid? _agendaGuid;
-        public Guid? AgendaGuid
+        private Guid? _tenantGuid;
+        public Guid? TenantGuid
         {
-            get { return _agendaGuid; }
+            get { return _tenantGuid; }
             set
             {
-                if (_agendaGuid != value)
+                if (_tenantGuid != value)
                 {
-                    _agendaGuid = value;
-                    RaisePropertyChanged(AgendaGuidProperty);
+                    _tenantGuid = value;
+                    RaisePropertyChanged(TenantGuidProperty);
                 }
             }
         }
@@ -44,7 +44,7 @@ namespace Birko.Models.Users.ViewModels
 
         private void UserRole_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { AgendaGuidProperty, GrantedAtProperty }.Contains(e.PropertyName))
+            if (new[] { TenantGuidProperty, GrantedAtProperty }.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(UserRoleObjectProperty);
             }

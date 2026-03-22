@@ -3,17 +3,17 @@ using System.Linq;
 
 namespace Birko.Models.Users.ViewModels
 {
-    public class Agenda : Birko.Data.ViewModels.LogViewModel
+    public class Tenant : Birko.Data.ViewModels.LogViewModel
     {
         public const string NameProperty = "Name";
         public const string DescriptionProperty = "Description";
         public const string DefaultProperty = "Default";
         public const string IsActiveProperty = "IsActive";
-        public const string AgendaObjectProperty = "Agenda";
+        public const string TenantObjectProperty = "Tenant";
 
-        public Agenda()
+        public Tenant()
         {
-            PropertyChanged += Agenda_PropertyChanged;
+            PropertyChanged += Tenant_PropertyChanged;
         }
 
         private string _name = null!;
@@ -72,11 +72,11 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private void Agenda_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        private void Tenant_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (new[] { NameProperty, DescriptionProperty, DefaultProperty, IsActiveProperty }.Contains(e.PropertyName))
             {
-                RaisePropertyChanged(AgendaObjectProperty);
+                RaisePropertyChanged(TenantObjectProperty);
             }
         }
     }

@@ -1,19 +1,16 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Users
 {
-    [Table("UserAgendas")]
-    public class UserAgenda : Birko.Data.Models.AbstractDatabaseLogModel
-        , Birko.Data.Models.ILoadable<ViewModels.UserAgenda>
+    public class UserTenant : Birko.Data.Models.AbstractLogModel
+        , Birko.Data.Models.ILoadable<ViewModels.UserTenant>
         , IRelatedToUser
-        , IRelatedToAgenda
+        , IRelatedToTenant
     {
         public Guid UserGuid { get; set; }
-        public Guid AgendaGuid { get; set; }
+        public Guid TenantGuid { get; set; }
 
-        [NamedField("IsOwner")]
         public bool IsOwner { get; set; }
 
         public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
@@ -26,7 +23,7 @@ namespace Birko.Models.Users
             }
         }
 
-        public virtual void LoadFrom(ViewModels.UserAgenda data)
+        public virtual void LoadFrom(ViewModels.UserTenant data)
         {
             base.LoadFrom(data);
             if (data == null) return;
@@ -34,11 +31,11 @@ namespace Birko.Models.Users
             JoinedAt = data.JoinedAt;
         }
 
-        public virtual void LoadFrom(ViewModels.Agenda data)
+        public virtual void LoadFrom(ViewModels.Tenant data)
         {
             if (data != null)
             {
-                AgendaGuid = data.Guid!.Value;
+                TenantGuid = data.Guid!.Value;
             }
         }
     }
