@@ -200,6 +200,51 @@ public enum MigrationDirection
 }
 ```
 
+## SQL View Migrations
+
+`Birko.Data.SQL.View.Migrations` integrates SQL View definitions with the Migration framework, allowing views to be created and dropped as part of versioned migrations:
+
+```csharp
+using Birko.Data.SQL.View.Migrations;
+
+public class AddCustomerOrdersView : SqlMigration
+{
+    public override long Version => 20260301_001;
+    public override string Name => "AddCustomerOrdersView";
+
+    public override void Up()
+    {
+        // Create view from attributed class
+        this.CreateView<CustomerOrderView>();
+    }
+
+    public override void Down()
+    {
+        this.DropView("customer_orders_view");
+    }
+}
+```
+
+### ViewSqlGenerator
+
+Generates static DDL from view attributes without requiring a database connection:
+
+```csharp
+// Provider-specific quoting
+var sql = ViewSqlGenerator.GenerateCreateViewSql<CustomerOrderView>(quoteChar: ("\"", "\"")); // PostgreSQL
+var sql = ViewSqlGenerator.GenerateCreateViewSql<CustomerOrderView>(quoteChar: ("`", "`"));   // MySQL
+var sql = ViewSqlGenerator.GenerateCreateViewSql<CustomerOrderView>(quoteChar: ("[", "]"));   // SQL Server
+```
+
+### API Reference
+
+| Method | Description |
+|--------|-------------|
+| `ViewSqlGenerator.GenerateCreateViewSql<T>(quoteChar)` | Generate CREATE VIEW DDL from view attributes |
+| `ViewSqlGenerator.GenerateDropViewSql<T>()` | Generate DROP VIEW IF EXISTS DDL |
+| `migration.CreateView<T>()` | Extension: add CREATE VIEW step to migration |
+| `migration.DropView(viewName)` | Extension: add DROP VIEW step to migration |
+
 ## Best Practices
 
 1. **Versioning**: Use numeric versions (e.g., `20260301_001`) for ordering. Migrations run in ascending version order.
@@ -219,3 +264,4 @@ public enum MigrationDirection
 - [Birko.Data.Migrations.RavenDB](https://github.com/birko/Birko.Data.Migrations.RavenDB)
 - [Birko.Data.Migrations.InfluxDB](https://github.com/birko/Birko.Data.Migrations.InfluxDB)
 - [Birko.Data.Migrations.TimescaleDB](https://github.com/birko/Birko.Data.Migrations.TimescaleDB)
+- [Birko.Data.SQL.View.Migrations](https://github.com/birko/Birko.Data.SQL.View.Migrations)

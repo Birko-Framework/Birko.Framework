@@ -240,9 +240,9 @@ SQL.View currently only generates SELECT queries on-the-fly from attributes. It 
 - [x] `DROP VIEW` support
 - [x] Database-specific syntax (MSSql, PostgreSQL, MySQL, SQLite differences) — separate projects: Birko.Data.SQL.{MSSql,PostgreSQL,MySQL,SqLite}.View
 - [x] View existence check before create
-- [ ] Integration with migration framework (create/drop views in migrations)
-- [ ] Option to query against persistent view vs on-the-fly SELECT (automatic fallback)
-- [ ] Materialized view support where available (PostgreSQL `CREATE MATERIALIZED VIEW` — partially done, MSSql indexed views)
+- [x] Integration with migration framework (ViewSqlGenerator + ViewMigrationExtensions in Birko.Data.SQL.View.Migrations shared project)
+- [x] Option to query against persistent view vs on-the-fly SELECT (ViewQueryMode enum: OnTheFly/Persistent/Auto with cached existence checks and automatic fallback)
+- [x] Materialized view support (PostgreSQL: sync+async Create/Refresh/Drop/Exists materialized views; MSSql: indexed views with SCHEMABINDING + clustered index; MaterializedViewType enum)
 
 ---
 

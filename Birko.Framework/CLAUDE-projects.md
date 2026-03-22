@@ -35,6 +35,8 @@
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.EventSourcing** - Event sourcing pattern
 - **Birko.Data.SQL.View** + **.MSSql.View** / **.PostgreSQL.View** / **.MySQL.View** / **.SqLite.View** - SQL view DDL
+- **Birko.Data.SQL.View.Migrations** - Integration between SQL View definitions and the Migration framework (ViewSqlGenerator, ViewMigrationExtensions)
+- **Birko.Data.SQL.Caching** - Query caching decorator for SQL stores (CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions)
 - **Birko.Data.Processors** - Stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Structures** - Data structures (trees, etc.)
 - **Birko.Helpers** - Data helper utilities
@@ -134,6 +136,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
 - Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
+- Birko.Data.MongoDB.Tests
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.
