@@ -12,15 +12,21 @@
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Address.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\BaseCustomer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Customer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\ContactPerson.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\CustomerBankAccount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Address.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\BaseCustomer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Customer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\CustomerAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\InvoiceAddress.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ContactPerson.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\CustomerBankAccount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Address.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\BaseCustomer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Customer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\CustomerAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\InvoiceAddress.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\ContactPerson.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\CustomerBankAccount.cs" />
   </ItemGroup>
 </Project>

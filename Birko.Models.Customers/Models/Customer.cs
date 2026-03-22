@@ -5,6 +5,19 @@ using Birko.Models.Accounting;
 
 namespace Birko.Models.Customers
 {
+    public enum PartnerType
+    {
+        Customer = 0,
+        Supplier = 1,
+        Both = 2
+    }
+
+    public enum LegalType
+    {
+        Company = 0,
+        Person = 1
+    }
+
     [Table("Customers")]
     public class Customer
         : BaseCustomer
@@ -12,6 +25,8 @@ namespace Birko.Models.Customers
         , IRelatedToPriceGroup
     {
         public Guid? PriceGroupGuid { get; set; }
+        public PartnerType PartnerType { get; set; } = PartnerType.Customer;
+        public LegalType LegalType { get; set; } = LegalType.Company;
 
         public virtual void LoadFrom(ViewModels.Customer data)
         {
