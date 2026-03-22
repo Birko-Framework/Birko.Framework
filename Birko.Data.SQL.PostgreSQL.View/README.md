@@ -29,6 +29,28 @@ connector.DropMaterializedView("user_stats_view");
 // Async equivalents
 await connector.CreateViewAsync(typeof(CustomerOrderView));
 bool exists = await connector.ViewExistsAsync("customer_orders_view");
+
+// Async materialized view methods
+await connector.CreateMaterializedViewAsync(typeof(UserStatsView));
+await connector.RefreshMaterializedViewAsync("user_stats_view", concurrently: true);
+await connector.DropMaterializedViewAsync("user_stats_view");
+bool matExists = await connector.MaterializedViewExistsAsync("user_stats_view");
+```
+
+### Async Materialized Views
+
+All materialized view operations have async variants for non-blocking execution:
+
+```csharp
+// Create a materialized view asynchronously
+await connector.CreateMaterializedViewAsync(typeof(UserStatsView));
+
+// Refresh with optional concurrent mode (requires a unique index on the view)
+await connector.RefreshMaterializedViewAsync("user_stats_view", concurrently: true);
+
+// Check existence and drop
+bool exists = await connector.MaterializedViewExistsAsync("user_stats_view");
+await connector.DropMaterializedViewAsync("user_stats_view");
 ```
 
 ## Dependencies

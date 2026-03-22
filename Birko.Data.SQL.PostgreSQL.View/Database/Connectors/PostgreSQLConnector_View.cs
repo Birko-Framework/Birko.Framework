@@ -1,3 +1,7 @@
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace Birko.Data.SQL.Connectors
 {
     public partial class PostgreSQLConnector
@@ -17,6 +21,30 @@ namespace Birko.Data.SQL.Connectors
             DoCommand((command) =>
             {
                 command.CommandText = "SELECT 1 FROM information_schema.views WHERE table_name = @viewName";
+                var param = command.CreateParameter();
+                param.ParameterName = "@viewName";
+                param.Value = viewName;
+                command.Parameters.Add(param);
+            }, (command) =>
+            {
+                using var reader = command.ExecuteReader();
+                exists = reader.HasRows;
+            });
+            return exists;
+        }
+
+        /// <summary>
+        /// Checks if a materialized view exists in PostgreSQL using pg_matviews.
+        /// </summary>
+        public bool MaterializedViewExists(string viewName)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
+
+            bool exists = false;
+            DoCommand((command) =>
+            {
+                command.CommandText = "SELECT 1 FROM pg_matviews WHERE matviewname = @viewName";
                 var param = command.CreateParameter();
                 param.ParameterName = "@viewName";
                 param.Value = viewName;
@@ -96,6 +124,117 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.ExecuteNonQuery();
             }, true);
+        }
+
+        /// <summary>
+        /// Asynchronously creates a materialized view in PostgreSQL.
+        /// Materialized views store query results physically and must be refreshed manually.
+        /// </summary>
+        /// <param name="viewType">The type decorated with ViewAttribute(s).</param>
+        /// <param name="viewName">Optional custom view name.</param>
+        /// <param name="ct">Cancellation token.</param>
+        public Task CreateMaterializedViewAsync(System.Type viewType, string? viewName = null, CancellationToken ct = default)
+        {
+            var view = DataBase.LoadView(viewType);
+            if (view == null || view.Tables == null || !view.Tables.Any())
+            {
+                throw new System.InvalidOperationException($"Type '{viewType.Name}' does not have valid view attributes.");
+            }
+
+            var name = viewName ?? view.Name;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new System.InvalidOperationException("View name cannot be empty.");
+            }
+
+            var selectSql = BuildViewSelectSql(view);
+
+            return Task.Run(() =>
+            {
+                DoCommandWithTransaction((command) =>
+                {
+                    command.CommandText = "CREATE MATERIALIZED VIEW IF NOT EXISTS " + QuoteIdentifier(name!) + " AS " + selectSql;
+                }, (command) =>
+                {
+                    command.ExecuteNonQuery();
+                }, true);
+            }, ct);
+        }
+
+        /// <summary>
+        /// Asynchronously refreshes a materialized view in PostgreSQL.
+        /// </summary>
+        /// <param name="viewName">The name of the materialized view to refresh.</param>
+        /// <param name="concurrently">If true, refreshes without locking the view for reads (requires a unique index).</param>
+        /// <param name="ct">Cancellation token.</param>
+        public Task RefreshMaterializedViewAsync(string viewName, bool concurrently = false, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
+
+            return Task.Run(() =>
+            {
+                DoCommandWithTransaction((command) =>
+                {
+                    command.CommandText = concurrently
+                        ? "REFRESH MATERIALIZED VIEW CONCURRENTLY " + QuoteIdentifier(viewName)
+                        : "REFRESH MATERIALIZED VIEW " + QuoteIdentifier(viewName);
+                }, (command) =>
+                {
+                    command.ExecuteNonQuery();
+                }, true);
+            }, ct);
+        }
+
+        /// <summary>
+        /// Asynchronously drops a materialized view in PostgreSQL.
+        /// </summary>
+        /// <param name="viewName">The name of the materialized view to drop.</param>
+        /// <param name="ct">Cancellation token.</param>
+        public Task DropMaterializedViewAsync(string viewName, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
+
+            return Task.Run(() =>
+            {
+                DoCommandWithTransaction((command) =>
+                {
+                    command.CommandText = "DROP MATERIALIZED VIEW IF EXISTS " + QuoteIdentifier(viewName);
+                }, (command) =>
+                {
+                    command.ExecuteNonQuery();
+                }, true);
+            }, ct);
+        }
+
+        /// <summary>
+        /// Asynchronously checks if a materialized view exists in PostgreSQL using pg_matviews.
+        /// </summary>
+        /// <param name="viewName">The name of the materialized view to check.</param>
+        /// <param name="ct">Cancellation token.</param>
+        public Task<bool> MaterializedViewExistsAsync(string viewName, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(viewName))
+                throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
+
+            return Task.Run(() =>
+            {
+                bool exists = false;
+                DoCommand((command) =>
+                {
+                    command.CommandText = "SELECT 1 FROM pg_matviews WHERE matviewname = @viewName";
+                    var param = command.CreateParameter();
+                    param.ParameterName = "@viewName";
+                    param.Value = viewName;
+                    command.Parameters.Add(param);
+                }, (command) =>
+                {
+                    using var reader = command.ExecuteReader();
+                    exists = reader.HasRows;
+                });
+                return exists;
+            }, ct);
         }
     }
 }
