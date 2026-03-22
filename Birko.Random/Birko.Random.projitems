@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a3b4c5d6-e7f8-4a9b-8c1d-2e3f4a5b6c7d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Random</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IRandomProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\SystemRandomProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\CryptoRandomProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\XorShiftProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\MersenneTwisterProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\SplitMixProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\TestRandomProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Distributions\UniformDistribution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Distributions\NormalDistribution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Distributions\ExponentialDistribution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Distributions\PoissonDistribution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Distributions\BernoulliDistribution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sequences\GuidGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sequences\NanoIdGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sequences\SnowflakeGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sequences\TokenGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Noise\PerlinNoise.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Noise\SimplexNoise.cs" />
+  </ItemGroup>
+</Project>
