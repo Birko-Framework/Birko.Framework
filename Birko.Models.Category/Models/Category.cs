@@ -5,9 +5,13 @@ using System.Text;
 
 namespace Birko.Models.Category
 {
-    public class Category : Data.Models.AbstractLogModel, Data.Models.ILoadable<Birko.Models.Category.ViewModels.Category>
+    public class Category
+        : Data.Models.AbstractLogModel
+        , Data.Models.ILoadable<Birko.Models.Category.ViewModels.Category>
+        , Birko.Models.Contracts.IHierarchical
     {
         public string Title { get; set; } = null!;
+        public Guid? ParentGuid { get; set; }
         public string Path { get; set; } = null!;
         public string Description { get; set; } = null!;
 
