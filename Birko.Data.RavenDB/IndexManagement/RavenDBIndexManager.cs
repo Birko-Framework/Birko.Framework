@@ -1,9 +1,12 @@
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
+using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Operations.Indexes;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using IndexDefinition = Birko.Data.Patterns.IndexManagement.IndexDefinition;
@@ -216,6 +219,147 @@ namespace Birko.Data.RavenDB.IndexManagement
             if (stats == null) return Array.Empty<string>();
 
             return stats.Where(s => s.IsStale).Select(s => s.Name).ToList();
+        }
+
+        /// <summary>
+        /// Deploys all <see cref="AbstractIndexCreationTask"/> implementations found in the specified assembly.
+        /// </summary>
+        /// <param name="assembly">The assembly to scan for index creation tasks.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>List of deployed index names.</returns>
+        public async Task<IReadOnlyList<string>> DeployFromAssemblyAsync(Assembly assembly, CancellationToken ct = default)
+        {
+            if (assembly == null) throw new ArgumentNullException(nameof(assembly));
+
+            var indexTypes = assembly.GetTypes()
+                .Where(t => !t.IsAbstract && typeof(AbstractIndexCreationTask).IsAssignableFrom(t) && t.GetConstructor(Type.EmptyTypes) != null)
+                .ToList();
+
+            var deployed = new List<string>();
+
+            foreach (var type in indexTypes)
+            {
+                var index = (AbstractIndexCreationTask)Activator.CreateInstance(type)!;
+                try
+                {
+                    await index.ExecuteAsync(_documentStore, token: ct).ConfigureAwait(false);
+                    deployed.Add(index.IndexName);
+                }
+                catch (Exception ex)
+                {
+                    throw new IndexManagementException(
+                        $"Failed to deploy index '{index.IndexName}' from type '{type.FullName}'.",
+                        index.IndexName, null, ex);
+                }
+            }
+
+            return deployed;
+        }
+
+        /// <summary>
+        /// Deploys all <see cref="AbstractIndexCreationTask"/> implementations found in the assembly containing <typeparamref name="TAssemblyMarker"/>.
+        /// </summary>
+        public Task<IReadOnlyList<string>> DeployFromAssemblyAsync<TAssemblyMarker>(CancellationToken ct = default)
+        {
+            return DeployFromAssemblyAsync(typeof(TAssemblyMarker).Assembly, ct);
+        }
+
+        #endregion
+
+        #region Map/Reduce Query Helpers
+
+        /// <summary>
+        /// Queries a Map/Reduce index and returns typed results with optional filtering, ordering, and paging.
+        /// </summary>
+        /// <typeparam name="TResult">The result type matching the index's Reduce output shape.</typeparam>
+        /// <param name="indexName">The name of the Map/Reduce index to query.</param>
+        /// <param name="filter">Optional filter expression applied to the reduced results.</param>
+        /// <param name="orderBy">Optional ordering expression.</param>
+        /// <param name="descending">Whether to order descending. Default is false.</param>
+        /// <param name="skip">Number of results to skip.</param>
+        /// <param name="take">Maximum number of results to return.</param>
+        /// <param name="ct">Cancellation token.</param>
+        public async Task<IReadOnlyList<TResult>> QueryMapReduceAsync<TResult>(
+            string indexName,
+            Expression<Func<TResult, bool>>? filter = null,
+            Expression<Func<TResult, object>>? orderBy = null,
+            bool descending = false,
+            int? skip = null,
+            int? take = null,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
+
+            using var session = _documentStore.OpenAsyncSession();
+            var query = session.Query<TResult>(indexName);
+
+            if (filter != null)
+            {
+                query = query.Where(filter);
+            }
+
+            IQueryable<TResult> sorted = query;
+
+            if (orderBy != null)
+            {
+                sorted = descending
+                    ? query.OrderByDescending(orderBy)
+                    : query.OrderBy(orderBy);
+            }
+
+            if (skip.HasValue)
+            {
+                sorted = sorted.Skip(skip.Value);
+            }
+
+            if (take.HasValue)
+            {
+                sorted = sorted.Take(take.Value);
+            }
+
+            return await ((IRavenQueryable<TResult>)sorted).ToListAsync(ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Queries a Map/Reduce index and returns the first matching result, or null if none found.
+        /// </summary>
+        public async Task<TResult?> QueryMapReduceFirstAsync<TResult>(
+            string indexName,
+            Expression<Func<TResult, bool>>? filter = null,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
+
+            using var session = _documentStore.OpenAsyncSession();
+            var query = session.Query<TResult>(indexName);
+
+            if (filter != null)
+            {
+                query = query.Where(filter);
+            }
+
+            return await query.FirstOrDefaultAsync(ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Counts results in a Map/Reduce index with an optional filter.
+        /// </summary>
+        public async Task<int> CountMapReduceAsync<TResult>(
+            string indexName,
+            Expression<Func<TResult, bool>>? filter = null,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
+
+            using var session = _documentStore.OpenAsyncSession();
+            var query = session.Query<TResult>(indexName);
+
+            if (filter != null)
+            {
+                return await query.CountAsync(filter, ct).ConfigureAwait(false);
+            }
+
+            return await query.CountAsync(ct).ConfigureAwait(false);
         }
 
         #endregion

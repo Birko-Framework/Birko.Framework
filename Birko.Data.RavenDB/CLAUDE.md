@@ -146,6 +146,21 @@ using (var session = Store.OpenSession())
 }
 ```
 
+## Index Management
+
+### RavenDBIndexManager
+- `ExistsAsync`, `CreateAsync`, `DropAsync`, `ListAsync`, `GetInfoAsync` — IIndexManager implementation
+- `CreateFromTaskAsync<TIndex>()` — Deploy a single AbstractIndexCreationTask
+- `DeployFromAssemblyAsync(assembly)` — Scan assembly for all AbstractIndexCreationTask types and deploy them
+- `DeployFromAssemblyAsync<TMarker>()` — Generic overload using marker type's assembly
+- `ResetAsync`, `EnableAsync`, `DisableAsync`, `SetPriorityAsync`, `GetStaleIndexesAsync`
+- Map/Reduce support via Properties dict ("Map", "Reduce" keys)
+
+### Map/Reduce Query Helpers
+- `QueryMapReduceAsync<TResult>(indexName, filter?, orderBy?, descending?, skip?, take?)` — Query index with LINQ expressions
+- `QueryMapReduceFirstAsync<TResult>(indexName, filter?)` — First-or-default from index
+- `CountMapReduceAsync<TResult>(indexName, filter?)` — Count results in index
+
 ## Indexes
 
 RavenDB uses indexes for queries:
