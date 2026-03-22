@@ -22,14 +22,18 @@ Zero-dependency foundation providing pure interfaces and shared utilities:
 Models reference `IGuidEntity`/`ILogEntity` interfaces (from Birko.Contracts), not ViewModel types. ViewModels reference Model types. This breaks the circular dependency.
 
 #### Business Models (Birko.Models)
-- **Birko.Models** - Base models (`AbstractPercentage`, `AbstractTree`, `ValueData`, `SourceValue`)
-- **Birko.Models.Product** - Product-specific models
-- **Birko.Models.Category** - Category-specific models
+- **Birko.Models.Contracts** - Domain interfaces (ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
+- **Birko.Models** - Base models (`AbstractPercentage`, `AbstractTree`, `ValueData`, `SourceValue`) + Value Objects (`Money`, `MoneyWithTax`, `Percentage`, `PostalAddress`, `Quantity`)
+- **Birko.Models.Product** - Product-specific models (implements ICatalogItem)
+- **Birko.Models.Category** - Category-specific models (implements IHierarchical)
 - **Birko.Models.SEO** - SEO-specific models
-- **Birko.Models.Accounting** - Currency, Tax, PriceGroup, MeasureUnit
-- **Birko.Models.Customers** - Address, Customer, InvoiceAddress
+- **Birko.Models.Accounting** - Currency, Tax, PriceGroup, MeasureUnit (legacy — use Pricing for new consumers)
+- **Birko.Models.Customers** - Address, Customer, InvoiceAddress (implements IAddressable, IContactable)
 - **Birko.Models.Users** - User, UserAgenda, Agenda
-- **Birko.Models.Warehouse** - Item, ItemVariant, Repository, WareHouseDocument
+- **Birko.Models.Warehouse** - Item, ItemVariant, Repository, WareHouseDocument (legacy — use Inventory for new consumers)
+- **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
+- **Birko.Models.Pricing** - Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount (clean, no SQL attrs)
+- **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry)
 
 #### Namespace Convention
 - **Models:** Base namespace (e.g., `Birko.Models.Product`)

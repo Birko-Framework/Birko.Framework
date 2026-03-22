@@ -42,6 +42,12 @@ Birko.Contracts (zero deps: ILoadable, ICopyable, IDefault, ITimestamped, IGuidE
     -> Birko.Data.Stores (store interfaces, imports Configuration)
       -> Birko.Data.Repositories
 
+Birko.Models.Contracts (zero deps: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
+  -> Birko.Models (AbstractPercentage, AbstractTree, ValueData + Value Objects: Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
+    -> Birko.Models.Inventory (StockItem, StorageLocation, InventoryDocument — clean, no SQL attrs)
+    -> Birko.Models.Pricing (Currency, Tax, PriceGroup, PriceList, Discount — clean, no SQL attrs)
+    -> Birko.Models.SQL (ModelMap<T>, IModelMapping<T>, ModelMapRegistry — fluent SQL mapping)
+
 Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider)
   -> Birko.Time (calendars, working hours, time zones)
 ```
@@ -63,6 +69,15 @@ Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, T
 ## Important Notes
 
 ### Recent Updates
+
+#### Birko.Models Restructuring (2026-03-22)
+Three-phase restructuring of the model layer:
+- **Birko.Models.Contracts** — Domain interfaces: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument/IDocumentLine, IContactable, IAddressable
+- **Birko.Models (Value Objects)** — Money, MoneyWithTax, Percentage, PostalAddress, Quantity
+- **Birko.Models.Inventory** — Clean replacement for Warehouse: StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument, InventoryDocumentLine
+- **Birko.Models.Pricing** — Pricing domain: Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount
+- **Birko.Models.SQL** — Fluent SQL mapping framework: ModelMap\<T\>, IModelMapping\<T\>, ModelMapRegistry
+- Existing models implement contracts additively (Product→ICatalogItem, Item→ICatalogItem+ICategorizeable, Address→IAddressable+IContactable, ValueData→IPriceable, AbstractTree→IHierarchical, Category→IHierarchical)
 
 #### New Model Projects (2026-03-06)
 Extracted reusable models from FisData.Stock:

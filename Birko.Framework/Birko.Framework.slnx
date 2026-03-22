@@ -110,12 +110,16 @@
     <Project Path="../Birko.Random/Birko.Random.shproj" />
   </Folder>
   <Folder Name="/Models/">
+    <Project Path="../Birko.Models.Contracts/Birko.Models.Contracts.shproj" />
     <Project Path="../Birko.Models/Birko.Models.shproj" />
     <Project Path="../Birko.Models.Accounting/Birko.Models.Accounting.shproj" />
     <Project Path="../Birko.Models.Category/Birko.Models.Category.shproj" />
     <Project Path="../Birko.Models.Customers/Birko.Models.Customers.shproj" />
+    <Project Path="../Birko.Models.Inventory/Birko.Models.Inventory.shproj" />
+    <Project Path="../Birko.Models.Pricing/Birko.Models.Pricing.shproj" />
     <Project Path="../Birko.Models.Product/Birko.Models.Product.shproj" />
     <Project Path="../Birko.Models.SEO/Birko.Models.SEO.shproj" />
+    <Project Path="../Birko.Models.SQL/Birko.Models.SQL.shproj" />
     <Project Path="../Birko.Models.Users/Birko.Models.Users.shproj" />
     <Project Path="../Birko.Models.Warehouse/Birko.Models.Warehouse.shproj" />
   </Folder>

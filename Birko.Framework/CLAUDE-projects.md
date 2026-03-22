@@ -56,12 +56,16 @@
 - **Birko.Messaging.Razor** - Razor template engine (RazorLight-based, .cshtml templates)
 
 ## Models
-- **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue)
+- **Birko.Models.Contracts** - Domain contract interfaces (ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
+- **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue) + Value Objects (Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
 - **Birko.Models.Product** / **.Category** / **.SEO**
 - **Birko.Models.Accounting** - Currency, Tax, PriceGroup, MeasureUnit
 - **Birko.Models.Customers** - Address, Customer, InvoiceAddress
 - **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Agenda
-- **Birko.Models.Warehouse** - Item, ItemVariant, Repository, WareHouseDocument
+- **Birko.Models.Warehouse** - Item, ItemVariant, Repository, WareHouseDocument (legacy — use Inventory for new consumers)
+- **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
+- **Birko.Models.Pricing** - Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount (clean, no SQL attrs)
+- **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry) — replaces attribute-based mapping
 
 ## Validation & Rules
 - **Birko.Validation** - Fluent validation (IValidator<T>, AbstractValidator<T>, built-in rules, store wrappers)

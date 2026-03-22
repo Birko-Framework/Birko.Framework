@@ -212,7 +212,7 @@ Pluggable random number generation with testable abstractions.
 - [ ] OAuth2 server (Birko.Security.OAuth.Server) — Token endpoint, authorization endpoint, client registration, consent management (needs Birko.Data.Stores for token/client persistence)
 
 ### Birko.Models — Restructuring
-**Status:** Planned | **Priority:** Next
+**Status:** Done (Phase A+B+C) | **Priority:** ~~Next~~ Complete
 
 Current problems:
 - SQL attributes (`[Table]`, `[UniqueField]`, `[PrecisionField]`) baked into domain models
@@ -223,49 +223,62 @@ Current problems:
 - Inconsistent base classes (`Product` → `AbstractLogModel`, `Item` → `AbstractDatabaseLogModel`)
 - 1:1 Model↔ViewModel mirroring creates massive duplication
 
-**Phase A — Contracts & Value Objects (non-breaking)**
+**Phase A — Contracts & Value Objects (Done)**
 
 New project `Birko.Models.Contracts/`:
-- [ ] `ICatalogItem` — Name, Code, BarCode, Description
-- [ ] `IPriceable` — Price, PriceVAT, VAT, Currency
-- [ ] `IVariantable` — Variants collection
-- [ ] `ICategorizeable` — CategoryId
-- [ ] `IBatchable` — BatchNumber, ExpiryDate
-- [ ] `ILocatable` — LocationId (warehouse/building)
-- [ ] `IHierarchical` — ParentId, Path (replaces AbstractTree)
-- [ ] `IDocument` / `IDocumentLine` — DocumentNumber, Status, Lines / Quantity, UnitPrice
-- [ ] `IContactable` / `IAddressable` — Phone, Email / Street, City, ZIP, Country
+- [x] `ICatalogItem` — Name, Code, BarCode, Description
+- [x] `IPriceable` — Price, PriceVAT, VAT
+- [x] `IVariantable` — Variants collection
+- [x] `ICategorizeable` — CategoryGuid
+- [x] `IBatchable` — BatchNumber, ExpiryDate
+- [x] `ILocatable` — LocationGuid
+- [x] `IHierarchical` — ParentGuid, Path
+- [x] `IDocument` / `IDocumentLine` — DocumentNumber, Status, Lines / Quantity, UnitPrice
+- [x] `IContactable` / `IAddressable` — Phone, Email / Street, StreetNumber, City, ZIP, Country
 
 New value objects in `Birko.Models/ValueObjects/`:
-- [ ] `Money` — Amount + CurrencyCode (replaces scattered decimals)
-- [ ] `MoneyWithTax` — Price + PriceVAT + VAT (replaces ValueData)
-- [ ] `Percentage` — Value decimal (replaces AbstractPercentage)
-- [ ] `PostalAddress` — Street, City, Zip, Country, State (immutable record)
-- [ ] `Quantity` — Amount + Unit
+- [x] `Money` — Amount + CurrencyCode (replaces scattered decimals)
+- [x] `MoneyWithTax` — Price + PriceVAT + VAT (replaces ValueData)
+- [x] `Percentage` — Value decimal (replaces AbstractPercentage)
+- [x] `PostalAddress` — Street, StreetNumber, City, Zip, Country, State (immutable)
+- [x] `Quantity` — Amount + Unit
 
-Have old models implement new contracts for gradual compatibility.
+Contract adoption on existing models:
+- [x] `Product` → `ICatalogItem` (SKUCode mapped to Code via explicit interface)
+- [x] `Warehouse.Item` → `ICatalogItem`, `ICategorizeable`
+- [x] `Address` → `IAddressable`, `IContactable`
+- [x] `ContactPerson` → `IContactable`
+- [x] `ValueData` → `IPriceable`
+- [x] `AbstractTree` → `IHierarchical` (added ParentGuid)
 
-**Phase B — Clean domain model projects (parallel to old)**
+**Phase B — Clean domain model projects (Done)**
 
 | New Project | Replaces | Key Changes |
 |-------------|----------|-------------|
-| `Birko.Models.Catalog` | Birko.Models.Product + Category | Product with variants, attributes, categories. No SQL attributes. |
-| `Birko.Models.Inventory` | Birko.Models.Warehouse | StockItem, StockMovement, StorageLocation (renamed from Repository), ReceiptDocument, IssueDocument, TransferDocument. Pricing extracted. |
-| `Birko.Models.Pricing` | Pricing fields from Warehouse + Accounting | PriceGroup, PriceList, PriceListEntry, Tax, Currency, Discount. Uses Money value object. |
+| `Birko.Models.Inventory` | Birko.Models.Warehouse | StockItem, StockItemVariant, StorageLocation (renamed from Repository), StockMovement, InventoryDocument, InventoryDocumentLine. Pricing extracted. No SQL attrs. |
+| `Birko.Models.Pricing` | Pricing fields from Warehouse + Accounting | Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount. No SQL attrs. |
 
-Refactor existing:
+Contracts added to existing (kept separate, not merged):
 | Project | Changes |
 |---------|---------|
-| `Birko.Models.Users` | Remove SQL attributes, rename Agenda→Tenant |
-| `Birko.Models.Customers` | Remove SQL attributes, use PostalAddress value object |
-| `Birko.Models.Accounting` | Keep Tax, Currency, MeasureUnit. Move PriceGroup to Pricing. |
+| `Birko.Models.Product` | Implements `ICatalogItem` |
+| `Birko.Models.Category` | Implements `IHierarchical`, added `ParentGuid` |
 
-**Phase C — SQL separation**
+Existing projects unchanged for backward compatibility:
+| Project | Status |
+|---------|--------|
+| `Birko.Models.Users` | Unchanged — Agenda→Tenant rename deferred to Phase C |
+| `Birko.Models.Customers` | Unchanged — PostalAddress adoption deferred to Phase C |
+| `Birko.Models.Accounting` | Unchanged — PriceGroup duplicated in Pricing for new consumers |
+
+**Phase C — SQL separation (Done)**
 
 New project `Birko.Models.SQL/`:
-- [ ] SQL mapping via partial classes or fluent `ModelMap<T>.ToTable("X").HasUnique(p => p.SKU)` configuration
-- [ ] All `[Table]`, `[UniqueField]`, `[PrecisionField]`, `[ScaleField]` attributes move here
-- [ ] Models extend clean `AuditableModel` instead of `AbstractDatabaseLogModel`
+- [x] Fluent `ModelMap<T>` API: `ToTable("X")`, `HasUnique()`, `HasPrimary()`, `Property().HasPrecision()` etc.
+- [x] `IModelMapping<T>` interface for defining mappings
+- [x] `ModelMapRegistry` with assembly scanning and caching
+- [x] Example mappings: StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping
+- [x] New clean models (Inventory, Pricing) use `AbstractLogModel` — no `AbstractDatabaseLogModel` dependency
 
 **Migration path:**
 1. Phase A — additive, zero breakage. Old models implement new contracts.
@@ -341,9 +354,9 @@ See [docs/consumers.md](docs/consumers.md) for detailed per-project breakdown.
 
 | Consumer | Birko Projects | Primary Data Store |
 |----------|---------------|-------------------|
-| Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES |
-| DraCode | 26 | SQLite |
-| Affiliate | 22 | Elasticsearch, InfluxDB |
+| Symbio | 54 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES |
+| DraCode | 27 | SQLite |
+| Affiliate | 23 | Elasticsearch, InfluxDB |
 | FisData.Stock | 0 | *(inactive — models extracted to Birko.Models.*)* |
 
 ---
@@ -358,4 +371,4 @@ For implementation details, refer to:
 
 ---
 
-**Last Updated:** 2026-03-20
+**Last Updated:** 2026-03-22

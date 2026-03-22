@@ -23,7 +23,8 @@ Core domain layer shared across all Symbio modules.
 | Birko.Data.Patterns | Unit of Work, Soft Delete, Audit, Paging |
 | Birko.Data.Tenant | Multi-tenancy support |
 | Birko.Helpers | String, HTML, Object, Enumerable utilities |
-| Birko.Models | Base models (AbstractPercentage, AbstractTree, ValueData) |
+| Birko.Models.Contracts | Domain interfaces (ICatalogItem, IPriceable, IHierarchical, etc.) |
+| Birko.Models | Base models (AbstractPercentage, AbstractTree, ValueData) + Value Objects |
 | Birko.Models.Accounting | Currency, Tax, PriceGroup, MeasureUnit |
 | Birko.Models.Users | User, Role, RBAC, Agenda |
 | Birko.Models.Customers | Address, Customer, InvoiceAddress |
@@ -94,6 +95,15 @@ IoT module with MQTT messaging.
 | Birko.MessageQueue.MQTT | MQTT broker integration |
 | + shared | Communication, Network, Hardware, Bluetooth |
 
+### Symbio.Module.Warehouse (3 projects)
+Warehouse/inventory module with clean Birko model projects.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Models.Inventory | StockItem, StorageLocation, InventoryDocument (clean, no SQL attrs) |
+| Birko.Models.Pricing | Currency, Tax, PriceGroup, PriceList, Discount (clean, no SQL attrs) |
+| Birko.Models.SQL | Fluent SQL mapping framework |
+
 ### Symbio-specific features (not in Birko scope)
 - Module discovery/registration (IModule, ModuleRegistrar, dependency graph)
 - Unified real-time notifier (SSE + WebSocket combined, tenant-aware)
@@ -127,6 +137,7 @@ Main application with SQLite data layer and event sourcing.
 | Birko.Caching | In-memory caching |
 | Birko.EventBus | In-process event bus |
 | Birko.Helpers | Utility helpers |
+| Birko.Models.Contracts | Domain interfaces |
 | Birko.Models | Base models |
 | Birko.Rules | Rule engine |
 | Birko.Serialization | Serialization abstraction |
@@ -185,6 +196,7 @@ Main application with Elasticsearch data layer and caching.
 | Birko.Data.InfluxDB.ViewModel | InfluxDB ViewModel repository |
 | Birko.Caching | In-memory caching |
 | Birko.Helpers | Utility helpers |
+| Birko.Models.Contracts | Domain interfaces |
 | Birko.Models | Base models |
 | Birko.Models.Category | Category models |
 | Birko.Models.Product | Product models |
@@ -227,7 +239,7 @@ FisData.Stock.Core models were refactored in March 2026 to extend Birko.Models.*
 
 | Consumer | Birko Projects | Primary Data Store | Key Features Used |
 |----------|---------------|-------------------|-------------------|
-| Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES | Full stack: IoT, multi-tenant, event sourcing, health, telemetry |
-| DraCode | 26 | SQLite | WebSocket real-time, event sourcing, in-memory messaging |
-| Affiliate | 22 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
+| Symbio | 54 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES | Full stack: IoT, multi-tenant, event sourcing, health, telemetry |
+| DraCode | 27 | SQLite | WebSocket real-time, event sourcing, in-memory messaging |
+| Affiliate | 23 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
 | FisData.Stock | 0 | *(inactive)* | Models extracted to Birko.Models.* |
