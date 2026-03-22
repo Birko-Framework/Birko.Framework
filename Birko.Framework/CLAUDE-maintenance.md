@@ -47,7 +47,7 @@ Existing folder groups:
 - **Data.SQL/** — Birko.Data.SQL, MSSql, MySQL, PostgreSQL, SqLite, View
 - **Data.Sync/** — Birko.Data.Sync.*
 - **Data.ViewModels/** — Birko.Data.*.ViewModel
-- **Helpers/** — Birko.Helpers, Birko.Structures
+- **Helpers/** — Birko.Helpers, Birko.Structures, Birko.Random
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
 - **Security/** — Birko.Security, Birko.Security.Jwt/AspNetCore/BCrypt/Vault/AzureKeyVault/NFC

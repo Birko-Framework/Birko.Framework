@@ -39,6 +39,7 @@
 - **Birko.Data.SQL.Caching** - Query caching decorator for SQL stores (CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions)
 - **Birko.Data.Processors** - Stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Structures** - Data structures (trees, etc.)
+- **Birko.Random** - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix, TestRandom), distributions, sequences (GuidV4/V7, NanoId, Snowflake, tokens), noise (Perlin, Simplex)
 - **Birko.Helpers** - Data helper utilities
 
 ## Communication
@@ -137,6 +138,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
+- Birko.Random.Tests
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.
