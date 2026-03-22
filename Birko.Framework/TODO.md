@@ -161,8 +161,8 @@ Extend existing tree structures (AVL, BST, Tree) with general-purpose data struc
 
 ---
 
-### Birko.Random — Random Number Generators
-**Status:** Planned | **Priority:** Low
+### Birko.Random — Random Number Generators (Done)
+**Status:** Done | **Priority:** Low
 
 Pluggable random number generation with testable abstractions.
 
