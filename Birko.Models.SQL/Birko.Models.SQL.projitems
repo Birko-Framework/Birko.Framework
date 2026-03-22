@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Models.SQL</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\IModelMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\ModelMap.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\ModelMapRegistry.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\PropertyMap.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\PropertyMapBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\StockItemMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\StorageLocationMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\InventoryDocumentLineMapping.cs" />
+  </ItemGroup>
+</Project>
