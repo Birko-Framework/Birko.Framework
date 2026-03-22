@@ -1,10 +1,8 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Customers
 {
-    [Table("CustomerAddresses")]
     public class CustomerAddress
         : Address
         , IRelatedToCustomer

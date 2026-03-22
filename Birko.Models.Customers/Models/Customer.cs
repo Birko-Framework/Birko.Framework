@@ -1,7 +1,5 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
-using Birko.Models.Accounting;
 
 namespace Birko.Models.Customers
 {
@@ -18,11 +16,9 @@ namespace Birko.Models.Customers
         Person = 1
     }
 
-    [Table("Customers")]
     public class Customer
         : BaseCustomer
         , Birko.Data.Models.ILoadable<ViewModels.Customer>
-        , IRelatedToPriceGroup
     {
         public Guid? PriceGroupGuid { get; set; }
         public PartnerType PartnerType { get; set; } = PartnerType.Customer;
@@ -37,7 +33,7 @@ namespace Birko.Models.Customers
             }
         }
 
-        public virtual void LoadFrom(Birko.Models.Accounting.ViewModels.PriceGroup data)
+        public virtual void LoadFrom(Birko.Models.Pricing.ViewModels.PriceGroup data)
         {
             if (data != null)
             {

@@ -1,6 +1,6 @@
 using System;
 using System.Linq;
-using Birko.Models.Accounting.ViewModels;
+using Birko.Models.Pricing.ViewModels;
 
 namespace Birko.Models.Customers.ViewModels
 {

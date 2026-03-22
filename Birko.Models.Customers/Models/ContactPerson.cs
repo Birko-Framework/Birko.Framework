@@ -1,5 +1,4 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Customers
@@ -7,25 +6,20 @@ namespace Birko.Models.Customers
     /// <summary>
     /// Contact person associated with a customer/partner.
     /// </summary>
-    [Table("ContactPersons")]
     public class ContactPerson
-        : AbstractDatabaseLogModel
+        : AbstractLogModel
         , IRelatedToCustomer
         , ILoadable<ViewModels.ContactPerson>
         , Birko.Models.Contracts.IContactable
     {
         public Guid? CustomerGuid { get; set; }
 
-        [PrecisionField(256)]
         public string Name { get; set; } = string.Empty;
 
-        [PrecisionField(256)]
         public string Position { get; set; } = string.Empty;
 
-        [PrecisionField(256)]
         public string Phone { get; set; } = string.Empty;
 
-        [PrecisionField(256)]
         public string Email { get; set; } = string.Empty;
 
         public bool IsPrimary { get; set; }

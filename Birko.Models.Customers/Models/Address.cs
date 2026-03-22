@@ -1,6 +1,6 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
+using Birko.Models.ValueObjects;
 
 namespace Birko.Models.Customers
 {
@@ -9,9 +9,8 @@ namespace Birko.Models.Customers
         Guid? AddressGuid { get; set; }
     }
 
-    [Table("Addresses")]
     public class Address
-        : Birko.Data.Models.AbstractDatabaseLogModel
+        : Birko.Data.Models.AbstractLogModel
         , Birko.Data.Models.ILoadable<ViewModels.Address>
         , ICopyable<Address>
         , Birko.Models.Contracts.IAddressable
@@ -62,6 +61,21 @@ namespace Birko.Models.Customers
             Country = data.Country;
             Phone = data.Phone;
             Email = data.Email;
+        }
+
+        public PostalAddress ToPostalAddress()
+        {
+            return new PostalAddress(Street, StreetNumber, City, ZIP, Country);
+        }
+
+        public void LoadFrom(PostalAddress address)
+        {
+            if (address == null) return;
+            Street = address.Street;
+            StreetNumber = address.StreetNumber;
+            City = address.City;
+            ZIP = address.Zip;
+            Country = address.Country;
         }
     }
 }

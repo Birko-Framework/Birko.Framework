@@ -1,5 +1,4 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Customers
@@ -9,7 +8,6 @@ namespace Birko.Models.Customers
         Guid? InvoiceAddressGuid { get; set; }
     }
 
-    [Table("InvoiceAddresses")]
     public class InvoiceAddress
         : Address
         , Birko.Data.Models.ILoadable<ViewModels.InvoiceAddress>

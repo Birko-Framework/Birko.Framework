@@ -1,5 +1,4 @@
 using System;
-using Birko.Data.SQL.Attributes;
 using Birko.Data.Models;
 
 namespace Birko.Models.Customers
@@ -9,9 +8,8 @@ namespace Birko.Models.Customers
         Guid? CustomerGuid { get; set; }
     }
 
-    [Table("Customers")]
     public class BaseCustomer
-        : Birko.Data.Models.AbstractDatabaseLogModel
+        : Birko.Data.Models.AbstractLogModel
         , Birko.Data.Models.ILoadable<ViewModels.BaseCustomer>
         , ICopyable<BaseCustomer>
     {
