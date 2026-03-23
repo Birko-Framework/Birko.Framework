@@ -49,11 +49,11 @@ Only 4 projitems-level import chains exist:
 │  Birko.Data.SQL │  │  NoSQL Stores   │  │  Feature Projects        │
 │  (← Core,Stores,│  │  (ES, JSON,     │  │  (Patterns, Migrations,  │
 │   Repositories) │  │   Mongo, Raven, │  │   Sync, Tenant, etc.)    │
-└────────┬────────┘  │   Influx)       │  └──────────────────────────┘
+└────────┬────────┘  │  Influx,Cosmos) │  └──────────────────────────┘
          │           └─────────────────┘
          ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│  SQL Providers: MSSql, PostgreSQL, MySQL, SqLite, View, TimescaleDB  │
+│  SQL Providers: MSSql, PostgreSQL, MySQL, SqLite, View, TimescaleDB │
 └──────────────────────────────────────────────────────────────────────┘
 
 ───────────────────── Communication Subtree ─────────────────────
@@ -152,6 +152,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.RavenDB** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.InfluxDB** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.TimescaleDB** | Birko.Data.Core, Birko.Data.SQL, Birko.Data.SQL.PostgreSQL, Birko.Data.Stores |
+| **Birko.Data.CosmosDB** | Birko.Data.Core, Birko.Data.Stores |
 
 ## ViewModel Layer
 
@@ -165,6 +166,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.RavenDB.ViewModel** | Birko.Data.Core, Birko.Data.RavenDB, Birko.Data.Repositories, Birko.Data.Stores, Birko.Data.ViewModel |
 | **Birko.Data.InfluxDB.ViewModel** | Birko.Data.Core, Birko.Data.InfluxDB, Birko.Data.Repositories, Birko.Data.Stores, Birko.Data.ViewModel |
 | **Birko.Data.TimescaleDB.ViewModel** | Birko.Data.Core, Birko.Data.Repositories, Birko.Data.SQL, Birko.Data.Stores, Birko.Data.TimescaleDB, Birko.Data.ViewModel |
+| **Birko.Data.CosmosDB.ViewModel** | Birko.Data.Core, Birko.Data.CosmosDB, Birko.Data.Repositories, Birko.Data.Stores, Birko.Data.ViewModel |
 
 ## Data Patterns & Features
 
@@ -178,12 +180,14 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.Migrations.RavenDB** | Birko.Data.Migrations, Birko.Data.RavenDB |
 | **Birko.Data.Migrations.InfluxDB** | Birko.Data.InfluxDB, Birko.Data.Migrations |
 | **Birko.Data.Migrations.TimescaleDB** | Birko.Data.Migrations, Birko.Data.Migrations.SQL, Birko.Data.TimescaleDB |
+| **Birko.Data.Migrations.CosmosDB** | Birko.Data.Migrations |
 | **Birko.Data.Sync** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.Sync.Sql** | Birko.Data.Core, Birko.Data.SQL, Birko.Data.Sync |
 | **Birko.Data.Sync.ElasticSearch** | Birko.Data.Core, Birko.Data.Sync |
 | **Birko.Data.Sync.Json** | Birko.Data.Core, Birko.Data.Sync |
 | **Birko.Data.Sync.MongoDb** | Birko.Data.Core, Birko.Data.Sync |
 | **Birko.Data.Sync.RavenDB** | Birko.Data.RavenDB, Birko.Data.Sync |
+| **Birko.Data.Sync.CosmosDB** | Birko.Data.CosmosDB, Birko.Data.Sync |
 | **Birko.Data.Sync.Tenant** | Birko.Data.Sync, Birko.Data.Tenant |
 | **Birko.Data.Aggregates** | Birko.Data.Core, Birko.Data.Stores, Birko.Helpers |
 | **Birko.Data.Tenant** | Birko.Data.Core, Birko.Data.Stores, Birko.Serialization |
@@ -296,6 +300,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.BackgroundJobs.RavenDB** | Birko.BackgroundJobs, Birko.Data.Core, Birko.Data.RavenDB, Birko.Data.Stores |
 | **Birko.BackgroundJobs.JSON** | Birko.BackgroundJobs, Birko.Data.Core, Birko.Data.JSON, Birko.Data.Stores, Birko.Serialization |
 | **Birko.BackgroundJobs.Redis** | Birko.BackgroundJobs, Birko.Redis, Birko.Serialization |
+| **Birko.BackgroundJobs.CosmosDB** | Birko.BackgroundJobs, Birko.Data.Core, Birko.Data.CosmosDB, Birko.Data.Stores |
 
 ## CQRS & Workflow
 
@@ -308,6 +313,7 @@ Only 4 projitems-level import chains exist:
 | **Birko.Workflow.MongoDB** | Birko.Data.MongoDB, Birko.Workflow |
 | **Birko.Workflow.RavenDB** | Birko.Data.RavenDB, Birko.Workflow |
 | **Birko.Workflow.JSON** | Birko.Data.JSON, Birko.Serialization, Birko.Workflow |
+| **Birko.Workflow.CosmosDB** | Birko.Data.CosmosDB, Birko.Workflow |
 
 ---
 

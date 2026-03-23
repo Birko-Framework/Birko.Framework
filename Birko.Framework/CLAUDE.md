@@ -86,6 +86,14 @@ Extracted reusable models from FisData.Stock:
 - **Birko.Models.Users** — User, Tenant (formerly Agenda), UserTenant
 - **Birko.Models** — Added AbstractPercentage, AbstractTree, ValueData
 
+#### Birko.Data.CosmosDB (2026-03-23)
+New Azure Cosmos DB (NoSQL API) store provider:
+- **Birko.Data.CosmosDB** — Stores (sync/async), Repositories, UnitOfWork (TransactionalBatch), IndexManagement
+- **Birko.Data.Sync.CosmosDB** — Sync knowledge store for Cosmos DB
+- **Birko.Data.Migrations.CosmosDB** — Migration framework for Cosmos DB (container, indexing policy, document ops)
+- **CosmosDbHealthCheck** added to Birko.Health.Data
+- Uses Microsoft.Azure.Cosmos SDK v3 with bulk execution enabled
+
 #### Recent Fixes (2026-03-05)
 - Replaced `NativeAsyncDataBaseStore` with `AsyncDataBaseStore` in async stores/repos
 - Fixed `AbstractAsyncStore.CreateAsync` return type: `Task` -> `Task<Guid>`

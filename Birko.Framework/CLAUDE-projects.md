@@ -21,16 +21,17 @@
 - **Birko.Data.RavenDB** - RavenDB repository/store
 - **Birko.Data.InfluxDB** - InfluxDB time-series database
 - **Birko.Data.TimescaleDB** - TimescaleDB implementation
+- **Birko.Data.CosmosDB** - Azure Cosmos DB (NoSQL API) repository/store
 
 ## ViewModel Layer
 - **Birko.Data.ViewModel** - Base ViewModel repository abstractions
 - **Birko.Data.SQL.ViewModel** - SQL ViewModel repositories
-- **Birko.Data.ElasticSearch.ViewModel** / **InfluxDB.ViewModel** / **JSON.ViewModel** / **MongoDB.ViewModel** / **RavenDB.ViewModel** / **TimescaleDB.ViewModel**
+- **Birko.Data.ElasticSearch.ViewModel** / **InfluxDB.ViewModel** / **JSON.ViewModel** / **MongoDB.ViewModel** / **RavenDB.ViewModel** / **TimescaleDB.ViewModel** / **CosmosDB.ViewModel**
 
 ## Data Features
 - **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Timestamp, Paging)
-- **Birko.Data.Migrations** + **.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.InfluxDB** / **.TimescaleDB**
-- **Birko.Data.Sync** + **.Sql** / **.ElasticSearch** / **.MongoDb** / **.RavenDB** / **.Json** / **.Tenant**
+- **Birko.Data.Migrations** + **.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.InfluxDB** / **.TimescaleDB** / **.CosmosDB**
+- **Birko.Data.Sync** + **.Sql** / **.ElasticSearch** / **.MongoDb** / **.RavenDB** / **.Json** / **.CosmosDB** / **.Tenant**
 - **Birko.Data.Aggregates** - SQL-NoSQL aggregate mapper (flatten/expand for sync)
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.EventSourcing** - Event sourcing pattern
@@ -73,7 +74,7 @@
 ## CQRS & Workflow
 - **Birko.CQRS** - Command/Query (ICommand, IQuery, IRequestHandler, IPipelineBehavior, IMediator)
 - **Birko.Workflow** - State machine engine (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
-- **Birko.Workflow.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** - Persistence backends
+- **Birko.Workflow.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** / **.CosmosDB** - Persistence backends
 
 ## Serialization
 - **Birko.Serialization** - Abstraction (ISerializer, SystemJsonSerializer, SystemXmlSerializer)
@@ -96,7 +97,7 @@
 
 ## Background Jobs & Message Queue
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, scheduler
-- **Birko.BackgroundJobs.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** / **.Redis**
+- **Birko.BackgroundJobs.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** / **.Redis** / **.CosmosDB**
 - **Birko.MessageQueue** - Core interfaces (IMessageQueue, IMessageProducer, IMessageConsumer), Pub/Sub, P2P
 - **Birko.MessageQueue.InMemory** / **.MQTT** / **.Redis**
 
@@ -108,7 +109,7 @@
 
 ## Health
 - **Birko.Health** - IHealthCheck, HealthCheckRunner, DiskSpace/Memory checks
-- **Birko.Health.Data** - SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP checks
+- **Birko.Health.Data** - SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB, Vault, MQTT, SMTP, WebSocket, TCP, SSE checks
 - **Birko.Health.Redis** - Redis PING + latency
 - **Birko.Health.Azure** - Blob Storage, Key Vault checks
 
@@ -142,7 +143,8 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
 - Birko.Random.Tests
-- Birko.Data.RavenDB.Tests
+- Birko.Data.RavenDB.Tests, Birko.Data.CosmosDB.Tests
+- Birko.Data.TimescaleDB.Tests, Birko.Data.InfluxDB.Tests, Birko.Data.JSON.Tests
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.

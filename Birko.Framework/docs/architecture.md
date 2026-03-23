@@ -98,6 +98,7 @@ All connectors are in `Birko.Data.SQL.Connectors` namespace.
 - **MongoDB** - MongoDB document database (`MongoDBStore<T>`, uses `MongoDBModel`)
 - **RavenDB** - RavenDB document database
 - **InfluxDB** - InfluxDB time-series database
+- **CosmosDB** - Azure Cosmos DB NoSQL API (`CosmosDBStore<T>`, `AsyncCosmosDBStore<T>`)
 - **JSON** - File-based JSON storage (`JsonStore<T>`)
 
 #### Repositories
@@ -130,6 +131,7 @@ ViewModel repositories provide mapping between models and view models:
 - **Birko.Data.MongoDB.ViewModel** - MongoDB ViewModel repositories
 - **Birko.Data.RavenDB.ViewModel** - RavenDB ViewModel repositories
 - **Birko.Data.TimescaleDB.ViewModel** - TimescaleDB ViewModel repositories
+- **Birko.Data.CosmosDB.ViewModel** - Cosmos DB ViewModel repositories
 
 ### 3. Feature Layers
 
@@ -137,7 +139,7 @@ ViewModel repositories provide mapping between models and view models:
 Database schema migration framework with provider-specific implementations:
 - `AbstractMigration` - Base class with `Version` (long), `Name`, `Up()`, `Down()`
 - `SqlMigration` - SQL-specific with `ExecuteSql()`, `UpSql`/`DownSql` properties, helper methods (`TableExists`, `ColumnExists`)
-- Provider-specific: SQL, ElasticSearch, MongoDB, RavenDB, InfluxDB, TimescaleDB
+- Provider-specific: SQL, ElasticSearch, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB
 
 #### Synchronization (Birko.Data.Sync)
 Data synchronization between different storage backends with provider-specific implementations:
@@ -201,6 +203,7 @@ Queue backends:
 - **RavenDB** (`Birko.BackgroundJobs.RavenDB`) - `RavenDBJobQueue`
 - **JSON** (`Birko.BackgroundJobs.JSON`) - `JsonJobQueue` for dev/testing
 - **Redis** (`Birko.BackgroundJobs.Redis`) - `RedisJobQueue` via StackExchange.Redis
+- **CosmosDB** (`Birko.BackgroundJobs.CosmosDB`) - `CosmosDBJobQueue` via Microsoft.Azure.Cosmos
 
 ### 8. Message Queue Layer (Birko.MessageQueue)
 Asynchronous messaging abstractions for pub/sub and point-to-point patterns:

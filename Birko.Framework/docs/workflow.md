@@ -148,6 +148,7 @@ var reservations = await store.FindByWorkflowNameAsync("HotelReservation");
 | **Birko.Workflow.MongoDB** | `MongoDBWorkflowInstanceStore<TData>` | `MongoDB Settings` | Document-oriented storage |
 | **Birko.Workflow.RavenDB** | `RavenDBWorkflowInstanceStore<TData>` | `RemoteSettings` | RavenDB deployments |
 | **Birko.Workflow.JSON** | `JsonWorkflowInstanceStore<TData>` | `Settings` | Development/testing |
+| **Birko.Workflow.CosmosDB** | `CosmosDBWorkflowInstanceStore<TData>` | `RemoteSettings` | Azure cloud-native |
 
 ### SQL Example
 

@@ -49,6 +49,9 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 | Birko.Data.Migrations + all providers | Done | Migration framework, all DB providers |
 | Birko.Data.Sync + all providers | Done | Data sync framework, all providers |
 | Birko.Rules | Done | Data-driven rule engine |
+| Birko.Data.CosmosDB + ViewModel + Sync + Migrations | Done | Azure Cosmos DB NoSQL API store, sync, migrations |
+| Birko.BackgroundJobs.CosmosDB | Done | Cosmos DB persistent job queue |
+| Birko.Workflow.CosmosDB | Done | Cosmos DB workflow instance persistence |
 
 ---
 
@@ -371,4 +374,4 @@ For implementation details, refer to:
 
 ---
 
-**Last Updated:** 2026-03-22
+**Last Updated:** 2026-03-23

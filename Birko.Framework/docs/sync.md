@@ -39,6 +39,7 @@ Provider-specific implementations for each storage backend:
 | MongoDB | Birko.Data.Sync.MongoDb |
 | RavenDB | Birko.Data.Sync.RavenDB |
 | JSON | Birko.Data.Sync.Json |
+| CosmosDB | Birko.Data.Sync.CosmosDB |
 | Tenant-aware | Birko.Data.Sync.Tenant |
 
 ## Usage

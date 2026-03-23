@@ -158,6 +158,78 @@ Calls `/build/version` endpoint:
 var check = new RavenDbHealthCheck("http://localhost:8080");
 ```
 
+### InfluxDbHealthCheck
+
+Calls `/ping` endpoint. Degrades above 2s:
+
+```csharp
+var check = new InfluxDbHealthCheck("http://localhost:8086");
+```
+
+### TimescaleDbHealthCheck
+
+TCP connect to PostgreSQL port. Degrades above 2s:
+
+```csharp
+var check = new TimescaleDbHealthCheck("timescale-host", 5432);
+```
+
+### CosmosDbHealthCheck
+
+HTTP GET to account endpoint (401 expected without auth — endpoint is reachable). Degrades above 2s:
+
+```csharp
+var check = new CosmosDbHealthCheck("https://myaccount.documents.azure.com:443");
+```
+
+### VaultHealthCheck
+
+Calls `/v1/sys/health`. Maps: 200=Healthy, 429/473=Degraded (standby):
+
+```csharp
+var check = new VaultHealthCheck("http://localhost:8200");
+```
+
+### MqttHealthCheck
+
+TCP connect to MQTT broker or custom ping function:
+
+```csharp
+var check = new MqttHealthCheck("mqtt-host", 1883);
+```
+
+### SmtpHealthCheck
+
+TCP connect + reads SMTP 220 banner:
+
+```csharp
+var check = new SmtpHealthCheck("smtp-host", 25);
+```
+
+### WebSocketHealthCheck
+
+WebSocket handshake or custom ping function:
+
+```csharp
+var check = new WebSocketHealthCheck("wss://example.com/ws");
+```
+
+### TcpHealthCheck
+
+Generic TCP connect test:
+
+```csharp
+var check = new TcpHealthCheck("service-host", 8080);
+```
+
+### SseHealthCheck
+
+HTTP GET with `Accept: text/event-stream`:
+
+```csharp
+var check = new SseHealthCheck("http://localhost:3000/events");
+```
+
 ## Redis Health Check (Birko.Health.Redis)
 
 Sends PING command, measures latency. Degrades above 100ms:

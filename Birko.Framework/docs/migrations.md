@@ -12,6 +12,7 @@ Birko.Data.Migrations provides a framework for managing database schema changes 
 - **RavenDB** (`Birko.Data.Migrations.RavenDB`) - RavenDB documents and indexes
 - **InfluxDB** (`Birko.Data.Migrations.InfluxDB`) - InfluxDB buckets and measurements
 - **TimescaleDB** (`Birko.Data.Migrations.TimescaleDB`) - TimescaleDB hypertables
+- **CosmosDB** (`Birko.Data.Migrations.CosmosDB`) - Cosmos DB containers and indexing policies
 
 ## Base Migration
 

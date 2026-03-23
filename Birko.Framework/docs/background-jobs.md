@@ -286,6 +286,7 @@ Uses SET NX with expiry and Lua-based safe release (checks lock token before DEL
 | **RavenDB** | Yes | Yes (built-in) | Yes | RavenDB-based applications |
 | **JSON** | Yes (files) | No | No | Development, small deployments |
 | **Redis** | Yes | Yes (Redlock) | No | High-throughput, low-latency |
+| **CosmosDB** | Yes | Yes (global) | Yes (batch) | Azure cloud-native workloads |
 
 ## See Also
 
