@@ -20,5 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)WebSocketHealthCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SseHealthCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)TcpHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosDbHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TimescaleDbHealthCheck.cs" />
   </ItemGroup>
 </Project>

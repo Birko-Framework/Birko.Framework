@@ -65,6 +65,16 @@ Health checks for infrastructure backends — databases, message brokers, secret
 - Simple TCP connect test, no protocol-specific logic
 - Reports latency, degrades above 2s
 
+### CosmosDbHealthCheck.cs
+- Takes base URL (account endpoint) + optional HttpClient
+- HTTP GET to endpoint — 401 is expected without auth (endpoint reachable)
+- Reports latency, degrades above 2s
+
+### TimescaleDbHealthCheck.cs
+- Takes host + port (default 5432, PostgreSQL)
+- TCP connect test to verify TimescaleDB/PostgreSQL reachability
+- Reports latency, degrades above 2s
+
 ### SseHealthCheck.cs
 - Takes URL + optional HttpClient
 - Sends HTTP GET with `Accept: text/event-stream`, reads response headers only
