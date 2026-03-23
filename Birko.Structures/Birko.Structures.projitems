@@ -9,13 +9,23 @@
     <Import_RootNamespace>Birko.Structures</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\TreeExtensions..cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\BinaryNodeExtensions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Extensions\Trees\NodeExtensions.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Trees\AVLTree.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Trees\Node.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\BinaryNode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\BinarySearchNode.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Trees\Node.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Trees\AVLTree.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Trees\Tree.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Trees\IntervalTree.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Graphs\Graph.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Graphs\DirectedGraph.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Graphs\WeightedGraph.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Heaps\BinaryHeap.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tries\Trie.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tries\CompressedTrie.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Caches\LruCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\BloomFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Buffers\RingBuffer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sets\DisjointSet.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Lists\SkipList.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Lists\Deque.cs" />
   </ItemGroup>
 </Project>

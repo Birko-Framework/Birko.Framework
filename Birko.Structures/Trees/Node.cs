@@ -2,208 +2,146 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Birko.Structures.Trees
+namespace Birko.Structures.Trees;
+
+/// <summary>
+/// Generic tree node that stores a value and maintains parent/children relationships.
+/// </summary>
+/// <typeparam name="T">The value type.</typeparam>
+public class Node<T>
 {
-    public abstract class Node : IComparable<Node>
+    /// <summary>
+    /// The value stored in this node.
+    /// </summary>
+    public T Value { get; set; }
+
+    /// <summary>
+    /// The parent node, or null if this is the root.
+    /// </summary>
+    public Node<T>? Parent { get; internal set; }
+
+    /// <summary>
+    /// The child nodes. Null slots represent empty positions (used by binary trees).
+    /// </summary>
+    internal List<Node<T>?> ChildList { get; set; } = new();
+
+    /// <summary>
+    /// Gets the children (non-null only).
+    /// </summary>
+    public IEnumerable<Node<T>> Children => ChildList.Where(c => c != null)!;
+
+    /// <summary>
+    /// Gets whether this is a root node (no parent).
+    /// </summary>
+    public bool IsRoot => Parent == null;
+
+    /// <summary>
+    /// Gets whether this is a leaf node (no children).
+    /// </summary>
+    public bool IsLeaf => !ChildList.Any(c => c != null);
+
+    /// <summary>
+    /// Creates a node with the specified value.
+    /// </summary>
+    public Node(T value)
     {
-        public Node? Parent { get; set; }
-        public IEnumerable<Node?>? Children { get; protected set; } = null;
-        public abstract int CompareTo(Node? other);
-        public abstract Node Insert(Node node);
+        Value = value;
+    }
 
-        public Node Insert(IEnumerable<Node> nodes)
+    /// <summary>
+    /// Adds a child node at the end.
+    /// </summary>
+    public Node<T> AddChild(T value)
+    {
+        var child = new Node<T>(value) { Parent = this };
+        ChildList.Add(child);
+        return child;
+    }
+
+    /// <summary>
+    /// Adds an existing node as a child.
+    /// </summary>
+    public void AddChild(Node<T> child)
+    {
+        child.Parent = this;
+        ChildList.Add(child);
+    }
+
+    /// <summary>
+    /// Removes a child node by reference.
+    /// </summary>
+    public bool RemoveChild(Node<T> child)
+    {
+        var index = ChildList.IndexOf(child);
+        if (index < 0) return false;
+
+        child.Parent = null;
+        ChildList[index] = null;
+        CleanupNullTail();
+        return true;
+    }
+
+    /// <summary>
+    /// Finds a node by value using DFS.
+    /// </summary>
+    public Node<T>? Find(T value, IEqualityComparer<T>? comparer = null)
+    {
+        comparer ??= EqualityComparer<T>.Default;
+
+        if (comparer.Equals(Value, value)) return this;
+
+        foreach (var child in Children)
         {
-            if (nodes?.Any() ?? false)
-            {
-                foreach (Node node in nodes)
-                {
-                    Insert(node);
-                }
-            }
-            return this;
+            var found = child.Find(value, comparer);
+            if (found != null) return found;
         }
 
-        public Node? Find(Node? node)
+        return null;
+    }
+
+    /// <summary>
+    /// Checks if a value exists in this subtree.
+    /// </summary>
+    public bool Contains(T value, IEqualityComparer<T>? comparer = null)
+    {
+        return Find(value, comparer) != null;
+    }
+
+    /// <summary>
+    /// Gets the depth of this node (distance from root).
+    /// </summary>
+    public int Depth()
+    {
+        int d = 0;
+        var current = Parent;
+        while (current != null) { d++; current = current.Parent; }
+        return d;
+    }
+
+    /// <summary>
+    /// Gets the height of this subtree.
+    /// </summary>
+    public int Height()
+    {
+        if (IsLeaf) return 1;
+        return Children.Max(c => c.Height()) + 1;
+    }
+
+    /// <summary>
+    /// Gets the total count of nodes in this subtree.
+    /// </summary>
+    public int Count()
+    {
+        return 1 + Children.Sum(c => c.Count());
+    }
+
+    public override string ToString() => Value?.ToString() ?? string.Empty;
+
+    private void CleanupNullTail()
+    {
+        while (ChildList.Count > 0 && ChildList[^1] == null)
         {
-            if (node == null)
-            {
-                return null;
-            }
-            if (CompareTo(node) == 0)
-            {
-                return this;
-            }
-
-            return FindInChildren(node);
-        }
-
-        protected virtual Node? FindInChildren(Node? node)
-        {
-            if (node == null)
-            {
-                return null;
-            }
-            if (!(Children?.Any(x => x != null) ?? false))
-            {
-                return null;
-            }
-            foreach (Node child in Children.Where(x => x != null)!)
-            {
-                Node? find = child.Find(node);
-                if (find != null)
-                {
-                    return find;
-                }
-            }
-
-            return null;
-        }
-
-        public bool Contains(Node node)
-        {
-            return Find(node) != null;
-        }
-
-        public virtual Node Remove(Node node)
-        {
-            if (node == null)
-            {
-                return this;
-            }
-            if (CompareTo(node) == 0)
-            {
-                IEnumerable<Node> siblings = Parent?.Children?.Where(x => x != null && x.CompareTo(node) != 0).Cast<Node>()! ?? Array.Empty<Node>();
-                Node? first = Children?.First();
-                if (first != null)
-                {
-                    if ((Children?.Count() ?? 0) > 1)
-                    {
-                        var remaining = Children?.Skip(1)?.Where(x => x != null).Cast<Node>();
-                        if (remaining != null)
-                        {
-                            first.Insert(remaining);
-                        }
-                    }
-                }
-                if (Parent != null)
-                {
-                    Parent.Children = null;
-                    Parent.Insert(siblings.Concat(node.Children?.Where(x => x != null).Cast<Node>() ?? Array.Empty<Node>()).Concat(first != null ? new[] { first } : Array.Empty<Node>()));
-                }
-
-                Children = null;
-                Parent = null;
-            }
-            else if(Children?.Any() ?? false)
-            {
-                foreach (Node? child in Children)
-                {
-                    if (child != null && child.Contains(node))
-                    {
-                        child.Remove(node);
-                        break;
-                    }
-                }
-            }
-            return this;
-        }
-
-        internal virtual Node? InsertChild(Node? node, int index)
-        {
-            if (index < 0)
-            {
-                index = (Children?.Count() ?? 0) - index;
-            }
-            if (index < 0)
-            {
-                throw new IndexOutOfRangeException(nameof(index));
-            }
-
-            ExtendChildren(index);
-
-            if (Children?.Any() ?? false)
-            {
-                List<Node?> newChildren = new();
-                var i = 0;
-                foreach (Node? child in Children)
-                {
-                    if (i == index)
-                    {
-                        if(child != null)
-                        {
-                            child.Parent = null;
-                        }
-                        if (node != null)
-                        {
-                            node.Parent = this;
-                        }
-                    }
-                    newChildren.Add((i == index) ? node : child);
-                    i++;
-                }
-                Children = newChildren.AsEnumerable();
-                FreeChildren();
-            }
-
-            return node;
-        }
-
-        internal virtual int? RemoveChild(Node node, int? index = null)
-        {
-            if (index != null && index < 0)
-            {
-                index = (Children?.Count() ?? 0) - index;
-            }
-
-            if (index != null && index < 0)
-            {
-                throw new IndexOutOfRangeException(nameof(index));
-            }
-
-            int? result = null;
-            if (Children?.Any() ?? false)
-            {
-                List<Node?> newChildren = new();
-                var i = 0;
-                foreach (Node? child in Children)
-                {
-                    if (
-                        (index != null && i == index)
-                        || (index == null && result == null && child != null && child.CompareTo(node) == 0)
-                    )
-                    {
-                        if(child != null)
-                        {
-                            child.Parent = null;
-                        }
-                        result = i;
-                    }
-                    newChildren.Add((result != i) ? child : null);
-                    i++;
-                }
-                Children = newChildren.AsEnumerable();
-                FreeChildren();
-            }
-
-            return result;
-        }
-
-        private void ExtendChildren(int index)
-        {
-            if ((Children?.Count() ?? -1) < index)
-            {
-                Node?[] newChildren = new Node?[index + 1];
-                Array.Copy(Children?.ToArray() ?? Array.Empty<Node?>(), newChildren, Children?.Count() ?? 0);
-                Children = newChildren.AsEnumerable();
-            }
-        }
-
-        private void FreeChildren()
-        {
-            if ((Children?.All(x => x == null) ?? false) || (Children?.Count() ?? 0) == 0)
-            {
-                Children = null;
-            }
+            ChildList.RemoveAt(ChildList.Count - 1);
         }
     }
 }

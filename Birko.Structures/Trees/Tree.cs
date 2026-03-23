@@ -1,109 +1,134 @@
-using Birko.Structures.Extensions.Trees;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
-namespace Birko.Structures.Trees
+namespace Birko.Structures.Trees;
+
+/// <summary>
+/// Generic tree container.
+/// </summary>
+/// <typeparam name="T">The value type.</typeparam>
+public class Tree<T>
 {
-    public class Tree
+    /// <summary>
+    /// The root node.
+    /// </summary>
+    public Node<T>? Root { get; protected set; }
+
+    /// <summary>
+    /// Gets the number of nodes in the tree.
+    /// </summary>
+    public int Count => Root?.Count() ?? 0;
+
+    /// <summary>
+    /// Gets the height of the tree.
+    /// </summary>
+    public int Height => Root?.Height() ?? 0;
+
+    /// <summary>
+    /// Gets whether the tree is empty.
+    /// </summary>
+    public bool IsEmpty => Root == null;
+
+    /// <summary>
+    /// Creates an empty tree.
+    /// </summary>
+    public Tree()
     {
-        public Node? Root { get; protected set; }
+    }
 
-        public Tree()
-        {
-        }
+    /// <summary>
+    /// Creates a tree with a root value.
+    /// </summary>
+    public Tree(T rootValue)
+    {
+        Root = new Node<T>(rootValue);
+    }
 
-        public Tree(IEnumerable<Node> nodes) : this()
-        {
-            Insert(nodes);
-        }
+    /// <summary>
+    /// Sets the root node. Returns the root.
+    /// </summary>
+    public Node<T> SetRoot(T value)
+    {
+        Root = new Node<T>(value);
+        return Root;
+    }
 
-        public virtual Node? Insert(Node? node)
-        {
-            if (node == null)
-            {
-                return null;
-            }
-            if (Root == null)
-            {
-                Root = node;
-                Root.Parent = null;
-                return Root;
-            }
-            else
-            {
-                return Root.Insert(node);
-            }
-        }
+    /// <summary>
+    /// Finds a node by value.
+    /// </summary>
+    public Node<T>? Find(T value, IEqualityComparer<T>? comparer = null)
+    {
+        return Root?.Find(value, comparer);
+    }
 
-        public void Insert(IEnumerable<Node> nodes)
-        {
-            if (nodes?.Any() ?? false)
-            {
-                foreach (Node node in nodes)
-                {
-                    Insert(node);
-                }
-            }
-        }
+    /// <summary>
+    /// Checks if a value exists in the tree.
+    /// </summary>
+    public bool Contains(T value, IEqualityComparer<T>? comparer = null)
+    {
+        return Root?.Contains(value, comparer) ?? false;
+    }
 
-        public Node? Find(Node? node)
-        {
-            if (node == null)
-            {
-                return null;
-            }
-            if (Root == null)
-            {
-                return null;
-            }
-            return Root.Find(node);
-        }
+    /// <summary>
+    /// Pre-order traversal (node, then children).
+    /// </summary>
+    public IEnumerable<T> PreOrder()
+    {
+        if (Root == null) yield break;
+        foreach (var node in PreOrder(Root))
+            yield return node.Value;
+    }
 
-        public bool Contains(Node node)
-        {
-            return Find(node) != null;
-        }
+    /// <summary>
+    /// Post-order traversal (children, then node).
+    /// </summary>
+    public IEnumerable<T> PostOrder()
+    {
+        if (Root == null) yield break;
+        foreach (var node in PostOrder(Root))
+            yield return node.Value;
+    }
 
-        public virtual Node? Remove(Node? node)
+    /// <summary>
+    /// Level-order (breadth-first) traversal.
+    /// </summary>
+    public IEnumerable<T> LevelOrder()
+    {
+        if (Root == null) yield break;
+
+        var queue = new Queue<Node<T>>();
+        queue.Enqueue(Root);
+
+        while (queue.Count > 0)
         {
-            if (node == null)
+            var current = queue.Dequeue();
+            yield return current.Value;
+
+            foreach (var child in current.Children)
             {
-                return null;
+                queue.Enqueue(child);
             }
-            if (Root == null)
-            {
-                return node;
-            }
-            if (Root.CompareTo(node) == 0)
-            {
-                Node? first = Root.Children?.First();
-                if (first != null && (Root.Children?.Count() ?? 0) > 1)
-                {
-                    var remaining = Root.Children!.Skip(1).Where(x => x != null).Cast<Node>();
-                    first.Insert(remaining);
-                    first.Parent = null;
-                }
-                node = Root;
-                Root = first;
-                return node;
-            }
-            else
-            {
-                if (Root.Children != null)
-                {
-                    foreach (Node? child in Root.Children)
-                    {
-                        if (child != null && child.Contains(node))
-                        {
-                            child.Remove(node);
-                            break;
-                        }
-                    }
-                }
-            }
-            return node;
         }
+    }
+
+    private static IEnumerable<Node<T>> PreOrder(Node<T> node)
+    {
+        yield return node;
+        foreach (var child in node.Children)
+        {
+            foreach (var descendant in PreOrder(child))
+                yield return descendant;
+        }
+    }
+
+    private static IEnumerable<Node<T>> PostOrder(Node<T> node)
+    {
+        foreach (var child in node.Children)
+        {
+            foreach (var descendant in PostOrder(child))
+                yield return descendant;
+        }
+        yield return node;
     }
 }

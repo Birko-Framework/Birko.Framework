@@ -1,115 +1,82 @@
 # Birko.Structures
 
 ## Overview
-Data structure implementations for the Birko data layer providing trees and other structures.
+General-purpose data structure library for the Birko Framework — trees, graphs, heaps, tries, caches, filters, buffers, sets, and lists.
 
 ## Project Location
 `C:\Source\Birko.Structures\`
 
 ## Purpose
-- Common data structures
-- Tree implementations
-- Hierarchical data support
-- Structure utilities
+- Tree hierarchies (general, binary, AVL, interval)
+- Graph algorithms (BFS, DFS, Dijkstra, topological sort)
+- Priority queues (min/max heaps)
+- String indexing (trie, compressed/radix trie)
+- Lightweight caching (LRU)
+- Probabilistic data structures (Bloom filter, skip list)
+- Circular buffers and double-ended queues
+- Union-Find for disjoint set operations
 
 ## Components
 
-### Trees
-- `TreeNode<T>` - Generic tree node
-- `Tree<T>` - Tree structure
-- `BinaryTree<T>` - Binary tree
-- `BinarySearchTree<T>` - Binary search tree
+### Trees (`Trees/`)
+- `Node<T>` — Generic tree node with parent/children, find, depth, height, count
+- `BinaryNode<T>` — Binary tree node (left/right children, balance factor)
+- `BinarySearchTree<T>` — BST with insert, find, remove, in-order/pre-order/post-order/level-order traversal
+- `AVLTree<T>` — Self-balancing AVL tree with rotations (extends BinarySearchTree)
+- `Tree<T>` — Generic N-ary tree container with traversals
+- `IntervalTree<T>` — Augmented BST for interval overlap queries (`Interval<T>`, `QueryOverlapping`, `QueryPoint`)
 
-### Extensions
-- Structure extensions for LINQ
-- Structure serialization
-- Structure traversal helpers
+### Graphs (`Graphs/`)
+- `Graph<T>` — Undirected graph: BFS, DFS, shortest path (hop count), connectivity check
+- `DirectedGraph<T>` — Digraph: topological sort, cycle detection, in/out degree, reverse
+- `WeightedGraph<T>` — Weighted directed graph: Dijkstra shortest path, distance map
 
-## Tree Node
+### Heaps (`Heaps/`)
+- `BinaryHeap<T>` — Array-backed binary heap with configurable comparer, push/pop/peek/replace, heapify
+- `MinHeap<T>` — Convenience: smallest element on top
+- `MaxHeap<T>` — Convenience: largest element on top
+
+### Tries (`Tries/`)
+- `Trie` — Standard prefix tree: insert, search, prefix search, delete, get all words
+- `CompressedTrie` — Radix/Patricia tree: edge compression for sparse key sets
+
+### Caches (`Caches/`)
+- `LruCache<TKey, TValue>` — O(1) get/put with capacity-based eviction (doubly-linked list + dictionary)
+
+### Filters (`Filters/`)
+- `BloomFilter<T>` — Probabilistic membership test: configurable false positive rate, double hashing
+
+### Buffers (`Buffers/`)
+- `RingBuffer<T>` — Fixed-capacity circular buffer: overwrite-oldest, read/write/peek
+
+### Sets (`Sets/`)
+- `DisjointSet<T>` — Union-Find: path compression + union by rank, connected check, get set members
+
+### Lists (`Lists/`)
+- `SkipList<T>` — Probabilistic sorted list: O(log n) insert/search/remove, range queries. Accepts optional `Func<double>` for pluggable randomness (e.g. `new SkipList<T>(myProvider.NextDouble)` with Birko.Random)
+- `Deque<T>` — Double-ended queue: O(1) amortized push/pop from both ends, circular array
+
+## Usage
 
 ```csharp
-using Birko.Structures.Trees;
+// N-ary tree
+var tree = new Tree<string>("Root");
+var child1 = tree.Root.AddChild("Child 1");
+var child2 = tree.Root.AddChild("Child 2");
+foreach (var val in tree.PreOrder()) { /* Root, Child 1, Child 2 */ }
 
-public class TreeNode<T>
-{
-    public T Value { get; set; }
-    public TreeNode<T> Parent { get; set; }
-    public IList<TreeNode<T>> Children { get; set; }
+// Binary search tree / AVL tree
+var avl = new AVLTree<int>();
+avl.Insert(5); avl.Insert(3); avl.Insert(7);
+var found = avl.Find(3);       // BinaryNode<int>
+foreach (var v in avl.InOrder()) { /* 3, 5, 7 */ }
 
-    public bool IsRoot => Parent == null;
-    public bool IsLeaf => Children.Count == 0;
-    public int Depth { get; }
-    public int Height { get; }
-}
-```
-
-## Tree Implementation
-
-```csharp
-var tree = new Tree<string>();
-
-var root = new TreeNode<string> { Value = "Root" };
-var child1 = new TreeNode<string> { Value = "Child 1" };
-var child2 = new TreeNode<string> { Value = "Child 2" };
-
-root.Children.Add(child1);
-root.Children.Add(child2);
-child1.Parent = root;
-child2.Parent = root;
-
-tree.Root = root;
-```
-
-## Tree Traversals
-
-### Depth-First (Pre-Order)
-```csharp
-public IEnumerable<TreeNode<T>> TraversePreOrder(TreeNode<T> node)
-{
-    yield return node;
-    foreach (var child in node.Children)
-    {
-        foreach (var descendant in TraversePreOrder(child))
-        {
-            yield return descendant;
-        }
-    }
-}
-```
-
-### Depth-First (Post-Order)
-```csharp
-public IEnumerable<TreeNode<T>> TraversePostOrder(TreeNode<T> node)
-{
-    foreach (var child in node.Children)
-    {
-        foreach (var descendant in TraversePostOrder(child))
-        {
-            yield return descendant;
-        }
-    }
-    yield return node;
-}
-```
-
-### Breadth-First
-```csharp
-public IEnumerable<TreeNode<T>> TraverseBreadthFirst(TreeNode<T> root)
-{
-    var queue = new Queue<TreeNode<T>>();
-    queue.Enqueue(root);
-
-    while (queue.Count > 0)
-    {
-        var node = queue.Dequeue();
-        yield return node;
-
-        foreach (var child in node.Children)
-        {
-            queue.Enqueue(child);
-        }
-    }
-}
+// Skip list with custom random (Birko.Random integration)
+// var rng = new Birko.Random.SystemRandomProvider();
+// var sl = new SkipList<int>(rng.NextDouble);
+var sl = new SkipList<int>();   // default System.Random
+sl.Insert(3); sl.Insert(1); sl.Insert(5);
+var range = sl.Range(1, 4);    // [1, 3]
 ```
 
 ## Hierarchical Data in Database
@@ -146,12 +113,17 @@ CREATE TABLE categories (
 - Birko.Data.Core
 
 ## Use Cases
-- Category hierarchies
-- Organization charts
-- File systems
-- Comment threads
-- Menu structures
-- Bill of materials
+- **Trees** — Category hierarchies, organization charts, file systems, comment threads
+- **Graphs** — Workflow routing, dependency resolution, migration ordering, network topology
+- **Heaps** — Job scheduling, event ordering, top-K queries
+- **Tries** — Autocomplete, localization key lookup, IP routing
+- **LruCache** — Lightweight eviction without full Birko.Caching dependency
+- **BloomFilter** — Deduplication in event bus, cache prefetch decisions
+- **RingBuffer** — Telemetry sampling, sliding window metrics
+- **IntervalTree** — Business calendar overlap, time-range queries
+- **DisjointSet** — Tenant grouping, data sync partitioning, Kruskal's MST
+- **SkipList** — Concurrent ordered collections, sorted set operations
+- **Deque** — Work-stealing queues, BFS with bidirectional expansion
 
 ## Related Projects
 - [Birko.Models.Category](../Birko.Models.Category/CLAUDE.md) - Category models with hierarchy

@@ -1,62 +1,148 @@
-using Birko.Structures.Extensions.Trees;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
-namespace Birko.Structures.Trees
+namespace Birko.Structures.Trees;
+
+/// <summary>
+/// Self-balancing AVL tree. Maintains O(log n) height via rotations after every insert/remove.
+/// </summary>
+/// <typeparam name="T">A comparable value type.</typeparam>
+public class AVLTree<T> : BinarySearchTree<T> where T : IComparable<T>
 {
-    public class AVLTree : Tree
+    /// <summary>
+    /// Creates an empty AVL tree.
+    /// </summary>
+    public AVLTree()
     {
-        public AVLTree(IEnumerable<BinarySearchNode> items) : base(items) { }
+    }
 
-        public override Node? Insert(Node? node)
+    /// <summary>
+    /// Creates an AVL tree from a collection of values.
+    /// </summary>
+    public AVLTree(IEnumerable<T> values)
+    {
+        foreach (var value in values)
         {
-            if (node is not BinarySearchNode)
-            {
-                throw new ArgumentException("Argument is not a instance of BinarySearchNode");
-            }
-            BinarySearchNode? insertedNode = (BinarySearchNode?)base.Insert(node);
-            if (insertedNode != null)
-            {
-                Root = ReBalance(insertedNode);
-            }
-            return insertedNode;
+            Insert(value);
+        }
+    }
+
+    /// <summary>
+    /// Inserts a value and rebalances the tree.
+    /// </summary>
+    public override BinaryNode<T> Insert(T value)
+    {
+        var node = base.Insert(value);
+        RebalanceFrom(node);
+        return node;
+    }
+
+    /// <summary>
+    /// Removes a value and rebalances the tree.
+    /// </summary>
+    public override bool Remove(T value)
+    {
+        var node = Find(value);
+        if (node == null) return false;
+
+        var rebalanceFrom = node.Parent;
+        RemoveNode(node);
+        Count--;
+
+        if (rebalanceFrom != null)
+        {
+            RebalanceFrom(rebalanceFrom);
+        }
+        else if (Root != null)
+        {
+            Root = Rebalance(Root);
         }
 
-        public override Node? Remove(Node? node)
+        return true;
+    }
+
+    private void RebalanceFrom(BinaryNode<T> node)
+    {
+        var current = node;
+        while (current != null)
         {
-            if (node is not BinarySearchNode)
+            var balanced = Rebalance(current);
+            if (balanced.Parent == null)
             {
-                throw new ArgumentException("Argument is not a instance of BinarySearchNode");
+                Root = balanced;
             }
-            BinarySearchNode? removedNodeParent = node.Parent as BinarySearchNode;
-            Node? removedNode = base.Remove(node);
-            if (removedNodeParent != null)
+            current = balanced.Parent;
+        }
+    }
+
+    private static BinaryNode<T> Rebalance(BinaryNode<T> node)
+    {
+        int balance = node.Balance();
+
+        if (balance > 1) // Right-heavy
+        {
+            if (node.Right != null && node.Right.Balance() < 0)
             {
-                Root = ReBalance(removedNodeParent);
+                node.Right = RotateRight(node.Right);
             }
+            return RotateLeft(node);
+        }
+
+        if (balance < -1) // Left-heavy
+        {
+            if (node.Left != null && node.Left.Balance() > 0)
+            {
+                node.Left = RotateLeft(node.Left);
+            }
+            return RotateRight(node);
+        }
+
+        return node;
+    }
+
+    private static BinaryNode<T> RotateLeft(BinaryNode<T> node)
+    {
+        var newRoot = node.Right!;
+        var newRootLeft = newRoot.Left;
+
+        newRoot.Left = node;
+        node.Right = newRootLeft;
+
+        newRoot.Parent = node.Parent;
+        node.Parent = newRoot;
+        if (newRootLeft != null) newRootLeft.Parent = node;
+
+        if (newRoot.Parent != null)
+        {
+            if (newRoot.Parent.Left == node)
+                newRoot.Parent.Left = newRoot;
             else
-            {
-                Root = null;
-            }
-            return removedNode;
+                newRoot.Parent.Right = newRoot;
         }
 
-        protected static Node ReBalance(BinarySearchNode node)
+        return newRoot;
+    }
+
+    private static BinaryNode<T> RotateRight(BinaryNode<T> node)
+    {
+        var newRoot = node.Left!;
+        var newRootRight = newRoot.Right;
+
+        newRoot.Right = node;
+        node.Left = newRootRight;
+
+        newRoot.Parent = node.Parent;
+        node.Parent = newRoot;
+        if (newRootRight != null) newRootRight.Parent = node;
+
+        if (newRoot.Parent != null)
         {
-            Node? pathNode = (Node?)node;
-            Node newRoot = pathNode!;
-            do
-            {
-                pathNode = ((BinarySearchNode)pathNode!).ReBalance();
-                if (pathNode.Parent == null)
-                {
-                    newRoot = pathNode;
-                }
-                pathNode = pathNode.Parent;
-
-            } while (pathNode != null);
-            return newRoot;
+            if (newRoot.Parent.Left == node)
+                newRoot.Parent.Left = newRoot;
+            else
+                newRoot.Parent.Right = newRoot;
         }
+
+        return newRoot;
     }
 }
