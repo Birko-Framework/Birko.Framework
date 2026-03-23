@@ -52,6 +52,7 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 | Birko.Data.CosmosDB + ViewModel + Sync + Migrations | Done | Azure Cosmos DB NoSQL API store, sync, migrations |
 | Birko.BackgroundJobs.CosmosDB | Done | Cosmos DB persistent job queue |
 | Birko.Workflow.CosmosDB | Done | Cosmos DB workflow instance persistence |
+| Birko.Structures (expanded) | Done | Graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, interval tree, disjoint set, skip list, deque |
 
 ---
 
@@ -139,26 +140,10 @@ Add when corresponding providers are implemented:
 
 ---
 
-### Birko.Structures — Additional Data Structures
-**Status:** Planned | **Priority:** Low
+### Birko.Structures — Additional Data Structures (Done)
+**Status:** Done | **Priority:** ~~Low~~ Complete
 
-Extend existing tree structures (AVL, BST, Tree) with general-purpose data structures.
-
-**Currently implemented:** Trees (Tree, AVLTree, BinaryNode, BinarySearchNode, Node) + Extensions
-
-**Planned additions:**
-
-| Category | Structures | Use Cases |
-|----------|-----------|-----------|
-| Graphs | Graph, DirectedGraph, WeightedGraph | Workflow routing, dependency resolution, migration ordering |
-| Heaps | BinaryHeap, MinHeap, MaxHeap | Job scheduling, event ordering |
-| Tries | Trie, CompressedTrie | Autocomplete, localization key lookup |
-| Caches | LruCache | Lightweight eviction without full Birko.Caching |
-| Filters | BloomFilter | Deduplication in event bus, cache prefetch |
-| Buffers | RingBuffer | Telemetry sampling, sliding window metrics |
-| Trees | IntervalTree | Business calendar overlap, time-range queries |
-| Sets | DisjointSet | Tenant grouping, data sync partitioning |
-| Lists | SkipList, Deque | Concurrent ordered collections, work-stealing |
+All planned data structures implemented: Graph, DirectedGraph, WeightedGraph, BinaryHeap, MinHeap, MaxHeap, Trie, CompressedTrie, LruCache, BloomFilter, RingBuffer, IntervalTree, DisjointSet, SkipList, Deque.
 
 **Dependencies:** None
 
