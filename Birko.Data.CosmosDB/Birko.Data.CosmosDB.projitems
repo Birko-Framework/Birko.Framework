@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a7b8c9d0-e1f2-4a3b-8c5d-6e7f8a9b0c1d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.CosmosDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.46.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncCosmosDBStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\CosmosDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncCosmosDBModelRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\CosmosDbUnitOfWork.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\CosmosDBIndexManager.cs" />
+  </ItemGroup>
+</Project>

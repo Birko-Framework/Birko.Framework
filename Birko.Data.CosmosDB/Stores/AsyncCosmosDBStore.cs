@@ -1,0 +1,503 @@
+using Birko.Data.Models;
+using Birko.Data.Stores;
+using Birko.Configuration;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Linq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Birko.Data.CosmosDB.Stores;
+
+/// <summary>
+/// Async Azure Cosmos DB implementation of IAsyncBulkStore with transactional batch support.
+/// Uses the Microsoft.Azure.Cosmos SDK v3 with the NoSQL API.
+/// </summary>
+public class AsyncCosmosDBStore<T>
+    : AbstractAsyncBulkStore<T>
+    , ISettingsStore<RemoteSettings>
+    , IAsyncTransactionalStore<T, TransactionalBatch>
+    where T : AbstractModel
+{
+    private CosmosClient? _cosmosClient;
+    private Database? _database;
+    private Container? _container;
+    private string? _databaseName;
+    private string? _containerName;
+
+    /// <summary>
+    /// Gets the underlying Cosmos DB client.
+    /// </summary>
+    public CosmosClient? Client => _cosmosClient;
+
+    /// <summary>
+    /// Gets the underlying Cosmos DB container.
+    /// </summary>
+    public Container? Container => _container;
+
+    /// <inheritdoc />
+    public TransactionalBatch? TransactionContext { get; private set; }
+
+    /// <inheritdoc />
+    public void SetTransactionContext(TransactionalBatch? context)
+    {
+        TransactionContext = context;
+    }
+
+    /// <summary>
+    /// Partition key path used for the container. Default is "/id".
+    /// Set before calling SetSettings or InitAsync to take effect.
+    /// </summary>
+    public static string PartitionKeyPath { get; set; } = "/id";
+
+    /// <summary>
+    /// Request timeout for Cosmos DB operations. Default is 30 seconds.
+    /// Set before calling SetSettings to take effect.
+    /// </summary>
+    public static TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Initializes a new instance of the AsyncCosmosDBStore class.
+    /// </summary>
+    public AsyncCosmosDBStore()
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance with a connection string.
+    /// </summary>
+    /// <param name="connectionString">The Cosmos DB connection string.</param>
+    /// <param name="databaseName">The database name.</param>
+    /// <param name="containerName">The container name. Defaults to the type name.</param>
+    public AsyncCosmosDBStore(string connectionString, string databaseName, string? containerName = null)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new ArgumentException("Connection string cannot be empty", nameof(connectionString));
+        }
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            throw new ArgumentException("Database name cannot be empty", nameof(databaseName));
+        }
+
+        _databaseName = databaseName;
+        _containerName = containerName ?? typeof(T).Name;
+
+        _cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions
+        {
+            RequestTimeout = RequestTimeout,
+            AllowBulkExecution = true
+        });
+    }
+
+    /// <summary>
+    /// Initializes a new instance with an existing Cosmos DB container.
+    /// </summary>
+    /// <param name="container">The Cosmos DB container.</param>
+    public AsyncCosmosDBStore(Container container)
+    {
+        _container = container ?? throw new ArgumentNullException(nameof(container));
+    }
+
+    #region Settings and Initialization
+
+    /// <summary>
+    /// Sets the connection settings.
+    /// </summary>
+    /// <param name="settings">The remote settings to use.</param>
+    public virtual void SetSettings(RemoteSettings settings)
+    {
+        SetSettings((ISettings)settings);
+    }
+
+    /// <summary>
+    /// Sets the connection settings via the ISettings interface.
+    /// RemoteSettings.Location = connection string or endpoint URL,
+    /// RemoteSettings.Name = database name,
+    /// RemoteSettings.Password = account key (if using endpoint URL),
+    /// RemoteSettings.UserName = container name (optional, defaults to type name).
+    /// </summary>
+    /// <param name="settings">The settings to use.</param>
+    public virtual void SetSettings(ISettings settings)
+    {
+        if (settings is not RemoteSettings remote)
+        {
+            return;
+        }
+
+        _databaseName = remote.Name;
+        _containerName = !string.IsNullOrWhiteSpace(remote.UserName) ? remote.UserName : typeof(T).Name;
+
+        if (!string.IsNullOrWhiteSpace(remote.Password))
+        {
+            _cosmosClient = new CosmosClient(remote.Location, remote.Password, new CosmosClientOptions
+            {
+                RequestTimeout = RequestTimeout,
+                AllowBulkExecution = true
+            });
+        }
+        else
+        {
+            _cosmosClient = new CosmosClient(remote.Location, new CosmosClientOptions
+            {
+                RequestTimeout = RequestTimeout,
+                AllowBulkExecution = true
+            });
+        }
+    }
+
+    /// <inheritdoc />
+    public override async Task InitAsync(CancellationToken ct = default)
+    {
+        await EnsureDatabaseAndContainerExistAsync(ct);
+    }
+
+    /// <inheritdoc />
+    public override async Task DestroyAsync(CancellationToken ct = default)
+    {
+        if (_container != null)
+        {
+            await _container.DeleteContainerAsync(cancellationToken: ct);
+            _container = null;
+        }
+    }
+
+    #endregion
+
+    #region Core CRUD Operations - Single Item
+
+    /// <inheritdoc />
+    public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    {
+        if (_container == null || data == null) return Guid.Empty;
+
+        data.Guid ??= Guid.NewGuid();
+        processDelegate?.Invoke(data);
+
+        if (TransactionContext != null)
+        {
+            TransactionContext.CreateItem(data);
+            return data.Guid.Value;
+        }
+
+        await _container.CreateItemAsync(data, new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+        return data.Guid.Value;
+    }
+
+    /// <inheritdoc />
+    public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
+    {
+        if (_container == null || guid == Guid.Empty) return null;
+
+        try
+        {
+            var response = await _container.ReadItemAsync<T>(guid.ToString(), new PartitionKey(guid.ToString()), cancellationToken: ct);
+            return response.Resource;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public override async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+    {
+        if (_container == null) return null;
+
+        var queryable = _container.GetItemLinqQueryable<T>();
+
+        if (filter != null)
+        {
+            queryable = (IOrderedQueryable<T>)queryable.Where(filter);
+        }
+
+        using var iterator = queryable.ToFeedIterator();
+        if (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(ct);
+            return response.FirstOrDefault();
+        }
+
+        return null;
+    }
+
+    /// <inheritdoc />
+    public override async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    {
+        if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+
+        processDelegate?.Invoke(data);
+
+        if (TransactionContext != null)
+        {
+            TransactionContext.ReplaceItem(data.Guid.Value.ToString(), data);
+            return;
+        }
+
+        await _container.ReplaceItemAsync(data, data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+    }
+
+    /// <inheritdoc />
+    public override async Task DeleteAsync(T data, CancellationToken ct = default)
+    {
+        if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
+
+        if (TransactionContext != null)
+        {
+            TransactionContext.DeleteItem(data.Guid.Value.ToString());
+            return;
+        }
+
+        await _container.DeleteItemAsync<T>(data.Guid.Value.ToString(), new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+    }
+
+    #endregion
+
+    #region Query and Count Operations
+
+    /// <inheritdoc />
+    public override async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+    {
+        if (_container == null) return 0;
+
+        var queryable = _container.GetItemLinqQueryable<T>();
+
+        if (filter != null)
+        {
+            queryable = (IOrderedQueryable<T>)queryable.Where(filter);
+        }
+
+        return await queryable.CountAsync(ct);
+    }
+
+    #endregion
+
+    #region Utility Methods
+
+    /// <inheritdoc />
+    public override async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    {
+        if (_container == null || data == null) return Guid.Empty;
+
+        processDelegate?.Invoke(data);
+
+        if (data.Guid == null || data.Guid == Guid.Empty)
+        {
+            data.Guid = Guid.NewGuid();
+        }
+
+        if (TransactionContext != null)
+        {
+            TransactionContext.UpsertItem(data);
+            return data.Guid.Value;
+        }
+
+        await _container.UpsertItemAsync(data, new PartitionKey(data.Guid.Value.ToString()), cancellationToken: ct);
+        return data.Guid.Value;
+    }
+
+    #endregion
+
+    #region Core CRUD Operations - Bulk
+
+    /// <inheritdoc />
+    public override async Task<IEnumerable<T>> ReadAsync(
+        Expression<Func<T, bool>>? filter = null,
+        OrderBy<T>? orderBy = null,
+        int? limit = null,
+        int? offset = null,
+        CancellationToken ct = default)
+    {
+        if (_container == null) return Enumerable.Empty<T>();
+
+        IQueryable<T> query = _container.GetItemLinqQueryable<T>();
+
+        if (filter != null)
+        {
+            query = query.Where(filter);
+        }
+
+        if (orderBy?.Fields.Count > 0)
+        {
+            for (int i = 0; i < orderBy.Fields.Count; i++)
+            {
+                var field = orderBy.Fields[i];
+                var param = Expression.Parameter(typeof(T), "x");
+                var property = Expression.Property(param, field.PropertyName);
+                var lambda = Expression.Lambda(property, param);
+
+                var methodName = i == 0
+                    ? (field.Descending ? "OrderByDescending" : "OrderBy")
+                    : (field.Descending ? "ThenByDescending" : "ThenBy");
+
+                var method = typeof(Queryable).GetMethods()
+                    .First(m => m.Name == methodName && m.GetParameters().Length == 2)
+                    .MakeGenericMethod(typeof(T), property.Type);
+
+                query = (IQueryable<T>)method.Invoke(null, new object[] { query, lambda })!;
+            }
+        }
+
+        if (offset.HasValue)
+        {
+            query = query.Skip(offset.Value);
+        }
+
+        if (limit.HasValue)
+        {
+            query = query.Take(limit.Value);
+        }
+
+        var results = new List<T>();
+        using var iterator = query.ToFeedIterator();
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(ct);
+            results.AddRange(response);
+        }
+
+        return results;
+    }
+
+    /// <inheritdoc />
+    public override async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+    {
+        if (_container == null || data == null) return;
+
+        if (TransactionContext != null)
+        {
+            foreach (var item in data)
+            {
+                if (item == null) continue;
+                item.Guid ??= Guid.NewGuid();
+                storeDelegate?.Invoke(item);
+                TransactionContext.CreateItem(item);
+            }
+            return;
+        }
+
+        var tasks = new List<Task>();
+        foreach (var item in data)
+        {
+            if (item == null) continue;
+
+            item.Guid ??= Guid.NewGuid();
+            storeDelegate?.Invoke(item);
+
+            tasks.Add(_container.CreateItemAsync(item, new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    /// <inheritdoc />
+    public override async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+    {
+        if (_container == null || data == null) return;
+
+        if (TransactionContext != null)
+        {
+            foreach (var item in data)
+            {
+                if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+                storeDelegate?.Invoke(item);
+                TransactionContext.ReplaceItem(item.Guid.Value.ToString(), item);
+            }
+            return;
+        }
+
+        var tasks = new List<Task>();
+        foreach (var item in data)
+        {
+            if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+
+            storeDelegate?.Invoke(item);
+            tasks.Add(_container.ReplaceItemAsync(item, item.Guid.Value.ToString(), new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    /// <inheritdoc />
+    public override async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
+    {
+        if (_container == null || data == null) return;
+
+        if (TransactionContext != null)
+        {
+            foreach (var item in data)
+            {
+                if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+                TransactionContext.DeleteItem(item.Guid.Value.ToString());
+            }
+            return;
+        }
+
+        var tasks = new List<Task>();
+        foreach (var item in data)
+        {
+            if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+
+            tasks.Add(_container.DeleteItemAsync<T>(item.Guid.Value.ToString(), new PartitionKey(item.Guid.Value.ToString()), cancellationToken: ct));
+        }
+
+        await Task.WhenAll(tasks);
+    }
+
+    #endregion
+
+    #region Database Utilities
+
+    /// <summary>
+    /// Ensures the database and container exist, creating them if needed.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    public async Task EnsureDatabaseAndContainerExistAsync(CancellationToken ct = default)
+    {
+        if (_cosmosClient == null || string.IsNullOrEmpty(_databaseName)) return;
+
+        var dbResponse = await _cosmosClient.CreateDatabaseIfNotExistsAsync(_databaseName, cancellationToken: ct);
+        _database = dbResponse.Database;
+
+        var containerResponse = await _database.CreateContainerIfNotExistsAsync(
+            _containerName ?? typeof(T).Name,
+            PartitionKeyPath,
+            cancellationToken: ct
+        );
+        _container = containerResponse.Container;
+    }
+
+    /// <summary>
+    /// Checks if the Cosmos DB endpoint is reachable.
+    /// </summary>
+    /// <returns>True if the endpoint is reachable, false otherwise.</returns>
+    public async Task<bool> IsHealthyAsync(CancellationToken ct = default)
+    {
+        if (_cosmosClient == null) return false;
+
+        try
+        {
+            await _cosmosClient.ReadAccountAsync();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Checks if the Cosmos DB endpoint is reachable (sync wrapper).
+    /// </summary>
+    public bool IsHealthy()
+    {
+        return IsHealthyAsync().GetAwaiter().GetResult();
+    }
+
+    #endregion
+}
