@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>f2a3b4c5-d6e7-4f8a-9b0c-1d2e3f4a5b6c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Workflow.CosmosDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\CosmosWorkflowInstanceModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosDBWorkflowInstanceStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosDBWorkflowInstanceSchema.cs" />
+  </ItemGroup>
+</Project>
