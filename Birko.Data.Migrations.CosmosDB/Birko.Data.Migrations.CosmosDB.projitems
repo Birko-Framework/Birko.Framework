@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>{C9D0E1F2-A3B4-4C5D-8E6F-7A8B9C0D1E2F}</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Migrations.CosmosDB</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosMigration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosMigrationStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CosmosMigrationRunner.cs" />
+  </ItemGroup>
+</Project>
