@@ -51,9 +51,9 @@ public sealed class CosmosDbHealthCheck : IHealthCheck
                 // 401 is expected without auth headers — endpoint is reachable
                 if (sw.ElapsedMilliseconds > 2000)
                 {
-                    return HealthCheckResult.Degraded($"Cosmos DB reachable but slow ({sw.ElapsedMilliseconds}ms).", data);
+                    return HealthCheckResult.Degraded($"Cosmos DB reachable but slow ({sw.ElapsedMilliseconds}ms).", data: data);
                 }
-                return HealthCheckResult.Healthy($"Cosmos DB endpoint OK ({_baseUrl}).", data);
+                return HealthCheckResult.Healthy($"Cosmos DB endpoint OK ({_baseUrl}).", data: data);
             }
 
             return HealthCheckResult.Unhealthy($"Cosmos DB returned {(int)response.StatusCode}.", data: data);

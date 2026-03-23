@@ -55,10 +55,10 @@ public sealed class TimescaleDbHealthCheck : IHealthCheck
 
             if (sw.ElapsedMilliseconds > 2000)
             {
-                return HealthCheckResult.Degraded($"TimescaleDB reachable but slow ({sw.ElapsedMilliseconds}ms).", data);
+                return HealthCheckResult.Degraded($"TimescaleDB reachable but slow ({sw.ElapsedMilliseconds}ms).", data: data);
             }
 
-            return HealthCheckResult.Healthy($"TimescaleDB OK ({_host}:{_port}).", data);
+            return HealthCheckResult.Healthy($"TimescaleDB OK ({_host}:{_port}).", data: data);
         }
         catch (Exception ex)
         {
