@@ -1,14 +1,17 @@
-using Birko.Models.Accounting;
 using Birko.Models.SQL.Mapping;
+using Birko.Models.Accounting;
+using PricingCurrency = Birko.Models.Pricing.Currency;
+using PricingTax = Birko.Models.Pricing.Tax;
+using PricingPriceGroup = Birko.Models.Pricing.PriceGroup;
 
 namespace Birko.Models.SQL.Mappings
 {
-    public class CurrencyMapping : IModelMapping<Currency>
+    public class CurrencyMapping : IModelMapping<PricingCurrency>
     {
         private const int DecimalPrecision = 22;
         private const int DecimalScale = 6;
 
-        public void Configure(ModelMap<Currency> map)
+        public void Configure(ModelMap<PricingCurrency> map)
         {
             map.ToTable("Currencies")
                 .HasPrimary(x => x.Guid)
@@ -21,12 +24,12 @@ namespace Birko.Models.SQL.Mappings
         }
     }
 
-    public class TaxMapping : IModelMapping<Tax>
+    public class TaxMapping : IModelMapping<PricingTax>
     {
         private const int DecimalPrecision = 22;
         private const int DecimalScale = 6;
 
-        public void Configure(ModelMap<Tax> map)
+        public void Configure(ModelMap<PricingTax> map)
         {
             map.ToTable("Taxes")
                 .HasPrimary(x => x.Guid)
@@ -51,12 +54,12 @@ namespace Birko.Models.SQL.Mappings
         }
     }
 
-    public class PriceGroupMapping : IModelMapping<PriceGroup>
+    public class PriceGroupMapping : IModelMapping<PricingPriceGroup>
     {
         private const int DecimalPrecision = 22;
         private const int DecimalScale = 6;
 
-        public void Configure(ModelMap<PriceGroup> map)
+        public void Configure(ModelMap<PricingPriceGroup> map)
         {
             map.ToTable("PriceGroups")
                 .HasPrimary(x => x.Guid)
