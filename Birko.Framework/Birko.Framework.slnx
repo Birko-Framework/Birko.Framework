@@ -72,6 +72,7 @@
     <Project Path="../Birko.Data.Patterns/Birko.Data.Patterns.shproj" />
     <Project Path="../Birko.Data.Processors/Birko.Data.Processors.shproj" />
     <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
+    <Project Path="../Birko.Data.Composition/Birko.Data.Composition.shproj" />
   </Folder>
   <Folder Name="/Data.SQL/">
     <Project Path="../Birko.Data.SQL/Birko.Data.SQL.shproj" />
@@ -155,7 +156,7 @@
     <Project Path="../Birko.Security.BCrypt/Birko.Security.BCrypt.shproj" />
     <Project Path="../Birko.Security.Vault/Birko.Security.Vault.shproj" />
     <Project Path="../Birko.Security.AzureKeyVault/Birko.Security.AzureKeyVault.shproj" />
-<Project Path="../Birko.Security.NFC/Birko.Security.NFC.shproj" />
+    <Project Path="../Birko.Security.NFC/Birko.Security.NFC.shproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="../Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
@@ -192,7 +193,7 @@
     <Project Path="../Birko.Data.Localization.Tests/Birko.Data.Localization.Tests.csproj" />
     <Project Path="../Birko.Communication.Modbus.Tests/Birko.Communication.Modbus.Tests.csproj" />
     <Project Path="../Birko.Communication.OAuth.Tests/Birko.Communication.OAuth.Tests.csproj" />
-<Project Path="../Birko.Communication.IR.Tests/Birko.Communication.IR.Tests.csproj" />
+    <Project Path="../Birko.Communication.IR.Tests/Birko.Communication.IR.Tests.csproj" />
     <Project Path="../Birko.Communication.NFC.Tests/Birko.Communication.NFC.Tests.csproj" />
     <Project Path="../Birko.Security.NFC.Tests/Birko.Security.NFC.Tests.csproj" />
     <Project Path="../Birko.Data.MongoDB.Tests/Birko.Data.MongoDB.Tests.csproj" />
@@ -236,4 +237,5 @@
     <Project Path="../Birko.Workflow.JSON/Birko.Workflow.JSON.shproj" />
     <Project Path="../Birko.Workflow.CosmosDB/Birko.Workflow.CosmosDB.shproj" />
   </Folder>
+  <Project Path="Birko.Framework/Birko.Framework.csproj" />
 </Solution>

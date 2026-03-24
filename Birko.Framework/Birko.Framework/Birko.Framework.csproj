@@ -1,0 +1,288 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+  </PropertyGroup>
+
+  <!-- Suppress known transitive vulnerability from Microsoft.Data.SqlClient -> System.Data.SqlClient -->
+  <ItemGroup>
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-8g2p-5pqh-5jmc" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-98g6-xh36-x2p7" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- Microsoft.Extensions.* packages are provided by the Microsoft.AspNetCore.App FrameworkReference -->
+    <!-- Additional packages not in shared projects -->
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="NEST" Version="7.17.5" />
+    <PackageReference Include="Elasticsearch.Net" Version="7.17.5" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.8.24" />
+    <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
+    <PackageReference Include="OpenTelemetry" Version="1.15.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.15.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.0" />
+    <PackageReference Include="RazorLight" Version="2.3.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="MessagePack" Version="3.1.3" />
+    <PackageReference Include="protobuf-net" Version="3.2.45" />
+    <PackageReference Include="XenoAtom.Terminal.UI" Version="1.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Project references to shared projects (.shproj) don't work with dotnet CLI -->
+    <!-- Uncomment these when building in Visual Studio or convert .shproj to regular .csproj -->
+    <!--
+    <ProjectReference Include="..\..\Birko.Data\Birko.Data\Birko.Data.shproj" />
+    <ProjectReference Include="..\..\Birko.Communication\Birko.Communication.shproj" />
+    <ProjectReference Include="..\..\Birko.Communication.SOAP\Birko.Communication.SOAP\Birko.Communication.SOAP.csproj" />
+    -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Use absolute paths via MSBuild property to ensure they work from both CLI and Visual Studio -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
+
+  <!-- Birko.Communication.Authentication moved to Birko.Security -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security\Birko.Security.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.Jwt\Birko.Security.Jwt.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Bluetooth\Birko.Communication.Bluetooth.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Hardware\Birko.Communication.Hardware.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Network\Birko.Communication.Network.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.REST\Birko.Communication.REST.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.SOAP\Birko.Communication.SOAP.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.SSE\Birko.Communication.SSE.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.WebSocket\Birko.Communication.WebSocket.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Modbus\Birko.Communication.Modbus.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Camera\Birko.Communication.Camera.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.IR\Birko.Communication.IR.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <!-- Birko.Settings is transitively imported via Birko.Data.Stores.projitems -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.ElasticSearch\Birko.Data.ElasticSearch.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.ElasticSearch.ViewModel\Birko.Data.ElasticSearch.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.EventSourcing\Birko.Data.EventSourcing.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.InfluxDB.ViewModel\Birko.Data.InfluxDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.JSON\Birko.Data.JSON.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.JSON.ViewModel\Birko.Data.JSON.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations\Birko.Data.Migrations.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.ElasticSearch\Birko.Data.Migrations.ElasticSearch.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.InfluxDB\Birko.Data.Migrations.InfluxDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.MongoDB\Birko.Data.Migrations.MongoDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.RavenDB\Birko.Data.Migrations.RavenDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.SQL\Birko.Data.Migrations.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.TimescaleDB\Birko.Data.Migrations.TimescaleDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.MongoDB\Birko.Data.MongoDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.MongoDB.ViewModel\Birko.Data.MongoDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Processors\Birko.Data.Processors.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.RavenDB\Birko.Data.RavenDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.RavenDB.ViewModel\Birko.Data.RavenDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL\Birko.Data.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.MSSql.View\Birko.Data.SQL.MSSql.View.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.PostgreSQL.View\Birko.Data.SQL.PostgreSQL.View.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.MySQL.View\Birko.Data.SQL.MySQL.View.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.SqLite.View\Birko.Data.SQL.SqLite.View.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.View.Migrations\Birko.Data.SQL.View.Migrations.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Structures\Birko.Structures.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Random\Birko.Random.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync\Birko.Data.Sync.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.ElasticSearch\Birko.Data.Sync.ElasticSearch.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.Json\Birko.Data.Sync.Json.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.MongoDb\Birko.Data.Sync.MongoDb.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.RavenDB\Birko.Data.Sync.RavenDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.Sql\Birko.Data.Sync.Sql.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.Tenant\Birko.Data.Sync.Tenant.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Aggregates\Birko.Data.Aggregates.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Tenant\Birko.Data.Tenant.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Composition\Birko.Data.Composition.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.TimescaleDB\Birko.Data.TimescaleDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.TimescaleDB.ViewModel\Birko.Data.TimescaleDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.ViewModel\Birko.Data.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Accounting\Birko.Models.Accounting.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Category\Birko.Models.Category.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Customers\Birko.Models.Customers.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Inventory\Birko.Models.Inventory.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models\Birko.Models.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Pricing\Birko.Models.Pricing.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Product\Birko.Models.Product.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.SEO\Birko.Models.SEO.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.SQL\Birko.Models.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Users\Birko.Models.Users.projitems" Label="Shared" />
+
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Caching\Birko.Caching.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Redis\Birko.Redis.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Caching.Redis\Birko.Caching.Redis.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.Caching\Birko.Data.SQL.Caching.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Validation\Birko.Validation.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs\Birko.BackgroundJobs.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.SQL\Birko.BackgroundJobs.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.ElasticSearch\Birko.BackgroundJobs.ElasticSearch.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.MongoDB\Birko.BackgroundJobs.MongoDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.RavenDB\Birko.BackgroundJobs.RavenDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.JSON\Birko.BackgroundJobs.JSON.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.Redis\Birko.BackgroundJobs.Redis.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.EventBus.MessageQueue\Birko.EventBus.MessageQueue.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.EventBus.Outbox\Birko.EventBus.Outbox.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.EventBus.EventSourcing\Birko.EventBus.EventSourcing.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Storage\Birko.Storage.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Storage.AzureBlob\Birko.Storage.AzureBlob.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Messaging\Birko.Messaging.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Messaging.Razor\Birko.Messaging.Razor.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Telemetry\Birko.Telemetry.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.BCrypt\Birko.Security.BCrypt.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.Vault\Birko.Security.Vault.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.AzureKeyVault\Birko.Security.AzureKeyVault.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Health\Birko.Health.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Health.Data\Birko.Health.Data.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Health.Redis\Birko.Health.Redis.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Health.Azure\Birko.Health.Azure.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.CQRS\Birko.CQRS.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Serialization.Newtonsoft\Birko.Serialization.Newtonsoft.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Serialization.MessagePack\Birko.Serialization.MessagePack.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Serialization.Protobuf\Birko.Serialization.Protobuf.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow\Birko.Workflow.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.SQL\Birko.Workflow.SQL.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.ElasticSearch\Birko.Workflow.ElasticSearch.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.MongoDB\Birko.Workflow.MongoDB.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.RavenDB\Birko.Workflow.RavenDB.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.JSON\Birko.Workflow.JSON.projitems" Label="Shared" />
+
+</Project>
