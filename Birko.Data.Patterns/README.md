@@ -8,6 +8,7 @@ Cross-cutting data patterns for the Birko Framework: Unit of Work, Soft Delete, 
 - Soft Delete via decorator wrappers (sets `DeletedAt` instead of deleting)
 - Audit tracking (automatic `CreatedBy`/`UpdatedBy` from context)
 - Timestamp management (automatic `CreatedAt`/`UpdatedAt`/`PrevUpdatedAt` via `IDateTimeProvider`)
+- Default constraint enforcement (only one entity with `IsDefault=true`)
 - Paged results with navigation metadata
 - All patterns available in sync, async, and bulk variants
 
@@ -51,6 +52,19 @@ var clock = new SystemDateTimeProvider(); // IDateTimeProvider from Birko.Time
 var store = new AsyncTimestampStoreWrapper<Customer>(innerStore, clock);
 store.Create(customer); // Automatically sets CreatedAt + UpdatedAt
 store.Update(customer); // Shifts UpdatedAt to PrevUpdatedAt, sets new UpdatedAt
+```
+
+### Default Constraint
+
+```csharp
+// Wrap any bulk store to enforce only one entity can be the default
+var store = new DefaultStoreWrapper<MyBulkStore, Currency>(innerStore);
+store.Create(currency); // If currency.IsDefault=true, unsets all other defaults
+store.Update(currency); // If currency.IsDefault=true, unsets all other defaults
+
+// Async variant
+var asyncStore = new AsyncDefaultStoreWrapper<MyAsyncBulkStore, Currency>(innerAsyncStore);
+await asyncStore.CreateAsync(currency);
 ```
 
 ### Paging
@@ -138,6 +152,12 @@ await indexManager.DropAsync("idx_user_email", scope: "Users");
 
 - **ISpecification\<T\>** — `IsSatisfiedBy(T)`, composable with `And()`, `Or()`, `Not()`
 - **RuleSpecification\<T\>** — Bridges Birko.Rules `IRule` to the Specification pattern
+
+### Default Constraint
+
+- **IDefault** (in Birko.Contracts) — Interface with `IsDefault` (bool)
+- **DefaultStoreWrapper\<T\>** — Wraps `IBulkStore<T>`, enforces single default. Requires bulk store
+- **AsyncDefaultStoreWrapper\<T\>** — Async variant wrapping `IAsyncBulkStore<T>`
 
 ### Concurrency
 
