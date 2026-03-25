@@ -2,7 +2,7 @@
 
 ## Overview
 
-Birko.Data.Patterns provides cross-cutting data access patterns implemented as decorator wrappers around existing stores and repositories: Unit of Work, Soft Delete, Audit, Paging, Specifications, and Optimistic Concurrency.
+Birko.Data.Patterns provides cross-cutting data access patterns implemented as decorator wrappers around existing stores and repositories: Unit of Work, Soft Delete, Audit, Default Constraint, Paging, Specifications, and Optimistic Concurrency.
 
 ## Unit of Work
 
@@ -138,14 +138,50 @@ await timestampedStore.UpdateAsync(order);
 ### Stacking with Other Decorators
 
 ```csharp
-// Stack: versioning -> audit -> timestamp -> soft delete -> base store
+// Stack: versioning -> default -> audit -> timestamp -> soft delete -> base store
 var store = new AsyncVersionedStoreWrapper<Order>(
-    new AsyncAuditStoreWrapper<Order>(
-        new AsyncTimestampStoreWrapper<Order>(
-            new AsyncSoftDeleteStoreWrapper<Order>(baseStore, clock),
-            clock),
-        auditContext));
+    new AsyncDefaultStoreWrapper<IAsyncBulkStore<Order>, Order>(
+        new AsyncAuditStoreWrapper<Order>(
+            new AsyncTimestampStoreWrapper<Order>(
+                new AsyncSoftDeleteStoreWrapper<Order>(baseStore, clock),
+                clock),
+            auditContext)));
 ```
+
+## Default Constraint
+
+Enforces that only one entity in a store can have `IsDefault = true` at a time.
+
+### Interface
+
+Uses `IDefault` from `Birko.Contracts`:
+
+```csharp
+public interface IDefault
+{
+    bool IsDefault { get; set; }
+}
+```
+
+### Usage
+
+```csharp
+// Wrap a bulk store to enforce single-default constraint
+var store = new AsyncDefaultStoreWrapper<IAsyncBulkStore<Currency>, Currency>(baseStore);
+
+// Creating with IsDefault=true automatically unsets all other defaults:
+await store.CreateAsync(newCurrency);
+
+// Updating with IsDefault=true does the same:
+await store.UpdateAsync(existingCurrency);
+```
+
+> **Note:** Requires a bulk store (`IBulkStore<T>` / `IAsyncBulkStore<T>`) because enforcing the constraint needs bulk read and update to find and unset other defaults.
+
+### Variants
+
+- `DefaultStoreWrapper<TStore, T>` — Sync, implements `IBulkStore<T>`
+- `AsyncDefaultStoreWrapper<TStore, T>` — Async, implements `IAsyncBulkStore<T>`
 
 ## Paging
 
@@ -286,13 +322,14 @@ All patterns use the decorator pattern and can be composed:
 ```csharp
 var baseStore = new AsyncDataBaseBulkStore<PostgreSQLConnector, Order>();
 
-// Stack: versioning -> audit -> timestamp -> soft delete -> base store
+// Stack: versioning -> default -> audit -> timestamp -> soft delete -> base store
 var store = new AsyncVersionedStoreWrapper<Order>(
-    new AsyncAuditStoreWrapper<Order>(
-        new AsyncTimestampStoreWrapper<Order>(
-            new AsyncSoftDeleteStoreWrapper<Order>(baseStore, clock),
-            clock),
-        auditContext));
+    new AsyncDefaultStoreWrapper<IAsyncBulkStore<Order>, Order>(
+        new AsyncAuditStoreWrapper<Order>(
+            new AsyncTimestampStoreWrapper<Order>(
+                new AsyncSoftDeleteStoreWrapper<Order>(baseStore, clock),
+                clock),
+            auditContext)));
 ```
 
 ## See Also

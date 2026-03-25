@@ -29,7 +29,7 @@
 - **Birko.Data.ElasticSearch.ViewModel** / **InfluxDB.ViewModel** / **JSON.ViewModel** / **MongoDB.ViewModel** / **RavenDB.ViewModel** / **TimescaleDB.ViewModel** / **CosmosDB.ViewModel**
 
 ## Data Features
-- **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Timestamp, Paging)
+- **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Timestamp, Default Constraint, Paging)
 - **Birko.Data.Migrations** + **.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.InfluxDB** / **.TimescaleDB** / **.CosmosDB**
 - **Birko.Data.Sync** + **.Sql** / **.ElasticSearch** / **.MongoDb** / **.RavenDB** / **.Json** / **.CosmosDB** / **.Tenant**
 - **Birko.Data.Aggregates** - SQL-NoSQL aggregate mapper (flatten/expand for sync)
