@@ -64,6 +64,25 @@ public static class JwtBearerExtensions
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.FromSeconds(options.ClockSkewSeconds),
             };
+
+            // Allow token from query string for SSE (EventSource can't set headers)
+            // and WebSocket connections
+            jwt.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var path = context.HttpContext.Request.Path;
+                    if (path.StartsWithSegments("/api/sse") || path.StartsWithSegments("/ws"))
+                    {
+                        var token = context.Request.Query["token"];
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            context.Token = token;
+                        }
+                    }
+                    return Task.CompletedTask;
+                }
+            };
         });
 
         services.AddAuthorization();
