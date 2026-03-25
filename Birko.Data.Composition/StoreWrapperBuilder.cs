@@ -10,7 +10,7 @@ namespace Birko.Data.Composition;
 
 /// <summary>
 /// Builds a store decorator chain based on which interfaces T implements.
-/// Chain order (outermost → innermost): Tenant → SoftDelete → Audit → Timestamp → RawStore.
+/// Chain order (outermost → innermost): Tenant → Default → SoftDelete → Audit → Timestamp → RawStore.
 /// Uses runtime type checks because C# generic constraints are compile-time only.
 /// </summary>
 public static class StoreWrapperBuilder
@@ -48,6 +48,12 @@ public static class StoreWrapperBuilder
             store = Wrap(typeof(AsyncSoftDeleteBulkStoreWrapper<,>), store, effectiveClock);
         }
 
+        // Default: enforces single IsDefault=true (applies to IDefault entities)
+        if (typeof(IDefault).IsAssignableFrom(typeof(T)))
+        {
+            store = WrapSingle(typeof(AsyncDefaultStoreWrapper<,>), store);
+        }
+
         // Outermost: Tenant filter (applies to ITenant entities)
         if (tenantContext is not null && typeof(ITenant).IsAssignableFrom(typeof(T)))
         {
@@ -65,5 +71,12 @@ public static class StoreWrapperBuilder
         ctorArgs[0] = store;
         Array.Copy(args, 0, ctorArgs, 1, args.Length);
         return (IAsyncBulkStore<T>)Activator.CreateInstance(closed, ctorArgs)!;
+    }
+
+    private static IAsyncBulkStore<T> WrapSingle<T>(Type wrapperType, IAsyncBulkStore<T> store)
+        where T : AbstractModel, new()
+    {
+        var closed = wrapperType.MakeGenericType(typeof(IAsyncBulkStore<T>), typeof(T));
+        return (IAsyncBulkStore<T>)Activator.CreateInstance(closed, store)!;
     }
 }
