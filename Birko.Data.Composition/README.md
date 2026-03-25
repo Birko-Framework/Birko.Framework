@@ -4,7 +4,7 @@ Composes Birko store decorator chains based on runtime type checks.
 
 ## Purpose
 
-Birko provides individual store wrappers (Tenant, SoftDelete, Audit, Timestamp) in separate shared projects. Each wrapper has compile-time generic constraints (e.g., `T : ISoftDeletable`). This project provides `StoreWrapperBuilder` which builds the full decorator chain at runtime, applying only the wrappers whose constraints `T` satisfies.
+Birko provides individual store wrappers (Tenant, Default, SoftDelete, Audit, Timestamp) in separate shared projects. Each wrapper has compile-time generic constraints (e.g., `T : ISoftDeletable`). This project provides `StoreWrapperBuilder` which builds the full decorator chain at runtime, applying only the wrappers whose constraints `T` satisfies.
 
 ## Dependencies
 
@@ -31,10 +31,11 @@ IAsyncBulkStore<Product> decoratedStore = StoreWrapperBuilder.Build(
 
 ```
 Outermost → Innermost:
-Tenant → SoftDelete → Audit → Timestamp → RawStore
+Tenant → Default → SoftDelete → Audit → Timestamp → RawStore
 ```
 
 - **Tenant** (`T : ITenant`) — auto-filters reads by TenantGuid, auto-sets on create, guards update/delete
+- **Default** (`T : IDefault`) — enforces only one entity with `IsDefault=true`, automatically unsets others on create/update
 - **SoftDelete** (`T : ISoftDeletable`) — converts Delete to soft-delete, filters deleted from reads
 - **Audit** (`T : IAuditable`) — auto-sets CreatedBy/UpdatedBy from IAuditContext
 - **Timestamp** (`T : ITimestamped`) — auto-sets CreatedAt/UpdatedAt/PrevUpdatedAt
