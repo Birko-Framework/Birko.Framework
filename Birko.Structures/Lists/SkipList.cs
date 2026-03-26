@@ -37,7 +37,7 @@ public class SkipList<T> : IEnumerable<T> where T : IComparable<T>
     /// <summary>
     /// Creates an empty skip list using <see cref="System.Random"/> for level generation.
     /// </summary>
-    public SkipList() : this(new Random().NextDouble)
+    public SkipList() : this(new System.Random().NextDouble)
     {
     }
 
