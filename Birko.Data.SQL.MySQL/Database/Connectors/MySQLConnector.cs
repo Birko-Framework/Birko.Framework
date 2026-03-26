@@ -18,7 +18,7 @@ namespace Birko.Data.SQL.Connectors
     /// <summary>
     /// MySQL database connector.
     /// </summary>
-    public partial class MySQLConnector : AbstractConnector
+    public partial class MySQLConnector : AbstractAsyncConnector
     {
         private const int BulkInsertBatchSize = 1000;
 
