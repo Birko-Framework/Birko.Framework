@@ -274,6 +274,39 @@ namespace Birko.Data.MongoDB.Stores
                 Collection.DeleteMany(filter);
         }
 
+        /// <inheritdoc />
+        public override void Delete(Expression<Func<T, bool>> filter)
+        {
+            if (Collection == null) return;
+
+            if (TransactionContext != null)
+                Collection.DeleteMany(TransactionContext, filter);
+            else
+                Collection.DeleteMany(filter);
+        }
+
+        /// <inheritdoc />
+        public override void Update(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates)
+        {
+            if (Collection == null || updates.Assignments.Count == 0) return;
+
+            var updateDefs = new List<UpdateDefinition<T>>();
+            foreach (var (property, value) in updates.Assignments)
+            {
+                var memberExpr = property.Body is UnaryExpression unary
+                    ? (MemberExpression)unary.Operand
+                    : (MemberExpression)property.Body;
+
+                updateDefs.Add(Builders<T>.Update.Set(memberExpr.Member.Name, BsonValue.Create(value)));
+            }
+
+            var combined = Builders<T>.Update.Combine(updateDefs);
+            if (TransactionContext != null)
+                Collection.UpdateMany(TransactionContext, (Expression<Func<T, bool>>)filter, combined);
+            else
+                Collection.UpdateMany((Expression<Func<T, bool>>)filter, combined);
+        }
+
         #endregion
 
         #region Change Streams

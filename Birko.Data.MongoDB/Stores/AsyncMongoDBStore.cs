@@ -368,6 +368,39 @@ namespace Birko.Data.MongoDB.Stores
                 await Collection.DeleteManyAsync(filter, ct);
         }
 
+        /// <inheritdoc />
+        public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        {
+            if (Collection == null) return;
+
+            if (TransactionContext != null)
+                await Collection.DeleteManyAsync(TransactionContext, filter, null, ct);
+            else
+                await Collection.DeleteManyAsync(filter, ct);
+        }
+
+        /// <inheritdoc />
+        public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
+        {
+            if (Collection == null || updates.Assignments.Count == 0) return;
+
+            var updateDefs = new List<UpdateDefinition<T>>();
+            foreach (var (property, value) in updates.Assignments)
+            {
+                var memberExpr = property.Body is UnaryExpression unary
+                    ? (MemberExpression)unary.Operand
+                    : (MemberExpression)property.Body;
+
+                updateDefs.Add(Builders<T>.Update.Set(memberExpr.Member.Name, BsonValue.Create(value)));
+            }
+
+            var combined = Builders<T>.Update.Combine(updateDefs);
+            if (TransactionContext != null)
+                await Collection.UpdateManyAsync(TransactionContext, (Expression<Func<T, bool>>)filter, combined, cancellationToken: ct);
+            else
+                await Collection.UpdateManyAsync((Expression<Func<T, bool>>)filter, combined, cancellationToken: ct);
+        }
+
         #endregion
 
         #region Change Streams

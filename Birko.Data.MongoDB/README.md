@@ -134,6 +134,15 @@ await indexManager.DropAllAsync("TempCollection");
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.MongoDB.ViewModel](../Birko.Data.MongoDB.ViewModel/) - ViewModel repositories
 
+## Filter-Based Bulk Operations
+
+MongoDB stores support native filter-based update and delete:
+
+- `Update(filter, PropertyUpdate<T>)` — Uses `Collection.UpdateMany()` with `Builders<T>.Update.Set()` definitions
+- `Delete(filter)` — Uses `Collection.DeleteMany(filter)` directly
+- `Update(filter, Action<T>)` — Read-modify-save fallback for complex mutations
+- All operations respect `TransactionContext` when set
+
 ## License
 
 Part of the Birko Framework.
