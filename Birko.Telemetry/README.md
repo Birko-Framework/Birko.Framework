@@ -75,6 +75,10 @@ All telemetry names are defined in `BirkoTelemetryConventions`:
 - Microsoft.AspNetCore.Http (FrameworkReference, for middleware)
 - No external NuGet packages
 
+## Filter-Based Bulk Operations
+
+All filter-based bulk operations (`Update(filter, PropertyUpdate)`, `Update(filter, Action)`, `Delete(filter)`) are instrumented with metrics and tracing, tagged as bulk operations.
+
 ## License
 
 This project is licensed under the MIT License - see the [License.md](License.md) file for details.

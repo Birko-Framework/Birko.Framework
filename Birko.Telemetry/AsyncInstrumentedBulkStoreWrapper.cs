@@ -31,6 +31,15 @@ public class AsyncInstrumentedBulkStoreWrapper<TStore, T> : AsyncInstrumentedSto
     public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Update", true, () => _innerStore.UpdateAsync(data, storeDelegate, ct));
 
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+        => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Update", true, () => _innerStore.UpdateAsync(filter, updateAction, ct));
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+        => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Update", true, () => _innerStore.UpdateAsync(filter, updates, ct));
+
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
         => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Delete", true, () => _innerStore.DeleteAsync(data, ct));
+
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        => StoreInstrumentation.ExecuteAsync(_storeType, _entityType, "Delete", true, () => _innerStore.DeleteAsync(filter, ct));
 }

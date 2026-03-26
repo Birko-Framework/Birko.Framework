@@ -29,6 +29,15 @@ public class InstrumentedBulkStoreWrapper<TStore, T> : InstrumentedStoreWrapper<
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         => StoreInstrumentation.Execute(_storeType, _entityType, "Update", true, () => _innerStore.Update(data, storeDelegate));
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+        => StoreInstrumentation.Execute(_storeType, _entityType, "Update", true, () => _innerStore.Update(filter, updateAction));
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+        => StoreInstrumentation.Execute(_storeType, _entityType, "Update", true, () => _innerStore.Update(filter, updates));
+
     public void Delete(IEnumerable<T> data)
         => StoreInstrumentation.Execute(_storeType, _entityType, "Delete", true, () => _innerStore.Delete(data));
+
+    public void Delete(Expression<Func<T, bool>> filter)
+        => StoreInstrumentation.Execute(_storeType, _entityType, "Delete", true, () => _innerStore.Delete(filter));
 }
