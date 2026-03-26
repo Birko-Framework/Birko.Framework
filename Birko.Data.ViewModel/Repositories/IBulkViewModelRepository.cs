@@ -1,5 +1,7 @@
 using Birko.Data.Filters;
+using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 
 namespace Birko.Data.Repositories
 {
@@ -64,6 +66,20 @@ namespace Birko.Data.Repositories
         /// <param name="data">The view models containing the updated data.</param>
         /// <param name="processDelegate">Optional delegate to process each data model before update.</param>
         void Update(IEnumerable<T> data, ProcessDataDelegate<TModel>? processDelegate = null);
+
+        /// <summary>
+        /// Updates all entities matching the filter by applying the specified action.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updateAction">Action to apply to each matching entity.</param>
+        void Update(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction);
+
+        /// <summary>
+        /// Updates specific properties on all entities matching the filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updates">Property assignments to apply.</param>
+        void Update(Expression<Func<TModel, bool>> filter, Stores.PropertyUpdate<TModel> updates);
     }
 
     #endregion
@@ -84,6 +100,12 @@ namespace Birko.Data.Repositories
         /// </summary>
         /// <param name="data">The view models representing the entities to delete.</param>
         void Delete(IEnumerable<T> data);
+
+        /// <summary>
+        /// Deletes all entities matching the specified filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to delete.</param>
+        void Delete(Expression<Func<TModel, bool>> filter);
     }
 
     #endregion

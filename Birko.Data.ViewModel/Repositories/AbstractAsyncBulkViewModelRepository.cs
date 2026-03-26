@@ -113,6 +113,33 @@ namespace Birko.Data.Repositories
         }
 
         /// <summary>
+        /// Asynchronously updates all entities matching the filter by applying the specified action.
+        /// </summary>
+        public virtual async Task UpdateAsync(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return;
+            await BulkStore.UpdateAsync(filter, updateAction, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Asynchronously updates specific properties on all entities matching the filter.
+        /// </summary>
+        public virtual async Task UpdateAsync(Expression<Func<TModel, bool>> filter, Stores.PropertyUpdate<TModel> updates, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return;
+            await BulkStore.UpdateAsync(filter, updates, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Asynchronously deletes all entities matching the specified filter.
+        /// </summary>
+        public virtual async Task DeleteAsync(Expression<Func<TModel, bool>> filter, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return;
+            await BulkStore.DeleteAsync(filter, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
         /// Asynchronously deletes multiple entities.
         /// </summary>
         public virtual async Task DeleteAsync(IEnumerable<TViewModel> data, CancellationToken ct = default)

@@ -75,6 +75,22 @@ namespace Birko.Data.Repositories
         /// <param name="storeDelegate">Optional callback to process each item before update.</param>
         /// <param name="ct">Cancellation token.</param>
         Task UpdateAsync(IEnumerable<TViewModel> data, Stores.StoreDataDelegate<TModel>? storeDelegate = null, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously updates all entities matching the filter by applying the specified action.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updateAction">Action to apply to each matching entity.</param>
+        /// <param name="ct">Cancellation token.</param>
+        Task UpdateAsync(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously updates specific properties on all entities matching the filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updates">Property assignments to apply.</param>
+        /// <param name="ct">Cancellation token.</param>
+        Task UpdateAsync(Expression<Func<TModel, bool>> filter, Stores.PropertyUpdate<TModel> updates, CancellationToken ct = default);
     }
 
     #endregion
@@ -96,6 +112,13 @@ namespace Birko.Data.Repositories
         /// <param name="data">The entities to delete.</param>
         /// <param name="ct">Cancellation token.</param>
         Task DeleteAsync(IEnumerable<TViewModel> data, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously deletes all entities matching the specified filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to delete.</param>
+        /// <param name="ct">Cancellation token.</param>
+        Task DeleteAsync(Expression<Func<TModel, bool>> filter, CancellationToken ct = default);
     }
 
     #endregion

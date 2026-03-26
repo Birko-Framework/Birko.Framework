@@ -64,6 +64,13 @@ await repository.SaveAsync(viewModel);
 - [Birko.Data.TimescaleDB.ViewModel](../Birko.Data.TimescaleDB.ViewModel/) - TimescaleDB
 - [Birko.Data.InfluxDB.ViewModel](../Birko.Data.InfluxDB.ViewModel/) - InfluxDB
 
+## Filter-Based Bulk Operations
+
+ViewModel bulk repositories expose filter-based operations at the model level (not the view model level), delegating directly to the underlying bulk store:
+- `Update(Expression<Func<TModel, bool>> filter, PropertyUpdate<TModel> updates)`
+- `Update(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction)`
+- `Delete(Expression<Func<TModel, bool>> filter)`
+
 ## License
 
 Part of the Birko Framework.

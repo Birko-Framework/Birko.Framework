@@ -4,6 +4,7 @@ using Birko.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 
 namespace Birko.Data.Repositories
 {
@@ -81,6 +82,36 @@ namespace Birko.Data.Repositories
                 processDelegate?.Invoke(item);
                 return item;
             }));
+        }
+
+        /// <inheritdoc />
+        public virtual void Update(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction)
+        {
+            if (Store is not IBulkStore<TModel> bulkStore)
+            {
+                throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
+            }
+            bulkStore.Update(filter, updateAction);
+        }
+
+        /// <inheritdoc />
+        public virtual void Update(Expression<Func<TModel, bool>> filter, PropertyUpdate<TModel> updates)
+        {
+            if (Store is not IBulkStore<TModel> bulkStore)
+            {
+                throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
+            }
+            bulkStore.Update(filter, updates);
+        }
+
+        /// <inheritdoc />
+        public virtual void Delete(Expression<Func<TModel, bool>> filter)
+        {
+            if (Store is not IBulkStore<TModel> bulkStore)
+            {
+                throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
+            }
+            bulkStore.Delete(filter);
         }
 
         /// <inheritdoc />
