@@ -74,6 +74,10 @@ store.SetSettings(settings);
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.JSON.ViewModel](../Birko.Data.JSON.ViewModel/) - JSON ViewModel repositories
 
+## Filter-Based Bulk Operations
+
+Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore (file-based storage has no native filter-based bulk operations).
+
 ## License
 
 Part of the Birko Framework.
