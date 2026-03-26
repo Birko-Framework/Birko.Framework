@@ -186,3 +186,7 @@ AsyncCosmosDBStore<Customer>.PartitionKeyPath = "/tenantId";
 - Birko.Data.Stores
 - Birko.Data.Patterns
 - Microsoft.Azure.Cosmos >= 3.46.1
+
+## Filter-Based Bulk Operations
+
+Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore. Cosmos DB has no server-side filter-based bulk operations; `PatchItemAsync` per item could be explored in a future optimization.
