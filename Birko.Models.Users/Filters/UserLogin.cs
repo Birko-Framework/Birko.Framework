@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using Birko.Data.Expressions;
 using Birko.Data.Filters;
 
 namespace Birko.Models.Users.Filters
@@ -44,12 +45,7 @@ namespace Birko.Models.Users.Filters
             Expression<Func<Models.Users.UserLogin, bool>>? left,
             Expression<Func<Models.Users.UserLogin, bool>> right)
         {
-            if (left == null) return right;
-            var param = left.Parameters[0];
-            var body = Expression.AndAlso(
-                left.Body,
-                Expression.Invoke(right, param));
-            return Expression.Lambda<Func<Models.Users.UserLogin, bool>>(body, param);
+            return ExpressionParameterReplacer.AndAlso(left, right);
         }
     }
 }
