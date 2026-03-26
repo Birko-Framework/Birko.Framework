@@ -72,6 +72,10 @@ FROM metrics GROUP BY bucket, device_id;
 - [Birko.Data.SQL.PostgreSQL](../Birko.Data.SQL.PostgreSQL/) - PostgreSQL base
 - [Birko.Data.TimescaleDB.ViewModel](../Birko.Data.TimescaleDB.ViewModel/) - ViewModel repositories
 
+## Filter-Based Bulk Operations
+
+Inherits native SQL filter-based operations from `DataBaseBulkStore`/`AsyncDataBaseBulkStore` — `PropertyUpdate<T>` generates a single `UPDATE SET WHERE` and `Delete(filter)` generates a single `DELETE WHERE`.
+
 ## License
 
 Part of the Birko Framework.
