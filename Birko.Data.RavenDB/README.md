@@ -98,6 +98,10 @@ await indexManager.CreateFromTaskAsync<Orders_ByCustomer>();
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.RavenDB.ViewModel](../Birko.Data.RavenDB.ViewModel/) - ViewModel repositories
 
+## Filter-Based Bulk Operations
+
+Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore. Native RavenDB `PatchByQueryOperation` support may be added in a future release.
+
 ## License
 
 Part of the Birko Framework.
