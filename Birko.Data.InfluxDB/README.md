@@ -73,6 +73,10 @@ from(bucket: "metrics")
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 - [Birko.Data.InfluxDB.ViewModel](../Birko.Data.InfluxDB.ViewModel/) - ViewModel repositories
 
+## Filter-Based Bulk Operations
+
+Supports filter-based update and delete via default read-modify-save pattern inherited from AbstractBulkStore.
+
 ## License
 
 Part of the Birko Framework.
