@@ -67,6 +67,13 @@ var pastState = repo.GetAtTime(id, someDate); // Temporal query
 - [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 
+## Filter-Based Bulk Operations
+
+Event sourcing wrappers record events for all filter-based bulk operations:
+- `Update(filter, PropertyUpdate<T>)` — Falls back to read-modify-save to record individual Updated events per entity
+- `Delete(filter)` — Falls back to read-then-delete to record individual Deleted events per entity
+- `Update(filter, Action<T>)` — Read-modify-save with event recording
+
 ## License
 
 Part of the Birko Framework.

@@ -161,5 +161,82 @@ namespace Birko.Data.EventSourcing.Stores
             // Then delete from the inner store
             await (_innerStore as IAsyncBulkStore<T>)!.DeleteAsync(items, cancellationToken);
         }
+
+        /// <summary>
+        /// Asynchronously updates specific properties on matching entities and records Updated events.
+        /// Falls back to read-modify-save to ensure event recording.
+        /// </summary>
+        public virtual Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken cancellationToken = default)
+        {
+            return UpdateAsync(filter, entity => updates.ApplyTo(entity), cancellationToken);
+        }
+
+        /// <summary>
+        /// Asynchronously updates all entities matching the filter by applying the specified action,
+        /// and records Updated events for each.
+        /// </summary>
+        public virtual async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken cancellationToken = default)
+        {
+            var bulkStore = (_innerStore as IAsyncBulkStore<T>)!;
+            var items = (await bulkStore.ReadAsync(filter, null, null, null, cancellationToken)).ToList();
+            var events = new List<IEvent>();
+
+            foreach (var item in items)
+            {
+                if (item?.Guid == null) continue;
+
+                updateAction(item);
+
+                var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
+                var newVersion = currentVersion + 1;
+
+                var @event = new DomainEvent(
+                    item.Guid.Value,
+                    newVersion,
+                    "Updated",
+                    _serializer.Serialize(item),
+                    CurrentUserId,
+                    _clock
+                );
+
+                events.Add(@event);
+                item.Version = newVersion;
+            }
+
+            await _eventStore.AppendRangeAsync(events, cancellationToken);
+            await bulkStore.UpdateAsync(items, null, cancellationToken);
+        }
+
+        /// <summary>
+        /// Asynchronously deletes all entities matching the filter and records Deleted events for each.
+        /// </summary>
+        public virtual async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken cancellationToken = default)
+        {
+            var bulkStore = (_innerStore as IAsyncBulkStore<T>)!;
+            var items = (await bulkStore.ReadAsync(filter, null, null, null, cancellationToken)).ToList();
+            var events = new List<IEvent>();
+
+            foreach (var item in items)
+            {
+                if (item?.Guid == null) continue;
+
+                var currentVersion = await _eventStore.GetVersionAsync(item.Guid.Value, cancellationToken);
+                var newVersion = currentVersion + 1;
+
+                var @event = new DomainEvent(
+                    item.Guid.Value,
+                    newVersion,
+                    "Deleted",
+                    _serializer.Serialize(item),
+                    CurrentUserId,
+                    _clock
+                );
+
+                events.Add(@event);
+            }
+
+            await _eventStore.AppendRangeAsync(events, cancellationToken);
+            await bulkStore.DeleteAsync(items, cancellationToken);
+        }
     }
 }

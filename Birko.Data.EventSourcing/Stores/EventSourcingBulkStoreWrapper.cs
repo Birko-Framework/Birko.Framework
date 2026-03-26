@@ -159,5 +159,86 @@ namespace Birko.Data.EventSourcing.Stores
             // Then delete from the inner store
             (_innerStore as IBulkStore<T>)?.Delete(items);
         }
+
+        /// <summary>
+        /// Updates specific properties on matching entities and records Updated events.
+        /// Falls back to read-modify-save to ensure event recording.
+        /// </summary>
+        public virtual void Update(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates)
+        {
+            Update(filter, entity => updates.ApplyTo(entity));
+        }
+
+        /// <summary>
+        /// Updates all entities matching the filter by applying the specified action,
+        /// and records Updated events for each.
+        /// </summary>
+        public virtual void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+        {
+            var bulkStore = _innerStore as IBulkStore<T>;
+            if (bulkStore == null) return;
+
+            var items = bulkStore.Read(filter, null, null, null).ToList();
+            var events = new List<IEvent>();
+
+            foreach (var item in items)
+            {
+                if (item?.Guid == null) continue;
+
+                updateAction(item);
+
+                var currentVersion = _eventStore.GetVersion(item.Guid.Value);
+                var newVersion = currentVersion + 1;
+
+                var @event = new DomainEvent(
+                    item.Guid.Value,
+                    newVersion,
+                    "Updated",
+                    _serializer.Serialize(item),
+                    CurrentUserId,
+                    _clock
+                );
+
+                events.Add(@event);
+                item.Version = newVersion;
+            }
+
+            _eventStore.AppendRange(events);
+            bulkStore.Update(items);
+        }
+
+        /// <summary>
+        /// Deletes all entities matching the filter and records Deleted events for each.
+        /// </summary>
+        public virtual void Delete(Expression<Func<T, bool>> filter)
+        {
+            var bulkStore = _innerStore as IBulkStore<T>;
+            if (bulkStore == null) return;
+
+            var items = bulkStore.Read(filter, null, null, null).ToList();
+            var events = new List<IEvent>();
+
+            foreach (var item in items)
+            {
+                if (item?.Guid == null) continue;
+
+                var currentVersion = _eventStore.GetVersion(item.Guid.Value);
+                var newVersion = currentVersion + 1;
+
+                var @event = new DomainEvent(
+                    item.Guid.Value,
+                    newVersion,
+                    "Deleted",
+                    _serializer.Serialize(item),
+                    CurrentUserId,
+                    _clock
+                );
+
+                events.Add(@event);
+            }
+
+            _eventStore.AppendRange(events);
+            bulkStore.Delete(items);
+        }
     }
 }
