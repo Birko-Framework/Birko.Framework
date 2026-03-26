@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace Birko.Data.Stores
@@ -30,7 +31,31 @@ namespace Birko.Data.Stores
         public abstract void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
 
         /// <inheritdoc />
+        public virtual void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+        {
+            Update(filter, entity => updates.ApplyTo(entity));
+        }
+
+        /// <inheritdoc />
+        public virtual void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+        {
+            var items = Read(filter, null, null, null).ToList();
+            foreach (var item in items)
+            {
+                updateAction(item);
+                Update(item);
+            }
+        }
+
+        /// <inheritdoc />
         public abstract void Delete(IEnumerable<T> data);
+
+        /// <inheritdoc />
+        public virtual void Delete(Expression<Func<T, bool>> filter)
+        {
+            var items = Read(filter, null, null, null).ToList();
+            Delete(items);
+        }
 
         #endregion
     }

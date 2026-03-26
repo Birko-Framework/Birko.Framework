@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ITransactionalStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OrderBy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)PropertyUpdate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreLocator.cs" />
   </ItemGroup>

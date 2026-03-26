@@ -65,6 +65,22 @@ namespace Birko.Data.Stores
         /// <param name="data">The entities with updated values.</param>
         /// <param name="storeDelegate">Optional delegate to process entities before update.</param>
         void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
+
+        /// <summary>
+        /// Updates all entities matching the filter by applying the specified action.
+        /// Uses read-modify-save pattern.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updateAction">Action to apply to each matching entity.</param>
+        void Update(Expression<Func<T, bool>> filter, Action<T> updateAction);
+
+        /// <summary>
+        /// Updates specific properties on all entities matching the filter.
+        /// Platforms can translate this to native operations (e.g. SQL UPDATE SET WHERE).
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updates">Property assignments to apply.</param>
+        void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates);
     }
 
     #endregion
@@ -83,6 +99,12 @@ namespace Birko.Data.Stores
         /// </summary>
         /// <param name="data">The entities to delete.</param>
         void Delete(IEnumerable<T> data);
+
+        /// <summary>
+        /// Deletes all entities matching the specified filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to delete.</param>
+        void Delete(Expression<Func<T, bool>> filter);
     }
 
     #endregion

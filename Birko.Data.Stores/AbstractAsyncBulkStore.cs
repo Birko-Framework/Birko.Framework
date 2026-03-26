@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -54,9 +55,41 @@ namespace Birko.Data.Stores
             CancellationToken ct = default);
 
         /// <inheritdoc />
+        public virtual Task UpdateAsync(
+            Expression<Func<T, bool>> filter,
+            PropertyUpdate<T> updates,
+            CancellationToken ct = default)
+        {
+            return UpdateAsync(filter, entity => updates.ApplyTo(entity), ct);
+        }
+
+        /// <inheritdoc />
+        public virtual async Task UpdateAsync(
+            Expression<Func<T, bool>> filter,
+            Action<T> updateAction,
+            CancellationToken ct = default)
+        {
+            var items = (await ReadAsync(filter, null, null, null, ct)).ToList();
+            foreach (var item in items)
+            {
+                updateAction(item);
+                await UpdateAsync(item, ct: ct);
+            }
+        }
+
+        /// <inheritdoc />
         public abstract Task DeleteAsync(
             IEnumerable<T> data,
             CancellationToken ct = default);
+
+        /// <inheritdoc />
+        public virtual async Task DeleteAsync(
+            Expression<Func<T, bool>> filter,
+            CancellationToken ct = default)
+        {
+            var items = (await ReadAsync(filter, null, null, null, ct)).ToList();
+            await DeleteAsync(items, ct);
+        }
 
         #endregion
     }

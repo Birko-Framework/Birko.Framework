@@ -28,8 +28,14 @@ Settings classes have been extracted to **Birko.Settings (namespace `Birko.Confi
 - **PasswordSettings** — Extends Settings with Password
 - **RemoteSettings** — Extends PasswordSettings with UserName, Port, UseSecure
 
+### Filter-Based Bulk Operations
+- **PropertyUpdate\<T\>** — Fluent builder for expressing partial property updates (`Set<TProperty>(expr, value)`). Platforms translate to native operations (SQL SET, MongoDB $set, ES Painless scripts). Has `ApplyTo(entity)` reflection fallback.
+- **IBulkUpdateStore\<T\>** adds: `Update(filter, Action<T>)` (read-modify-save), `Update(filter, PropertyUpdate<T>)` (native)
+- **IBulkDeleteStore\<T\>** adds: `Delete(filter)` (native on SQL/MongoDB/ES, fallback on others)
+
 ### Utilities
 - **OrderBy\<T\>** — Type-safe sorting specification with expression-based API
+- **PropertyUpdate\<T\>** — Fluent property assignment builder for native bulk updates
 - **StoreLocator** — Thread-safe service locator for store instances
 - **StoreExtensions** — Helper methods for unwrapping store decorators
 
