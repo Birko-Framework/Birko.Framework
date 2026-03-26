@@ -172,10 +172,33 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
         await DeleteTranslationsAsync(data, ct);
     }
 
+    public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        var items = (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
+        foreach (var item in items)
+        {
+            updateAction(item);
+            await _innerStore.UpdateAsync(item, ct: ct);
+            await SaveTranslationsAsync(item, ct);
+        }
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _innerStore.UpdateAsync(filter, updates, ct);
+
     public async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
         await _innerStore.DeleteAsync(data, ct);
         foreach (var entity in data)
+        {
+            await DeleteTranslationsAsync(entity, ct);
+        }
+    }
+
+    public async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+    {
+        var items = (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
+        await _innerStore.DeleteAsync(items, ct);
+        foreach (var entity in items)
         {
             await DeleteTranslationsAsync(entity, ct);
         }

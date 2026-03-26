@@ -165,10 +165,31 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         DeleteTranslations(data);
     }
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        _innerStore.Update(filter, item =>
+        {
+            updateAction(item);
+            SaveTranslations(item);
+        });
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates) => _innerStore.Update(filter, updates);
+
     public void Delete(IEnumerable<T> data)
     {
         _innerStore.Delete(data);
         foreach (var entity in data)
+        {
+            DeleteTranslations(entity);
+        }
+    }
+
+    public void Delete(Expression<Func<T, bool>> filter)
+    {
+        var items = _innerStore.Read(filter).ToList();
+        _innerStore.Delete(items);
+        foreach (var entity in items)
         {
             DeleteTranslations(entity);
         }

@@ -72,6 +72,10 @@ store = new AsyncLocalizedStoreWrapper<...>(store, translationStore, locContext)
 - Birko.Data.Core (AbstractModel)
 - Birko.Data.Stores (IStore, IAsyncStore, IBulkStore, IAsyncBulkStore, IStoreWrapper)
 
+## Filter-Based Bulk Operations
+
+Localized store wrappers delegate `PropertyUpdate` and `Delete(filter)` directly to the inner store. The `Action<T>` overload saves translations after each entity update.
+
 ## License
 
 MIT — see [License.md](License.md)
