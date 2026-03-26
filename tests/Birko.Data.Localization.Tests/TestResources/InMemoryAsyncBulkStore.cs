@@ -87,9 +87,39 @@ public class InMemoryAsyncBulkStore<T> : IAsyncBulkStore<T> where T : AbstractMo
         return Task.CompletedTask;
     }
 
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        var items = _data.Values.AsQueryable().Where(filter).ToList();
+        foreach (var item in items)
+        {
+            updateAction(item);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        var items = _data.Values.AsQueryable().Where(filter).ToList();
+        foreach (var item in items)
+        {
+            updates.ApplyTo(item);
+        }
+        return Task.CompletedTask;
+    }
+
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
         foreach (var item in data)
+        {
+            if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+    {
+        var items = _data.Values.AsQueryable().Where(filter).ToList();
+        foreach (var item in items)
         {
             if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
         }

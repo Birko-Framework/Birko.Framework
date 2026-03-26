@@ -71,9 +71,33 @@ public class InMemoryBulkStore<T> : IBulkStore<T> where T : AbstractModel, new()
         if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
     }
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        var items = _data.Values.AsQueryable().Where(filter).ToList();
+        foreach (var item in items)
+        {
+            updateAction(item);
+        }
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        var items = _data.Values.AsQueryable().Where(filter).ToList();
+        foreach (var item in items)
+        {
+            updates.ApplyTo(item);
+        }
+    }
+
     public void Delete(IEnumerable<T> data)
     {
         foreach (var item in data) Delete(item);
+    }
+
+    public void Delete(Expression<Func<T, bool>> filter)
+    {
+        var items = _data.Values.AsQueryable().Where(filter).ToList();
+        foreach (var item in items) Delete(item);
     }
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
