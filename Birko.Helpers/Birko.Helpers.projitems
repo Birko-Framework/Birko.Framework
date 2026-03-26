@@ -9,6 +9,7 @@
     <Import_RootNamespace>Birko.Helpers</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)BatchHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HtmlHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ObjectHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)EnumerableHelper.cs" />
