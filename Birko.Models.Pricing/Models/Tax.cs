@@ -15,7 +15,7 @@ namespace Birko.Models.Pricing
         public string Name { get; set; } = null!;
         public string ShortCut { get; set; } = null!;
         public decimal Percentage { get; set; }
-        public bool Default { get; set; }
+        public bool IsDefault { get; set; }
 
         public virtual Tax CopyTo(Tax clone)
         {
@@ -27,7 +27,7 @@ namespace Birko.Models.Pricing
             clone.Name = Name;
             clone.ShortCut = ShortCut;
             clone.Percentage = Percentage;
-            clone.Default = Default;
+            clone.IsDefault = IsDefault;
             return clone;
         }
 
@@ -38,7 +38,7 @@ namespace Birko.Models.Pricing
             Name = data.Name;
             ShortCut = data.ShortCut;
             Percentage = data.Percentage;
-            Default = data.Default;
+            IsDefault = data.IsDefault;
         }
     }
 }

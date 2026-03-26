@@ -16,7 +16,7 @@ namespace Birko.Models.Pricing.ViewModels
         public string Name { get => _name; set { if (_name != value) { _name = value; RaisePropertyChanged(NameProperty); } } }
 
         public decimal Percentage { get; set; }
-        public bool Default { get; set; }
+        public bool IsDefault { get; set; }
 
         private void PriceGroup_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {

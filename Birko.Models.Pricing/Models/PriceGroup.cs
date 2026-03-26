@@ -15,7 +15,7 @@ namespace Birko.Models.Pricing
     {
         public string Name { get; set; } = null!;
         public decimal Percentage { get; set; }
-        public bool Default { get; set; }
+        public bool IsDefault { get; set; }
 
         public virtual PriceGroup CopyTo(PriceGroup clone)
         {
@@ -26,7 +26,7 @@ namespace Birko.Models.Pricing
             base.CopyTo(clone);
             clone.Name = Name;
             clone.Percentage = Percentage;
-            clone.Default = Default;
+            clone.IsDefault = IsDefault;
             return clone;
         }
 
@@ -36,7 +36,7 @@ namespace Birko.Models.Pricing
             if (data == null) return;
             Name = data.Name;
             Percentage = data.Percentage;
-            Default = data.Default;
+            IsDefault = data.IsDefault;
         }
     }
 }

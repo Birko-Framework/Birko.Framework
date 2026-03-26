@@ -21,7 +21,7 @@ namespace Birko.Models.Pricing.ViewModels
 
         public decimal FromRate { get; set; }
         public decimal ToRate { get; set; }
-        public bool Default { get; set; }
+        public bool IsDefault { get; set; }
 
         private void Currency_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {

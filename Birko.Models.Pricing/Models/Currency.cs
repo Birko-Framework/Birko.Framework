@@ -16,7 +16,7 @@ namespace Birko.Models.Pricing
         public string Symbol { get; set; } = null!;
         public decimal FromRate { get; set; }
         public decimal ToRate { get; set; }
-        public bool Default { get; set; }
+        public bool IsDefault { get; set; }
 
         public virtual Currency CopyTo(Currency clone)
         {
@@ -29,7 +29,7 @@ namespace Birko.Models.Pricing
             clone.Symbol = Symbol;
             clone.FromRate = FromRate;
             clone.ToRate = ToRate;
-            clone.Default = Default;
+            clone.IsDefault = IsDefault;
             return clone;
         }
 
@@ -41,7 +41,7 @@ namespace Birko.Models.Pricing
             Symbol = data.Symbol;
             FromRate = data.FromRate;
             ToRate = data.ToRate;
-            Default = data.Default;
+            IsDefault = data.IsDefault;
         }
     }
 }
