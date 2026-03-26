@@ -7,7 +7,7 @@ namespace Birko.Models.Users.Filters
     public class Tenant : IFilter<Models.Users.Tenant>
     {
         public string? Name { get; set; }
-        public bool? Default { get; set; }
+        public bool? IsDefault { get; set; }
         public bool? IsActive { get; set; }
 
         public Expression<Func<Models.Users.Tenant, bool>>? Filter()
@@ -19,10 +19,10 @@ namespace Birko.Models.Users.Filters
                 result = Combine(result, x => x.Name == Name);
             }
 
-            if (Default.HasValue)
+            if (IsDefault.HasValue)
             {
-                var def = Default.Value;
-                result = Combine(result, x => x.Default == def);
+                var def = IsDefault.Value;
+                result = Combine(result, x => x.IsDefault == def);
             }
 
             if (IsActive.HasValue)

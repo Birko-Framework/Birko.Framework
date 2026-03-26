@@ -7,7 +7,7 @@ namespace Birko.Models.Users.ViewModels
     {
         public const string NameProperty = "Name";
         public const string DescriptionProperty = "Description";
-        public const string DefaultProperty = "Default";
+        public const string DefaultProperty = "IsDefault";
         public const string IsActiveProperty = "IsActive";
         public const string TenantObjectProperty = "Tenant";
 
@@ -44,15 +44,15 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
-        private bool _default;
-        public bool Default
+        private bool _isDefault;
+        public bool IsDefault
         {
-            get { return _default; }
+            get { return _isDefault; }
             set
             {
-                if (_default != value)
+                if (_isDefault != value)
                 {
-                    _default = value;
+                    _isDefault = value;
                     RaisePropertyChanged(DefaultProperty);
                 }
             }

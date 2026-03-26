@@ -17,7 +17,7 @@ namespace Birko.Models.Users
 
         public string? Description { get; set; }
 
-        public bool Default { get; set; } = false;
+        public bool IsDefault { get; set; } = false;
 
         public bool IsActive { get; set; } = true;
 
@@ -27,7 +27,7 @@ namespace Birko.Models.Users
             if (data == null) return;
             Name = data.Name;
             Description = data.Description;
-            Default = data.Default;
+            IsDefault = data.IsDefault;
             IsActive = data.IsActive;
         }
     }
