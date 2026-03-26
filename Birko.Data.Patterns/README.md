@@ -169,6 +169,16 @@ await indexManager.DropAsync("idx_user_email", scope: "Users");
 - [Birko.Data.Core](../Birko.Data.Core/) - Models and core types
 - [Birko.Data.Stores](../Birko.Data.Stores/) - Store interfaces
 
+## Filter-Based Bulk Operations & Patterns
+
+All pattern wrappers support the new filter-based bulk operations:
+
+- **Soft Delete** — `Update(filter, ...)` automatically scopes filter to non-deleted entities; `Delete(filter)` soft-deletes via native `Update` with `DeletedAt` set
+- **Timestamp** — `Update(filter, PropertyUpdate<T>)` automatically adds `UpdatedAt` to the property updates; `Action<T>` overload also sets `PrevUpdatedAt`
+- **Audit** — `Update(filter, PropertyUpdate<T>)` automatically adds `UpdatedBy` to the property updates
+- **Default Constraint** — Delegates to inner store; `IsDefault` enforcement uses the `Action<T>` overload
+- **Concurrency** — No filter-based overrides (entity-level concern)
+
 ## License
 
 Part of the Birko Framework.

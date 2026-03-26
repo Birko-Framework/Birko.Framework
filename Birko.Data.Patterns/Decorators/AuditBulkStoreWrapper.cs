@@ -45,5 +45,22 @@ public class AuditBulkStoreWrapper<TStore, T> : AuditStoreWrapper<TStore, T>, IB
         }), storeDelegate);
     }
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        var userId = _auditContext.CurrentUserId;
+        _innerStore.Update(filter, item =>
+        {
+            updateAction(item);
+            item.UpdatedBy = userId;
+        });
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserId);
+        _innerStore.Update(filter, updates);
+    }
+
     public void Delete(IEnumerable<T> data) => _innerStore.Delete(data);
+    public void Delete(Expression<Func<T, bool>> filter) => _innerStore.Delete(filter);
 }

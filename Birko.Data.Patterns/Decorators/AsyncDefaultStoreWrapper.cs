@@ -87,8 +87,25 @@ public class AsyncDefaultStoreWrapper<TStore, T> : IAsyncBulkStore<T>, IStoreWra
         await _innerStore.UpdateAsync(items, storeDelegate, ct);
     }
 
+    public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        var items = (await _innerStore.ReadAsync(filter, null, null, null, ct)).ToList();
+        foreach (var item in items)
+        {
+            updateAction(item);
+            if (item.IsDefault)
+            {
+                await UnsetOtherDefaultsAsync(item.Guid, ct: ct);
+            }
+            await _innerStore.UpdateAsync(item, ct: ct);
+        }
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _innerStore.UpdateAsync(filter, updates, ct);
+
     public Task DeleteAsync(T data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => _innerStore.DeleteAsync(filter, ct);
 
     public async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {

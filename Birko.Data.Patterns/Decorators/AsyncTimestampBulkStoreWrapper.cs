@@ -50,5 +50,23 @@ public class AsyncTimestampBulkStoreWrapper<TStore, T> : AsyncTimestampStoreWrap
         }), storeDelegate, ct);
     }
 
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        var now = _clock.UtcNow;
+        return _innerStore.UpdateAsync(filter, item =>
+        {
+            updateAction(item);
+            item.PrevUpdatedAt = item.UpdatedAt;
+            item.UpdatedAt = now;
+        }, ct);
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        updates.Set(x => x.UpdatedAt, _clock.UtcNow);
+        return _innerStore.UpdateAsync(filter, updates, ct);
+    }
+
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => _innerStore.DeleteAsync(filter, ct);
 }

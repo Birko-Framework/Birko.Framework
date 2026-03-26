@@ -38,6 +38,16 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
         _innerStore.Update(data, storeDelegate);
     }
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), updateAction);
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), updates);
+    }
+
     /// <summary>
     /// Soft-deletes multiple entities.
     /// </summary>
@@ -46,5 +56,14 @@ public class SoftDeleteBulkStoreWrapper<TStore, T> : SoftDeleteStoreWrapper<TSto
         var now = _clock.UtcNow;
         var items = data.Select(item => { item.DeletedAt = now; return item; });
         _innerStore.Update(items);
+    }
+
+    /// <summary>
+    /// Soft-deletes all entities matching the filter.
+    /// </summary>
+    public void Delete(Expression<Func<T, bool>> filter)
+    {
+        var now = _clock.UtcNow;
+        _innerStore.Update(SoftDeleteFilter.CombineWithNotDeleted(filter), item => { item.DeletedAt = now; });
     }
 }

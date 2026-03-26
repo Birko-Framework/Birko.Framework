@@ -48,5 +48,23 @@ public class TimestampBulkStoreWrapper<TStore, T> : TimestampStoreWrapper<TStore
         }), storeDelegate);
     }
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        var now = _clock.UtcNow;
+        _innerStore.Update(filter, item =>
+        {
+            updateAction(item);
+            item.PrevUpdatedAt = item.UpdatedAt;
+            item.UpdatedAt = now;
+        });
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        updates.Set(x => x.UpdatedAt, _clock.UtcNow);
+        _innerStore.Update(filter, updates);
+    }
+
     public void Delete(IEnumerable<T> data) => _innerStore.Delete(data);
+    public void Delete(Expression<Func<T, bool>> filter) => _innerStore.Delete(filter);
 }

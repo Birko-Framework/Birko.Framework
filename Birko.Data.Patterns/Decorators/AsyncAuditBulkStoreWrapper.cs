@@ -47,5 +47,22 @@ public class AsyncAuditBulkStoreWrapper<TStore, T> : AsyncAuditStoreWrapper<TSto
         }), storeDelegate, ct);
     }
 
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        var userId = _auditContext.CurrentUserId;
+        return _innerStore.UpdateAsync(filter, item =>
+        {
+            updateAction(item);
+            item.UpdatedBy = userId;
+        }, ct);
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        updates.Set(x => x.UpdatedBy, _auditContext.CurrentUserId);
+        return _innerStore.UpdateAsync(filter, updates, ct);
+    }
+
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => _innerStore.DeleteAsync(filter, ct);
 }

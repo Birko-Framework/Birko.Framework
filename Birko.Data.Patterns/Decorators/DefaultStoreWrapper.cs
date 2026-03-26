@@ -85,8 +85,23 @@ public class DefaultStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper<T>
         _innerStore.Update(items, storeDelegate);
     }
 
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        _innerStore.Update(filter, item =>
+        {
+            updateAction(item);
+            if (item.IsDefault)
+            {
+                UnsetOtherDefaults(item.Guid);
+            }
+        });
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates) => _innerStore.Update(filter, updates);
+
     public void Delete(T data) => _innerStore.Delete(data);
     public void Delete(IEnumerable<T> data) => _innerStore.Delete(data);
+    public void Delete(Expression<Func<T, bool>> filter) => _innerStore.Delete(filter);
 
     public Guid Save(T data, StoreDataDelegate<T>? storeDelegate = null)
     {

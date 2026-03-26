@@ -40,6 +40,16 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
         return _innerStore.UpdateAsync(data, storeDelegate, ct);
     }
 
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), updateAction, ct);
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+    {
+        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), updates, ct);
+    }
+
     /// <summary>
     /// Soft-deletes multiple entities.
     /// </summary>
@@ -48,5 +58,14 @@ public class AsyncSoftDeleteBulkStoreWrapper<TStore, T> : AsyncSoftDeleteStoreWr
         var now = _clock.UtcNow;
         var items = data.Select(item => { item.DeletedAt = now; return item; });
         return _innerStore.UpdateAsync(items, ct: ct);
+    }
+
+    /// <summary>
+    /// Soft-deletes all entities matching the filter.
+    /// </summary>
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+    {
+        var now = _clock.UtcNow;
+        return _innerStore.UpdateAsync(SoftDeleteFilter.CombineWithNotDeleted(filter), item => { item.DeletedAt = now; }, ct);
     }
 }
