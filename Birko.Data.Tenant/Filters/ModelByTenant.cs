@@ -1,8 +1,8 @@
-﻿using Birko.Data.Filters;
+﻿using Birko.Data.Expressions;
+using Birko.Data.Filters;
 using Birko.Data.Models;
 using Birko.Data.Tenant.Models;
 using System;
-using System.Linq;
 using System.Linq.Expressions;
 
 namespace Birko.Data.Tenant.Filters
@@ -23,10 +23,8 @@ namespace Birko.Data.Tenant.Filters
         {
             if (TenantGuid != null && TenantGuid != Guid.Empty)
             {
-                Expression<Func<TModel, bool>> right = (x) => x.TenantGuid == TenantGuid;
-                return (BaseFilter != null)
-                      ? Expression.Lambda<Func<TModel, bool>>(Expression.AndAlso(BaseFilter.Body, right.Body), BaseFilter.Parameters.Concat(right.Parameters.Skip(1)).Distinct())
-                      : right;
+                Expression<Func<TModel, bool>> tenantFilter = (x) => x.TenantGuid == TenantGuid;
+                return ExpressionParameterReplacer.AndAlso(BaseFilter, tenantFilter);
             }
             return BaseFilter;
         }
