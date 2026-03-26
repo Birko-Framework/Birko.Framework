@@ -1,3 +1,4 @@
+using Birko.Data.Expressions;
 using Birko.Data.Patterns.Models;
 using System;
 using System.Linq.Expressions;
@@ -16,17 +17,6 @@ public static class SoftDeleteFilter
         where T : ISoftDeletable
     {
         Expression<Func<T, bool>> notDeleted = x => x.DeletedAt == null;
-
-        if (filter == null)
-        {
-            return notDeleted;
-        }
-
-        var parameter = filter.Parameters[0];
-        var body = Expression.AndAlso(
-            filter.Body,
-            Expression.Invoke(notDeleted, parameter)
-        );
-        return Expression.Lambda<Func<T, bool>>(body, parameter);
+        return ExpressionParameterReplacer.AndAlso(filter, notDeleted);
     }
 }

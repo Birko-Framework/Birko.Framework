@@ -1,5 +1,6 @@
 using System;
 using System.Linq.Expressions;
+using Birko.Data.Expressions;
 
 namespace Birko.Data.Patterns.Specification;
 
@@ -21,14 +22,6 @@ public sealed class AndSpecification<T> : Specification<T>
 
     public override Expression<Func<T, bool>> ToExpression()
     {
-        var leftExpr = _left.ToExpression();
-        var rightExpr = _right.ToExpression();
-
-        var parameter = Expression.Parameter(typeof(T), "x");
-        var combined = Expression.AndAlso(
-            Expression.Invoke(leftExpr, parameter),
-            Expression.Invoke(rightExpr, parameter));
-
-        return Expression.Lambda<Func<T, bool>>(combined, parameter);
+        return ExpressionParameterReplacer.AndAlso(_left.ToExpression(), _right.ToExpression());
     }
 }

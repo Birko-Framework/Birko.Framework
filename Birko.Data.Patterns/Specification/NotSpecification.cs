@@ -20,10 +20,8 @@ public sealed class NotSpecification<T> : Specification<T>
     public override Expression<Func<T, bool>> ToExpression()
     {
         var innerExpr = _inner.ToExpression();
+        var negated = Expression.Not(innerExpr.Body);
 
-        var parameter = Expression.Parameter(typeof(T), "x");
-        var negated = Expression.Not(Expression.Invoke(innerExpr, parameter));
-
-        return Expression.Lambda<Func<T, bool>>(negated, parameter);
+        return Expression.Lambda<Func<T, bool>>(negated, innerExpr.Parameters);
     }
 }
