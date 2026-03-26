@@ -54,11 +54,26 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
         if (!data.All(BelongsToCurrentTenant))
         {
             throw new UnauthorizedAccessException(
-                $"Cannot delete item: it does not belong to the current tenant"
+                $"Cannot update item: it does not belong to the current tenant"
             );
         }
 
         _innerStore.Update(data, storeDelegate);
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+    {
+        _innerStore.Update((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updateAction);
+    }
+
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        _innerStore.Update((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updates);
+    }
+
+    public void Delete(Expression<Func<T, bool>> filter)
+    {
+        _innerStore.Delete((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!);
     }
 }
 

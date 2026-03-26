@@ -163,6 +163,12 @@ The middleware resolves tenant ID in this order (first match wins):
 - [Birko.Data.Sync.Tenant](../Birko.Data.Sync.Tenant/) - Tenant-aware synchronization
 - [Birko.Security.AspNetCore](../Birko.Security.AspNetCore/) - ASP.NET Core security with tenant resolution
 
+## Filter-Based Bulk Operations
+
+Tenant wrappers automatically compose the tenant filter with user-provided filters for all filter-based operations:
+- `Update(filter, PropertyUpdate<T>)` / `Update(filter, Action<T>)` — filter is scoped to current tenant
+- `Delete(filter)` — filter is scoped to current tenant
+
 ## License
 
 Part of the Birko Framework.

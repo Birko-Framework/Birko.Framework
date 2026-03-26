@@ -56,11 +56,26 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
         if (!data.All(BelongsToCurrentTenant))
         {
             throw new UnauthorizedAccessException(
-                $"Cannot delete item: it does not belong to the current tenant"
+                $"Cannot update item: it does not belong to the current tenant"
             );
         }
 
         await _innerStore.UpdateAsync(data, storeDelegate, cancellationToken);
+    }
+
+    public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken cancellationToken = default)
+    {
+        await _innerStore.UpdateAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updateAction, cancellationToken);
+    }
+
+    public async Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken cancellationToken = default)
+    {
+        await _innerStore.UpdateAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updates, cancellationToken);
+    }
+
+    public async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken cancellationToken = default)
+    {
+        await _innerStore.DeleteAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, cancellationToken);
     }
 }
 
