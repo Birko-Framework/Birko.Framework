@@ -77,6 +77,26 @@ namespace Birko.Data.Repositories
             bulkStore.Update(data);
         }
 
+        /// <inheritdoc />
+        public virtual void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
+        {
+            if (Store is not Stores.IBulkStore<T> bulkStore)
+            {
+                throw new InvalidOperationException($"Store is not type of {typeof(Stores.IBulkStore<T>)}");
+            }
+            bulkStore.Update(filter, updateAction);
+        }
+
+        /// <inheritdoc />
+        public virtual void Update(Expression<Func<T, bool>> filter, Stores.PropertyUpdate<T> updates)
+        {
+            if (Store is not Stores.IBulkStore<T> bulkStore)
+            {
+                throw new InvalidOperationException($"Store is not type of {typeof(Stores.IBulkStore<T>)}");
+            }
+            bulkStore.Update(filter, updates);
+        }
+
         #endregion
 
         #region Bulk Delete Operations
@@ -89,6 +109,16 @@ namespace Birko.Data.Repositories
                 throw new InvalidOperationException($"Store is not type of {typeof(Stores.IBulkStore<T>)}");
             }
             bulkStore.Delete(data);
+        }
+
+        /// <inheritdoc />
+        public virtual void Delete(Expression<Func<T, bool>> filter)
+        {
+            if (Store is not Stores.IBulkStore<T> bulkStore)
+            {
+                throw new InvalidOperationException($"Store is not type of {typeof(Stores.IBulkStore<T>)}");
+            }
+            bulkStore.Delete(filter);
         }
 
         #endregion

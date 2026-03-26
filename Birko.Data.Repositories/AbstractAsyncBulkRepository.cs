@@ -76,6 +76,20 @@ namespace Birko.Data.Repositories
             await BulkStore.UpdateAsync(data, ct: ct);
         }
 
+        /// <inheritdoc />
+        public virtual async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return;
+            await BulkStore.UpdateAsync(filter, updateAction, ct);
+        }
+
+        /// <inheritdoc />
+        public virtual async Task UpdateAsync(Expression<Func<T, bool>> filter, Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return;
+            await BulkStore.UpdateAsync(filter, updates, ct);
+        }
+
         #endregion
 
         #region Bulk Delete Operations
@@ -85,6 +99,13 @@ namespace Birko.Data.Repositories
         {
             if (BulkStore == null) return;
             await BulkStore.DeleteAsync(data, ct);
+        }
+
+        /// <inheritdoc />
+        public virtual async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return;
+            await BulkStore.DeleteAsync(filter, ct);
         }
 
         #endregion

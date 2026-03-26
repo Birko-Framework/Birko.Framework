@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using Birko.Data.Stores;
 
 namespace Birko.Data.Repositories
 {
@@ -64,6 +65,20 @@ namespace Birko.Data.Repositories
         /// </summary>
         /// <param name="data">The entities with updated values.</param>
         void Update(IEnumerable<T> data);
+
+        /// <summary>
+        /// Updates all entities matching the filter by applying the specified action.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updateAction">Action to apply to each matching entity.</param>
+        void Update(Expression<Func<T, bool>> filter, Action<T> updateAction);
+
+        /// <summary>
+        /// Updates specific properties on all entities matching the filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updates">Property assignments to apply.</param>
+        void Update(Expression<Func<T, bool>> filter, Stores.PropertyUpdate<T> updates);
     }
 
     #endregion
@@ -82,6 +97,12 @@ namespace Birko.Data.Repositories
         /// </summary>
         /// <param name="data">The entities to delete.</param>
         void Delete(IEnumerable<T> data);
+
+        /// <summary>
+        /// Deletes all entities matching the specified filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to delete.</param>
+        void Delete(Expression<Func<T, bool>> filter);
     }
 
     #endregion

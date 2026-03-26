@@ -15,7 +15,7 @@ AbstractAsyncRepository<T> (wraps IAsyncStore<T>)
 ## Key Interfaces
 
 - `IRepository<T>` / `IAsyncRepository<T>` — Single-entity CRUD via repositories
-- `IBulkRepository<T>` / `IAsyncBulkRepository<T>` — Batch operations with filtering, ordering, paging
+- `IBulkRepository<T>` / `IAsyncBulkRepository<T>` — Batch operations with filtering, ordering, paging, filter-based update/delete
 - `RepositoryLocator` — Thread-safe factory/cache for repository instances
 - `ServiceCollectionExtensions` — DI registration (AddRepository, AddRepositorySingleton, AddRepositoryScoped)
 

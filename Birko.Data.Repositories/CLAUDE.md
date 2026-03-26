@@ -18,8 +18,8 @@ Repository abstractions for the Birko Framework. Contains repository interfaces,
 ### Abstract Implementations
 - **AbstractRepository\<T\>** — Base sync repository, delegates to IStore\<T\>
 - **AbstractAsyncRepository\<T\>** — Base async repository, delegates to IAsyncStore\<T\>
-- **AbstractBulkRepository\<T\>** — Extends AbstractRepository with bulk operations via IBulkStore\<T\>
-- **AbstractAsyncBulkRepository\<T\>** — Extends AbstractAsyncRepository with bulk operations
+- **AbstractBulkRepository\<T\>** — Extends AbstractRepository with bulk operations via IBulkStore\<T\>, including filter-based Update/Delete and PropertyUpdate
+- **AbstractAsyncBulkRepository\<T\>** — Extends AbstractAsyncRepository with bulk operations, including filter-based Update/Delete and PropertyUpdate
 
 ### Utilities
 - **RepositoryLocator** — Thread-safe service locator for repository instances

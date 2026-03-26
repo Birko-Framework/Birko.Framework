@@ -70,6 +70,22 @@ namespace Birko.Data.Repositories
         /// <param name="data">The entities with updated values.</param>
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         Task UpdateAsync(IEnumerable<T> data, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously updates all entities matching the filter by applying the specified action.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updateAction">Action to apply to each matching entity.</param>
+        /// <param name="ct">A cancellation token to cancel the operation.</param>
+        Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously updates specific properties on all entities matching the filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to update.</param>
+        /// <param name="updates">Property assignments to apply.</param>
+        /// <param name="ct">A cancellation token to cancel the operation.</param>
+        Task UpdateAsync(Expression<Func<T, bool>> filter, Stores.PropertyUpdate<T> updates, CancellationToken ct = default);
     }
 
     #endregion
@@ -89,6 +105,13 @@ namespace Birko.Data.Repositories
         /// <param name="data">The entities to delete.</param>
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously deletes all entities matching the specified filter.
+        /// </summary>
+        /// <param name="filter">Filter expression to select entities to delete.</param>
+        /// <param name="ct">A cancellation token to cancel the operation.</param>
+        Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default);
     }
 
     #endregion
