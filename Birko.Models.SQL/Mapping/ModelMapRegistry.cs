@@ -73,5 +73,20 @@ namespace Birko.Models.SQL.Mapping
         {
             return _maps.ContainsKey(modelType);
         }
+
+        /// <summary>
+        /// Get all registered type → table name mappings.
+        /// Useful for registering with DataBase.RegisterTableNames().
+        /// </summary>
+        public IEnumerable<KeyValuePair<Type, string>> GetTableNames()
+        {
+            foreach (var (type, map) in _maps)
+            {
+                var tableNameProp = map.GetType().GetProperty("TableName");
+                var tableName = tableNameProp?.GetValue(map) as string;
+                if (!string.IsNullOrEmpty(tableName))
+                    yield return new KeyValuePair<Type, string>(type, tableName);
+            }
+        }
     }
 }
