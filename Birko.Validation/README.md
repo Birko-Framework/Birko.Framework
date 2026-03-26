@@ -50,6 +50,10 @@ if (!result.IsValid)
 - **ValidationResult** - Contains `IsValid` and `Errors`
 - Built-in rules: `Required()`, `Email()`, `Range()`, `Length()`, `Regex()`, `Custom()`
 
+## Filter-Based Bulk Operations
+
+`AsyncValidatingBulkStoreWrapper` delegates `PropertyUpdate` and `Delete(filter)` directly to the inner store (no pre-validation possible for filter-based operations since entities aren't loaded). The `Action<T>` overload also delegates directly.
+
 ## License
 
 Part of the Birko Framework.

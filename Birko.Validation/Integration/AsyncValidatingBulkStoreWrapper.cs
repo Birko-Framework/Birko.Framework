@@ -38,7 +38,16 @@ public class AsyncValidatingBulkStoreWrapper<TStore, T> : AsyncValidatingStoreWr
         await _innerStore.UpdateAsync(data, storeDelegate, ct);
     }
 
+    public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
+    {
+        await _innerStore.UpdateAsync(filter, updateAction, ct);
+    }
+
+    public Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default) => _innerStore.UpdateAsync(filter, updates, ct);
+
     public Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default) => _innerStore.DeleteAsync(data, ct);
+
+    public Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default) => _innerStore.DeleteAsync(filter, ct);
 
     private async Task ValidateBatchAndThrowAsync(IEnumerable<T> data, CancellationToken ct)
     {
