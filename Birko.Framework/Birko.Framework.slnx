@@ -237,5 +237,9 @@
     <Project Path="../Birko.Workflow.JSON/Birko.Workflow.JSON.shproj" />
     <Project Path="../Birko.Workflow.CosmosDB/Birko.Workflow.CosmosDB.shproj" />
   </Folder>
+  <Folder Name="/Web/">
+    <Project Path="../Birko.Web.Core/package.json" />
+    <Project Path="../Birko.Web.Components/package.json" />
+  </Folder>
   <Project Path="Birko.Framework/Birko.Framework.csproj" />
 </Solution>

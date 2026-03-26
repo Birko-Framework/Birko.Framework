@@ -109,6 +109,13 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Communication.IR | Consumer IR (NEC, Samsung, RC5 protocols, pluggable transports) |
 | Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
 
+### Web
+
+| Project | Description |
+|---------|-------------|
+| Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, and hash router. No dependencies. |
+| Birko.Web.Components | Component library built on Birko.Web.Core — 31 Shadow DOM web components covering inputs, layout, data, feedback, and navigation. |
+
 ### Cross-Cutting
 
 | Project | Description |

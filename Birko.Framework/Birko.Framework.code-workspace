@@ -729,6 +729,14 @@
 			"path": "../Birko.Workflow.CosmosDB"
 		},
 		{
+			"name": "Web / Birko.Web.Core",
+			"path": "../Birko.Web.Core"
+		},
+		{
+			"name": "Web / Birko.Web.Components",
+			"path": "../Birko.Web.Components"
+		},
+		{
 			"path": "."
 		}
 	]
