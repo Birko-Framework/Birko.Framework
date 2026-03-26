@@ -59,6 +59,9 @@ Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, T
 ## Conventions
 - All stores implement: IStore, IAsyncStore, IBulkStore, IAsyncBulkStore
 - All repositories implement: IRepository, IAsyncRepository, IBulkRepository, IAsyncBulkRepository
+- Bulk stores support filter-based Update/Delete: `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, `Delete(filter)`
+- Use `PropertyUpdate<T>` for native platform operations (SQL SET, MongoDB $set, ES UpdateByQuery); use `Action<T>` for complex mutations
+- New platform stores should override `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` for native performance
 - Use protected setters for properties that derived classes need to modify
 - RemoteSettings should be passed via base.SetSettings(), not constructed inline
 
@@ -69,6 +72,14 @@ Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, T
 ## Important Notes
 
 ### Recent Updates
+
+#### Filter-Based Bulk Operations (2026-03-26)
+Added native filter-based Update/Delete to all bulk stores and repositories:
+- **PropertyUpdate\<T\>** — Fluent builder for partial property updates, translated natively by platforms
+- **Native implementations** — SQL (`UPDATE SET WHERE`/`DELETE WHERE`), MongoDB (`UpdateMany`/`DeleteMany`), ElasticSearch (`UpdateByQuery`/`DeleteByQuery`)
+- **Action\<T\> overload** — Read-modify-save fallback for complex mutations
+- All decorators (SoftDelete, Timestamp, Audit, Tenant, EventSourcing, Localization, Telemetry, Validation) updated
+- All repositories (AbstractBulk, AsyncBulk, ViewModel) delegate to stores
 
 #### Birko.Models Restructuring (2026-03-22)
 Three-phase restructuring of the model layer:

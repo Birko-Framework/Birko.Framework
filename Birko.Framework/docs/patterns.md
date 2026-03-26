@@ -57,6 +57,11 @@ await softStore.DeleteAsync(product);  // product.DeletedAt = DateTime.UtcNow
 
 // All reads automatically filter out soft-deleted records:
 var active = await softStore.ReadAsync();  // Only non-deleted items
+
+// Filter-based bulk operations respect soft-delete:
+await softStore.UpdateAsync(x => x.Price > 100,
+    new PropertyUpdate<Product>().Set(x => x.Active, false));  // Only updates non-deleted
+await softStore.DeleteAsync(x => x.IsExpired);                  // Soft-deletes matching non-deleted
 ```
 
 ### Expression Helper

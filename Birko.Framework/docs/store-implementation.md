@@ -47,12 +47,18 @@ public interface IAsyncStore<T> where T : AbstractModel
 ```csharp
 public interface IBulkStore<T> : IStore<T> where T : AbstractModel
 {
+    // Batch operations
     IEnumerable<T> Read();
     IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null,
                         int? limit = null, int? offset = null);
     void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
     void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
     void Delete(IEnumerable<T> data);
+
+    // Filter-based bulk operations
+    void Update(Expression<Func<T, bool>> filter, Action<T> updateAction);           // read-modify-save
+    void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates);         // native (SQL SET, MongoDB $set)
+    void Delete(Expression<Func<T, bool>> filter);                                     // native (SQL DELETE WHERE)
 }
 ```
 
@@ -61,13 +67,32 @@ public interface IBulkStore<T> : IStore<T> where T : AbstractModel
 ```csharp
 public interface IAsyncBulkStore<T> : IAsyncStore<T> where T : AbstractModel
 {
+    // Batch operations
     Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default);
     Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null,
                                     int? limit = null, int? offset = null, CancellationToken ct = default);
     Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default);
     Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default);
     Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default);
+
+    // Filter-based bulk operations
+    Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default);
+    Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default);
+    Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default);
 }
+```
+
+### PropertyUpdate<T>
+
+Fluent builder for expressing partial property updates that platforms translate natively:
+
+```csharp
+// Usage: generates a single SQL UPDATE ... SET active=0, category='archived' WHERE price > 100
+var updates = new PropertyUpdate<Product>()
+    .Set(x => x.Active, false)
+    .Set(x => x.Category, "archived");
+
+store.Update(x => x.Price > 100, updates);
 ```
 
 ## Implementation Options
@@ -250,6 +275,55 @@ public class MyAsyncSqlBulkStore<T> : AsyncDataBaseBulkStore<MyConnector, T> whe
     // Inherits all async CRUD + bulk operations
 }
 ```
+
+## Filter-Based Bulk Operations
+
+### Default Behavior (AbstractBulkStore)
+
+`AbstractBulkStore<T>` provides virtual default implementations:
+- `Update(filter, Action<T>)` — reads matching entities, applies action, saves each
+- `Update(filter, PropertyUpdate<T>)` — delegates to `Update(filter, Action<T>)` via reflection
+- `Delete(filter)` — reads matching entities, calls `Delete(IEnumerable<T>)`
+
+### Overriding for Native Performance
+
+Platform stores should override these for single-command execution:
+
+```csharp
+// SQL: single UPDATE ... SET ... WHERE
+public override void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+{
+    var table = SQL.DataBase.LoadTable(typeof(T));
+    var fields = new Dictionary<int, string>();
+    var values = new Dictionary<string, object>();
+    foreach (var (property, value) in updates.Assignments)
+    {
+        var field = SQL.DataBase.GetField(property);
+        fields.Add(fields.Count, field.Name);
+        values.Add(field.Name, value ?? DBNull.Value);
+    }
+    var conditions = SQL.DataBase.ParseConditionExpression(filter as LambdaExpression);
+    Connector.Update(table.Name, fields, values, conditions);
+}
+
+// SQL: single DELETE FROM ... WHERE
+public override void Delete(Expression<Func<T, bool>> filter)
+{
+    Connector.Delete(typeof(T), filter as LambdaExpression);
+}
+```
+
+### Native Support by Platform
+
+| Platform | PropertyUpdate | Delete(filter) | Action\<T\> |
+|----------|---------------|----------------|-------------|
+| SQL | `UPDATE SET WHERE` | `DELETE WHERE` | read-modify-save |
+| MongoDB | `UpdateMany` | `DeleteMany` | read-modify-save |
+| ElasticSearch | `UpdateByQuery` | `DeleteByQuery` | read-modify-save |
+| RavenDB | fallback | fallback | read-modify-save |
+| CosmosDB | fallback | fallback | read-modify-save |
+| JSON | fallback | fallback | read-modify-save |
+| TimescaleDB | inherits SQL | inherits SQL | read-modify-save |
 
 ## Connector Pattern
 

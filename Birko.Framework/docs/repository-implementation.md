@@ -58,6 +58,11 @@ public interface IBulkRepository<T> : IRepository<T> where T : AbstractModel
     void Create(IEnumerable<T> data);
     void Update(IEnumerable<T> data);
     void Delete(IEnumerable<T> data);
+
+    // Filter-based bulk operations
+    void Update(Expression<Func<T, bool>> filter, Action<T> updateAction);
+    void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates);
+    void Delete(Expression<Func<T, bool>> filter);
 }
 ```
 
@@ -72,6 +77,11 @@ public interface IAsyncBulkRepository<T> : IAsyncRepository<T> where T : Abstrac
     Task CreateAsync(IEnumerable<T> data, CancellationToken ct = default);
     Task UpdateAsync(IEnumerable<T> data, CancellationToken ct = default);
     Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default);
+
+    // Filter-based bulk operations
+    Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default);
+    Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default);
+    Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default);
 }
 ```
 
@@ -204,6 +214,28 @@ Repositories pass settings through to their store:
 var repo = new CustomerRepository();
 repo.SetSettings(new RemoteSettings("localhost", "mydb", "sa", "password", 1433));
 repo.Init();
+```
+
+## Filter-Based Bulk Operations
+
+Bulk repositories expose filter-based update/delete that delegate to the underlying store:
+
+```csharp
+// Native property update (single SQL UPDATE SET WHERE)
+repo.Update(
+    p => p.Category == "old",
+    new PropertyUpdate<Product>().Set(p => p.Active, false)
+);
+
+// Complex mutation (read-modify-save)
+repo.Update(p => p.Price > 100, p => { p.Price *= 0.9m; });
+
+// Native delete (single SQL DELETE WHERE)
+repo.Delete(p => p.IsExpired);
+
+// Async equivalents
+await repo.UpdateAsync(p => p.Stock == 0, new PropertyUpdate<Product>().Set(p => p.Active, false), ct);
+await repo.DeleteAsync(p => p.DeletedAt < cutoff, ct);
 ```
 
 ## Key API Notes
