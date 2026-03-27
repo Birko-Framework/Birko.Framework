@@ -50,6 +50,12 @@ Birko.Models.Contracts (zero deps: ICatalogItem, IPriceable, IVariantable, ICate
 
 Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider)
   -> Birko.Time (calendars, working hours, time zones)
+
+Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
+  -> Birko.Data.Composition (StoreWrapperBuilder — runtime decorator chains)
+
+Birko.Data.Core
+  -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
 ```
 
 ### Reference Implementations

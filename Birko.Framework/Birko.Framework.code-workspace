@@ -213,6 +213,10 @@
 			"path": "../Birko.Data.Composition"
 		},
 		{
+			"name": "Data.Patterns / Birko.Data.Tagging",
+			"path": "../Birko.Data.Tagging"
+		},
+		{
 			"name": "Data.SQL / Birko.Data.SQL",
 			"path": "../Birko.Data.SQL"
 		},
@@ -735,6 +739,10 @@
 		{
 			"name": "Web / Birko.Web.Components",
 			"path": "../Birko.Web.Components"
+		},
+		{
+			"name": "Web / Birko.Web.Shell",
+			"path": "../Birko.Web.Shell"
 		},
 		{
 			"path": "."

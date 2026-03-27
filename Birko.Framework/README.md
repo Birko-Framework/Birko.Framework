@@ -4,7 +4,7 @@ A modular .NET framework providing data access, communication, and model infrast
 
 ## Features
 
-- Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON)
+- Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, Azure Cosmos DB)
 - Sync and async store/repository abstractions with bulk operation support
 - ViewModel layer with model-to-viewmodel mapping
 - Database migrations framework
@@ -19,12 +19,14 @@ A modular .NET framework providing data access, communication, and model infrast
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
 - Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
-- File/blob storage abstraction (local filesystem, cloud providers planned)
+- File/blob storage abstraction (local filesystem, Azure Blob Storage)
 - Telemetry (store metrics via System.Diagnostics.Metrics, distributed tracing via ActivitySource, correlation ID middleware)
 - OpenTelemetry integration (OTLP + Console exporters, auto-wires Birko meters/activity sources)
 - Data-driven rules engine (composable rules, groups, contexts, SQL/Specification/Validation integration)
 - Generic data processors (XML, CSV, HTTP, ZIP with decorator composition)
 - Background job processing with pluggable persistent queues
+- Entity tagging system (tenant-scoped tags, polymorphic junction, tag service)
+- Store decorator composition (conditional runtime decorator chains)
 - Data structures (trees, AVL trees, BST)
 - Helper utilities and extensions (including RFC 4180 CSV parser)
 
@@ -55,6 +57,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.RavenDB | RavenDB repository/store |
 | Birko.Data.InfluxDB | InfluxDB time-series database |
 | Birko.Data.TimescaleDB | TimescaleDB implementation |
+| Birko.Data.CosmosDB | Azure Cosmos DB (NoSQL API) repository/store |
 
 ### Data Features
 
@@ -64,6 +67,8 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.Migrations | Database migration framework (SQL, ES, MongoDB, RavenDB, InfluxDB, TimescaleDB) |
 | Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, Tenant) |
 | Birko.Data.Tenant | Multi-tenancy support |
+| Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
+| Birko.Data.Tagging | Entity tagging system (tenant-scoped tags, polymorphic junction) |
 | Birko.Data.EventSourcing | Event sourcing pattern |
 | Birko.Data.SQL.View | SQL view generation |
 
@@ -115,6 +120,7 @@ A modular .NET framework providing data access, communication, and model infrast
 |---------|-------------|
 | Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, and hash router. No dependencies. |
 | Birko.Web.Components | Component library built on Birko.Web.Core — 31 Shadow DOM web components covering inputs, layout, data, feedback, and navigation. |
+| Birko.Web.Shell | Application shell framework built on Birko.Web.Core — auth, modules, command palette, notifications, tenants. |
 
 ### Cross-Cutting
 
@@ -239,6 +245,7 @@ dotnet test
 - [Telemetry Guide](docs/telemetry.md) (Store metrics, distributed tracing, correlation ID)
 - [Rules Engine Guide](docs/rules.md) (Data-driven rules, groups, contexts, SQL/Spec/Validation integration)
 - [Data Processors Guide](docs/processors.md) (XML, CSV, HTTP, ZIP, decorator composition)
+- [Tagging Guide](docs/tagging.md) (Entity tagging, polymorphic junction, tenant-scoped tags)
 - [TODO / Roadmap](TODO.md)
 
 ## License

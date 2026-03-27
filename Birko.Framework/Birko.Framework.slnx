@@ -73,6 +73,7 @@
     <Project Path="../Birko.Data.Processors/Birko.Data.Processors.shproj" />
     <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
     <Project Path="../Birko.Data.Composition/Birko.Data.Composition.shproj" />
+    <Project Path="../Birko.Data.Tagging/Birko.Data.Tagging.shproj" />
   </Folder>
   <Folder Name="/Data.SQL/">
     <Project Path="../Birko.Data.SQL/Birko.Data.SQL.shproj" />

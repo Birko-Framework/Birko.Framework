@@ -34,6 +34,8 @@
 - **Birko.Data.Sync** + **.Sql** / **.ElasticSearch** / **.MongoDb** / **.RavenDB** / **.Json** / **.CosmosDB** / **.Tenant**
 - **Birko.Data.Aggregates** - SQL-NoSQL aggregate mapper (flatten/expand for sync)
 - **Birko.Data.Tenant** - Multi-tenancy support
+- **Birko.Data.Composition** - Runtime store decorator composition (StoreWrapperBuilder — conditional Tenant/Default/SoftDelete/Audit/Timestamp chains)
+- **Birko.Data.Tagging** - Entity tagging system (Tag, EntityTag, ITaggable, ITagService, TagServiceBase — tenant-scoped, polymorphic junction)
 - **Birko.Data.EventSourcing** - Event sourcing pattern
 - **Birko.Data.SQL.View** + **.MSSql.View** / **.PostgreSQL.View** / **.MySQL.View** / **.SqLite.View** - SQL view DDL
 - **Birko.Data.SQL.View.Migrations** - Integration between SQL View definitions and the Migration framework (ViewSqlGenerator, ViewMigrationExtensions)
@@ -125,6 +127,11 @@
 - **Birko.Localization** - Translation framework, CLDR pluralization, JSON/RESX/InMemory providers
 - **Birko.Localization.Data** - Database-backed translations, namespace scoping, TTL cache
 - **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers)
+
+## Web (TypeScript)
+- **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP client, SSE client, hash router)
+- **Birko.Web.Components** - Component library (31 Shadow DOM web components: inputs, layout, data, feedback, navigation)
+- **Birko.Web.Shell** - Application shell framework (authentication, module loading, command palette, notifications, tenant switching)
 
 ## Tests
 All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its own CLAUDE.md.

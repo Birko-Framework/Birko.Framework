@@ -337,6 +337,24 @@ var store = new AsyncVersionedStoreWrapper<Order>(
             auditContext)));
 ```
 
+## Store Decorator Composition (Birko.Data.Composition)
+
+`StoreWrapperBuilder.Build<T>()` inspects entity type `T` at runtime and conditionally wraps an `IAsyncBulkStore<T>` with applicable decorators:
+
+```csharp
+// Automatically applies Tenant, Default, SoftDelete, Audit, Timestamp
+// based on which interfaces T implements
+var store = StoreWrapperBuilder.Build<Order>(rawStore, tenantContext, auditContext, clock);
+```
+
+**Decorator chain order (outermost to innermost):**
+1. **Tenant** — applied if `T : ITenant`
+2. **Default** — applied if `T : IDefault`
+3. **SoftDelete** — applied if `T : ISoftDeletable`
+4. **Audit** — applied if `T : IAuditable`
+5. **Timestamp** — applied if `T : ITimestamped`
+
 ## See Also
 
+- [Tagging Guide](tagging.md)
 - [Birko.Data.Patterns](https://github.com/birko/Birko.Data.Patterns)
