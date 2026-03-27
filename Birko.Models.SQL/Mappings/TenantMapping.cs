@@ -7,7 +7,7 @@ namespace Birko.Models.SQL.Mappings
     {
         public void Configure(ModelMap<Tenant> map)
         {
-            map.ToTable("Agendas")
+            map.ToTable("Tenants")
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 

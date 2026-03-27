@@ -22,6 +22,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\RoleMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserLoginMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserProfileMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserTenantMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserRoleMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\RolePermissionMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\CustomerMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\AddressMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\CurrencyMapping.cs" />

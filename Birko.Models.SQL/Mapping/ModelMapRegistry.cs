@@ -88,5 +88,50 @@ namespace Birko.Models.SQL.Mapping
                     yield return new KeyValuePair<Type, string>(type, tableName);
             }
         }
+
+        /// <summary>
+        /// Get all registered property mappings for a model type.
+        /// Returns empty if no mapping is registered.
+        /// </summary>
+        public IReadOnlyList<PropertyMap> GetPropertyMaps(Type modelType)
+        {
+            if (!_maps.TryGetValue(modelType, out var map))
+                return Array.Empty<PropertyMap>();
+            var propsProp = map.GetType().GetProperty("Properties");
+            return propsProp?.GetValue(map) as IReadOnlyList<PropertyMap> ?? Array.Empty<PropertyMap>();
+        }
+
+        /// <summary>
+        /// Apply all registered mappings to the Birko SQL DataBase layer.
+        /// Registers table names and applies field metadata (primary, unique, precision, etc.)
+        /// from fluent PropertyMap definitions to the SQL field cache.
+        /// </summary>
+        public void ApplyToDatabase()
+        {
+            // 1. Register table names
+            Birko.Data.SQL.DataBase.RegisterTableNames(GetTableNames());
+
+            // 2. Apply property-level metadata to the field cache
+            foreach (var (type, _) in _maps)
+            {
+                var properties = GetPropertyMaps(type);
+                if (properties.Count == 0) continue;
+
+                // Force LoadTable to populate the field cache for this type
+                var table = Birko.Data.SQL.DataBase.LoadTable(type);
+                if (table?.Fields == null) continue;
+
+                foreach (var propMap in properties)
+                {
+                    var field = table.GetFieldByPropertyName(propMap.PropertyName);
+                    if (field == null) continue;
+
+                    if (propMap.IsPrimary) field.IsPrimary = true;
+                    if (propMap.IsUnique) field.IsUnique = true;
+                    if (propMap.IsRequired) field.IsNotNull = true;
+                    if (propMap.IsIncrement) field.IsAutoincrement = true;
+                }
+            }
+        }
     }
 }
