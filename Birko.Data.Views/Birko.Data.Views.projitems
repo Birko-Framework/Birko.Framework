@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-view00000001</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Data.Views</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Enums -->
+    <Compile Include="$(MSBuildThisFileDirectory)ViewQueryMode.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AggregateFunction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)JoinType.cs" />
+    <!-- DTOs -->
+    <Compile Include="$(MSBuildThisFileDirectory)FieldSelector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)JoinClause.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AggregateClause.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GroupByClause.cs" />
+    <!-- Builder -->
+    <Compile Include="$(MSBuildThisFileDirectory)ViewDefinition.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewDefinitionBuilder.cs" />
+    <!-- Configuration -->
+    <Compile Include="$(MSBuildThisFileDirectory)IViewMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewMapRegistry.cs" />
+    <!-- Store & Manager -->
+    <Compile Include="$(MSBuildThisFileDirectory)IViewStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IViewManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewResult.cs" />
+  </ItemGroup>
+</Project>
