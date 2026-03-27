@@ -3,7 +3,7 @@ namespace Birko.Data.Tagging;
 /// <summary>
 /// Tag DTO returned by the tag service.
 /// </summary>
-public sealed record TagDto(Guid Id, string Name, string? Color, string? Group);
+public sealed record TagDto(Guid Id, string Name, string? Color, string? TagGroup);
 
 /// <summary>
 /// Service for managing tags and attaching/detaching them to/from entities.

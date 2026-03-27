@@ -36,7 +36,7 @@ public abstract class TagServiceBase : ITagService
             TenantGuid = GetCurrentTenantId(),
             Name = name.Trim(),
             Color = color,
-            Group = group,
+            TagGroup = group,
         };
         var created = await CreateTagInternalAsync(tag, ct);
         return ToDto(created);
@@ -66,8 +66,8 @@ public abstract class TagServiceBase : ITagService
                   ?? throw new InvalidOperationException($"Tag {tagId} not found.");
 
         if (name is not null) tag.Name = name.Trim();
-        if (color is not null) tag.Color = color;
-        if (group is not null) tag.Group = group;
+        if (color is not null) tag.Color = string.IsNullOrWhiteSpace(color) ? null : color;
+        if (group is not null) tag.TagGroup = string.IsNullOrWhiteSpace(group) ? null : group;
 
         await UpdateTagInternalAsync(tag, ct);
     }
@@ -187,5 +187,5 @@ public abstract class TagServiceBase : ITagService
 
     // ── Mapping ──────────────────────────────────────────────────────────
 
-    private static TagDto ToDto(Tag t) => new(t.Guid!.Value, t.Name, t.Color, t.Group);
+    private static TagDto ToDto(Tag t) => new(t.Guid!.Value, t.Name, t.Color, t.TagGroup);
 }

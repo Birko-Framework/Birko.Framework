@@ -11,5 +11,5 @@ public class Tag : AbstractLogModel
     public Guid TenantGuid { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Color { get; set; }
-    public string? Group { get; set; }
+    public string? TagGroup { get; set; }
 }
