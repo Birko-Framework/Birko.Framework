@@ -58,6 +58,10 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.InfluxDB | InfluxDB time-series database |
 | Birko.Data.TimescaleDB | TimescaleDB implementation |
 | Birko.Data.CosmosDB | Azure Cosmos DB (NoSQL API) repository/store |
+| Birko.Data.MongoDB.Views | MongoDB platform for fluent views (aggregation pipelines) |
+| Birko.Data.ElasticSearch.Views | ElasticSearch platform for fluent views (NEST aggregations) |
+| Birko.Data.RavenDB.Views | RavenDB platform for fluent views (Map/Reduce static indexes) |
+| Birko.Data.CosmosDB.Views | Cosmos DB platform for fluent views (LINQ + Cosmos SQL) |
 
 ### Data Features
 
@@ -69,8 +73,10 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.Tenant | Multi-tenancy support |
 | Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
 | Birko.Data.Tagging | Entity tagging system (tenant-scoped tags, polymorphic junction) |
+| Birko.Data.Views | Unified fluent view builder (cross-platform views, projections, aggregations) |
 | Birko.Data.EventSourcing | Event sourcing pattern |
-| Birko.Data.SQL.View | SQL view generation |
+| Birko.Data.SQL.View | SQL view generation (attribute-based) |
+| Birko.Data.SQL.Views | SQL platform for fluent views (translates ViewDefinition to SQL) |
 
 ### ViewModel Layer
 
@@ -246,6 +252,7 @@ dotnet test
 - [Rules Engine Guide](docs/rules.md) (Data-driven rules, groups, contexts, SQL/Spec/Validation integration)
 - [Data Processors Guide](docs/processors.md) (XML, CSV, HTTP, ZIP, decorator composition)
 - [Tagging Guide](docs/tagging.md) (Entity tagging, polymorphic junction, tenant-scoped tags)
+- [Views Guide](docs/views.md) (Fluent view builder, cross-platform projections, aggregations)
 - [TODO / Roadmap](TODO.md)
 
 ## License

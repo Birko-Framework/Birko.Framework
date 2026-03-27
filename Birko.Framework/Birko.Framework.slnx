@@ -66,6 +66,10 @@
     <Project Path="../Birko.Data.RavenDB/Birko.Data.RavenDB.shproj" />
     <Project Path="../Birko.Data.TimescaleDB/Birko.Data.TimescaleDB.shproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
     <Project Path="../Birko.Data.CosmosDB/Birko.Data.CosmosDB.shproj" />
+    <Project Path="../Birko.Data.MongoDB.Views/Birko.Data.MongoDB.Views.shproj" />
+    <Project Path="../Birko.Data.ElasticSearch.Views/Birko.Data.ElasticSearch.Views.shproj" />
+    <Project Path="../Birko.Data.RavenDB.Views/Birko.Data.RavenDB.Views.shproj" />
+    <Project Path="../Birko.Data.CosmosDB.Views/Birko.Data.CosmosDB.Views.shproj" />
   </Folder>
   <Folder Name="/Data.Patterns/">
     <Project Path="../Birko.Data.EventSourcing/Birko.Data.EventSourcing.shproj" />
@@ -74,6 +78,7 @@
     <Project Path="../Birko.Data.Tenant/Birko.Data.Tenant.shproj" />
     <Project Path="../Birko.Data.Composition/Birko.Data.Composition.shproj" />
     <Project Path="../Birko.Data.Tagging/Birko.Data.Tagging.shproj" />
+    <Project Path="../Birko.Data.Views/Birko.Data.Views.shproj" />
   </Folder>
   <Folder Name="/Data.SQL/">
     <Project Path="../Birko.Data.SQL/Birko.Data.SQL.shproj" />
@@ -88,6 +93,7 @@
     <Project Path="../Birko.Data.SQL.SqLite.View/Birko.Data.SQL.SqLite.View.shproj" />
     <Project Path="../Birko.Data.SQL.View.Migrations/Birko.Data.SQL.View.Migrations.shproj" />
     <Project Path="../Birko.Data.SQL.Caching/Birko.Data.SQL.Caching.shproj" />
+    <Project Path="../Birko.Data.SQL.Views/Birko.Data.SQL.Views.shproj" />
   </Folder>
   <Folder Name="/Data.Sync/">
     <Project Path="../Birko.Data.Sync/Birko.Data.Sync.shproj" />
@@ -204,6 +210,7 @@
     <Project Path="../Birko.Data.TimescaleDB.Tests/Birko.Data.TimescaleDB.Tests.csproj" />
     <Project Path="../Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
     <Project Path="../Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
+    <Project Path="../Birko.Data.Views.Tests/Birko.Data.Views.Tests.csproj" />
   </Folder>
   <Folder Name="/Time/">
     <Project Path="../Birko.Time.Abstractions/Birko.Time.Abstractions.shproj" />
@@ -241,6 +248,7 @@
   <Folder Name="/Web/">
     <Project Path="../Birko.Web.Core/package.json" />
     <Project Path="../Birko.Web.Components/package.json" />
+    <Project Path="../Birko.Web.Shell/package.json" />
   </Folder>
   <Project Path="Birko.Framework/Birko.Framework.csproj" />
 </Solution>

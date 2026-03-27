@@ -56,6 +56,9 @@ Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
 
 Birko.Data.Core
   -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
+
+Birko.Data.Stores (OrderBy<T>)
+  -> Birko.Data.Views (ViewDefinitionBuilder, ViewMapRegistry, IViewStore, IViewManager)
 ```
 
 ### Reference Implementations

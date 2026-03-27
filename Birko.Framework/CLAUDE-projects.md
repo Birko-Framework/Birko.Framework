@@ -22,6 +22,10 @@
 - **Birko.Data.InfluxDB** - InfluxDB time-series database
 - **Birko.Data.TimescaleDB** - TimescaleDB implementation
 - **Birko.Data.CosmosDB** - Azure Cosmos DB (NoSQL API) repository/store
+- **Birko.Data.MongoDB.Views** - MongoDB platform for fluent views (MongoViewTranslator, aggregation pipelines, db.createView)
+- **Birko.Data.ElasticSearch.Views** - ElasticSearch platform for fluent views (NEST aggregations, terms/composite + metric sub-aggs)
+- **Birko.Data.RavenDB.Views** - RavenDB platform for fluent views (RavenViewTranslator, Map/Reduce static indexes)
+- **Birko.Data.CosmosDB.Views** - Cosmos DB platform for fluent views (LINQ queries, Cosmos SQL GROUP BY)
 
 ## ViewModel Layer
 - **Birko.Data.ViewModel** - Base ViewModel repository abstractions
@@ -36,10 +40,12 @@
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.Composition** - Runtime store decorator composition (StoreWrapperBuilder — conditional Tenant/Default/SoftDelete/Audit/Timestamp chains)
 - **Birko.Data.Tagging** - Entity tagging system (Tag, EntityTag, ITaggable, ITagService, TagServiceBase — tenant-scoped, polymorphic junction)
+- **Birko.Data.Views** - Unified fluent view builder (ViewDefinitionBuilder, IViewMapping, ViewMapRegistry, IViewStore, IViewManager — cross-platform views/projections/aggregations)
 - **Birko.Data.EventSourcing** - Event sourcing pattern
 - **Birko.Data.SQL.View** + **.MSSql.View** / **.PostgreSQL.View** / **.MySQL.View** / **.SqLite.View** - SQL view DDL
 - **Birko.Data.SQL.View.Migrations** - Integration between SQL View definitions and the Migration framework (ViewSqlGenerator, ViewMigrationExtensions)
 - **Birko.Data.SQL.Caching** - Query caching decorator for SQL stores (CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions)
+- **Birko.Data.SQL.Views** - SQL platform implementation for fluent views (SqlViewTranslator, SqlViewStore, SqlViewManager — translates ViewDefinition to Tables.View)
 - **Birko.Data.Processors** - Stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Structures** - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - **Birko.Random** - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix, TestRandom), distributions, sequences (GuidV4/V7, NanoId, Snowflake, tokens), noise (Perlin, Simplex)
