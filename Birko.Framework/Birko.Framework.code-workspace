@@ -193,6 +193,22 @@
 			"path": "../Birko.Data.CosmosDB"
 		},
 		{
+			"name": "Data.NoSQL / Birko.Data.MongoDB.Views",
+			"path": "../Birko.Data.MongoDB.Views"
+		},
+		{
+			"name": "Data.NoSQL / Birko.Data.ElasticSearch.Views",
+			"path": "../Birko.Data.ElasticSearch.Views"
+		},
+		{
+			"name": "Data.NoSQL / Birko.Data.RavenDB.Views",
+			"path": "../Birko.Data.RavenDB.Views"
+		},
+		{
+			"name": "Data.NoSQL / Birko.Data.CosmosDB.Views",
+			"path": "../Birko.Data.CosmosDB.Views"
+		},
+		{
 			"name": "Data.Patterns / Birko.Data.EventSourcing",
 			"path": "../Birko.Data.EventSourcing"
 		},
@@ -215,6 +231,10 @@
 		{
 			"name": "Data.Patterns / Birko.Data.Tagging",
 			"path": "../Birko.Data.Tagging"
+		},
+		{
+			"name": "Data.Patterns / Birko.Data.Views",
+			"path": "../Birko.Data.Views"
 		},
 		{
 			"name": "Data.SQL / Birko.Data.SQL",
@@ -263,6 +283,10 @@
 		{
 			"name": "Data.SQL / Birko.Data.SQL.Caching",
 			"path": "../Birko.Data.SQL.Caching"
+		},
+		{
+			"name": "Data.SQL / Birko.Data.SQL.Views",
+			"path": "../Birko.Data.SQL.Views"
 		},
 		{
 			"name": "Data.Sync / Birko.Data.Sync",
@@ -699,6 +723,10 @@
 		{
 			"name": "Tests / Birko.Data.JSON.Tests",
 			"path": "../Birko.Data.JSON.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Views.Tests",
+			"path": "../Birko.Data.Views.Tests"
 		},
 		{
 			"name": "Validation / Birko.Validation",
