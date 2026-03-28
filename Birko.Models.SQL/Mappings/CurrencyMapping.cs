@@ -1,35 +1,29 @@
 using Birko.Models.SQL.Mapping;
-using Birko.Models.Accounting;
-using PricingCurrency = Birko.Models.Pricing.Currency;
-using PricingTax = Birko.Models.Pricing.Tax;
-using PricingPriceGroup = Birko.Models.Pricing.PriceGroup;
+using Birko.Models.Product;
+using Birko.Models.Pricing;
 
 namespace Birko.Models.SQL.Mappings
 {
-    public class CurrencyMapping : IModelMapping<PricingCurrency>
+    public class CurrencyMapping : IModelMapping<Currency>
     {
-        private const int DecimalPrecision = 22;
-        private const int DecimalScale = 6;
-
-        public void Configure(ModelMap<PricingCurrency> map)
+        public void Configure(ModelMap<Currency> map)
         {
             map.ToTable("Currencies")
                 .HasPrimary(x => x.Guid)
                 .HasUnique(x => x.Guid);
 
+            map.Property(x => x.Code).HasPrecision(8).IsUnique();
             map.Property(x => x.Name).HasPrecision(256);
             map.Property(x => x.Symbol).HasPrecision(8);
-            map.Property(x => x.FromRate).HasColumnName("FromRate").HasPrecision(DecimalPrecision).HasScale(DecimalScale);
-            map.Property(x => x.ToRate).HasColumnName("ToRate").HasPrecision(DecimalPrecision).HasScale(DecimalScale);
         }
     }
 
-    public class TaxMapping : IModelMapping<PricingTax>
+    public class TaxMapping : IModelMapping<Tax>
     {
         private const int DecimalPrecision = 22;
         private const int DecimalScale = 6;
 
-        public void Configure(ModelMap<PricingTax> map)
+        public void Configure(ModelMap<Tax> map)
         {
             map.ToTable("Taxes")
                 .HasPrimary(x => x.Guid)
@@ -55,12 +49,12 @@ namespace Birko.Models.SQL.Mappings
         }
     }
 
-    public class PriceGroupMapping : IModelMapping<PricingPriceGroup>
+    public class PriceGroupMapping : IModelMapping<PriceGroup>
     {
         private const int DecimalPrecision = 22;
         private const int DecimalScale = 6;
 
-        public void Configure(ModelMap<PricingPriceGroup> map)
+        public void Configure(ModelMap<PriceGroup> map)
         {
             map.ToTable("PriceGroups")
                 .HasPrimary(x => x.Guid)
