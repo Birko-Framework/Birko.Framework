@@ -119,5 +119,32 @@ namespace Birko.Models.Contracts
         {
             return potentialDescendant.Path.StartsWith(potentialAncestor.Path + Separator);
         }
+
+        /// <summary>
+        /// Resequences SortOrder on an ordered list of items to 0, 1, 2...
+        /// Items must already be sorted by their current SortOrder.
+        /// Returns only the items whose SortOrder actually changed (for efficient bulk update).
+        /// </summary>
+        public static IReadOnlyList<T> NormalizeSortOrder<T>(IReadOnlyList<T> sortedItems, Func<T, int> getOrder, Action<T, int> setOrder)
+        {
+            var changed = new List<T>();
+            for (int i = 0; i < sortedItems.Count; i++)
+            {
+                if (getOrder(sortedItems[i]) != i)
+                {
+                    setOrder(sortedItems[i], i);
+                    changed.Add(sortedItems[i]);
+                }
+            }
+            return changed;
+        }
+    }
+
+    /// <summary>
+    /// Entity with a SortOrder property for manual ordering within a collection.
+    /// </summary>
+    public interface ISortable
+    {
+        int SortOrder { get; set; }
     }
 }
