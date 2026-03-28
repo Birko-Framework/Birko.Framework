@@ -18,6 +18,7 @@ namespace Birko.Models.Inventory
         public int SortOrder { get; set; }
         public Guid? ParentGuid { get; set; }
         public string Path { get; set; } = null!;
+        public int Depth { get; set; }
         public Guid TenantGuid { get; set; }
 
         public virtual void LoadFrom(ViewModels.StorageLocation data)
