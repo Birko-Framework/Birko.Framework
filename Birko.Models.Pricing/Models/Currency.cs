@@ -3,8 +3,16 @@ using Birko.Data.Models;
 
 namespace Birko.Models.Pricing
 {
+    /// <summary>Mixin interface for entities that reference a Currency.</summary>
+    public interface IRelatedToCurrency : Data.Models.ILoadable<ViewModels.Currency>
+    {
+        Guid? CurrencyGuid { get; set; }
+        string CurrencySymbol { get; set; }
+    }
+
     /// <summary>
-    /// Currency with exchange rates. Clean replacement for Accounting.Currency.
+    /// Currency definition with ISO code and symbol positioning.
+    /// Exchange rates are handled separately by <see cref="CurrencyRate"/>.
     /// </summary>
     public class Currency
         : AbstractLogModel
@@ -12,10 +20,13 @@ namespace Birko.Models.Pricing
         , ICopyable<Currency>
         , IDefault
     {
+        /// <summary>ISO 4217 code (e.g. EUR, USD, CZK).</summary>
+        public string Code { get; set; } = null!;
         public string Name { get; set; } = null!;
+        /// <summary>Currency symbol (e.g. €, $, Kč).</summary>
         public string Symbol { get; set; } = null!;
-        public decimal FromRate { get; set; }
-        public decimal ToRate { get; set; }
+        /// <summary>True if symbol is placed before the amount ($100), false if after (100 €).</summary>
+        public bool IsLeftSymbol { get; set; }
         public bool IsDefault { get; set; }
 
         public virtual Currency CopyTo(Currency clone)
@@ -25,10 +36,10 @@ namespace Birko.Models.Pricing
                 clone = new Currency();
             }
             base.CopyTo(clone);
+            clone.Code = Code;
             clone.Name = Name;
             clone.Symbol = Symbol;
-            clone.FromRate = FromRate;
-            clone.ToRate = ToRate;
+            clone.IsLeftSymbol = IsLeftSymbol;
             clone.IsDefault = IsDefault;
             return clone;
         }
@@ -37,10 +48,10 @@ namespace Birko.Models.Pricing
         {
             base.LoadFrom(data);
             if (data == null) return;
+            Code = data.Code;
             Name = data.Name;
             Symbol = data.Symbol;
-            FromRate = data.FromRate;
-            ToRate = data.ToRate;
+            IsLeftSymbol = data.IsLeftSymbol;
             IsDefault = data.IsDefault;
         }
     }

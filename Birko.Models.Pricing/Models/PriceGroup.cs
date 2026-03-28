@@ -3,9 +3,14 @@ using Birko.Data.Models;
 
 namespace Birko.Models.Pricing
 {
+    /// <summary>Mixin interface for entities that reference a PriceGroup.</summary>
+    public interface IRelatedToPriceGroup : Data.Models.ILoadable<ViewModels.PriceGroup>
+    {
+        Guid? PriceGroupGuid { get; set; }
+    }
+
     /// <summary>
     /// Customer price group with percentage modifier.
-    /// Moved from Accounting to Pricing domain.
     /// </summary>
     public class PriceGroup
         : AbstractLogModel

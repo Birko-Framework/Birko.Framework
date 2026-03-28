@@ -10,16 +10,21 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Models\Currency.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\CurrencyRate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Tax.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\PriceGroup.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\PriceList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\PriceListEntry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Discount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Currency.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ViewModels\CurrencyRate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Tax.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\PriceGroup.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\PriceList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\PriceListEntry.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ViewModels\Discount.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\Currency.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\PriceGroup.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\Tax.cs" />
   </ItemGroup>
 </Project>
