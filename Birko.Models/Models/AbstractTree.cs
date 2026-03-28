@@ -22,6 +22,8 @@ namespace Birko.Models
 
         public virtual string Path { get; set; } = null!;
 
+        public virtual int Depth { get; set; }
+
         public virtual void LoadFrom(ViewModels.AbstractTree data)
         {
             base.LoadFrom(data);
