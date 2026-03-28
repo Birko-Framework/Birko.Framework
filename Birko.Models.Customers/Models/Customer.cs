@@ -16,13 +16,28 @@ namespace Birko.Models.Customers
         Person = 1
     }
 
+    public enum CustomerStatus
+    {
+        Active = 0,
+        Inactive = 1,
+        Blocked = 2
+    }
+
     public class Customer
         : BaseCustomer
         , Birko.Data.Models.ILoadable<ViewModels.Customer>
     {
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? Website { get; set; }
         public Guid? PriceGroupGuid { get; set; }
         public PartnerType PartnerType { get; set; } = PartnerType.Customer;
         public LegalType LegalType { get; set; } = LegalType.Company;
+        /// <summary>Business identification number (IČO).</summary>
+        public string? TaxId { get; set; }
+        /// <summary>VAT identification number (DIČ / IČ DPH).</summary>
+        public string? VatId { get; set; }
+        public CustomerStatus Status { get; set; } = CustomerStatus.Active;
 
         public virtual void LoadFrom(ViewModels.Customer data)
         {

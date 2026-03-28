@@ -9,6 +9,13 @@ namespace Birko.Models.Customers
         Guid? AddressGuid { get; set; }
     }
 
+    public enum AddressType
+    {
+        Billing = 0,
+        Shipping = 1,
+        Registered = 2
+    }
+
     public class Address
         : Birko.Data.Models.AbstractLogModel
         , Birko.Data.Models.ILoadable<ViewModels.Address>
@@ -16,6 +23,7 @@ namespace Birko.Models.Customers
         , Birko.Models.Contracts.IAddressable
         , Birko.Models.Contracts.IContactable
     {
+        public AddressType Type { get; set; } = AddressType.Billing;
         public string Name { get; set; } = string.Empty;
         public string Street { get; set; } = string.Empty;
         public string StreetNumber { get; set; } = string.Empty;
