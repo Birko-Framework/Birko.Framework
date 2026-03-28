@@ -13,6 +13,7 @@ namespace Birko.Models.Category
         public string Title { get; set; } = null!;
         public Guid? ParentGuid { get; set; }
         public string Path { get; set; } = null!;
+        public int Depth { get; set; }
         public string Description { get; set; } = null!;
 
         public void LoadFrom(Birko.Models.Category.ViewModels.Category data)
