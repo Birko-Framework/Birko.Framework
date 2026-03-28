@@ -12,7 +12,7 @@ namespace Birko.Models.Inventory.ViewModels
         public string? Description { get; set; }
         public string? Batch { get; set; }
         public decimal Quantity { get; set; }
-        public string? MeasureUnit { get; set; }
+        public Guid? MeasureUnitGuid { get; set; }
         public decimal? UnitPrice { get; set; }
         public decimal? UnitPriceVAT { get; set; }
         public decimal? VAT { get; set; }

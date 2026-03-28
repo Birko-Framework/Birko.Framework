@@ -21,7 +21,7 @@ namespace Birko.Models.Inventory
         public string? Description { get; set; }
         public string? Batch { get; set; }
         public decimal Quantity { get; set; }
-        public string? MeasureUnit { get; set; }
+        public Guid? MeasureUnitGuid { get; set; }
         public decimal? UnitPrice { get; set; }
         public decimal? UnitPriceVAT { get; set; }
         public decimal? VAT { get; set; }
@@ -41,7 +41,7 @@ namespace Birko.Models.Inventory
             Description = data.Description;
             Batch = data.Batch;
             Quantity = data.Quantity;
-            MeasureUnit = data.MeasureUnit;
+            MeasureUnitGuid = data.MeasureUnitGuid;
             UnitPrice = data.UnitPrice;
             UnitPriceVAT = data.UnitPriceVAT;
             VAT = data.VAT;
