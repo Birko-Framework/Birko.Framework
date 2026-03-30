@@ -12,7 +12,7 @@ namespace Birko.Data.SQL.Repositories
     /// </summary>
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
-    public class PostgreSQLRepository<TViewModel, TModel>
+    public abstract class PostgreSQLRepository<TViewModel, TModel>
         : DataBaseRepository<SQL.Connectors.PostgreSQLConnector, TViewModel, TModel>
         where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
         where TViewModel : Models.ILoadable<TModel>
