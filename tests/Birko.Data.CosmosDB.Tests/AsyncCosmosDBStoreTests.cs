@@ -37,7 +37,7 @@ public class AsyncCosmosDBStoreTests
     public async Task CreateAsync_WithNullData_ShouldReturnEmptyGuid()
     {
         var store = new AsyncCosmosDBStore<TestModel>();
-        var result = await store.CreateAsync(null!);
+        var result = await store.CreateAsync((TestModel)null!);
         result.Should().Be(Guid.Empty);
     }
 

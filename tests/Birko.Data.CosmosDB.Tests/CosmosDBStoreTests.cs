@@ -52,7 +52,7 @@ public class CosmosDBStoreTests
     public void Create_WithNullData_ShouldReturnEmptyGuid()
     {
         var store = new CosmosDBStore<TestModel>();
-        var result = store.Create(null!);
+        var result = store.Create((TestModel)null!);
         result.Should().Be(Guid.Empty);
     }
 
