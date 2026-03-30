@@ -16,6 +16,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.*" />
   </ItemGroup>
 
   <Import Project="..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
@@ -27,4 +28,5 @@
   <Import Project="..\Birko.Data.JSON\Birko.Data.JSON.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <Import Project="..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
 </Project>
