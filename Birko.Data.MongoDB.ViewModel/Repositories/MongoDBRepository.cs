@@ -10,9 +10,9 @@ namespace Birko.Data.MongoDB.Repositories
     /// </summary>
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
-    public class MongoDBRepository<TViewModel, TModel>
+    public abstract class MongoDBRepository<TViewModel, TModel>
         : Data.Repositories.AbstractBulkViewModelRepository<TViewModel, TModel>
-        where TModel : MongoDB.Models.MongoDBModel, Data.Models.ILoadable<TViewModel>
+        where TModel : MongoDB.Models.MongoDBModel
         where TViewModel : Data.Models.ILoadable<TModel>
     {
         /// <summary>
