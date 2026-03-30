@@ -13,8 +13,8 @@ namespace Birko.BackgroundJobs.Tests.Core
             var policy = RetryPolicy.Default;
 
             policy.MaxRetries.Should().Be(3);
-            policy.BaseDelay.Should().Be(TimeSpan.FromSeconds(5));
-            policy.MaxDelay.Should().Be(TimeSpan.FromMinutes(5));
+            policy.BaseDelay.Should().Be(TimeSpan.FromSeconds(30));
+            policy.MaxDelay.Should().Be(TimeSpan.FromHours(1));
             policy.UseExponentialBackoff.Should().BeTrue();
         }
 
