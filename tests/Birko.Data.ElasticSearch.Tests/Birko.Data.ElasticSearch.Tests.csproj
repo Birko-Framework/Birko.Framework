@@ -26,6 +26,7 @@
   <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.ElasticSearch\Birko.Data.ElasticSearch.projitems" Label="Shared" />
+  <Import Project="..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
