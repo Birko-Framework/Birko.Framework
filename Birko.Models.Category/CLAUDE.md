@@ -15,8 +15,8 @@ Category domain models for the Birko Framework.
 ## Components
 
 ### Models
-- `Category` - Base category entity
-- `CategoryTree` - Category hierarchy
+- `Category` - Base category entity (implements `IHierarchical`, `ISluggable` — slug auto-generated from `Title`)
+- `IRelatedToCategory` - Interface for entities related to a category
 
 ### ViewModels
 - `CategoryViewModel` - Category display model
@@ -67,8 +67,7 @@ var filter = new CategoryFilter
 ```
 
 ## Dependencies
-- Birko.Models
-- Birko.Structures (for tree operations)
+- Birko.Models, Birko.Models.Contracts (IHierarchical), Birko.Data.Patterns (ISluggable)
 
 ## Use Cases
 - E-commerce categories
