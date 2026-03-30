@@ -49,7 +49,7 @@
 - **Birko.Data.Processors** - Stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Structures** - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - **Birko.Random** - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix, TestRandom), distributions, sequences (GuidV4/V7, NanoId, Snowflake, tokens), noise (Perlin, Simplex)
-- **Birko.Helpers** - Data helper utilities
+- **Birko.Helpers** - Data helper utilities (slug generation moved to Birko.Data.Patterns SlugGenerator)
 
 ## Communication
 - **Birko.Communication** - Base interfaces
@@ -67,7 +67,7 @@
 ## Models
 - **Birko.Models.Contracts** - Domain contract interfaces (ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
 - **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue) + Value Objects (Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
-- **Birko.Models.Product** / **.Category** / **.SEO**
+- **Birko.Models.Product** (ISluggable from Name) / **.Category** (ISluggable from Title) / **.SEO**
 - **Birko.Models.Customers** - Address, Customer, InvoiceAddress
 - **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Agenda
 - **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
