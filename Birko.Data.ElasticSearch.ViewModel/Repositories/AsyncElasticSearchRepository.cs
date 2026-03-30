@@ -11,8 +11,8 @@ namespace Birko.Data.ElasticSearch.Repositories
     /// </summary>
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
-    public class AsyncElasticSearchRepository<TViewModel, TModel> : Data.Repositories.AbstractAsyncBulkViewModelRepository<TViewModel, TModel>
-        where TModel : Data.Models.AbstractModel, Data.Models.ILoadable<TViewModel>
+    public abstract class AsyncElasticSearchRepository<TViewModel, TModel> : Data.Repositories.AbstractAsyncBulkViewModelRepository<TViewModel, TModel>
+        where TModel : Data.Models.AbstractModel
         where TViewModel : Data.Models.ILoadable<TModel>
     {
         #region Properties
