@@ -48,6 +48,13 @@ public static class StoreWrapperBuilder
             store = Wrap(typeof(AsyncSoftDeleteBulkStoreWrapper<,>), store, effectiveClock);
         }
 
+        // Sluggable: normalizes slug and ensures uniqueness (applies to ISluggable entities)
+        // Positioned after SoftDelete so uniqueness checks only consider non-deleted records.
+        if (typeof(ISluggable).IsAssignableFrom(typeof(T)))
+        {
+            store = WrapSingle(typeof(AsyncSluggableBulkStoreWrapper<,>), store);
+        }
+
         // Default: enforces single IsDefault=true (applies to IDefault entities)
         if (typeof(IDefault).IsAssignableFrom(typeof(T)))
         {
