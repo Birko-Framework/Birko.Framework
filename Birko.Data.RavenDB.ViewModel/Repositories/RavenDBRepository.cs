@@ -14,8 +14,8 @@ namespace Birko.Data.RavenDB.Repositories;
 /// </summary>
 /// <typeparam name="TViewModel">The type of view model.</typeparam>
 /// <typeparam name="TModel">The type of data model.</typeparam>
-public class RavenDBRepository<TViewModel, TModel> : AbstractBulkViewModelRepository<TViewModel, TModel>
-    where TModel : AbstractModel, ILoadable<TViewModel>
+public abstract class RavenDBRepository<TViewModel, TModel> : AbstractBulkViewModelRepository<TViewModel, TModel>
+    where TModel : AbstractModel
     where TViewModel : ILoadable<TModel>
 {
     /// <summary>
