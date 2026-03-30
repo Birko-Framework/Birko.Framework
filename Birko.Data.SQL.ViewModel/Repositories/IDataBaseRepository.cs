@@ -7,7 +7,7 @@ namespace Birko.Data.SQL.Repositories
 {
     public interface IDataBaseRepository<TConnector, TViewModel, TModel> : IViewModelRepository<TViewModel, TModel>
         where TConnector : SQL.Connectors.AbstractConnector
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         TConnector? Connector { get; }
