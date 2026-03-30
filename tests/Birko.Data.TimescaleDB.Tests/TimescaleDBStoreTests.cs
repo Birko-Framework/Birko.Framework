@@ -1,4 +1,4 @@
-using Birko.Data.TimescaleDB.Stores;
+using Birko.Data.SQL.TimescaleDB.Stores;
 using Birko.Data.Models;
 using FluentAssertions;
 using System;

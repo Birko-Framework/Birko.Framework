@@ -16,6 +16,8 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Moq" Version="4.20.72" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.*" />
+    <PackageReference Include="Npgsql" Version="9.*" />
   </ItemGroup>
 
   <Import Project="..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
@@ -25,8 +27,15 @@
   <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.SQL\Birko.Data.SQL.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.ViewModel\Birko.Data.ViewModel.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
+  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.TimescaleDB\Birko.Data.TimescaleDB.projitems" Label="Shared" />
+  <Import Project="..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
+  <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
   <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
 </Project>
