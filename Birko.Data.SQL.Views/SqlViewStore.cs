@@ -21,7 +21,7 @@ namespace Birko.Data.SQL.Views;
 public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
 {
     private readonly AbstractConnector _connector;
-    private readonly View _sqlView;
+    private readonly Tables.View _sqlView;
 
     public SqlViewStore(AbstractConnector connector, ViewDefinition definition)
     {
@@ -34,7 +34,7 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
         _sqlView = SqlViewTranslator.Translate(definition);
     }
 
-    public SqlViewStore(AbstractConnector connector, View sqlView)
+    public SqlViewStore(AbstractConnector connector, Tables.View sqlView)
     {
         _connector = connector ?? throw new ArgumentNullException(nameof(connector));
         _sqlView = sqlView ?? throw new ArgumentNullException(nameof(sqlView));

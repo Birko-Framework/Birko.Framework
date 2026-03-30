@@ -7,12 +7,14 @@ using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Fields;
 using Birko.Data.SQL.Tables;
 using Birko.Data.Views;
+using PortableJoinType = Birko.Data.Views.JoinType;
+using PortableViewQueryMode = Birko.Data.Views.ViewQueryMode;
 
 namespace Birko.Data.SQL.Views;
 
 /// <summary>
 /// Translates a portable <see cref="ViewDefinition"/> into the SQL-specific
-/// <see cref="View"/> metadata that the existing connector infrastructure expects.
+/// <see cref="Table"/> view metadata that the existing connector infrastructure expects.
 /// </summary>
 public static class SqlViewTranslator
 {
@@ -28,14 +30,14 @@ public static class SqlViewTranslator
     /// <summary>
     /// Translates a <see cref="ViewDefinition"/> into a SQL <see cref="View"/>.
     /// </summary>
-    public static View Translate(ViewDefinition definition)
+    public static Tables.View Translate(ViewDefinition definition)
     {
         if (definition == null)
         {
             throw new ArgumentNullException(nameof(definition));
         }
 
-        var view = new View();
+        var view = new Tables.View();
         view.Name = definition.Name;
         view.QueryMode = TranslateQueryMode(definition.QueryMode);
 
@@ -192,25 +194,25 @@ public static class SqlViewTranslator
         return types;
     }
 
-    private static Conditions.JoinType TranslateJoinType(Views.JoinType joinType)
+    private static Conditions.JoinType TranslateJoinType(PortableJoinType joinType)
     {
         return joinType switch
         {
-            Views.JoinType.Inner => Conditions.JoinType.Inner,
-            Views.JoinType.LeftOuter => Conditions.JoinType.LeftOuter,
-            Views.JoinType.Cross => Conditions.JoinType.Cross,
+            PortableJoinType.Inner => Conditions.JoinType.Inner,
+            PortableJoinType.LeftOuter => Conditions.JoinType.LeftOuter,
+            PortableJoinType.Cross => Conditions.JoinType.Cross,
             _ => Conditions.JoinType.Cross
         };
     }
 
-    private static ViewQueryMode TranslateQueryMode(Views.ViewQueryMode mode)
+    private static Birko.Data.SQL.ViewQueryMode TranslateQueryMode(PortableViewQueryMode mode)
     {
         return mode switch
         {
-            Views.ViewQueryMode.OnTheFly => ViewQueryMode.OnTheFly,
-            Views.ViewQueryMode.Persistent => ViewQueryMode.Persistent,
-            Views.ViewQueryMode.Auto => ViewQueryMode.Auto,
-            _ => ViewQueryMode.OnTheFly
+            PortableViewQueryMode.OnTheFly => Birko.Data.SQL.ViewQueryMode.OnTheFly,
+            PortableViewQueryMode.Persistent => Birko.Data.SQL.ViewQueryMode.Persistent,
+            PortableViewQueryMode.Auto => Birko.Data.SQL.ViewQueryMode.Auto,
+            _ => Birko.Data.SQL.ViewQueryMode.OnTheFly
         };
     }
 

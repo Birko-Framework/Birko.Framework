@@ -23,7 +23,7 @@ public class SqlViewManager : IViewManager
     {
         ct.ThrowIfCancellationRequested();
 
-        if (definition.QueryMode == Views.ViewQueryMode.OnTheFly)
+        if (definition.QueryMode == Birko.Data.Views.ViewQueryMode.OnTheFly)
         {
             return Task.CompletedTask;
         }
