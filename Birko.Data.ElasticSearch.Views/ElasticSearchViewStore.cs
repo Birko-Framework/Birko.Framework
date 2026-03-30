@@ -167,7 +167,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 ? ToCamelCase(aggregate.SourceProperty)
                 : null;
 
-            IAggregationContainer agg = aggregate.Function switch
+            AggregationContainer agg = aggregate.Function switch
             {
                 AggregateFunction.Sum => new AggregationContainer { Sum = new SumAggregation(aggName, fieldName) },
                 AggregateFunction.Avg => new AggregationContainer { Average = new AverageAggregation(aggName, fieldName) },
@@ -276,7 +276,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 foreach (var groupBy in _definition.GroupBy)
                 {
                     var gbFieldName = ToCamelCase(groupBy.PropertyName);
-                    if (bucket.Key.TryGetValue(gbFieldName, out var keyValue))
+                    if (bucket.Key.TryGetValue(gbFieldName, out string keyValue))
                     {
                         SetPropertyValue(item, viewType, groupBy.PropertyName, keyValue);
                     }
