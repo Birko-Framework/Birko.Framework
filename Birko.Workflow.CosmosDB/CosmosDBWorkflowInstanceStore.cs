@@ -58,7 +58,7 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     }
 
     /// <inheritdoc />
-    public async Task SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken ct = default)
+    public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
@@ -68,11 +68,13 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
         {
             existing.UpdateFromInstance(instance);
             await _store.UpdateAsync(existing, ct: ct).ConfigureAwait(false);
+            return existing.Guid ?? instance.InstanceId;
         }
         else
         {
             var model = CosmosWorkflowInstanceModel.FromInstance(workflowName, instance);
-            await _store.CreateAsync(model, ct: ct).ConfigureAwait(false);
+            var id = await _store.CreateAsync(model, ct: ct).ConfigureAwait(false);
+            return id;
         }
     }
 
@@ -98,13 +100,13 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<WorkflowInstance<TData>>> FindByStateAsync(string state, int? limit = null, CancellationToken ct = default)
+    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
         var results = await _store.ReadAsync(
             filter: m => m.CurrentState == state && m.WorkflowName == _workflowName,
-            orderBy: new OrderBy<CosmosWorkflowInstanceModel>(nameof(CosmosWorkflowInstanceModel.UpdatedAt), true),
+            orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
             limit: limit,
             ct: ct
         ).ConfigureAwait(false);
@@ -113,14 +115,14 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int? limit = null, CancellationToken ct = default)
+    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
         var statusInt = (int)status;
         var results = await _store.ReadAsync(
             filter: m => m.Status == statusInt && m.WorkflowName == _workflowName,
-            orderBy: new OrderBy<CosmosWorkflowInstanceModel>(nameof(CosmosWorkflowInstanceModel.UpdatedAt), true),
+            orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
             limit: limit,
             ct: ct
         ).ConfigureAwait(false);
@@ -129,13 +131,13 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<WorkflowInstance<TData>>> FindByWorkflowNameAsync(string workflowName, int? limit = null, CancellationToken ct = default)
+    public async Task<IEnumerable<WorkflowInstance<TData>>> FindByWorkflowNameAsync(string workflowName, int limit = 100, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
         var results = await _store.ReadAsync(
             filter: m => m.WorkflowName == workflowName,
-            orderBy: new OrderBy<CosmosWorkflowInstanceModel>(nameof(CosmosWorkflowInstanceModel.UpdatedAt), true),
+            orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
             limit: limit,
             ct: ct
         ).ConfigureAwait(false);
