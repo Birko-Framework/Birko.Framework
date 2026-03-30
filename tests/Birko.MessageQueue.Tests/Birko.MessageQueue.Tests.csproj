@@ -22,6 +22,7 @@
 
   <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
   <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
   <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
