@@ -10,9 +10,9 @@ namespace Birko.Data.InfluxDB.Repositories
     /// </summary>
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
-    public class InfluxDBRepository<TViewModel, TModel>
+    public abstract class InfluxDBRepository<TViewModel, TModel>
         : Data.Repositories.AbstractBulkViewModelRepository<TViewModel, TModel>
-        where TModel : Data.Models.AbstractModel, Data.Models.ILoadable<TViewModel>
+        where TModel : Data.Models.AbstractModel
         where TViewModel : Data.Models.ILoadable<TModel>
     {
         /// <summary>
