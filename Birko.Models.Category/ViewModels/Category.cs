@@ -6,6 +6,7 @@ namespace Birko.Models.Category.ViewModels
     public class Category : Data.ViewModels.LogViewModel, Data.Models.ILoadable<Birko.Models.Category.Category>, Data.Models.ILoadable<Category>
     {
         public const string TitleProperty = "Title";
+        public const string SlugProperty = "Slug";
         public const string PathProperty = "Path";
         public const string DescriptionProperty = "Description";
         public const string CategoryObjectProperty = "Category";
@@ -25,6 +26,20 @@ namespace Birko.Models.Category.ViewModels
                 {
                     _title = value;
                     RaisePropertyChanged(TitleProperty);
+                }
+            }
+        }
+
+        private string? _slug;
+        public string? Slug
+        {
+            get { return _slug; }
+            set
+            {
+                if (_slug != value)
+                {
+                    _slug = value;
+                    RaisePropertyChanged(SlugProperty);
                 }
             }
         }
@@ -58,6 +73,7 @@ namespace Birko.Models.Category.ViewModels
         {
             if (new[] {
                     TitleProperty,
+                    SlugProperty,
                     PathProperty,
                     DescriptionProperty,
                 }.Contains(e.PropertyName)
@@ -73,6 +89,7 @@ namespace Birko.Models.Category.ViewModels
             if (data == null) return;
 
             Title = data.Title;
+            Slug = data.Slug;
             Path = data.Path;
             Description = data.Description;
         }
@@ -83,6 +100,7 @@ namespace Birko.Models.Category.ViewModels
             if (data == null) return;
 
             Title = data.Title;
+            Slug = data.Slug;
             Path = data.Path?.Trim() ?? string.Empty;
             Description = data.Description;
         }
