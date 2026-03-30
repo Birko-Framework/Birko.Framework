@@ -191,7 +191,7 @@ namespace Birko.Data.SQL
                         }
 
                         _fieldsCache.TryAdd(type, view.Tables.SelectMany(x => x.Fields.Values).ToArray());
-                        _viewCache.Add(type, view);
+                        _viewCache[type] = view;
                     }
                     else
                     {
