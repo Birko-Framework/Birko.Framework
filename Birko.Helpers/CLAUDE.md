@@ -8,7 +8,7 @@ General-purpose utility classes for the Birko Framework — string manipulation,
 
 ## Components
 
-- **StringHelper.cs** — Extension methods: `GenerateSlug`, `RemoveDiacritics`, `RemoveMultipleSpaces`, `CalculateSHA256Hash`, `CalculateSHA512Hash`, `ToHexText`
+- **StringHelper.cs** — Extension methods: `RemoveMultipleSpaces`, `CalculateSHA256Hash`, `CalculateSHA512Hash`, `ToHexText` (slug generation moved to `SlugGenerator` in Birko.Data.Patterns)
 - **HtmlHelper.cs** — Static methods: `StripTagsRegexCompiled`, `StripATagsRegexCompiled`, `StripImgTagsRegexCompiled`
 - **ObjectHelper.cs** — Static methods: `Compare` (null-safe IComparable), `CompareHash` (constant-time byte[] comparison)
 - **PathValidator.cs** — Path security: `ValidatePath`, `CombineAndValidate`, `ValidateUserPath`, `NormalizePath`, `SanitizePath`, `ValidateDirectory`, `CombineAndValidateUnchecked`
