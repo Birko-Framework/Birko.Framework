@@ -8,7 +8,7 @@ using Birko.Data.SQL.Repositories;
 
 namespace Birko.Data.SQL.Repositories
 {
-    public class MSSqlRepository<TViewModel, TModel>
+    public abstract class MSSqlRepository<TViewModel, TModel>
         : DataBaseRepository<MSSqlConnector, TViewModel, TModel>
         where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
         where TViewModel : Models.ILoadable<TModel>
