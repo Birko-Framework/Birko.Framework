@@ -332,6 +332,7 @@ RavenDBIndexManager implements IIndexManager with full lifecycle: create (from I
 
 ## Technical Debt
 
+- [x] **ILoadable\<T\> circular reference between Model and ViewModel** — Removed `ILoadable<TViewModel>` constraint from TModel. Models no longer know about ViewModels. ViewModel→Model mapping moved to abstract `MapToModel(TViewModel, TModel)` on repository base classes. All platform ViewModel repos made abstract. **Breaking change** — consumer repos must override `MapToModel`, consumer models can remove `ILoadable<TViewModel>` implementation.
 - [ ] **MqttExtensions.cs** — MQTT v5 features (topic aliases, user properties). Low priority unless high-frequency IoT sensors need bandwidth optimization.
 
 ---

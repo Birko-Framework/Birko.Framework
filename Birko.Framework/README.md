@@ -276,6 +276,20 @@ AbstractRepository -> AbstractBulkRepository (sync)
 AbstractAsyncRepository -> AbstractAsyncBulkRepository (async)
 ```
 
+## Usage in Consumer Solutions
+
+When using Birko.Framework projects in your own solution, it is recommended to create a single aggregator library project named `{YourSolution}.Birko` (e.g. `FisData.Birko`) and include all needed `Birko.*` shared project references in that one project. Your other projects then reference only `{YourSolution}.Birko` instead of individual Birko shared projects.
+
+This pattern helps avoid compilation and transitive reference issues that arise when multiple projects import overlapping sets of shared projects independently.
+
+```
+YourSolution/
+  YourSolution.Birko/          # Single .csproj importing all Birko.* .projitems
+    YourSolution.Birko.csproj
+  YourSolution.Core/            # References YourSolution.Birko
+  YourSolution.Web/             # References YourSolution.Birko
+```
+
 ## Getting Started
 
 ```bash

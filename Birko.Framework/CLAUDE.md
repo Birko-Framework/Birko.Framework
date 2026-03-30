@@ -65,6 +65,10 @@ Birko.Data.Stores (OrderBy<T>)
 - **ElasticSearch** store — reference for async/bulk operations
 - **JSON** store — reference for file-based storage
 
+## Usage in Consumer Solutions
+
+When using Birko.Framework projects in your solution, create a single aggregator library project named `{YourSolution}.Birko` (e.g. `FisData.Birko`) and include all `Birko.*` shared project references there. Your other projects then reference only `{YourSolution}.Birko`. This avoids compilation and transitive reference issues that arise when multiple projects import overlapping sets of shared projects independently.
+
 ## Conventions
 - All stores implement: IStore, IAsyncStore, IBulkStore, IAsyncBulkStore
 - All repositories implement: IRepository, IAsyncRepository, IBulkRepository, IAsyncBulkRepository
@@ -113,6 +117,13 @@ New Azure Cosmos DB (NoSQL API) store provider:
 - **Birko.Data.Migrations.CosmosDB** — Migration framework for Cosmos DB (container, indexing policy, document ops)
 - **CosmosDbHealthCheck** added to Birko.Health.Data
 - Uses Microsoft.Azure.Cosmos SDK v3 with bulk execution enabled
+
+#### ViewModel Repository MapToModel Refactor (2026-03-30)
+Removed circular `ILoadable<TViewModel>` constraint from TModel in all ViewModel repositories:
+- **Breaking change** — `TModel` no longer requires `ILoadable<TViewModel>`; Models have no knowledge of ViewModels
+- **MapToModel** — New abstract method `MapToModel(TViewModel source, TModel target)` on `AbstractViewModelRepository` and `AbstractAsyncViewModelRepository`; consumer concrete repositories must override it
+- **Abstract platform repos** — All platform ViewModel repositories (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, JSON, InfluxDB, TimescaleDB) made abstract; consumers must subclass
+- **DeleteAsync bug fix** — `AbstractAsyncViewModelRepository.DeleteAsync` no longer creates from `data.GetType()` (wrong); uses `CreateModelInstance()` + `MapToModel`
 
 #### Recent Fixes (2026-03-05)
 - Replaced `NativeAsyncDataBaseStore` with `AsyncDataBaseStore` in async stores/repos
