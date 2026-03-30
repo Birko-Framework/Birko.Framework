@@ -33,6 +33,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\ConcurrentUpdateException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\VersionedStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Concurrency\AsyncVersionedStoreWrapper.cs" />
+    <!-- Models: Sluggable -->
+    <Compile Include="$(MSBuildThisFileDirectory)Models\ISluggable.cs" />
+    <!-- Decorators: Sluggable -->
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SlugGenerator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SluggableStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\SluggableBulkStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSluggableStoreWrapper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Decorators\AsyncSluggableBulkStoreWrapper.cs" />
     <!-- Decorators: SoftDelete -->
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Decorators\SoftDeleteStoreWrapper.cs" />

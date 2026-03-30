@@ -47,6 +47,14 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `PagedRepositoryWrapper<T>` - Wraps `IBulkRepository<T>`, combines `Read()` + `Count()` into `PagedResult<T>`
 - `AsyncPagedRepositoryWrapper<T>` - Wraps `IAsyncBulkRepository<T>`, runs Read and Count in parallel
 
+### Sluggable
+- `ISluggable` - Interface with `Slug` property (string?) and `GetSlugSource()` method
+- `SlugGenerator` - Static utility for slug normalization (lowercase, diacritics removal, hyphen delimiters) and uniqueness checking with numeric suffixes (-1, -2, etc.)
+- `SluggableStoreWrapper<T>` - Wraps `IStore<T>`, auto-generates slug from `GetSlugSource()` on create/update, ensures uniqueness
+- `SluggableBulkStoreWrapper<T>` - Bulk store variant with internal collision tracking within batch creates
+- `AsyncSluggableStoreWrapper<T>` - Async store variant
+- `AsyncSluggableBulkStoreWrapper<T>` - Async bulk store variant
+
 ### Default Constraint
 - `IDefault` - Interface in Birko.Contracts with `IsDefault` property (bool)
 - `DefaultStoreWrapper<TStore, T>` - Wraps `IBulkStore<T>`, enforces only one entity has `IsDefault=true`. On create/update, automatically unsets other defaults. Implements `IBulkStore<T>`
@@ -71,7 +79,7 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 ### Decorator Pattern
 Store wrappers use the decorator pattern to add cross-cutting concerns:
 ```
-IBulkStore<T> -> DefaultStoreWrapper<T> -> SoftDeleteStoreWrapper<T> -> TimestampStoreWrapper<T> -> AuditStoreWrapper<T> -> actual store
+IBulkStore<T> -> DefaultStoreWrapper<T> -> SoftDeleteStoreWrapper<T> -> SluggableStoreWrapper<T> -> TimestampStoreWrapper<T> -> AuditStoreWrapper<T> -> actual store
 ```
 
 ## Dependencies
