@@ -115,8 +115,8 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
     {
         var collectionName = MongoViewTranslator.GetCollectionName(_definition.PrimarySource);
 
-        if (_definition.QueryMode == Views.ViewQueryMode.Persistent ||
-            _definition.QueryMode == Views.ViewQueryMode.Auto)
+        if (_definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent ||
+            _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Auto)
         {
             // Try querying the persistent view (MongoDB view is a virtual collection)
             var viewName = _definition.Name;
@@ -129,7 +129,7 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
                     var cursor = await viewCollection.AggregateAsync(viewPipeline, null, ct).ConfigureAwait(false);
                     return await cursor.ToListAsync(ct).ConfigureAwait(false);
                 }
-                catch (MongoCommandException) when (_definition.QueryMode == Views.ViewQueryMode.Auto)
+                catch (MongoCommandException) when (_definition.QueryMode == Birko.Data.Views.ViewQueryMode.Auto)
                 {
                     // Fall through to on-the-fly
                 }

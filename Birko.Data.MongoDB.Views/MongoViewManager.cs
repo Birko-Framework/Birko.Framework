@@ -29,7 +29,7 @@ public class MongoViewManager : IViewManager
 
     public async Task EnsureAsync(ViewDefinition definition, CancellationToken ct = default)
     {
-        if (definition.QueryMode == Views.ViewQueryMode.OnTheFly)
+        if (definition.QueryMode == Birko.Data.Views.ViewQueryMode.OnTheFly)
         {
             return;
         }
