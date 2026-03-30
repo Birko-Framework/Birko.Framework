@@ -12,22 +12,33 @@ A modular .NET framework providing data access, communication, and model infrast
 - Multi-tenancy support
 - Event sourcing pattern
 - Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, Camera, IR, NFC)
-- Domain model libraries (Product, Category, SEO, Accounting, Customers, Users, Warehouse)
+- Domain model libraries (Product, Category, SEO, Customers, Users, Inventory, Pricing) with domain contracts
 - Fluent validation framework
-- Caching with in-memory and Redis backends
-- Security (password hashing with PBKDF2 and BCrypt, AES encryption, JWT tokens, RBAC, ASP.NET Core integration)
+- Caching with in-memory, Redis, and hybrid (L1+L2) backends
+- Security (password hashing with PBKDF2 and BCrypt, AES encryption, JWT tokens, RBAC, ASP.NET Core integration, HashiCorp Vault, Azure Key Vault, NFC authentication)
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
-- Messaging (email via SMTP, SMS and push notification interfaces, string template engine)
+- Messaging (email via SMTP, SMS and push notification interfaces, string and Razor template engines)
 - File/blob storage abstraction (local filesystem, Azure Blob Storage)
 - Telemetry (store metrics via System.Diagnostics.Metrics, distributed tracing via ActivitySource, correlation ID middleware)
 - OpenTelemetry integration (OTLP + Console exporters, auto-wires Birko meters/activity sources)
+- CQRS (Command/Query, mediator, pipeline behaviors)
+- Workflow engine (state machines, guards, actions, persistence backends, Mermaid/DOT export)
 - Data-driven rules engine (composable rules, groups, contexts, SQL/Specification/Validation integration)
 - Generic data processors (XML, CSV, HTTP, ZIP with decorator composition)
 - Background job processing with pluggable persistent queues
 - Entity tagging system (tenant-scoped tags, polymorphic junction, tag service)
+- Fluent view builder (cross-platform views, projections, aggregations)
 - Store decorator composition (conditional runtime decorator chains)
-- Data structures (trees, AVL trees, BST)
+- SQL query caching decorator
+- Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry)
+- Localization framework (CLDR pluralization, JSON/RESX/DB providers, entity-level localization)
+- Time utilities (business calendar, holidays, working hours, time zones)
+- Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
+- Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf)
+- Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
+- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 31 components, app shell)
+- Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser)
 
 ## Project Structure
@@ -68,14 +79,17 @@ A modular .NET framework providing data access, communication, and model infrast
 | Project | Description |
 |---------|-------------|
 | Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Paging) |
-| Birko.Data.Migrations | Database migration framework (SQL, ES, MongoDB, RavenDB, InfluxDB, TimescaleDB) |
-| Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, Tenant) |
+| Birko.Data.Migrations | Database migration framework (SQL, ES, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB) |
+| Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, CosmosDB, Tenant) |
+| Birko.Data.Aggregates | SQL-NoSQL aggregate mapper (flatten/expand for sync) |
 | Birko.Data.Tenant | Multi-tenancy support |
 | Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
 | Birko.Data.Tagging | Entity tagging system (tenant-scoped tags, polymorphic junction) |
 | Birko.Data.Views | Unified fluent view builder (cross-platform views, projections, aggregations) |
 | Birko.Data.EventSourcing | Event sourcing pattern |
 | Birko.Data.SQL.View | SQL view generation (attribute-based) |
+| Birko.Data.SQL.View.Migrations | Integration between SQL View definitions and the Migration framework |
+| Birko.Data.SQL.Caching | Query caching decorator for SQL stores |
 | Birko.Data.SQL.Views | SQL platform for fluent views (translates ViewDefinition to SQL) |
 
 ### ViewModel Layer
@@ -84,7 +98,7 @@ A modular .NET framework providing data access, communication, and model infrast
 |---------|-------------|
 | Birko.Data.ViewModel | Base ViewModel repository abstractions |
 | Birko.Data.SQL.ViewModel | SQL ViewModel repositories |
-| Platform-specific ViewModel projects | ES, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB |
+| Platform-specific ViewModel projects | ES, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB, CosmosDB |
 
 ### Models
 
@@ -95,7 +109,6 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Models.Product | Product, variants, images, pricing |
 | Birko.Models.Category | Categories with hierarchical tree support |
 | Birko.Models.SEO | SEO metadata, URL aliases, sitemaps |
-| Birko.Models.Accounting | Currency, Tax, PriceGroup, MeasureUnit |
 | Birko.Models.Customers | Address, Customer, InvoiceAddress, ContactPerson |
 | Birko.Models.Users | User, UserLogin, UserProfile, Role, Tenant, UserTenant |
 | Birko.Models.Inventory | StockItem, StockItemVariant, StorageLocation, InventoryDocument |
@@ -108,6 +121,7 @@ A modular .NET framework providing data access, communication, and model infrast
 |---------|-------------|
 | Birko.Communication | Base communication interfaces |
 | Birko.Communication.REST | REST API client |
+| Birko.Communication.REST.Server | REST API server (HttpListener, routing, middleware, authentication) |
 | Birko.Communication.SOAP | SOAP client |
 | Birko.Communication.WebSocket | WebSocket implementation |
 | Birko.Communication.SSE | Server-Sent Events |
@@ -125,8 +139,29 @@ A modular .NET framework providing data access, communication, and model infrast
 | Project | Description |
 |---------|-------------|
 | Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, and hash router. No dependencies. |
-| Birko.Web.Components | Component library built on Birko.Web.Core — 31 Shadow DOM web components covering inputs, layout, data, feedback, and navigation. |
+| Birko.Web.Components | Component library built on Birko.Web.Core — 38 Shadow DOM web components covering inputs, layout, data, feedback, and navigation. |
 | Birko.Web.Shell | Application shell framework built on Birko.Web.Core — auth, modules, command palette, notifications, tenants. |
+
+### Workflow
+
+| Project | Description |
+|---------|-------------|
+| Birko.Workflow | State machine engine (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT) |
+| Birko.Workflow.SQL | SQL persistence backend |
+| Birko.Workflow.ElasticSearch | Elasticsearch persistence backend |
+| Birko.Workflow.MongoDB | MongoDB persistence backend |
+| Birko.Workflow.RavenDB | RavenDB persistence backend |
+| Birko.Workflow.JSON | JSON file persistence backend |
+| Birko.Workflow.CosmosDB | Cosmos DB persistence backend |
+
+### Health
+
+| Project | Description |
+|---------|-------------|
+| Birko.Health | IHealthCheck, HealthCheckRunner, DiskSpace/Memory checks |
+| Birko.Health.Data | SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB, Vault, MQTT, SMTP, WebSocket, TCP, SSE checks |
+| Birko.Health.Redis | Redis PING + latency |
+| Birko.Health.Azure | Blob Storage, Key Vault checks |
 
 ### Cross-Cutting
 
@@ -135,6 +170,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Validation | Fluent validation framework |
 | Birko.Caching | In-memory caching with ICache interface |
 | Birko.Caching.Redis | Redis-backed cache |
+| Birko.Caching.Hybrid | L1 memory + L2 distributed two-tier cache |
 | Birko.Redis | Shared Redis infrastructure (RedisSettings, RedisConnectionManager) |
 | Birko.Security | Password hashing, AES encryption, RBAC interfaces |
 | Birko.Security.Jwt | JWT token provider |
@@ -150,20 +186,35 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.BackgroundJobs.RavenDB | RavenDB-based persistent job queue |
 | Birko.BackgroundJobs.JSON | JSON file-based job queue (dev/testing) |
 | Birko.BackgroundJobs.Redis | Redis-based persistent job queue |
+| Birko.BackgroundJobs.CosmosDB | Cosmos DB-based persistent job queue |
 | Birko.MessageQueue | Core message queue interfaces (pub/sub, point-to-point) |
 | Birko.MessageQueue.InMemory | In-memory channel-based queue (testing/development) |
 | Birko.MessageQueue.MQTT | MQTT implementation via MQTTnet (IoT, sensors, telemetry) |
+| Birko.MessageQueue.Redis | Redis-backed message queue |
 | Birko.EventBus | Core event bus (in-process, pipelines, deduplication, DI) |
 | Birko.EventBus.MessageQueue | Distributed event bus over MessageQueue providers |
 | Birko.EventBus.Outbox | Transactional outbox pattern (at-least-once delivery) |
 | Birko.EventBus.EventSourcing | EventStore-to-EventBus bridge and replay |
 | Birko.Messaging | Email, SMS, push notification interfaces and SMTP sender |
+| Birko.Messaging.Razor | Razor template engine (RazorLight-based, .cshtml templates) |
 | Birko.Storage | File/blob storage abstraction (local filesystem) |
+| Birko.Storage.AzureBlob | Azure Blob Storage (REST API, OAuth2, SAS) |
 | Birko.Telemetry | Store instrumentation (metrics, tracing), correlation ID middleware |
 | Birko.Telemetry.OpenTelemetry | OpenTelemetry SDK integration (OTLP, Console exporters) |
+| Birko.CQRS | Command/Query (ICommand, IQuery, IRequestHandler, IPipelineBehavior, IMediator) |
 | Birko.Rules | Data-driven rule engine (rules, groups, contexts, evaluator) |
 | Birko.Data.Processors | Generic stream processors (XML, CSV, HTTP, ZIP, decorator composition) |
-| Birko.Structures | Tree data structures (AVL, BST) |
+| Birko.Serialization | Serialization abstraction (ISerializer, SystemJsonSerializer, SystemXmlSerializer) |
+| Birko.Serialization.Newtonsoft | Newtonsoft.Json serializer |
+| Birko.Serialization.MessagePack | MessagePack serializer |
+| Birko.Serialization.Protobuf | Protocol Buffers serializer |
+| Birko.Time.Abstractions | IDateTimeProvider (zero deps) |
+| Birko.Time | Time zones, business calendar, holidays, working hours |
+| Birko.Localization | Translation framework, CLDR pluralization, JSON/RESX/InMemory providers |
+| Birko.Localization.Data | Database-backed translations, namespace scoping, TTL cache |
+| Birko.Data.Localization | Entity-level localization (ILocalizable, store decorator wrappers) |
+| Birko.Random | Pluggable RNG, distributions, sequences (GuidV4/V7, NanoId, Snowflake), noise (Perlin, Simplex) |
+| Birko.Structures | Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, deque) |
 | Birko.Helpers | Utility and extension methods, CsvParser |
 
 ### Tests
@@ -193,6 +244,14 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Communication.IR.Tests | IR communication tests (NEC/Samsung/RC5 encode/decode, IrTiming) |
 | Birko.Communication.NFC.Tests | NFC communication tests (tag data, NDEF parsing, ISO 14443A, HID transport) |
 | Birko.Security.NFC.Tests | NFC authentication tests (enroll/authenticate/revoke, normalization, store) |
+| Birko.Data.MongoDB.Tests | MongoDB store/repository tests |
+| Birko.Data.RavenDB.Tests | RavenDB store/repository tests |
+| Birko.Data.CosmosDB.Tests | Cosmos DB store/repository tests |
+| Birko.Data.TimescaleDB.Tests | TimescaleDB store/repository tests |
+| Birko.Data.InfluxDB.Tests | InfluxDB store/repository tests |
+| Birko.Data.JSON.Tests | JSON file store tests |
+| Birko.Data.Views.Tests | Fluent view builder tests |
+| Birko.Random.Tests | RNG providers, distributions, sequences tests |
 
 ## Architecture
 
@@ -246,13 +305,23 @@ dotnet test
 - [Event Sourcing Guide](docs/event-sourcing.md)
 - [Storage Guide](docs/storage.md) (Local filesystem, cloud providers)
 - [Messaging Guide](docs/messaging.md) (Email, SMS, Push, Templates)
+- [Communication Guide](docs/communication.md) (REST, SOAP, WebSocket, SSE, Modbus, OAuth, IR, NFC)
 - [Data Synchronization Guide](docs/sync.md)
 - [Multi-Tenancy Guide](docs/tenant.md)
 - [Telemetry Guide](docs/telemetry.md) (Store metrics, distributed tracing, correlation ID)
+- [CQRS Guide](docs/cqrs.md) (Command/Query, Mediator, Pipeline behaviors)
+- [Workflow Guide](docs/workflow.md) (State machines, guards, actions, persistence)
 - [Rules Engine Guide](docs/rules.md) (Data-driven rules, groups, contexts, SQL/Spec/Validation integration)
 - [Data Processors Guide](docs/processors.md) (XML, CSV, HTTP, ZIP, decorator composition)
 - [Tagging Guide](docs/tagging.md) (Entity tagging, polymorphic junction, tenant-scoped tags)
 - [Views Guide](docs/views.md) (Fluent view builder, cross-platform projections, aggregations)
+- [Serialization Guide](docs/serialization.md) (System.Text.Json, Newtonsoft, MessagePack, Protobuf)
+- [Localization Guide](docs/localization.md) (Translations, CLDR pluralization, entity-level)
+- [Time Guide](docs/time.md) (Business calendar, holidays, working hours, time zones)
+- [Random Guide](docs/random.md) (RNG providers, distributions, sequences, noise)
+- [Health Guide](docs/health.md) (Health checks, runners, platform probes)
+- [Dependencies Guide](docs/dependencies.md)
+- [Consumers Guide](docs/consumers.md)
 - [TODO / Roadmap](TODO.md)
 
 ## License

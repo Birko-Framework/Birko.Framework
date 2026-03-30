@@ -81,6 +81,10 @@
 			"path": "../Birko.Communication.REST"
 		},
 		{
+			"name": "Communication / Birko.Communication.REST.Server",
+			"path": "../Birko.Communication.REST.Server"
+		},
+		{
 			"name": "Communication / Birko.Communication.SOAP",
 			"path": "../Birko.Communication.SOAP"
 		},
@@ -432,11 +436,7 @@
 			"name": "Models / Birko.Models",
 			"path": "../Birko.Models"
 		},
-		{
-			"name": "Models / Birko.Models.Accounting",
-			"path": "../Birko.Models.Accounting"
-		},
-		{
+{
 			"name": "Models / Birko.Models.Category",
 			"path": "../Birko.Models.Category"
 		},

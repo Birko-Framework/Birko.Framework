@@ -40,6 +40,7 @@
     <Project Path="../Birko.Communication.OAuth/Birko.Communication.OAuth.shproj" />
     <Project Path="../Birko.Communication.IR/Birko.Communication.IR.shproj" />
     <Project Path="../Birko.Communication.NFC/Birko.Communication.NFC.shproj" />
+    <Project Path="../Birko.Communication.REST.Server/Birko.Communication.REST.Server.shproj" />
   </Folder>
   <Folder Name="/Data/">
     <Project Path="../Birko.Contracts/Birko.Contracts.shproj" />
@@ -125,7 +126,6 @@
   <Folder Name="/Models/">
     <Project Path="../Birko.Models.Contracts/Birko.Models.Contracts.shproj" />
     <Project Path="../Birko.Models/Birko.Models.shproj" />
-    <Project Path="../Birko.Models.Accounting/Birko.Models.Accounting.shproj" />
     <Project Path="../Birko.Models.Category/Birko.Models.Category.shproj" />
     <Project Path="../Birko.Models.Customers/Birko.Models.Customers.shproj" />
     <Project Path="../Birko.Models.Inventory/Birko.Models.Inventory.shproj" />

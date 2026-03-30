@@ -53,7 +53,7 @@
 
 ## Communication
 - **Birko.Communication** - Base interfaces
-- **Birko.Communication.Network** / **.Hardware** / **.Bluetooth** / **.WebSocket** / **.REST** / **.SOAP** / **.SSE**
+- **Birko.Communication.Network** / **.Hardware** / **.Bluetooth** / **.WebSocket** / **.REST** / **.REST.Server** / **.SOAP** / **.SSE**
 - **Birko.Communication.Modbus** - Modbus RTU/TCP (serial/network, function codes 01-06/15-16)
 - **Birko.Communication.OAuth** - OAuth2 client (Client Credentials, Auth Code, PKCE, Device Code, Refresh Token)
 - **Birko.Communication.Camera** - Camera frame capture (FFmpeg-based JPEG snapshots)
@@ -68,7 +68,6 @@
 - **Birko.Models.Contracts** - Domain contract interfaces (ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
 - **Birko.Models** - Base models (AbstractPercentage, AbstractTree, ValueData, SourceValue) + Value Objects (Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
 - **Birko.Models.Product** / **.Category** / **.SEO**
-- **Birko.Models.Accounting** - Currency, Tax, PriceGroup, MeasureUnit
 - **Birko.Models.Customers** - Address, Customer, InvoiceAddress
 - **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Agenda
 - **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
@@ -136,7 +135,7 @@
 
 ## Web (TypeScript)
 - **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP client, SSE client, hash router)
-- **Birko.Web.Components** - Component library (31 Shadow DOM web components: inputs, layout, data, feedback, navigation)
+- **Birko.Web.Components** - Component library (38 Shadow DOM web components: inputs, layout, data, feedback, navigation)
 - **Birko.Web.Shell** - Application shell framework (authentication, module loading, command palette, notifications, tenant switching)
 
 ## Tests
@@ -158,6 +157,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Random.Tests
 - Birko.Data.RavenDB.Tests, Birko.Data.CosmosDB.Tests
 - Birko.Data.TimescaleDB.Tests, Birko.Data.InfluxDB.Tests, Birko.Data.JSON.Tests
+- Birko.Data.Views.Tests
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.

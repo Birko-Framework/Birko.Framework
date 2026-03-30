@@ -72,6 +72,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.REST\Birko.Communication.REST.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.REST.Server\Birko.Communication.REST.Server.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.SOAP\Birko.Communication.SOAP.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.SSE\Birko.Communication.SSE.projitems" Label="Shared" />
@@ -83,6 +85,10 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Camera\Birko.Communication.Camera.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.IR\Birko.Communication.IR.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.OAuth\Birko.Communication.OAuth.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.NFC\Birko.Communication.NFC.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
   <!-- Birko.Settings is transitively imported via Birko.Data.Stores.projitems -->
@@ -118,6 +124,8 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.SQL\Birko.Data.Migrations.SQL.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.TimescaleDB\Birko.Data.Migrations.TimescaleDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.CosmosDB\Birko.Data.Migrations.CosmosDB.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.MongoDB\Birko.Data.MongoDB.projitems" Label="Shared" />
 
@@ -174,15 +182,25 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Composition\Birko.Data.Composition.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Tagging\Birko.Data.Tagging.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Views\Birko.Data.Views.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.TimescaleDB\Birko.Data.TimescaleDB.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.TimescaleDB.ViewModel\Birko.Data.TimescaleDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.CosmosDB.ViewModel\Birko.Data.CosmosDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.CosmosDB\Birko.Data.Sync.CosmosDB.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.ViewModel\Birko.Data.ViewModel.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
 
-  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Accounting\Birko.Models.Accounting.projitems" Label="Shared" />
+  <!-- Birko.Models.Accounting merged into Birko.Models.Pricing -->
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Category\Birko.Models.Category.projitems" Label="Shared" />
 
@@ -211,6 +229,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.Caching\Birko.Data.SQL.Caching.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Caching.Hybrid\Birko.Caching.Hybrid.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Validation\Birko.Validation.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs\Birko.BackgroundJobs.projitems" Label="Shared" />
@@ -227,11 +247,15 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.Redis\Birko.BackgroundJobs.Redis.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.CosmosDB\Birko.BackgroundJobs.CosmosDB.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.MessageQueue.Redis\Birko.MessageQueue.Redis.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.EventBus\Birko.EventBus.projitems" Label="Shared" />
 
@@ -259,6 +283,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.AzureKeyVault\Birko.Security.AzureKeyVault.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.NFC\Birko.Security.NFC.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Health\Birko.Health.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Health.Data\Birko.Health.Data.projitems" Label="Shared" />
@@ -284,5 +310,16 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.MongoDB\Birko.Workflow.MongoDB.projitems" Label="Shared" />
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.RavenDB\Birko.Workflow.RavenDB.projitems" Label="Shared" />
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.JSON\Birko.Workflow.JSON.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.CosmosDB\Birko.Workflow.CosmosDB.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Localization\Birko.Localization.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Localization.Data\Birko.Localization.Data.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Localization\Birko.Data.Localization.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.SQL.Views\Birko.Data.SQL.Views.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.MongoDB.Views\Birko.Data.MongoDB.Views.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.ElasticSearch.Views\Birko.Data.ElasticSearch.Views.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.RavenDB.Views\Birko.Data.RavenDB.Views.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.CosmosDB.Views\Birko.Data.CosmosDB.Views.projitems" Label="Shared" />
 
 </Project>

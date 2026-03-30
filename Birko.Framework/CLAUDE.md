@@ -101,10 +101,10 @@ Three-phase restructuring of the model layer:
 
 #### New Model Projects (2026-03-06)
 Extracted reusable models from FisData.Stock:
-- **Birko.Models.Accounting** — Currency, Tax, PriceGroup, MeasureUnit
 - **Birko.Models.Customers** — Address, Customer, InvoiceAddress
 - **Birko.Models.Users** — User, Tenant (formerly Agenda), UserTenant
 - **Birko.Models** — Added AbstractPercentage, AbstractTree, ValueData
+- *(Birko.Models.Accounting was merged into Birko.Models.Pricing during the 2026-03-22 restructuring)*
 
 #### Birko.Data.CosmosDB (2026-03-23)
 New Azure Cosmos DB (NoSQL API) store provider:
