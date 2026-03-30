@@ -1,7 +1,7 @@
 # Birko.Communication.REST
 
 ## Overview
-REST API client implementation for Birko.Communication.
+REST API client implementation for Birko.Communication. Server-side functionality is in Birko.Communication.REST.Server.
 
 ## Project Location
 `C:\Source\Birko.Communication.REST\`

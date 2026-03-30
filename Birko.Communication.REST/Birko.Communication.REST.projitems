@@ -9,10 +9,6 @@
     <Import_RootNamespace>Birko.Communication.REST</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Middleware\RestAuthenticationConfiguration.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Middleware\RestAuthenticationMiddleware.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Middleware\RestAuthenticationService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RestClient.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)RestServer.cs" />
   </ItemGroup>
 </Project>
