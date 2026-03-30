@@ -17,7 +17,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public abstract class AbstractAsyncViewModelRepository<TViewModel, TModel>
         : IAsyncViewModelRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         #region Properties and Fields
@@ -142,6 +142,12 @@ namespace Birko.Data.Repositories
         #region Instance Loading Methods
 
         /// <summary>
+        /// Maps ViewModel data onto a Model instance.
+        /// Override in concrete repositories to define the ViewModel→Model mapping.
+        /// </summary>
+        protected abstract void MapToModel(TViewModel source, TModel target);
+
+        /// <summary>
         /// Loads a view model from a data model.
         /// </summary>
         /// <param name="model">The data model to load from.</param>
@@ -166,7 +172,7 @@ namespace Birko.Data.Repositories
         public virtual TModel LoadModelInstance(TViewModel model)
         {
             TModel result = CreateModelInstance();
-            result.LoadFrom(model);
+            MapToModel(model, result);
             return result;
         }
 
@@ -233,8 +239,8 @@ namespace Birko.Data.Repositories
         {
             if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
             if (Store == null) return;
-            var item = (TModel)Activator.CreateInstance(data.GetType(), Array.Empty<object>())!;
-            item.LoadFrom(data);
+            TModel item = CreateModelInstance();
+            MapToModel(data, item);
             await Store.DeleteAsync(item, ct);
         }
 

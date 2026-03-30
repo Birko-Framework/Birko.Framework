@@ -15,7 +15,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public abstract class AbstractViewModelRepository<TViewModel, TModel>
         : IViewModelRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         #region Properties and Fields
@@ -122,6 +122,12 @@ namespace Birko.Data.Repositories
 
         #region Instance Loading Methods
 
+        /// <summary>
+        /// Maps ViewModel data onto a Model instance.
+        /// Override in concrete repositories to define the ViewModel→Model mapping.
+        /// </summary>
+        protected abstract void MapToModel(TViewModel source, TModel target);
+
         public virtual TViewModel? LoadInstance(TModel? model = null)
         {
             if (model == null)
@@ -137,7 +143,7 @@ namespace Birko.Data.Repositories
         public virtual TModel LoadModelInstance(TViewModel model)
         {
             TModel result = CreateModelInstance();
-            result.LoadFrom(model);
+            MapToModel(model, result);
             return result;
         }
 

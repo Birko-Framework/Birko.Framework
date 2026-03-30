@@ -120,7 +120,7 @@ namespace Birko.Data.Repositories
         , IViewModelDeleteRepository<T, TModel>
 
         where T : Models.ILoadable<TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<T>
+        where TModel : Models.AbstractModel
     {
         /// <summary>
         /// Creates a new instance of the view model type.

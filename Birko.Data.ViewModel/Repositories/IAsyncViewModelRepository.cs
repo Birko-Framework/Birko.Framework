@@ -127,7 +127,7 @@ namespace Birko.Data.Repositories
         , IAsyncViewModelCreateRepository<TViewModel, TModel>
         , IAsyncViewModelUpdateRepository<TViewModel, TModel>
         , IAsyncViewModelDeleteRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         /// <summary>

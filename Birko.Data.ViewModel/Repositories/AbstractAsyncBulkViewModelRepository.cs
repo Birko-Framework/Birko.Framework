@@ -15,7 +15,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public abstract class AbstractAsyncBulkViewModelRepository<TViewModel, TModel>
         : AbstractAsyncViewModelRepository<TViewModel, TModel>, IAsyncBulkViewModelRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         #region Properties
@@ -62,7 +62,7 @@ namespace Birko.Data.Repositories
             var models = data.Select(vm =>
             {
                 var model = CreateModelInstance();
-                model.LoadFrom(vm);
+                MapToModel(vm, model);
                 return model;
             }).Where(m => m != null).ToList()!;
 
@@ -105,7 +105,7 @@ namespace Birko.Data.Repositories
             var models = data.Select(vm =>
             {
                 var model = CreateModelInstance();
-                model.LoadFrom(vm);
+                MapToModel(vm, model);
                 return model;
             }).Where(m => m != null).ToList()!;
 
@@ -152,7 +152,7 @@ namespace Birko.Data.Repositories
             var models = data.Select(vm =>
             {
                 var model = CreateModelInstance();
-                model.LoadFrom(vm);
+                MapToModel(vm, model);
                 return model;
             }).Where(m => m != null).ToList()!;
 

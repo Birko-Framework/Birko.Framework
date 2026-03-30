@@ -125,7 +125,7 @@ namespace Birko.Data.Repositories
          , IBulkViewModelUpdateRepository<T, TModel>
          , IBulkViewModelDeleteRepository<T, TModel>
          where T : Models.ILoadable<TModel>
-         where TModel : Models.AbstractModel, Models.ILoadable<T>
+         where TModel : Models.AbstractModel
     {
     }
 

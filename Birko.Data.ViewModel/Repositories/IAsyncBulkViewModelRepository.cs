@@ -15,7 +15,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public interface IAsyncBulkViewModelReadRepository<TViewModel, TModel> : IAsyncViewModelReadRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         /// <summary>
@@ -43,7 +43,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public interface IAsyncBulkViewModelCreateRepository<TViewModel, TModel> : IAsyncViewModelCreateRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         /// <summary>
@@ -65,7 +65,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public interface IAsyncBulkViewModelUpdateRepository<TViewModel, TModel> : IAsyncViewModelUpdateRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         /// <summary>
@@ -103,7 +103,7 @@ namespace Birko.Data.Repositories
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
     public interface IAsyncBulkViewModelDeleteRepository<TViewModel, TModel> : IAsyncViewModelDeleteRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         /// <summary>
@@ -137,7 +137,7 @@ namespace Birko.Data.Repositories
         , IAsyncBulkViewModelCreateRepository<TViewModel, TModel>
         , IAsyncBulkViewModelUpdateRepository<TViewModel, TModel>
         , IAsyncBulkViewModelDeleteRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
     }

@@ -17,7 +17,7 @@ namespace Birko.Data.Repositories
     public abstract class AbstractBulkViewModelRepository<TViewModel, TModel>
         : AbstractViewModelRepository<TViewModel, TModel>
         , IBulkViewModelRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         #region Constructors and Initialization
