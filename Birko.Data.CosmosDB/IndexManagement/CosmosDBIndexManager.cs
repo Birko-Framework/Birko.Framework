@@ -79,7 +79,7 @@ public class CosmosDBIndexManager : IIndexManager
                     compositeIndex.Add(new CompositePath
                     {
                         Path = path,
-                        Order = field.FieldType == IndexFieldType.Descending
+                        Order = field.IsDescending
                             ? CompositePathSortOrder.Descending
                             : CompositePathSortOrder.Ascending
                     });
@@ -235,11 +235,9 @@ public class CosmosDBIndexManager : IIndexManager
         var response = await container.ReadContainerAsync(cancellationToken: ct).ConfigureAwait(false);
         var properties = response.Resource;
 
-        properties.IndexingPolicy.SpatialIndexes.Add(new SpatialPath
-        {
-            Path = path,
-            SpatialTypes = new System.Collections.ObjectModel.Collection<SpatialType> { spatialType }
-        });
+        var spatialPath = new SpatialPath { Path = path };
+        spatialPath.SpatialTypes.Add(spatialType);
+        properties.IndexingPolicy.SpatialIndexes.Add(spatialPath);
 
         await container.ReplaceContainerAsync(properties, cancellationToken: ct).ConfigureAwait(false);
     }
