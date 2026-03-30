@@ -9,6 +9,7 @@ namespace Birko.Models.Product
         : Data.Models.AbstractLogModel
         , Data.Models.ILoadable<Birko.Models.Product.ViewModels.Product>
         , Birko.Models.Contracts.ICatalogItem
+        , Birko.Data.Patterns.Models.ISluggable
     {
         public string SKUCode { get; set; } = null!;
 
@@ -25,7 +26,9 @@ namespace Birko.Models.Product
             set => SKUCode = value;
         }
 
-        public string Slug { get; set; } = null!;
+        public string? Slug { get; set; }
+
+        public string? GetSlugSource() => Name;
 
         public string Description { get; set; } = null!;
 
