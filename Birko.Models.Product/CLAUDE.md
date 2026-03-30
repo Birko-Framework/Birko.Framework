@@ -15,10 +15,10 @@ Product domain models for the Birko Framework.
 ## Components
 
 ### Models
-- `Product` - Base product entity
-- `ProductVariant` - Product variant
-- `ProductImage` - Product image
-- `ProductPrice` - Product pricing
+- `Product` - Base product entity (implements `ICatalogItem`, `ISluggable` — slug auto-generated from `Name`)
+- `ProductPartnerCode` - Partner code mapping
+- `MeasureUnit` - Measure unit
+- `UnitConversion` - Unit conversion
 
 ### ViewModels
 - `ProductViewModel` - Product display model
@@ -77,7 +77,7 @@ var filter = new ProductFilter
 ```
 
 ## Dependencies
-- Birko.Models
+- Birko.Models, Birko.Models.Contracts (ICatalogItem), Birko.Data.Patterns (ISluggable)
 
 ## Use Cases
 - E-commerce platforms
