@@ -15,6 +15,26 @@ namespace Birko.Data.SQL
     {
         private static Dictionary<Type, Tables.View>? _viewCache = null;
 
+        private static void EnsureViewResolverRegistered()
+        {
+            if (ResolveFieldSelectName == null)
+            {
+                ResolveFieldSelectName = (type, propertyName, withTableName) =>
+                {
+                    var view = LoadView(type);
+                    if (view != null)
+                    {
+                        var field = view.GetTableFields().FirstOrDefault(x => x.Property.Name == propertyName);
+                        if (field != null)
+                        {
+                            return field.GetSelectName(withTableName);
+                        }
+                    }
+                    return null;
+                };
+            }
+        }
+
         public static IEnumerable<Tables.View> LoadViews(IEnumerable<Type> types)
         {
             if (types != null && types.Any())
@@ -57,6 +77,7 @@ namespace Birko.Data.SQL
 
         public static Tables.View LoadView(Type type)
         {
+            EnsureViewResolverRegistered();
             if (_viewCache == null)
             {
                 _viewCache = new Dictionary<Type, Tables.View>();
