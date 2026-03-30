@@ -12,8 +12,8 @@ namespace Birko.Data.JSON.Repositories
     /// </summary>
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
-    public class JsonRepository<TViewModel, TModel> : AbstractBulkViewModelRepository<TViewModel, TModel>
-        where TModel : Models.AbstractModel, Models.ILoadable<TViewModel>
+    public abstract class JsonRepository<TViewModel, TModel> : AbstractBulkViewModelRepository<TViewModel, TModel>
+        where TModel : Models.AbstractModel
         where TViewModel : Models.ILoadable<TModel>
     {
         #region Properties
