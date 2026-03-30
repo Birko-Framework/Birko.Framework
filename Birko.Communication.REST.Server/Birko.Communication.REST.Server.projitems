@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>B2C3D4E5-F6A7-4B5C-9D0E-1F2A3B4C5D6E</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.REST.Server</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)RestServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\RestAuthenticationConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\RestAuthenticationMiddleware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\RestAuthenticationService.cs" />
+  </ItemGroup>
+</Project>
