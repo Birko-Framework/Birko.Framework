@@ -2,7 +2,7 @@
 
 ## Overview
 
-Birko.Data.Patterns provides cross-cutting data access patterns implemented as decorator wrappers around existing stores and repositories: Unit of Work, Soft Delete, Audit, Default Constraint, Paging, Specifications, and Optimistic Concurrency.
+Birko.Data.Patterns provides cross-cutting data access patterns implemented as decorator wrappers around existing stores and repositories: Unit of Work, Soft Delete, Audit, Default Constraint, Sluggable, Paging, Specifications, and Optimistic Concurrency.
 
 ## Unit of Work
 
@@ -143,7 +143,7 @@ await timestampedStore.UpdateAsync(order);
 ### Stacking with Other Decorators
 
 ```csharp
-// Stack: versioning -> default -> audit -> timestamp -> soft delete -> base store
+// Stack: versioning -> default -> soft delete -> sluggable -> audit -> timestamp -> base store
 var store = new AsyncVersionedStoreWrapper<Order>(
     new AsyncDefaultStoreWrapper<IAsyncBulkStore<Order>, Order>(
         new AsyncAuditStoreWrapper<Order>(
@@ -187,6 +187,57 @@ await store.UpdateAsync(existingCurrency);
 
 - `DefaultStoreWrapper<TStore, T>` — Sync, implements `IBulkStore<T>`
 - `AsyncDefaultStoreWrapper<TStore, T>` — Async, implements `IAsyncBulkStore<T>`
+
+## Sluggable
+
+Auto-generates URL-friendly slugs from entity content and ensures uniqueness.
+
+### Interface
+
+```csharp
+public interface ISluggable
+{
+    string? Slug { get; set; }
+    string? GetSlugSource();
+}
+```
+
+### SlugGenerator
+
+Static utility for slug processing:
+- `Normalize(string)` — converts to lowercase, removes diacritics, replaces whitespace/delimiters with hyphens, strips non-alphanumeric characters
+- `EnsureUnique` / `EnsureUniqueAsync` — appends numeric suffixes (-1, -2, etc.) when a duplicate slug exists in the store
+
+### Usage
+
+```csharp
+public class Product : AbstractModel, ISluggable
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Slug { get; set; }
+    public string? GetSlugSource() => Name;
+}
+
+// Wrap a store to auto-generate slugs
+var store = new AsyncSluggableBulkStoreWrapper<Product>(baseStore);
+
+// Slug is auto-generated from GetSlugSource() on create:
+var product = new Product { Name = "My Product" };
+await store.CreateAsync(product); // product.Slug == "my-product"
+
+// Duplicate names get numeric suffixes:
+var product2 = new Product { Name = "My Product" };
+await store.CreateAsync(product2); // product2.Slug == "my-product-1"
+```
+
+> **Note:** Positioned after SoftDelete in the decorator chain so uniqueness checks only consider non-deleted records.
+
+### Variants
+
+- `SluggableStoreWrapper<T>` — Sync, implements `IStore<T>`
+- `SluggableBulkStoreWrapper<T>` — Sync bulk with batch collision tracking
+- `AsyncSluggableStoreWrapper<T>` — Async, implements `IAsyncStore<T>`
+- `AsyncSluggableBulkStoreWrapper<T>` — Async bulk with batch collision tracking
 
 ## Paging
 
@@ -327,7 +378,7 @@ All patterns use the decorator pattern and can be composed:
 ```csharp
 var baseStore = new AsyncDataBaseBulkStore<PostgreSQLConnector, Order>();
 
-// Stack: versioning -> default -> audit -> timestamp -> soft delete -> base store
+// Stack: versioning -> default -> soft delete -> sluggable -> audit -> timestamp -> base store
 var store = new AsyncVersionedStoreWrapper<Order>(
     new AsyncDefaultStoreWrapper<IAsyncBulkStore<Order>, Order>(
         new AsyncAuditStoreWrapper<Order>(
@@ -342,7 +393,7 @@ var store = new AsyncVersionedStoreWrapper<Order>(
 `StoreWrapperBuilder.Build<T>()` inspects entity type `T` at runtime and conditionally wraps an `IAsyncBulkStore<T>` with applicable decorators:
 
 ```csharp
-// Automatically applies Tenant, Default, SoftDelete, Audit, Timestamp
+// Automatically applies Tenant, Default, SoftDelete, Sluggable, Audit, Timestamp
 // based on which interfaces T implements
 var store = StoreWrapperBuilder.Build<Order>(rawStore, tenantContext, auditContext, clock);
 ```
@@ -351,8 +402,9 @@ var store = StoreWrapperBuilder.Build<Order>(rawStore, tenantContext, auditConte
 1. **Tenant** — applied if `T : ITenant`
 2. **Default** — applied if `T : IDefault`
 3. **SoftDelete** — applied if `T : ISoftDeletable`
-4. **Audit** — applied if `T : IAuditable`
-5. **Timestamp** — applied if `T : ITimestamped`
+4. **Sluggable** — applied if `T : ISluggable`
+5. **Audit** — applied if `T : IAuditable`
+6. **Timestamp** — applied if `T : ITimestamped`
 
 ## See Also
 

@@ -78,7 +78,7 @@ A modular .NET framework providing data access, communication, and model infrast
 
 | Project | Description |
 |---------|-------------|
-| Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Paging) |
+| Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Sluggable, Paging) |
 | Birko.Data.Migrations | Database migration framework (SQL, ES, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB) |
 | Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, CosmosDB, Tenant) |
 | Birko.Data.Aggregates | SQL-NoSQL aggregate mapper (flatten/expand for sync) |
