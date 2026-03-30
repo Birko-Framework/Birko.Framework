@@ -51,11 +51,12 @@ public class CosmosDBJobQueue : IJobQueue
     }
 
     /// <inheritdoc />
-    public async Task EnqueueAsync(JobDescriptor descriptor, CancellationToken ct = default)
+    public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
         var model = CosmosJobDescriptorModel.FromDescriptor(descriptor);
-        await _store.CreateAsync(model, ct: ct).ConfigureAwait(false);
+        var id = await _store.CreateAsync(model, ct: ct).ConfigureAwait(false);
+        return id;
     }
 
     /// <inheritdoc />
@@ -70,7 +71,7 @@ public class CosmosDBJobQueue : IJobQueue
         var results = await _store.ReadAsync(
             filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt <= now))
                 && (queueName == null || j.QueueName == queueName),
-            orderBy: new OrderBy<CosmosJobDescriptorModel>(nameof(CosmosJobDescriptorModel.Priority), true),
+            orderBy: OrderBy<CosmosJobDescriptorModel>.ByName(nameof(CosmosJobDescriptorModel.Priority), descending: true),
             limit: 1,
             ct: ct
         ).ConfigureAwait(false);
@@ -122,16 +123,17 @@ public class CosmosDBJobQueue : IJobQueue
     }
 
     /// <inheritdoc />
-    public async Task CancelAsync(Guid jobId, CancellationToken ct = default)
+    public async Task<bool> CancelAsync(Guid jobId, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
         var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
-        if (model == null) return;
+        if (model == null) return false;
 
         model.Status = (int)JobStatus.Cancelled;
         model.CompletedAt = DateTime.UtcNow;
         await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
+        return true;
     }
 
     /// <inheritdoc />
@@ -144,14 +146,14 @@ public class CosmosDBJobQueue : IJobQueue
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int? limit = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
         var statusInt = (int)status;
         var results = await _store.ReadAsync(
             filter: j => j.Status == statusInt,
-            orderBy: new OrderBy<CosmosJobDescriptorModel>(nameof(CosmosJobDescriptorModel.EnqueuedAt), true),
+            orderBy: OrderBy<CosmosJobDescriptorModel>.ByName(nameof(CosmosJobDescriptorModel.EnqueuedAt), descending: true),
             limit: limit,
             ct: ct
         ).ConfigureAwait(false);
@@ -160,23 +162,26 @@ public class CosmosDBJobQueue : IJobQueue
     }
 
     /// <inheritdoc />
-    public async Task PurgeAsync(DateTime olderThan, CancellationToken ct = default)
+    public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken ct = default)
     {
         await EnsureInitializedAsync(ct).ConfigureAwait(false);
 
+        var cutoff = DateTime.UtcNow - olderThan;
         var completedStatus = (int)JobStatus.Completed;
         var failedStatus = (int)JobStatus.Failed;
         var cancelledStatus = (int)JobStatus.Cancelled;
 
         var results = await _store.ReadAsync(
             filter: j => (j.Status == completedStatus || j.Status == failedStatus || j.Status == cancelledStatus)
-                && j.CompletedAt != null && j.CompletedAt < olderThan,
+                && j.CompletedAt != null && j.CompletedAt < cutoff,
             ct: ct
         ).ConfigureAwait(false);
 
-        if (results.Any())
+        var count = results.Count();
+        if (count > 0)
         {
             await _store.DeleteAsync(results, ct).ConfigureAwait(false);
         }
+        return count;
     }
 }
