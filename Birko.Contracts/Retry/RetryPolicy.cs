@@ -8,6 +8,7 @@ namespace Birko
     /// </summary>
     public class RetryPolicy
     {
+        private static readonly Random _jitterRandom = new();
         /// <summary>
         /// Maximum number of retry attempts. Default is 3.
         /// </summary>
@@ -31,17 +32,37 @@ namespace Birko
         public bool UseExponentialBackoff { get; set; } = true;
 
         /// <summary>
+        /// Multiplier for exponential backoff. Default is 2.0.
+        /// </summary>
+        public double BackoffMultiplier { get; set; } = 2.0;
+
+        /// <summary>
+        /// Whether to add random jitter (+-25%) to delays to prevent thundering herd. Default is false.
+        /// </summary>
+        public bool AddJitter { get; set; } = false;
+
+        /// <summary>
         /// Calculates the delay before the next retry attempt.
         /// </summary>
         public TimeSpan GetDelay(int attemptNumber)
         {
+            TimeSpan delay;
             if (!UseExponentialBackoff)
             {
-                return BaseDelay;
+                delay = BaseDelay;
+            }
+            else
+            {
+                delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(BackoffMultiplier, attemptNumber - 1));
+                if (delay > MaxDelay)
+                    delay = MaxDelay;
             }
 
-            var delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(2, attemptNumber - 1));
-            return delay > MaxDelay ? MaxDelay : delay;
+            if (!AddJitter)
+                return delay;
+
+            var jitterFactor = 0.75 + (_jitterRandom.NextDouble() * 0.5);
+            return TimeSpan.FromTicks((long)(delay.Ticks * jitterFactor));
         }
 
         /// <summary>
