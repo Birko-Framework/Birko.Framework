@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>77bc96a7-c096-4844-baad-5af56d0b483b</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.AI.Resilience</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Configuration\RateLimitConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Configuration\CostTrackingConfiguration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IUsageRepository.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\ICircuitBreakerStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\ProviderRateLimiter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\ProviderCircuitBreaker.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\CostTrackingService.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Services\TrackedLlmProvider.cs" />
+  </ItemGroup>
+</Project>
