@@ -41,6 +41,7 @@
     <Project Path="../Birko.Communication.IR/Birko.Communication.IR.shproj" />
     <Project Path="../Birko.Communication.NFC/Birko.Communication.NFC.shproj" />
     <Project Path="../Birko.Communication.REST.Server/Birko.Communication.REST.Server.shproj" />
+    <Project Path="../Birko.Communication.OAuth.Providers/Birko.Communication.OAuth.Providers.shproj" />
   </Folder>
   <Folder Name="/Data/">
     <Project Path="../Birko.Contracts/Birko.Contracts.shproj" />
@@ -211,6 +212,15 @@
     <Project Path="../Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
     <Project Path="../Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
     <Project Path="../Birko.Data.Views.Tests/Birko.Data.Views.Tests.csproj" />
+    <Project Path="../Birko.Validation.Tests/Birko.Validation.Tests.csproj" />
+    <Project Path="../Birko.Data.Sync.Tests/Birko.Data.Sync.Tests.csproj" />
+    <Project Path="../Birko.BackgroundJobs.SQL.Tests/Birko.BackgroundJobs.SQL.Tests.csproj" />
+    <Project Path="../Birko.Workflow.SQL.Tests/Birko.Workflow.SQL.Tests.csproj" />
+    <Project Path="../Birko.Communication.Camera.Tests/Birko.Communication.Camera.Tests.csproj" />
+    <Project Path="../Birko.Data.Migrations.SQL.Tests/Birko.Data.Migrations.SQL.Tests.csproj" />
+    <Project Path="../Birko.Caching.Tests/Birko.Caching.Tests.csproj" />
+    <Project Path="../Birko.Communication.REST.Tests/Birko.Communication.REST.Tests.csproj" />
+    <Project Path="../Birko.Communication.WebSocket.Tests/Birko.Communication.WebSocket.Tests.csproj" />
   </Folder>
   <Folder Name="/Time/">
     <Project Path="../Birko.Time.Abstractions/Birko.Time.Abstractions.shproj" />
@@ -244,6 +254,14 @@
     <Project Path="../Birko.Workflow.RavenDB/Birko.Workflow.RavenDB.shproj" />
     <Project Path="../Birko.Workflow.JSON/Birko.Workflow.JSON.shproj" />
     <Project Path="../Birko.Workflow.CosmosDB/Birko.Workflow.CosmosDB.shproj" />
+  </Folder>
+  <Folder Name="/AI/">
+    <Project Path="../Birko.AI.Contracts/Birko.AI.Contracts.shproj" />
+    <Project Path="../Birko.AI/Birko.AI.shproj" />
+    <Project Path="../Birko.AI.Providers/Birko.AI.Providers.shproj" />
+    <Project Path="../Birko.AI.Agents/Birko.AI.Agents.shproj" />
+    <Project Path="../Birko.AI.Resilience/Birko.AI.Resilience.shproj" />
+    <Project Path="../Birko.AI.Orchestration/Birko.AI.Orchestration.shproj" />
   </Folder>
   <Folder Name="/Web/">
     <Project Path="../Birko.Web.Core/package.json" />

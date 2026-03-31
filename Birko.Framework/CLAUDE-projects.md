@@ -133,6 +133,15 @@
 - **Birko.Localization.Data** - Database-backed translations, namespace scoping, TTL cache
 - **Birko.Data.Localization** - Entity-level localization (ILocalizable, store decorator wrappers)
 
+## AI / LLM
+- **Birko.AI.Contracts** - LLM provider interface (ILlmProvider), models (Message, ContentBlock, TokenUsage, LlmResponse, LlmStreamingResponse), Tool base class, AgentOptions
+- **Birko.AI** - LlmProviderBase (retry with Birko.RetryPolicy, SSE parsing, OpenAI-style message/tool builders), Agent base class (run loop, streaming, tool execution), 9 default tools (ListFiles, ReadFile, WriteFile, EditFile, AppendToFile, SearchCode, RunCommand, DisplayText, AskUser)
+- **Birko.AI.Providers** - 11 LLM provider implementations: ClaudeProvider, OpenAiProvider, AzureOpenAiProvider, GeminiProvider, OllamaProvider, OpenAiCompatibleProviderBase, LlamaCppProvider, VllmProvider, SglangProvider, GitHubCopilotProvider (uses IOAuthClient), ZAiProvider
+- **Birko.AI.Agents** - CodingAgent base, 10 language-specific agents (CSharp, Python, JS/TS, Cpp, React, Angular, CSS, HTML, PHP, Assembler), 4 task agents (Debug, Refactor, Test, Documentation), DiagrammingAgent, MediaAgent + 3 media agents (Image, Svg, Bitmap), OrchestratorAgent base, AgentFactory
+- **Birko.AI.Resilience** - ProviderRateLimiter (sliding window per-minute/per-day), ProviderCircuitBreaker (Closed/Open/HalfOpen with ICircuitBreakerStore), CostTrackingService (pricing, budget enforcement with IUsageRepository), TrackedLlmProvider (decorator combining rate limiting + cost tracking)
+- **Birko.AI.Orchestration** - ITaskDispatcher + DirectTaskDispatcher, AgentTaskRecord (status, dependencies, retry tracking), ImplementationPlan/ImplementationStep (file-level dependencies), StepDependencyAnalyzer (parallel groups, topological sort), EscalationAlert (escalation types, reflection entries)
+- **Birko.Communication.OAuth.Providers** - GitHubOAuthProvider (pre-configured OAuthSettings factory for GitHub Device Code flow, uses Birko.Communication.OAuth)
+
 ## Web (TypeScript)
 - **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP client, SSE client, hash router)
 - **Birko.Web.Components** - Component library (38 Shadow DOM web components: inputs, layout, data, feedback, navigation)

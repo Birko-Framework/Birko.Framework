@@ -4,6 +4,34 @@
 
 Birko.Data.Views provides a unified fluent API for defining cross-platform views — projections, joins, and aggregations that work identically across SQL, MongoDB, ElasticSearch, RavenDB, and Cosmos DB. It replaces attribute-based SQL view definitions with a type-safe fluent builder.
 
+## Project Hierarchy
+
+```
+Birko.Data.Views              — Platform-agnostic: fluent API (ViewDefinitionBuilder,
+│                               ViewMapRegistry, IViewStore, IViewManager)
+│
+├─► Birko.Data.SQL.Views      — SQL bridge: translates ViewDefinition → Tables.View
+│   │                           (SqlViewTranslator, SqlViewStore, SqlViewManager)
+│   │
+│   └─► Birko.Data.SQL.View   — SQL engine: attribute-based definitions, connector
+│       │                        extensions, DDL, field types, query building
+│       │
+│       ├─► Birko.Data.SQL.MSSql.View
+│       ├─► Birko.Data.SQL.PostgreSQL.View
+│       ├─► Birko.Data.SQL.MySQL.View
+│       └─► Birko.Data.SQL.SqLite.View
+│
+├─► Birko.Data.MongoDB.Views  — MongoDB platform implementation
+├─► Birko.Data.ElasticSearch.Views — ElasticSearch platform implementation
+├─► Birko.Data.RavenDB.Views  — RavenDB platform implementation
+└─► Birko.Data.CosmosDB.Views — Cosmos DB platform implementation
+```
+
+- **Birko.Data.Views** defines *what* a view is (interfaces, fluent builder, registry).
+- **Birko.Data.SQL.Views** translates the fluent definitions into SQL metadata (`Tables.View`).
+- **Birko.Data.SQL.View** executes the SQL work (DDL, SELECT building, connector extensions).
+- **Provider-specific projects** supply database-dialect SQL (e.g. `CREATE MATERIALIZED VIEW` for PostgreSQL).
+
 ## Core Concepts
 
 ### View Definition

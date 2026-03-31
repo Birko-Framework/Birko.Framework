@@ -39,7 +39,8 @@ A modular .NET framework providing data access, communication, and model infrast
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 31 components, app shell)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
-- Helper utilities and extensions (including RFC 4180 CSV parser)
+- Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
+- AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
 
 ## Project Structure
 
@@ -134,6 +135,18 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Communication.IR | Consumer IR (NEC, Samsung, RC5 protocols, pluggable transports) |
 | Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
 
+### AI / LLM
+
+| Project | Description |
+|---------|-------------|
+| Birko.AI.Contracts | ILlmProvider, Message, ContentBlock, TokenUsage, LlmResponse, LlmStreamingResponse, Tool base, AgentOptions |
+| Birko.AI | LlmProviderBase (retry, SSE, OpenAI helpers), Agent base class (run loop, streaming, tools), 9 default tools |
+| Birko.AI.Providers | 11 providers: Claude, OpenAI, AzureOpenAI, Gemini, Ollama, LlamaCpp, Vllm, Sglang, GitHubCopilot, ZAi |
+| Birko.AI.Agents | CodingAgent, 10 language agents, 4 task agents, media agents, OrchestratorAgent, AgentFactory |
+| Birko.AI.Resilience | ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider |
+| Birko.AI.Orchestration | ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer, EscalationAlert |
+| Birko.Communication.OAuth.Providers | GitHubOAuthProvider (pre-configured device flow) |
+
 ### Web
 
 | Project | Description |
@@ -221,7 +234,7 @@ A modular .NET framework providing data access, communication, and model infrast
 
 | Project | Description |
 |---------|-------------|
-| Birko.Data.Tests | Core store abstraction tests |
+| Birko.Data.Tests | Core store/patterns tests (decorators, paging, specification, concurrency, sluggable, default) |
 | Birko.Data.SQL.Tests | SQL connector, strategy, and expression tests |
 | Birko.Data.ElasticSearch.Tests | Elasticsearch expression tests |
 | Birko.Helpers.Tests | Helper utility tests |
@@ -252,6 +265,15 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.JSON.Tests | JSON file store tests |
 | Birko.Data.Views.Tests | Fluent view builder tests |
 | Birko.Random.Tests | RNG providers, distributions, sequences tests |
+| Birko.Validation.Tests | Fluent validation rules, validator composition, store wrapper integration tests |
+| Birko.Data.Sync.Tests | Data sync framework tests (SyncProvider, SyncQueue, models) |
+| Birko.BackgroundJobs.SQL.Tests | SQL job queue model mapping tests (JobDescriptorModel) |
+| Birko.Workflow.SQL.Tests | SQL workflow instance model mapping tests (WorkflowInstanceModel) |
+| Birko.Communication.Camera.Tests | Camera communication tests (CapturedFrame, settings, source state) |
+| Birko.Data.Migrations.SQL.Tests | SQL migration tests (MigrationResult, SqlMigration, settings) |
+| Birko.Caching.Tests | Core caching tests (CacheResult, CacheEntryOptions, MemoryCache) |
+| Birko.Communication.REST.Tests | REST client tests (BuildUri, HttpMethod, event args, defaults) |
+| Birko.Communication.WebSocket.Tests | WebSocket settings and configuration tests |
 
 ## Architecture
 

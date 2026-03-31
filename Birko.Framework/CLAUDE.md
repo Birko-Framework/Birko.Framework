@@ -59,6 +59,16 @@ Birko.Data.Core
 
 Birko.Data.Stores (OrderBy<T>)
   -> Birko.Data.Views (ViewDefinitionBuilder, ViewMapRegistry, IViewStore, IViewManager)
+
+Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions)
+  -> Birko.AI (LlmProviderBase, Agent base, default tools)
+    -> Birko.AI.Providers (Claude, OpenAI, Gemini, Ollama, AzureOpenAI, etc.)
+    -> Birko.AI.Agents (CodingAgent, language agents, media agents, AgentFactory)
+    -> Birko.AI.Orchestration (ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer)
+  -> Birko.AI.Resilience (ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider)
+
+Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
+  -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
 ```
 
 ### Reference Implementations
@@ -85,6 +95,18 @@ When using Birko.Framework projects in your solution, create a single aggregator
 ## Important Notes
 
 ### Recent Updates
+
+#### AI/LLM Infrastructure (2026-03-31)
+Extracted reusable AI agent framework from DraCode into Birko.AI.* projects:
+- **Birko.AI.Contracts** — ILlmProvider interface, Message/ContentBlock/TokenUsage models, Tool base class, AgentOptions
+- **Birko.AI** — LlmProviderBase (retry, SSE, OpenAI-style helpers), Agent base class (run loop, streaming, tool execution), 9 default tools
+- **Birko.AI.Providers** — 11 LLM providers: Claude, OpenAI, AzureOpenAI, Gemini, Ollama, OpenAiCompatibleBase, LlamaCpp, Vllm, Sglang, GitHubCopilot, ZAi
+- **Birko.AI.Agents** — CodingAgent base, 10 language agents, 4 task agents (Debug, Refactor, Test, Documentation), 4 media agents, OrchestratorAgent, AgentFactory
+- **Birko.AI.Resilience** — ProviderRateLimiter (sliding window), ProviderCircuitBreaker (3-state), CostTrackingService (budget enforcement), TrackedLlmProvider (decorator)
+- **Birko.AI.Orchestration** — ITaskDispatcher, DirectTaskDispatcher, ImplementationPlan/Step models, StepDependencyAnalyzer (parallel groups, topological sort), EscalationAlert
+- **Birko.Communication.OAuth.Providers** — GitHubOAuthProvider (pre-configured device flow factory using Birko.Communication.OAuth)
+- **Birko.Contracts** — RetryPolicy extended with BackoffMultiplier and AddJitter
+- **Birko.Helpers** — Added PathHelper (IsPathSafe, IsUnderDirectory, GetCanonicalPath)
 
 #### Filter-Based Bulk Operations (2026-03-26)
 Added native filter-based Update/Delete to all bulk stores and repositories:
@@ -124,6 +146,12 @@ Removed circular `ILoadable<TViewModel>` constraint from TModel in all ViewModel
 - **MapToModel** — New abstract method `MapToModel(TViewModel source, TModel target)` on `AbstractViewModelRepository` and `AbstractAsyncViewModelRepository`; consumer concrete repositories must override it
 - **Abstract platform repos** — All platform ViewModel repositories (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, JSON, InfluxDB, TimescaleDB) made abstract; consumers must subclass
 - **DeleteAsync bug fix** — `AbstractAsyncViewModelRepository.DeleteAsync` no longer creates from `data.GetType()` (wrong); uses `CreateModelInstance()` + `MapToModel`
+
+#### Phase 1 Test Coverage (2026-03-30)
+Completed core data layer test coverage:
+- **Birko.Validation.Tests** (new) — 122 tests: rules (Required, Email, Length, Range, Regex, Custom), fluent AbstractValidator, ValidationResult, store wrapper integration (sync, async, bulk)
+- **Birko.Data.Tests** (expanded) — 181 tests: added async soft-delete/audit/timestamp decorators, DefaultStoreWrapper, SluggableStoreWrapper, SlugGenerator, SoftDeleteFilter, UnitOfWork exceptions, PagedResult
+- **Birko.Data.Sync.Tests** (new) — 21 tests: SyncProvider (initial/download/upload), SyncQueue (serialization, concurrency), model defaults
 
 #### Recent Fixes (2026-03-05)
 - Replaced `NativeAsyncDataBaseStore` with `AsyncDataBaseStore` in async stores/repos

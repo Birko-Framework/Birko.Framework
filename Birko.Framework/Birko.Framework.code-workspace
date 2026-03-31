@@ -729,6 +729,42 @@
 			"path": "../Birko.Data.Views.Tests"
 		},
 		{
+			"name": "Tests / Birko.Validation.Tests",
+			"path": "../Birko.Validation.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Sync.Tests",
+			"path": "../Birko.Data.Sync.Tests"
+		},
+		{
+			"name": "Tests / Birko.BackgroundJobs.SQL.Tests",
+			"path": "../Birko.BackgroundJobs.SQL.Tests"
+		},
+		{
+			"name": "Tests / Birko.Workflow.SQL.Tests",
+			"path": "../Birko.Workflow.SQL.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.Camera.Tests",
+			"path": "../Birko.Communication.Camera.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Migrations.SQL.Tests",
+			"path": "../Birko.Data.Migrations.SQL.Tests"
+		},
+		{
+			"name": "Tests / Birko.Caching.Tests",
+			"path": "../Birko.Caching.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.REST.Tests",
+			"path": "../Birko.Communication.REST.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.WebSocket.Tests",
+			"path": "../Birko.Communication.WebSocket.Tests"
+		},
+		{
 			"name": "Validation / Birko.Validation",
 			"path": "../Birko.Validation"
 		},
@@ -771,6 +807,34 @@
 		{
 			"name": "Web / Birko.Web.Shell",
 			"path": "../Birko.Web.Shell"
+		},
+		{
+			"name": "AI / Birko.AI.Contracts",
+			"path": "../Birko.AI.Contracts"
+		},
+		{
+			"name": "AI / Birko.AI",
+			"path": "../Birko.AI"
+		},
+		{
+			"name": "AI / Birko.AI.Providers",
+			"path": "../Birko.AI.Providers"
+		},
+		{
+			"name": "AI / Birko.AI.Agents",
+			"path": "../Birko.AI.Agents"
+		},
+		{
+			"name": "AI / Birko.AI.Resilience",
+			"path": "../Birko.AI.Resilience"
+		},
+		{
+			"name": "AI / Birko.AI.Orchestration",
+			"path": "../Birko.AI.Orchestration"
+		},
+		{
+			"name": "Communication / Birko.Communication.OAuth.Providers",
+			"path": "../Birko.Communication.OAuth.Providers"
 		},
 		{
 			"path": "."
