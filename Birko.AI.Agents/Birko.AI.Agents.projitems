@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>84f162b5-eef5-4c0a-a855-65720cb3ccec</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.AI.Agents</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\CodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\DiagrammingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\MediaAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\OrchestratorAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\AgentFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\DebugAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\DocumentationAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\RefactorAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\TestAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\CSharpCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\PythonCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\JavaScriptTypeScriptCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\CppCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\ReactCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\AngularCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\CssCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\HtmlCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\PhpCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\Specialized\AssemblerCodingAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Media\ImageAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Media\SvgAgent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Media\BitmapAgent.cs" />
+  </ItemGroup>
+</Project>
