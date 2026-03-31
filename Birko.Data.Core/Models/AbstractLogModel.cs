@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Birko.Data.Models
 {
-    public abstract partial class AbstractLogModel : AbstractModel, ICopyable<AbstractLogModel>, ILoadable<ILogEntity>, ITimestamped
+    public abstract partial class AbstractLogModel : AbstractModel, ILogEntity, ICopyable<AbstractLogModel>, ILoadable<ILogEntity>
     {
         public virtual DateTime CreatedAt { get; set; }
         public virtual DateTime UpdatedAt { get; set; }
