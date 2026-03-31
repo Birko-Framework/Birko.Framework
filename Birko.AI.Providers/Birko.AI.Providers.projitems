@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>5ab2dd6a-a02a-4544-9a64-8a34206eb7b3</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.AI.Providers</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\ClaudeProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\OpenAiProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\AzureOpenAiProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\GeminiProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\OllamaProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\OpenAiCompatibleProviderBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\LlamaCppProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\VllmProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\SglangProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\GitHubCopilotProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\ZAiProvider.cs" />
+  </ItemGroup>
+</Project>
