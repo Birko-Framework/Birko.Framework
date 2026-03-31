@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a64686cb-d9ca-4fcc-9d7f-9b864a3fe3af</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.AI</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\LlmProviderBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\Agent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\ListFilesTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\ReadFileTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\WriteFileTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\EditFileTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\AppendToFileTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\SearchCodeTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\RunCommandTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\DisplayTextTool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tools\AskUserTool.cs" />
+  </ItemGroup>
+</Project>
