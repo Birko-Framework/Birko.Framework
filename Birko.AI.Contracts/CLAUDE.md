@@ -35,6 +35,9 @@ Zero-dependency shared project with LLM provider interface, message models, tool
 ### AgentOptions.cs
 - `AgentOptions` — Configuration options for agent behavior
 
+### LlmProviderFactory.cs
+- `LlmProviderFactory` — Registration-based factory for creating LLM provider instances. Consumers register provider factory delegates (e.g., `LlmProviderFactory.Register("claude", settings => new ClaudeProvider(settings))`) to avoid transitive dependencies
+
 ## Dependencies
 None. This is a zero-dependency project.
 

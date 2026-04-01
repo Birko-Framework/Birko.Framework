@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AgentOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)LlmProviderFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ContentBlock.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TokenUsage.cs" />
