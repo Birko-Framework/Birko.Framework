@@ -1,13 +1,13 @@
 # Birko.AI
 
 ## Overview
-Core AI agent framework with LLM provider base class, agent run loop, and default tools.
+Core AI agent framework with LLM provider base class, agent run loop, factories, and default tools.
 
 ## Project Location
 `C:\Source\Birko.AI\`
 
 ## Namespace
-`Birko.AI.Providers`, `Birko.AI.Agents`, `Birko.AI.Tools`
+`Birko.AI.Providers`, `Birko.AI.Agents`, `Birko.AI.Factories`, `Birko.AI.Tools`
 
 ## Components
 
@@ -16,6 +16,11 @@ Core AI agent framework with LLM provider base class, agent run loop, and defaul
 
 ### Agents/Agent.cs
 - `Agent` — Core agent run loop with streaming support and tool execution
+
+### Factories/AgentFactory.cs
+- `AgentFactory` — Factory for creating agent instances from providers (does NOT create providers)
+
+**Note:** `LlmProviderFactory` is located in the `Birko.AI.Contracts` project (namespace `Birko.AI.Contracts`) since it only depends on contracts/interfaces.
 
 ### Tools/ListFilesTool.cs
 - `ListFilesTool` — List files in a directory
@@ -48,7 +53,17 @@ Core AI agent framework with LLM provider base class, agent run loop, and defaul
 - **Birko.AI.Contracts** — interfaces and models
 - **Birko.Contracts** — `RetryPolicy`
 - **Birko.Helpers** — `PathHelper`
+- **Birko.AI.Agents** — concrete agent implementations (used by AgentFactory)
 
 ## Consumers
 - **Birko.AI.Providers** — extends `LlmProviderBase`
 - **Birko.AI.Agents** — extends `Agent`
+
+## Factory Pattern
+
+This project contains both `LlmProviderFactory` and `AgentFactory`:
+
+- **LlmProviderFactory** — Registration-based, consumers register provider delegates (e.g., `LlmProviderFactory.Register("claude", settings => new ClaudeProvider(settings))`)
+- **AgentFactory** — Direct instantiation, creates agents from providers (e.g., `AgentFactory.Create(provider, agentType: "csharp")`)
+
+This design avoids transitive dependencies — Birko.AI doesn't reference Birko.AI.Providers or Birko.Communication.OAuth.

@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Providers\LlmProviderBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Agents\Agent.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Factories\AgentFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\ListFilesTool.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\ReadFileTool.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tools\WriteFileTool.cs" />
