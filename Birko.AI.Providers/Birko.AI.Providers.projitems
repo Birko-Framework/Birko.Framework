@@ -20,5 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Providers\SglangProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\GitHubCopilotProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\ZAiProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ProviderRegistration.cs" />
   </ItemGroup>
 </Project>

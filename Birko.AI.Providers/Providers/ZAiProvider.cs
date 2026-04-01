@@ -37,7 +37,7 @@ namespace Birko.AI.Providers
         /// <summary>
         /// Default recommended model (latest stable)
         /// </summary>
-        public const string DefaultModel = Models.Glm48;
+        public const string DefaultModel = Models.Glm51;
 
         public override string Name => $"Z.AI ({_model})";
 
@@ -173,11 +173,15 @@ namespace Birko.AI.Providers
         {
             return model switch
             {
-                Models.Glm47 => 8192,       // GLM-4.7 supports up to 8K output
-                Models.Glm48 => 8192,       // GLM-4.8 supports up to 8K output
-                Models.Glm4VPlus => 4096,   // Vision models typically have lower output limits
+                Models.Glm51Turbo => 131072,    // GLM-5.1 Turbo supports up to 131072 tokens
+                Models.Glm51 => 131072,         // GLM-5.1 supports up to 131072 tokens
+                Models.Glm5Turbo => 128000,     // GLM-5 Turbo supports up to 128000 tokens
+                Models.Glm5 => 128000,          // GLM-5 supports up to 128000 tokens
+                Models.Glm47 => 8192,           // GLM-4.7 supports up to 8K output
+                Models.Glm48 => 8192,           // GLM-4.8 supports up to 8K output
+                Models.Glm4VPlus => 4096,       // Vision models typically have lower output limits
                 Models.Glm4V => 4096,
-                _ => 4096                   // Default for other models
+                _ => 4096                       // Default for other models
             };
         }
 
@@ -307,7 +311,7 @@ namespace Birko.AI.Providers
         private static readonly HashSet<string> ValidModels = new()
         {
             // GLM-5 series
-            Models.Glm5,
+            Models.Glm5, Models.Glm5Turbo, Models.Glm51, Models.Glm51Turbo,
             // GLM-4.5 series
             Models.Glm45Flash, Models.Glm45Air, Models.Glm45,
             // GLM-4.6 series
@@ -328,6 +332,9 @@ namespace Birko.AI.Providers
         public static class Models
         {
             // GLM-5 series
+            public const string Glm51Turbo = "glm-5.1-turbo";
+            public const string Glm51 = "glm-5.1";
+            public const string Glm5Turbo = "glm-5-turbo";
             public const string Glm5 = "glm-5";
             // GLM-4.5 series
             public const string Glm45Flash = "glm-4.5-flash";
