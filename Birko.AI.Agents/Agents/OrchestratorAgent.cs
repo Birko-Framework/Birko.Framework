@@ -1,3 +1,4 @@
+using Birko.AI.Models;
 using Birko.AI.Providers;
 
 namespace Birko.AI.Agents

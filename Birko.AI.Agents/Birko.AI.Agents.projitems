@@ -13,7 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Agents\DiagrammingAgent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Agents\MediaAgent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Agents\OrchestratorAgent.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Agents\AgentFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Agents\AgentRegistration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\DebugAgent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\DocumentationAgent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Agents\Coding\RefactorAgent.cs" />

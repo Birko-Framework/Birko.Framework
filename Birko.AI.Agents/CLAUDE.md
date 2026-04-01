@@ -1,7 +1,7 @@
 # Birko.AI.Agents
 
 ## Overview
-22 specialized AI agents and factory for creating provider+agent combinations.
+22 specialized AI agent implementations (no factory - factory has been moved to `Birko.AI`).
 
 ## Project Location
 `C:\Source\Birko.AI.Agents\`
@@ -41,13 +41,14 @@
 ### OrchestratorAgent.cs
 - `OrchestratorAgent` — Multi-agent task coordination
 
-### AgentFactory.cs
-- `AgentFactory` — Factory for creating provider+agent combinations by name
+### Agents/AgentFactory.cs (DEPRECATED)
+- **Note:** The old `AgentFactory` with `CreateLlmProvider()` method still exists here for backward compatibility, but new code should use:
+  - `Birko.AI.Contracts.LlmProviderFactory` for creating providers (registration-based)
+  - `Birko.AI.Factories.AgentFactory` for creating agents
 
 ## Dependencies
 - **Birko.AI.Contracts** — interfaces and models
 - **Birko.AI** — `Agent` base class, tools
-- **Birko.AI.Providers** — provider implementations
 
 ## Consumers
 - Consumer applications
