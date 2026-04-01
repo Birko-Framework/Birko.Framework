@@ -8,7 +8,7 @@ namespace Birko
     /// </summary>
     public class RetryPolicy
     {
-        private static readonly Random _jitterRandom = new();
+        private static readonly System.Random _jitterRandom = new();
         /// <summary>
         /// Maximum number of retry attempts. Default is 3.
         /// </summary>
