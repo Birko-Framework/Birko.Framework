@@ -139,10 +139,10 @@ A modular .NET framework providing data access, communication, and model infrast
 
 | Project | Description |
 |---------|-------------|
-| Birko.AI.Contracts | ILlmProvider, Message, ContentBlock, TokenUsage, LlmResponse, LlmStreamingResponse, Tool base, AgentOptions |
-| Birko.AI | LlmProviderBase (retry, SSE, OpenAI helpers), Agent base class (run loop, streaming, tools), 9 default tools |
-| Birko.AI.Providers | 11 providers: Claude, OpenAI, AzureOpenAI, Gemini, Ollama, LlamaCpp, Vllm, Sglang, GitHubCopilot, ZAi |
-| Birko.AI.Agents | CodingAgent, 10 language agents, 4 task agents, media agents, OrchestratorAgent, AgentFactory |
+| Birko.AI.Contracts | ILlmProvider, Message, ContentBlock, TokenUsage, LlmResponse, LlmStreamingResponse, Tool base, AgentOptions, LlmProviderFactory |
+| Birko.AI | LlmProviderBase (retry, SSE, OpenAI helpers), Agent base class (run loop, streaming, tools), AgentFactory (registration-based), 9 default tools |
+| Birko.AI.Providers | 11 providers: Claude, OpenAI, AzureOpenAI, Gemini, Ollama, LlamaCpp, Vllm, Sglang, GitHubCopilot, ZAi + ProviderRegistration |
+| Birko.AI.Agents | CodingAgent, 10 language agents, 4 task agents, media agents, OrchestratorAgent + AgentRegistration |
 | Birko.AI.Resilience | ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider |
 | Birko.AI.Orchestration | ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer, EscalationAlert |
 | Birko.Communication.OAuth.Providers | GitHubOAuthProvider (pre-configured device flow) |

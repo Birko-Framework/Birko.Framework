@@ -307,21 +307,24 @@ RavenDBIndexManager implements IIndexManager with full lifecycle: create (from I
 
 ## Test Coverage Gaps
 
-### Phase 1 — High Priority (Core Data Layer)
-- [ ] Birko.Validation.Tests — fluent validation rules, validator composition
-- [ ] Birko.Data.Patterns.Tests — Unit of Work, Soft Delete, Audit, Timestamp, Paging patterns
-- [ ] Birko.Data.Sync.Tests — core sync framework + at least Birko.Data.Sync.Sql.Tests
+### Phase 1 — High Priority (Core Data Layer) (Done)
+- [x] Birko.Validation.Tests — fluent validation rules, validator composition (122 tests)
+- [x] Birko.Data.Patterns.Tests — Unit of Work, Soft Delete, Audit, Timestamp, Paging, Default, Sluggable patterns (added to Birko.Data.Tests, 181 total)
+- [x] Birko.Data.Sync.Tests — core sync framework, SyncProvider, SyncQueue (21 tests)
 
-### Phase 2 — Medium Priority (Platform Implementations)
-- [ ] Birko.BackgroundJobs.SQL.Tests + Birko.BackgroundJobs.Redis.Tests
-- [ ] Birko.Workflow.SQL.Tests
-- [ ] Birko.EventBus.Outbox.Tests
-- [ ] Birko.Communication.Camera.Tests
+### Phase 2 — Medium Priority (Platform Implementations) (Done)
+- [x] Birko.BackgroundJobs.SQL.Tests — JobDescriptorModel mapping tests (9 tests)
+- [ ] Birko.BackgroundJobs.Redis.Tests — Requires Redis infrastructure, deferred
+- [x] Birko.Workflow.SQL.Tests — WorkflowInstanceModel mapping tests (7 tests)
+- [x] Birko.EventBus.Outbox.Tests — Already existed in Birko.EventBus.Tests/Outbox/
+- [x] Birko.Communication.Camera.Tests — CapturedFrame, settings, source state tests (11 tests)
 
-### Phase 3 — Infrastructure
-- [ ] Birko.Data.Migrations.SQL.Tests
-- [ ] Birko.Caching.Redis.Tests
-- [ ] Birko.Communication.REST.Tests + Birko.Communication.WebSocket.Tests
+### Phase 3 — Infrastructure (Done)
+- [x] Birko.Data.Migrations.SQL.Tests — MigrationResult, SqlMigration, SqlMigrationSettings tests (11 tests)
+- [x] Birko.Caching.Tests — CacheResult, CacheEntryOptions, MemoryCache full behavior tests (23 tests)
+- [ ] Birko.Caching.Redis.Tests — Requires Redis infrastructure, deferred
+- [x] Birko.Communication.REST.Tests — BuildUri, HttpMethod, event args, defaults (15 tests)
+- [x] Birko.Communication.WebSocket.Tests — WebSocketSettings, GetID format (4 tests)
 
 ### Phase 4 — Lower Priority
 - [ ] Birko.Models.* — lightweight validation tests for model projects
