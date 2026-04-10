@@ -20,7 +20,6 @@ namespace Birko.BackgroundJobs.JSON
         private readonly AsyncJsonStore<JsonJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
         private readonly IDateTimeProvider _clock;
-        private bool _initialized;
 
         /// <summary>
         /// Creates a new JSON job queue.
@@ -50,8 +49,6 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = JsonJobDescriptorModel.FromDescriptor(descriptor);
             var id = await _store.CreateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return id;
@@ -59,8 +56,6 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var now = _clock.UtcNow;
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
@@ -104,8 +99,6 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
@@ -117,8 +110,6 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
@@ -141,8 +132,6 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
 
@@ -162,16 +151,12 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             return model?.ToDescriptor();
         }
 
         public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var statusInt = (int)status;
 
             var models = await _store.ReadAsync(
@@ -186,8 +171,6 @@ namespace Birko.BackgroundJobs.JSON
 
         public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var cutoff = _clock.UtcNow.Subtract(olderThan);
             var completedStatus = (int)JobStatus.Completed;
             var deadStatus = (int)JobStatus.Dead;
@@ -206,14 +189,6 @@ namespace Birko.BackgroundJobs.JSON
             }
 
             return list.Count;
-        }
-
-        private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
-        {
-            if (_initialized) return;
-
-            await _store.InitAsync(cancellationToken).ConfigureAwait(false);
-            _initialized = true;
         }
     }
 }
