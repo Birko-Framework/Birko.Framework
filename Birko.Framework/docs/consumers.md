@@ -8,7 +8,7 @@ Birko Framework is consumed by several projects via `.projitems` shared project 
 
 **Location:** `C:\Source\Symbio`
 **Description:** IoT-capable, multi-tenant enterprise platform
-**Birko projects referenced:** 50
+**Birko projects referenced:** 50 (unique across all modules)
 
 ### Symbio.Domain.Shared (16 projects)
 Core domain layer shared across all Symbio modules.
@@ -26,7 +26,7 @@ Core domain layer shared across all Symbio modules.
 | Birko.Models.Contracts | Domain interfaces (ICatalogItem, IPriceable, IHierarchical, etc.) |
 | Birko.Models | Base models (AbstractPercentage, AbstractTree, ValueData) + Value Objects |
 | Birko.Models.Accounting | Currency, Tax, PriceGroup, MeasureUnit |
-| Birko.Models.Users | User, Role, RBAC, Agenda |
+| Birko.Models.Users | User, Role, RBAC, Tenant, UserTenant |
 | Birko.Models.Customers | Address, Customer, InvoiceAddress |
 | Birko.Rules | Data-driven rule engine |
 | Birko.Serialization | JSON/XML serialization abstraction |
@@ -117,7 +117,7 @@ Warehouse/inventory module with clean Birko model projects.
 
 **Location:** `C:\Source\DraCode`
 **Description:** Game/application platform using SQLite, WebSocket real-time, and event sourcing
-**Birko projects referenced:** 26
+**Birko projects referenced:** 26 (unique across all modules)
 
 ### DraCode.KoboldLair (19 projects)
 Main application with SQLite data layer and event sourcing.
@@ -178,7 +178,7 @@ Standalone WebSocket client library.
 
 **Location:** `C:\Source\Affiliate`
 **Description:** Product/category aggregation platform using Elasticsearch and InfluxDB
-**Birko projects referenced:** 22
+**Birko projects referenced:** 22 (unique across all modules)
 
 ### Affiliate (18 projects)
 Main application with Elasticsearch data layer and caching.
@@ -239,7 +239,7 @@ FisData.Stock.Core models were refactored in March 2026 to extend Birko.Models.*
 
 | Consumer | Birko Projects | Primary Data Store | Key Features Used |
 |----------|---------------|-------------------|-------------------|
-| Symbio | 54 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES | Full stack: IoT, multi-tenant, event sourcing, health, telemetry |
-| DraCode | 27 | SQLite | WebSocket real-time, event sourcing, in-memory messaging |
-| Affiliate | 23 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
+| Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES | Full stack: IoT, multi-tenant, event sourcing, health, telemetry |
+| DraCode | 26 | SQLite | WebSocket real-time, event sourcing, in-memory messaging |
+| Affiliate | 22 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
 | FisData.Stock | 0 | *(inactive)* | Models extracted to Birko.Models.* |

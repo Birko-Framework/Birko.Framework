@@ -67,6 +67,22 @@ Only 4 projitems-level import chains exist:
            │
            └──► Communication.IR (← Communication, Communication.Hardware)
 
+───────────────────── AI / LLM Subtree ─────────────────────────
+
+┌──────────────────────────┐
+│  Birko.AI.Contracts      │ (zero-dep root)
+└──────────┬───────────────┘
+           │
+           ▼
+┌──────────────────────────┐
+│  Birko.AI                │ (← AI.Contracts, Contracts, Helpers)
+└──────────┬───────────────┘
+           │
+           ├──► AI.Providers (← AI, AI.Contracts, Communication.OAuth)
+           ├──► AI.Agents (← AI, AI.Contracts)
+           ├──► AI.Resilience (← AI.Contracts)
+           └──► AI.Orchestration (← AI.Contracts)
+
 ───────────────────── Security Subtree ──────────────────────────
 
 ┌──────────────────────┐
@@ -99,6 +115,7 @@ Only 4 projitems-level import chains exist:
 |---------|-------------|
 | **Birko.Helpers** | *(none)* |
 | **Birko.Structures** | Birko.Data.Core |
+| **Birko.Random** | *(none)* |
 
 ## Serialization
 
@@ -120,6 +137,7 @@ Only 4 projitems-level import chains exist:
 
 | Project | Dependencies |
 |---------|-------------|
+| **Birko.Models.Contracts** | *(none)* |
 | **Birko.Models** | Birko.Data.Core |
 | **Birko.Models.Accounting** | Birko.Data.Core, Birko.Models |
 | **Birko.Models.Category** | Birko.Models, Birko.Structures |
@@ -141,6 +159,13 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.SQL.PostgreSQL** | Birko.Data.Core, Birko.Data.SQL, Birko.Data.Stores |
 | **Birko.Data.SQL.SqLite** | Birko.Data.Core, Birko.Data.SQL, Birko.Data.Stores |
 | **Birko.Data.SQL.View** | Birko.Data.Core, Birko.Data.SQL, Birko.Data.Stores |
+| **Birko.Data.SQL.MSSql.View** | Birko.Data.SQL.View, Birko.Data.SQL.MSSql |
+| **Birko.Data.SQL.PostgreSQL.View** | Birko.Data.SQL.View, Birko.Data.SQL.PostgreSQL |
+| **Birko.Data.SQL.MySQL.View** | Birko.Data.SQL.View, Birko.Data.SQL.MySQL |
+| **Birko.Data.SQL.SqLite.View** | Birko.Data.SQL.View, Birko.Data.SQL.SqLite |
+| **Birko.Data.SQL.View.Migrations** | Birko.Data.SQL.View, Birko.Data.Migrations.SQL |
+| **Birko.Data.SQL.Caching** | Birko.Caching, Birko.Data.SQL |
+| **Birko.Data.SQL.Views** | Birko.Data.SQL.View, Birko.Data.Views |
 
 ## NoSQL Data Layer
 
@@ -194,6 +219,13 @@ Only 4 projitems-level import chains exist:
 | **Birko.Data.EventSourcing** | Birko.Data.Core, Birko.Data.Stores, Birko.Serialization |
 | **Birko.Data.Processors** | Birko.Helpers |
 | **Birko.Data.Localization** | Birko.Data.Core, Birko.Data.Stores |
+| **Birko.Data.Tagging** | Birko.Data.Core, Birko.Data.Stores |
+| **Birko.Data.Composition** | Birko.Data.Patterns, Birko.Data.Tenant, Birko.Time.Abstractions |
+| **Birko.Data.Views** | Birko.Data.Stores |
+| **Birko.Data.MongoDB.Views** | Birko.Data.MongoDB, Birko.Data.Views |
+| **Birko.Data.ElasticSearch.Views** | Birko.Data.ElasticSearch, Birko.Data.Views |
+| **Birko.Data.RavenDB.Views** | Birko.Data.RavenDB, Birko.Data.Views |
+| **Birko.Data.CosmosDB.Views** | Birko.Data.CosmosDB, Birko.Data.Views |
 
 ## Localization
 
@@ -270,6 +302,8 @@ Only 4 projitems-level import chains exist:
 | **Birko.Communication.OAuth** | Birko.Configuration |
 | **Birko.Communication.IR** | Birko.Communication, Birko.Communication.Hardware |
 | **Birko.Communication.NFC** | Birko.Communication |
+| **Birko.Communication.REST.Server** | Birko.Communication, Birko.Communication.REST |
+| **Birko.Communication.OAuth.Providers** | Birko.Communication.OAuth |
 
 ## Message Queue
 
@@ -315,11 +349,22 @@ Only 4 projitems-level import chains exist:
 | **Birko.Workflow.JSON** | Birko.Data.JSON, Birko.Serialization, Birko.Workflow |
 | **Birko.Workflow.CosmosDB** | Birko.Data.CosmosDB, Birko.Workflow |
 
+## AI / LLM
+
+| Project | Dependencies |
+|---------|-------------|
+| **Birko.AI.Contracts** | *(none)* |
+| **Birko.AI** | Birko.AI.Contracts, Birko.Contracts, Birko.Helpers |
+| **Birko.AI.Providers** | Birko.AI, Birko.AI.Contracts, Birko.Communication.OAuth |
+| **Birko.AI.Agents** | Birko.AI, Birko.AI.Contracts |
+| **Birko.AI.Resilience** | Birko.AI.Contracts |
+| **Birko.AI.Orchestration** | Birko.AI.Contracts |
+
 ---
 
 ## Statistics
 
-- **Total projects:** 110+ (including tests)
-- **Zero-dependency roots:** 13 projects
+- **Total projects:** 140+ (including tests)
+- **Zero-dependency roots:** 16 projects (added AI.Contracts, Models.Contracts, Random)
 - **Most depended-upon:** Birko.Data.Stores (~40 dependents), Birko.Data.Core (~35), Birko.Data.SQL (~15)
 - **Deepest chain:** Contracts → Configuration → Data.Stores → Data.Repositories → Data.SQL → SQL.ViewModel (6 levels)

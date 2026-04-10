@@ -53,6 +53,15 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 | Birko.BackgroundJobs.CosmosDB | Done | Cosmos DB persistent job queue |
 | Birko.Workflow.CosmosDB | Done | Cosmos DB workflow instance persistence |
 | Birko.Structures (expanded) | Done | Graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, interval tree, disjoint set, skip list, deque |
+| Birko.Data.Tagging | Done | ITaggable, Tag, EntityTag, ITagService, TagServiceBase — tenant-scoped, polymorphic junction |
+| Birko.Data.Views + platform impls | Done | Fluent view builder (ViewDefinitionBuilder, ViewMapRegistry, IViewStore, IViewManager) + SQL, MongoDB, ES, RavenDB, CosmosDB |
+| Birko.Data.Composition | Done | StoreWrapperBuilder — runtime decorator chains (Tenant/Default/SoftDelete/Audit/Timestamp) |
+| Birko.Data.SQL.Caching | Done | CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions |
+| Birko.Data.SQL.View.Migrations | Done | ViewSqlGenerator, ViewMigrationExtensions — bridge between SQL View DDL and Migration framework |
+| Birko.Communication.REST.Server | Done | HttpListener, routing, middleware, authentication |
+| Birko.Communication.OAuth.Providers | Done | GitHubOAuthProvider (pre-configured device flow) |
+| Birko.AI.* (Contracts, AI, Providers, Agents, Resilience, Orchestration) | Done | Multi-provider LLM framework, 11 providers, 22 agents, rate limiting, circuit breaker, cost tracking, task orchestration |
+| Birko.Web.* (Core, Components, Shell) | Done | Shadow DOM web components (38), reactive state, HTTP/SSE clients, hash router, app shell |
 
 ---
 
@@ -130,9 +139,9 @@ Add when corresponding providers are implemented:
 
 | Health Check | Service | Probe | Target Project |
 |-------------|---------|-------|---------------|
-| ~~WebSocketHealthCheck~~ | ~~WebSocket server~~ | ~~TCP + WS handshake~~ | ~~Birko.Health.Data~~ |
-| ~~SseHealthCheck~~ | ~~SSE endpoint~~ | ~~HTTP GET + event stream~~ | ~~Birko.Health.Data~~ |
-| ~~TcpHealthCheck~~ | ~~Generic TCP~~ | ~~TCP connect + latency~~ | ~~Birko.Health.Data~~ |
+| ~~WebSocketHealthCheck~~ | ~~WebSocket server~~ | ~~TCP + WS handshake~~ | ~~Birko.Health.Data~~ (Done) |
+| ~~SseHealthCheck~~ | ~~SSE endpoint~~ | ~~HTTP GET + event stream~~ | ~~Birko.Health.Data~~ (Done) |
+| ~~TcpHealthCheck~~ | ~~Generic TCP~~ | ~~TCP connect + latency~~ | ~~Birko.Health.Data~~ (Done) |
 | RabbitMqHealthCheck | RabbitMQ | HTTP management API | Birko.Health.Data |
 | KafkaHealthCheck | Apache Kafka | Metadata request | Birko.Health.Data |
 | AzureServiceBusHealthCheck | Azure Service Bus | REST API probe | Birko.Health.Azure |
@@ -336,6 +345,7 @@ RavenDBIndexManager implements IIndexManager with full lifecycle: create (from I
 ## Technical Debt
 
 - [x] **ILoadable\<T\> circular reference between Model and ViewModel** — Removed `ILoadable<TViewModel>` constraint from TModel. Models no longer know about ViewModels. ViewModel→Model mapping moved to abstract `MapToModel(TViewModel, TModel)` on repository base classes. All platform ViewModel repos made abstract. **Breaking change** — consumer repos must override `MapToModel`, consumer models can remove `ILoadable<TViewModel>` implementation.
+- [x] **Store lazy-init (auto-create tables)** — Refactored abstract store base classes to use template method pattern. CRUD methods auto-call `Init()`/`InitAsync()` before first use via double-checked locking. Concrete stores override `*Core` methods. Removed duplicated lazy-init from 12 Workflow + BackgroundJobs stores. **Breaking change** — concrete stores must rename overrides from `Create` → `CreateCore`, `CreateAsync` → `CreateCoreAsync`, etc.
 - [ ] **MqttExtensions.cs** — MQTT v5 features (topic aliases, user properties). Low priority unless high-frequency IoT sensors need bandwidth optimization.
 
 ---
@@ -346,9 +356,9 @@ See [docs/consumers.md](docs/consumers.md) for detailed per-project breakdown.
 
 | Consumer | Birko Projects | Primary Data Store |
 |----------|---------------|-------------------|
-| Symbio | 54 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES |
-| DraCode | 27 | SQLite |
-| Affiliate | 23 | Elasticsearch, InfluxDB |
+| Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES |
+| DraCode | 26 | SQLite |
+| Affiliate | 22 | Elasticsearch, InfluxDB |
 | FisData.Stock | 0 | *(inactive — models extracted to Birko.Models.*)* |
 
 ---
@@ -363,4 +373,4 @@ For implementation details, refer to:
 
 ---
 
-**Last Updated:** 2026-03-23
+**Last Updated:** 2026-04-09

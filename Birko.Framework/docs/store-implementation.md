@@ -95,6 +95,20 @@ var updates = new PropertyUpdate<Product>()
 store.Update(x => x.Price > 100, updates);
 ```
 
+## Lazy-Init (Template Method Pattern)
+
+All abstract store base classes use lazy-init: public CRUD methods automatically call `Init()`/`InitAsync()` before the first operation. Concrete stores override `protected *Core` methods — never the public methods directly.
+
+```
+Public API (base class):     CreateAsync(data) → EnsureInitializedAsync() → CreateCoreAsync(data)
+Concrete store overrides:    protected override CreateCoreAsync(data) { /* your implementation */ }
+```
+
+- **Thread-safe**: Uses `SemaphoreSlim` (async) / `lock` (sync) with double-checked pattern
+- **Idempotent**: `Init()`/`InitAsync()` can be called explicitly or never — the guard handles both
+- **Destroy not affected**: `Destroy()`/`DestroyAsync()` remains explicit, not lazy
+- No need to call `Init()` before using a store — it happens automatically
+
 ## Implementation Options
 
 ### Option 1: Non-SQL Store (Sync)
@@ -105,9 +119,9 @@ using Birko.Data.Models;
 
 public class MyCustomStore<T> : AbstractStore<T> where T : AbstractModel
 {
-    public override void Init()
+    protected override void InitCore()
     {
-        // Initialize storage backend
+        // Initialize storage backend (called once automatically before first CRUD)
     }
 
     public override void Destroy()
@@ -115,7 +129,7 @@ public class MyCustomStore<T> : AbstractStore<T> where T : AbstractModel
         // Clean up / remove data
     }
 
-    public override Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         storeDelegate?.Invoke(data);
         data.Id ??= Guid.NewGuid();
@@ -123,23 +137,23 @@ public class MyCustomStore<T> : AbstractStore<T> where T : AbstractModel
         return data.Id.Value;
     }
 
-    public override T? Read(Expression<Func<T, bool>>? filter = null)
+    protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
     {
         // Read with optional filter expression
     }
 
-    public override void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         storeDelegate?.Invoke(data);
         // Update persisted data
     }
 
-    public override void Delete(T data)
+    protected override void DeleteCore(T data)
     {
         // Soft-delete or mark as deleted
     }
 
-    public override long Count(Expression<Func<T, bool>>? filter = null)
+    protected override long CountCore(Expression<Func<T, bool>>? filter = null)
     {
         // Return count matching filter
     }
@@ -151,9 +165,9 @@ public class MyCustomStore<T> : AbstractStore<T> where T : AbstractModel
 ```csharp
 public class MyCustomAsyncStore<T> : AbstractAsyncStore<T> where T : AbstractModel
 {
-    public override async Task InitAsync(CancellationToken ct = default)
+    protected override async Task InitCoreAsync(CancellationToken ct = default)
     {
-        // Initialize storage backend
+        // Initialize storage backend (called once automatically before first CRUD)
     }
 
     public override async Task DestroyAsync(CancellationToken ct = default)
@@ -161,7 +175,7 @@ public class MyCustomAsyncStore<T> : AbstractAsyncStore<T> where T : AbstractMod
         // Clean up
     }
 
-    public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null,
+    protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null,
                                                    CancellationToken ct = default)
     {
         processDelegate?.Invoke(data);
@@ -170,25 +184,25 @@ public class MyCustomAsyncStore<T> : AbstractAsyncStore<T> where T : AbstractMod
         return data.Id.Value;
     }
 
-    public override async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null,
+    protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null,
                                               CancellationToken ct = default)
     {
         // Async read with filter
     }
 
-    public override async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null,
+    protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null,
                                             CancellationToken ct = default)
     {
         processDelegate?.Invoke(data);
         // Async update
     }
 
-    public override async Task DeleteAsync(T data, CancellationToken ct = default)
+    protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
     {
         // Async delete
     }
 
-    public override async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null,
+    protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null,
                                                  CancellationToken ct = default)
     {
         // Async count
@@ -229,31 +243,26 @@ SQL store generic constraints: `where DB : AbstractConnector, where T : Abstract
 ```csharp
 public class MyBulkStore<T> : AbstractBulkStore<T> where T : AbstractModel
 {
-    // Inherits all IStore<T> methods from parent
+    // Override *Core methods (base handles lazy-init + public API)
+    // Also override InitCore, CreateCore, ReadCore(filter), UpdateCore, DeleteCore, CountCore from AbstractStore
 
-    // Additional bulk methods:
-    public override IEnumerable<T> Read()
-    {
-        // Read all items
-    }
-
-    public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null,
+    protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null,
                                          OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
         // Read with filter, ordering, and paging
     }
 
-    public override void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         // Bulk create
     }
 
-    public override void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         // Bulk update
     }
 
-    public override void Delete(IEnumerable<T> data)
+    protected override void DeleteCore(IEnumerable<T> data)
     {
         // Bulk delete
     }

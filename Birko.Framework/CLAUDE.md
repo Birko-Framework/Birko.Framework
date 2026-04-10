@@ -8,11 +8,13 @@ See also:
 
 ## Architecture
 
-### Store Hierarchy
+### Store Hierarchy (Template Method Pattern)
 ```
 AbstractStore -> AbstractBulkStore (sync)
 AbstractAsyncStore -> AbstractAsyncBulkStore (async)
 ```
+
+Stores use lazy-init: CRUD methods auto-call `Init()`/`InitAsync()` before first use (via `EnsureInitialized`/`EnsureInitializedAsync` with double-checked locking). Concrete stores override `*Core` methods (e.g., `CreateCoreAsync` instead of `CreateAsync`). Public methods are `virtual` on the base class.
 
 ### SQL Stores
 ```
@@ -85,6 +87,7 @@ When using Birko.Framework projects in your solution, create a single aggregator
 - Bulk stores support filter-based Update/Delete: `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, `Delete(filter)`
 - Use `PropertyUpdate<T>` for native platform operations (SQL SET, MongoDB $set, ES UpdateByQuery); use `Action<T>` for complex mutations
 - New platform stores should override `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` for native performance
+- Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), NOT the public CRUD methods. The base class handles lazy-init in the public wrapper
 - Use protected setters for properties that derived classes need to modify
 - RemoteSettings should be passed via base.SetSettings(), not constructed inline
 
@@ -95,6 +98,16 @@ When using Birko.Framework projects in your solution, create a single aggregator
 ## Important Notes
 
 ### Recent Updates
+
+#### Store Lazy-Init with Template Method Pattern (2026-04-10)
+Refactored all abstract store base classes to auto-initialize on first CRUD operation:
+- **AbstractStore/AbstractAsyncStore** — Public CRUD methods (`Create`, `Read`, `Update`, `Delete`, `Count`) call `EnsureInitialized`/`EnsureInitializedAsync` (double-checked locking, thread-safe) then delegate to `protected abstract *Core` methods
+- **AbstractBulkStore/AbstractAsyncBulkStore** — Same pattern for bulk methods (`Create(IEnumerable)`, `Read(filter,orderBy,limit,offset)`, `Update(IEnumerable)`, `Delete(IEnumerable)`)
+- **SQL Bulk Stores** — `DataBaseBulkStore`/`AsyncDataBaseBulkStore` also use template method with `protected virtual *Core` methods
+- **Breaking change** — Concrete stores must override `*Core` methods instead of public CRUD methods (e.g., `CreateCoreAsync` instead of `CreateAsync`)
+- **Cleanup** — Removed duplicate `_initialized`/`EnsureInitializedAsync` boilerplate from 12 Workflow + BackgroundJobs stores (~150 lines removed)
+- `Init()`/`InitAsync()` is now idempotent — safe to call multiple times or never (auto-called on first CRUD)
+- `Destroy()`/`DestroyAsync()` not affected — still explicit
 
 #### AI/LLM Infrastructure (2026-03-31)
 Extracted reusable AI agent framework from DraCode into Birko.AI.* projects:

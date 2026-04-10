@@ -5,7 +5,7 @@ A modular .NET framework providing data access, communication, and model infrast
 ## Features
 
 - Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, Azure Cosmos DB)
-- Sync and async store/repository abstractions with bulk operation support
+- Sync and async store/repository abstractions with bulk operation support and lazy-init (auto-creates tables/indexes on first use)
 - ViewModel layer with model-to-viewmodel mapping
 - Database migrations framework
 - Data synchronization across stores
@@ -37,7 +37,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
 - Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
-- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 31 components, app shell)
+- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 38 components, app shell)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
 - AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
@@ -356,6 +356,7 @@ dotnet test
 - [Time Guide](docs/time.md) (Business calendar, holidays, working hours, time zones)
 - [Random Guide](docs/random.md) (RNG providers, distributions, sequences, noise)
 - [Health Guide](docs/health.md) (Health checks, runners, platform probes)
+- [AI / LLM Guide](docs/ai.md) (Multi-provider LLM, agents, orchestration, resilience)
 - [Dependencies Guide](docs/dependencies.md)
 - [Consumers Guide](docs/consumers.md)
 - [TODO / Roadmap](TODO.md)

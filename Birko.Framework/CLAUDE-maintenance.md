@@ -59,7 +59,13 @@ Existing folder groups:
 - **Rules/** — Birko.Rules
 - **Validation/** — Birko.Validation
 - **Time/** — Birko.Time.Abstractions, Birko.Time
-- **Workflow/** — Birko.Workflow, Birko.Workflow.SQL/ElasticSearch/MongoDB/RavenDB/JSON
+- **Workflow/** — Birko.Workflow, Birko.Workflow.SQL/ElasticSearch/MongoDB/RavenDB/JSON/CosmosDB
+- **AI/** — Birko.AI.Contracts, Birko.AI, Birko.AI.Providers, Birko.AI.Agents, Birko.AI.Resilience, Birko.AI.Orchestration
+- **Data.Views/** — Birko.Data.Views, Birko.Data.SQL.Views, Birko.Data.MongoDB.Views, Birko.Data.ElasticSearch.Views, Birko.Data.RavenDB.Views, Birko.Data.CosmosDB.Views
+- **EventBus/** — Birko.EventBus, Birko.EventBus.MessageQueue, Birko.EventBus.Outbox, Birko.EventBus.EventSourcing
+- **Localization/** — Birko.Localization, Birko.Localization.Data, Birko.Data.Localization
+- **Messaging/** — Birko.Messaging, Birko.Messaging.Razor
+- **Web/** — Birko.Web.Core, Birko.Web.Components, Birko.Web.Shell
 
 ## Test Requirements
 Every new public functionality must have corresponding unit tests:
