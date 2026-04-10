@@ -115,7 +115,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Init()
+    protected override void InitCore()
     {
         EnsureDatabaseExists();
     }
@@ -137,7 +137,7 @@ public class RavenDBStore<T>
     #region Core CRUD Operations - Single Item
 
     /// <inheritdoc />
-    public override Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (_documentStore == null || data == null) return Guid.Empty;
 
@@ -186,7 +186,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override T? Read(Expression<Func<T, bool>>? filter = null)
+    protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
     {
         if (_documentStore == null) return null;
 
@@ -210,7 +210,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -240,7 +240,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Delete(T data)
+    protected override void DeleteCore(T data)
     {
         if (_documentStore == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -260,7 +260,7 @@ public class RavenDBStore<T>
     #region Query and Count Operations
 
     /// <inheritdoc />
-    public override long Count(Expression<Func<T, bool>>? filter = null)
+    protected override long CountCore(Expression<Func<T, bool>>? filter = null)
     {
         if (_documentStore == null) return 0;
 
@@ -288,7 +288,7 @@ public class RavenDBStore<T>
     #region Core CRUD Operations - Bulk
 
     /// <inheritdoc />
-    public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+    protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
         if (_documentStore == null) return Enumerable.Empty<T>();
 
@@ -347,7 +347,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (_documentStore == null || data == null) return;
 
@@ -377,7 +377,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+    protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         if (_documentStore == null || data == null) return;
 
@@ -417,7 +417,7 @@ public class RavenDBStore<T>
     }
 
     /// <inheritdoc />
-    public override void Delete(IEnumerable<T> data)
+    protected override void DeleteCore(IEnumerable<T> data)
     {
         if (_documentStore == null || data == null) return;
 
