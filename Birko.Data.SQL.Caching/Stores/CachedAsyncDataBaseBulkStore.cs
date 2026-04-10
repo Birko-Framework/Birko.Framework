@@ -41,11 +41,11 @@ namespace Birko.Data.SQL.Stores
         #region Cached Read Operations
 
         /// <inheritdoc />
-        public override async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             if (!_options.Enabled)
             {
-                return await base.ReadAsync(filter, ct);
+                return await base.ReadCoreAsync(filter, ct);
             }
 
             var filterString = filter?.ToString();
@@ -57,7 +57,7 @@ namespace Birko.Data.SQL.Stores
                 return cached.Value;
             }
 
-            var result = await base.ReadAsync(filter, ct);
+            var result = await base.ReadCoreAsync(filter, ct);
 
             await _cache.SetAsync(key, result, CreateEntryOptions(), ct);
 
@@ -65,7 +65,7 @@ namespace Birko.Data.SQL.Stores
         }
 
         /// <inheritdoc />
-        public override async Task<IEnumerable<T>> ReadAsync(
+        protected override async Task<IEnumerable<T>> ReadCoreAsync(
             Expression<Func<T, bool>>? filter = null,
             OrderBy<T>? orderBy = null,
             int? limit = null,
@@ -74,7 +74,7 @@ namespace Birko.Data.SQL.Stores
         {
             if (!_options.Enabled)
             {
-                return await base.ReadAsync(filter, orderBy, limit, offset, ct);
+                return await base.ReadCoreAsync(filter, orderBy, limit, offset, ct);
             }
 
             var filterString = filter?.ToString();
@@ -89,17 +89,11 @@ namespace Birko.Data.SQL.Stores
                 return cached.Value ?? Enumerable.Empty<T>();
             }
 
-            var result = (await base.ReadAsync(filter, orderBy, limit, offset, ct)).ToList();
+            var result = (await base.ReadCoreAsync(filter, orderBy, limit, offset, ct)).ToList();
 
             await _cache.SetAsync(key, result, CreateEntryOptions(), ct);
 
             return result;
-        }
-
-        /// <inheritdoc />
-        public override async Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
-        {
-            return await ReadAsync(null, null, null, null, ct);
         }
 
         #endregion
@@ -107,45 +101,45 @@ namespace Birko.Data.SQL.Stores
         #region Write Operations with Cache Invalidation
 
         /// <inheritdoc />
-        public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            var result = await base.CreateAsync(data, processDelegate, ct);
+            var result = await base.CreateCoreAsync(data, processDelegate, ct);
             await InvalidateCacheAsync(ct);
             return result;
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
-            await base.UpdateAsync(data, processDelegate, ct);
+            await base.UpdateCoreAsync(data, processDelegate, ct);
             await InvalidateCacheAsync(ct);
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(T data, CancellationToken ct = default)
+        protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
-            await base.DeleteAsync(data, ct);
+            await base.DeleteCoreAsync(data, ct);
             await InvalidateCacheAsync(ct);
         }
 
         /// <inheritdoc />
-        public override async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
-            await base.CreateAsync(data, storeDelegate, ct);
+            await base.CreateCoreAsync(data, storeDelegate, ct);
             await InvalidateCacheAsync(ct);
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
-            await base.UpdateAsync(data, storeDelegate, ct);
+            await base.UpdateCoreAsync(data, storeDelegate, ct);
             await InvalidateCacheAsync(ct);
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
+        protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
-            await base.DeleteAsync(data, ct);
+            await base.DeleteCoreAsync(data, ct);
             await InvalidateCacheAsync(ct);
         }
 
