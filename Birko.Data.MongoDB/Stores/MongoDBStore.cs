@@ -81,7 +81,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Init()
+        protected override void InitCore()
         {
             // MongoDB is schema-less, so no initialization needed
             // Collections are created automatically on first write
@@ -112,7 +112,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override T? Read(Expression<Func<T, bool>>? filter = null)
+        protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
         {
             if (Collection == null) return null;
 
@@ -125,7 +125,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override long Count(Expression<Func<T, bool>>? filter = null)
+        protected override long CountCore(Expression<Func<T, bool>>? filter = null)
         {
             if (Collection == null) return 0;
 
@@ -138,7 +138,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override Guid Create(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override Guid CreateCore(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Collection == null || data == null) return Guid.Empty;
 
@@ -154,7 +154,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -168,7 +168,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(T data)
+        protected override void DeleteCore(T data)
         {
             if (Collection == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -182,7 +182,7 @@ namespace Birko.Data.MongoDB.Stores
         #region Bulk Operations (IBulkStore<T>)
 
         /// <inheritdoc />
-        public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+        protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
             if (Collection == null) return Enumerable.Empty<T>();
 
@@ -211,7 +211,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Create(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void CreateCore(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Collection == null || data == null) return;
 
@@ -231,7 +231,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Collection == null || data == null) return;
 
@@ -256,7 +256,7 @@ namespace Birko.Data.MongoDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(IEnumerable<T> data)
+        protected override void DeleteCore(IEnumerable<T> data)
         {
             if (Collection == null || data == null) return;
 
