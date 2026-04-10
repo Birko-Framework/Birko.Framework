@@ -13,7 +13,7 @@ namespace Birko.Data.SQL.Tests.DataBase
         {
             Expression<Func<DateModel, object>> expr = (x) => 3;
             var parameters = new Dictionary<string, object>();
-            Assert.Equal("@Constat0",  Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal("@Const0",  Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
         }
 
         [Fact]
@@ -45,7 +45,7 @@ namespace Birko.Data.SQL.Tests.DataBase
         {
             Expression<Func<DateModel, object>> expr = (x) => DateTime.UtcNow;
             var parameters = new Dictionary<string, object>();
-            Assert.Equal("@Constat0", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters));
+            Assert.Equal("@Const0", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters));
         }
 
         [Fact]
@@ -61,8 +61,8 @@ namespace Birko.Data.SQL.Tests.DataBase
         {
             Expression<Func<DateModel, object>> expr = (x) => x.Count + 3;
             var parameters = new Dictionary<string, object>();
-            Assert.Equal("(DateModels.Count + @Constat0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
-            Assert.Equal(3, parameters["@Constat0"]);
+            Assert.Equal("(DateModels.Count + @Const0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal(3, parameters["@Const0"]);
         }
 
         [Fact]
@@ -70,8 +70,8 @@ namespace Birko.Data.SQL.Tests.DataBase
         {
             Expression<Func<DateModel, object>> expr = (x) => x.Count - 3;
             var parameters = new Dictionary<string, object>();
-            Assert.Equal("(DateModels.Count - @Constat0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
-            Assert.Equal(3, parameters["@Constat0"]);
+            Assert.Equal("(DateModels.Count - @Const0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal(3, parameters["@Const0"]);
         }
 
         [Fact]
@@ -79,8 +79,8 @@ namespace Birko.Data.SQL.Tests.DataBase
         {
             Expression<Func<DateModel, object>> expr = (x) => x.Count - int.Parse("3");
             var parameters = new Dictionary<string, object>();
-            Assert.Equal("(DateModels.Count - @Constat0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
-            Assert.Equal(3, parameters["@Constat0"]);
+            Assert.Equal("(DateModels.Count - @Const0)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal(3, parameters["@Const0"]);
         }
 
         [Fact]
@@ -88,9 +88,9 @@ namespace Birko.Data.SQL.Tests.DataBase
         {
             Expression<Func<DateModel, object>> expr = (x) => x.Text.Replace("original", "replace");
             var parameters = new Dictionary<string, object>();
-            Assert.Equal("REPLACE(DateModels.Text, @Constat0, @Constat1)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
-            Assert.Equal("original", parameters["@Constat0"]);
-            Assert.Equal("replace", parameters["@Constat1"]);
+            Assert.Equal("REPLACE(DateModels.Text, @Const0, @Const1)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+            Assert.Equal("original", parameters["@Const0"]);
+            Assert.Equal("replace", parameters["@Const1"]);
         }
     }
 }
