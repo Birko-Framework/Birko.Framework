@@ -22,7 +22,6 @@ namespace Birko.Workflow.SQL
         where TData : class
     {
         private readonly AsyncDataBaseBulkStore<DB, WorkflowInstanceModel> _store;
-        private bool _initialized;
 
         public SqlWorkflowInstanceStore(PasswordSettings settings)
         {
@@ -39,8 +38,6 @@ namespace Birko.Workflow.SQL
 
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
             if (existing != null)
             {
@@ -56,16 +53,12 @@ namespace Birko.Workflow.SQL
 
         public async Task<WorkflowInstance<TData>?> LoadAsync(Guid instanceId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
             return model?.ToInstance<TData>();
         }
 
         public async Task DeleteAsync(Guid instanceId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
             if (model != null)
             {
@@ -75,8 +68,6 @@ namespace Birko.Workflow.SQL
 
         public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var models = await _store.ReadAsync(
                 filter: m => m.CurrentState == state,
                 orderBy: OrderBy<WorkflowInstanceModel>.ByDescending(m => m.UpdatedAt),
@@ -89,8 +80,6 @@ namespace Birko.Workflow.SQL
 
         public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var statusInt = (int)status;
             var models = await _store.ReadAsync(
                 filter: m => m.Status == statusInt,
@@ -104,8 +93,6 @@ namespace Birko.Workflow.SQL
 
         public async Task<IEnumerable<WorkflowInstance<TData>>> FindByWorkflowNameAsync(string workflowName, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var models = await _store.ReadAsync(
                 filter: m => m.WorkflowName == workflowName,
                 orderBy: OrderBy<WorkflowInstanceModel>.ByDescending(m => m.UpdatedAt),
@@ -114,14 +101,6 @@ namespace Birko.Workflow.SQL
             ).ConfigureAwait(false);
 
             return models.Select(m => m.ToInstance<TData>());
-        }
-
-        private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
-        {
-            if (_initialized) return;
-
-            await _store.InitAsync(cancellationToken).ConfigureAwait(false);
-            _initialized = true;
         }
     }
 }
