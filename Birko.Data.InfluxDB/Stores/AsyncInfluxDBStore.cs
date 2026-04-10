@@ -99,7 +99,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             if (Client == null || _settings == null)
             {
@@ -138,7 +138,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             if (Client == null || _settings == null)
             {
@@ -184,7 +184,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task<Guid> CreateAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        protected override async Task<Guid> CreateCoreAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             if (Client == null || _settings == null || data == null)
             {
@@ -212,7 +212,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+        protected override async Task UpdateCoreAsync(T data, Data.Stores.StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
             {
@@ -237,7 +237,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(T data, CancellationToken ct = default)
+        protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
             if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty)
             {
@@ -288,7 +288,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task InitAsync(CancellationToken ct = default)
+        protected override async Task InitCoreAsync(CancellationToken ct = default)
         {
             if (Client == null || _settings == null)
             {
@@ -342,7 +342,7 @@ namespace Birko.Data.InfluxDB.Stores
         #region Bulk Operations (IAsyncBulkStore<T>)
 
         /// <inheritdoc />
-        public override async Task<IEnumerable<T>> ReadAsync(
+        protected override async Task<IEnumerable<T>> ReadCoreAsync(
             Expression<Func<T, bool>>? filter = null,
             Data.Stores.OrderBy<T>? orderBy = null,
             int? limit = null,
@@ -416,7 +416,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task CreateAsync(
+        protected override async Task CreateCoreAsync(
             IEnumerable<T> data,
             Data.Stores.StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default)
@@ -455,7 +455,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(
+        protected override async Task UpdateCoreAsync(
             IEnumerable<T> data,
             Data.Stores.StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default)
@@ -493,7 +493,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
+        protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
             if (Client == null || _settings == null || data == null)
             {

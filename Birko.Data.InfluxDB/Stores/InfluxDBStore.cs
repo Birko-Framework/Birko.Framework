@@ -61,7 +61,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Init()
+        protected override void InitCore()
         {
             if (Client == null || _settings == null) return;
 
@@ -138,7 +138,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override T? Read(Expression<Func<T, bool>>? filter = null)
+        protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
         {
             if (Client == null || _settings == null) return null;
 
@@ -174,7 +174,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override long Count(Expression<Func<T, bool>>? filter = null)
+        protected override long CountCore(Expression<Func<T, bool>>? filter = null)
         {
             if (Client == null || _settings == null) return 0;
 
@@ -216,7 +216,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override Guid Create(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override Guid CreateCore(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Client == null || _settings == null || data == null) return Guid.Empty;
 
@@ -243,7 +243,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(T data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -267,7 +267,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(T data)
+        protected override void DeleteCore(T data)
         {
             if (Client == null || _settings == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -294,7 +294,7 @@ namespace Birko.Data.InfluxDB.Stores
         #region Bulk Operations (IBulkStore<T>)
 
         /// <inheritdoc />
-        public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+        protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
             if (Client == null || _settings == null) return Enumerable.Empty<T>();
 
@@ -360,7 +360,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Create(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void CreateCore(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Client == null || _settings == null || data == null) return;
 
@@ -392,7 +392,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Client == null || _settings == null || data == null) return;
 
@@ -423,7 +423,7 @@ namespace Birko.Data.InfluxDB.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(IEnumerable<T> data)
+        protected override void DeleteCore(IEnumerable<T> data)
         {
             if (Client == null || _settings == null || data == null) return;
 
