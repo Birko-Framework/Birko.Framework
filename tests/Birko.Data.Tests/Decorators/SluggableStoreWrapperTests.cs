@@ -27,42 +27,36 @@ public class SluggableStoreWrapperTests
     {
         private readonly Dictionary<Guid, TestModel> _data = new();
 
-        public override long Count(Expression<Func<TestModel, bool>>? filter = null)
+        protected override long CountCore(Expression<Func<TestModel, bool>>? filter = null)
         {
             if (filter == null) return _data.Count;
             return _data.Values.AsQueryable().Count(filter);
         }
 
         public override TestModel? Read(Guid guid) => _data.GetValueOrDefault(guid);
-        public override TestModel? Read(Expression<Func<TestModel, bool>>? filter = null) =>
+        protected override TestModel? ReadCore(Expression<Func<TestModel, bool>>? filter = null) =>
             filter == null ? _data.Values.FirstOrDefault() : _data.Values.AsQueryable().FirstOrDefault(filter);
 
-        public override Guid Create(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null)
+        protected override Guid CreateCore(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null)
         {
             data.Guid ??= Guid.NewGuid();
             _data[data.Guid.Value] = data;
             return data.Guid.Value;
         }
 
-        public override void Update(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null)
+        protected override void UpdateCore(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null)
         {
             if (data.Guid.HasValue) _data[data.Guid.Value] = data;
         }
 
-        public override void Delete(TestModel data)
+        protected override void DeleteCore(TestModel data)
         {
             if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
         }
 
-        public override void Init() { }
+        protected override void InitCore() { }
         public override void Destroy() { }
         public override TestModel CreateInstance() => new();
-        public override Guid Save(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null)
-        {
-            if (data.Guid == null || data.Guid == Guid.Empty) return Create(data, storeDelegate);
-            Update(data, storeDelegate);
-            return data.Guid.Value;
-        }
     }
 
     #endregion

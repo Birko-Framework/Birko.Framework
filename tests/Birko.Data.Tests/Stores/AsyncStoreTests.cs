@@ -29,7 +29,7 @@ namespace Birko.Data.Tests.Stores
         {
             private readonly Dictionary<Guid, TestModel> _data = new();
 
-            public override Task<TestModel?> ReadAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
+            protected override Task<TestModel?> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
             {
                 if (filter == null)
                 {
@@ -39,13 +39,13 @@ namespace Birko.Data.Tests.Stores
                 return Task.FromResult<TestModel?>(_data.Values.FirstOrDefault(compiled));
             }
 
-            public override Task<long> CountAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
+            protected override Task<long> CountCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
             {
                 long count = _data.Count;
                 return Task.FromResult(count);
             }
 
-            public override Task<Guid> CreateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
+            protected override Task<Guid> CreateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
             {
                 if (data == null) return Task.FromResult(Guid.Empty);
 
@@ -55,7 +55,7 @@ namespace Birko.Data.Tests.Stores
                 return Task.FromResult(data.Guid.Value);
             }
 
-            public override Task UpdateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
+            protected override Task UpdateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
             {
                 if (data?.Guid != null && _data.ContainsKey(data.Guid.Value))
                 {
@@ -65,7 +65,7 @@ namespace Birko.Data.Tests.Stores
                 return Task.CompletedTask;
             }
 
-            public override Task DeleteAsync(TestModel data, CancellationToken ct = default)
+            protected override Task DeleteCoreAsync(TestModel data, CancellationToken ct = default)
             {
                 if (data?.Guid != null && _data.ContainsKey(data.Guid.Value))
                 {
@@ -74,7 +74,7 @@ namespace Birko.Data.Tests.Stores
                 return Task.CompletedTask;
             }
 
-            public override Task InitAsync(CancellationToken ct = default)
+            protected override Task InitCoreAsync(CancellationToken ct = default)
             {
                 return Task.CompletedTask;
             }

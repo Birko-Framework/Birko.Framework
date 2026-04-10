@@ -30,13 +30,13 @@ public class AsyncPagedRepositoryWrapperTests
 
         public void Seed(IEnumerable<TestModel> items) => _data.AddRange(items);
 
-        public override Task<long> CountAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
+        protected override Task<long> CountCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
         {
             long count = filter == null ? _data.Count : _data.AsQueryable().Count(filter);
             return Task.FromResult(count);
         }
 
-        public override Task<IEnumerable<TestModel>> ReadAsync(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
+        protected override Task<IEnumerable<TestModel>> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
         {
             IEnumerable<TestModel> query = _data;
             if (filter != null) query = query.AsQueryable().Where(filter);
@@ -57,17 +57,16 @@ public class AsyncPagedRepositoryWrapperTests
 
         public override Task<IEnumerable<TestModel>> ReadAsync(CancellationToken ct = default) => ReadAsync(null, null, null, null, ct);
         public override Task<TestModel?> ReadAsync(Guid guid, CancellationToken ct = default) => Task.FromResult(_data.FirstOrDefault(x => x.Guid == guid));
-        public override Task<TestModel?> ReadAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) => Task.FromResult(filter == null ? _data.FirstOrDefault() : _data.AsQueryable().FirstOrDefault(filter));
-        public override Task<Guid> CreateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default) { _data.Add(data); return Task.FromResult(data.Guid ?? Guid.Empty); }
-        public override Task CreateAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default) { _data.AddRange(data); return Task.CompletedTask; }
-        public override Task UpdateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default) => Task.CompletedTask;
-        public override Task UpdateAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default) => Task.CompletedTask;
-        public override Task DeleteAsync(TestModel data, CancellationToken ct = default) { _data.Remove(data); return Task.CompletedTask; }
-        public override Task DeleteAsync(IEnumerable<TestModel> data, CancellationToken ct = default) { foreach (var d in data) _data.Remove(d); return Task.CompletedTask; }
-        public override Task InitAsync(CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task<TestModel?> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) => Task.FromResult(filter == null ? _data.FirstOrDefault() : _data.AsQueryable().FirstOrDefault(filter));
+        protected override Task<Guid> CreateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default) { _data.Add(data); return Task.FromResult(data.Guid ?? Guid.Empty); }
+        protected override Task CreateCoreAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default) { _data.AddRange(data); return Task.CompletedTask; }
+        protected override Task UpdateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task UpdateCoreAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task DeleteCoreAsync(TestModel data, CancellationToken ct = default) { _data.Remove(data); return Task.CompletedTask; }
+        protected override Task DeleteCoreAsync(IEnumerable<TestModel> data, CancellationToken ct = default) { foreach (var d in data) _data.Remove(d); return Task.CompletedTask; }
+        protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override TestModel CreateInstance() => new();
-        public override Task<Guid> SaveAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default) => CreateAsync(data, processDelegate, ct);
     }
 
     private class TestAsyncBulkRepository : AbstractAsyncBulkRepository<TestModel>

@@ -30,13 +30,13 @@ public class PagedRepositoryWrapperTests
 
         public void Seed(IEnumerable<TestModel> items) => _data.AddRange(items);
 
-        public override long Count(Expression<Func<TestModel, bool>>? filter = null)
+        protected override long CountCore(Expression<Func<TestModel, bool>>? filter = null)
         {
             if (filter == null) return _data.Count;
             return _data.AsQueryable().Count(filter);
         }
 
-        public override IEnumerable<TestModel> Read(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null)
+        protected override IEnumerable<TestModel> ReadCore(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null)
         {
             IEnumerable<TestModel> query = _data;
             if (filter != null) query = query.AsQueryable().Where(filter);
@@ -56,17 +56,16 @@ public class PagedRepositoryWrapperTests
         }
 
         public override TestModel? Read(Guid guid) => _data.FirstOrDefault(x => x.Guid == guid);
-        public override TestModel? Read(Expression<Func<TestModel, bool>>? filter = null) => filter == null ? _data.FirstOrDefault() : _data.AsQueryable().FirstOrDefault(filter);
-        public override Guid Create(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null) { _data.Add(data); return data.Guid ?? Guid.Empty; }
-        public override void Create(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null) => _data.AddRange(data);
-        public override void Update(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null) { }
-        public override void Update(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null) { }
-        public override void Delete(TestModel data) => _data.Remove(data);
-        public override void Delete(IEnumerable<TestModel> data) { foreach (var d in data) _data.Remove(d); }
-        public override void Init() { }
+        protected override TestModel? ReadCore(Expression<Func<TestModel, bool>>? filter = null) => filter == null ? _data.FirstOrDefault() : _data.AsQueryable().FirstOrDefault(filter);
+        protected override Guid CreateCore(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null) { _data.Add(data); return data.Guid ?? Guid.Empty; }
+        protected override void CreateCore(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null) => _data.AddRange(data);
+        protected override void UpdateCore(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null) { }
+        protected override void UpdateCore(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null) { }
+        protected override void DeleteCore(TestModel data) => _data.Remove(data);
+        protected override void DeleteCore(IEnumerable<TestModel> data) { foreach (var d in data) _data.Remove(d); }
+        protected override void InitCore() { }
         public override void Destroy() { }
         public override TestModel CreateInstance() => new();
-        public override Guid Save(TestModel data, StoreDataDelegate<TestModel>? storeDelegate = null) => Create(data, storeDelegate);
     }
 
     private class TestBulkRepository : AbstractBulkRepository<TestModel>

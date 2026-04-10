@@ -33,35 +33,35 @@ public class AsyncTimestampStoreWrapperTests
         public override Task<TestModel?> ReadAsync(Guid guid, CancellationToken ct = default) =>
             Task.FromResult<TestModel?>(_data.GetValueOrDefault(guid));
 
-        public override Task<TestModel?> ReadAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
+        protected override Task<TestModel?> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
         {
             if (filter == null) return Task.FromResult<TestModel?>(_data.Values.FirstOrDefault());
             return Task.FromResult<TestModel?>(_data.Values.AsQueryable().FirstOrDefault(filter));
         }
 
-        public override Task<long> CountAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) =>
+        protected override Task<long> CountCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) =>
             Task.FromResult((long)_data.Count);
 
-        public override Task<Guid> CreateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
+        protected override Task<Guid> CreateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
         {
             data.Guid ??= Guid.NewGuid();
             _data[data.Guid.Value] = data;
             return Task.FromResult(data.Guid.Value);
         }
 
-        public override Task UpdateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
+        protected override Task UpdateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
         {
             if (data.Guid.HasValue) _data[data.Guid.Value] = data;
             return Task.CompletedTask;
         }
 
-        public override Task DeleteAsync(TestModel data, CancellationToken ct = default)
+        protected override Task DeleteCoreAsync(TestModel data, CancellationToken ct = default)
         {
             if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
             return Task.CompletedTask;
         }
 
-        public override Task InitAsync(CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override TestModel CreateInstance() => new();
     }
