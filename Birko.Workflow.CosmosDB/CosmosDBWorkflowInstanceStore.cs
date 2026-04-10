@@ -21,7 +21,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
 {
     private readonly AsyncCosmosDBStore<CosmosWorkflowInstanceModel> _store;
     private readonly string _workflowName;
-    private bool _initialized;
 
     /// <summary>
     /// Gets the underlying store for transaction context access.
@@ -45,23 +44,11 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     {
         _workflowName = workflowName ?? throw new ArgumentNullException(nameof(workflowName));
         _store = store ?? throw new ArgumentNullException(nameof(store));
-        _initialized = true;
-    }
-
-    private async Task EnsureInitializedAsync(CancellationToken ct)
-    {
-        if (!_initialized)
-        {
-            await _store.InitAsync(ct).ConfigureAwait(false);
-            _initialized = true;
-        }
     }
 
     /// <inheritdoc />
     public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken ct = default)
     {
-        await EnsureInitializedAsync(ct).ConfigureAwait(false);
-
         var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, ct).ConfigureAwait(false);
 
         if (existing != null)
@@ -81,8 +68,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <inheritdoc />
     public async Task<WorkflowInstance<TData>?> LoadAsync(Guid instanceId, CancellationToken ct = default)
     {
-        await EnsureInitializedAsync(ct).ConfigureAwait(false);
-
         var model = await _store.ReadAsync(m => m.Guid == instanceId, ct).ConfigureAwait(false);
         return model?.ToInstance<TData>();
     }
@@ -90,8 +75,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <inheritdoc />
     public async Task DeleteAsync(Guid instanceId, CancellationToken ct = default)
     {
-        await EnsureInitializedAsync(ct).ConfigureAwait(false);
-
         var model = await _store.ReadAsync(m => m.Guid == instanceId, ct).ConfigureAwait(false);
         if (model != null)
         {
@@ -102,8 +85,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <inheritdoc />
     public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken ct = default)
     {
-        await EnsureInitializedAsync(ct).ConfigureAwait(false);
-
         var results = await _store.ReadAsync(
             filter: m => m.CurrentState == state && m.WorkflowName == _workflowName,
             orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
@@ -117,8 +98,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <inheritdoc />
     public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken ct = default)
     {
-        await EnsureInitializedAsync(ct).ConfigureAwait(false);
-
         var statusInt = (int)status;
         var results = await _store.ReadAsync(
             filter: m => m.Status == statusInt && m.WorkflowName == _workflowName,
@@ -133,8 +112,6 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <inheritdoc />
     public async Task<IEnumerable<WorkflowInstance<TData>>> FindByWorkflowNameAsync(string workflowName, int limit = 100, CancellationToken ct = default)
     {
-        await EnsureInitializedAsync(ct).ConfigureAwait(false);
-
         var results = await _store.ReadAsync(
             filter: m => m.WorkflowName == workflowName,
             orderBy: OrderBy<CosmosWorkflowInstanceModel>.ByName(nameof(CosmosWorkflowInstanceModel.UpdatedAt), descending: true),
