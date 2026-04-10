@@ -117,7 +117,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
         #region Native Bulk Operations
 
         /// <inheritdoc />
-        public override async Task CreateAsync(
+        protected override async Task CreateCoreAsync(
             IEnumerable<T> data,
             StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default)
@@ -136,7 +136,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(
+        protected override async Task UpdateCoreAsync(
             IEnumerable<T> data,
             StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default)
@@ -157,7 +157,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(
+        protected override async Task DeleteCoreAsync(
             IEnumerable<T> data,
             CancellationToken ct = default)
         {
