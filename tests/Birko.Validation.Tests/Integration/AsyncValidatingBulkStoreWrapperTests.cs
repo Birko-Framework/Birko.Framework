@@ -39,7 +39,7 @@ public class AsyncValidatingBulkStoreWrapperTests
         public override Task<TestModel?> ReadAsync(Guid guid, CancellationToken ct = default) =>
             Task.FromResult<TestModel?>(_data.GetValueOrDefault(guid));
 
-        public override Task<TestModel?> ReadAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
+        protected override Task<TestModel?> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
         {
             if (filter == null) return Task.FromResult<TestModel?>(_data.Values.FirstOrDefault());
             return Task.FromResult<TestModel?>(_data.Values.AsQueryable().FirstOrDefault(filter));
@@ -48,24 +48,24 @@ public class AsyncValidatingBulkStoreWrapperTests
         public override Task<IEnumerable<TestModel>> ReadAsync(CancellationToken ct = default) =>
             Task.FromResult<IEnumerable<TestModel>>(_data.Values.ToList());
 
-        public override Task<IEnumerable<TestModel>> ReadAsync(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
+        protected override Task<IEnumerable<TestModel>> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
         {
             IEnumerable<TestModel> result = _data.Values;
             if (filter != null) result = result.AsQueryable().Where(filter);
             return Task.FromResult(result);
         }
 
-        public override Task<long> CountAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) =>
+        protected override Task<long> CountCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) =>
             Task.FromResult((long)_data.Count);
 
-        public override Task<Guid> CreateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
+        protected override Task<Guid> CreateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
         {
             data.Guid ??= Guid.NewGuid();
             _data[data.Guid.Value] = data;
             return Task.FromResult(data.Guid.Value);
         }
 
-        public override Task CreateAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default)
+        protected override Task CreateCoreAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default)
         {
             foreach (var item in data)
             {
@@ -75,13 +75,13 @@ public class AsyncValidatingBulkStoreWrapperTests
             return Task.CompletedTask;
         }
 
-        public override Task UpdateAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
+        protected override Task UpdateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
         {
             if (data.Guid.HasValue) _data[data.Guid.Value] = data;
             return Task.CompletedTask;
         }
 
-        public override Task UpdateAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default)
+        protected override Task UpdateCoreAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default)
         {
             foreach (var item in data)
                 if (item.Guid.HasValue) _data[item.Guid.Value] = item;
@@ -98,13 +98,13 @@ public class AsyncValidatingBulkStoreWrapperTests
         public override Task UpdateAsync(Expression<Func<TestModel, bool>> filter, PropertyUpdate<TestModel> updates, CancellationToken ct = default) =>
             Task.CompletedTask;
 
-        public override Task DeleteAsync(TestModel data, CancellationToken ct = default)
+        protected override Task DeleteCoreAsync(TestModel data, CancellationToken ct = default)
         {
             if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
             return Task.CompletedTask;
         }
 
-        public override Task DeleteAsync(IEnumerable<TestModel> data, CancellationToken ct = default)
+        protected override Task DeleteCoreAsync(IEnumerable<TestModel> data, CancellationToken ct = default)
         {
             foreach (var item in data)
                 if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
@@ -119,7 +119,7 @@ public class AsyncValidatingBulkStoreWrapperTests
             return Task.CompletedTask;
         }
 
-        public override Task InitAsync(CancellationToken ct = default) => Task.CompletedTask;
+        protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
         public override TestModel CreateInstance() => new();
     }
