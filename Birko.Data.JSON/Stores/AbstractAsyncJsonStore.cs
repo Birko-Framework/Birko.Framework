@@ -42,14 +42,14 @@ namespace Birko.Data.JSON.Stores
         #region Core CRUD Operations - Single Item
 
         /// <inheritdoc />
-        public override async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
             return _items?.Values.Where(x => filter?.Compile()?.Invoke(x) ?? true)?.FirstOrDefault() ?? null;
         }
 
         /// <inheritdoc />
-        public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
 
@@ -65,7 +65,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
 
@@ -78,7 +78,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(T data, CancellationToken ct = default)
+        protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
 
@@ -94,7 +94,7 @@ namespace Birko.Data.JSON.Stores
         #region Query and Count Operations
 
         /// <inheritdoc />
-        public override async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
             return _items?.Where(x => filter?.Compile()?.Invoke(x.Value) ?? true)?.Count() ?? 0;
@@ -163,7 +163,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task<IEnumerable<T>> ReadAsync(
+        protected override async Task<IEnumerable<T>> ReadCoreAsync(
             Expression<Func<T, bool>>? filter = null,
             OrderBy<T>? orderBy = null,
             int? limit = null,
@@ -220,7 +220,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
 
@@ -240,7 +240,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
             if (data == null) return;
@@ -255,7 +255,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
+        protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
         {
             await EnsureDataLoadedAsync(ct);
             if (data == null) return;

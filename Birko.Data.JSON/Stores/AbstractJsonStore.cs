@@ -40,7 +40,7 @@ namespace Birko.Data.JSON.Stores
         #region Core CRUD Operations - Single Item
 
         /// <inheritdoc />
-        public override T? Read(Expression<Func<T, bool>>? filter = null)
+        protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
         {
             return _items?.Values.Where(x => filter?.Compile()?.Invoke(x) ?? true)?.FirstOrDefault() ?? null;
         }
@@ -56,7 +56,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+        protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             data.Guid ??= Guid.NewGuid();
             storeDelegate?.Invoke(data);
@@ -66,7 +66,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
         {
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
@@ -77,7 +77,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(T data)
+        protected override void DeleteCore(T data)
         {
             if (data.Guid != null && (_items?.ContainsKey(data.Guid.Value) ?? false))
             {
@@ -91,7 +91,7 @@ namespace Birko.Data.JSON.Stores
         #region Query and Count Operations
 
         /// <inheritdoc />
-        public override long Count(Expression<Func<T, bool>>? filter = null)
+        protected override long CountCore(Expression<Func<T, bool>>? filter = null)
         {
             return _items?.Where(x => filter?.Compile()?.Invoke(x.Value) ?? true)?.Count() ?? 0;
         }
@@ -141,7 +141,7 @@ namespace Birko.Data.JSON.Stores
         #region Core CRUD Operations - Bulk
 
         /// <inheritdoc />
-        public override IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+        protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
             var result = _items?.Values?.Where(x => filter?.Compile()?.Invoke(x) ?? true);
 
@@ -190,7 +190,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+        protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             bool save = false;
             foreach (var item in data.Where(x => x != null))
@@ -207,7 +207,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             bool save = false;
             foreach (var item in data.Where(x => x != null))
@@ -226,7 +226,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(IEnumerable<T> data)
+        protected override void DeleteCore(IEnumerable<T> data)
         {
             bool save = false;
             foreach (var item in data.Where(x => x != null))

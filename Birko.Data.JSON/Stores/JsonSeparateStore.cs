@@ -39,7 +39,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override void Init()
+        protected override void InitCore()
         {
             if (!string.IsNullOrEmpty(Path) && !Directory.Exists(Path))
             {

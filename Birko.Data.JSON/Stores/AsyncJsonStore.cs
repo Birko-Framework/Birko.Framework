@@ -80,7 +80,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override async Task InitAsync(CancellationToken ct = default)
+        protected override async Task InitCoreAsync(CancellationToken ct = default)
         {
             var path = Path;
             if (!string.IsNullOrEmpty(path) && !File.Exists(path) && (_settings is Settings settings))

@@ -39,7 +39,7 @@ namespace Birko.Data.JSON.Stores
         }
 
         /// <inheritdoc />
-        public override Task InitAsync(CancellationToken ct = default)
+        protected override Task InitCoreAsync(CancellationToken ct = default)
         {
             var pathDirectory = PathDirectory;
             if (!string.IsNullOrEmpty(pathDirectory) && !Directory.Exists(pathDirectory))
