@@ -18,7 +18,6 @@ namespace Birko.BackgroundJobs.RavenDB
     {
         private readonly AsyncRavenDBStore<RavenJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
-        private bool _initialized;
 
         /// <summary>
         /// Creates a new RavenDB job queue.
@@ -46,8 +45,6 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = RavenJobDescriptorModel.FromDescriptor(descriptor);
             var id = await _store.CreateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return id;
@@ -55,8 +52,6 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var now = DateTime.UtcNow;
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
@@ -100,8 +95,6 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
@@ -113,8 +106,6 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
@@ -137,8 +128,6 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
 
@@ -158,16 +147,12 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             return model?.ToDescriptor();
         }
 
         public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var statusInt = (int)status;
 
             var models = await _store.ReadAsync(
@@ -182,8 +167,6 @@ namespace Birko.BackgroundJobs.RavenDB
 
         public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var cutoff = DateTime.UtcNow.Subtract(olderThan);
             var completedStatus = (int)JobStatus.Completed;
             var deadStatus = (int)JobStatus.Dead;
@@ -204,12 +187,5 @@ namespace Birko.BackgroundJobs.RavenDB
             return list.Count;
         }
 
-        private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
-        {
-            if (_initialized) return;
-
-            await _store.InitAsync(cancellationToken).ConfigureAwait(false);
-            _initialized = true;
-        }
     }
 }
