@@ -16,7 +16,6 @@ namespace Birko.Workflow.RavenDB
         where TData : class
     {
         private readonly AsyncRavenDBStore<RavenWorkflowInstanceModel> _store;
-        private bool _initialized;
 
         public RavenDBWorkflowInstanceStore(RemoteSettings settings)
         {
@@ -33,8 +32,6 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
             if (existing != null)
             {
@@ -50,16 +47,12 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<WorkflowInstance<TData>?> LoadAsync(Guid instanceId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
             return model?.ToInstance<TData>();
         }
 
         public async Task DeleteAsync(Guid instanceId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
             if (model != null)
             {
@@ -69,8 +62,6 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStateAsync(string state, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var models = await _store.ReadAsync(
                 filter: m => m.CurrentState == state,
                 orderBy: OrderBy<RavenWorkflowInstanceModel>.ByDescending(m => m.UpdatedAt),
@@ -83,8 +74,6 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<IEnumerable<WorkflowInstance<TData>>> FindByStatusAsync(WorkflowStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var statusInt = (int)status;
             var models = await _store.ReadAsync(
                 filter: m => m.Status == statusInt,
@@ -98,8 +87,6 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<IEnumerable<WorkflowInstance<TData>>> FindByWorkflowNameAsync(string workflowName, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var models = await _store.ReadAsync(
                 filter: m => m.WorkflowName == workflowName,
                 orderBy: OrderBy<RavenWorkflowInstanceModel>.ByDescending(m => m.UpdatedAt),
@@ -108,14 +95,6 @@ namespace Birko.Workflow.RavenDB
             ).ConfigureAwait(false);
 
             return models.Select(m => m.ToInstance<TData>());
-        }
-
-        private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
-        {
-            if (_initialized) return;
-
-            await _store.InitAsync(cancellationToken).ConfigureAwait(false);
-            _initialized = true;
         }
     }
 }
