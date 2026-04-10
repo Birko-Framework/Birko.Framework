@@ -14,7 +14,7 @@ public class TestSyncKnowledgeItemStore : AbstractBulkStore<TestSyncKnowledge>, 
     private readonly Dictionary<Guid, TestSyncKnowledge> _data = new();
     private readonly Dictionary<string, DateTime?> _syncTimes = new();
 
-    public override long Count(Expression<Func<TestSyncKnowledge, bool>>? filter = null)
+    protected override long CountCore(Expression<Func<TestSyncKnowledge, bool>>? filter = null)
     {
         if (filter == null) return _data.Count;
         return _data.Values.AsQueryable().Count(filter);
@@ -22,36 +22,36 @@ public class TestSyncKnowledgeItemStore : AbstractBulkStore<TestSyncKnowledge>, 
 
     public override TestSyncKnowledge? Read(Guid guid) => _data.GetValueOrDefault(guid);
 
-    public override TestSyncKnowledge? Read(Expression<Func<TestSyncKnowledge, bool>>? filter = null) =>
+    protected override TestSyncKnowledge? ReadCore(Expression<Func<TestSyncKnowledge, bool>>? filter = null) =>
         filter == null ? _data.Values.FirstOrDefault() : _data.Values.AsQueryable().FirstOrDefault(filter);
 
     public override IEnumerable<TestSyncKnowledge> Read() => _data.Values.ToList();
 
-    public override IEnumerable<TestSyncKnowledge> Read(Expression<Func<TestSyncKnowledge, bool>>? filter = null, OrderBy<TestSyncKnowledge>? orderBy = null, int? limit = null, int? offset = null)
+    protected override IEnumerable<TestSyncKnowledge> ReadCore(Expression<Func<TestSyncKnowledge, bool>>? filter = null, OrderBy<TestSyncKnowledge>? orderBy = null, int? limit = null, int? offset = null)
     {
         IEnumerable<TestSyncKnowledge> result = _data.Values;
         if (filter != null) result = result.AsQueryable().Where(filter);
         return result.ToList();
     }
 
-    public override Guid Create(TestSyncKnowledge data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
+    protected override Guid CreateCore(TestSyncKnowledge data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
     {
         data.Guid ??= Guid.NewGuid();
         _data[data.Guid.Value] = data;
         return data.Guid.Value;
     }
 
-    public override void Create(IEnumerable<TestSyncKnowledge> data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
+    protected override void CreateCore(IEnumerable<TestSyncKnowledge> data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
     {
         foreach (var item in data) Create(item, storeDelegate);
     }
 
-    public override void Update(TestSyncKnowledge data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
+    protected override void UpdateCore(TestSyncKnowledge data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
     {
         if (data.Guid.HasValue) _data[data.Guid.Value] = data;
     }
 
-    public override void Update(IEnumerable<TestSyncKnowledge> data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
+    protected override void UpdateCore(IEnumerable<TestSyncKnowledge> data, StoreDataDelegate<TestSyncKnowledge>? storeDelegate = null)
     {
         foreach (var item in data)
         {
@@ -70,12 +70,12 @@ public class TestSyncKnowledgeItemStore : AbstractBulkStore<TestSyncKnowledge>, 
 
     public override void Update(Expression<Func<TestSyncKnowledge, bool>> filter, PropertyUpdate<TestSyncKnowledge> updates) { }
 
-    public override void Delete(TestSyncKnowledge data)
+    protected override void DeleteCore(TestSyncKnowledge data)
     {
         if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
     }
 
-    public override void Delete(IEnumerable<TestSyncKnowledge> data)
+    protected override void DeleteCore(IEnumerable<TestSyncKnowledge> data)
     {
         foreach (var item in data) Delete(item);
     }
@@ -86,7 +86,7 @@ public class TestSyncKnowledgeItemStore : AbstractBulkStore<TestSyncKnowledge>, 
         foreach (var item in toDelete) Delete(item);
     }
 
-    public override void Init() { }
+    protected override void InitCore() { }
     public override void Destroy() { }
     public override TestSyncKnowledge CreateInstance() => new();
 

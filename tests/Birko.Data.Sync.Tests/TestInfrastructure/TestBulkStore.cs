@@ -11,7 +11,7 @@ public class TestBulkStore : AbstractBulkStore<TestSyncModel>
 {
     private readonly Dictionary<Guid, TestSyncModel> _data = new();
 
-    public override long Count(Expression<Func<TestSyncModel, bool>>? filter = null)
+    protected override long CountCore(Expression<Func<TestSyncModel, bool>>? filter = null)
     {
         if (filter == null) return _data.Count;
         return _data.Values.AsQueryable().Count(filter);
@@ -19,36 +19,36 @@ public class TestBulkStore : AbstractBulkStore<TestSyncModel>
 
     public override TestSyncModel? Read(Guid guid) => _data.GetValueOrDefault(guid);
 
-    public override TestSyncModel? Read(Expression<Func<TestSyncModel, bool>>? filter = null) =>
+    protected override TestSyncModel? ReadCore(Expression<Func<TestSyncModel, bool>>? filter = null) =>
         filter == null ? _data.Values.FirstOrDefault() : _data.Values.AsQueryable().FirstOrDefault(filter);
 
     public override IEnumerable<TestSyncModel> Read() => _data.Values.ToList();
 
-    public override IEnumerable<TestSyncModel> Read(Expression<Func<TestSyncModel, bool>>? filter = null, OrderBy<TestSyncModel>? orderBy = null, int? limit = null, int? offset = null)
+    protected override IEnumerable<TestSyncModel> ReadCore(Expression<Func<TestSyncModel, bool>>? filter = null, OrderBy<TestSyncModel>? orderBy = null, int? limit = null, int? offset = null)
     {
         IEnumerable<TestSyncModel> result = _data.Values;
         if (filter != null) result = result.AsQueryable().Where(filter);
         return result.ToList();
     }
 
-    public override Guid Create(TestSyncModel data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
+    protected override Guid CreateCore(TestSyncModel data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
     {
         data.Guid ??= Guid.NewGuid();
         _data[data.Guid.Value] = data;
         return data.Guid.Value;
     }
 
-    public override void Create(IEnumerable<TestSyncModel> data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
+    protected override void CreateCore(IEnumerable<TestSyncModel> data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
     {
         foreach (var item in data) Create(item, storeDelegate);
     }
 
-    public override void Update(TestSyncModel data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
+    protected override void UpdateCore(TestSyncModel data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
     {
         if (data.Guid.HasValue) _data[data.Guid.Value] = data;
     }
 
-    public override void Update(IEnumerable<TestSyncModel> data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
+    protected override void UpdateCore(IEnumerable<TestSyncModel> data, StoreDataDelegate<TestSyncModel>? storeDelegate = null)
     {
         foreach (var item in data) Update(item, storeDelegate);
     }
@@ -61,12 +61,12 @@ public class TestBulkStore : AbstractBulkStore<TestSyncModel>
 
     public override void Update(Expression<Func<TestSyncModel, bool>> filter, PropertyUpdate<TestSyncModel> updates) { }
 
-    public override void Delete(TestSyncModel data)
+    protected override void DeleteCore(TestSyncModel data)
     {
         if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
     }
 
-    public override void Delete(IEnumerable<TestSyncModel> data)
+    protected override void DeleteCore(IEnumerable<TestSyncModel> data)
     {
         foreach (var item in data) Delete(item);
     }
@@ -77,7 +77,7 @@ public class TestBulkStore : AbstractBulkStore<TestSyncModel>
         foreach (var item in toDelete) Delete(item);
     }
 
-    public override void Init() { }
+    protected override void InitCore() { }
     public override void Destroy() { }
     public override TestSyncModel CreateInstance() => new();
 
