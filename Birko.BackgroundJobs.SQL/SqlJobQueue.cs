@@ -22,7 +22,6 @@ namespace Birko.BackgroundJobs.SQL
     {
         private readonly AsyncDataBaseBulkStore<DB, JobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
-        private bool _initialized;
 
         /// <summary>
         /// Creates a new SQL job queue.
@@ -54,8 +53,6 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = JobDescriptorModel.FromDescriptor(descriptor);
             var id = await _store.CreateAsync(model, ct: cancellationToken).ConfigureAwait(false);
             return id;
@@ -63,8 +60,6 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var now = DateTime.UtcNow;
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
@@ -111,8 +106,6 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
@@ -124,8 +117,6 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             if (model == null) return;
 
@@ -148,8 +139,6 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
 
@@ -169,16 +158,12 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var model = await _store.ReadAsync(j => j.Guid == jobId, cancellationToken).ConfigureAwait(false);
             return model?.ToDescriptor();
         }
 
         public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var statusInt = (int)status;
 
             var models = await _store.ReadAsync(
@@ -193,8 +178,6 @@ namespace Birko.BackgroundJobs.SQL
 
         public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
         {
-            await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
-
             var cutoff = DateTime.UtcNow.Subtract(olderThan);
             var completedStatus = (int)JobStatus.Completed;
             var deadStatus = (int)JobStatus.Dead;
@@ -213,14 +196,6 @@ namespace Birko.BackgroundJobs.SQL
             }
 
             return list.Count;
-        }
-
-        private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
-        {
-            if (_initialized) return;
-
-            await _store.InitAsync(cancellationToken).ConfigureAwait(false);
-            _initialized = true;
         }
     }
 }
