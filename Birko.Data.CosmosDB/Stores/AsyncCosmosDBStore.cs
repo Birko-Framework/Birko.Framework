@@ -151,7 +151,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task InitAsync(CancellationToken ct = default)
+    protected override async Task InitCoreAsync(CancellationToken ct = default)
     {
         await EnsureDatabaseAndContainerExistAsync(ct);
     }
@@ -171,7 +171,7 @@ public class AsyncCosmosDBStore<T>
     #region Core CRUD Operations - Single Item
 
     /// <inheritdoc />
-    public override async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         if (_container == null || data == null) return Guid.Empty;
 
@@ -205,7 +205,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+    protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
         if (_container == null) return null;
 
@@ -227,7 +227,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
+    protected override async Task UpdateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -243,7 +243,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task DeleteAsync(T data, CancellationToken ct = default)
+    protected override async Task DeleteCoreAsync(T data, CancellationToken ct = default)
     {
         if (_container == null || data == null || data.Guid == null || data.Guid == Guid.Empty) return;
 
@@ -261,7 +261,7 @@ public class AsyncCosmosDBStore<T>
     #region Query and Count Operations
 
     /// <inheritdoc />
-    public override async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+    protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
         if (_container == null) return 0;
 
@@ -306,7 +306,7 @@ public class AsyncCosmosDBStore<T>
     #region Core CRUD Operations - Bulk
 
     /// <inheritdoc />
-    public override async Task<IEnumerable<T>> ReadAsync(
+    protected override async Task<IEnumerable<T>> ReadCoreAsync(
         Expression<Func<T, bool>>? filter = null,
         OrderBy<T>? orderBy = null,
         int? limit = null,
@@ -365,7 +365,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+    protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
         if (_container == null || data == null) return;
 
@@ -396,7 +396,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+    protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
         if (_container == null || data == null) return;
 
@@ -424,7 +424,7 @@ public class AsyncCosmosDBStore<T>
     }
 
     /// <inheritdoc />
-    public override async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
+    protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
         if (_container == null || data == null) return;
 
