@@ -59,7 +59,7 @@ namespace Birko.Data.SQL.MSSql.Stores
         #region Native Bulk Operations
 
         /// <inheritdoc />
-        public override void Create(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void CreateCore(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Connector == null || data == null || !data.Any())
                 return;
@@ -75,7 +75,7 @@ namespace Birko.Data.SQL.MSSql.Stores
         }
 
         /// <inheritdoc />
-        public override void Update(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
+        protected override void UpdateCore(IEnumerable<T> data, Data.Stores.StoreDataDelegate<T>? storeDelegate = null)
         {
             if (Connector == null || data == null || !data.Any())
                 return;
@@ -93,7 +93,7 @@ namespace Birko.Data.SQL.MSSql.Stores
         }
 
         /// <inheritdoc />
-        public override void Delete(IEnumerable<T> data)
+        protected override void DeleteCore(IEnumerable<T> data)
         {
             if (Connector == null || data == null || !data.Any())
                 return;
