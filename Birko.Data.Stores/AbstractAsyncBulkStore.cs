@@ -29,13 +29,39 @@ namespace Birko.Data.Stores
         #region Core CRUD Operations - Bulk
 
         /// <inheritdoc />
-        public abstract Task CreateAsync(
+        public virtual async Task CreateAsync(
+            IEnumerable<T> data,
+            StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            await CreateCoreAsync(data, storeDelegate, ct);
+        }
+
+        /// <summary>
+        /// Core bulk create implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract Task CreateCoreAsync(
             IEnumerable<T> data,
             StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default);
 
         /// <inheritdoc />
-        public abstract Task<IEnumerable<T>> ReadAsync(
+        public virtual async Task<IEnumerable<T>> ReadAsync(
+            Expression<Func<T, bool>>? filter = null,
+            OrderBy<T>? orderBy = null,
+            int? limit = null,
+            int? offset = null,
+            CancellationToken ct = default)
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            return await ReadCoreAsync(filter, orderBy, limit, offset, ct);
+        }
+
+        /// <summary>
+        /// Core bulk read implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract Task<IEnumerable<T>> ReadCoreAsync(
             Expression<Func<T, bool>>? filter = null,
             OrderBy<T>? orderBy = null,
             int? limit = null,
@@ -49,7 +75,19 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public abstract Task UpdateAsync(
+        public virtual async Task UpdateAsync(
+            IEnumerable<T> data,
+            StoreDataDelegate<T>? storeDelegate = null,
+            CancellationToken ct = default)
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            await UpdateCoreAsync(data, storeDelegate, ct);
+        }
+
+        /// <summary>
+        /// Core bulk update implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract Task UpdateCoreAsync(
             IEnumerable<T> data,
             StoreDataDelegate<T>? storeDelegate = null,
             CancellationToken ct = default);
@@ -78,7 +116,18 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public abstract Task DeleteAsync(
+        public virtual async Task DeleteAsync(
+            IEnumerable<T> data,
+            CancellationToken ct = default)
+        {
+            await EnsureInitializedAsync(ct).ConfigureAwait(false);
+            await DeleteCoreAsync(data, ct);
+        }
+
+        /// <summary>
+        /// Core bulk delete implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract Task DeleteCoreAsync(
             IEnumerable<T> data,
             CancellationToken ct = default);
 

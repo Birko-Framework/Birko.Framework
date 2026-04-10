@@ -16,10 +16,28 @@ namespace Birko.Data.Stores
         #region Core CRUD Operations - Bulk
 
         /// <inheritdoc />
-        public abstract void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
+        public virtual void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            EnsureInitialized();
+            CreateCore(data, storeDelegate);
+        }
+
+        /// <summary>
+        /// Core bulk create implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
 
         /// <inheritdoc />
-        public abstract IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null);
+        public virtual IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
+        {
+            EnsureInitialized();
+            return ReadCore(filter, orderBy, limit, offset);
+        }
+
+        /// <summary>
+        /// Core bulk read implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null);
 
         /// <inheritdoc />
         public virtual IEnumerable<T> Read()
@@ -28,7 +46,16 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public abstract void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
+        public virtual void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            EnsureInitialized();
+            UpdateCore(data, storeDelegate);
+        }
+
+        /// <summary>
+        /// Core bulk update implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
 
         /// <inheritdoc />
         public virtual void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
@@ -48,7 +75,16 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public abstract void Delete(IEnumerable<T> data);
+        public virtual void Delete(IEnumerable<T> data)
+        {
+            EnsureInitialized();
+            DeleteCore(data);
+        }
+
+        /// <summary>
+        /// Core bulk delete implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract void DeleteCore(IEnumerable<T> data);
 
         /// <inheritdoc />
         public virtual void Delete(Expression<Func<T, bool>> filter)

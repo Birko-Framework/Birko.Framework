@@ -6,15 +6,43 @@ namespace Birko.Data.Stores
     /// <summary>
     /// Abstract base class for synchronous data stores.
     /// Provides core CRUD and lifecycle operations for entities.
+    /// Automatically initializes on first CRUD operation via lazy-init.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
     public abstract class AbstractStore<T> : IStore<T>
          where T : Models.AbstractModel
     {
+        private bool _initialized;
+        private readonly object _initLock = new();
+
         #region Initialization and Lifecycle
 
+        /// <summary>
+        /// Ensures the store is initialized. Called automatically before CRUD operations.
+        /// Uses double-checked locking for thread safety.
+        /// </summary>
+        protected void EnsureInitialized()
+        {
+            if (_initialized) return;
+            lock (_initLock)
+            {
+                if (_initialized) return;
+                InitCore();
+                _initialized = true;
+            }
+        }
+
         /// <inheritdoc />
-        public abstract void Init();
+        public void Init()
+        {
+            EnsureInitialized();
+        }
+
+        /// <summary>
+        /// Core initialization logic. Override to set up storage backend (create tables, indexes, etc.).
+        /// Called once automatically before the first CRUD operation, or explicitly via Init.
+        /// </summary>
+        protected abstract void InitCore();
 
         /// <inheritdoc />
         public abstract void Destroy();
@@ -24,10 +52,28 @@ namespace Birko.Data.Stores
         #region Core CRUD Operations - Single Item
 
         /// <inheritdoc />
-        public abstract Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null);
+        public virtual Guid Create(T data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            EnsureInitialized();
+            return CreateCore(data, storeDelegate);
+        }
+
+        /// <summary>
+        /// Core create implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null);
 
         /// <inheritdoc />
-        public abstract T? Read(Expression<Func<T, bool>>? filter = null);
+        public virtual T? Read(Expression<Func<T, bool>>? filter = null)
+        {
+            EnsureInitialized();
+            return ReadCore(filter);
+        }
+
+        /// <summary>
+        /// Core read implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract T? ReadCore(Expression<Func<T, bool>>? filter = null);
 
         /// <inheritdoc />
         public virtual T? Read(Guid guid)
@@ -36,17 +82,44 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
-        public abstract void Update(T data, StoreDataDelegate<T>? storeDelegate = null);
+        public virtual void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            EnsureInitialized();
+            UpdateCore(data, storeDelegate);
+        }
+
+        /// <summary>
+        /// Core update implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract void UpdateCore(T data, StoreDataDelegate<T>? storeDelegate = null);
 
         /// <inheritdoc />
-        public abstract void Delete(T data);
+        public virtual void Delete(T data)
+        {
+            EnsureInitialized();
+            DeleteCore(data);
+        }
+
+        /// <summary>
+        /// Core delete implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract void DeleteCore(T data);
 
         #endregion
 
         #region Query and Count Operations
 
         /// <inheritdoc />
-        public abstract long Count(Expression<Func<T, bool>>? filter = null);
+        public virtual long Count(Expression<Func<T, bool>>? filter = null)
+        {
+            EnsureInitialized();
+            return CountCore(filter);
+        }
+
+        /// <summary>
+        /// Core count implementation. Override in concrete stores.
+        /// </summary>
+        protected abstract long CountCore(Expression<Func<T, bool>>? filter = null);
 
         #endregion
 
