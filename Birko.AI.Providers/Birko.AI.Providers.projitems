@@ -20,6 +20,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)Providers\SglangProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\GitHubCopilotProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Providers\ZAiProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\MistralProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\DeepSeekProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\GroqProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\LmStudioProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Providers\OpenRouterProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ProviderRegistration.cs" />
   </ItemGroup>
 </Project>

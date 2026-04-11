@@ -89,6 +89,36 @@ namespace Birko.AI.Providers
                     c.Get("useCodingEndpoint", "false").Equals("true", StringComparison.OrdinalIgnoreCase));
             });
 
+            LlmProviderFactory.Register("mistral", config =>
+            {
+                var c = new ConfigHelper(config);
+                return new MistralProvider(c.Get("apiKey"), c.Get("model", "mistral-large-latest"), c.GetOrNull("baseUrl"));
+            });
+
+            LlmProviderFactory.Register("deepseek", config =>
+            {
+                var c = new ConfigHelper(config);
+                return new DeepSeekProvider(c.Get("apiKey"), c.Get("model", "deepseek-chat"), c.GetOrNull("baseUrl"));
+            });
+
+            LlmProviderFactory.Register("groq", config =>
+            {
+                var c = new ConfigHelper(config);
+                return new GroqProvider(c.Get("apiKey"), c.Get("model", "llama-3.3-70b-versatile"), c.GetOrNull("baseUrl"));
+            });
+
+            LlmProviderFactory.Register("lmstudio", config =>
+            {
+                var c = new ConfigHelper(config);
+                return new LmStudioProvider(c.Get("model", "local-model"), c.GetOrNull("baseUrl"));
+            });
+
+            LlmProviderFactory.Register("openrouter", config =>
+            {
+                var c = new ConfigHelper(config);
+                return new OpenRouterProvider(c.Get("apiKey"), c.Get("model", "anthropic/claude-3.5-sonnet"), c.GetOrNull("baseUrl"));
+            });
+
             // Aliases
             LlmProviderFactory.Register("zhipu", config => LlmProviderFactory.Create("zai", config));
             LlmProviderFactory.Register("zhipuai", config => LlmProviderFactory.Create("zai", config));
