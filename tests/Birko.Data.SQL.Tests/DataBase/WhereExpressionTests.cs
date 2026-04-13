@@ -132,5 +132,73 @@ namespace Birko.Data.SQL.Tests.DataBase
             }
             return result;
         }
+
+        // ── ToLower / ToUpper in WHERE conditions ──
+
+        [Fact]
+        public void ParseToLowerContainsExpression()
+        {
+            var term = "test";
+            Expression<Func<DateModel, bool>> expr = (x) => x.Text.ToLower().Contains(term);
+            var data = Birko.Data.SQL.DataBase.ParseConditionExpression(expr);
+            Assert.NotNull(data);
+            Assert.NotEmpty(data);
+
+            var conditions = FlattenConditions(data);
+            Assert.NotEmpty(conditions);
+            var cond = conditions.First();
+            Assert.Equal(Birko.Data.SQL.Conditions.ConditionType.Like, cond.Type);
+            Assert.StartsWith("LOWER(", cond.Name);
+            Assert.Contains("Text", cond.Name);
+        }
+
+        [Fact]
+        public void ParseToLowerInvariantContainsExpression()
+        {
+            var term = "test";
+            Expression<Func<DateModel, bool>> expr = (x) => x.Text.ToLowerInvariant().Contains(term);
+            var data = Birko.Data.SQL.DataBase.ParseConditionExpression(expr);
+            Assert.NotNull(data);
+
+            var conditions = FlattenConditions(data);
+            Assert.NotEmpty(conditions);
+            var cond = conditions.First();
+            Assert.StartsWith("LOWER(", cond.Name);
+            Assert.Equal(Birko.Data.SQL.Conditions.ConditionType.Like, cond.Type);
+        }
+
+        [Fact]
+        public void ParseToUpperStartsWithExpression()
+        {
+            var term = "test";
+            Expression<Func<DateModel, bool>> expr = (x) => x.Text.ToUpper().StartsWith(term);
+            var data = Birko.Data.SQL.DataBase.ParseConditionExpression(expr);
+            Assert.NotNull(data);
+
+            var conditions = FlattenConditions(data);
+            Assert.NotEmpty(conditions);
+            var cond = conditions.First();
+            Assert.StartsWith("UPPER(", cond.Name);
+            Assert.Equal(Birko.Data.SQL.Conditions.ConditionType.StartsWith, cond.Type);
+        }
+
+        [Fact]
+        public void ParseToLowerContainsWithOtherCondition()
+        {
+            var term = "test";
+            Expression<Func<DateModel, bool>> expr = (x) => x.Text.ToLower().Contains(term) && x.Count > 0;
+            var data = Birko.Data.SQL.DataBase.ParseConditionExpression(expr);
+            Assert.NotNull(data);
+
+            var conditions = FlattenConditions(data);
+            Assert.True(conditions.Count >= 2, $"Expected at least 2 conditions, got {conditions.Count}");
+
+            var likeCond = conditions.FirstOrDefault(c => c.Type == Birko.Data.SQL.Conditions.ConditionType.Like);
+            Assert.NotNull(likeCond);
+            Assert.StartsWith("LOWER(", likeCond!.Name);
+
+            var gtCond = conditions.FirstOrDefault(c => c.Type == Birko.Data.SQL.Conditions.ConditionType.Greather);
+            Assert.NotNull(gtCond);
+        }
     }
 }

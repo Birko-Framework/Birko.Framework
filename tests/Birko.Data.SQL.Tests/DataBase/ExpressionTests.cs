@@ -92,5 +92,45 @@ namespace Birko.Data.SQL.Tests.DataBase
             Assert.Equal("original", parameters["@Const0"]);
             Assert.Equal("replace", parameters["@Const1"]);
         }
+
+        [Fact]
+        public void ParseToLowerExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToLower();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("LOWER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToLowerInvariantExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToLowerInvariant();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("LOWER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToUpperExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToUpper();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("UPPER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToUpperInvariantExpression()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToUpperInvariant();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("UPPER(DateModels.Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, true));
+        }
+
+        [Fact]
+        public void ParseToLowerWithoutTableName()
+        {
+            Expression<Func<DateModel, object>> expr = (x) => x.Text.ToLower();
+            var parameters = new Dictionary<string, object>();
+            Assert.Equal("LOWER(Text)", Birko.Data.SQL.DataBase.ParseExpression(expr, parameters, false));
+        }
     }
 }
