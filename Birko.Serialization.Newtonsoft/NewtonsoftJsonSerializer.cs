@@ -1,5 +1,8 @@
 using System;
+using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace Birko.Serialization.Newtonsoft
@@ -75,6 +78,88 @@ namespace Birko.Serialization.Newtonsoft
             ArgumentNullException.ThrowIfNull(data);
             var json = Encoding.UTF8.GetString(data);
             return Deserialize<T>(json);
+        }
+
+        public void Serialize(Stream stream, object value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            using var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true);
+            using var jsonWriter = new JsonTextWriter(streamWriter);
+            var serializer = JsonSerializer.Create(_settings);
+            serializer.Serialize(jsonWriter, value);
+            jsonWriter.Flush();
+        }
+
+        public void Serialize<T>(Stream stream, T value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            using var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true);
+            using var jsonWriter = new JsonTextWriter(streamWriter);
+            var serializer = JsonSerializer.Create(_settings);
+            serializer.Serialize(jsonWriter, value);
+            jsonWriter.Flush();
+        }
+
+        public object? Deserialize(Stream stream, Type type)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            using var streamReader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            using var jsonReader = new JsonTextReader(streamReader);
+            var serializer = JsonSerializer.Create(_settings);
+            return serializer.Deserialize(jsonReader, type);
+        }
+
+        public T? Deserialize<T>(Stream stream)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            using var streamReader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            using var jsonReader = new JsonTextReader(streamReader);
+            var serializer = JsonSerializer.Create(_settings);
+            return serializer.Deserialize<T>(jsonReader);
+        }
+
+        public async Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            using var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true);
+            using var jsonWriter = new JsonTextWriter(streamWriter);
+            var serializer = JsonSerializer.Create(_settings);
+            serializer.Serialize(jsonWriter, value);
+            await jsonWriter.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            using var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true);
+            using var jsonWriter = new JsonTextWriter(streamWriter);
+            var serializer = JsonSerializer.Create(_settings);
+            serializer.Serialize(jsonWriter, value);
+            await jsonWriter.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            using var streamReader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            using var jsonReader = new JsonTextReader(streamReader);
+            var serializer = JsonSerializer.Create(_settings);
+            return await Task.Run(() => serializer.Deserialize(jsonReader, type), cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            using var streamReader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+            using var jsonReader = new JsonTextReader(streamReader);
+            var serializer = JsonSerializer.Create(_settings);
+            return await Task.Run(() => serializer.Deserialize<T>(jsonReader), cancellationToken).ConfigureAwait(false);
         }
     }
 }
