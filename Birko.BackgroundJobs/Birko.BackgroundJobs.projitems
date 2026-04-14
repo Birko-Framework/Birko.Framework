@@ -22,6 +22,7 @@
     <!-- Serialization -->
     <Compile Include="$(MSBuildThisFileDirectory)Serialization\IJobSerializer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Serialization\JsonJobSerializer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\JobSerializationHelper.cs" />
     <!-- Processing -->
     <Compile Include="$(MSBuildThisFileDirectory)Processing\BackgroundJobProcessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Processing\InMemoryJobQueue.cs" />
