@@ -35,7 +35,7 @@
 ## Data Features
 - **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Timestamp, Default Constraint, Sluggable, Paging)
 - **Birko.Data.Migrations** + **.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.InfluxDB** / **.TimescaleDB** / **.CosmosDB**
-- **Birko.Data.Sync** + **.Sql** / **.ElasticSearch** / **.MongoDb** / **.RavenDB** / **.Json** / **.CosmosDB** / **.Tenant**
+- **Birko.Data.Sync** + **.Sql** / **.ElasticSearch** / **.MongoDb** / **.RavenDB** / **.Json** / **.Xml** / **.CosmosDB** / **.Tenant**
 - **Birko.Data.Aggregates** - SQL-NoSQL aggregate mapper (flatten/expand for sync)
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.Composition** - Runtime store decorator composition (StoreWrapperBuilder — conditional Tenant/Default/SoftDelete/Audit/Timestamp chains)
@@ -81,7 +81,7 @@
 ## CQRS & Workflow
 - **Birko.CQRS** - Command/Query (ICommand, IQuery, IRequestHandler, IPipelineBehavior, IMediator)
 - **Birko.Workflow** - State machine engine (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
-- **Birko.Workflow.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** / **.CosmosDB** - Persistence backends
+- **Birko.Workflow.SQL** / **.ElasticSearch** / **.MongoDB** / **.RavenDB** / **.JSON** / **.XML** / **.CosmosDB** - Persistence backends
 
 ## Serialization
 - **Birko.Serialization** - Abstraction (ISerializer, SystemJsonSerializer, SystemXmlSerializer)

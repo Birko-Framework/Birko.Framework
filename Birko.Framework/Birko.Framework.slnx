@@ -64,6 +64,7 @@
     <Project Path="../Birko.Data.ElasticSearch/Birko.Data.ElasticSearch.shproj" />
     <Project Path="../Birko.Data.InfluxDB/Birko.Data.InfluxDB.shproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
     <Project Path="../Birko.Data.JSON/Birko.Data.JSON.shproj" />
+    <Project Path="../Birko.Data.XML/Birko.Data.XML.shproj" />
     <Project Path="../Birko.Data.MongoDB/Birko.Data.MongoDB.shproj" Id="9d0b1c33-e449-5c0f-d758-76348e110ddd" />
     <Project Path="../Birko.Data.RavenDB/Birko.Data.RavenDB.shproj" />
     <Project Path="../Birko.Data.TimescaleDB/Birko.Data.TimescaleDB.shproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
@@ -101,6 +102,7 @@
     <Project Path="../Birko.Data.Sync/Birko.Data.Sync.shproj" />
     <Project Path="../Birko.Data.Sync.ElasticSearch/Birko.Data.Sync.ElasticSearch.shproj" />
     <Project Path="../Birko.Data.Sync.Json/Birko.Data.Sync.Json.shproj" />
+    <Project Path="../Birko.Data.Sync.Xml/Birko.Data.Sync.Xml.shproj" />
     <Project Path="../Birko.Data.Sync.MongoDb/Birko.Data.Sync.MongoDb.shproj" />
     <Project Path="../Birko.Data.Sync.RavenDB/Birko.Data.Sync.RavenDB.shproj" />
     <Project Path="../Birko.Data.Sync.Sql/Birko.Data.Sync.Sql.shproj" />
@@ -113,6 +115,7 @@
     <Project Path="../Birko.Data.ElasticSearch.ViewModel/Birko.Data.ElasticSearch.ViewModel.shproj" Id="2b3c4d5e-6f7a-8901-2bcd-ef3456789012" />
     <Project Path="../Birko.Data.InfluxDB.ViewModel/Birko.Data.InfluxDB.ViewModel.shproj" Id="6f7a8b9c-0d1e-2345-6f78-901234567890" />
     <Project Path="../Birko.Data.JSON.ViewModel/Birko.Data.JSON.ViewModel.shproj" Id="3c4d5e6f-7a8b-9012-3cde-f45678901234" />
+    <Project Path="../Birko.Data.XML.ViewModel/Birko.Data.XML.ViewModel.shproj" />
     <Project Path="../Birko.Data.MongoDB.ViewModel/Birko.Data.MongoDB.ViewModel.shproj" Id="1a2b3c4d-5e6f-7890-1abc-def234567890" />
     <Project Path="../Birko.Data.RavenDB.ViewModel/Birko.Data.RavenDB.ViewModel.shproj" Id="4d5e6f7a-8b9c-0123-4def-567890123456" />
     <Project Path="../Birko.Data.SQL.ViewModel/Birko.Data.SQL.ViewModel.shproj" Id="9c5de2f0-ba3c-4e6d-af40-2b3c4d5e6f70" />
@@ -211,6 +214,7 @@
     <Project Path="../Birko.Data.TimescaleDB.Tests/Birko.Data.TimescaleDB.Tests.csproj" />
     <Project Path="../Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
     <Project Path="../Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
+    <Project Path="../Birko.Data.XML.Tests/Birko.Data.XML.Tests.csproj" />
     <Project Path="../Birko.Data.Views.Tests/Birko.Data.Views.Tests.csproj" />
     <Project Path="../Birko.Validation.Tests/Birko.Validation.Tests.csproj" />
     <Project Path="../Birko.Data.Sync.Tests/Birko.Data.Sync.Tests.csproj" />
@@ -254,6 +258,7 @@
     <Project Path="../Birko.Workflow.RavenDB/Birko.Workflow.RavenDB.shproj" />
     <Project Path="../Birko.Workflow.JSON/Birko.Workflow.JSON.shproj" />
     <Project Path="../Birko.Workflow.CosmosDB/Birko.Workflow.CosmosDB.shproj" />
+    <Project Path="../Birko.Workflow.XML/Birko.Workflow.XML.shproj" />
   </Folder>
   <Folder Name="/AI/">
     <Project Path="../Birko.AI.Contracts/Birko.AI.Contracts.shproj" />

@@ -1,0 +1,245 @@
+@startuml Birko Framework Architecture
+
+!define FOUNDATION #E3F2FD
+!define CORE #BBDEFB
+!define DATA #90CAF9
+!define AI #FFF9C4
+!define SPECIALIZED #CE93D8
+!define REFERENCE #A5D6A7
+!define WHITE #F8F9FA
+
+skinparam component {
+    BackgroundColor<<foundation>> FOUNDATION
+    BorderColor<<foundation>> #1976D2
+    FontColor<<foundation>> #0D47A1
+
+    BackgroundColor<<core>> CORE
+    BorderColor<<core>> #1565C0
+    FontColor<<core>> #0D47A1
+
+    BackgroundColor<<data>> DATA
+    BorderColor<<data>> #0D47A1
+    FontColor<<data>> #FFFFFF
+
+    BackgroundColor<<ai>> AI
+    BorderColor<<ai>> #F57F17
+    FontColor<<ai>> #BF360C
+
+    BackgroundColor<<specialized>> SPECIALIZED
+    BorderColor<<specialized>> #6A1B9A
+    FontColor<<specialized>> #4A148C
+
+    BackgroundColor<<reference>> REFERENCE
+    BorderColor<<reference>> #2E7D32
+    FontColor<<reference>> #1B5E20
+}
+
+title Birko.Framework Architecture
+
+package "Foundations (Zero Dependencies)" <<foundation>> {
+    [Birko.Contracts]
+    note right of Birko.Contracts
+      ILoadable, ICopyable, IDefault,
+      ITimestamped, IGuidEntity, ILogEntity,
+      RetryPolicy
+    end note
+
+    [Birko.Models.Contracts]
+    note right of Birko.Models.Contracts
+      ICatalogItem, IPriceable, IVariantable,
+      ICategorizeable, IBatchable, ILocatable,
+      IHierarchical, IDocument, IContactable,
+      IAddressable
+    end note
+
+    [Birko.Time.Abstractions]
+    note right of Birko.Time.Abstractions
+      IDateTimeProvider, SystemDateTimeProvider,
+      TestDateTimeProvider
+    end note
+}
+
+package "Core Infrastructure" <<core>> {
+    [Birko.Configuration]
+    note right of Birko.Configuration
+      ISettings → Settings →
+      PasswordSettings → RemoteSettings
+    end note
+
+    [Birko.Data.Core]
+    note right of Birko.Data.Core
+      AbstractModel, ViewModels,
+      Filters, Exceptions
+    end note
+
+    [Birko.Models]
+    note right of Birko.Models
+      Value Objects: Money, MoneyWithTax,
+      Percentage, PostalAddress, Quantity
+    end note
+
+    [Birko.Models.Inventory]
+    note right of Birko.Models.Inventory
+      StockItem, StorageLocation,
+      InventoryDocument
+    end note
+
+    [Birko.Models.Pricing]
+    note right of Birko.Models.Pricing
+      Currency, Tax, PriceGroup,
+      PriceList, Discount
+    end note
+}
+
+package "Data Access Layer" <<data>> {
+    [Birko.Data.Stores]
+    note right of Birko.Data.Stores
+      Store interfaces, OrderBy<T>
+    end note
+
+    [Birko.Data.Repositories]
+
+    [Birko.Data.Patterns]
+    note right of Birko.Data.Patterns
+      StoreWrapperBuilder
+    end note
+
+    [Birko.Data.Composition]
+    note right of Birko.Data.Composition
+      Runtime decorator chains
+    end note
+
+    [Birko.Data.Tagging]
+    note right of Birko.Data.Tagging
+      ITaggable, Tag, TagService
+    end note
+
+    [Birko.Data.Views]
+    note right of Birko.Data.Views
+      ViewDefinitionBuilder, ViewMapRegistry
+    end note
+}
+
+package "AI & Communication Layer" <<ai>> {
+    [Birko.AI.Contracts]
+    note right of Birko.AI.Contracts
+      ILlmProvider, Message, Tool,
+      AgentOptions, LlmProviderFactory
+    end note
+
+    [Birko.AI]
+    note right of Birko.AI
+      LlmProviderBase, Agent base, AgentFactory
+    end note
+
+    [Birko.AI.Providers]
+    note right of Birko.AI.Providers
+      Claude, OpenAI, Gemini, Ollama,
+      AzureOpenAI
+    end note
+
+    [Birko.AI.Agents]
+    note right of Birko.AI.Agents
+      CodingAgent, Language agents,
+      Media agents
+    end note
+
+    [Birko.AI.Resilience]
+    note right of Birko.AI.Resilience
+      RateLimiter, CircuitBreaker,
+      CostTracking
+    end note
+
+    [Birko.AI.Orchestration]
+    note right of Birko.AI.Orchestration
+      ITaskDispatcher, ImplementationPlan
+    end note
+
+    [Birko.Communication.OAuth]
+    note right of Birko.Communication.OAuth
+      OAuthClient, OAuthSettings
+    end note
+}
+
+package "Specialized Implementations" <<specialized>> {
+    [Birko.Models.SQL]
+    note right of Birko.Models.SQL
+      ModelMap<T>, ModelMapRegistry
+    end note
+
+    [Birko.Data.CosmosDB]
+    note right of Birko.Data.CosmosDB
+      Stores, Repositories, UnitOfWork
+    end note
+
+    [Birko.Data.Migrations.CosmosDB]
+
+    [Birko.Health.Data]
+    note right of Birko.Health.Data
+      CosmosDbHealthCheck
+    end note
+}
+
+package "Reference Implementations" <<reference>> {
+    [ElasticSearch Store]
+    note right of ElasticSearch Store
+      Async/Bulk operations reference
+    end note
+
+    [JSON Store]
+    note right of JSON Store
+      File-based storage reference
+    end note
+
+    [XML Store]
+    note right of XML Store
+      File-based storage reference
+    end note
+}
+
+' Dependency relationships
+Birko.Contracts --> Birko.Configuration
+Birko.Contracts --> Birko.Data.Core
+Birko.Models.Contracts --> Birko.Models
+Birko.Models.Contracts --> Birko.Models.Inventory
+Birko.Models.Contracts --> Birko.Models.Pricing
+Birko.Time.Abstractions --> Birko.Data.Composition
+
+Birko.Configuration --> Birko.Data.Stores
+Birko.Data.Core --> Birko.Data.Stores
+Birko.Models --> Birko.Data.Stores
+Birko.Models.Inventory --> Birko.Data.Stores
+Birko.Models.Pricing --> Birko.Data.Stores
+
+Birko.Data.Stores --> Birko.Data.Repositories
+Birko.Data.Stores --> Birko.Data.Patterns
+Birko.Data.Stores --> Birko.Data.Composition
+Birko.Data.Stores --> Birko.Data.Tagging
+Birko.Data.Stores --> Birko.Data.Views
+Birko.Data.Stores --> ElasticSearch_Store
+Birko.Data.Stores --> JSON_Store
+Birko.Data.Stores --> XML_Store
+
+Birko.Data.Core --> Birko.Models.SQL
+Birko.Data.Stores --> Birko.Data.CosmosDB
+Birko.Data.Stores --> Birko.Data.Migrations.CosmosDB
+Birko.Data.CosmosDB --> Birko.Health.Data
+
+Birko.Contracts --> Birko.AI.Contracts
+Birko.AI.Contracts --> Birko.AI
+Birko.AI --> Birko.AI.Providers
+Birko.AI --> Birko.AI.Agents
+Birko.AI --> Birko.AI.Resilience
+Birko.AI --> Birko.AI.Orchestration
+Birko.Contracts --> Birko.Communication.OAuth
+
+legend right
+  |=<color:FOUNDATIONS> Foundations | Zero dependencies |
+  |=<color:CORE> Core Infrastructure | Core domain models |
+  |=<color:DATA> Data Access | Stores & repositories |
+  |=<color:AI> AI & Communication | LLM providers |
+  |=<color:SPECIALIZED> Specialized | Platform-specific |
+  |=<color:REFERENCE> Reference | Reference implementations (ES, JSON, XML) |
+endlegend
+
+@enduml

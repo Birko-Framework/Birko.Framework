@@ -1,0 +1,121 @@
+graph TB
+    %% Bottom Layer - Foundations
+    subgraph Foundations["Foundations (Zero Dependencies)"]
+        Contracts["Birko.Contracts<br/>(ILoadable, ICopyable, IDefault,<br/>ITimestamped, IGuidEntity, ILogEntity, RetryPolicy)"]
+        ModelsContracts["Birko.Models.Contracts<br/>(ICatalogItem, IPriceable, IVariantable,<br/>ICategorizeable, IBatchable, ILocatable,<br/>IHierarchical, IDocument, IContactable, IAddressable)"]
+        TimeAbstractions["Birko.Time.Abstractions<br/>(IDateTimeProvider, SystemDateTimeProvider,<br/>TestDateTimeProvider)"]
+    end
+
+    %% Middle Layer - Core Infrastructure
+    subgraph CoreInfrastructure["Core Infrastructure"]
+        Configuration["Birko.Configuration<br/>(ISettings to Settings to PasswordSettings to RemoteSettings)"]
+        DataCore["Birko.Data.Core<br/>(AbstractModel, ViewModels, Filters, Exceptions)"]
+        Models["Birko.Models<br/>(Value Objects: Money, MoneyWithTax,<br/>Percentage, PostalAddress, Quantity)"]
+        ModelsInventory["Birko.Models.Inventory<br/>(StockItem, StorageLocation, InventoryDocument)"]
+        ModelsPricing["Birko.Models.Pricing<br/>(Currency, Tax, PriceGroup,<br/>PriceList, Discount)"]
+    end
+
+    %% Upper Middle Layer - Data Access
+    subgraph DataAccess["Data Access Layer"]
+        DataStores["Birko.Data.Stores<br/>(Store interfaces, OrderBy&lt;T&gt;)"]
+        Repositories["Birko.Data.Repositories"]
+        DataPatterns["Birko.Data.Patterns<br/>(StoreWrapperBuilder)"]
+        DataComposition["Birko.Data.Composition<br/>(Runtime decorator chains)"]
+        DataTagging["Birko.Data.Tagging<br/>(ITaggable, Tag, TagService)"]
+        DataViews["Birko.Data.Views<br/>(ViewDefinitionBuilder, ViewMapRegistry)"]
+    end
+
+    %% Top Layer - AI & Communication
+    subgraph AILayer["AI & Communication Layer"]
+        AIContracts["Birko.AI.Contracts<br/>(ILlmProvider, Message, Tool,<br/>AgentOptions, LlmProviderFactory)"]
+        AI["Birko.AI<br/>(LlmProviderBase, Agent base, AgentFactory)"]
+        AIProviders["Birko.AI.Providers<br/>(Claude, OpenAI, Gemini, Ollama, AzureOpenAI)"]
+        AIAgents["Birko.AI.Agents<br/>(CodingAgent, Language agents, Media agents)"]
+        AIResilience["Birko.AI.Resilience<br/>(RateLimiter, CircuitBreaker, CostTracking)"]
+        AIOrchestration["Birko.AI.Orchestration<br/>(ITaskDispatcher, ImplementationPlan)"]
+        OAuth["Birko.Communication.OAuth<br/>(OAuthClient, OAuthSettings)"]
+    end
+
+    %% Specialized Layers
+    subgraph Specialized["Specialized Implementations"]
+        ModelsSQL["Birko.Models.SQL<br/>(ModelMap&lt;T&gt;, ModelMapRegistry)"]
+        CosmosDB["Birko.Data.CosmosDB<br/>(Stores, Repositories, UnitOfWork)"]
+        CosmosMigrations["Birko.Data.Migrations.CosmosDB"]
+        HealthData["Birko.Health.Data<br/>(CosmosDbHealthCheck)"]
+    end
+
+    %% Reference Implementations
+    subgraph Reference["Reference Implementations"]
+        ElasticSearch["ElasticSearch Store<br/>(Async/Bulk operations reference)"]
+        JSONStore["JSON Store<br/>(File-based storage reference)"]
+        XMLStore["XML Store<br/>(File-based storage reference)"]
+    end
+
+    %% Dependency Arrows
+    Contracts --> Configuration
+    Contracts --> DataCore
+    ModelsContracts --> Models
+    ModelsContracts --> ModelsInventory
+    ModelsContracts --> ModelsPricing
+    TimeAbstractions --> DataComposition
+
+    Configuration --> DataStores
+    DataCore --> DataStores
+    Models --> DataStores
+    ModelsInventory --> DataStores
+    ModelsPricing --> DataStores
+
+    DataStores --> Repositories
+    DataStores --> DataPatterns
+    DataStores --> DataComposition
+    DataStores --> DataTagging
+    DataStores --> DataViews
+    DataStores --> ElasticSearch
+    DataStores --> JSONStore
+    DataStores --> XMLStore
+
+    DataCore --> ModelsSQL
+    DataStores --> CosmosDB
+    DataStores --> CosmosMigrations
+    CosmosDB --> HealthData
+
+    Contracts --> AIContracts
+    AIContracts --> AI
+    AI --> AIProviders
+    AI --> AIAgents
+    AI --> AIResilience
+    AI --> AIOrchestration
+    Contracts --> OAuth
+
+    %% Styling
+    classDef foundationStyle fill:#e3f2fd,stroke:#1976d2,strokeWidth:2px,color:#0d47a1
+    classDef coreStyle fill:#bbdefb,stroke:#1565c0,strokeWidth:2px,color:#0d47a1
+    classDef dataStyle fill:#90caf9,stroke:#0d47a1,strokeWidth:2px,color:#ffffff
+    classDef aiStyle fill:#fff9c4,stroke:#f57f17,strokeWidth:2px,color:#bf360c
+    classDef specializedStyle fill:#ce93d8,stroke:#6a1b9a,strokeWidth:2px,color:#4a148c
+    classDef referenceStyle fill:#a5d6a7,stroke:#2e7d32,strokeWidth:2px,color:#1b5e20
+
+    class Contracts,ModelsContracts,TimeAbstractions foundationStyle
+    class Configuration,DataCore,Models,ModelsInventory,ModelsPricing coreStyle
+    class DataStores,Repositories,DataPatterns,DataComposition,DataTagging,DataViews dataStyle
+    class AIContracts,AI,AIProviders,AIAgents,AIResilience,AIOrchestration,OAuth aiStyle
+    class ModelsSQL,CosmosDB,CosmosMigrations,HealthData specializedStyle
+    class ElasticSearch,JSONStore,XMLStore referenceStyle
+
+    %% Legend
+    subgraph Legend["Legend"]
+        L1["● Foundations - Zero dependencies"]
+        L2["● Core Infrastructure - Core domain models"]
+        L3["● Data Access - Stores & repositories"]
+        L4["● AI & Communication - LLM providers"]
+        L5["● Specialized - Platform-specific"]
+        L6["● Reference - Reference implementations (ES, JSON, XML)"]
+    end
+
+    style Foundations fill:#f8f9fa,stroke:#dee2e6
+    style CoreInfrastructure fill:#f8f9fa,stroke:#dee2e6
+    style DataAccess fill:#f8f9fa,stroke:#dee2e6
+    style AILayer fill:#f8f9fa,stroke:#dee2e6
+    style Specialized fill:#f8f9fa,stroke:#dee2e6
+    style Reference fill:#f8f9fa,stroke:#dee2e6
+    style Legend fill:#ffffff,stroke:#dee2e6

@@ -181,6 +181,10 @@
 			"path": "../Birko.Data.JSON"
 		},
 		{
+			"name": "Data.NoSQL / Birko.Data.XML",
+			"path": "../Birko.Data.XML"
+		},
+		{
 			"name": "Data.NoSQL / Birko.Data.MongoDB",
 			"path": "../Birko.Data.MongoDB"
 		},
@@ -305,6 +309,10 @@
 			"path": "../Birko.Data.Sync.Json"
 		},
 		{
+			"name": "Data.Sync / Birko.Data.Sync.Xml",
+			"path": "../Birko.Data.Sync.Xml"
+		},
+		{
 			"name": "Data.Sync / Birko.Data.Sync.MongoDb",
 			"path": "../Birko.Data.Sync.MongoDb"
 		},
@@ -343,6 +351,10 @@
 		{
 			"name": "Data.ViewModels / Birko.Data.JSON.ViewModel",
 			"path": "../Birko.Data.JSON.ViewModel"
+		},
+		{
+			"name": "Data.ViewModels / Birko.Data.XML.ViewModel",
+			"path": "../Birko.Data.XML.ViewModel"
 		},
 		{
 			"name": "Data.ViewModels / Birko.Data.MongoDB.ViewModel",
@@ -725,6 +737,10 @@
 			"path": "../Birko.Data.JSON.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.XML.Tests",
+			"path": "../Birko.Data.XML.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Views.Tests",
 			"path": "../Birko.Data.Views.Tests"
 		},
@@ -779,6 +795,10 @@
 		{
 			"name": "Workflow / Birko.Workflow.JSON",
 			"path": "../Birko.Workflow.JSON"
+		},
+		{
+			"name": "Workflow / Birko.Workflow.XML",
+			"path": "../Birko.Workflow.XML"
 		},
 		{
 			"name": "Workflow / Birko.Workflow.MongoDB",

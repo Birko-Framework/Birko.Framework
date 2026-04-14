@@ -4,7 +4,7 @@ A modular .NET framework providing data access, communication, and model infrast
 
 ## Features
 
-- Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, Azure Cosmos DB)
+- Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, XML, Azure Cosmos DB)
 - Sync and async store/repository abstractions with bulk operation support and lazy-init (auto-creates tables/indexes on first use)
 - ViewModel layer with model-to-viewmodel mapping
 - Database migrations framework
@@ -49,6 +49,8 @@ A modular .NET framework providing data access, communication, and model infrast
 | Project | Description |
 |---------|-------------|
 | Birko.Framework | Main framework application |
+| Birko.Contracts | Pure interfaces (ILoadable, ICopyable, IDefault, ITimestamped) with zero dependencies |
+| Birko.Configuration | Settings hierarchy (Settings, PasswordSettings, RemoteSettings) |
 | Birko.Data.Core | Models, ViewModels, Filters, Exceptions (foundation layer) |
 | Birko.Data.Stores | Store interfaces/abstractions, Settings, OrderBy, StoreLocator |
 | Birko.Data.Repositories | Repository interfaces/abstractions, RepositoryLocator, DI extensions |
@@ -64,6 +66,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Data.SQL.MySQL | MySQL implementation |
 | Birko.Data.SQL.SqLite | SQLite implementation |
 | Birko.Data.JSON | JSON file-based storage |
+| Birko.Data.XML | XML file-based storage |
 | Birko.Data.ElasticSearch | Elasticsearch repository/store |
 | Birko.Data.MongoDB | MongoDB repository/store |
 | Birko.Data.RavenDB | RavenDB repository/store |
@@ -81,7 +84,7 @@ A modular .NET framework providing data access, communication, and model infrast
 |---------|-------------|
 | Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Sluggable, Paging) |
 | Birko.Data.Migrations | Database migration framework (SQL, ES, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB) |
-| Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, CosmosDB, Tenant) |
+| Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, XML, CosmosDB, Tenant) |
 | Birko.Data.Aggregates | SQL-NoSQL aggregate mapper (flatten/expand for sync) |
 | Birko.Data.Tenant | Multi-tenancy support |
 | Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
@@ -99,7 +102,7 @@ A modular .NET framework providing data access, communication, and model infrast
 |---------|-------------|
 | Birko.Data.ViewModel | Base ViewModel repository abstractions |
 | Birko.Data.SQL.ViewModel | SQL ViewModel repositories |
-| Platform-specific ViewModel projects | ES, InfluxDB, JSON, MongoDB, RavenDB, TimescaleDB, CosmosDB |
+| Platform-specific ViewModel projects | ES, InfluxDB, JSON, XML, MongoDB, RavenDB, TimescaleDB, CosmosDB |
 
 ### Models
 
@@ -166,6 +169,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Workflow.RavenDB | RavenDB persistence backend |
 | Birko.Workflow.JSON | JSON file persistence backend |
 | Birko.Workflow.CosmosDB | Cosmos DB persistence backend |
+| Birko.Workflow.XML | XML file persistence backend |
 
 ### Health
 
