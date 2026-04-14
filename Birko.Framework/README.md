@@ -278,6 +278,21 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Caching.Tests | Core caching tests (CacheResult, CacheEntryOptions, MemoryCache) |
 | Birko.Communication.REST.Tests | REST client tests (BuildUri, HttpMethod, event args, defaults) |
 | Birko.Communication.WebSocket.Tests | WebSocket settings and configuration tests |
+| Birko.Caching.Hybrid.Tests | Hybrid two-tier cache tests (L1/L2 sync, eviction, TTL) |
+| Birko.CQRS.Tests | CQRS tests (commands, queries, pipeline behaviors, mediator) |
+| Birko.Data.Aggregates.Tests | Aggregate mapper tests (flatten/expand, sync integration) |
+| Birko.Data.Localization.Tests | Entity-level localization tests (ILocalizable, store decorators) |
+| Birko.Data.XML.Tests | XML file store tests |
+| Birko.Health.Tests | Health check tests (runner, disk space, memory) |
+| Birko.Health.Azure.Tests | Azure health check tests (Blob Storage, Key Vault) |
+| Birko.Localization.Tests | Localization tests (CLDR pluralization, JSON/RESX providers) |
+| Birko.Localization.Data.Tests | Database-backed localization tests (namespace scoping, TTL cache) |
+| Birko.MessageQueue.Redis.Tests | Redis message queue tests |
+| Birko.Messaging.Razor.Tests | Razor template engine tests (.cshtml rendering) |
+| Birko.Serialization.Tests | Serialization tests (System.Text.Json, System.Xml) |
+| Birko.Storage.AzureBlob.Tests | Azure Blob Storage tests (REST API, SAS, presigned URLs) |
+| Birko.Time.Tests | Time utility tests (calendar, holidays, working hours, zones) |
+| Birko.Workflow.Tests | Workflow engine tests (state machine, guards, actions, Mermaid/DOT) |
 
 ## Architecture
 

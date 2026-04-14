@@ -167,6 +167,11 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Data.RavenDB.Tests, Birko.Data.CosmosDB.Tests
 - Birko.Data.TimescaleDB.Tests, Birko.Data.InfluxDB.Tests, Birko.Data.JSON.Tests
 - Birko.Data.Views.Tests
+- Birko.Validation.Tests, Birko.Data.Sync.Tests
+- Birko.BackgroundJobs.SQL.Tests, Birko.Workflow.SQL.Tests
+- Birko.Communication.Camera.Tests, Birko.Communication.REST.Tests, Birko.Communication.WebSocket.Tests
+- Birko.Data.Migrations.SQL.Tests, Birko.Data.XML.Tests
+- Birko.Caching.Tests
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.
