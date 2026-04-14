@@ -90,8 +90,11 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.NFC\Birko.Communication.NFC.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.OAuth.Providers\Birko.Communication.OAuth.Providers.projitems" Label="Shared" />
+
+  <!-- Birko.Contracts and Birko.Configuration are transitively imported via Birko.Data.Stores.projitems -->
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <!-- Birko.Settings is transitively imported via Birko.Data.Stores.projitems -->
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
 
@@ -176,6 +179,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.Tenant\Birko.Data.Sync.Tenant.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.Xml\Birko.Data.Sync.Xml.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Aggregates\Birko.Data.Aggregates.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Tenant\Birko.Data.Tenant.projitems" Label="Shared" />
@@ -192,7 +197,11 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.XML\Birko.Data.XML.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.CosmosDB.ViewModel\Birko.Data.CosmosDB.ViewModel.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.XML.ViewModel\Birko.Data.XML.ViewModel.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Sync.CosmosDB\Birko.Data.Sync.CosmosDB.projitems" Label="Shared" />
 
@@ -296,6 +305,7 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <!-- Birko.Time.Abstractions is transitively imported via Birko.Time.projitems -->
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.CQRS\Birko.CQRS.projitems" Label="Shared" />
 
@@ -311,6 +321,14 @@
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.RavenDB\Birko.Workflow.RavenDB.projitems" Label="Shared" />
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.JSON\Birko.Workflow.JSON.projitems" Label="Shared" />
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.CosmosDB\Birko.Workflow.CosmosDB.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Workflow.XML\Birko.Workflow.XML.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.AI.Contracts\Birko.AI.Contracts.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.AI\Birko.AI.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.AI.Providers\Birko.AI.Providers.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.AI.Agents\Birko.AI.Agents.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.AI.Resilience\Birko.AI.Resilience.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.AI.Orchestration\Birko.AI.Orchestration.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Localization\Birko.Localization.projitems" Label="Shared" />
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Localization.Data\Birko.Localization.Data.projitems" Label="Shared" />
