@@ -1,5 +1,6 @@
 using System;
 using Birko.Data.Models;
+using Birko.BackgroundJobs.Serialization;
 using Nest;
 
 namespace Birko.BackgroundJobs.ElasticSearch.Models;
@@ -76,7 +77,7 @@ public class ElasticJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
         if (!string.IsNullOrEmpty(MetadataJson))
         {
-            var metadata = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(MetadataJson);
+            var metadata = JobSerializationHelper.DeserializeMetadata(MetadataJson);
             if (metadata != null)
             {
                 descriptor.Metadata = metadata;
@@ -109,8 +110,6 @@ public class ElasticJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
         LastAttemptAt = data.LastAttemptAt;
         CompletedAt = data.CompletedAt;
         LastError = data.LastError;
-        MetadataJson = data.Metadata.Count > 0
-            ? System.Text.Json.JsonSerializer.Serialize(data.Metadata)
-            : null;
+        MetadataJson = JobSerializationHelper.SerializeMetadata(data.Metadata);
     }
 }
