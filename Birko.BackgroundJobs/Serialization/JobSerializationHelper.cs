@@ -27,11 +27,12 @@ namespace Birko.BackgroundJobs.Models
         /// <summary>
         /// Deserializes JSON string to metadata dictionary.
         /// </summary>
-        public static IDictionary<string, string>? DeserializeMetadata(string? json)
+        public static Dictionary<string, string>? DeserializeMetadata(string? json)
         {
             if (string.IsNullOrEmpty(json))
                 return null;
-            return _serializer.Deserialize<IDictionary<string, string>>(json);
+            var result = _serializer.Deserialize<IDictionary<string, string>>(json);
+            return result as Dictionary<string, string> ?? new Dictionary<string, string>(result!);
         }
     }
 }
