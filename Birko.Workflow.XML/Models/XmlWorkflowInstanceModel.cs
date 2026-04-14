@@ -32,7 +32,7 @@ public class XmlWorkflowInstanceModel : AbstractModel
     [XmlElement("UpdatedAt")]
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    private static readonly ISerializer DefaultSerializer = new Birko.Serialization.Xml.XmlSerializer();
+    private static readonly ISerializer DefaultSerializer = new Birko.Serialization.Xml.SystemXmlSerializer();
 
     public WorkflowInstance<TData> ToInstance<TData>(ISerializer? serializer = null) where TData : class
     {
