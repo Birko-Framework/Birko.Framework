@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using Birko.Data.Models;
+using Birko.BackgroundJobs.Serialization;
 
 namespace Birko.BackgroundJobs.CosmosDB.Models;
 
@@ -47,7 +47,7 @@ public class CosmosJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
         if (!string.IsNullOrEmpty(MetadataJson))
         {
-            var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(MetadataJson);
+            var metadata = JobSerializationHelper.DeserializeMetadata(MetadataJson);
             if (metadata != null)
             {
                 descriptor.Metadata = metadata;
@@ -80,8 +80,6 @@ public class CosmosJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
         LastAttemptAt = data.LastAttemptAt;
         CompletedAt = data.CompletedAt;
         LastError = data.LastError;
-        MetadataJson = data.Metadata.Count > 0
-            ? JsonSerializer.Serialize(data.Metadata)
-            : null;
+        MetadataJson = JobSerializationHelper.SerializeMetadata(data.Metadata);
     }
 }
