@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using ProtoBuf;
 
 namespace Birko.Serialization.Protobuf
@@ -79,6 +81,62 @@ namespace Birko.Serialization.Protobuf
             ArgumentNullException.ThrowIfNull(data);
             using var stream = new MemoryStream(data);
             return Serializer.Deserialize<T>(stream);
+        }
+
+        public void Serialize(Stream stream, object value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            Serializer.Serialize(stream, value);
+        }
+
+        public void Serialize<T>(Stream stream, T value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            Serializer.Serialize(stream, value);
+        }
+
+        public object? Deserialize(Stream stream, Type type)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            return Serializer.Deserialize(type, stream);
+        }
+
+        public T? Deserialize<T>(Stream stream)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return Serializer.Deserialize<T>(stream);
+        }
+
+        public Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            Serializer.Serialize(stream, value);
+            return Task.CompletedTask;
+        }
+
+        public Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            Serializer.Serialize(stream, value);
+            return Task.CompletedTask;
+        }
+
+        public async Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            return await Task.Run(() => Serializer.Deserialize(type, stream), cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            return await Task.Run(() => Serializer.Deserialize<T>(stream), cancellationToken).ConfigureAwait(false);
         }
     }
 }
