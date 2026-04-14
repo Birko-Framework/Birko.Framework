@@ -1,6 +1,7 @@
 using System;
 using Birko.Data.Models;
 using Birko.BackgroundJobs.Serialization;
+using Birko.BackgroundJobs.Models;
 using Nest;
 
 namespace Birko.BackgroundJobs.ElasticSearch.Models;
