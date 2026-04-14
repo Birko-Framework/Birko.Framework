@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using MessagePack;
 using MessagePack.Resolvers;
 
@@ -77,6 +80,72 @@ namespace Birko.Serialization.MessagePack
         {
             ArgumentNullException.ThrowIfNull(data);
             return MessagePackSerializer.Deserialize<T>(data, _options);
+        }
+
+        public void Serialize(Stream stream, object value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var bytes = MessagePackSerializer.Serialize(value.GetType(), value, _options);
+            stream.Write(bytes, 0, bytes.Length);
+        }
+
+        public void Serialize<T>(Stream stream, T value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var bytes = MessagePackSerializer.Serialize(value, _options);
+            stream.Write(bytes, 0, bytes.Length);
+        }
+
+        public object? Deserialize(Stream stream, Type type)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return MessagePackSerializer.Deserialize(type, ms.ToArray(), _options);
+        }
+
+        public T? Deserialize<T>(Stream stream)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return MessagePackSerializer.Deserialize<T>(ms.ToArray(), _options);
+        }
+
+        public async Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var bytes = MessagePackSerializer.Serialize(value.GetType(), value, _options);
+            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var bytes = MessagePackSerializer.Serialize(value, _options);
+            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+        }
+
+        public async Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+            return MessagePackSerializer.Deserialize(type, ms.ToArray(), _options);
+        }
+
+        public async Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
+            return MessagePackSerializer.Deserialize<T>(ms.ToArray(), _options);
         }
     }
 }
