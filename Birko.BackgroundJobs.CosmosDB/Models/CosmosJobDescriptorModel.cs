@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Birko.Data.Models;
 using Birko.BackgroundJobs.Serialization;
+using Birko.BackgroundJobs.Models;
 
 namespace Birko.BackgroundJobs.CosmosDB.Models;
 
