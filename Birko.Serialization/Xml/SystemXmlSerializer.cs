@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Serialization;
 
@@ -115,6 +117,84 @@ namespace Birko.Serialization.Xml
             using var stream = new MemoryStream(data);
             using var xmlReader = XmlReader.Create(stream, _readerSettings);
             return (T?)serializer.Deserialize(xmlReader);
+        }
+
+        public void Serialize(Stream stream, object value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var serializer = new XmlSerializer(value.GetType());
+            using var xmlWriter = XmlWriter.Create(stream, _writerSettings);
+            serializer.Serialize(xmlWriter, value);
+            xmlWriter.Flush();
+        }
+
+        public void Serialize<T>(Stream stream, T value)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var serializer = new XmlSerializer(typeof(T));
+            using var xmlWriter = XmlWriter.Create(stream, _writerSettings);
+            serializer.Serialize(xmlWriter, value);
+            xmlWriter.Flush();
+        }
+
+        public object? Deserialize(Stream stream, Type type)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            var serializer = new XmlSerializer(type);
+            using var xmlReader = XmlReader.Create(stream, _readerSettings);
+            return serializer.Deserialize(xmlReader);
+        }
+
+        public T? Deserialize<T>(Stream stream)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            var serializer = new XmlSerializer(typeof(T));
+            using var xmlReader = XmlReader.Create(stream, _readerSettings);
+            return (T?)serializer.Deserialize(xmlReader);
+        }
+
+        public Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var serializer = new XmlSerializer(value.GetType());
+            using var xmlWriter = XmlWriter.Create(stream, _writerSettings);
+            serializer.Serialize(xmlWriter, value);
+            xmlWriter.Flush();
+            return Task.CompletedTask;
+        }
+
+        public Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            var serializer = new XmlSerializer(typeof(T));
+            using var xmlWriter = XmlWriter.Create(stream, _writerSettings);
+            serializer.Serialize(xmlWriter, value);
+            xmlWriter.Flush();
+            return Task.CompletedTask;
+        }
+
+        public Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            var serializer = new XmlSerializer(type);
+            using var xmlReader = XmlReader.Create(stream, _readerSettings);
+            var result = serializer.Deserialize(xmlReader);
+            return Task.FromResult(result);
+        }
+
+        public Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(stream);
+            var serializer = new XmlSerializer(typeof(T));
+            using var xmlReader = XmlReader.Create(stream, _readerSettings);
+            var result = (T?)serializer.Deserialize(xmlReader);
+            return Task.FromResult(result);
         }
     }
 }
