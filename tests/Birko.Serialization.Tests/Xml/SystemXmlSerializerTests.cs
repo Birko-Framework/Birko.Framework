@@ -121,7 +121,7 @@ namespace Birko.Serialization.Tests.Xml
         [Fact]
         public void Deserialize_NullData_ThrowsArgumentNullException()
         {
-            var act = () => _serializer.Deserialize<XmlTestPayload>(null!);
+            var act = () => _serializer.Deserialize<XmlTestPayload>((string)null!);
             act.Should().Throw<ArgumentNullException>();
         }
 

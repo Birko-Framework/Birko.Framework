@@ -69,7 +69,7 @@ namespace Birko.Serialization.Tests.Newtonsoft
         [Fact]
         public void Deserialize_NullData_ThrowsArgumentNullException()
         {
-            var act = () => _serializer.Deserialize<TestPayload>(null!);
+            var act = () => _serializer.Deserialize<TestPayload>((string)null!);
             act.Should().Throw<ArgumentNullException>();
         }
 
