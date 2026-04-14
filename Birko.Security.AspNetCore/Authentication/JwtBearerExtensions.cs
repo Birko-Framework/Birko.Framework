@@ -66,19 +66,15 @@ public static class JwtBearerExtensions
             };
 
             // Allow token from query string for SSE (EventSource can't set headers)
-            // and WebSocket connections
+            // and WebSocket connections — any request with ?token= gets it read
             jwt.Events = new JwtBearerEvents
             {
                 OnMessageReceived = context =>
                 {
-                    var path = context.HttpContext.Request.Path;
-                    if (path.StartsWithSegments("/api/sse") || path.StartsWithSegments("/ws"))
+                    var token = context.Request.Query["token"];
+                    if (!string.IsNullOrEmpty(token))
                     {
-                        var token = context.Request.Query["token"];
-                        if (!string.IsNullOrEmpty(token))
-                        {
-                            context.Token = token;
-                        }
+                        context.Token = token;
                     }
                     return Task.CompletedTask;
                 }
