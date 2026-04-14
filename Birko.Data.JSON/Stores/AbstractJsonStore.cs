@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Text.Json;
 
 using Birko.Data.Stores;
 using Birko.Configuration;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 
 namespace Birko.Data.JSON.Stores
 {
@@ -24,15 +25,28 @@ namespace Birko.Data.JSON.Stores
         /// </summary>
         protected Dictionary<Guid, T> _items = new();
 
+        /// <summary>
+        /// The JSON serializer instance.
+        /// </summary>
+        protected ISerializer _serializer;
+
         #endregion
 
         #region Constructors and Initialization
 
         /// <summary>
-        /// Initializes a new instance of the AbstractJsonStore class.
+        /// Initializes a new instance of the AbstractJsonStore class with a JSON serializer.
         /// </summary>
-        public AbstractJsonStore()
+        /// <param name="serializer">The JSON serializer to use. If null, creates a default SystemJsonSerializer.</param>
+        protected AbstractJsonStore(ISerializer? serializer = null)
         {
+            _serializer = serializer ?? new SystemJsonSerializer(
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                    WriteIndented = true
+                },
+                new System.Text.Json.JsonWriterOptions { Indented = true });
         }
 
         #endregion
@@ -111,29 +125,25 @@ namespace Birko.Data.JSON.Stores
         protected abstract void SaveData();
 
         /// <summary>
-        /// Deserializes data from a stream.
+        /// Deserializes data from a stream using the configured serializer.
         /// </summary>
         /// <typeparam name="TData">Type of data to deserialize.</typeparam>
         /// <param name="stream">The stream to read from.</param>
         /// <returns>The deserialized data.</returns>
-        protected static TData? ReadFromStream<TData>(FileStream stream)
+        protected TData? ReadFromStream<TData>(Stream stream)
         {
-            return JsonSerializer.Deserialize<TData>(stream);
+            return _serializer.Deserialize<TData>(stream);
         }
 
         /// <summary>
-        /// Serializes data to a stream.
+        /// Serializes data to a stream using the configured serializer.
         /// </summary>
         /// <typeparam name="TData">Type of data to serialize.</typeparam>
         /// <param name="stream">The stream to write to.</param>
         /// <param name="data">The data to serialize.</param>
-        protected static void WriteToStream<TData>(FileStream stream, TData data)
+        protected void WriteToStream<TData>(Stream stream, TData data)
         {
-            using Utf8JsonWriter jsonWriter = new(stream, new JsonWriterOptions()
-            {
-                Indented = true,
-            });
-            JsonSerializer.Serialize(jsonWriter, data);
+            _serializer.Serialize(stream, data);
         }
 
         #endregion
