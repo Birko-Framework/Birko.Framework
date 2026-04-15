@@ -1,5 +1,5 @@
 # Birko Framework
-## Modulárny .NET framework pre podnikové aplikácie
+## Modulárny .NET framework pre podnikové, IoT, AI a real-time aplikácie
 
 ---
 
@@ -21,8 +21,21 @@ Birko Framework je komplexný .NET 10.0 framework postavený na princípe **jedn
 
 - **161 produktových projektov** (z toho približne **81 platformových rozšírení**)
 - **55 testovacích projektov** (xUnit + FluentAssertions)
-- **12 databázových platforiem**, **11 LLM poskytovateľov**, **38 Web Components**
+- **12 databázových platforiem**, **11 LLM poskytovateľov**, **43 Web Components**
 - **0 externých závislostí** pre core contracts
+
+**Oblasti použitia:**
+
+Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu doménu:
+
+- **Podnikové aplikácie (back-office, ERP)** – CRUD, multi-tenancy, RBAC, audit, workflow, CQRS, reporting
+- **E-shopy a e-commerce** – domain modely (Customers, Products, Category, Pricing: Currency/Tax/PriceGroup/PriceList/Discount, Inventory, IDocument/IDocumentLine pre objednávky), Workflow pre stavy objednávok, Background Jobs, Messaging (Email/SMS/Push), ElasticSearch vyhľadávanie, multi-currency a multi-language
+- **Prezentačné a CMS aplikácie** – Web.Components (Shadow DOM UI), Web.Shell, hash router, Razor templates (RazorLight), SEO modely, Localization (CLDR pluralizácia), JSON/XML content storage, Azure Blob pre médiá, slug generátor
+- **Desktopové aplikácie** – SQLite / JSON / XML stores, lokálny filesystem storage, hardvér (NFC, RFID, Bluetooth, Camera, IR, Modbus), offline background jobs (XML job queue), AI/LLM integrácia pre local-first nástroje
+- **IoT a priemysel** – Modbus (RTU/TCP, funkčné kódy 01–16), NFC/RFID (ISO 14443A, NDEF), Bluetooth, IR (NEC/Samsung/RC5 @ 38 kHz), Camera, Hardware, time-series (InfluxDB, TimescaleDB)
+- **AI-riadené aplikácie a devtools** – 11 LLM poskytovateľov, 10 jazykových a 4 task agenti, orchestrácia, resilience (rate limit / circuit breaker / cost tracking)
+- **Real-time systémy** – WebSocket, SSE, MessageQueue, EventBus, distribuovaná synchronizácia
+- **Procedurálna generácia a simulácie** – 6 RNG algoritmov, Perlin/Simplex noise, distribúcie (Uniform/Normal/Exponential/Poisson), grafy, stromy (AVL/Red-Black/Interval), heapy, Bloom filter, skip list
 
 ---
 
@@ -503,7 +516,7 @@ Utility funkcie pre bežné úlohy:
 - Hash router
 
 ### Birko.Web.Components
-**38 komponentov**: inputs, layout, data, feedback, navigation
+**43 komponentov**: inputs (17), layout (9), data (7), feedback (5), navigation (4), command palette (1)
 
 ### Birko.Web.Shell
 Application shell framework s **trojvrstvovou hierarchiou** abstraktných tried:
@@ -575,7 +588,7 @@ Vytvorte projekt `{YourSolution}.Birko` (napríklad `FisData.Birko`) a importujt
 | **Projekty celkom** | **216** |
 | Databázové platformy | 12 |
 | LLM poskytovatelia | 11 |
-| Web Components | 38 |
+| Web Components | 43 |
 | Jazykové AI agenti | 10 |
 | Task AI agenti | 4 |
 | Communication protokoly | 14 |
