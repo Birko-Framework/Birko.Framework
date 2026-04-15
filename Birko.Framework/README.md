@@ -83,26 +83,67 @@ A modular .NET framework providing data access, communication, and model infrast
 | Project | Description |
 |---------|-------------|
 | Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Sluggable, Paging) |
-| Birko.Data.Migrations | Database migration framework (SQL, ES, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB) |
-| Birko.Data.Sync | Data synchronization (SQL, ES, MongoDB, RavenDB, JSON, XML, CosmosDB, Tenant) |
 | Birko.Data.Aggregates | SQL-NoSQL aggregate mapper (flatten/expand for sync) |
 | Birko.Data.Tenant | Multi-tenancy support |
 | Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
 | Birko.Data.Tagging | Entity tagging system (tenant-scoped tags, polymorphic junction) |
 | Birko.Data.Views | Unified fluent view builder (cross-platform views, projections, aggregations) |
 | Birko.Data.EventSourcing | Event sourcing pattern |
-| Birko.Data.SQL.View | SQL view generation (attribute-based) |
-| Birko.Data.SQL.View.Migrations | Integration between SQL View definitions and the Migration framework |
 | Birko.Data.SQL.Caching | Query caching decorator for SQL stores |
+
+### Migrations
+
+| Project | Description |
+|---------|-------------|
+| Birko.Data.Migrations | Core migration framework (Migration base, runner, result types) |
+| Birko.Data.Migrations.SQL | SQL migration backend (cross-database DDL) |
+| Birko.Data.Migrations.ElasticSearch | Elasticsearch index/mapping migrations |
+| Birko.Data.Migrations.MongoDB | MongoDB collection/index migrations |
+| Birko.Data.Migrations.RavenDB | RavenDB collection/index migrations |
+| Birko.Data.Migrations.InfluxDB | InfluxDB bucket/retention migrations |
+| Birko.Data.Migrations.TimescaleDB | TimescaleDB hypertable/compression migrations |
+| Birko.Data.Migrations.CosmosDB | Cosmos DB container/indexing-policy migrations |
+
+### Data Sync
+
+| Project | Description |
+|---------|-------------|
+| Birko.Data.Sync | Core sync framework (SyncProvider, SyncQueue, upload/download) |
+| Birko.Data.Sync.Sql | SQL sync backend |
+| Birko.Data.Sync.ElasticSearch | Elasticsearch sync backend |
+| Birko.Data.Sync.MongoDb | MongoDB sync backend |
+| Birko.Data.Sync.RavenDB | RavenDB sync backend |
+| Birko.Data.Sync.CosmosDB | Cosmos DB sync backend |
+| Birko.Data.Sync.Json | JSON file sync backend |
+| Birko.Data.Sync.Xml | XML file sync backend |
+| Birko.Data.Sync.Tenant | Tenant-scoped sync decorator |
+
+### SQL View (DDL)
+
+| Project | Description |
+|---------|-------------|
+| Birko.Data.SQL.View | SQL view generation base (attribute-based view definitions) |
+| Birko.Data.SQL.MSSql.View | SQL Server view DDL dialect |
+| Birko.Data.SQL.PostgreSQL.View | PostgreSQL view DDL dialect |
+| Birko.Data.SQL.MySQL.View | MySQL view DDL dialect |
+| Birko.Data.SQL.SqLite.View | SQLite view DDL dialect |
+| Birko.Data.SQL.View.Migrations | Integration between SQL View definitions and the Migration framework |
 | Birko.Data.SQL.Views | SQL platform for fluent views (translates ViewDefinition to SQL) |
 
 ### ViewModel Layer
 
 | Project | Description |
 |---------|-------------|
-| Birko.Data.ViewModel | Base ViewModel repository abstractions |
+| Birko.Data.ViewModel | Base ViewModel repository abstractions (`AbstractViewModelRepository`, `AbstractAsyncViewModelRepository`, `MapToModel`) |
 | Birko.Data.SQL.ViewModel | SQL ViewModel repositories |
-| Platform-specific ViewModel projects | ES, InfluxDB, JSON, XML, MongoDB, RavenDB, TimescaleDB, CosmosDB |
+| Birko.Data.ElasticSearch.ViewModel | Elasticsearch ViewModel repositories |
+| Birko.Data.MongoDB.ViewModel | MongoDB ViewModel repositories |
+| Birko.Data.RavenDB.ViewModel | RavenDB ViewModel repositories |
+| Birko.Data.CosmosDB.ViewModel | Cosmos DB ViewModel repositories |
+| Birko.Data.InfluxDB.ViewModel | InfluxDB ViewModel repositories |
+| Birko.Data.TimescaleDB.ViewModel | TimescaleDB ViewModel repositories |
+| Birko.Data.JSON.ViewModel | JSON file ViewModel repositories |
+| Birko.Data.XML.ViewModel | XML file ViewModel repositories |
 
 ### Models
 
@@ -137,6 +178,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.Communication.Camera | Camera frame capture (FFmpeg-based JPEG snapshots) |
 | Birko.Communication.IR | Consumer IR (NEC, Samsung, RC5 protocols, pluggable transports) |
 | Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
+| Birko.Communication.OAuth.Providers | Pre-configured OAuth providers (e.g. GitHubOAuthProvider for Device Code flow) |
 
 ### AI / LLM
 
@@ -148,7 +190,6 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.AI.Agents | CodingAgent, 10 language agents, 4 task agents, media agents, OrchestratorAgent + AgentRegistration |
 | Birko.AI.Resilience | ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider |
 | Birko.AI.Orchestration | ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer, EscalationAlert |
-| Birko.Communication.OAuth.Providers | GitHubOAuthProvider (pre-configured device flow) |
 
 ### Web
 
@@ -350,8 +391,10 @@ dotnet test
 - [Architecture](docs/architecture.md)
 - [Store Implementation Guide](docs/store-implementation.md)
 - [Repository Implementation Guide](docs/repository-implementation.md)
+- [Store Composition Guide](docs/composition.md) (Runtime decorator composition — `StoreWrapperBuilder`)
 - [Migration Guide](docs/migrations.md)
 - [Data Patterns Guide](docs/patterns.md) (Unit of Work, Soft Delete, Audit, Paging, Specifications, Concurrency)
+- [Domain Models Guide](docs/models.md) (Contracts, Value Objects, Customers, Users, Inventory, Pricing, Product, Category, SEO, fluent SQL mapping)
 - [Validation Guide](docs/validation.md)
 - [Caching Guide](docs/caching.md)
 - [Security Guide](docs/security.md) (Password hashing, AES encryption, JWT, ASP.NET Core integration)
@@ -363,6 +406,7 @@ dotnet test
 - [Messaging Guide](docs/messaging.md) (Email, SMS, Push, Templates)
 - [Communication Guide](docs/communication.md) (REST, SOAP, WebSocket, SSE, Modbus, OAuth, IR, NFC)
 - [Data Synchronization Guide](docs/sync.md)
+- [Aggregates Guide](docs/aggregates.md) (SQL ↔ NoSQL flatten/expand for cross-store sync)
 - [Multi-Tenancy Guide](docs/tenant.md)
 - [Telemetry Guide](docs/telemetry.md) (Store metrics, distributed tracing, correlation ID)
 - [CQRS Guide](docs/cqrs.md) (Command/Query, Mediator, Pipeline behaviors)
@@ -375,8 +419,10 @@ dotnet test
 - [Localization Guide](docs/localization.md) (Translations, CLDR pluralization, entity-level)
 - [Time Guide](docs/time.md) (Business calendar, holidays, working hours, time zones)
 - [Random Guide](docs/random.md) (RNG providers, distributions, sequences, noise)
+- [Data Structures Guide](docs/structures.md) (Trees, graphs, heaps, tries, LRU, Bloom filter, skip list)
 - [Health Guide](docs/health.md) (Health checks, runners, platform probes)
 - [AI / LLM Guide](docs/ai.md) (Multi-provider LLM, agents, orchestration, resilience)
+- [Web Components Guide](docs/web.md) (`Birko.Web.Core`/`.Components`/`.Shell` — Shadow DOM, Signal/Store, ribbon shell)
 - [Dependencies Guide](docs/dependencies.md)
 - [Consumers Guide](docs/consumers.md)
 - [TODO / Roadmap](TODO.md)

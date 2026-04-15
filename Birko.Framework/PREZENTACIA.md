@@ -578,12 +578,9 @@ Vytvorte projekt `{YourSolution}.Birko` (napríklad `FisData.Birko`) a importujt
 
 ## Dokumentácia
 
-- [README.md](README.md) – kompletná dokumentácia
-- [CLAUDE.md](CLAUDE.md) – hlavné inštrukcie pre Claude Code
-- [CLAUDE-projects.md](CLAUDE-projects.md) – úplný katalóg projektov
-- [CLAUDE-maintenance.md](CLAUDE-maintenance.md) – údržba, registrácia nových projektov
+- [README.md](README.md) – kompletná užívateľská dokumentácia
 - [docs/](docs/) – detailné návody pre každú oblasť (architektúra, stores, repozitáre, migrácie, vzory, caching, validácia, background jobs, message queue, event bus, event sourcing, storage, messaging, telemetry, security, rules, workflow, CQRS, health, procesory, serializácia, sync, čas, lokalizácia, tenant, komunikácia, závislosti, konzumeri, AI/LLM)
-- [TODO.md](TODO.md) – plánované funkcie a roadmap
+- Každý projekt má vlastný `README.md` s rýchlym prehľadom API a príkladmi použitia
 
 ---
 

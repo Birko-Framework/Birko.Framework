@@ -5,6 +5,10 @@ Modular .NET framework providing data access, communication, and model infrastru
 See also:
 - [CLAUDE-projects.md](CLAUDE-projects.md) — Full project catalog
 - [CLAUDE-maintenance.md](CLAUDE-maintenance.md) — Maintenance guidelines, new project checklist, solution registration
+- [CHANGELOG.md](CHANGELOG.md) — Historical architectural changes
+- [README.md](README.md) + [docs/](docs/) — User-facing documentation
+
+Each project has its own `CLAUDE.md` at `../Birko.{ProjectName}/CLAUDE.md` with project-specific details.
 
 ## Architecture
 
@@ -46,8 +50,7 @@ Birko.Contracts (zero deps: ILoadable, ICopyable, IDefault, ITimestamped, IGuidE
 
 Birko.Models.Contracts (zero deps: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument, IContactable, IAddressable)
   -> Birko.Models (AbstractPercentage, AbstractTree, ValueData + Value Objects: Money, MoneyWithTax, Percentage, PostalAddress, Quantity)
-    -> Birko.Models.Inventory (StockItem, StorageLocation, InventoryDocument — clean, no SQL attrs)
-    -> Birko.Models.Pricing (Currency, Tax, PriceGroup, PriceList, Discount — clean, no SQL attrs)
+    -> Birko.Models.Inventory / .Pricing / .Customers / .Users / .Product / .Category / .SEO (clean, no SQL attrs)
     -> Birko.Models.SQL (ModelMap<T>, IModelMapping<T>, ModelMapRegistry — fluent SQL mapping)
 
 Birko.Time.Abstractions (zero deps: IDateTimeProvider, SystemDateTimeProvider, TestDateTimeProvider)
@@ -71,110 +74,57 @@ Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentO
 
 Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
   -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
+
+Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy, JobProcessor, JobScheduler)
+  -> 8 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .Redis, .CosmosDB
+
+Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
+  -> 7 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .CosmosDB
 ```
 
 ### Reference Implementations
 - **ElasticSearch** store — reference for async/bulk operations
 - **JSON** store — reference for file-based storage
+- **XML** store — reference for file-based storage with `System.Xml.Serialization` (note: no native `Dictionary` support — use wrapper types)
 
 ## Usage in Consumer Solutions
 
 When using Birko.Framework projects in your solution, create a single aggregator library project named `{YourSolution}.Birko` (e.g. `FisData.Birko`) and include all `Birko.*` shared project references there. Your other projects then reference only `{YourSolution}.Birko`. This avoids compilation and transitive reference issues that arise when multiple projects import overlapping sets of shared projects independently.
 
 ## Conventions
-- All stores implement: IStore, IAsyncStore, IBulkStore, IAsyncBulkStore
-- All repositories implement: IRepository, IAsyncRepository, IBulkRepository, IAsyncBulkRepository
+- All stores implement: `IStore`, `IAsyncStore`, `IBulkStore`, `IAsyncBulkStore`
+- All repositories implement: `IRepository`, `IAsyncRepository`, `IBulkRepository`, `IAsyncBulkRepository`
 - Bulk stores support filter-based Update/Delete: `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, `Delete(filter)`
 - Use `PropertyUpdate<T>` for native platform operations (SQL SET, MongoDB $set, ES UpdateByQuery); use `Action<T>` for complex mutations
 - New platform stores should override `Update(filter, PropertyUpdate<T>)` and `Delete(filter)` for native performance
-- Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), NOT the public CRUD methods. The base class handles lazy-init in the public wrapper
+- Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), **NOT** the public CRUD methods. The base class handles lazy-init in the public wrapper
 - Use protected setters for properties that derived classes need to modify
-- RemoteSettings should be passed via base.SetSettings(), not constructed inline
+- `RemoteSettings` should be passed via `base.SetSettings()`, not constructed inline
 
 ## Code Style
 - **Guard clauses:** Use early returns instead of wrapping entire method bodies in if blocks. Prefer `if (x == null) return;` over `if (x != null) { ... }`.
 - **No nullable warnings:** All new code must compile without CS8600–CS8605, CS8618, CS8625. Use proper null checks, `!` only when provably safe, or `?` annotations.
 
-## Important Notes
+## Testing
+- All test projects use **xUnit + FluentAssertions**
+- Every new public functionality must have corresponding tests in `Birko.{ProjectName}.Tests`
+- Test both success and failure cases; include edge cases and boundary conditions
+- Each test project has its own `CLAUDE.md` describing scope and conventions
+- See [CLAUDE-maintenance.md](CLAUDE-maintenance.md) for test requirements on new projects and health check patterns
 
-### Recent Updates
+## Recent Updates
 
-#### Store Lazy-Init with Template Method Pattern (2026-04-10)
+For older entries, see [CHANGELOG.md](CHANGELOG.md).
+
+### Birko.BackgroundJobs.XML (2026-04-15)
+Added XML-file backend for BackgroundJobs to match `Workflow.XML` and `Sync.Xml`:
+- Uses `AsyncXmlStore` from `Birko.Data.XML`
+- `XmlJobDescriptorModel` uses `[XmlRoot]`/`[XmlElement]`; nullable `DateTime?` uses `IsNullable = true` for `xsi:nil`
+- Job metadata stored via `SerializableMetadata` wrapper (System.Xml.Serialization has no native `Dictionary` support)
+
+### Store Lazy-Init with Template Method Pattern (2026-04-10)
 Refactored all abstract store base classes to auto-initialize on first CRUD operation:
-- **AbstractStore/AbstractAsyncStore** — Public CRUD methods (`Create`, `Read`, `Update`, `Delete`, `Count`) call `EnsureInitialized`/`EnsureInitializedAsync` (double-checked locking, thread-safe) then delegate to `protected abstract *Core` methods
-- **AbstractBulkStore/AbstractAsyncBulkStore** — Same pattern for bulk methods (`Create(IEnumerable)`, `Read(filter,orderBy,limit,offset)`, `Update(IEnumerable)`, `Delete(IEnumerable)`)
-- **SQL Bulk Stores** — `DataBaseBulkStore`/`AsyncDataBaseBulkStore` also use template method with `protected virtual *Core` methods
-- **Breaking change** — Concrete stores must override `*Core` methods instead of public CRUD methods (e.g., `CreateCoreAsync` instead of `CreateAsync`)
-- **Cleanup** — Removed duplicate `_initialized`/`EnsureInitializedAsync` boilerplate from 12 Workflow + BackgroundJobs stores (~150 lines removed)
-- `Init()`/`InitAsync()` is now idempotent — safe to call multiple times or never (auto-called on first CRUD)
-- `Destroy()`/`DestroyAsync()` not affected — still explicit
-
-#### AI/LLM Infrastructure (2026-03-31)
-Extracted reusable AI agent framework from DraCode into Birko.AI.* projects:
-- **Birko.AI.Contracts** — ILlmProvider interface, Message/ContentBlock/TokenUsage models, Tool base class, AgentOptions, LlmProviderFactory (registration-based, `Birko.AI.Factories` namespace)
-- **Birko.AI** — LlmProviderBase (retry, SSE, OpenAI-style helpers), Agent base class (run loop, streaming, tool execution), AgentFactory (registration-based, `Birko.AI.Factories` namespace), 9 default tools
-- **Birko.AI.Providers** — 11 LLM providers: Claude, OpenAI, AzureOpenAI, Gemini, Ollama, OpenAiCompatibleBase, LlamaCpp, Vllm, Sglang, GitHubCopilot, ZAi + ProviderRegistration (registers all providers with LlmProviderFactory)
-- **Birko.AI.Agents** — CodingAgent base, 10 language agents, 4 task agents (Debug, Refactor, Test, Documentation), 4 media agents, OrchestratorAgent + AgentRegistration (registers all agents with AgentFactory, convenience Create)
-- **Birko.AI.Resilience** — ProviderRateLimiter (sliding window), ProviderCircuitBreaker (3-state), CostTrackingService (budget enforcement), TrackedLlmProvider (decorator)
-- **Birko.AI.Orchestration** — ITaskDispatcher, DirectTaskDispatcher, ImplementationPlan/Step models, StepDependencyAnalyzer (parallel groups, topological sort), EscalationAlert
-- **Birko.Communication.OAuth.Providers** — GitHubOAuthProvider (pre-configured device flow factory using Birko.Communication.OAuth)
-- **Birko.Contracts** — RetryPolicy extended with BackoffMultiplier and AddJitter
-- **Birko.Helpers** — Added PathHelper (IsPathSafe, IsUnderDirectory, GetCanonicalPath)
-
-#### Filter-Based Bulk Operations (2026-03-26)
-Added native filter-based Update/Delete to all bulk stores and repositories:
-- **PropertyUpdate\<T\>** — Fluent builder for partial property updates, translated natively by platforms
-- **Native implementations** — SQL (`UPDATE SET WHERE`/`DELETE WHERE`), MongoDB (`UpdateMany`/`DeleteMany`), ElasticSearch (`UpdateByQuery`/`DeleteByQuery`)
-- **Action\<T\> overload** — Read-modify-save fallback for complex mutations
-- All decorators (SoftDelete, Timestamp, Audit, Tenant, EventSourcing, Localization, Telemetry, Validation) updated
-- All repositories (AbstractBulk, AsyncBulk, ViewModel) delegate to stores
-
-#### Birko.Models Restructuring (2026-03-22)
-Three-phase restructuring of the model layer:
-- **Birko.Models.Contracts** — Domain interfaces: ICatalogItem, IPriceable, IVariantable, ICategorizeable, IBatchable, ILocatable, IHierarchical, IDocument/IDocumentLine, IContactable, IAddressable
-- **Birko.Models (Value Objects)** — Money, MoneyWithTax, Percentage, PostalAddress, Quantity
-- **Birko.Models.Inventory** — Clean replacement for Warehouse: StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument, InventoryDocumentLine
-- **Birko.Models.Pricing** — Pricing domain: Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount
-- **Birko.Models.SQL** — Fluent SQL mapping framework: ModelMap\<T\>, IModelMapping\<T\>, ModelMapRegistry
-- Existing models implement contracts additively (Product→ICatalogItem+ISluggable, Item→ICatalogItem+ICategorizeable, Address→IAddressable+IContactable, ValueData→IPriceable, AbstractTree→IHierarchical, Category→IHierarchical+ISluggable)
-
-#### New Model Projects (2026-03-06)
-Extracted reusable models from FisData.Stock:
-- **Birko.Models.Customers** — Address, Customer, InvoiceAddress
-- **Birko.Models.Users** — User, Tenant (formerly Agenda), UserTenant
-- **Birko.Models** — Added AbstractPercentage, AbstractTree, ValueData
-- *(Birko.Models.Accounting was merged into Birko.Models.Pricing during the 2026-03-22 restructuring)*
-
-#### Birko.Data.CosmosDB (2026-03-23)
-New Azure Cosmos DB (NoSQL API) store provider:
-- **Birko.Data.CosmosDB** — Stores (sync/async), Repositories, UnitOfWork (TransactionalBatch), IndexManagement
-- **Birko.Data.Sync.CosmosDB** — Sync knowledge store for Cosmos DB
-- **Birko.Data.Migrations.CosmosDB** — Migration framework for Cosmos DB (container, indexing policy, document ops)
-- **CosmosDbHealthCheck** added to Birko.Health.Data
-- Uses Microsoft.Azure.Cosmos SDK v3 with bulk execution enabled
-
-#### ViewModel Repository MapToModel Refactor (2026-03-30)
-Removed circular `ILoadable<TViewModel>` constraint from TModel in all ViewModel repositories:
-- **Breaking change** — `TModel` no longer requires `ILoadable<TViewModel>`; Models have no knowledge of ViewModels
-- **MapToModel** — New abstract method `MapToModel(TViewModel source, TModel target)` on `AbstractViewModelRepository` and `AbstractAsyncViewModelRepository`; consumer concrete repositories must override it
-- **Abstract platform repos** — All platform ViewModel repositories (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, JSON, InfluxDB, TimescaleDB) made abstract; consumers must subclass
-- **DeleteAsync bug fix** — `AbstractAsyncViewModelRepository.DeleteAsync` no longer creates from `data.GetType()` (wrong); uses `CreateModelInstance()` + `MapToModel`
-
-#### Phase 1 Test Coverage (2026-03-30)
-Completed core data layer test coverage:
-- **Birko.Validation.Tests** (new) — 122 tests: rules (Required, Email, Length, Range, Regex, Custom), fluent AbstractValidator, ValidationResult, store wrapper integration (sync, async, bulk)
-- **Birko.Data.Tests** (expanded) — 181 tests: added async soft-delete/audit/timestamp decorators, DefaultStoreWrapper, SluggableStoreWrapper, SlugGenerator, SoftDeleteFilter, UnitOfWork exceptions, PagedResult
-- **Birko.Data.Sync.Tests** (new) — 21 tests: SyncProvider (initial/download/upload), SyncQueue (serialization, concurrency), model defaults
-
-#### Recent Fixes (2026-03-05)
-- Replaced `NativeAsyncDataBaseStore` with `AsyncDataBaseStore` in async stores/repos
-- Fixed `AbstractAsyncStore.CreateAsync` return type: `Task` -> `Task<Guid>`
-- Changed `Connector` property from `private set` to `protected set` in DataBaseStore/AsyncDataBaseStore
-- Added parameterless constructor to `DataBaseRepository`
-- Fixed PostgreSQL/MySQL stores settings handling
-
-## Documentation
-- [TODO.md](./TODO.md) — Planned features and roadmap
-- [docs/](docs/) — Detailed documentation (architecture, store/repository guides, migrations, patterns, caching, validation, background jobs, message queue, event bus, event sourcing, storage, messaging, telemetry, security, rules, workflow, CQRS, health, processors, serialization, sync, time, localization, tenant, communication, dependencies, consumers)
-
-Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md`.
+- Public CRUD methods (`Create`, `Read`, `Update`, `Delete`, `Count`, bulk variants) call `EnsureInitialized`/`EnsureInitializedAsync` (double-checked locking) then delegate to `protected abstract *Core` methods
+- **Breaking change** — Concrete stores must override `*Core` methods instead of public CRUD methods
+- `Init()`/`InitAsync()` is now idempotent; `Destroy()`/`DestroyAsync()` remain explicit
+- Removed ~150 lines of duplicate `_initialized` boilerplate from 12 Workflow + BackgroundJobs stores
