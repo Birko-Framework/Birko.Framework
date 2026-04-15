@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>b7c8d9e0-f1a2-4b3c-8d4e-5f6a7b8c9d01</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.BackgroundJobs.XML</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Models\XmlJobDescriptorModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)XmlJobQueue.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)XmlJobQueueSchema.cs" />
+  </ItemGroup>
+
+</Project>
