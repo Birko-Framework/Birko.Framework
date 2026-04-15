@@ -330,17 +330,35 @@ Required abstract methods: 4 from `BCoreAppShell` (`brandName`, `getUserName`, `
 
 ### Page base classes
 
-Drop-in base classes for the common page shapes:
+Drop-in base classes for the common page shapes. All extend `BaseComponent`.
+
+```
+BasePage                       (minimal — header + content slot)
+    └── BaseCrudPage           (adds filters, table, create/edit modal, delete confirm, permissions)
+            ├── BaseListPage<T>   (list with row actions)
+            └── BaseSplitPage<T>  (master-detail with split panel)
+
+BaseDetailPage<T>              (standalone — single-entity detail/edit, loads by ID)
+```
 
 | Class | Purpose |
 |---|---|
+| `BasePage` | Minimal page shell — header with title and optional action buttons, plus a `renderContent()` body hook. Use directly for non-CRUD screens (dashboards, settings, POS terminals, maps). |
+| `BaseCrudPage` | Abstract — extends `BasePage` with declarative filters, data table, modal create/edit, delete confirmation, permission checks, and a required-filter empty state. Don't extend directly; pick `BaseListPage` or `BaseSplitPage`. |
 | `BaseListPage<T>` | CRUD list: auto-fetching table, search toolbar, create/edit modal, delete confirm, permissions |
 | `BaseSplitPage<T>` | Master-detail with optional CRUD — master list + detail pane, responsive collapse |
 | `BaseDetailPage<T>` | Single-entity detail/edit — loads by ID, populates form, save/cancel |
-| `BaseFormModal<T>` | Modal with form in create or edit mode (`open()` or `open(id)`) |
-| `BaseDashboardWidget<TConfig>` | Dashboard widget base with auto-refresh and API access |
 
 Extension points are typed — override `endpoint`, `api`, `columns`, `formSchema`, `entityLabel`, plus hooks (`onRowClick`, `afterSave`, `mapToForm`, `mapFromForm`, `onEntityLoaded`, `onSave`, ...).
+
+### Composable widgets and modals
+
+Not pages — reusable components composed *into* pages or shells.
+
+| Class | Composed into | Purpose |
+|---|---|---|
+| `BaseFormModal<T>` | any page | Reusable `<b-modal>` + `<b-form>` + Save/Cancel pattern. Opened via `open()` (create) or `open(id)` (edit) — typically from a `BaseListPage` row action. |
+| `BaseDashboardWidget<TConfig>` | a dashboard `BasePage` | Auto-refreshing widget with `setConfig({ apiClient, refreshInterval, ... })` and `loadData()` lifecycle. Lives in `dashboard/`, not `pages/`. |
 
 ### Breadcrumbs
 
