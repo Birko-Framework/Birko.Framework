@@ -405,9 +405,14 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
                                      HTTP/SSE klient, hash router
 🟩 Birko.Web.Components           → 38 Shadow DOM komponentov
                                      (inputs, layout, data, feedback, navigation)
-🟩 Birko.Web.Shell                → Application shell (auth, module loading,
-                                     command palette, notifikácie,
-                                     tenant switching)
+🟩 Birko.Web.Shell                → Application shell — trojvrstvová hierarchia:
+                                     • BCoreAppShell (theme, online/offline,
+                                       user dropdown, brand, breadcrumbs)
+                                     • BSidebarAppShell (opt-in left + right
+                                       sidebars cez <b-sidebar>)
+                                     • BAppShell (ribbon, notifikácie,
+                                       tenant switcher, status bar,
+                                       command palette)
 ```
 
 ### Detailné popisy špeciálnych projektov
@@ -501,7 +506,13 @@ Utility funkcie pre bežné úlohy:
 **38 komponentov**: inputs, layout, data, feedback, navigation
 
 ### Birko.Web.Shell
-Application shell framework – autentifikácia, dynamické načítavanie modulov, command palette, notifikácie, prepínanie tenantov
+Application shell framework s **trojvrstvovou hierarchiou** abstraktných tried:
+
+- **`BCoreAppShell`** — abstraktné jadro: theme/layout persistence, online/offline tracking, user dropdown, brand link, breadcrumb listener, base CSS, default minimálny layout. Použiteľné priamo pre login stránky, error stránky, kiosky.
+- **`BSidebarAppShell extends BCoreAppShell`** — opt-in **ľavý a/alebo pravý sidebar** cez `<b-sidebar>`. Oba môžu byť aktívne súčasne (Outlook-style: folder list vľavo + reading pane vpravo). Žiadne nové abstraktné metódy — sidebar plne opt-in cez gettery.
+- **`BAppShell extends BSidebarAppShell`** — full Office-style ribbon shell: navigation tabs, notification bell, tenant switcher, status bar, command palette. Dedí sidebar capability — ribbon shell môže mať aj ľavé/pravé panely.
+
+Plus factory funkcie: autentifikácia (createAuthStore), dynamické moduly (createModuleStore), tenant switching, command palette providers, route guards, page base classes (BaseListPage, BaseSplitPage, BaseDetailPage, BaseFormModal, BaseDashboardWidget).
 
 ---
 

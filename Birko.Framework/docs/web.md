@@ -193,15 +193,17 @@ el.load();
 
 ## Birko.Web.Shell
 
-### Two-level shell hierarchy
+### Three-level shell hierarchy
 
 ```
-BCoreAppShell  (abstract — shared infrastructure, default minimal layout)
-    └── BAppShell  (abstract — full ribbon-based Office-style shell)
+BCoreAppShell        (abstract — shared infrastructure, default minimal layout)
+    └── BSidebarAppShell  (adds opt-in left + right sidebars via <b-sidebar>)
+            └── BAppShell  (abstract — full ribbon-based Office-style shell)
 ```
 
-Use **`BAppShell`** when you want the full ribbon shell (most apps).
-Use **`BCoreAppShell`** directly when you need a different layout — sidebar nav, mobile-first shell, kiosk mode, login page shell.
+Use **`BAppShell`** when you want the full ribbon shell (most apps). Sidebars are inherited and opt-in — your ribbon shell can also have left/right panels.
+Use **`BSidebarAppShell`** when you need sidebars but a custom top instead of the ribbon (sidebar-driven navigation patterns).
+Use **`BCoreAppShell`** directly when you need a different layout — mobile-first shell, kiosk mode, login page shell.
 
 ### `BCoreAppShell` — shared infrastructure
 
@@ -256,9 +258,27 @@ export abstract class BSidebarAppShell extends BCoreAppShell {
 }
 ```
 
+### `BSidebarAppShell` — opt-in left + right sidebars
+
+Extends `BCoreAppShell`. Adds opt-in **left and/or right sidebars** using `<b-sidebar>`. Both can be enabled simultaneously (Outlook-style: folder list left + reading pane right; VS Code-style: Explorer left + Outline right).
+
+**No new required methods** — sidebar is fully opt-in via getter overrides:
+
+| Override | Default | Purpose |
+|---|---|---|
+| `showLeftSidebar` / `showRightSidebar` | `false` | Enable a sidebar |
+| `getLeftSidebarItems()` / `getRightSidebarItems()` | `[]` | `SidebarItem[]` items |
+| `getActiveLeftSidebarItem()` / `getActiveRightSidebarItem()` | `''` | Active item highlight |
+| `leftSidebarCollapsible` / `rightSidebarCollapsible` | `true` | Show collapse toggle |
+| `onLeftSidebarToggle(c)` / `onRightSidebarToggle(c)` | noop | User toggle callback |
+
+Collapsed state of each sidebar persists independently in `localStorage`. Refresh from store subscriptions via `refreshLeftSidebar()` / `refreshRightSidebar()`.
+
+`BSidebarAppShell` only overrides `renderContent()` (wraps base content with sidebar containers) — header and footer hooks are unchanged. Subclasses overriding `render()` entirely (like `BAppShell`) just call `${this.renderContent()}` to get the sidebar layout.
+
 ### `BAppShell` — ribbon-based shell
 
-Extends `BCoreAppShell` (~370 LOC). Adds the full Office-style layout: ribbon tabs, status bar, notification bell with badge, user dropdown with sign-out, tenant switcher, command palette — all wired together.
+Extends `BSidebarAppShell` (which extends `BCoreAppShell`). Adds the full Office-style layout: ribbon tabs, status bar, notification bell with badge, user dropdown with sign-out, tenant switcher, command palette — all wired together. Sidebars come automatically from the parent class (opt-in).
 
 ```typescript
 import { BAppShell } from 'birko-web-shell/shell';
