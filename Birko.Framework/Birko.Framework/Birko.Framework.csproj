@@ -254,6 +254,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.JSON\Birko.BackgroundJobs.JSON.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.XML\Birko.BackgroundJobs.XML.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.Redis\Birko.BackgroundJobs.Redis.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.BackgroundJobs.CosmosDB\Birko.BackgroundJobs.CosmosDB.projitems" Label="Shared" />

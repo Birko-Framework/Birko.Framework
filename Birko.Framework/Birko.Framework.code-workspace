@@ -25,6 +25,10 @@
 			"path": "../Birko.BackgroundJobs.JSON"
 		},
 		{
+			"name": "BackgroundJobs / Birko.BackgroundJobs.XML",
+			"path": "../Birko.BackgroundJobs.XML"
+		},
+		{
 			"name": "BackgroundJobs / Birko.BackgroundJobs.Redis",
 			"path": "../Birko.BackgroundJobs.Redis"
 		},

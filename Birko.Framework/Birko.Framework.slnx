@@ -6,6 +6,7 @@
     <Project Path="../Birko.BackgroundJobs.MongoDB/Birko.BackgroundJobs.MongoDB.shproj" />
     <Project Path="../Birko.BackgroundJobs.RavenDB/Birko.BackgroundJobs.RavenDB.shproj" />
     <Project Path="../Birko.BackgroundJobs.JSON/Birko.BackgroundJobs.JSON.shproj" />
+    <Project Path="../Birko.BackgroundJobs.XML/Birko.BackgroundJobs.XML.shproj" />
     <Project Path="../Birko.BackgroundJobs.Redis/Birko.BackgroundJobs.Redis.shproj" />
     <Project Path="../Birko.BackgroundJobs.CosmosDB/Birko.BackgroundJobs.CosmosDB.shproj" />
   </Folder>

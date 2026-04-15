@@ -202,6 +202,7 @@ A modular .NET framework providing data access, communication, and model infrast
 | Birko.BackgroundJobs.MongoDB | MongoDB-based persistent job queue |
 | Birko.BackgroundJobs.RavenDB | RavenDB-based persistent job queue |
 | Birko.BackgroundJobs.JSON | JSON file-based job queue (dev/testing) |
+| Birko.BackgroundJobs.XML | XML file-based job queue (dev/testing, human-readable audit) |
 | Birko.BackgroundJobs.Redis | Redis-based persistent job queue |
 | Birko.BackgroundJobs.CosmosDB | Cosmos DB-based persistent job queue |
 | Birko.MessageQueue | Core message queue interfaces (pub/sub, point-to-point) |
