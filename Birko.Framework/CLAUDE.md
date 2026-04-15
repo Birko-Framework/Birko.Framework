@@ -1,6 +1,6 @@
 # Birko Framework
 
-Modular .NET framework providing data access, communication, and model infrastructure for enterprise applications.
+Modular .NET framework with data access, communication, AI, and model infrastructure. General-purpose across enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, and real-time domains.
 
 See also:
 - [CLAUDE-projects.md](CLAUDE-projects.md) — Full project catalog

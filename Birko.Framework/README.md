@@ -1,6 +1,6 @@
 # Birko Framework
 
-A modular .NET framework providing data access, communication, and model infrastructure for enterprise applications. Built on .NET 10.0 with shared projects via .projitems.
+A modular .NET framework providing data access, communication, AI, and model infrastructure. General-purpose — applicable to enterprise back-office, e-commerce, presentation/CMS, desktop, IoT, real-time, and AI-driven applications. Built on .NET 10.0 with shared projects via .projitems.
 
 ## Features
 
@@ -37,7 +37,7 @@ A modular .NET framework providing data access, communication, and model infrast
 - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
 - Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
-- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 38 components, app shell)
+- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 43 components across inputs/layout/data/feedback/nav/command palette, app shell)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
 - AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
