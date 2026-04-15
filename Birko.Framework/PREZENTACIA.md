@@ -437,7 +437,7 @@ Unifikovaný interface pre viaceré serializačné formáty:
 - **MessagePack**: Binárna serializácia (rýchla a kompaktná)
 - **Protobuf**: Protocol Buffers serializácia
 
-**Poznámka**: `Birko.Data.JSON` a `Birko.Data.XML` používajú priamo `System.Text.Json` a `System.Xml.Serialization`, nie túto abstrakciu.
+**Poznámka**: `Birko.Data.JSON` a `Birko.Data.XML` stores akceptujú `ISerializer` v konštruktore a default používajú `SystemJsonSerializer` / `SystemXmlSerializer` z tejto abstrakcie — takže je možné injectnúť aj iný serializer (napr. Newtonsoft) bez zmeny store kódu.
 
 #### 📋 Birko.CQRS – Command/Query Separation
 Implementácia CQRS vzoru s Mediátorom:

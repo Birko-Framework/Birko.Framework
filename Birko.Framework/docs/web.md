@@ -193,9 +193,72 @@ el.load();
 
 ## Birko.Web.Shell
 
-### `BAppShell`
+### Two-level shell hierarchy
 
-Abstract base class (~610 LOC) giving you a full Office-style shell: ribbon tabs, status bar, notification bell with badge, user dropdown with sign-out, tenant switcher, command palette — all wired together.
+```
+BCoreAppShell  (abstract — shared infrastructure, default minimal layout)
+    └── BAppShell  (abstract — full ribbon-based Office-style shell)
+```
+
+Use **`BAppShell`** when you want the full ribbon shell (most apps).
+Use **`BCoreAppShell`** directly when you need a different layout — sidebar nav, mobile-first shell, kiosk mode, login page shell.
+
+### `BCoreAppShell` — shared infrastructure
+
+Abstract core (~280 LOC). Provides:
+- Theme + layout persistence from `localStorage` (`data-theme`, `data-layout` on `<html>`)
+- Online / offline tracking exposed as `protected get isOnline(): boolean`
+- Default user dropdown (profile / settings / signout) with built-in handler
+- Brand link with configurable target (`brandHref`)
+- Breadcrumb event listener (`set-breadcrumbs` from pages)
+- Default minimal layout (brand + user dropdown + content slot) — usable as-is
+- Base CSS tokens (`:host` flex column, `.app-brand`, `.user-trigger`, `.app-content`, `.app-status-bar` skeleton, `.status-dot` variants)
+- Render helpers: `renderBrand()`, `renderUserDropdown()` for subclasses
+
+**Required (4 abstract methods):**
+```typescript
+protected abstract get brandName(): string;
+protected abstract getUserName(): string;
+protected abstract t(key: string, params?: Record<string, string>): string;
+protected abstract onSignOut(): void;
+```
+
+**Subclass for a custom layout:**
+```typescript
+import { BCoreAppShell } from 'birko-web-shell';
+
+export abstract class BSidebarAppShell extends BCoreAppShell {
+  protected abstract getSidebarItems(): SidebarItem[];
+
+  render() {
+    return `
+      <aside class="shell-sidebar">
+        <div class="brand">${this.renderBrand()}</div>
+        <b-sidebar id="sidebar"></b-sidebar>
+        <div class="user">${this.renderUserDropdown()}</div>
+      </aside>
+      <main class="shell-content"><slot></slot></main>
+    `;
+  }
+
+  static get styles() {
+    return super.styles + `
+      :host { display: grid; grid-template-columns: 16rem 1fr; }
+      .shell-sidebar { /* ... */ }
+      .shell-content { /* ... */ }
+    `;
+  }
+
+  protected onMount() {
+    super.onMount();   // theme, online/offline, breadcrumbs
+    // your sidebar-specific setup
+  }
+}
+```
+
+### `BAppShell` — ribbon-based shell
+
+Extends `BCoreAppShell` (~370 LOC). Adds the full Office-style layout: ribbon tabs, status bar, notification bell with badge, user dropdown with sign-out, tenant switcher, command palette — all wired together.
 
 ```typescript
 import { BAppShell } from 'birko-web-shell/shell';
@@ -227,7 +290,7 @@ class AppShell extends BAppShell {
 define('my-app-shell', AppShell);
 ```
 
-Required abstract methods: 7 (`brandName`, `getUserName`, `getRibbonTabs`, `getActiveTabId`, `t`, `onTabChange`, `onSignOut`). Optional overrides: ~20 (avatar URL, status indicators, notification click handlers, ...). Public refresh hooks: `refreshRibbon()`, `refreshStatusBar()`, `refreshBellBadge()`, `refreshTenantSwitcher()`, `refreshUserMenu()`.
+Required abstract methods: 4 from `BCoreAppShell` (`brandName`, `getUserName`, `t`, `onSignOut`) + 3 added by `BAppShell` (`getRibbonTabs`, `getActiveTabId`, `onTabChange`). Optional overrides: ~20 (avatar URL, status indicators, notification click handlers, ...). Public refresh hooks: `refreshRibbon()`, `refreshStatusBar()`, `refreshBellBadge()`, `refreshTenantSwitcher()`, `refreshUserMenu()` (last one inherited from `BCoreAppShell`).
 
 ### Factory functions
 
