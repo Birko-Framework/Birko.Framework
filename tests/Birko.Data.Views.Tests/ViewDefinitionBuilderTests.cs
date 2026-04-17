@@ -1,3 +1,4 @@
+using Birko.Data.Stores;
 using FluentAssertions;
 using Xunit;
 
