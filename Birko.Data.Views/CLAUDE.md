@@ -6,7 +6,7 @@ Unified fluent view builder for defining cross-platform views/projections/aggreg
 
 ### Enums
 - **ViewQueryMode** — OnTheFly (computed at query time), Persistent (materialized), Auto (try persistent, fall back)
-- **AggregateFunction** — Count, Sum, Avg, Min, Max
+- **AggregateFunction** — imported from `Birko.Data.Stores` (Count, Sum, Avg, Min, Max)
 - **JoinType** — Inner, LeftOuter, Cross
 
 ### Builder
@@ -30,7 +30,7 @@ Unified fluent view builder for defining cross-platform views/projections/aggreg
 
 ## Dependencies
 - Birko.Data.Core (AbstractModel)
-- Birko.Data.Stores (OrderBy\<T\>)
+- Birko.Data.Stores (OrderBy\<T\>, AggregateFunction)
 
 ## Namespace
 `Birko.Data.Views`

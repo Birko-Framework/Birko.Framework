@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Stores;
 
 namespace Birko.Data.Views;
 

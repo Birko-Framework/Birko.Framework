@@ -6,7 +6,7 @@ Unified fluent view builder for the Birko Framework. Define views once with a fl
 
 - Fluent view definition builder (replaces attribute-based SQL view definitions)
 - Cross-platform: same definition works on SQL, MongoDB, ElasticSearch, RavenDB, Cosmos DB
-- Field selection, joins, aggregates (Count, Sum, Avg, Min, Max), GroupBy
+- Field selection, joins, aggregates (Count, Sum, Avg, Min, Max via `AggregateFunction` from `Birko.Data.Stores`), GroupBy
 - Three query modes: OnTheFly, Persistent (materialized), Auto
 - IViewMapping interface + ViewMapRegistry for assembly scanning
 - Read-only IViewStore for querying, IViewManager for persistent view lifecycle
@@ -64,5 +64,5 @@ var results = await viewStore.QueryAsync(v => v.TotalSpent > 1000m, limit: 10);
 
 ## Dependencies
 
-- Birko.Data.Core
-- Birko.Data.Stores
+- Birko.Data.Core (AbstractModel)
+- Birko.Data.Stores (OrderBy\<T\>, AggregateFunction)

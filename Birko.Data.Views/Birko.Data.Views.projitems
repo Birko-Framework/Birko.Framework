@@ -11,7 +11,6 @@
   <ItemGroup>
     <!-- Enums -->
     <Compile Include="$(MSBuildThisFileDirectory)ViewQueryMode.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)AggregateFunction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)JoinType.cs" />
     <!-- DTOs -->
     <Compile Include="$(MSBuildThisFileDirectory)FieldSelector.cs" />
