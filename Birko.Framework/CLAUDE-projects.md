@@ -5,7 +5,7 @@
 - **Birko.Contracts** - Pure interfaces (ILoadable, ICopyable, IDefault, ITimestamped) with zero dependencies
 - **Birko.Data.Core** - Models, ViewModels, Filters, Exceptions (foundation layer, imports Birko.Contracts)
 - **Birko.Configuration** - Settings hierarchy (Settings, PasswordSettings, RemoteSettings) in namespace `Birko.Configuration`, imports Birko.Contracts
-- **Birko.Data.Stores** - Store interfaces/abstractions, OrderBy, StoreLocator (imports Birko.Configuration transitively)
+- **Birko.Data.Stores** - Store interfaces/abstractions, OrderBy, StoreLocator, Aggregation (AggregateFunction, AggregateQuery, AggregateResult, IAggregatableStore/IAsyncAggregatableStore, AggregateHelper, TimeIntervalParser, OrderByHelper) (imports Birko.Configuration transitively)
 - **Birko.Data.Repositories** - Repository interfaces/abstractions, RepositoryLocator, DI extensions
 - **Birko.Models** - Base models and extensions
 
@@ -22,10 +22,10 @@
 - **Birko.Data.InfluxDB** - InfluxDB time-series database
 - **Birko.Data.TimescaleDB** - TimescaleDB implementation
 - **Birko.Data.CosmosDB** - Azure Cosmos DB (NoSQL API) repository/store
-- **Birko.Data.MongoDB.Views** - MongoDB platform for fluent views (MongoViewTranslator, aggregation pipelines, db.createView)
-- **Birko.Data.ElasticSearch.Views** - ElasticSearch platform for fluent views (NEST aggregations, terms/composite + metric sub-aggs)
+- **Birko.Data.MongoDB.Views** - MongoDB platform for fluent views (MongoViewTranslator, aggregation pipelines, db.createView; uses StoreAggregationHelper for group stages)
+- **Birko.Data.ElasticSearch.Views** - ElasticSearch platform for fluent views (NEST aggregations, terms/composite + metric sub-aggs; uses StoreAggregationHelper for metric creation/extraction)
 - **Birko.Data.RavenDB.Views** - RavenDB platform for fluent views (RavenViewTranslator, Map/Reduce static indexes)
-- **Birko.Data.CosmosDB.Views** - Cosmos DB platform for fluent views (LINQ queries, Cosmos SQL GROUP BY)
+- **Birko.Data.CosmosDB.Views** - Cosmos DB platform for fluent views (LINQ queries, Cosmos SQL GROUP BY; uses CosmosAggregationHelper and OrderByHelper)
 
 ## ViewModel Layer
 - **Birko.Data.ViewModel** - Base ViewModel repository abstractions
@@ -40,12 +40,12 @@
 - **Birko.Data.Tenant** - Multi-tenancy support
 - **Birko.Data.Composition** - Runtime store decorator composition (StoreWrapperBuilder — conditional Tenant/Default/SoftDelete/Audit/Timestamp chains)
 - **Birko.Data.Tagging** - Entity tagging system (Tag, EntityTag, ITaggable, ITagService, TagServiceBase — tenant-scoped, polymorphic junction)
-- **Birko.Data.Views** - Unified fluent view builder (ViewDefinitionBuilder, IViewMapping, ViewMapRegistry, IViewStore, IViewManager — cross-platform views/projections/aggregations)
+- **Birko.Data.Views** - Unified fluent view builder (ViewDefinitionBuilder, IViewMapping, ViewMapRegistry, IViewStore, IViewManager — cross-platform views/projections/aggregations; AggregateFunction imported from Birko.Data.Stores)
 - **Birko.Data.EventSourcing** - Event sourcing pattern
 - **Birko.Data.SQL.View** + **.MSSql.View** / **.PostgreSQL.View** / **.MySQL.View** / **.SqLite.View** - SQL view DDL
 - **Birko.Data.SQL.View.Migrations** - Integration between SQL View definitions and the Migration framework (ViewSqlGenerator, ViewMigrationExtensions)
 - **Birko.Data.SQL.Caching** - Query caching decorator for SQL stores (CachedAsyncDataBaseBulkStore, SqlCacheKeyBuilder, SqlCacheOptions)
-- **Birko.Data.SQL.Views** - SQL platform implementation for fluent views (SqlViewTranslator, SqlViewStore, SqlViewManager — translates ViewDefinition to Tables.View)
+- **Birko.Data.SQL.Views** - SQL platform implementation for fluent views (SqlViewTranslator, SqlViewStore, SqlViewManager — translates ViewDefinition to Tables.View; uses AbstractConnectorBase.GetSqlFunctionName and FunctionField.CreateFunctionField for aggregates)
 - **Birko.Data.Processors** - Stream processors (XML, CSV, HTTP, ZIP) with decorator composition
 - **Birko.Structures** - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - **Birko.Random** - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix, TestRandom), distributions, sequences (GuidV4/V7, NanoId, Snowflake, tokens), noise (Perlin, Simplex)

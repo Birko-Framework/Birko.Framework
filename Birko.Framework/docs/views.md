@@ -7,29 +7,35 @@ Birko.Data.Views provides a unified fluent API for defining cross-platform views
 ## Project Hierarchy
 
 ```
-Birko.Data.Views              — Platform-agnostic: fluent API (ViewDefinitionBuilder,
-│                               ViewMapRegistry, IViewStore, IViewManager)
+Birko.Data.Stores             — Shared aggregation types (AggregateFunction,
+│                               AggregateQuery, AggregateResult, OrderByHelper,
+│                               TimeIntervalParser, AggregateHelper)
 │
-├─► Birko.Data.SQL.Views      — SQL bridge: translates ViewDefinition → Tables.View
-│   │                           (SqlViewTranslator, SqlViewStore, SqlViewManager)
-│   │
-│   └─► Birko.Data.SQL.View   — SQL engine: attribute-based definitions, connector
-│       │                        extensions, DDL, field types, query building
-│       │
-│       ├─► Birko.Data.SQL.MSSql.View
-│       ├─► Birko.Data.SQL.PostgreSQL.View
-│       ├─► Birko.Data.SQL.MySQL.View
-│       └─► Birko.Data.SQL.SqLite.View
-│
-├─► Birko.Data.MongoDB.Views  — MongoDB platform implementation
-├─► Birko.Data.ElasticSearch.Views — ElasticSearch platform implementation
-├─► Birko.Data.RavenDB.Views  — RavenDB platform implementation
-└─► Birko.Data.CosmosDB.Views — Cosmos DB platform implementation
+└─► Birko.Data.Views          — Platform-agnostic: fluent API (ViewDefinitionBuilder,
+    │                           ViewMapRegistry, IViewStore, IViewManager)
+    │
+    ├─► Birko.Data.SQL.Views  — SQL bridge: translates ViewDefinition → Tables.View
+    │   │                       (SqlViewTranslator, SqlViewStore, SqlViewManager)
+    │   │
+    │   └─► Birko.Data.SQL.View — SQL engine: attribute-based definitions, connector
+    │       │                      extensions, DDL, field types, query building
+    │       │
+    │       ├─► Birko.Data.SQL.MSSql.View
+    │       ├─► Birko.Data.SQL.PostgreSQL.View
+    │       ├─► Birko.Data.SQL.MySQL.View
+    │       └─► Birko.Data.SQL.SqLite.View
+    │
+    ├─► Birko.Data.MongoDB.Views  — MongoDB (aggregation pipelines, StoreAggregationHelper)
+    ├─► Birko.Data.ElasticSearch.Views — ElasticSearch (NEST aggs, StoreAggregationHelper)
+    ├─► Birko.Data.RavenDB.Views  — RavenDB (Map/Reduce static indexes)
+    └─► Birko.Data.CosmosDB.Views — Cosmos DB (Cosmos SQL, CosmosAggregationHelper)
 ```
 
-- **Birko.Data.Views** defines *what* a view is (interfaces, fluent builder, registry).
-- **Birko.Data.SQL.Views** translates the fluent definitions into SQL metadata (`Tables.View`).
+- **Birko.Data.Stores** defines shared aggregation types (`AggregateFunction`, `AggregateQuery`, `AggregateResult`, helpers).
+- **Birko.Data.Views** defines *what* a view is (interfaces, fluent builder, registry). Uses `AggregateFunction` from Stores.
+- **Birko.Data.SQL.Views** translates the fluent definitions into SQL metadata (`Tables.View`). Uses `AbstractConnectorBase.GetSqlFunctionName()` and `FunctionField.CreateFunctionField()`.
 - **Birko.Data.SQL.View** executes the SQL work (DDL, SELECT building, connector extensions).
+- **Platform view projects** use shared helpers (`OrderByHelper`, platform-specific `StoreAggregationHelper` / `CosmosAggregationHelper`) to translate aggregation into native operations.
 - **Provider-specific projects** supply database-dialect SQL (e.g. `CREATE MATERIALIZED VIEW` for PostgreSQL).
 
 ## Core Concepts
@@ -39,7 +45,7 @@ Birko.Data.Views              — Platform-agnostic: fluent API (ViewDefinitionB
 A view is a read-only projection over one or more source entities. It can include:
 - **Field selections** — pick specific properties from source entities
 - **Joins** — combine multiple source entities
-- **Aggregates** — Count, Sum, Avg, Min, Max
+- **Aggregates** — Count, Sum, Avg, Min, Max (via `AggregateFunction` from `Birko.Data.Stores`)
 - **GroupBy** — group aggregation results
 
 ### Query Modes
@@ -216,6 +222,35 @@ The fluent builder coexists with existing attribute-based views:
 2. Existing connector infrastructure works unchanged
 3. Migrate views incrementally: create `IViewMapping` implementations, remove attributes
 4. Mark old attributes `[Obsolete]` after migration
+
+## Store-Level Aggregation
+
+In addition to view-based aggregation, stores can implement `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` (defined in `Birko.Data.Stores`) for direct server-side aggregation without defining a view:
+
+```csharp
+var query = new AggregateQuery<Order>
+{
+    Filter = o => o.Status == OrderStatus.Completed,
+    GroupByFields = ["CustomerId"],
+    Aggregates =
+    [
+        new AggregateField(AggregateFunction.Count, "Id", "order_count"),
+        new AggregateField(AggregateFunction.Sum, "Total", "total_spent"),
+    ],
+    OrderBy = new Dictionary<string, bool> { ["total_spent"] = false },
+    Limit = 10
+};
+
+IReadOnlyList<AggregateResult> results = await store.AggregateAsync(query);
+foreach (var row in results)
+{
+    var customerId = row.GetValue<Guid>("CustomerId");
+    var count = row.GetValue<int>("order_count");
+    var total = row.GetValue<decimal>("total_spent");
+}
+```
+
+`AggregateHelper.LinqAggregateAsync()` provides an in-memory LINQ fallback for stores that don't implement native aggregation.
 
 ## See Also
 

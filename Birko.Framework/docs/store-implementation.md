@@ -440,6 +440,75 @@ store.AddOnInit((connector) => {
 10. **CancellationToken**: All async methods accept `CancellationToken ct = default`
 11. **Connector property**: `protected set` - derived classes can modify
 
+## Aggregation Interfaces
+
+Stores can optionally implement aggregation for server-side grouped queries:
+
+### IAggregatableStore\<T\> (Sync)
+
+```csharp
+public interface IAggregatableStore<T> where T : AbstractModel
+{
+    IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query);
+}
+```
+
+### IAsyncAggregatableStore\<T\> (Async)
+
+```csharp
+public interface IAsyncAggregatableStore<T> where T : AbstractModel
+{
+    Task<IReadOnlyList<AggregateResult>> AggregateAsync(AggregateQuery<T> query, CancellationToken ct = default);
+}
+```
+
+### AggregateQuery\<T\>
+
+```csharp
+var query = new AggregateQuery<Order>
+{
+    Filter = o => o.Status == OrderStatus.Completed,
+    GroupByFields = ["CustomerId"],
+    Aggregates =
+    [
+        new AggregateField(AggregateFunction.Count, "Id", "order_count"),
+        new AggregateField(AggregateFunction.Sum, "Total", "total_spent"),
+    ],
+    TimeBucketInterval = "1 hour",   // optional time bucketing
+    TimeColumn = "CreatedAt",         // property for time bucketing
+    OrderBy = new Dictionary<string, bool> { ["total_spent"] = false },
+    Limit = 10,
+    Offset = 0
+};
+```
+
+### AggregateResult
+
+```csharp
+IReadOnlyList<AggregateResult> results = await store.AggregateAsync(query);
+foreach (var row in results)
+{
+    var count = row.GetValue<int>("order_count");
+    var total = row.GetValue<decimal>("total_spent");
+    var bucket = row.GetBucketTime();  // convenience for "bucket_time"
+}
+```
+
+### LINQ Fallback
+
+`AggregateHelper` provides a default in-memory implementation for stores without native aggregation support:
+
+```csharp
+// In your store implementation:
+public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
+    => AggregateHelper.LinqAggregate(GetAllItems(), query);
+```
+
+### Shared Helpers
+
+- **TimeIntervalParser** — Parses `"5 minutes"`, `"1 hour"`, `"00:15:00"` → `TimeSpan`; `ToSqlInterval()` for SQL
+- **OrderByHelper** — Applies `OrderBy<T>` to `IQueryable<T>` / `IEnumerable<T>` via dynamic expressions
+
 ## Caching Decorator
 
 `CachedAsyncDataBaseBulkStore<DB,T>` wraps any async bulk SQL store to add transparent query caching with automatic invalidation. See the [Caching Guide](caching.md#sql-query-caching-integration) for configuration details.

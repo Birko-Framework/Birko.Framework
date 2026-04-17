@@ -75,6 +75,27 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 
 ---
 
+### Birko.Data.Redis
+**Status:** Planned | **Priority:** Low
+
+Redis data store with hybrid aggregation strategy.
+
+**Approach:** Hash-based storage (`HSET`/`HGET`) for CRUD, with two aggregation paths:
+- **With RediSearch (Redis Stack):** Native `FT.AGGREGATE` — server-side GROUP BY, SUM, AVG, MIN, MAX, COUNT. Time bucketing via `APPLY`. Requires `FT.CREATE` index.
+- **Without RediSearch:** Falls back to `AggregateHelper.LinqAggregate()` (same as JSON/XML/InfluxDB stores)
+
+**Implements:** `IAsyncStore<T>`, `IAsyncBulkStore<T>`, `IAsyncAggregatableStore<T>`
+
+**Dependencies:** Birko.Data.Stores, Birko.Redis (RedisConnectionManager), NRedisStack (optional, for RediSearch)
+
+**Structure:**
+- `RedisStore.cs` — AsyncStore with `*Core` overrides, lazy-init
+- `RedisAggregationHelper.cs` — Translates `AggregateQuery<T>` → `FT.AGGREGATE` args, parses results
+- `RedisFieldMapper.cs` — C# property → Redis field name mapping
+- `RedisIndexManager.cs` — `FT.CREATE` schema from model metadata
+
+---
+
 ### Birko.Caching.NCache
 **Status:** Planned | **Priority:** Low
 

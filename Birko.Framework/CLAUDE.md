@@ -62,7 +62,7 @@ Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
 Birko.Data.Core
   -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
 
-Birko.Data.Stores (OrderBy<T>)
+Birko.Data.Stores (OrderBy<T>, AggregateFunction, AggregateQuery, AggregateResult, IAggregatableStore, OrderByHelper, TimeIntervalParser)
   -> Birko.Data.Views (ViewDefinitionBuilder, ViewMapRegistry, IViewStore, IViewManager)
 
 Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions, LlmProviderFactory)
@@ -115,6 +115,14 @@ When using Birko.Framework projects in your solution, create a single aggregator
 ## Recent Updates
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
+
+### Store-Level Aggregation & Shared Helpers (2026-04-16)
+Centralized aggregation abstractions in Birko.Data.Stores and refactored all view platform implementations:
+- **New in Birko.Data.Stores**: `AggregateFunction` (enum, moved from Birko.Data.Views), `AggregateField`, `AggregateQuery<T>`, `AggregateResult`, `IAggregatableStore<T>`, `IAsyncAggregatableStore<T>`, `AggregateHelper` (LINQ fallback), `TimeIntervalParser`, `OrderByHelper`
+- **Birko.Data.Views**: `AggregateFunction` deleted locally — now imported from `Birko.Data.Stores`
+- **Birko.Data.SQL.Views**: `SqlViewTranslator` uses `AbstractConnectorBase.GetSqlFunctionName()` and `FunctionField.CreateFunctionField()` instead of local helpers
+- **Platform views**: MongoDB uses `StoreAggregationHelper`; ElasticSearch uses `StoreAggregationHelper`; CosmosDB uses `CosmosAggregationHelper`; RavenDB and all platforms use shared `OrderByHelper.ApplyTo()`
+- Removed hardcoded camelCase field name conversions across all platform view implementations
 
 ### Birko.BackgroundJobs.XML (2026-04-15)
 Added XML-file backend for BackgroundJobs to match `Workflow.XML` and `Sync.Xml`:

@@ -47,6 +47,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Time-series**: InfluxDB, TimescaleDB (2 projekty)
 - **Súborové**: JSON (System.Text.Json), XML (System.Xml.Serialization)
 - **Repository & Store pattern** s lazy-init a bulk operáciami (Create/Read/Update/Delete + filter-based Update/Delete s `PropertyUpdate<T>`)
+- **Agregácia na úrovni store** — `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` pre server-side GROUP BY, SUM, AVG, MIN, MAX, COUNT s time bucketing a stránkovaním
 
 ### 🔄 Vzory a funkcionality (8 feature + 8 migrations + 9 sync + 10 viewmodel + 5 views)
 - **Migrácie** – automatické vytváranie tabuliek, indexov a schémových zmien (base + 7 platforiem)
@@ -212,7 +213,9 @@ Birko.AI.Contracts       → ILlmProvider, Message, ContentBlock, TokenUsage,
 Birko.Framework          → Main framework aggregator
 Birko.Configuration      → Settings, PasswordSettings, RemoteSettings
 Birko.Data.Core          → AbstractModel, ViewModels, Filters, Exceptions
-Birko.Data.Stores        → IStore, IAsyncStore, IBulkStore, OrderBy, StoreLocator
+Birko.Data.Stores        → IStore, IAsyncStore, IBulkStore, OrderBy, StoreLocator,
+                           AggregateFunction, AggregateQuery, AggregateResult,
+                           IAggregatableStore, OrderByHelper, TimeIntervalParser
 Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 ```
 
@@ -242,6 +245,7 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟩 Birko.Data.EventSourcing     → Event Sourcing pattern
 🟩 Birko.Data.Aggregates        → SQL-NoSQL aggregate mapper (flatten/expand)
 🟩 Birko.Data.Views             → Fluent ViewDefinitionBuilder, ViewMapRegistry
+                                   (AggregateFunction z Birko.Data.Stores)
 🟩 Birko.Data.Processors        → Stream procesory (XML, CSV, HTTP, ZIP)
 
 🟩 Birko.Data.Migrations        → Migračný framework (base)
@@ -628,4 +632,4 @@ Súčasť Birko Framework – pozri [License.md](License.md).
 
 ---
 
-*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-04-15*
+*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-04-16*

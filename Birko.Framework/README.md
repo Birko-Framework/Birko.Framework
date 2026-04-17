@@ -52,7 +52,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Contracts | Pure interfaces (ILoadable, ICopyable, IDefault, ITimestamped) with zero dependencies |
 | Birko.Configuration | Settings hierarchy (Settings, PasswordSettings, RemoteSettings) |
 | Birko.Data.Core | Models, ViewModels, Filters, Exceptions (foundation layer) |
-| Birko.Data.Stores | Store interfaces/abstractions, Settings, OrderBy, StoreLocator |
+| Birko.Data.Stores | Store interfaces/abstractions, Settings, OrderBy, StoreLocator, Aggregation (AggregateQuery, AggregateResult, IAggregatableStore) |
 | Birko.Data.Repositories | Repository interfaces/abstractions, RepositoryLocator, DI extensions |
 | Birko.Models | Base entity and ViewModel classes |
 
