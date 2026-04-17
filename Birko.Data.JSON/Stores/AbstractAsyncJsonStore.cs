@@ -17,7 +17,7 @@ namespace Birko.Data.JSON.Stores
     /// Abstract base class for async JSON file-based data stores with bulk operations.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public abstract class AbstractAsyncJsonStore<T> : AbstractAsyncBulkStore<T>
+    public abstract class AbstractAsyncJsonStore<T> : AbstractAsyncBulkStore<T>, IAsyncAggregatableStore<T>
         where T : Models.AbstractModel
     {
         #region Fields and Properties
@@ -213,7 +213,7 @@ namespace Birko.Data.JSON.Stores
 
             if (orderBy != null && orderBy.Fields.Count > 0)
             {
-                query = ApplyOrderBy(query, orderBy);
+                query = OrderByHelper.ApplyTo(query, orderBy);
             }
 
             if (offset.HasValue)
@@ -227,34 +227,6 @@ namespace Birko.Data.JSON.Stores
             }
 
             return [.. query];
-        }
-
-        private IEnumerable<T> ApplyOrderBy(IEnumerable<T> source, OrderBy<T> orderBy)
-        {
-            IOrderedEnumerable<T>? orderedSource = null;
-
-            foreach (var field in orderBy.Fields)
-            {
-                var param = Expression.Parameter(typeof(T), "x");
-                var property = Expression.Property(param, field.PropertyName);
-                var lambda = Expression.Lambda<Func<T, object>>(Expression.Convert(property, typeof(object)), param);
-                var compiledFunc = lambda.Compile();
-
-                if (orderedSource == null)
-                {
-                    orderedSource = field.Descending
-                        ? source.OrderByDescending(compiledFunc)
-                        : source.OrderBy(compiledFunc);
-                }
-                else
-                {
-                    orderedSource = field.Descending
-                        ? orderedSource.ThenByDescending(compiledFunc)
-                        : orderedSource.ThenBy(compiledFunc);
-                }
-            }
-
-            return orderedSource ?? source;
         }
 
         /// <inheritdoc />
@@ -304,6 +276,21 @@ namespace Birko.Data.JSON.Stores
             }
 
             await SaveDataAsync(ct);
+        }
+
+        #endregion
+
+        #region Aggregation
+
+        /// <summary>
+        /// Executes an aggregation query over the in-memory items using LINQ.
+        /// </summary>
+        public async Task<IReadOnlyList<AggregateResult>> AggregateAsync(
+            AggregateQuery<T> query,
+            CancellationToken ct = default)
+        {
+            await EnsureDataLoadedAsync(ct);
+            return await AggregateHelper.LinqAggregateAsync(_items.Values, query, ct);
         }
 
         #endregion
