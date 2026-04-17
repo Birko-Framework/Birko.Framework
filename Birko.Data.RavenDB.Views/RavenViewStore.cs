@@ -52,7 +52,7 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         }
 
         IQueryable<TView> sorted = query;
-        sorted = ApplyOrderBy(sorted, orderBy);
+        sorted = OrderByHelper.ApplyTo(sorted, orderBy);
 
         if (offset.HasValue)
         {
@@ -127,31 +127,4 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
         return session.Query<TView>(_indexName);
     }
 
-    private static IQueryable<TView> ApplyOrderBy(IQueryable<TView> query, OrderBy<TView>? orderBy)
-    {
-        if (orderBy?.Fields == null || orderBy.Fields.Count == 0)
-        {
-            return query;
-        }
-
-        for (int i = 0; i < orderBy.Fields.Count; i++)
-        {
-            var field = orderBy.Fields[i];
-            var param = Expression.Parameter(typeof(TView), "x");
-            var property = Expression.Property(param, field.PropertyName);
-            var lambda = Expression.Lambda(property, param);
-
-            var methodName = i == 0
-                ? (field.Descending ? "OrderByDescending" : "OrderBy")
-                : (field.Descending ? "ThenByDescending" : "ThenBy");
-
-            var method = typeof(Queryable).GetMethods()
-                .First(m => m.Name == methodName && m.GetParameters().Length == 2)
-                .MakeGenericMethod(typeof(TView), property.Type);
-
-            query = (IQueryable<TView>)method.Invoke(null, new object[] { query, lambda })!;
-        }
-
-        return query;
-    }
 }

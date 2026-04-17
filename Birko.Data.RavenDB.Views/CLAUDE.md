@@ -20,7 +20,7 @@ RavenDB view implementation for the Birko data layer. Translates portable `ViewD
 - **OnTheFly** mode: queries the collection directly via `session.Query<TView>()`
 - **Persistent/Auto** mode: queries a static index via `session.Query<TView>(indexName)`
 - Supports filter, orderBy, skip/take pagination
-- Uses reflection-based expression building for dynamic OrderBy (same pattern as existing RavenDB store)
+- Uses shared `OrderByHelper.ApplyTo()` for dynamic ordering
 
 ### RavenViewManager
 - Implements `IViewManager`
@@ -30,8 +30,8 @@ RavenDB view implementation for the Birko data layer. Translates portable `ViewD
 - `RefreshAsync`: no-op (RavenDB indexes are auto-maintained)
 
 ## Dependencies
-- Birko.Data.Views (ViewDefinition, IViewStore, IViewManager, OrderBy)
-- Birko.Data.Stores (OrderBy\<T\>)
+- Birko.Data.Views (ViewDefinition, IViewStore, IViewManager)
+- Birko.Data.Stores (OrderBy\<T\>, OrderByHelper, AggregateFunction)
 - RavenDB.Client
 
 ## Maintenance

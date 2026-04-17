@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Birko.Data.Stores;
 using Birko.Data.Views;
 
 namespace Birko.Data.RavenDB.Views;
