@@ -13,7 +13,7 @@ namespace Birko.Data.InfluxDB.Stores
     /// Synchronous InfluxDB data store for CRUD and bulk operations.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public class InfluxDBStore<T> : Data.Stores.AbstractBulkStore<T>, Data.Stores.ISettingsStore<Settings>
+    public class InfluxDBStore<T> : Data.Stores.AbstractBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAggregatableStore<T>
         where T : Models.AbstractModel
     {
         /// <summary>
@@ -689,6 +689,22 @@ namespace Birko.Data.InfluxDB.Stores
             {
                 return default;
             }
+        }
+
+        #endregion
+
+        #region Aggregation
+
+        /// <summary>
+        /// Executes a synchronous aggregation query by reading data and aggregating in memory.
+        /// For native Flux aggregation, use the async store.
+        /// </summary>
+        public IReadOnlyList<Data.Stores.AggregateResult> Aggregate(Data.Stores.AggregateQuery<T> query)
+        {
+            if (Client == null || _settings == null) return Array.Empty<Data.Stores.AggregateResult>();
+
+            var data = Read(query.Filter, null, null, null);
+            return Data.Stores.AggregateHelper.LinqAggregate(data, query);
         }
 
         #endregion

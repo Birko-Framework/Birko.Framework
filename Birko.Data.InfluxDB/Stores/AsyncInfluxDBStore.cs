@@ -14,7 +14,7 @@ namespace Birko.Data.InfluxDB.Stores
     /// Async InfluxDB data store for CRUD and bulk operations.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public class AsyncInfluxDBStore<T> : Data.Stores.AbstractAsyncBulkStore<T>, Data.Stores.ISettingsStore<Settings>
+    public class AsyncInfluxDBStore<T> : Data.Stores.AbstractAsyncBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAsyncAggregatableStore<T>
         where T : Data.Models.AbstractModel
     {
         /// <summary>
@@ -766,6 +766,154 @@ namespace Birko.Data.InfluxDB.Stores
             {
                 return default;
             }
+        }
+
+        #endregion
+
+        #region Aggregation
+
+        /// <summary>
+        /// Executes an aggregation query using native Flux queries for simple cases
+        /// (single aggregate, optional GROUP BY, optional time bucketing),
+        /// with LINQ fallback for multi-aggregate queries.
+        /// </summary>
+        public async Task<IReadOnlyList<Data.Stores.AggregateResult>> AggregateAsync(
+            Data.Stores.AggregateQuery<T> query,
+            CancellationToken ct = default)
+        {
+            if (Client == null || _settings == null) return Array.Empty<Data.Stores.AggregateResult>();
+
+            // Native Flux: single aggregate function, no filter expression (Flux can't translate C# expressions)
+            bool canUseNative = query.Aggregates.Count == 1 && query.Filter == null;
+
+            if (canUseNative)
+            {
+                return await NativeFluxAggregateAsync(query, ct);
+            }
+
+            // Fallback: read all data, then aggregate in memory
+            var data = await ReadAsync(query.Filter, null, null, null, ct);
+            return await Data.Stores.AggregateHelper.LinqAggregateAsync(data, query, ct);
+        }
+
+        private async Task<IReadOnlyList<Data.Stores.AggregateResult>> NativeFluxAggregateAsync(
+            Data.Stores.AggregateQuery<T> query,
+            CancellationToken ct)
+        {
+            var agg = query.Aggregates[0];
+            var fluxFn = agg.Function switch
+            {
+                Data.Stores.AggregateFunction.Sum => "sum",
+                Data.Stores.AggregateFunction.Avg => "mean",
+                Data.Stores.AggregateFunction.Min => "min",
+                Data.Stores.AggregateFunction.Max => "max",
+                Data.Stores.AggregateFunction.Count => "count",
+                _ => throw new NotSupportedException($"Aggregate function {agg.Function} is not supported")
+            };
+
+            var flux = $"from(bucket: \"{_settings!.Bucket}\") " +
+                       $"|> range(start: 0) " +
+                       $"|> filter(fn: (r) => r._measurement == \"{MeasurementName}\")";
+
+            // Filter to specific field for non-count aggregates
+            if (agg.Function != Data.Stores.AggregateFunction.Count)
+            {
+                flux += $" |> filter(fn: (r) => r._field == \"{agg.SourcePropertyName}\")";
+            }
+
+            // Time bucketing
+            bool hasTimeBucket = !string.IsNullOrEmpty(query.TimeBucketInterval);
+            if (hasTimeBucket)
+            {
+                var interval = FormatFluxInterval(query.TimeBucketInterval!);
+                flux += $" |> aggregateWindow(every: {interval}, fn: {fluxFn}, createEmpty: false)";
+            }
+
+            // GROUP BY
+            if (query.GroupByFields.Count > 0)
+            {
+                var columns = string.Join(", ", query.GroupByFields.Select(f => $"\"{f}\""));
+                flux += $" |> group(columns: [{columns}])";
+            }
+
+            // Apply aggregate if not already applied via aggregateWindow
+            if (!hasTimeBucket)
+            {
+                flux += $" |> {fluxFn}()";
+            }
+
+            try
+            {
+                return await ExecuteWithRetryAsync(async () =>
+                {
+                    var queryApi = Client!.GetQueryApi();
+                    var tables = await queryApi.QueryAsync(flux, _settings.Organization, ct);
+
+                    var results = new List<Data.Stores.AggregateResult>();
+                    if (tables == null) return results.AsReadOnly();
+
+                    foreach (var table in tables)
+                    {
+                        foreach (var record in table.Records)
+                        {
+                            var row = new Dictionary<string, object?>();
+
+                            // Group-by fields from tags
+                            foreach (var field in query.GroupByFields)
+                            {
+                                if (record.Values.TryGetValue(field, out var tagValue))
+                                    row[field] = tagValue;
+                            }
+
+                            // Time bucket
+                            if (hasTimeBucket && record.GetTimeInDateTime().HasValue)
+                            {
+                                row["bucket_time"] = record.GetTimeInDateTime()!.Value;
+                            }
+
+                            // Aggregate value
+                            row[agg.ResolvedAlias] = record.GetValue();
+
+                            results.Add(new Data.Stores.AggregateResult(row));
+                        }
+                    }
+
+                    results = Data.Stores.AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit);
+
+                    return (IReadOnlyList<Data.Stores.AggregateResult>)results.AsReadOnly();
+                }, ct);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to execute aggregation in InfluxDB", ex);
+            }
+        }
+
+        private static string FormatFluxInterval(string interval)
+        {
+            if (TimeSpan.TryParse(interval, out var ts))
+            {
+                if (ts.TotalDays >= 1) return $"{(int)ts.TotalDays}d";
+                if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h";
+                if (ts.TotalMinutes >= 1) return $"{(int)ts.TotalMinutes}m";
+                return $"{(int)ts.TotalSeconds}s";
+            }
+
+            var parts = interval.Trim().Split(' ');
+            if (parts.Length == 2 && int.TryParse(parts[0], out var value))
+            {
+                var unit = parts[1].ToLowerInvariant() switch
+                {
+                    "second" or "seconds" or "s" => "s",
+                    "minute" or "minutes" or "m" or "min" or "mins" => "m",
+                    "hour" or "hours" or "h" or "hr" or "hrs" => "h",
+                    "day" or "days" or "d" => "d",
+                    _ => "h"
+                };
+                return $"{value}{unit}";
+            }
+
+            return "1h";
         }
 
         #endregion
