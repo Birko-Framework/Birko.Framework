@@ -81,6 +81,7 @@ public class UserStatsView { /* ... */ }
 - **ViewGenerator\<T\>** - Generates CREATE VIEW SQL
 - **ViewBuilder** - View query builder
 - **ViewDefinition** - View metadata
+- **FunctionField** - Aggregate function fields with `CreateFunctionField()` static helper for typed field creation from function name and source field
 
 ## View Query Modes
 

@@ -16,121 +16,98 @@ namespace Birko.Data.SQL.Fields
 
         public static FunctionField CreateFunctionAggregateField(System.Reflection.PropertyInfo property, Attributes.AggregateFieldAttribute field, AbstractField tablefield)
         {
+            var functionName = field switch
+            {
+                Attributes.AvgFieldAttribute => "AVG",
+                Attributes.CountFieldAttribute => "COUNT",
+                Attributes.MaxFieldAttribute => "MAX",
+                Attributes.MinFieldAttribute => "MIN",
+                Attributes.SumFieldAttribute => "SUM",
+                _ => throw new NotSupportedException($"Aggregate attribute {field.GetType().Name} is not supported.")
+            };
+
+            return CreateFunctionField(property, functionName, tablefield);
+        }
+
+        /// <summary>
+        /// Creates an aggregate <see cref="FunctionField"/> by SQL function name and source field type.
+        /// Shared by both attribute-based views (<see cref="CreateFunctionAggregateField"/>) and
+        /// portable view definitions (<see cref="SqlViewTranslator"/>).
+        /// </summary>
+        public static FunctionField CreateFunctionField(System.Reflection.PropertyInfo property, string functionName, AbstractField sourceField)
+        {
             FunctionField? functionField = null;
-            if (field is Attributes.AvgFieldAttribute)
+            var parameters = new object[] { sourceField.Name };
+
+            if (functionName == "COUNT")
             {
-                functionField = (tablefield.IsNotNull)
-                    ? new DecimalFunction(property, "AVG", new[] { tablefield.Name })
-                    : new NullableDecimalFunction(property, "AVG", new[] { tablefield.Name });
+                functionField = sourceField.IsNotNull
+                    ? new IntegerFunction(property, functionName, parameters)
+                    : new NullableIntegerFunction(property, functionName, parameters);
             }
-            else if (field is Attributes.CountFieldAttribute)
+            else if (functionName == "AVG")
             {
-                functionField = (tablefield.IsNotNull)
-                    ? new IntegerFunction(property, "COUNT", new[] { tablefield.Name })
-                    : new NullableIntegerFunction(property, "COUNT", new[] { tablefield.Name });
+                functionField = sourceField.IsNotNull
+                    ? new DecimalFunction(property, functionName, parameters)
+                    : new NullableDecimalFunction(property, functionName, parameters);
             }
-            else if (field is Attributes.MaxFieldAttribute)
+            else if (functionName is "SUM" or "MIN" or "MAX")
             {
-                if (tablefield is IntegerField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new IntegerFunction(property, "MAX", new[] { tablefield.Name })
-                    : new NullableIntegerFunction(property, "MAX", new[] { tablefield.Name });
-                }
-                else if (tablefield is DecimalField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new DecimalFunction(property, "MAX", new[] { tablefield.Name })
-                    : new NullableDecimalFunction(property, "MAX", new[] { tablefield.Name });
-                }
-                else if (tablefield is BooleanField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new BooleanFunction(property, "MAX", new[] { tablefield.Name })
-                    : new NullableBooleanFunction(property, "MAX", new[] { tablefield.Name });
-                }
-                else if (tablefield is DateTimeField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new DateTimeFunction(property, "MAX", new[] { tablefield.Name })
-                    : new NullableDateTimeFunction(property, "MAX", new[] { tablefield.Name });
-                }
-                else if (tablefield is GuidField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new GuidFunction(property, "MAX", new[] { tablefield.Name })
-                    : new NullableGuidFunction(property, "MAX", new[] { tablefield.Name });
-                }
-                else if (tablefield is CharField charfield)
-                {
-                    functionField = new CharFunction(property, "MAX", new[] { tablefield.Name }, charfield.Lenght);
-                }
-                else
-                {
-                    functionField = new StringFunction(property, "MAX", new[] { tablefield.Name });
-                }
+                functionField = CreateTypedFunctionField(property, functionName, parameters, sourceField);
             }
-            else if (field is Attributes.MinFieldAttribute)
-            {
-                if (tablefield is IntegerField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new IntegerFunction(property, "MIN", new[] { tablefield.Name })
-                    : new NullableIntegerFunction(property, "MIN", new[] { tablefield.Name });
-                }
-                else if (tablefield is DecimalField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new DecimalFunction(property, "MIN", new[] { tablefield.Name })
-                    : new NullableDecimalFunction(property, "MIN", new[] { tablefield.Name });
-                }
-                else if (tablefield is BooleanField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new BooleanFunction(property, "MIN", new[] { tablefield.Name })
-                    : new NullableBooleanFunction(property, "MIN", new[] { tablefield.Name });
-                }
-                else if (tablefield is DateTimeField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new DateTimeFunction(property, "MIN", new[] { tablefield.Name })
-                    : new NullableDateTimeFunction(property, "MIN", new[] { tablefield.Name });
-                }
-                else if (tablefield is GuidField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new GuidFunction(property, "MIN", new[] { tablefield.Name })
-                    : new NullableGuidFunction(property, "MIN", new[] { tablefield.Name });
-                }
-                else if (tablefield is CharField charfield)
-                {
-                    functionField = new CharFunction(property, "MIN", new[] { tablefield.Name }, charfield.Lenght);
-                }
-                else
-                {
-                    functionField = new StringFunction(property, "MIN", new[] { tablefield.Name });
-                }
-            }
-            else if (field is Attributes.SumFieldAttribute)
-            {
-                if (tablefield is IntegerField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new IntegerFunction(property, "SUM", new[] { tablefield.Name })
-                    : new NullableIntegerFunction(property, "SUM", new[] { tablefield.Name });
-                }
-                else if (tablefield is DecimalField)
-                {
-                    functionField = (tablefield.IsNotNull)
-                    ? new DecimalFunction(property, "SUM", new[] { tablefield.Name })
-                    : new NullableDecimalFunction(property, "SUM", new[] { tablefield.Name });
-                }
-            }
+
             if (functionField != null)
             {
                 functionField.IsAggregate = true;
             }
+
             return functionField!;
+        }
+
+        private static FunctionField? CreateTypedFunctionField(
+            System.Reflection.PropertyInfo property, string functionName, object[] parameters, AbstractField sourceField)
+        {
+            if (sourceField is IntegerField)
+            {
+                return sourceField.IsNotNull
+                    ? new IntegerFunction(property, functionName, parameters)
+                    : new NullableIntegerFunction(property, functionName, parameters);
+            }
+
+            if (sourceField is DecimalField)
+            {
+                return sourceField.IsNotNull
+                    ? new DecimalFunction(property, functionName, parameters)
+                    : new NullableDecimalFunction(property, functionName, parameters);
+            }
+
+            if (sourceField is DateTimeField)
+            {
+                return sourceField.IsNotNull
+                    ? new DateTimeFunction(property, functionName, parameters)
+                    : new NullableDateTimeFunction(property, functionName, parameters);
+            }
+
+            if (sourceField is BooleanField)
+            {
+                return sourceField.IsNotNull
+                    ? new BooleanFunction(property, functionName, parameters)
+                    : new NullableBooleanFunction(property, functionName, parameters);
+            }
+
+            if (sourceField is GuidField)
+            {
+                return sourceField.IsNotNull
+                    ? new GuidFunction(property, functionName, parameters)
+                    : new NullableGuidFunction(property, functionName, parameters);
+            }
+
+            if (sourceField is CharField charField)
+            {
+                return new CharFunction(property, functionName, parameters, charField.Lenght);
+            }
+
+            return new StringFunction(property, functionName, parameters);
         }
     }
 }
