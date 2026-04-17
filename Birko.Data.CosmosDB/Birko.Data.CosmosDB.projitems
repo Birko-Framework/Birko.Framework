@@ -18,5 +18,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncCosmosDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\CosmosDbUnitOfWork.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\CosmosDBIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Aggregation\CosmosAggregationHelper.cs" />
   </ItemGroup>
 </Project>

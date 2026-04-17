@@ -1,3 +1,4 @@
+using Birko.Data.CosmosDB.Aggregation;
 using Birko.Data.Models;
 using Birko.Data.Stores;
 using Birko.Configuration;
@@ -18,6 +19,7 @@ namespace Birko.Data.CosmosDB.Stores;
 public class CosmosDBStore<T>
     : AbstractBulkStore<T>
     , ISettingsStore<RemoteSettings>
+    , IAggregatableStore<T>
     where T : AbstractModel
 {
     private CosmosClient? _cosmosClient;
@@ -394,6 +396,37 @@ public class CosmosDBStore<T>
         {
             return false;
         }
+    }
+
+    #endregion
+
+    #region Aggregation
+
+    /// <summary>
+    /// Executes a synchronous aggregation query using native Cosmos DB SQL aggregation.
+    /// Builds a GROUP BY query with aggregate functions (SUM, AVG, MIN, MAX, COUNT).
+    /// </summary>
+    public IReadOnlyList<AggregateResult> Aggregate(AggregateQuery<T> query)
+    {
+        if (_container == null) return Array.Empty<AggregateResult>();
+
+        var sql = CosmosAggregationHelper.BuildAggregateSql(query);
+        var queryDef = new QueryDefinition(sql);
+
+        var results = new List<AggregateResult>();
+        using var iterator = _container.GetItemQueryIterator<System.Text.Json.JsonElement>(queryDef);
+        while (iterator.HasMoreResults)
+        {
+            var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
+            foreach (var doc in response)
+            {
+                results.Add(new AggregateResult(CosmosAggregationHelper.ParseJsonResult(doc)));
+            }
+        }
+
+        results = AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit);
+
+        return results.AsReadOnly();
     }
 
     #endregion
