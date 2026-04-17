@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Data.ElasticSearch.Aggregation;
 using Birko.Data.Stores;
 using Birko.Data.Views;
 using Nest;
@@ -128,7 +129,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             {
                 sorts.Add(new FieldSort
                 {
-                    Field = ToCamelCase(field.PropertyName),
+                    Field = field.PropertyName,
                     Order = field.Descending ? SortOrder.Descending : SortOrder.Ascending
                 });
             }
@@ -164,18 +165,10 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         {
             var aggName = BuildAggregationName(aggregate);
             var fieldName = aggregate.SourceProperty != null
-                ? ToCamelCase(aggregate.SourceProperty)
+                ? aggregate.SourceProperty
                 : null;
 
-            AggregationContainer agg = aggregate.Function switch
-            {
-                AggregateFunction.Sum => new AggregationContainer { Sum = new SumAggregation(aggName, fieldName) },
-                AggregateFunction.Avg => new AggregationContainer { Average = new AverageAggregation(aggName, fieldName) },
-                AggregateFunction.Min => new AggregationContainer { Min = new MinAggregation(aggName, fieldName) },
-                AggregateFunction.Max => new AggregationContainer { Max = new MaxAggregation(aggName, fieldName) },
-                AggregateFunction.Count => new AggregationContainer { ValueCount = new ValueCountAggregation(aggName, fieldName ?? "_id") },
-                _ => throw new NotSupportedException($"Aggregate function {aggregate.Function} is not supported.")
-            };
+            var agg = StoreAggregationHelper.BuildSingleMetricAggregation(aggregate.Function, aggName, fieldName);
 
             metricAggregations.Add(aggName, agg);
         }
@@ -184,50 +177,12 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
         if (_definition.HasGroupBy)
         {
-            // Use TermsAggregation for GROUP BY with metric sub-aggregations
-            var groupByField = ToCamelCase(_definition.GroupBy[0].PropertyName);
-
-            var termsAgg = new TermsAggregation("group_by")
+            // Use shared helper for GROUP BY aggregation
+            var groupByFieldNames = _definition.GroupBy.Select(g => g.PropertyName).ToList();
+            topLevelAggregations = new AggregationDictionary
             {
-                Field = groupByField,
-                Size = limit ?? 10000,
-                Aggregations = metricAggregations
+                { "group_by", StoreAggregationHelper.BuildGroupByAggregation(groupByFieldNames, metricAggregations, limit ?? 10000) }
             };
-
-            // For multiple GROUP BY fields, use composite aggregation approach via nested terms
-            // For simplicity, additional group-by fields are handled via multi_terms script
-            if (_definition.GroupBy.Count > 1)
-            {
-                // Use a composite aggregation for multiple group-by fields
-                var compositeSourceList = new List<ICompositeAggregationSource>();
-                foreach (var groupBy in _definition.GroupBy)
-                {
-                    var gbFieldName = ToCamelCase(groupBy.PropertyName);
-                    compositeSourceList.Add(new TermsCompositeAggregationSource(gbFieldName)
-                    {
-                        Field = gbFieldName
-                    });
-                }
-
-                var compositeAgg = new CompositeAggregation("group_by")
-                {
-                    Size = limit ?? 10000,
-                    Sources = compositeSourceList,
-                    Aggregations = metricAggregations
-                };
-
-                topLevelAggregations = new AggregationDictionary
-                {
-                    { "group_by", new AggregationContainer { Composite = compositeAgg } }
-                };
-            }
-            else
-            {
-                topLevelAggregations = new AggregationDictionary
-                {
-                    { "group_by", new AggregationContainer { Terms = termsAgg } }
-                };
-            }
         }
         else
         {
@@ -275,7 +230,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
                 // Set group-by field values from composite key
                 foreach (var groupBy in _definition.GroupBy)
                 {
-                    var gbFieldName = ToCamelCase(groupBy.PropertyName);
+                    var gbFieldName = groupBy.PropertyName;
                     if (bucket.Key.TryGetValue(gbFieldName, out string keyValue))
                     {
                         SetPropertyValue(item, viewType, groupBy.PropertyName, keyValue);
@@ -317,20 +272,15 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         var item = new TView();
         var viewType = typeof(TView);
 
+        // Reuse the shared metric extraction logic via a response-level adapter.
+        // response.Aggregations is a BucketBase-compatible aggregate dictionary.
+        var aggNames = _definition.Aggregates.Select(a => (BuildAggregationName(a), a.Function));
+        var values = StoreAggregationHelper.ExtractMetricValues(response.Aggregations, aggNames);
+
         foreach (var aggregate in _definition.Aggregates)
         {
             var aggName = BuildAggregationName(aggregate);
-            double? value = aggregate.Function switch
-            {
-                AggregateFunction.Sum => response.Aggregations.Sum(aggName)?.Value,
-                AggregateFunction.Avg => response.Aggregations.Average(aggName)?.Value,
-                AggregateFunction.Min => response.Aggregations.Min(aggName)?.Value,
-                AggregateFunction.Max => response.Aggregations.Max(aggName)?.Value,
-                AggregateFunction.Count => response.Aggregations.ValueCount(aggName)?.Value,
-                _ => null
-            };
-
-            if (value.HasValue)
+            if (values.TryGetValue(aggName, out var value) && value.HasValue)
             {
                 SetPropertyValue(item, viewType, aggregate.ViewProperty, value.Value);
             }
@@ -341,20 +291,14 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
     private void SetAggregateValues(TView item, Type viewType, BucketBase bucket)
     {
-        foreach (var aggregate in _definition.Aggregates)
-        {
-            var aggName = BuildAggregationName(aggregate);
-            double? value = aggregate.Function switch
-            {
-                AggregateFunction.Sum => bucket.Sum(aggName)?.Value,
-                AggregateFunction.Avg => bucket.Average(aggName)?.Value,
-                AggregateFunction.Min => bucket.Min(aggName)?.Value,
-                AggregateFunction.Max => bucket.Max(aggName)?.Value,
-                AggregateFunction.Count => bucket.ValueCount(aggName)?.Value,
-                _ => null
-            };
+        var aggNames = _definition.Aggregates.Select(a => (BuildAggregationName(a), a.Function));
+        var values = StoreAggregationHelper.ExtractMetricValues(bucket, aggNames);
 
-            if (value.HasValue)
+        for (int i = 0; i < _definition.Aggregates.Count; i++)
+        {
+            var aggregate = _definition.Aggregates[i];
+            var aggName = BuildAggregationName(aggregate);
+            if (values.TryGetValue(aggName, out var value) && value.HasValue)
             {
                 SetPropertyValue(item, viewType, aggregate.ViewProperty, value.Value);
             }
@@ -411,25 +355,15 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
         }
 
         return _definition.Fields
-            .Select(f => ToCamelCase(f.SourceProperty))
+            .Select(f => f.SourceProperty)
             .ToArray();
-    }
-
-    private static string ToCamelCase(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-        {
-            return name;
-        }
-
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
     }
 
     private static string BuildAggregationName(AggregateClause aggregate)
     {
         var functionPrefix = aggregate.Function.ToString().ToLowerInvariant();
         var fieldSuffix = aggregate.SourceProperty ?? "all";
-        return $"{functionPrefix}_{ToCamelCase(fieldSuffix)}";
+        return $"{functionPrefix}_{fieldSuffix}";
     }
 
     private static void SetPropertyValue(TView instance, Type viewType, string propertyName, object? value)
