@@ -21,8 +21,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)IStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ITransactionalStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OrderBy.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OrderByHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TimeIntervalParser.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PropertyUpdate.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreLocator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AggregateQuery.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AggregateResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAggregatableStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IAsyncAggregatableStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AggregateHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AggregateMath.cs" />
   </ItemGroup>
 </Project>

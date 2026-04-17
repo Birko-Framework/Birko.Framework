@@ -1,6 +1,6 @@
 # Birko.Data.Stores
 
-Store abstractions for the Birko Framework. Contains store interfaces, abstract implementations, ordering, and service locator. Settings hierarchy (Settings, PasswordSettings, RemoteSettings) is provided by `Birko.Settings` and imported transitively.
+Store abstractions for the Birko Framework. Contains store interfaces, abstract implementations, ordering, aggregation, and service locator. Settings hierarchy (Settings, PasswordSettings, RemoteSettings) is provided by `Birko.Settings` and imported transitively.
 
 ## Store Hierarchy
 
@@ -24,6 +24,7 @@ Settings (Location, Name)
 
 - `IStore<T>` / `IAsyncStore<T>` — Single-entity CRUD operations
 - `IBulkStore<T>` / `IAsyncBulkStore<T>` — Batch operations with filtering, ordering, paging, filter-based update/delete
+- `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` — Optional server-side aggregation (GROUP BY, SUM, AVG, MIN, MAX, COUNT with time bucketing)
 - `PropertyUpdate<T>` — Fluent builder for native partial property updates (SQL SET, MongoDB $set, ES scripts)
 - `IStoreWrapper` — Decorator pattern for store composition
 - `ITransactionalStore<T, TContext>` — External transaction participation
@@ -52,6 +53,35 @@ store.Delete(x => x.IsExpired);
 | MongoDB | `UpdateMany` with `$set` | `DeleteMany` |
 | ElasticSearch | `UpdateByQuery` (Painless) | `DeleteByQuery` |
 | Others | Fallback read-modify-save | Fallback read-then-delete |
+
+## Aggregation
+
+Stores can optionally implement `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` for server-side aggregation:
+
+```csharp
+var query = new AggregateQuery<Order>
+{
+    Filter = o => o.Status == OrderStatus.Completed,
+    GroupByFields = ["CustomerId"],
+    Aggregates =
+    [
+        new AggregateField(AggregateFunction.Count, "Id", "order_count"),
+        new AggregateField(AggregateFunction.Sum, "Total", "total_spent"),
+    ],
+    TimeBucketInterval = "1 hour",   // optional time bucketing
+    TimeColumn = "CreatedAt",
+    Limit = 10
+};
+
+IReadOnlyList<AggregateResult> results = await store.AggregateAsync(query);
+foreach (var row in results)
+{
+    var count = row.GetValue<int>("order_count");
+    var total = row.GetValue<decimal>("total_spent");
+}
+```
+
+**Key types:** `AggregateFunction` (enum), `AggregateField` (record), `AggregateQuery<T>`, `AggregateResult`, `AggregateHelper` (LINQ fallback), `TimeIntervalParser`, `OrderByHelper`.
 
 ## Usage
 

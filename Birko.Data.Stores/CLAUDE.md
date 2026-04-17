@@ -33,6 +33,17 @@ Settings classes have been extracted to **Birko.Settings (namespace `Birko.Confi
 - **IBulkUpdateStore\<T\>** adds: `Update(filter, Action<T>)` (read-modify-save), `Update(filter, PropertyUpdate<T>)` (native)
 - **IBulkDeleteStore\<T\>** adds: `Delete(filter)` (native on SQL/MongoDB/ES, fallback on others)
 
+### Aggregation
+- **AggregateFunction** (enum) — Count, Sum, Avg, Min, Max (shared across all view/store projects)
+- **AggregateField** (sealed record) — Function + SourcePropertyName + optional Alias (defaults to `{function}_{source}`)
+- **AggregateQuery\<T\>** — Filter, GroupByFields, Aggregates, TimeBucketInterval, TimeColumn, OrderBy, Limit, Offset
+- **AggregateResult** — Dictionary-backed result with typed `GetValue<TVal>(alias)` and `GetBucketTime()` convenience accessor
+- **IAggregatableStore\<T\>** — Optional sync interface: `Aggregate(AggregateQuery<T>)` → `IReadOnlyList<AggregateResult>`
+- **IAsyncAggregatableStore\<T\>** — Optional async interface: `AggregateAsync(AggregateQuery<T>, CancellationToken)` → `Task<IReadOnlyList<AggregateResult>>`
+- **AggregateHelper** — Static LINQ fallback for in-memory aggregation (`LinqAggregate`, `LinqAggregateAsync`), shared ordering/paging, time bucketing, numeric computation
+- **TimeIntervalParser** — Parses human-readable intervals (`"5 minutes"`, `"1 hour"`, `"00:15:00"`) to `TimeSpan`; `ToSqlInterval()` for SQL-friendly output
+- **OrderByHelper** — Applies `OrderBy<T>` to `IQueryable<T>` and `IEnumerable<T>` via dynamic expressions
+
 ### Utilities
 - **OrderBy\<T\>** — Type-safe sorting specification with expression-based API
 - **PropertyUpdate\<T\>** — Fluent property assignment builder for native bulk updates
