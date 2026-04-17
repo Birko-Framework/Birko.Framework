@@ -25,5 +25,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)ChangeStreams\ChangeStreamEvent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ChangeStreams\ChangeStreamOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Aggregation\AggregationPipelineBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Aggregation\StoreAggregationHelper.cs" />
   </ItemGroup>
 </Project>

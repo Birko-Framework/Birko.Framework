@@ -18,6 +18,7 @@ namespace Birko.Data.MongoDB.Stores
         : Data.Stores.AbstractBulkStore<T>
         , Data.Stores.ISettingsStore<Settings>
         , Data.Stores.ITransactionalStore<T, IClientSessionHandle>
+        , Data.Stores.IAggregatableStore<T>
         where T : Models.MongoDBModel
     {
         /// <summary>
@@ -409,6 +410,26 @@ namespace Birko.Data.MongoDB.Stores
             }
 
             return new AggregationPipelineBuilder<T>(Collection);
+        }
+
+        /// <summary>
+        /// Executes an aggregation query using MongoDB aggregation pipeline.
+        /// </summary>
+        public IReadOnlyList<Data.Stores.AggregateResult> Aggregate(Data.Stores.AggregateQuery<T> query)
+        {
+            if (Collection == null) return Array.Empty<Data.Stores.AggregateResult>();
+
+            var pipeline = Aggregate();
+
+            if (query.Filter != null)
+                pipeline.Match(query.Filter);
+
+            var (groupDoc, projection) = StoreAggregationHelper.BuildGroupStage(query);
+            pipeline.Group(groupDoc);
+            pipeline.Project(projection);
+
+            var bsonResults = pipeline.ToList();
+            return StoreAggregationHelper.MapBsonResults(bsonResults);
         }
 
         #endregion

@@ -1,6 +1,7 @@
 using Birko.Data.Filters;
 using Birko.Data.MongoDB.Aggregation;
 using Birko.Data.MongoDB.ChangeStreams;
+using Birko.Data.Stores;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using System;
@@ -21,6 +22,7 @@ namespace Birko.Data.MongoDB.Stores
         : Data.Stores.AbstractAsyncBulkStore<T>
         , Data.Stores.ISettingsStore<Settings>
         , Data.Stores.IAsyncTransactionalStore<T, IClientSessionHandle>
+        , Data.Stores.IAsyncAggregatableStore<T>
         where T : Data.Models.AbstractModel
     {
         /// <summary>
@@ -506,6 +508,35 @@ namespace Birko.Data.MongoDB.Stores
             }
 
             return new AggregationPipelineBuilder<T>(Collection);
+        }
+
+        #endregion
+
+        #region Store-Level Aggregation
+
+        /// <summary>
+        /// Executes an aggregation query using MongoDB aggregation pipeline.
+        /// Translates <see cref="AggregateQuery{T}"/> into $match + $group + $project stages.
+        /// </summary>
+        public async Task<IReadOnlyList<AggregateResult>> AggregateAsync(
+            AggregateQuery<T> query,
+            CancellationToken ct = default)
+        {
+            if (Collection == null) return Array.Empty<AggregateResult>();
+
+            var pipeline = Aggregate();
+
+            // $match from filter
+            if (query.Filter != null)
+                pipeline.Match(query.Filter);
+
+            var (groupDoc, projection) = StoreAggregationHelper.BuildGroupStage(query);
+            pipeline.Group(groupDoc);
+            pipeline.Project(projection);
+
+            // Execute and map to AggregateResult
+            var bsonResults = await pipeline.ToListAsync(ct);
+            return StoreAggregationHelper.MapBsonResults(bsonResults);
         }
 
         #endregion
