@@ -4,7 +4,7 @@ MongoDB platform implementation for Birko.Data.Views. Translates ViewDefinition 
 
 ## Components
 
-- **MongoViewTranslator** — Converts ViewDefinition → List\<BsonDocument\> pipeline stages ($lookup, $unwind, $group, $project)
+- **MongoViewTranslator** — Converts ViewDefinition → List\<BsonDocument\> pipeline stages ($lookup, $unwind, $group, $project). Group stage built via shared `StoreAggregationHelper.BuildGroupStageFromPaths()`
 - **MongoViewStore\<TView\>** — Implements IViewStore\<TView\> by executing aggregation pipelines. Supports Persistent (MongoDB view collection), OnTheFly (pipeline on source collection), and Auto modes
 - **MongoViewManager** — Implements IViewManager using MongoDB `db.createView()` command (requires MongoDB 3.4+)
 
@@ -21,7 +21,8 @@ MongoDB platform implementation for Birko.Data.Views. Translates ViewDefinition 
 
 ## Dependencies
 - Birko.Data.Views (ViewDefinition, IViewStore, IViewManager)
-- Birko.Data.MongoDB (MongoDBClient)
+- Birko.Data.Stores (AggregateFunction, OrderByHelper)
+- Birko.Data.MongoDB (MongoDBClient, StoreAggregationHelper)
 - MongoDB.Driver, MongoDB.Bson
 
 ## Namespace

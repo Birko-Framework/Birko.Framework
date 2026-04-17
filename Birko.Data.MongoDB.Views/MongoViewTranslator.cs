@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Birko.Data.Stores;
 using Birko.Data.Views;
 using MongoDB.Bson;
 
@@ -11,14 +12,6 @@ namespace Birko.Data.MongoDB.Views;
 /// </summary>
 public static class MongoViewTranslator
 {
-    private static readonly Dictionary<AggregateFunction, string> AggregateOperators = new()
-    {
-        [AggregateFunction.Count] = "$sum",
-        [AggregateFunction.Sum] = "$sum",
-        [AggregateFunction.Avg] = "$avg",
-        [AggregateFunction.Min] = "$min",
-        [AggregateFunction.Max] = "$max"
-    };
 
     /// <summary>
     /// Translates a ViewDefinition into an ordered list of BsonDocument pipeline stages.
@@ -61,40 +54,22 @@ public static class MongoViewTranslator
         // 2. $group stage if aggregates are present
         if (definition.HasAggregates)
         {
-            var groupId = new BsonDocument();
-            foreach (var grp in definition.GroupBy)
-            {
-                var fieldPath = ResolveFieldPath(grp.SourceType, grp.PropertyName, definition);
-                groupId.Add(grp.PropertyName, "$" + fieldPath);
-            }
+            var groupByPaths = definition.GroupBy
+                .Select(grp => (grp.PropertyName, ResolveFieldPath(grp.SourceType, grp.PropertyName, definition)));
 
-            var groupDoc = new BsonDocument("_id", groupId.ElementCount > 0 ? (BsonValue)groupId : BsonNull.Value);
+            var firstFieldPaths = definition.GroupBy
+                .Select(grp => (grp.PropertyName, ResolveFieldPath(grp.SourceType, grp.PropertyName, definition)));
 
-            // Add grouped fields to carry them forward
-            foreach (var grp in definition.GroupBy)
-            {
-                var fieldPath = ResolveFieldPath(grp.SourceType, grp.PropertyName, definition);
-                groupDoc.Add(grp.PropertyName, new BsonDocument("$first", "$" + fieldPath));
-            }
+            var accumulators = definition.Aggregates
+                .Select(agg => (
+                    agg.ViewProperty,
+                    agg.Function,
+                    agg.Function == AggregateFunction.Count
+                        ? (string?)null
+                        : ResolveFieldPath(agg.SourceType, agg.SourceProperty!, definition)));
 
-            // Add aggregate expressions
-            foreach (var agg in definition.Aggregates)
-            {
-                var op = AggregateOperators[agg.Function];
-
-                BsonValue aggExpr;
-                if (agg.Function == AggregateFunction.Count)
-                {
-                    aggExpr = new BsonDocument(op, 1);
-                }
-                else
-                {
-                    var fieldPath = ResolveFieldPath(agg.SourceType, agg.SourceProperty!, definition);
-                    aggExpr = new BsonDocument(op, "$" + fieldPath);
-                }
-
-                groupDoc.Add(agg.ViewProperty, aggExpr);
-            }
+            var groupDoc = Aggregation.StoreAggregationHelper.BuildGroupStageFromPaths(
+                groupByPaths, firstFieldPaths, accumulators);
 
             stages.Add(new BsonDocument("$group", groupDoc));
         }
@@ -157,8 +132,8 @@ public static class MongoViewTranslator
     }
 
     /// <summary>
-    /// Converts a C# property name to MongoDB field name convention.
-    /// MongoDB uses camelCase by default; Guid property maps to _id.
+    /// Converts a C# property name to MongoDB field name.
+    /// Maps Guid property to _id.
     /// </summary>
     private static string GetFieldName(string propertyName)
     {
@@ -167,12 +142,6 @@ public static class MongoViewTranslator
             return "_id";
         }
 
-        // Convert to camelCase
-        if (string.IsNullOrEmpty(propertyName))
-        {
-            return propertyName;
-        }
-
-        return char.ToLowerInvariant(propertyName[0]) + propertyName.Substring(1);
+        return propertyName;
     }
 }
