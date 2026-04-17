@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Birko.Data.CosmosDB.Aggregation;
 using Birko.Data.Stores;
 using Birko.Data.Views;
 using Microsoft.Azure.Cosmos;
@@ -95,7 +96,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
         if (orderBy?.Fields.Count > 0)
         {
-            query = ApplyOrderBy(query, orderBy);
+            query = OrderByHelper.ApplyTo(query, orderBy);
         }
 
         if (offset.HasValue && offset.Value > 0)
@@ -156,29 +157,6 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         return await queryable.CountAsync(ct).ConfigureAwait(false);
     }
 
-    private static IQueryable<TView> ApplyOrderBy(IQueryable<TView> query, OrderBy<TView> orderBy)
-    {
-        for (int i = 0; i < orderBy.Fields.Count; i++)
-        {
-            var field = orderBy.Fields[i];
-            var param = Expression.Parameter(typeof(TView), "x");
-            var property = Expression.Property(param, field.PropertyName);
-            var lambda = Expression.Lambda(property, param);
-
-            var methodName = i == 0
-                ? (field.Descending ? "OrderByDescending" : "OrderBy")
-                : (field.Descending ? "ThenByDescending" : "ThenBy");
-
-            var method = typeof(Queryable).GetMethods()
-                .First(m => m.Name == methodName && m.GetParameters().Length == 2)
-                .MakeGenericMethod(typeof(TView), property.Type);
-
-            query = (IQueryable<TView>)method.Invoke(null, new object[] { query, lambda })!;
-        }
-
-        return query;
-    }
-
     #endregion
 
     #region SQL-based queries (aggregate with GROUP BY)
@@ -228,41 +206,16 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         int? limit,
         int? offset)
     {
-        var sb = new StringBuilder();
+        // Build SELECT ... FROM c and GROUP BY parts separately via shared helper
+        var groupByFields = _definition.GroupBy
+            .Select(g => (g.PropertyName, FindViewPropertyForGroupBy(g)));
+        var aggregateDefs = _definition.Aggregates
+            .Select(a => (a.Function, a.SourceProperty, a.ViewProperty));
+        var (selectFromSql, groupBySql) = CosmosAggregationHelper.BuildAggregateSqlParts(groupByFields, aggregateDefs);
 
-        // SELECT clause: group-by fields + aggregate functions
-        sb.Append("SELECT ");
-        var selectParts = new List<string>();
+        var sb = new StringBuilder(selectFromSql);
 
-        foreach (var groupBy in _definition.GroupBy)
-        {
-            var cosmosField = ToCamelCase(groupBy.PropertyName);
-            var viewField = FindViewPropertyForGroupBy(groupBy);
-            var alias = ToCamelCase(viewField);
-            selectParts.Add($"c.{cosmosField} AS {alias}");
-        }
-
-        foreach (var agg in _definition.Aggregates)
-        {
-            var alias = ToCamelCase(agg.ViewProperty);
-            var aggSql = agg.Function switch
-            {
-                AggregateFunction.Count => "COUNT(1)",
-                AggregateFunction.Sum => $"SUM(c.{ToCamelCase(agg.SourceProperty!)})",
-                AggregateFunction.Avg => $"AVG(c.{ToCamelCase(agg.SourceProperty!)})",
-                AggregateFunction.Min => $"MIN(c.{ToCamelCase(agg.SourceProperty!)})",
-                AggregateFunction.Max => $"MAX(c.{ToCamelCase(agg.SourceProperty!)})",
-                _ => throw new NotSupportedException($"Aggregate function {agg.Function} is not supported.")
-            };
-            selectParts.Add($"{aggSql} AS {alias}");
-        }
-
-        sb.Append(string.Join(", ", selectParts));
-
-        // FROM clause
-        sb.Append(" FROM c");
-
-        // WHERE clause
+        // WHERE clause (must come before GROUP BY)
         if (filter != null)
         {
             var whereClause = CosmosFilterTranslator.Translate(filter);
@@ -273,18 +226,16 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         }
 
         // GROUP BY clause
-        if (_definition.HasGroupBy)
+        if (groupBySql != null)
         {
-            var groupByParts = _definition.GroupBy
-                .Select(g => $"c.{ToCamelCase(g.PropertyName)}");
-            sb.Append(" GROUP BY ").Append(string.Join(", ", groupByParts));
+            sb.Append(groupBySql);
         }
 
         // ORDER BY clause
         if (orderBy?.Fields.Count > 0)
         {
             var orderParts = orderBy.Fields
-                .Select(f => $"c.{ToCamelCase(f.PropertyName)}{(f.Descending ? " DESC" : " ASC")}");
+                .Select(f => $"c.{f.PropertyName}{(f.Descending ? " DESC" : " ASC")}");
             sb.Append(" ORDER BY ").Append(string.Join(", ", orderParts));
         }
 
@@ -318,7 +269,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         if (_definition.HasGroupBy)
         {
             var groupByParts = _definition.GroupBy
-                .Select(g => $"c.{ToCamelCase(g.PropertyName)}");
+                .Select(g => $"c.{g.PropertyName}");
             sb.Append(" GROUP BY ").Append(string.Join(", ", groupByParts));
         }
 
@@ -343,24 +294,6 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
     #endregion
 
     #region Helpers
-
-    /// <summary>
-    /// Converts a PascalCase property name to camelCase for Cosmos DB field convention.
-    /// </summary>
-    private static string ToCamelCase(string name)
-    {
-        if (string.IsNullOrEmpty(name))
-        {
-            return name;
-        }
-
-        if (char.IsLower(name[0]))
-        {
-            return name;
-        }
-
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
-    }
 
     /// <summary>
     /// Internal result type for COUNT queries.
@@ -452,12 +385,12 @@ internal static class CosmosFilterTranslator
     {
         if (expression is MemberExpression member)
         {
-            return $"c.{ToCamelCase(member.Member.Name)}";
+            return $"c.{member.Member.Name}";
         }
 
         if (expression is UnaryExpression unary && unary.Operand is MemberExpression unaryMember)
         {
-            return $"c.{ToCamelCase(unaryMember.Member.Name)}";
+            return $"c.{unaryMember.Member.Name}";
         }
 
         throw new NotSupportedException("Cannot translate field access expression.");
@@ -492,13 +425,4 @@ internal static class CosmosFilterTranslator
         };
     }
 
-    private static string ToCamelCase(string name)
-    {
-        if (string.IsNullOrEmpty(name) || char.IsLower(name[0]))
-        {
-            return name;
-        }
-
-        return char.ToLowerInvariant(name[0]) + name.Substring(1);
-    }
 }

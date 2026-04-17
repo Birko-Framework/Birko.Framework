@@ -18,7 +18,8 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 - Implements `IViewStore<TView>` for querying views
 - Non-aggregate views: LINQ via `container.GetItemLinqQueryable<T>()` with Where/OrderBy/Skip/Take, executed via `ToFeedIterator`
 - Aggregate views: Cosmos SQL with GROUP BY via `QueryDefinition` and `GetItemQueryIterator<TView>`
-- Field names use camelCase convention (first character lowercase)
+- Field names use property names as-is (matching SDK default serialization)
+- Aggregate SQL built via shared `CosmosAggregationHelper` from `Birko.Data.CosmosDB`
 - Joins are ignored (Cosmos DB does not support cross-container joins)
 
 ### CosmosViewManager
@@ -34,7 +35,8 @@ Azure Cosmos DB (NoSQL API) implementation of the Birko.Data.Views interfaces, p
 
 ## Dependencies
 - Birko.Data.Views (IViewStore, IViewManager, ViewDefinition)
-- Birko.Data.Stores (OrderBy)
+- Birko.Data.Stores (OrderBy, OrderByHelper, AggregateFunction)
+- Birko.Data.CosmosDB (CosmosAggregationHelper)
 - Microsoft.Azure.Cosmos (Container, Database, QueryDefinition)
 
 ## Important Notes
