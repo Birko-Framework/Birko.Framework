@@ -18,5 +18,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncRavenDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\RavenDbUnitOfWork.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\RavenDBIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Aggregation\FacetAggregationHelper.cs" />
   </ItemGroup>
 </Project>

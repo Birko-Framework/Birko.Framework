@@ -1,10 +1,12 @@
 using Birko.Data.Models;
+using Birko.Data.RavenDB.Aggregation;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Operations.Indexes;
+using Raven.Client.Documents.Queries.Facets;
 using Raven.Client.ServerWide;
 using Raven.Client.ServerWide.Operations;
 using System;
@@ -23,6 +25,7 @@ public class AsyncRavenDBStore<T>
     : AbstractAsyncBulkStore<T>
     , ISettingsStore<RemoteSettings>
     , IAsyncTransactionalStore<T, Raven.Client.Documents.Session.IAsyncDocumentSession>
+    , IAsyncAggregatableStore<T>
     where T : AbstractModel
 {
     private IDocumentStore? _documentStore;
@@ -597,6 +600,63 @@ public class AsyncRavenDBStore<T>
         {
             return false;
         }
+    }
+
+    #endregion
+
+    #region Aggregation
+
+    /// <summary>
+    /// Executes an aggregation query using native RavenDB faceted aggregation for single GROUP BY,
+    /// with LINQ fallback for multi-field GROUP BY or time bucketing.
+    /// </summary>
+    public async Task<IReadOnlyList<AggregateResult>> AggregateAsync(
+        AggregateQuery<T> query,
+        CancellationToken ct = default)
+    {
+        if (_documentStore == null) return Array.Empty<AggregateResult>();
+
+        var session = TransactionContext ?? _documentStore.OpenAsyncSession();
+        try
+        {
+            // Native faceted aggregation: single GROUP BY, no time bucketing
+            bool canUseNative = query.GroupByFields.Count == 1
+                && string.IsNullOrEmpty(query.TimeBucketInterval);
+
+            if (canUseNative)
+            {
+                return await NativeFacetAggregateAsync(session, query, ct);
+            }
+
+            // Fallback to LINQ for multi-field GROUP BY, time bucketing, or no GROUP BY
+            IQueryable<T> q = session.Query<T>();
+            if (query.Filter != null)
+                q = q.Where(query.Filter);
+
+            var data = await q.ToListAsync(ct);
+            return await AggregateHelper.LinqAggregateAsync(data, query, ct);
+        }
+        finally
+        {
+            if (TransactionContext == null)
+                session.Dispose();
+        }
+    }
+
+    private async Task<IReadOnlyList<AggregateResult>> NativeFacetAggregateAsync(
+        Raven.Client.Documents.Session.IAsyncDocumentSession session,
+        AggregateQuery<T> query,
+        CancellationToken ct)
+    {
+        IQueryable<T> q = session.Query<T>();
+        if (query.Filter != null)
+            q = q.Where(query.Filter);
+
+        var aggregation = q.AggregateBy(FacetAggregationHelper.BuildFacetBuilder(query));
+        var facetResults = await aggregation.ExecuteAsync(ct);
+
+        var results = FacetAggregationHelper.MapFacetResults(facetResults, query);
+        return AggregateHelper.ApplyOrderingAndPaging(results, query.OrderBy, query.Offset, query.Limit).AsReadOnly();
     }
 
     #endregion
