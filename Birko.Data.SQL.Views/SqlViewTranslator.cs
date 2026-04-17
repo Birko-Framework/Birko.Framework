@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Birko.Data.Stores;
 using Birko.Data.SQL;
 using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Fields;
@@ -18,14 +19,6 @@ namespace Birko.Data.SQL.Views;
 /// </summary>
 public static class SqlViewTranslator
 {
-    private static readonly Dictionary<AggregateFunction, string> AggregateSqlNames = new()
-    {
-        [AggregateFunction.Count] = "COUNT",
-        [AggregateFunction.Sum] = "SUM",
-        [AggregateFunction.Avg] = "AVG",
-        [AggregateFunction.Min] = "MIN",
-        [AggregateFunction.Max] = "MAX"
-    };
 
     /// <summary>
     /// Translates a <see cref="ViewDefinition"/> into a SQL <see cref="View"/>.
@@ -99,7 +92,7 @@ public static class SqlViewTranslator
                 continue;
             }
 
-            var sqlFuncName = AggregateSqlNames[agg.Function];
+            var sqlFuncName = SQL.Connectors.AbstractConnectorBase.GetSqlFunctionName(agg.Function);
 
             if (agg.SourceProperty == null)
             {
@@ -110,7 +103,7 @@ public static class SqlViewTranslator
                     continue;
                 }
 
-                var countField = CreateFunctionField(viewProp, sqlFuncName, firstField);
+                var countField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, firstField);
                 if (countField != null)
                 {
                     view.AddField(table.Name, table.Type, countField, countField.Name);
@@ -124,7 +117,7 @@ public static class SqlViewTranslator
                     continue;
                 }
 
-                var functionField = CreateFunctionField(viewProp, sqlFuncName, sourceField);
+                var functionField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, sourceField);
                 if (functionField != null)
                 {
                     view.AddField(table.Name, table.Type, functionField, functionField.Name);
@@ -216,79 +209,4 @@ public static class SqlViewTranslator
         };
     }
 
-    private static FunctionField? CreateFunctionField(PropertyInfo viewProp, string functionName, AbstractField sourceField)
-    {
-        FunctionField? functionField = null;
-        var parameters = new object[] { sourceField.Name };
-
-        if (functionName == "COUNT")
-        {
-            functionField = sourceField.IsNotNull
-                ? new IntegerFunction(viewProp, functionName, parameters)
-                : new NullableIntegerFunction(viewProp, functionName, parameters);
-        }
-        else if (functionName == "AVG")
-        {
-            functionField = sourceField.IsNotNull
-                ? new DecimalFunction(viewProp, functionName, parameters)
-                : new NullableDecimalFunction(viewProp, functionName, parameters);
-        }
-        else if (functionName is "SUM" or "MIN" or "MAX")
-        {
-            functionField = CreateTypedFunctionField(viewProp, functionName, parameters, sourceField);
-        }
-
-        if (functionField != null)
-        {
-            functionField.IsAggregate = true;
-        }
-
-        return functionField;
-    }
-
-    private static FunctionField? CreateTypedFunctionField(
-        PropertyInfo viewProp, string functionName, object[] parameters, AbstractField sourceField)
-    {
-        if (sourceField is IntegerField)
-        {
-            return sourceField.IsNotNull
-                ? new IntegerFunction(viewProp, functionName, parameters)
-                : new NullableIntegerFunction(viewProp, functionName, parameters);
-        }
-
-        if (sourceField is DecimalField)
-        {
-            return sourceField.IsNotNull
-                ? new DecimalFunction(viewProp, functionName, parameters)
-                : new NullableDecimalFunction(viewProp, functionName, parameters);
-        }
-
-        if (sourceField is DateTimeField)
-        {
-            return sourceField.IsNotNull
-                ? new DateTimeFunction(viewProp, functionName, parameters)
-                : new NullableDateTimeFunction(viewProp, functionName, parameters);
-        }
-
-        if (sourceField is BooleanField)
-        {
-            return sourceField.IsNotNull
-                ? new BooleanFunction(viewProp, functionName, parameters)
-                : new NullableBooleanFunction(viewProp, functionName, parameters);
-        }
-
-        if (sourceField is GuidField)
-        {
-            return sourceField.IsNotNull
-                ? new GuidFunction(viewProp, functionName, parameters)
-                : new NullableGuidFunction(viewProp, functionName, parameters);
-        }
-
-        if (sourceField is CharField charField)
-        {
-            return new CharFunction(viewProp, functionName, parameters, charField.Lenght);
-        }
-
-        return new StringFunction(viewProp, functionName, parameters);
-    }
 }

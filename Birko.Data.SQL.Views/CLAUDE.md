@@ -4,7 +4,7 @@ SQL platform implementation for Birko.Data.Views. Translates ViewDefinition into
 
 ## Components
 
-- **SqlViewTranslator** — Converts ViewDefinition → Tables.View by loading source tables via DataBase.LoadTable, mapping fields, creating FunctionFields for aggregates, and building Join conditions
+- **SqlViewTranslator** — Converts ViewDefinition → Tables.View by loading source tables via DataBase.LoadTable, mapping fields, creating FunctionFields for aggregates (via `FunctionField.CreateFunctionField()` and `AbstractConnectorBase.GetSqlFunctionName()`), and building Join conditions
 - **SqlViewStore\<TView\>** — Implements IViewStore\<TView\> using existing connector SelectView/Select infrastructure
 - **SqlViewManager** — Implements IViewManager using connector CreateView/DropView/ViewExists
 
