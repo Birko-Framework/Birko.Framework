@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using Birko.Serialization;
 using Birko.Serialization.Json;
 using System.Text.Json;
@@ -153,6 +152,44 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
         }
 
         return Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// Reads every key/value pair stored under the given Vault KV path (KV v1 or v2).
+    /// Useful when the secret is a bag of fields rather than a single <c>value</c> —
+    /// e.g. Spring-Boot-style application configuration trees or nested credential blobs.
+    /// Returns <c>null</c> when the path doesn't exist. Values are JSON-stringified when
+    /// they aren't already strings (numbers, booleans, objects).
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, string>?> GetSecretPairsAsync(string key, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var path = BuildDataPath(key);
+        var response = await _httpClient.GetAsync($"v1/{path}", ct).ConfigureAwait(false);
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            return null;
+
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(json);
+
+        var data = doc.RootElement.GetProperty("data");
+        var inner = _settings.KvVersion == 2 ? data.GetProperty("data") : data;
+
+        var result = new Dictionary<string, string>();
+        foreach (var prop in inner.EnumerateObject())
+        {
+            result[prop.Name] = prop.Value.ValueKind switch
+            {
+                JsonValueKind.String => prop.Value.GetString() ?? string.Empty,
+                JsonValueKind.Null   => string.Empty,
+                _                    => prop.Value.GetRawText(),
+            };
+        }
+        return result;
     }
 
     /// <summary>
