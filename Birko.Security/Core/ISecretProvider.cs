@@ -47,6 +47,19 @@ public interface ISecretProvider
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A list of secret keys.</returns>
     Task<IReadOnlyList<string>> ListSecretsAsync(string? path = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads all key/value pairs stored under the given key/path.
+    /// For providers with multi-field secrets (e.g. Vault KV), returns all fields.
+    /// The default implementation returns a single-entry dictionary from <see cref="GetSecretAsync"/>.
+    /// Returns null when the key does not exist.
+    /// </summary>
+    async Task<IReadOnlyDictionary<string, string>?> GetSecretPairsAsync(string key, CancellationToken ct = default)
+    {
+        var value = await GetSecretAsync(key, ct).ConfigureAwait(false);
+        if (value is null) return null;
+        return new Dictionary<string, string> { ["value"] = value };
+    }
 }
 
 /// <summary>
