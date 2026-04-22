@@ -134,7 +134,7 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 
 ### Inputs (18)
 
-`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons), `b-form` (schema-driven form builder with validation and cascading selects).
+`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons), `b-form` (schema-driven form builder with validation and cascading selects), `b-markdown-editor` (toolbar: bold/italic/strikethrough/highlight/superscript/subscript, H1–H6 heading dropdown, blockquote, code, bullet/numbered/task lists, link, image, table, horizontal rule; split/source/preview modes; Word HTML paste cleanup; custom renderer).
 
 ### Layout (9)
 
@@ -146,6 +146,7 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 - `b-data-table` — auto-fetching server-driven table with search, filters, pagination, bulk actions, inline editing
 - `b-editable-table` — fully editable table (every cell in edit mode) for line items
 - `b-pagination` — page indicator
+- `b-kanban` — Kanban board with columns, drag-and-drop, keyboard navigation. Supports recursive card nesting: `KanbanCard.children` for sub-tasks, 3-zone DnD (before/inside/after), expand/collapse toggle per parent, `maxNestingDepth` config, depth-aware `renderCard(card, depth)` callback
 - `b-badge` — status badge (success/warning/danger/info/secondary)
 - `b-chart` — bar/line/area/pie/donut/gauge
 - `b-tag` — tag/label element

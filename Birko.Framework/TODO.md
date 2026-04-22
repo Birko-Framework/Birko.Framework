@@ -63,6 +63,7 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 | Birko.AI.* (Contracts, AI, Providers, Agents, Resilience, Orchestration) | Done | Multi-provider LLM framework, 11 providers, 22 agents, rate limiting, circuit breaker, cost tracking, task orchestration |
 | Birko.Web.* (Core, Components, Shell) | Done | Shadow DOM web components (50), reactive state, HTTP/SSE clients, hash router, app shell |
 | Birko.Web.Components display widgets | Done | b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer, b-tag-input |
+| Birko.Web.Components b-kanban nesting | Done | Recursive card nesting, 3-zone DnD, expand/collapse, keyboard nav |
 
 ---
 

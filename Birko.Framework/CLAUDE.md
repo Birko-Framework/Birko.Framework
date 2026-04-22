@@ -116,6 +116,26 @@ When using Birko.Framework projects in your solution, create a single aggregator
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Components — b-kanban Card Nesting (2026-04-22)
+Extended `b-kanban` with recursive card nesting, expand/collapse, and 3-zone drag-and-drop:
+- **`KanbanCard` extended** — new `parentId`, `collapsed`, `children` fields for recursive card hierarchy
+- **`KanbanConfig` extended** — `renderCard` callback now receives `(card, depth)` for depth-aware rendering; `maxNestingDepth` limits recursion
+- **Expand/collapse** — `_expanded` Set tracks parent card state; toggle button per parent card (same pattern as `b-tree-menu`); `toggleCard`/`expandCard`/`collapseCard`/`expandAll`/`collapseAll` public API
+- **3-zone DnD** — top 25% = drop before, middle 50% = drop inside (nest), bottom 25% = drop after (same zone pattern as `b-tree-menu`); prevents dropping into self or descendants
+- **Keyboard navigation** — ArrowRight expands parent / focuses first child; ArrowLeft collapses / focuses parent; flat up/down/home/end across all visible cards
+- **Nesting API** — `addSubCard(parentId, card)`, `getChildren(cardId)`, `removeCard` removes descendants recursively
+- **CSS** — `.card-children` container with dashed `border-left` guide, `.card-toggle` button, `.card-child-count` badge, `.drop-inside` zone highlight; all values use `--b-*` tokens exclusively
+
+### Birko.Web.Components — Markdown Editor Formatting (2026-04-22)
+Extended `b-markdown-editor` toolbar with missing formatting options:
+- **Heading dropdown** (H1–H6) — replaces single H2 button; dropdown panel with level labels and markdown hints
+- **Table insertion** — inserts `| Header | Header |` GFM table template
+- **Task list** — inserts `- [ ] task` checkbox items; renderer produces `<li class="task-list-item">` with `<input type="checkbox">`
+- **Highlight** — `==text==` → `<mark>` (pandoc extension); toolbar button + renderer + Word HTML cleanup
+- **Superscript** — `^text^` → `<sup>` (pandoc extension); toolbar button + renderer + Word HTML cleanup
+- **Subscript** — `~text~` → `<sub>` (pandoc extension, single tilde; `~~` still strikethrough); toolbar button + renderer + Word HTML cleanup
+- Preview CSS for `<mark>`, `<sup>`, `<sub>`, `.task-list-item` checkboxes; all values use `--b-*` tokens
+
 ### Birko.Web.Components — Sticky Headers + Shared Viewer Sheets (2026-04-22)
 Unified sticky-header behavior across `b-object-tree`, `b-json-viewer`, `b-xml-viewer`, `b-code-block` and extracted shared CSS:
 - **`b-object-tree` opt-in header** — new `show-header` attribute enables a card-style chrome + toolbar (Expand / Collapse / Copy) matching `b-json-viewer` / `b-xml-viewer`; configurable via `header-title`, `no-copy`, `no-expand-actions`
