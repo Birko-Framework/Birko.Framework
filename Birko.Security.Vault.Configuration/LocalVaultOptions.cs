@@ -18,8 +18,11 @@ public sealed class LocalVaultOptions
     /// </summary>
     public string Token { get; set; } = string.Empty;
 
-    /// <summary>Vault base URL. Falls back to HashiCorp's dev-server default.</summary>
-    public string Url { get; set; } = "http://localhost:8200";
+    /// <summary>
+    /// Vault base URL. Leave empty to let the resolver pick up <c>LOCAL_VAULT_ADDR</c>
+    /// or fall back to HashiCorp's dev-server default (<c>http://localhost:8200</c>).
+    /// </summary>
+    public string Url { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional user name. When set, enables user-scoped override paths

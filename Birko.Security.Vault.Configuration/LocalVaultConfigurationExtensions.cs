@@ -105,7 +105,7 @@ public static class LocalVaultConfigurationExtensions
         var o = seed ?? new LocalVaultOptions();
 
         o.Token       = FirstNonEmpty(o.Token,       Environment.GetEnvironmentVariable(TokenVar),       o.Token);
-        o.Url         = FirstNonEmpty(o.Url,         Environment.GetEnvironmentVariable(AddressVar),     o.Url);
+        o.Url         = FirstNonEmpty(o.Url,         Environment.GetEnvironmentVariable(AddressVar),     "http://localhost:8200");
         o.User        = FirstNonEmpty(o.User,        Environment.GetEnvironmentVariable(UserVar),        string.Empty);
         o.Domain      = FirstNonEmpty(o.Domain,      Environment.GetEnvironmentVariable(DomainVar),      string.Empty);
         o.Environment = FirstNonEmpty(o.Environment, Environment.GetEnvironmentVariable(EnvironmentVar), string.Empty);
