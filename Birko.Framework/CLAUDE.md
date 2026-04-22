@@ -116,6 +116,18 @@ When using Birko.Framework projects in your solution, create a single aggregator
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Components — Display & Inspection Widgets (2026-04-22)
+Added 7 new Shadow DOM components (42 → 50):
+- **`b-pre`** — preformatted text block (wrap, max-height, size)
+- **`b-code-block`** — syntax-highlighted code for json/js/ts/html/xml/css/sql/csharp/bash with copy button and optional line numbers
+- **`b-definition-list`** — semantic `<dl>` with `layout` variants (stacked/inline/horizontal/grid)
+- **`b-object-tree`** — recursive property tree for any JS value with lazy expansion, type coloring, `expandAll`/`collapseAll`
+- **`b-json-viewer`** — composes `<b-object-tree>` with JSON string parsing, error panel, Expand/Collapse/Copy header
+- **`b-xml-viewer`** — DOMParser-backed tree renderer for elements, attributes, text, CDATA, comments, PIs
+- **`b-tag-input`** — freeform multi-value input with Enter-to-create, Tab-commit, Backspace-delete, paste-split on `,`/newline/tab (configurable via `separators`)
+
+All use existing `--b-*` tokens and the `formFieldSheet`/`formControlSheet` shared sheets where applicable.
+
 ### Store-Level Aggregation & Shared Helpers (2026-04-16)
 Centralized aggregation abstractions in Birko.Data.Stores and refactored all view platform implementations:
 - **New in Birko.Data.Stores**: `AggregateFunction` (enum, moved from Birko.Data.Views), `AggregateField`, `AggregateQuery<T>`, `AggregateResult`, `IAggregatableStore<T>`, `IAsyncAggregatableStore<T>`, `AggregateHelper` (LINQ fallback), `TimeIntervalParser`, `OrderByHelper`

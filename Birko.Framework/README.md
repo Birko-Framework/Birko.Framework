@@ -37,7 +37,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
 - Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
-- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 43 components across inputs/layout/data/feedback/nav/command palette, app shell)
+- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 50 components across inputs/layout/data/feedback/nav/command palette, app shell)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
 - AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
@@ -196,7 +196,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Project | Description |
 |---------|-------------|
 | Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, and hash router. No dependencies. |
-| Birko.Web.Components | Component library built on Birko.Web.Core — 38 Shadow DOM web components covering inputs, layout, data, feedback, and navigation. |
+| Birko.Web.Components | Component library built on Birko.Web.Core — 50 Shadow DOM web components covering inputs (incl. `b-tag-input` for freeform multi-value entry), layout, data (incl. `b-code-block`, `b-json-viewer`, `b-xml-viewer`, `b-object-tree`, `b-definition-list`, `b-pre`), feedback, and navigation. |
 | Birko.Web.Shell | Application shell framework built on Birko.Web.Core — auth, modules, command palette, notifications, tenants. |
 
 ### Workflow
@@ -235,6 +235,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.AspNetCore | ASP.NET Core integration (JWT Bearer auth, ICurrentUser, tenant middleware, permission filters) |
 | Birko.Security.BCrypt | BCrypt password hashing (pure C#, configurable work factor) |
 | Birko.Security.Vault | HashiCorp Vault secret provider (KV v1/v2, HTTP API) |
+| Birko.Security.Vault.Configuration | Microsoft.Extensions.Configuration integration for any ISecretProvider (Vault, Azure Key Vault, etc.) |
 | Birko.Security.AzureKeyVault | Azure Key Vault secret provider (OAuth2, REST API) |
 | Birko.Security.NFC | NFC-based authentication (tag-to-user mapping, JWT integration) |
 | Birko.BackgroundJobs | Background job processing framework |

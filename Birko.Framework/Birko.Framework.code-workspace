@@ -452,7 +452,7 @@
 			"name": "Models / Birko.Models",
 			"path": "../Birko.Models"
 		},
-{
+	{
 			"name": "Models / Birko.Models.Category",
 			"path": "../Birko.Models.Category"
 		},
@@ -539,6 +539,10 @@
 		{
 			"name": "Security / Birko.Security.Vault",
 			"path": "../Birko.Security.Vault"
+		},
+		{
+			"name": "Security / Birko.Security.Vault.Configuration",
+			"path": "../Birko.Security.Vault.Configuration"
 		},
 		{
 			"name": "Tests / Birko.BackgroundJobs.Tests",

@@ -61,7 +61,8 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 | Birko.Communication.REST.Server | Done | HttpListener, routing, middleware, authentication |
 | Birko.Communication.OAuth.Providers | Done | GitHubOAuthProvider (pre-configured device flow) |
 | Birko.AI.* (Contracts, AI, Providers, Agents, Resilience, Orchestration) | Done | Multi-provider LLM framework, 11 providers, 22 agents, rate limiting, circuit breaker, cost tracking, task orchestration |
-| Birko.Web.* (Core, Components, Shell) | Done | Shadow DOM web components (43), reactive state, HTTP/SSE clients, hash router, app shell |
+| Birko.Web.* (Core, Components, Shell) | Done | Shadow DOM web components (50), reactive state, HTTP/SSE clients, hash router, app shell |
+| Birko.Web.Components display widgets | Done | b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer, b-tag-input |
 
 ---
 
@@ -394,4 +395,4 @@ For implementation details, refer to:
 
 ---
 
-**Last Updated:** 2026-04-09
+**Last Updated:** 2026-04-22

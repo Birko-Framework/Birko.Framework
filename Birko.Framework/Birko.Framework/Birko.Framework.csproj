@@ -292,6 +292,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.Vault\Birko.Security.Vault.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.Vault.Configuration\Birko.Security.Vault.Configuration.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.AzureKeyVault\Birko.Security.AzureKeyVault.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.NFC\Birko.Security.NFC.projitems" Label="Shared" />

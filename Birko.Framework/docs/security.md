@@ -266,10 +266,13 @@ public interface ISecretProvider
     Task SetSecretAsync(string key, string value, CancellationToken ct = default);
     Task DeleteSecretAsync(string key, CancellationToken ct = default);
     Task<IReadOnlyList<string>> ListSecretsAsync(string? path = null, CancellationToken ct = default);
+    async Task<IReadOnlyDictionary<string, string>?> GetSecretPairsAsync(string key, CancellationToken ct = default) { ... }
 }
 ```
 
 `SecretResult` includes `Key`, `Value`, `CreatedAt`, `UpdatedAt`, `ExpiresAt`, `Version`, and `Metadata`.
+
+`GetSecretPairsAsync` returns all key/value pairs at a given path (multi-field secrets in Vault KV). Flat providers return `{"value": <secret>}` by default.
 
 ### HashiCorp Vault (Birko.Security.Vault)
 
@@ -299,6 +302,30 @@ var settings = new AzureKeyVaultSettings("https://myvault.vault.azure.net/", "te
 using var akv = new AzureKeyVaultSecretProvider(settings);
 await akv.SetSecretAsync("db-password", "s3cret");
 var password = await akv.GetSecretAsync("db-password");
+```
+
+### Configuration Integration (Birko.Security.Vault.Configuration)
+
+Plugs any `ISecretProvider` into `Microsoft.Extensions.Configuration`. Works with Vault, Azure Key Vault, and any future provider.
+
+```csharp
+using Birko.Security.Configuration;
+
+// Provider-agnostic — works with any ISecretProvider
+config.AddSecretConfiguration(vaultProvider, "myapp/db", recursive: true);
+config.AddSecretConfiguration(azureKeyVaultProvider, "ConnectionStrings", recursive: false);
+
+// Multiple paths (later overrides earlier)
+config.AddSecretConfiguration(provider, new[] { "defaults", "production" });
+```
+
+Vault-specific convenience method with hierarchical path convention:
+
+```csharp
+using Birko.Security.Vault.Configuration;
+
+// Reads LOCAL_VAULT_* env vars, builds path hierarchy: defaults → env → project → user
+config.AddLocalVaultConfiguration("myapp");
 ```
 
 ### NFC Authentication
@@ -339,5 +366,6 @@ Features:
 - [Birko.Security.AspNetCore](https://github.com/birko/Birko.Security.AspNetCore)
 - [Birko.Security.BCrypt](https://github.com/birko/Birko.Security.BCrypt)
 - [Birko.Security.Vault](https://github.com/birko/Birko.Security.Vault)
+- [Birko.Security.Vault.Configuration](https://github.com/birko/Birko.Security.Vault.Configuration)
 - [Birko.Security.AzureKeyVault](https://github.com/birko/Birko.Security.AzureKeyVault)
 - [Birko.Security.NFC](https://github.com/birko/Birko.Security.NFC)

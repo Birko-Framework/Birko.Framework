@@ -12,16 +12,16 @@ Birko Framework je komplexný .NET 10.0 framework postavený na princípe **jedn
 - **Univerzálny prístup k dátam** – 12 databázových platforiem cez jednotný `IStore` / `IAsyncStore` / `IBulkStore` interface
 - **Komunikačnú vrstvu** – REST, SOAP, WebSocket, SSE, Modbus, OAuth 2.0, NFC/RFID, Bluetooth, Camera, IR
 - **AI/LLM infraštruktúru** – multi-provider agent framework s resilience (rate limiting, circuit breaker, cost tracking)
-- **Bezpečnosť** – hashovanie (PBKDF2, BCrypt), šifrovanie (AES-256-GCM), JWT, RBAC, HashiCorp Vault a Azure Key Vault integrácia
+- **Bezpečnosť** – hashovanie (PBKDF2, BCrypt), šifrovanie (AES-256-GCM), JWT, RBAC, HashiCorp Vault a Azure Key Vault integrácia, konfiguračný bridge pre ISecretProvider
 - **Integračné vzory** – Unit of Work, Soft Delete, Audit, Timestamp, Multi-tenancy, Event Sourcing, CQRS, Workflow, Tagging
 - **Asynchrónnu infraštruktúru** – Message Queue, Event Bus, Background Jobs, Outbox Pattern
 - **Observabilitu** – Health Checks, Telemetry, OpenTelemetry, distribuované tracing
 
 **Čísla:**
 
-- **161 produktových projektov** (z toho približne **81 platformových rozšírení**)
+- **162 produktových projektov** (z toho približne **81 platformových rozšírení**)
 - **55 testovacích projektov** (xUnit + FluentAssertions)
-- **12 databázových platforiem**, **11 LLM poskytovateľov**, **43 Web Components**
+- **12 databázových platforiem**, **11 LLM poskytovateľov**, **50 Web Components**
 - **0 externých závislostí** pre core contracts
 
 **Oblasti použitia:**
@@ -76,11 +76,12 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Resilience**: Rate limiting (sliding window), Circuit Breaker (3-stavový), Cost Tracking (budget enforcement)
 - **Orchestration**: Task dispatcher, implementation plán, paralelné vykonávanie, závislostná analýza, eskalácie
 
-### 🔒 Bezpečnosť (7 projektov)
+### 🔒 Bezpečnosť (8 projektov)
 - **Hashovanie**: PBKDF2 (core), BCrypt (pure C# Blowfish)
 - **Šifrovanie**: AES-256-GCM
 - **Autentifikácia**: JWT, NFC-based auth (tag-to-user mapovanie)
-- **Secret Management**: HashiCorp Vault (KV v1/v2), Azure Key Vault (OAuth2 + REST API)
+- **Secret Management**: HashiCorp Vault (KV v1/v2), Azure Key Vault (OAuth2 + REST API), konfiguračný bridge (Microsoft.Extensions.Configuration)
+- **Configuration bridge**: `AddSecretConfiguration(any ISecretProvider)` — Vault, Azure Key Vault, čiľubovoľný provider do `IConfiguration`
 - **ASP.NET Core** integrácia – JWT Bearer, `ICurrentUser`, permissions, tenant middleware, RBAC
 
 ### 📦 Infraštruktúra
@@ -343,12 +344,14 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Storage.AzureBlob      → REST + OAuth2 + SAS
 ```
 
-#### 8. 🔒 Security (7 projektov)
+#### 8. 🔒 Security (8 projektov)
 ```
 🟩 Birko.Security                → PBKDF2, AES-256-GCM, RBAC interfaces
 🟨 Birko.Security.BCrypt         → BCrypt (pure C# Blowfish)
 🟨 Birko.Security.Jwt            → JWT ITokenProvider
 🟨 Birko.Security.Vault          → HashiCorp Vault (KV v1/v2)
+🟨 Birko.Security.Vault.Configuration → IConfiguration bridge pre ISecretProvider
+                                      (provider-agnostic + Vault hierarchical paths)
 🟨 Birko.Security.AzureKeyVault  → Azure Key Vault (OAuth2 + REST)
 🟨 Birko.Security.AspNetCore     → JWT Bearer, ICurrentUser, tenant middleware
 🟨 Birko.Security.NFC            → NFC tag-to-user auth (enrollment, revocation)
@@ -420,8 +423,9 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 ```
 🟩 Birko.Web.Core                 → Shadow DOM base, Signal/Store,
                                      HTTP/SSE klient, hash router
-🟩 Birko.Web.Components           → 38 Shadow DOM komponentov
-                                     (inputs, layout, data, feedback, navigation)
+🟩 Birko.Web.Components           → 50 Shadow DOM komponentov
+                                     (inputs, layout, data, feedback, navigation,
+                                     command palette)
 🟩 Birko.Web.Shell                → Application shell — trojvrstvová hierarchia:
                                      • BCoreAppShell (theme, online/offline,
                                        user dropdown, brand, breadcrumbs)
@@ -520,7 +524,11 @@ Utility funkcie pre bežné úlohy:
 - Hash router
 
 ### Birko.Web.Components
-**43 komponentov**: inputs (17), layout (9), data (7), feedback (5), navigation (4), command palette (1)
+**50 komponentov**: inputs (18), layout (9), data (13), feedback (5), navigation (4), command palette (1)
+
+Nové display/inspection komponenty: `b-pre`, `b-code-block` (syntax-highlighted s copy button), `b-definition-list` (stacked/inline/horizontal/grid), `b-object-tree` (rekurzívny property tree s lazy expansion), `b-json-viewer` (wrapper nad object-tree s JSON parse + Expand/Collapse/Copy), `b-xml-viewer` (DOM tree cez DOMParser — elementy, atribúty, CDATA, komentáre).
+
+Nové input: `b-tag-input` — freeform multi-value vstup s Enter-to-create a paste-split na oddeľovačoch (`,`, newline, tab).
 
 ### Birko.Web.Shell
 Application shell framework s **trojvrstvovou hierarchiou** abstraktných tried:
@@ -549,7 +557,7 @@ Plus factory funkcie: autentifikácia (createAuthStore), dynamické moduly (crea
 | **Background Jobs & MQ** | 4 | BackgroundJobs core + SQL backend; MessageQueue (InMemory) + Redis backend |
 | **Event Bus** | 1 | In-process bus, pipeline, deduplikácia, outbox |
 | **Caching** | 2 | Caching core + Hybrid (L1+L2) |
-| **Security** | 5 | ASP.NET Core (JWT, tenant middleware), BCrypt, Vault, AzureKeyVault, NFC auth |
+| **Security** | 5 | ASP.NET Core (JWT, tenant middleware), BCrypt, Vault + Vault.Configuration, AzureKeyVault, NFC auth |
 | **Communication** | 6 | Modbus (RTU/TCP), OAuth (všetky flows), IR, NFC, Camera, REST, WebSocket |
 | **Messaging** | 2 | SMTP + string templates; Razor template engine |
 | **Storage** | 2 | LocalFileStorage; Azure Blob |
@@ -585,14 +593,14 @@ Vytvorte projekt `{YourSolution}.Birko` (napríklad `FisData.Birko`) a importujt
 
 | Metrika | Hodnota |
 |---|---:|
-| **Produktové projekty celkom** | **161** |
+| **Produktové projekty celkom** | **162** |
 | **z toho platformové rozšírenia** (🟨) | **~81** |
-| **z toho core / feature projekty** (🟦 + 🟩) | **~80** |
+| **z toho core / feature projekty** (🟦 + 🟩) | **~81** |
 | **Testovacie projekty** | **55** |
-| **Projekty celkom** | **216** |
+| **Projekty celkom** | **217** |
 | Databázové platformy | 12 |
 | LLM poskytovatelia | 11 |
-| Web Components | 43 |
+| Web Components | 50 |
 | Jazykové AI agenti | 10 |
 | Task AI agenti | 4 |
 | Communication protokoly | 14 |
@@ -632,4 +640,4 @@ Súčasť Birko Framework – pozri [License.md](License.md).
 
 ---
 
-*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-04-16*
+*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-04-21*

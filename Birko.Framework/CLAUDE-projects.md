@@ -97,6 +97,7 @@
 - **Birko.Security** - PBKDF2 hashing, AES-256-GCM, token/secret provider interfaces, static token auth, RBAC interfaces
 - **Birko.Security.BCrypt** - BCrypt hashing (pure C# Blowfish)
 - **Birko.Security.Vault** - HashiCorp Vault (ISecretProvider, KV v1/v2)
+- **Birko.Security.Vault.Configuration** - Provider-agnostic Microsoft.Extensions.Configuration integration for ISecretProvider (SecretConfigurationProvider, AddSecretConfiguration; includes Vault-specific LocalVault extensions)
 - **Birko.Security.AzureKeyVault** - Azure Key Vault (ISecretProvider, OAuth2, REST API)
 - **Birko.Security.Jwt** - JWT ITokenProvider
 - **Birko.Security.AspNetCore** - ASP.NET Core integration (JWT Bearer, ICurrentUser, permissions, tenant middleware)
@@ -153,7 +154,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Helpers.Tests, Birko.Structures.Tests
 - Birko.BackgroundJobs.Tests, Birko.MessageQueue.Tests, Birko.MessageQueue.Redis.Tests
 - Birko.EventBus.Tests, Birko.CQRS.Tests, Birko.Workflow.Tests
-- Birko.Security.AspNetCore.Tests, Birko.Security.BCrypt.Tests, Birko.Security.Vault.Tests, Birko.Security.AzureKeyVault.Tests, Birko.Security.NFC.Tests
+- Birko.Security.AspNetCore.Tests, Birko.Security.BCrypt.Tests, Birko.Security.Vault.Tests, Birko.Security.AzureKeyVault.Tests, Birko.Security.NFC.Tests (Vault.Tests also covers Vault.Configuration)
 - Birko.Storage.Tests, Birko.Storage.AzureBlob.Tests
 - Birko.Telemetry.Tests, Birko.Telemetry.OpenTelemetry.Tests
 - Birko.Rules.Tests, Birko.Data.Processors.Tests, Birko.Data.Aggregates.Tests

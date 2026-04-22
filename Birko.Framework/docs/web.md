@@ -7,7 +7,7 @@ Birko ships three TypeScript projects for building modern Single-Page Applicatio
 | Project | Purpose |
 |---|---|
 | `Birko.Web.Core` | Minimal Web Component framework — Shadow DOM base class, reactive state, HTTP/SSE clients, hash router. No external dependencies. |
-| `Birko.Web.Components` | Component library of ~43 production-ready Shadow DOM web components (inputs, layout, data, feedback, navigation, command palette) built on Web.Core. |
+| `Birko.Web.Components` | Component library of ~50 production-ready Shadow DOM web components (inputs, layout, data, feedback, navigation, command palette) built on Web.Core. |
 | `Birko.Web.Shell` | Application shell framework — abstract `BAppShell` with ribbon, status bar, notifications, tenant switcher, plus factory functions for auth, modules, routing, page bases. |
 
 All three are **pure TypeScript ES modules** with no build tooling. They are consumed via TypeScript path aliases or esbuild path mappings in the downstream app. No virtual DOM, no bundler required.
@@ -130,17 +130,17 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 
 ## Birko.Web.Components
 
-~43 components grouped into 6 categories. All are Shadow DOM components built on `BaseComponent`, styled with design tokens (`--b-*` CSS variables).
+~50 components grouped into 6 categories. All are Shadow DOM components built on `BaseComponent`, styled with design tokens (`--b-*` CSS variables).
 
-### Inputs (17)
+### Inputs (18)
 
-`b-input`, `b-select`, `b-multi-select`, `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons), `b-form` (schema-driven form builder with validation and cascading selects).
+`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons), `b-form` (schema-driven form builder with validation and cascading selects).
 
 ### Layout (9)
 
 `b-card`, `b-modal` (sm/md/lg/xl/xxl sizes), `b-drawer`, `b-tabs`, `b-confirm-dialog` (`show(): Promise<boolean>`), `b-dropdown-menu`, `b-tooltip`, `b-split-panel` (master-detail with responsive collapse), `b-chat`.
 
-### Data (7)
+### Data (13)
 
 - `b-table` — client-side sort/filter with setColumns/setData
 - `b-data-table` — auto-fetching server-driven table with search, filters, pagination, bulk actions, inline editing
@@ -149,6 +149,12 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 - `b-badge` — status badge (success/warning/danger/info/secondary)
 - `b-chart` — bar/line/area/pie/donut/gauge
 - `b-tag` — tag/label element
+- `b-pre` — preformatted text block with wrap/max-height controls
+- `b-code-block` — syntax-highlighted code (json/js/ts/html/xml/css/sql/csharp/bash) with copy button and optional line numbers
+- `b-definition-list` — `<dl>` term/description pairs with stacked/inline/horizontal/grid layouts
+- `b-object-tree` — collapsible property tree for any JS value; recursive with lazy expansion and type coloring
+- `b-json-viewer` — wraps `b-object-tree` with JSON string parsing, parse-error panel, Expand/Collapse/Copy header
+- `b-xml-viewer` — collapsible XML DOM tree via DOMParser (elements, attributes, text, CDATA, comments, PIs)
 
 ### Feedback (5)
 

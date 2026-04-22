@@ -167,6 +167,7 @@
     <Project Path="../Birko.Security.AspNetCore/Birko.Security.AspNetCore.shproj" />
     <Project Path="../Birko.Security.BCrypt/Birko.Security.BCrypt.shproj" />
     <Project Path="../Birko.Security.Vault/Birko.Security.Vault.shproj" />
+    <Project Path="../Birko.Security.Vault.Configuration/Birko.Security.Vault.Configuration.shproj" />
     <Project Path="../Birko.Security.AzureKeyVault/Birko.Security.AzureKeyVault.shproj" />
     <Project Path="../Birko.Security.NFC/Birko.Security.NFC.shproj" />
   </Folder>
