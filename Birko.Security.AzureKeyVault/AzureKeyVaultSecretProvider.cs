@@ -144,6 +144,14 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
         return results.AsReadOnly();
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyDictionary<string, string>?> GetSecretPairsAsync(string key, CancellationToken ct = default)
+    {
+        var value = await GetSecretAsync(key, ct).ConfigureAwait(false);
+        if (value is null) return null;
+        return new Dictionary<string, string> { ["value"] = value };
+    }
+
     public void Dispose()
     {
         if (_ownsHttpClient)
