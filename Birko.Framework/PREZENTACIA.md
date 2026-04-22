@@ -526,7 +526,7 @@ Utility funkcie pre bežné úlohy:
 ### Birko.Web.Components
 **50 komponentov**: inputs (18), layout (9), data (13), feedback (5), navigation (4), command palette (1)
 
-Nové display/inspection komponenty: `b-pre`, `b-code-block` (syntax-highlighted s copy button), `b-definition-list` (stacked/inline/horizontal/grid), `b-object-tree` (rekurzívny property tree s lazy expansion), `b-json-viewer` (wrapper nad object-tree s JSON parse + Expand/Collapse/Copy), `b-xml-viewer` (DOM tree cez DOMParser — elementy, atribúty, CDATA, komentáre).
+Nové display/inspection komponenty: `b-pre`, `b-code-block` (syntax-highlighted s copy button), `b-definition-list` (stacked/inline/horizontal/grid), `b-object-tree` (rekurzívny property tree s lazy expansion; voliteľný `show-header` režim s toolbarom), `b-json-viewer` (wrapper nad object-tree s JSON parse + Expand/Collapse/Copy), `b-xml-viewer` (DOM tree cez DOMParser — elementy, atribúty, CDATA, komentáre). Všetky štyri viewery podporujú `max-height` (vnútorný scroll s headerom nad ním) a `sticky-header="page"` (header sa prilepí k viewportu pri scrollovaní stránky) a zdieľajú nové CSS sheets `dataViewerCardSheet` / `dataViewerHeaderSheet` / `toolbarBtnSheet`.
 
 Nové input: `b-tag-input` — freeform multi-value vstup s Enter-to-create a paste-split na oddeľovačoch (`,`, newline, tab).
 

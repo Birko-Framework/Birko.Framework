@@ -68,6 +68,44 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 
 ## Remaining Work
 
+### Birko.Web.Components — `bare` attribute on form controls
+**Status:** Planned | **Priority:** Low
+
+Add `bare` boolean attribute to `b-input`, `b-select`, `b-multi-select`, `b-textarea`, `b-tag-input`, `b-search-input`, `b-date-picker`, `b-datetime-picker` that strips the `.field` wrapper (no label slot, no error-message row below). Intended for inline use cases — toolbars, table cells, floating action bars — where the outer stacked chrome is unwanted.
+
+**Design:**
+- When `bare` is set, skip rendering `.field` + `renderLabel` + error `<span>`; emit the control element directly under the shadow root.
+- Error / label state can still be surfaced via attributes, just not rendered by the component — caller is responsible for positioning.
+- Pairs naturally with `size="sm"` for dense layouts.
+
+**Defer until:** a concrete second use case beyond editable-table exists (editable-table already has a performance-motivated reason to use raw `<input>` — see item below).
+
+---
+
+### Birko.Web.Components — `b-editable-table` migration to form components
+**Status:** Considering | **Priority:** Low
+
+`b-editable-table` currently renders raw `<input>` / `<select>` / `<checkbox>` inside its own shadow root to (a) use a single delegated event listener on `<tbody>`, (b) avoid re-render-on-keystroke so caret + selection survive, and (c) render cells at `--b-control-min-height-sm` density without each cell paying for its own Shadow DOM.
+
+Migrating each cell to `<b-input size="sm" bare>` / `<b-select size="sm" bare>` etc. would unify chrome with the rest of the form family but costs: Shadow-DOM-per-cell render overhead, per-cell event listeners (no delegation), and the focus-preservation strategy must be redesigned (bubble `change` from custom elements, avoid parent `update()` on edit).
+
+**Prereq:** `bare` attribute above. **Decision point:** benchmark a 500-row grid before/after to see if the Shadow-DOM cost is tolerable.
+
+---
+
+### Birko.Web.Components — `size` attribute on components that lack it
+**Status:** Planned | **Priority:** Low
+
+Convention is now documented in `Birko.Web.Components/CLAUDE.md` (five categories: vertical-footprint / text-scale / width / shape-weight / inline-chip). Existing components with `size` have been normalized (b-button switched from class interpolation to `:host([size])`, b-badge gained a `sm` variant). Remaining opportunity:
+
+- **`b-pagination`** — add `size="sm"/"lg"` (chip category) for compact pagination in dense tables.
+- **`b-dropdown-menu`** — add `size="sm"` (text-scale category) for compact menu rows.
+- **`b-breadcrumb`** — maybe add `size` (text-scale) if a use case appears.
+
+Defer each until a concrete requirement shows up — adding without a UI driver risks premature scope.
+
+---
+
 ### Birko.Data.Patterns — Timestamp Audit (Done)
 **Priority:** Medium
 

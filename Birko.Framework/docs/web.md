@@ -150,11 +150,13 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 - `b-chart` — bar/line/area/pie/donut/gauge
 - `b-tag` — tag/label element
 - `b-pre` — preformatted text block with wrap/max-height controls
-- `b-code-block` — syntax-highlighted code (json/js/ts/html/xml/css/sql/csharp/bash) with copy button and optional line numbers
+- `b-code-block` — syntax-highlighted code (json/js/ts/html/xml/css/sql/csharp/bash) with copy button, optional line numbers, `max-height` internal scroll, and `sticky-header="page"` for page-viewport pinning
 - `b-definition-list` — `<dl>` term/description pairs with stacked/inline/horizontal/grid layouts
-- `b-object-tree` — collapsible property tree for any JS value; recursive with lazy expansion and type coloring
-- `b-json-viewer` — wraps `b-object-tree` with JSON string parsing, parse-error panel, Expand/Collapse/Copy header
-- `b-xml-viewer` — collapsible XML DOM tree via DOMParser (elements, attributes, text, CDATA, comments, PIs)
+- `b-object-tree` — collapsible property tree for any JS value; recursive with lazy expansion and type coloring. Opt-in `show-header` adds a card chrome + Expand/Collapse/Copy toolbar (`header-title`, `no-copy`, `no-expand-actions`); supports `max-height` and `sticky-header="page"`
+- `b-json-viewer` — wraps `b-object-tree` with JSON string parsing, parse-error panel, Expand/Collapse/Copy header, `max-height`, and `sticky-header="page"`
+- `b-xml-viewer` — collapsible XML DOM tree via DOMParser (elements, attributes, text, CDATA, comments, PIs), `max-height`, and `sticky-header="page"`
+
+> **Sticky header modes (shared by all four viewers):** set `max-height="400px"` (or any CSS length) for internal scroll — the body becomes the scroll container and the header stays pinned above it; set `sticky-header="page"` to flip the card's `overflow` to `visible` so `position: sticky` pins the header to the page viewport as the user scrolls the page. The modes are mutually exclusive — `sticky-header="page"` takes precedence. The card chrome and toolbar are implemented via three shared `@sheet` sections (`dataViewerCard`, `dataViewerHeader`, `toolbarBtn`).
 
 ### Feedback (5)
 

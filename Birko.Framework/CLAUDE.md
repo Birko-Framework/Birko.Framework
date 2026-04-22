@@ -116,6 +116,13 @@ When using Birko.Framework projects in your solution, create a single aggregator
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Components — Sticky Headers + Shared Viewer Sheets (2026-04-22)
+Unified sticky-header behavior across `b-object-tree`, `b-json-viewer`, `b-xml-viewer`, `b-code-block` and extracted shared CSS:
+- **`b-object-tree` opt-in header** — new `show-header` attribute enables a card-style chrome + toolbar (Expand / Collapse / Copy) matching `b-json-viewer` / `b-xml-viewer`; configurable via `header-title`, `no-copy`, `no-expand-actions`
+- **Two sticky modes on all four viewers** — `max-height` for internal body scroll (header stays above); `sticky-header="page"` flips card overflow to `visible` so `position: sticky` pins the header to the page viewport. The modes are mutually exclusive (page mode takes precedence)
+- **New shared `@sheet` sections** — `dataViewerCard` (card shell + `.sticky-page` modifier), `dataViewerHeader` (compact sticky toolbar), `toolbarBtn` (small bordered action button with `.copied` state); exported as `dataViewerCardSheet`, `dataViewerHeaderSheet`, `toolbarBtnSheet`
+- Per-component CSS shrank by ~40–50 lines each; `b-card` kept distinct (elevated bg, text-lg semibold header) since data viewers and content cards are intentionally different visual languages
+
 ### Birko.Web.Components — Display & Inspection Widgets (2026-04-22)
 Added 7 new Shadow DOM components (42 → 50):
 - **`b-pre`** — preformatted text block (wrap, max-height, size)
@@ -126,7 +133,7 @@ Added 7 new Shadow DOM components (42 → 50):
 - **`b-xml-viewer`** — DOMParser-backed tree renderer for elements, attributes, text, CDATA, comments, PIs
 - **`b-tag-input`** — freeform multi-value input with Enter-to-create, Tab-commit, Backspace-delete, paste-split on `,`/newline/tab (configurable via `separators`)
 
-All use existing `--b-*` tokens and the `formFieldSheet`/`formControlSheet` shared sheets where applicable.
+All use existing `--b-*` tokens and the `formFieldSheet`/`formControlSheet` shared sheets where applicable. `b-object-tree` (with header), `b-json-viewer`, `b-xml-viewer`, `b-code-block` share `dataViewerCardSheet` / `dataViewerHeaderSheet` / `toolbarBtnSheet`.
 
 ### Store-Level Aggregation & Shared Helpers (2026-04-16)
 Centralized aggregation abstractions in Birko.Data.Stores and refactored all view platform implementations:
