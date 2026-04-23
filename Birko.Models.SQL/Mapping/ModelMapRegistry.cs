@@ -2,20 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Birko.Data.Patterns.Schema;
 
 namespace Birko.Models.SQL.Mapping
 {
-    /// <summary>
-    /// Central registry for model-to-SQL mappings. Discovers and caches
-    /// IModelMapping implementations from assemblies.
-    /// </summary>
     public class ModelMapRegistry
     {
         private readonly Dictionary<Type, object> _maps = new Dictionary<Type, object>();
 
-        /// <summary>
-        /// Register a single mapping.
-        /// </summary>
         public void Register<T>(IModelMapping<T> mapping) where T : class
         {
             var map = new ModelMap<T>();
@@ -23,9 +17,6 @@ namespace Birko.Models.SQL.Mapping
             _maps[typeof(T)] = map;
         }
 
-        /// <summary>
-        /// Scan an assembly for all IModelMapping implementations and register them.
-        /// </summary>
         public void RegisterFromAssembly(Assembly assembly)
         {
             var mappingTypes = assembly.GetTypes()
@@ -50,34 +41,21 @@ namespace Birko.Models.SQL.Mapping
             }
         }
 
-        /// <summary>
-        /// Get the mapping for a model type. Returns null if not registered.
-        /// </summary>
         public ModelMap<T>? GetMap<T>() where T : class
         {
             return _maps.TryGetValue(typeof(T), out var map) ? (ModelMap<T>)map : null;
         }
 
-        /// <summary>
-        /// Check if a mapping exists for a model type.
-        /// </summary>
         public bool HasMap<T>() where T : class
         {
             return _maps.ContainsKey(typeof(T));
         }
 
-        /// <summary>
-        /// Check if a mapping exists for a model type.
-        /// </summary>
         public bool HasMap(Type modelType)
         {
             return _maps.ContainsKey(modelType);
         }
 
-        /// <summary>
-        /// Get all registered type → table name mappings.
-        /// Useful for registering with DataBase.RegisterTableNames().
-        /// </summary>
         public IEnumerable<KeyValuePair<Type, string>> GetTableNames()
         {
             foreach (var (type, map) in _maps)
@@ -89,47 +67,35 @@ namespace Birko.Models.SQL.Mapping
             }
         }
 
-        /// <summary>
-        /// Get all registered property mappings for a model type.
-        /// Returns empty if no mapping is registered.
-        /// </summary>
-        public IReadOnlyList<PropertyMap> GetPropertyMaps(Type modelType)
+        public IReadOnlyList<FieldDescriptor> GetPropertyMaps(Type modelType)
         {
             if (!_maps.TryGetValue(modelType, out var map))
-                return Array.Empty<PropertyMap>();
+                return Array.Empty<FieldDescriptor>();
             var propsProp = map.GetType().GetProperty("Properties");
-            return propsProp?.GetValue(map) as IReadOnlyList<PropertyMap> ?? Array.Empty<PropertyMap>();
+            return propsProp?.GetValue(map) as IReadOnlyList<FieldDescriptor> ?? Array.Empty<FieldDescriptor>();
         }
 
-        /// <summary>
-        /// Apply all registered mappings to the Birko SQL DataBase layer.
-        /// Registers table names and applies field metadata (primary, unique, precision, etc.)
-        /// from fluent PropertyMap definitions to the SQL field cache.
-        /// </summary>
         public void ApplyToDatabase()
         {
-            // 1. Register table names
             Birko.Data.SQL.DataBase.RegisterTableNames(GetTableNames());
 
-            // 2. Apply property-level metadata to the field cache
             foreach (var (type, _) in _maps)
             {
                 var properties = GetPropertyMaps(type);
                 if (properties.Count == 0) continue;
 
-                // Force LoadTable to populate the field cache for this type
                 var table = Birko.Data.SQL.DataBase.LoadTable(type);
                 if (table?.Fields == null) continue;
 
-                foreach (var propMap in properties)
+                foreach (var field in properties)
                 {
-                    var field = table.GetFieldByPropertyName(propMap.PropertyName);
-                    if (field == null) continue;
+                    var sqlField = table.GetFieldByPropertyName(field.Name);
+                    if (sqlField == null) continue;
 
-                    if (propMap.IsPrimary) field.IsPrimary = true;
-                    if (propMap.IsUnique) field.IsUnique = true;
-                    if (propMap.IsRequired) field.IsNotNull = true;
-                    if (propMap.IsIncrement) field.IsAutoincrement = true;
+                    if (field.IsPrimary) sqlField.IsPrimary = true;
+                    if (field.IsUnique) sqlField.IsUnique = true;
+                    if (field.IsRequired) sqlField.IsNotNull = true;
+                    if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
                 }
             }
         }

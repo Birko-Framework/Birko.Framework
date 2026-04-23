@@ -1,17 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using Birko.Data.Patterns.Schema;
 
 namespace Birko.Models.SQL.Mapping
 {
-    /// <summary>
-    /// Fluent SQL mapping configuration for a model type.
-    /// Replaces attribute-based mapping ([Table], [UniqueField], [PrecisionField], etc.).
-    /// </summary>
     public class ModelMap<T> where T : class
     {
         public string? TableName { get; private set; }
-        public List<PropertyMap> Properties { get; } = new List<PropertyMap>();
+        public List<FieldDescriptor> Properties { get; } = new List<FieldDescriptor>();
 
         public ModelMap<T> ToTable(string tableName)
         {
@@ -19,26 +16,26 @@ namespace Birko.Models.SQL.Mapping
             return this;
         }
 
-        public PropertyMapBuilder<T> Property<TProp>(Expression<Func<T, TProp>> propertyExpression)
+        public FieldBuilder<T> Property<TProp>(Expression<Func<T, TProp>> propertyExpression)
         {
             var memberName = GetMemberName(propertyExpression);
-            var map = new PropertyMap(memberName);
-            Properties.Add(map);
-            return new PropertyMapBuilder<T>(this, map);
+            var field = new FieldDescriptor(memberName);
+            Properties.Add(field);
+            return new FieldBuilder<T>(this, field);
         }
 
         public ModelMap<T> HasUnique<TProp>(Expression<Func<T, TProp>> propertyExpression)
         {
             var memberName = GetMemberName(propertyExpression);
-            var existing = Properties.Find(p => p.PropertyName == memberName);
+            var existing = Properties.Find(p => p.Name == memberName);
             if (existing != null)
             {
                 existing.IsUnique = true;
             }
             else
             {
-                var map = new PropertyMap(memberName) { IsUnique = true };
-                Properties.Add(map);
+                var field = new FieldDescriptor(memberName) { IsUnique = true };
+                Properties.Add(field);
             }
             return this;
         }
@@ -46,15 +43,15 @@ namespace Birko.Models.SQL.Mapping
         public ModelMap<T> HasPrimary<TProp>(Expression<Func<T, TProp>> propertyExpression)
         {
             var memberName = GetMemberName(propertyExpression);
-            var existing = Properties.Find(p => p.PropertyName == memberName);
+            var existing = Properties.Find(p => p.Name == memberName);
             if (existing != null)
             {
                 existing.IsPrimary = true;
             }
             else
             {
-                var map = new PropertyMap(memberName) { IsPrimary = true };
-                Properties.Add(map);
+                var field = new FieldDescriptor(memberName) { IsPrimary = true };
+                Properties.Add(field);
             }
             return this;
         }
@@ -62,15 +59,15 @@ namespace Birko.Models.SQL.Mapping
         public ModelMap<T> Ignore<TProp>(Expression<Func<T, TProp>> propertyExpression)
         {
             var memberName = GetMemberName(propertyExpression);
-            var existing = Properties.Find(p => p.PropertyName == memberName);
+            var existing = Properties.Find(p => p.Name == memberName);
             if (existing != null)
             {
                 existing.IsIgnored = true;
             }
             else
             {
-                var map = new PropertyMap(memberName) { IsIgnored = true };
-                Properties.Add(map);
+                var field = new FieldDescriptor(memberName) { IsIgnored = true };
+                Properties.Add(field);
             }
             return this;
         }

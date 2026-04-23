@@ -12,8 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Mapping\IModelMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mapping\ModelMap.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mapping\ModelMapRegistry.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Mapping\PropertyMap.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Mapping\PropertyMapBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mapping\FieldBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\StockItemMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\StorageLocationMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\InventoryDocumentLineMapping.cs" />
