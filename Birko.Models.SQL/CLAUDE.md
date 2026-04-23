@@ -10,15 +10,15 @@ Fluent SQL mapping framework for Birko domain models. Replaces attribute-based m
 
 ### Mapping Framework (`Birko.Models.SQL.Mapping`)
 - **ModelMap\<T\>** — Fluent configuration: `ToTable()`, `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`
-- **PropertyMap** — Property metadata: ColumnName, IsUnique, IsPrimary, Precision, Scale, MaxLength, Index
-- **PropertyMapBuilder\<T\>** — Fluent property builder: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `HasIndex()`
+- **FieldBuilder\<T\>** — Fluent field builder wrapping `FieldDescriptor` from Birko.Data.Patterns: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `IsAutoIncrement()`, `IsIgnored()`, `HasMaxLength()`, `HasIndex()`, `And()`
 - **IModelMapping\<T\>** — Implement to define SQL mappings for a model type
-- **ModelMapRegistry** — Central registry with assembly scanning (`RegisterFromAssembly`) and caching
+- **ModelMapRegistry** — Central registry with assembly scanning (`RegisterFromAssembly`), `GetMap<T>()`, `GetPropertyMaps()`, `ApplyToDatabase()`
 
 ### Example Mappings (`Birko.Models.SQL.Mappings`)
 - **StockItemMapping** — Maps StockItem to "Items" table
 - **StorageLocationMapping** — Maps StorageLocation to "Repositories" table
 - **InventoryDocumentLineMapping** — Maps InventoryDocumentLine with decimal precision
+- Plus 14 additional model mappings for Users, Roles, Customers, Currencies, etc.
 
 ## File Structure
 ```
@@ -26,16 +26,22 @@ Mapping/
 ├── IModelMapping.cs
 ├── ModelMap.cs
 ├── ModelMapRegistry.cs
-├── PropertyMap.cs
-└── PropertyMapBuilder.cs
+└── FieldBuilder.cs
 Mappings/
 ├── StockItemMapping.cs
 ├── StorageLocationMapping.cs
-└── InventoryDocumentLineMapping.cs
+├── InventoryDocumentLineMapping.cs
+├── CurrencyMapping.cs
+├── UserMapping.cs
+├── TenantMapping.cs
+├── RoleMapping.cs
+├── ... (14 more)
 ```
 
 ## Dependencies
-- **Birko.Models.Inventory** — For example mappings
+- **Birko.Data.Patterns** — FieldDescriptor (shared type for both mapping and migrations)
+- **Birko.Data.SQL** — ApplyToDatabase() registers table names and field metadata with the SQL layer
+- **Birko.Models.Inventory** / **Birko.Models.Pricing** / **Birko.Models.Users** / **Birko.Models.Customers** — For example mappings
 
 ## Usage
 
@@ -56,6 +62,9 @@ public class StockItemMapping : IModelMapping<StockItem>
 var registry = new ModelMapRegistry();
 registry.RegisterFromAssembly(typeof(StockItemMapping).Assembly);
 var map = registry.GetMap<StockItem>();
+
+// Apply to database (registers table names + field metadata)
+registry.ApplyToDatabase();
 ```
 
 ## Maintenance
