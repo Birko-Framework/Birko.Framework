@@ -65,5 +65,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexDefinition.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\IndexManagementException.cs" />
+    <!-- Schema -->
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\FieldType.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\FieldDescriptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\ISchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\ICollectionBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\IIndexBuilder.cs" />
   </ItemGroup>
 </Project>
