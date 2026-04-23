@@ -1,48 +1,53 @@
 # Birko.Data.Migrations.TimescaleDB
 
 ## Overview
-TimescaleDB-specific migration framework extending SQL migrations with hypertable, compression, and continuous aggregate support.
+TimescaleDB migration backend extending SQL migrations. Uses AbstractConnector (PostgreSQL). TimescaleDB-specific operations (hypertables, compression policies) use the Raw() escape hatch.
 
 ## Project Location
 `C:\Source\Birko.Data.Migrations.TimescaleDB\`
 
 ## Components
 
-### Migration Base Class
-- `TimescaleDBMigration` - Extends `SQL.SqlMigration` with TimescaleDB-specific methods
-  - Hypertables: `CreateHypertable()`, `CreateHypertableWithSpace()`, `IsHypertable()`, `GetChunkInterval()`
-  - Policies: `AddCompressionPolicy()`, `AddRetentionPolicy()`, `RemoveCompressionPolicy()`, `RemoveRetentionPolicy()`
-  - Aggregates: `CreateContinuousAggregate()`, `RefreshContinuousAggregate()`
-  - Internal: `EnsureTimescaleDBExtension()`
-
 ### Runner
-- `TimescaleDBMigrationRunner` - Extends `SQL.SqlMigrationRunner`
+- `TimescaleDBMigrationRunner` — Extends SqlMigrationRunner. Takes `AbstractConnector` (from `store.Connector`). Overrides context creation to provide TimescaleDBMigrationContext.
+
+### Context
+- `TimescaleDBMigrationContext` — Extends SqlMigrationContext. ProviderName is "TimescaleDB". Provides Connection and Transaction properties for TimescaleDB-specific SQL via Raw().
+
+## TimescaleDB-Specific Operations
+
+Use `context.Raw()` for operations not covered by the platform-agnostic API:
+
+```csharp
+public override void Up(IMigrationContext context)
+{
+    context.Schema.CreateCollection("metrics", b => b
+        .WithField("time", FieldType.DateTime, f => f.IsPrimary = true)
+        .WithField("value", FieldType.Double));
+
+    if (context.ProviderName == "TimescaleDB")
+    {
+        context.Raw(obj =>
+        {
+            var connection = (DbConnection)obj;
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT create_hypertable('metrics', 'time')";
+            cmd.ExecuteNonQuery();
+        });
+    }
+}
+```
 
 ## Dependencies
 - Birko.Data.Migrations
 - Birko.Data.Migrations.SQL
-- Birko.Data.TimescaleDB
+- Birko.Data.Patterns
+- Birko.Data.SQL
 
 ## Maintenance
 
 ### README Updates
-When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly. This includes:
-- New classes, interfaces, or methods
-- Changed dependencies
-- New or modified usage examples
-- Breaking changes
+When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly.
 
 ### CLAUDE.md Updates
-When making major changes to this project, update this CLAUDE.md to reflect:
-- New or renamed files and components
-- Changed architecture or patterns
-- New dependencies or removed dependencies
-- Updated interfaces or abstract class signatures
-- New conventions or important notes
-
-### Test Requirements
-Every new public functionality must have corresponding unit tests. When adding new features:
-- Create test classes in the corresponding test project
-- Follow existing test patterns (xUnit + FluentAssertions)
-- Test both success and failure cases
-- Include edge cases and boundary conditions
+When making major changes to this project, update this CLAUDE.md to reflect new or renamed files, changed architecture, dependencies, or conventions.
