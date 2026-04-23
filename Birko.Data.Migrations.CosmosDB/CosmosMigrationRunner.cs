@@ -45,18 +45,11 @@ public class CosmosMigrationRunner : Data.Migrations.AbstractMigrationRunner
         {
             foreach (var migration in migrations)
             {
-                if (migration is CosmosMigration cosmosMigration)
-                {
-                    cosmosMigration.Execute(_database, direction);
-                }
-                else if (direction == Data.Migrations.MigrationDirection.Up)
-                {
-                    migration.Up();
-                }
+                var context = new Context.CosmosDBMigrationContext(_database);
+                if (direction == Data.Migrations.MigrationDirection.Up)
+                    migration.Up(context);
                 else
-                {
-                    migration.Down();
-                }
+                    migration.Down(context);
 
                 if (direction == Data.Migrations.MigrationDirection.Up)
                 {

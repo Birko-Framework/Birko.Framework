@@ -9,8 +9,10 @@
     <Import_RootNamespace>Birko.Data.Migrations.CosmosDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)CosmosMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CosmosMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CosmosMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\CosmosDBMigrationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\CosmosDBSchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\CosmosDBDataMigrator.cs" />
   </ItemGroup>
 </Project>
