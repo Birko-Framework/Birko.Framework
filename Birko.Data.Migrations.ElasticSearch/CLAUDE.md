@@ -1,53 +1,45 @@
 # Birko.Data.Migrations.ElasticSearch
 
 ## Overview
-Elasticsearch-specific migration framework for managing index schemas, aliases, and mappings.
+ElasticSearch migration backend using ElasticClient (NEST). Implements platform-agnostic IMigrationContext.
 
 ## Project Location
 `C:\Source\Birko.Data.Migrations.ElasticSearch\`
 
 ## Components
 
-### Migration Base Class
-- `ElasticSearchMigration` - Extends `AbstractMigration` with `ElasticClient`-specific methods
-  - Abstract: `Up(ElasticClient)`, `Down(ElasticClient)`
-  - Helpers: `CreateIndex()`, `DeleteIndex()`, `CreateAlias()`, `DeleteAlias()`, `Reindex()`, `UpdateMapping()`, `PutTemplate()`, `DeleteTemplate()`
+### Runner
+- `ElasticSearchMigrationRunner` — Takes `ElasticClient` (from `store.Connector`).
 
-### Settings
-- `ElasticSearchMigrationSettings` - Extends `ElasticSearch.Stores.Settings`
-  - `MigrationsIndex`, `UseAliases`, `NumberOfShards`, `NumberOfReplicas`
+### Context
+- `ElasticSearchMigrationContext` — Wraps ElasticClient. Schema and Data properties. Raw() exposes ElasticClient.
+- `ElasticSearchSchemaBuilder` — CreateCollection creates index with mapping. AddField updates mapping via PUT. DropField is no-op (ES can't remove fields). CreateIndex creates aliases.
+- `ElasticSearchDataMigrator` — UpdateDocuments via _update_by_query, DeleteDocuments via _delete_by_query, CopyData via _reindex.
 
 ### Store
-- `ElasticSearchMigrationStore` - Implements `IMigrationStore`, stores migration state in Elasticsearch index using `MigrationDocument`
+- `ElasticSearchMigrationStore` — Stores migration state in an ElasticSearch index.
 
-### Runner
-- `ElasticSearchMigrationRunner` - Extends `AbstractMigrationRunner`, executes `ElasticSearchMigration` instances
+### Settings
+- `ElasticSearchMigrationSettings` — MigrationsIndex, UseAliases, NumberOfShards, NumberOfReplicas
+
+## Usage
+
+```csharp
+var runner = new ElasticSearchMigrationRunner(store.Connector);
+runner.Register(new CreateProductsIndex());
+runner.Migrate();
+```
 
 ## Dependencies
 - Birko.Data.Migrations
+- Birko.Data.Patterns
 - Birko.Data.ElasticSearch
 - NEST / Elasticsearch.Net
 
 ## Maintenance
 
 ### README Updates
-When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly. This includes:
-- New classes, interfaces, or methods
-- Changed dependencies
-- New or modified usage examples
-- Breaking changes
+When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly.
 
 ### CLAUDE.md Updates
-When making major changes to this project, update this CLAUDE.md to reflect:
-- New or renamed files and components
-- Changed architecture or patterns
-- New dependencies or removed dependencies
-- Updated interfaces or abstract class signatures
-- New conventions or important notes
-
-### Test Requirements
-Every new public functionality must have corresponding unit tests. When adding new features:
-- Create test classes in the corresponding test project
-- Follow existing test patterns (xUnit + FluentAssertions)
-- Test both success and failure cases
-- Include edge cases and boundary conditions
+When making major changes to this project, update this CLAUDE.md to reflect new or renamed files, changed architecture, dependencies, or conventions.
