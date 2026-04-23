@@ -1,5 +1,4 @@
 using Raven.Client.Documents;
-using Raven.Client.Documents.Session;
 using System;
 using System.Collections.Generic;
 
@@ -46,18 +45,11 @@ namespace Birko.Data.Migrations.RavenDB
             {
                 foreach (var migration in migrations)
                 {
-                    if (migration is RavenMigration ravenMigration)
-                    {
-                        ravenMigration.Execute(_store, direction);
-                    }
-                    else if (direction == Data.Migrations.MigrationDirection.Up)
-                    {
-                        migration.Up();
-                    }
+                    var context = new Context.RavenDBMigrationContext(_store);
+                    if (direction == Data.Migrations.MigrationDirection.Up)
+                        migration.Up(context);
                     else
-                    {
-                        migration.Down();
-                    }
+                        migration.Down(context);
 
                     // Update store record
                     if (direction == Data.Migrations.MigrationDirection.Up)

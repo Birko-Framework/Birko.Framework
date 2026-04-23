@@ -9,8 +9,10 @@
     <Import_RootNamespace>Birko.Data.Migrations.RavenDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)RavenMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RavenMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RavenMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\RavenDBMigrationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\RavenDBSchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\RavenDBDataMigrator.cs" />
   </ItemGroup>
 </Project>
