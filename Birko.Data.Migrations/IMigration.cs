@@ -1,9 +1,12 @@
 using System;
+using Birko.Data.Migrations.Context;
 
 namespace Birko.Data.Migrations
 {
     /// <summary>
     /// Defines a single migration with Up (apply) and Down (revert) operations.
+    /// Migrations receive an IMigrationContext that provides platform-agnostic
+    /// schema and data operations.
     /// </summary>
     public interface IMigration
     {
@@ -32,12 +35,12 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Applies the migration (upgrade).
         /// </summary>
-        void Up();
+        void Up(IMigrationContext context);
 
         /// <summary>
         /// Reverts the migration (downgrade).
         /// Should undo all changes made by Up().
         /// </summary>
-        void Down();
+        void Down(IMigrationContext context);
     }
 }

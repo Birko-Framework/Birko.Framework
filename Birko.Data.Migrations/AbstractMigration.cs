@@ -1,4 +1,5 @@
 using System;
+using Birko.Data.Migrations.Context;
 
 namespace Birko.Data.Migrations
 {
@@ -38,14 +39,13 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Applies the migration (upgrade).
         /// </summary>
-        public abstract void Up();
+        public abstract void Up(IMigrationContext context);
 
         /// <summary>
         /// Reverts the migration (downgrade).
-        /// Implementations should undo all changes made by Up().
         /// Default implementation throws NotImplementedException.
         /// </summary>
-        public virtual void Down()
+        public virtual void Down(IMigrationContext context)
         {
             throw new NotImplementedException($"Down migration for '{Name}' (v{Version}) is not implemented.");
         }

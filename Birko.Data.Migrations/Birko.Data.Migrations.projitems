@@ -17,5 +17,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)AbstractMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AbstractMigrationRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\MigrationException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\IMigrationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\IDataMigrator.cs" />
   </ItemGroup>
 </Project>
