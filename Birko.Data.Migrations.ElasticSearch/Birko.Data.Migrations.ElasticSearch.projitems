@@ -9,9 +9,11 @@
     <Import_RootNamespace>Birko.Data.Migrations.ElasticSearch</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchMigrationRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Settings\ElasticSearchMigrationSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\ElasticSearchMigrationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\ElasticSearchSchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\ElasticSearchDataMigrator.cs" />
   </ItemGroup>
 </Project>
