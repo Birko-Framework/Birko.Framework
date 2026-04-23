@@ -9,9 +9,11 @@
     <Import_RootNamespace>Birko.Data.Migrations.MongoDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)MongoMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoMigrationRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Settings\MongoMigrationSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\MongoMigrationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\MongoSchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\MongoDataMigrator.cs" />
   </ItemGroup>
 </Project>

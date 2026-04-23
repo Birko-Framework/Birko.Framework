@@ -28,11 +28,13 @@ namespace Birko.Data.Migrations.MongoDB
         /// <summary>
         /// Initializes a new instance of the MongoMigrationRunner class.
         /// </summary>
-        public MongoMigrationRunner(IMongoClient client, IMongoDatabase database, Settings.MongoMigrationSettings? settings = null)
-            : base(new MongoMigrationStore(client, database, settings))
+        /// <param name="mongoClient">MongoDB client wrapper from the store. Use <c>store.Client</c> to pass it.</param>
+        /// <param name="settings">Migration settings.</param>
+        public MongoMigrationRunner(global::Birko.Data.MongoDB.MongoDBClient mongoClient, Settings.MongoMigrationSettings? settings = null)
+            : base(new MongoMigrationStore(mongoClient.Client, mongoClient.Database, settings))
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
-            _database = database ?? throw new ArgumentNullException(nameof(database));
+            _client = mongoClient.Client ?? throw new ArgumentNullException(nameof(mongoClient));
+            _database = mongoClient.Database ?? throw new ArgumentNullException(nameof(mongoClient));
             _settings = settings ?? new Settings.MongoMigrationSettings();
         }
 
@@ -63,18 +65,11 @@ namespace Birko.Data.Migrations.MongoDB
 
                 foreach (var migration in migrations)
                 {
-                    if (migration is MongoMigration mongoMigration)
-                    {
-                        mongoMigration.Execute(_client, _database, direction);
-                    }
-                    else if (direction == Data.Migrations.MigrationDirection.Up)
-                    {
-                        migration.Up();
-                    }
+                    var context = new Context.MongoMigrationContext(_database);
+                    if (direction == Data.Migrations.MigrationDirection.Up)
+                        migration.Up(context);
                     else
-                    {
-                        migration.Down();
-                    }
+                        migration.Down(context);
 
                     // Update store record
                     if (direction == Data.Migrations.MigrationDirection.Up)
