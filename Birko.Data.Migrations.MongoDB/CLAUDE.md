@@ -1,52 +1,45 @@
 # Birko.Data.Migrations.MongoDB
 
 ## Overview
-MongoDB-specific migration framework for managing collections, indexes, and validation rules.
+MongoDB migration backend using MongoDBClient from Birko.Data.MongoDB. Implements platform-agnostic IMigrationContext.
 
 ## Project Location
 `C:\Source\Birko.Data.Migrations.MongoDB\`
 
 ## Components
 
-### Migration Base Class
-- `MongoMigration` - Extends `AbstractMigration` with `IMongoClient` and `IMongoDatabase` parameters
-  - Helpers: `CreateCollection()`, `DropCollection()`, `CreateIndex()` (2 overloads), `DropIndex()`, `DropAllIndexes()`, `RenameCollection()`, `UpdateDocuments()`, `RunCommand()`, `SetValidationRule()`, `CollectionExists()`
+### Runner
+- `MongoMigrationRunner` — Takes `MongoDBClient` (from `store.Client`). Optional session/transaction support for replica sets.
 
-### Settings
-- `MongoMigrationSettings` - Extends `MongoDB.Stores.Settings`
-  - `MigrationsCollection`, `UseSession` properties
+### Context
+- `MongoMigrationContext` — Wraps IMongoDatabase. Schema and Data properties. Raw() exposes IMongoDatabase.
+- `MongoSchemaBuilder` — CreateCollection/DropCollection via IMongoDatabase. AddField/DropField are no-op (schema-less). RenameField uses $rename. Index creation via Builders<BsonDocument>.IndexKeys.
+- `MongoDataMigrator` — BsonDocument filter parsing, $set updates, $merge for CopyData.
 
 ### Store
-- `MongoMigrationStore` - Implements `IMigrationStore` with `MigrationDocument`, handles transactions
+- `MongoMigrationStore` — Stores migration state in a MongoDB collection with unique index on version.
 
-### Runner
-- `MongoMigrationRunner` - Extends `AbstractMigrationRunner`, manages MongoDB sessions and transactions
+### Settings
+- `MongoMigrationSettings` — MigrationsCollection, UseSession
+
+## Usage
+
+```csharp
+var runner = new MongoMigrationRunner(store.Client);
+runner.Register(new CreateUsersCollection());
+runner.Migrate();
+```
 
 ## Dependencies
 - Birko.Data.Migrations
-- Birko.Data.MongoDB
+- Birko.Data.Patterns
+- Birko.Data.MongoDB (MongoDBClient)
 - MongoDB.Driver
 
 ## Maintenance
 
 ### README Updates
-When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly. This includes:
-- New classes, interfaces, or methods
-- Changed dependencies
-- New or modified usage examples
-- Breaking changes
+When making changes that affect the public API, features, or usage patterns of this project, update the README.md accordingly.
 
 ### CLAUDE.md Updates
-When making major changes to this project, update this CLAUDE.md to reflect:
-- New or renamed files and components
-- Changed architecture or patterns
-- New dependencies or removed dependencies
-- Updated interfaces or abstract class signatures
-- New conventions or important notes
-
-### Test Requirements
-Every new public functionality must have corresponding unit tests. When adding new features:
-- Create test classes in the corresponding test project
-- Follow existing test patterns (xUnit + FluentAssertions)
-- Test both success and failure cases
-- Include edge cases and boundary conditions
+When making major changes to this project, update this CLAUDE.md to reflect new or renamed files, changed architecture, dependencies, or conventions.
