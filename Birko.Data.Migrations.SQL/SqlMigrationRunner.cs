@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.Common;
 using System.Linq;
-using System.Threading.Tasks;
 using Birko.Data.Migrations.Exceptions;
 using Birko.Data.Migrations.SQL.Settings;
+using Birko.Data.SQL.Connectors;
 
 namespace Birko.Data.Migrations.SQL
 {
@@ -14,18 +13,18 @@ namespace Birko.Data.Migrations.SQL
     /// </summary>
     public class SqlMigrationRunner : Data.Migrations.AbstractMigrationRunner
     {
-        private readonly Func<DbConnection> _connectionFactory;
+        private readonly AbstractConnector _connector;
         private readonly SqlMigrationSettings _settings;
 
         /// <summary>
         /// Initializes a new instance of the SqlMigrationRunner class.
         /// </summary>
-        /// <param name="connectionFactory">Factory function to create database connections.</param>
+        /// <param name="connector">SQL connector from the store. Use <c>store.Connector</c> to pass it.</param>
         /// <param name="settings">Migration settings.</param>
-        public SqlMigrationRunner(Func<DbConnection> connectionFactory, SqlMigrationSettings? settings = null)
-            : base(new SqlMigrationStore(connectionFactory, settings))
+        public SqlMigrationRunner(AbstractConnector connector, SqlMigrationSettings? settings = null)
+            : base(new SqlMigrationStore(() => connector.CreateConnection(connector.Settings), settings))
         {
-            _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
+            _connector = connector ?? throw new ArgumentNullException(nameof(connector));
             _settings = settings ?? new SqlMigrationSettings();
         }
 
@@ -42,7 +41,7 @@ namespace Birko.Data.Migrations.SQL
                 return Data.Migrations.MigrationResult.Successful(fromVersion, toVersion, direction, executed);
             }
 
-            using var connection = _connectionFactory();
+            using var connection = _connector.CreateConnection(_connector.Settings);
             connection.Open();
 
             if (_settings.UseTransaction)
@@ -123,25 +122,17 @@ namespace Birko.Data.Migrations.SQL
             }
         }
 
-        private void ExecuteSingleMigration(
+        protected virtual void ExecuteSingleMigration(
             Data.Migrations.IMigration migration,
             Data.Migrations.MigrationDirection direction,
             DbConnection connection,
             DbTransaction? transaction)
         {
-            if (migration is SqlMigration sqlMigration)
-            {
-                // SQL migration can use the connection directly
-                sqlMigration.Execute(connection, transaction, direction);
-            }
-            else if (direction == Data.Migrations.MigrationDirection.Up)
-            {
-                migration.Up();
-            }
+            var context = new Context.SqlMigrationContext(connection, transaction, "SQL", _connector);
+            if (direction == Data.Migrations.MigrationDirection.Up)
+                migration.Up(context);
             else
-            {
-                migration.Down();
-            }
+                migration.Down(context);
         }
 
         private void UpdateStoreRecord(
