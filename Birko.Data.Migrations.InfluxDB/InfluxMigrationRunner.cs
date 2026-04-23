@@ -51,18 +51,11 @@ namespace Birko.Data.Migrations.InfluxDB
             {
                 foreach (var migration in migrations)
                 {
-                    if (migration is InfluxMigration influxMigration)
-                    {
-                        influxMigration.Execute(_client, _organization, direction);
-                    }
-                    else if (direction == Data.Migrations.MigrationDirection.Up)
-                    {
-                        migration.Up();
-                    }
+                    var context = new Context.InfluxDBMigrationContext(_client, _organization);
+                    if (direction == Data.Migrations.MigrationDirection.Up)
+                        migration.Up(context);
                     else
-                    {
-                        migration.Down();
-                    }
+                        migration.Down(context);
 
                     // Update store record
                     if (direction == Data.Migrations.MigrationDirection.Up)

@@ -9,8 +9,10 @@
     <Import_RootNamespace>Birko.Data.Migrations.InfluxDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)InfluxMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InfluxMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InfluxMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxDBMigrationContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxDBSchemaBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Context\InfluxDBDataMigrator.cs" />
   </ItemGroup>
 </Project>
