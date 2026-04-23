@@ -61,6 +61,14 @@ Cross-cutting data patterns including Unit of Work, soft delete, audit tracking,
 - `AsyncDefaultStoreWrapper<TStore, T>` - Async variant wrapping `IAsyncBulkStore<T>`, implements `IAsyncBulkStore<T>`
 - Note: Requires bulk store (not plain IStore) because enforcing the constraint requires bulk read + update
 
+### Schema (Birko.Data.Patterns.Schema)
+Provider-agnostic field and schema abstractions. Used by both the migration system and the SQL model mapping framework.
+- `FieldType` - Enum: String, Integer, Long, Decimal, Double, Boolean, DateTime, Guid, Binary, Json
+- `FieldDescriptor` - Mutable field metadata: Name, Type, ColumnName, IsPrimary, IsUnique, IsRequired, IsIgnored, MaxLength, Precision, Scale, IsAutoIncrement, DefaultValue, IndexName, IndexOrder, IndexDescending. Used by migrations (ISchemaBuilder.AddField) and SQL mapping (FieldBuilder<T>).
+- `ISchemaBuilder` - CreateCollection, DropCollection, CollectionExists, CreateIndex, DropIndex, AddField, DropField, RenameField
+- `ICollectionBuilder` - Fluent: WithField(name, type) and WithField(FieldDescriptor)
+- `IIndexBuilder` - Fluent: WithField (uses IndexFieldType from IndexManagement), Unique, Sparse, WithProperty
+
 ### Specification
 - `ISpecification<T>` - Interface with `IsSatisfiedBy(entity)` and `ToExpression()` for store filtering
 - `Specification<T>` - Abstract base class with cached compiled expression and `And()`, `Or()`, `Not()` methods + `&`, `|`, `!` operators
