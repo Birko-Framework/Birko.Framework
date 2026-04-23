@@ -10,7 +10,7 @@ Birko Framework je komplexný .NET 10.0 framework postavený na princípe **jedn
 **Čo framework poskytuje:**
 
 - **Univerzálny prístup k dátam** – 12 databázových platforiem cez jednotný `IStore` / `IAsyncStore` / `IBulkStore` interface
-- **Komunikačnú vrstvu** – REST, SOAP, WebSocket, SSE, Modbus, OAuth 2.0, NFC/RFID, Bluetooth, Camera, IR
+- **Komunikačnú vrstvu** – REST, SOAP, WebSocket, SSE, GraphQL, Modbus, OAuth 2.0, NFC/RFID, Bluetooth, Camera, IR
 - **AI/LLM infraštruktúru** – multi-provider agent framework s resilience (rate limiting, circuit breaker, cost tracking)
 - **Bezpečnosť** – hashovanie (PBKDF2, BCrypt), šifrovanie (AES-256-GCM), JWT, RBAC, HashiCorp Vault a Azure Key Vault integrácia, konfiguračný bridge pre ISecretProvider
 - **Integračné vzory** – Unit of Work, Soft Delete, Audit, Timestamp, Multi-tenancy, Event Sourcing, CQRS, Workflow, Tagging

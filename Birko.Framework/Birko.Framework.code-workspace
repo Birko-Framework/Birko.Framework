@@ -789,6 +789,10 @@
 			"path": "../Birko.Communication.WebSocket.Tests"
 		},
 		{
+			"name": "Tests / Birko.Communication.GraphQL.Tests",
+			"path": "../Birko.Communication.GraphQL.Tests"
+		},
+		{
 			"name": "Validation / Birko.Validation",
 			"path": "../Birko.Validation"
 		},
@@ -863,6 +867,10 @@
 		{
 			"name": "Communication / Birko.Communication.OAuth.Providers",
 			"path": "../Birko.Communication.OAuth.Providers"
+		},
+		{
+			"name": "Communication / Birko.Communication.GraphQL",
+			"path": "../Birko.Communication.GraphQL"
 		},
 		{
 			"path": "."

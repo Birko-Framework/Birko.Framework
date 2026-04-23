@@ -53,6 +53,16 @@ OAuth2 client library supporting multiple grant types with automatic token cachi
 - **PkceChallenge** — built-in SHA-256 PKCE challenge pair generation
 - **OAuthSettings** — extends `RemoteSettings` (ClientId=UserName, ClientSecret=Password, TokenEndpoint=Location)
 
+### Birko.Communication.GraphQL
+GraphQL client with zero external dependencies (HttpClient + ClientWebSocket + Birko.Serialization):
+- **Queries and Mutations** — typed responses via `GraphQLResponse<T>` with automatic error handling
+- **Subscriptions** — real-time data over WebSocket using graphql-ws protocol (`IObservable<T>`)
+- **Static client caching** — `GraphQLClient.GetClient(endpoint)` with automatic per-URL caching
+- **Fluent request builder** — `GraphQLRequestBuilder` with Query/Mutation/Variables/OperationName/Extensions
+- **Event-driven** — OnRequest/OnResponse/OnError events for logging and monitoring
+- **GraphQLSettings** — extends `RemoteSettings` (Endpoint=Location), adds SchemaPath, UseSubscriptions, SubscriptionProtocol, TimeoutSeconds, ExtraHeaders
+- **ISerializer integration** — uses `Birko.Serialization.ISerializer` (SystemJsonSerializer) for all JSON
+
 ### Birko.Communication.IR
 Consumer infrared (38 kHz modulated) communication for remote control — **not** IrDA/IrCOMM (see `Birko.Communication.Hardware.Ports.Infraport` for serial IrCOMM):
 - **InfraredPort** — extends AbstractPort with async send/receive and learning mode
@@ -139,6 +149,56 @@ await port.StopLearningAsync();
 ```
 
 ### OAuth2 Client Credentials
+
+### GraphQL Query
+
+```csharp
+using Birko.Communication.GraphQL;
+
+var client = new GraphQLClient(new GraphQLSettings
+{
+    Endpoint = "https://api.example.com/graphql"
+});
+
+var response = await client.QueryAsync<User>("{ user(id: 1) { name email } }");
+Console.WriteLine(response.Data?.Name);
+
+// With variables and operation name
+var response2 = await client.QueryAsync<User>(
+    "query GetUser($id: Int!) { user(id: $id) { name } }",
+    new { id = 1 },
+    "GetUser");
+```
+
+### GraphQL Mutation with Builder
+
+```csharp
+var request = new GraphQLRequestBuilder()
+    .Mutation("mutation CreateUser($name: String!) { createUser(name: $name) { id name } }")
+    .Variables(new { name = "Alice" })
+    .OperationName("CreateUser")
+    .Build();
+
+var response = await client.ExecuteAsync<User>(request);
+```
+
+### GraphQL Subscription
+
+```csharp
+var client = new GraphQLClient(new GraphQLSettings
+{
+    Endpoint = "wss://api.example.com/graphql",
+    UseSubscriptions = true
+});
+
+var subscription = await client.SubscribeAsync<Message>(
+    "subscription { onMessage { text author } }");
+
+subscription.AsObservable().Subscribe(msg =>
+    Console.WriteLine($"{msg.Author}: {msg.Text}"));
+```
+
+### OAuth2 Client Credentials (Original)
 
 ```csharp
 using Birko.Communication.OAuth;
@@ -276,6 +336,7 @@ if (result.IsAuthenticated)
 - [Birko.Communication.SSE](https://github.com/birko/Birko.Communication.SSE)
 - [Birko.Communication.Modbus](https://github.com/birko/Birko.Communication.Modbus)
 - [Birko.Communication.OAuth](https://github.com/birko/Birko.Communication.OAuth)
+- [Birko.Communication.GraphQL](https://github.com/birko/Birko.Communication.GraphQL)
 - [Birko.Communication.Camera](https://github.com/birko/Birko.Communication.Camera)
 - [Birko.Communication.IR](https://github.com/birko/Birko.Communication.IR)
 - [Birko.Communication.NFC](https://github.com/birko/Birko.Communication.NFC)

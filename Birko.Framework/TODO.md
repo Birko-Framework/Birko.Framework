@@ -60,6 +60,7 @@ All phases below are fully implemented. See each project's CLAUDE.md for details
 | Birko.Data.SQL.View.Migrations | Done | ViewSqlGenerator, ViewMigrationExtensions — bridge between SQL View DDL and Migration framework |
 | Birko.Communication.REST.Server | Done | HttpListener, routing, middleware, authentication |
 | Birko.Communication.OAuth.Providers | Done | GitHubOAuthProvider (pre-configured device flow) |
+| Birko.Communication.GraphQL | Done | GraphQL client: queries, mutations, subscriptions over HttpClient + ClientWebSocket, zero external deps |
 | Birko.AI.* (Contracts, AI, Providers, Agents, Resilience, Orchestration) | Done | Multi-provider LLM framework, 11 providers, 22 agents, rate limiting, circuit breaker, cost tracking, task orchestration |
 | Birko.Web.* (Core, Components, Shell) | Done | Shadow DOM web components (50), reactive state, HTTP/SSE clients, hash router, app shell |
 | Birko.Web.Components display widgets | Done | b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer, b-tag-input |
@@ -264,7 +265,7 @@ Pluggable random number generation with testable abstractions.
 - [x] Connection resiliency (RetryPolicy on Settings, transient error detection, sync/async retry wrappers on all CRUD operations)
 
 ### Birko.Communication
-- [ ] GraphQL client
+- [x] GraphQL client (Birko.Communication.GraphQL) — Queries, mutations, subscriptions over HttpClient + ClientWebSocket. Uses Birko.Serialization. Zero external deps. 49 tests.
 - [ ] gRPC support
 - [x] OAuth2 client (Birko.Communication.OAuth) — Client Credentials, Auth Code, PKCE, Device Code, Refresh Token, DelegatingHandler
 - [ ] OAuth2 server (Birko.Security.OAuth.Server) — Token endpoint, authorization endpoint, client registration, consent management (needs Birko.Data.Stores for token/client persistence)

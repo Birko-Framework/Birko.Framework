@@ -4,6 +4,47 @@ Historical record of architectural changes that are no longer "recent" but prese
 
 ---
 
+## 2026-04-23 — Platform-Agnostic Migrations + FieldDescriptor Unification
+
+Rewrote the migration system so migrations are written once and run against any provider. Unified `PropertyMap` (Birko.Models.SQL) with `FieldDescriptor` (Birko.Data.Patterns) into a single type.
+
+**Migration system:**
+- `IMigration` now has `Up(IMigrationContext context)` / `Down(IMigrationContext context)` — no more provider-specific base classes
+- `IMigrationContext` provides `Schema` (ISchemaBuilder), `Data` (IDataMigrator), `Raw(Action<object>)`, `ProviderName`
+- Schema abstractions in Birko.Data.Patterns: `FieldType` enum, `FieldDescriptor`, `ISchemaBuilder`, `ICollectionBuilder`, `IIndexBuilder`
+- Each provider implements IMigrationContext: SQL (wraps DbConnection + AbstractConnector), MongoDB (IMongoDatabase), ElasticSearch (ElasticClient), RavenDB (IDocumentStore), CosmosDB (Database), InfluxDB (InfluxDBClient), TimescaleDB (extends SQL)
+- NoSQL providers silently skip inapplicable operations (AddField/DropField are no-op on schema-less databases)
+- Runner constructors take the store's native connector: `new SqlMigrationRunner(store.Connector)`, `new MongoMigrationRunner(store.Client)`
+- Deleted provider-specific base classes: SqlMigration, MongoMigration, ElasticSearchMigration, RavenMigration, CosmosMigration, InfluxMigration
+
+**FieldDescriptor unification:**
+- `PropertyMap` (Birko.Models.SQL.Mapping) deleted — `FieldDescriptor` (Birko.Data.Patterns.Schema) now serves both model mapping and migrations
+- `PropertyMapBuilder<T>` renamed to `FieldBuilder<T>` — wraps FieldDescriptor with fluent API
+- Added to FieldDescriptor: ColumnName, IsIgnored, IndexName, IndexOrder, IndexDescending
+- Changed FieldDescriptor from `init` to `{ get; set; }` to support the builder pattern
+- `ModelMap<T>` and `ModelMapRegistry` updated to use FieldDescriptor
+- All 31 consumer mapping files unchanged (fluent API surface is identical)
+
+---
+
+## 2026-04-23 — Birko.Communication.GraphQL
+
+New GraphQL client project following Birko.Communication.OAuth patterns. Zero external NuGet dependencies — uses HttpClient for queries/mutations, ClientWebSocket for subscriptions, and Birko.Serialization (SystemJsonSerializer) for JSON.
+
+**Components:**
+- `GraphQLSettings` extends `RemoteSettings` (Endpoint = Location alias). Adds SchemaPath ("/graphql"), UseSubscriptions, SubscriptionProtocol enum (WebSocket/SSE), TimeoutSeconds (30), EnableAutoPersistedQueries, ExtraHeaders.
+- `IGraphQLClient` interface with `QueryAsync<T>`, `MutateAsync<T>`, `SubscribeAsync<T>`, `ExecuteAsync<T>` plus OnRequest/OnResponse/OnError events.
+- `GraphQLClient` implementation — static `GetClient(endpoint)` caching (RestClient pattern), optional HttpClient injection, thread-safe via SemaphoreSlim. Uses `ISerializer` for all JSON operations.
+- `GraphQLRequest` — serializable request model with Query, Variables, OperationName, Extensions. Serialize via ISerializer.
+- `GraphQLResponse<T>` — typed response with Data, Errors, Extensions. Static Deserialize factory.
+- `GraphQLError` — error model with Message, Locations (line/column), Path, Extensions.
+- `GraphQLSubscription<T>` — IObservable<T> over ClientWebSocket using graphql-ws protocol. IDisposable.
+- `GraphQLRequestBuilder` — fluent API: Query(), Mutation(), Variables(), OperationName(), WithExtension(), Build().
+- `GraphQLException` — mirrors OAuthException with Errors list and StatusCode.
+
+**Tests:** 49 tests in Birko.Communication.GraphQL.Tests (xUnit + FluentAssertions).
+
+---
 ## 2026-04-22 — Birko.Web.Components — Markdown Editor Formatting
 
 Extended `b-markdown-editor` with all missing formatting options:

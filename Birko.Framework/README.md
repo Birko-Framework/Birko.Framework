@@ -7,7 +7,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, XML, Azure Cosmos DB)
 - Sync and async store/repository abstractions with bulk operation support and lazy-init (auto-creates tables/indexes on first use)
 - ViewModel layer with model-to-viewmodel mapping
-- Database migrations framework
+- Database migrations framework (platform-agnostic — write once, run against any provider)
 - Data synchronization across stores
 - Multi-tenancy support
 - Event sourcing pattern
@@ -82,7 +82,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 
 | Project | Description |
 |---------|-------------|
-| Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Sluggable, Paging) |
+| Birko.Data.Patterns | Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Sluggable, Paging) + Schema abstractions (FieldType, FieldDescriptor, ISchemaBuilder) |
 | Birko.Data.Aggregates | SQL-NoSQL aggregate mapper (flatten/expand for sync) |
 | Birko.Data.Tenant | Multi-tenancy support |
 | Birko.Data.Composition | Runtime store decorator composition (conditional decorator chains) |
@@ -95,14 +95,14 @@ A modular .NET framework providing data access, communication, AI, and model inf
 
 | Project | Description |
 |---------|-------------|
-| Birko.Data.Migrations | Core migration framework (Migration base, runner, result types) |
-| Birko.Data.Migrations.SQL | SQL migration backend (cross-database DDL) |
-| Birko.Data.Migrations.ElasticSearch | Elasticsearch index/mapping migrations |
-| Birko.Data.Migrations.MongoDB | MongoDB collection/index migrations |
-| Birko.Data.Migrations.RavenDB | RavenDB collection/index migrations |
-| Birko.Data.Migrations.InfluxDB | InfluxDB bucket/retention migrations |
-| Birko.Data.Migrations.TimescaleDB | TimescaleDB hypertable/compression migrations |
-| Birko.Data.Migrations.CosmosDB | Cosmos DB container/indexing-policy migrations |
+| Birko.Data.Migrations | Core migration framework (IMigration, IMigrationContext, AbstractMigration, AbstractMigrationRunner) — platform-agnostic |
+| Birko.Data.Migrations.SQL | SQL migration backend (SqlMigrationContext, SqlSchemaBuilder, AbstractConnector-based) |
+| Birko.Data.Migrations.ElasticSearch | Elasticsearch index/mapping migrations (ElasticSearchMigrationContext) |
+| Birko.Data.Migrations.MongoDB | MongoDB collection/index migrations (MongoMigrationContext) |
+| Birko.Data.Migrations.RavenDB | RavenDB collection/index migrations (RavenDBMigrationContext) |
+| Birko.Data.Migrations.InfluxDB | InfluxDB bucket/retention migrations (InfluxMigrationContext) |
+| Birko.Data.Migrations.TimescaleDB | TimescaleDB hypertable/compression migrations (extends SQL context) |
+| Birko.Data.Migrations.CosmosDB | Cosmos DB container/indexing-policy migrations (CosmosDBMigrationContext) |
 
 ### Data Sync
 
@@ -158,7 +158,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Models.Users | User, UserLogin, UserProfile, Role, Tenant, UserTenant |
 | Birko.Models.Inventory | StockItem, StockItemVariant, StorageLocation, InventoryDocument |
 | Birko.Models.Pricing | Currency, Tax, PriceGroup, PriceList, Discount |
-| Birko.Models.SQL | Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry) |
+| Birko.Models.SQL | Fluent SQL mapping framework (ModelMap, FieldBuilder, IModelMapping, ModelMapRegistry — uses FieldDescriptor from Data.Patterns) |
 
 ### Communication
 

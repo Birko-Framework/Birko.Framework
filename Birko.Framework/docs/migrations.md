@@ -2,267 +2,270 @@
 
 ## Overview
 
-Birko.Data.Migrations provides a framework for managing database schema changes across different storage backends.
+Birko.Data.Migrations provides a platform-agnostic migration framework. Write a migration once and run it against any supported provider — SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, InfluxDB, or TimescaleDB.
 
 ## Supported Providers
 
-- **SQL** (`Birko.Data.Migrations.SQL`) - Microsoft SQL Server, PostgreSQL, MySQL, SQLite
-- **ElasticSearch** (`Birko.Data.Migrations.ElasticSearch`) - Elasticsearch indices and mappings
-- **MongoDB** (`Birko.Data.Migrations.MongoDB`) - MongoDB collections and indexes
-- **RavenDB** (`Birko.Data.Migrations.RavenDB`) - RavenDB documents and indexes
-- **InfluxDB** (`Birko.Data.Migrations.InfluxDB`) - InfluxDB buckets and measurements
-- **TimescaleDB** (`Birko.Data.Migrations.TimescaleDB`) - TimescaleDB hypertables
-- **CosmosDB** (`Birko.Data.Migrations.CosmosDB`) - Cosmos DB containers and indexing policies
+| Provider | Project | What to pass to runner |
+|----------|---------|----------------------|
+| SQL | `Birko.Data.Migrations.SQL` | `AbstractConnector` (from `store.Connector`) |
+| MongoDB | `Birko.Data.Migrations.MongoDB` | `MongoDBClient` (from `store.Client`) |
+| ElasticSearch | `Birko.Data.Migrations.ElasticSearch` | `ElasticClient` (from `store.Connector`) |
+| RavenDB | `Birko.Data.Migrations.RavenDB` | `IDocumentStore` (from `store.DocumentStore`) |
+| CosmosDB | `Birko.Data.Migrations.CosmosDB` | `Database` (from `store.Client`/`store.Container`) |
+| InfluxDB | `Birko.Data.Migrations.InfluxDB` | `InfluxDBClient` (from `store.Client`) |
+| TimescaleDB | `Birko.Data.Migrations.TimescaleDB` | `AbstractConnector` (from `store.Connector`) |
 
-## Base Migration
+## Platform-Agnostic Migration
 
-All migrations extend `AbstractMigration` from `Birko.Data.Migrations`:
+All migrations implement `IMigration` from `Birko.Data.Migrations` and receive an `IMigrationContext`:
 
 ```csharp
 using Birko.Data.Migrations;
+using Birko.Data.Patterns.Schema;
 
-public abstract class AbstractMigration : IMigration
+public class CreateUsersTable : AbstractMigration
 {
-    public abstract long Version { get; }          // Numeric version for ordering
-    public abstract string Name { get; }           // Human-readable name
-    public virtual string Description => Name;     // Optional description
-    public DateTime CreatedAt { get; }             // Set at construction time
-
-    public abstract void Up();                     // Apply migration
-    public virtual void Down() { }                 // Rollback (optional override)
-}
-```
-
-**Key difference from docs previously:** Version is `long` (not string), and the base `Up()`/`Down()` are parameterless.
-
-## SQL Migrations
-
-SQL migrations extend `SqlMigration` from `Birko.Data.Migrations.SQL`:
-
-```csharp
-using Birko.Data.Migrations.SQL;
-
-public class CreateUsersTable : SqlMigration
-{
-    public override long Version => 20260101_001;
+    public override long Version => 20260423_001;
     public override string Name => "CreateUsersTable";
 
-    // Option 1: Override SQL strings directly
-    protected override string UpSql => @"
-        CREATE TABLE Users (
-            Id UNIQUEIDENTIFIER PRIMARY KEY,
-            Email NVARCHAR(256) NOT NULL,
-            Name NVARCHAR(256) NOT NULL,
-            CreatedAt DATETIME2 DEFAULT GETDATE()
-        )";
-
-    protected override string DownSql => "DROP TABLE Users";
-}
-```
-
-For more complex migrations, override `ExecuteSql`:
-
-```csharp
-public class AddUserIndexes : SqlMigration
-{
-    public override long Version => 20260101_002;
-    public override string Name => "AddUserIndexes";
-
-    protected override void ExecuteSql(DbConnection connection, DbTransaction? transaction,
-                                        MigrationDirection direction)
+    public override void Up(IMigrationContext context)
     {
-        if (direction == MigrationDirection.Up)
-        {
-            // Check if table exists before modifying
-            if (TableExists(connection, "Users"))
-            {
-                ExecuteScript(connection, transaction,
-                    "CREATE INDEX IX_Users_Email ON Users (Email)");
+        context.Schema.CreateCollection("Users", b => b
+            .WithField("Id", FieldType.Guid, f => f.IsPrimary = true)
+            .WithField("Email", FieldType.String, f => f.MaxLength = 256)
+            .WithField("Name", FieldType.String, f => f.MaxLength = 256)
+            .WithField("CreatedAt", FieldType.DateTime));
 
-                if (!ColumnExists(connection, "Users", "LastLogin"))
-                {
-                    ExecuteScript(connection, transaction,
-                        "ALTER TABLE Users ADD LastLogin DATETIME2 NULL");
-                }
-            }
-        }
-        else
-        {
-            ExecuteScript(connection, transaction,
-                "DROP INDEX IF EXISTS IX_Users_Email ON Users");
-        }
+        context.Schema.CreateIndex("Users", "IX_Users_Email", ib => ib
+            .WithField("Email")
+            .Unique());
+    }
+
+    public override void Down(IMigrationContext context)
+    {
+        context.Schema.DropCollection("Users");
     }
 }
 ```
 
-### SqlMigration Helper Methods
+### IMigrationContext
 
-`SqlMigration` provides built-in helpers:
+The context provides three capabilities:
+
+| Member | Type | Purpose |
+|--------|------|---------|
+| `Schema` | `ISchemaBuilder` | Create/drop collections, indexes, fields |
+| `Data` | `IDataMigrator` | Update/delete/count documents, bulk insert, copy data |
+| `Raw(Action<object>)` | Method | Escape hatch — access the native provider client |
+| `ProviderName` | `string` | Identifies the provider (e.g., "SQL", "MongoDB") |
+
+### ISchemaBuilder Operations
+
+| Method | SQL Translation | NoSQL Behavior |
+|--------|----------------|----------------|
+| `CreateCollection(name, builder)` | CREATE TABLE | Create collection/container/index |
+| `DropCollection(name)` | DROP TABLE | Drop collection/container |
+| `CollectionExists(name)` | Information schema check | Provider-specific check |
+| `AddField(collection, field)` | ALTER TABLE ADD COLUMN | No-op (schema-less) |
+| `DropField(collection, name)` | ALTER TABLE DROP COLUMN | No-op |
+| `RenameField(collection, old, new)` | EXEC sp_rename / ALTER | $rename (MongoDB), no-op (others) |
+| `CreateIndex(collection, name, builder)` | CREATE INDEX | Create native index |
+| `DropIndex(collection, name)` | DROP INDEX | Drop native index |
+
+### IDataMigrator Operations
 
 | Method | Description |
 |--------|-------------|
-| `ExecuteScript(connection, transaction, sql)` | Execute a SQL script |
-| `TableExists(connection, tableName)` | Check if a table exists |
-| `ColumnExists(connection, tableName, columnName)` | Check if a column exists |
-| `AddParameter(command, name, value)` | Add a parameter to a DbCommand |
+| `UpdateDocuments(collection, filter, updates)` | Update matching documents |
+| `DeleteDocuments(collection, filter)` | Delete matching documents |
+| `CountDocuments(collection, filter)` | Count matching documents |
+| `CopyData(source, target, filter)` | Copy documents between collections |
+| `BulkInsert(collection, documents)` | Insert multiple documents |
 
-### PostgreSQL Example
+### FieldDescriptor
+
+Fields are described using `FieldDescriptor` from `Birko.Data.Patterns.Schema`:
 
 ```csharp
-public class CreateProductsTable : SqlMigration
+var field = new FieldDescriptor
 {
-    public override long Version => 20260101_001;
-    public override string Name => "CreateProductsTable";
-
-    protected override string UpSql => @"
-        CREATE TABLE products (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            name VARCHAR(256) NOT NULL,
-            price NUMERIC(10,2) NOT NULL,
-            category VARCHAR(128),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )";
-
-    protected override string DownSql => "DROP TABLE IF EXISTS products";
-}
+    Name = "Email",
+    Type = FieldType.String,
+    MaxLength = 256,
+    IsRequired = true,
+    IsUnique = true
+};
 ```
 
-## ElasticSearch Migrations
+Available `FieldType` values: String, Integer, Long, Decimal, Double, Boolean, DateTime, Guid, Binary, Json.
+
+### Raw Escape Hatch
+
+For provider-specific operations that don't have a platform-agnostic equivalent:
 
 ```csharp
-using Birko.Data.Migrations.ElasticSearch;
-using Nest;
-
-public class CreateProductsIndex : ElasticSearchMigration
+public override void Up(IMigrationContext context)
 {
-    public override long Version => 20260101_001;
-    public override string Name => "CreateProductsIndex";
-
-    // ElasticSearch migrations receive IElasticClient
-    protected override void ExecuteMigration(IElasticClient client, MigrationDirection direction)
+    if (context.ProviderName == "SQL")
     {
-        if (direction == MigrationDirection.Up)
+        context.Raw(obj =>
         {
-            client.Indices.Create("products", i => i
-                .Map<Product>(m => m
-                    .Properties(p => p
-                        .Keyword(t => t.Name(n => n.Id))
-                        .Text(t => t.Name(n => n.Name))
-                        .Number(t => t.Name(n => n.Price).Type(NumberType.Double))
-                    )
-                )
-            );
-        }
-        else
-        {
-            client.Indices.Delete("products");
-        }
+            var connection = (DbConnection)obj;
+            // Execute raw SQL
+        });
     }
 }
 ```
 
-## MongoDB Migrations
+The `Raw()` parameter type varies by provider:
+
+| Provider | Raw parameter type |
+|----------|-------------------|
+| SQL | `DbConnection` |
+| MongoDB | `IMongoDatabase` |
+| ElasticSearch | `ElasticClient` |
+| RavenDB | `IDocumentStore` |
+| CosmosDB | `Database` |
+| InfluxDB | `InfluxDBClient` |
+
+## Running Migrations
+
+Each provider has its own runner that takes the store's native connector:
 
 ```csharp
-using Birko.Data.Migrations.MongoDB;
-using MongoDB.Driver;
+// SQL
+var runner = new SqlMigrationRunner(store.Connector);
 
-public class CreateUsersCollection : MongoDBMigration
-{
-    public override long Version => 20260101_001;
-    public override string Name => "CreateUsersCollection";
+// MongoDB
+var runner = new MongoMigrationRunner(store.Client);
 
-    protected override void ExecuteMigration(IMongoDatabase database, MigrationDirection direction)
-    {
-        if (direction == MigrationDirection.Up)
-        {
-            database.CreateCollection("users");
-            var collection = database.GetCollection<BsonDocument>("users");
+// ElasticSearch
+var runner = new ElasticSearchMigrationRunner(store.Connector);
 
-            var indexKeys = Builders<BsonDocument>.IndexKeys.Ascending("Email");
-            collection.Indexes.CreateOne(new CreateIndexModel<BsonDocument>(indexKeys));
-        }
-        else
-        {
-            database.DropCollection("users");
-        }
-    }
-}
+// RavenDB
+var runner = new RavenMigrationRunner(store.DocumentStore);
+
+// CosmosDB
+var runner = new CosmosMigrationRunner(database);
+
+// InfluxDB
+var runner = new InfluxMigrationRunner(influxClient, "my-org");
+
+// TimescaleDB
+var runner = new TimescaleDBMigrationRunner(store.Connector);
 ```
 
-## MigrationDirection Enum
+### Registering Migrations
 
 ```csharp
-public enum MigrationDirection
+runner.Register(new CreateUsersTable());
+runner.Register(new AddEmailIndex());
+
+// Run all pending
+runner.Migrate();
+
+// Rollback to a specific version
+runner.RollbackTo(20260423_001);
+```
+
+## TimescaleDB-Specific Migrations
+
+TimescaleDB extends the SQL context. For hypertable and compression operations, use `Raw()`:
+
+```csharp
+public override void Up(IMigrationContext context)
 {
-    Up,
-    Down
+    context.Schema.CreateCollection("metrics", b => b
+        .WithField("time", FieldType.DateTime, f => f.IsPrimary = true)
+        .WithField("value", FieldType.Double));
+
+    if (context.ProviderName == "TimescaleDB")
+    {
+        context.Raw(obj =>
+        {
+            var connection = (DbConnection)obj;
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT create_hypertable('metrics', 'time')";
+            cmd.ExecuteNonQuery();
+        });
+    }
 }
 ```
 
 ## SQL View Migrations
 
-`Birko.Data.SQL.View.Migrations` integrates SQL View definitions with the Migration framework, allowing views to be created and dropped as part of versioned migrations:
+`Birko.Data.SQL.View.Migrations` integrates SQL View definitions with the Migration framework:
 
 ```csharp
 using Birko.Data.SQL.View.Migrations;
 
-public class AddCustomerOrdersView : SqlMigration
+public class AddCustomerOrdersView : AbstractMigration
 {
-    public override long Version => 20260301_001;
+    public override long Version => 20260423_002;
     public override string Name => "AddCustomerOrdersView";
 
-    public override void Up()
+    public override void Up(IMigrationContext context)
     {
-        // Create view from attributed class
-        this.CreateView<CustomerOrderView>();
+        context.CreateView<CustomerOrderView>();
     }
 
-    public override void Down()
+    public override void Down(IMigrationContext context)
     {
-        this.DropView("customer_orders_view");
+        context.DropView("customer_orders_view");
     }
 }
-```
-
-### ViewSqlGenerator
-
-Generates static DDL from view attributes without requiring a database connection:
-
-```csharp
-// Provider-specific quoting
-var sql = ViewSqlGenerator.GenerateCreateViewSql<CustomerOrderView>(quoteChar: ("\"", "\"")); // PostgreSQL
-var sql = ViewSqlGenerator.GenerateCreateViewSql<CustomerOrderView>(quoteChar: ("`", "`"));   // MySQL
-var sql = ViewSqlGenerator.GenerateCreateViewSql<CustomerOrderView>(quoteChar: ("[", "]"));   // SQL Server
 ```
 
 ### API Reference
 
 | Method | Description |
 |--------|-------------|
-| `ViewSqlGenerator.GenerateCreateViewSql<T>(quoteChar)` | Generate CREATE VIEW DDL from view attributes |
-| `ViewSqlGenerator.GenerateDropViewSql<T>()` | Generate DROP VIEW IF EXISTS DDL |
-| `migration.CreateView<T>()` | Extension: add CREATE VIEW step to migration |
-| `migration.DropView(viewName)` | Extension: add DROP VIEW step to migration |
+| `context.CreateView<T>()` | Extension: create view from attributed class |
+| `context.DropView(viewName)` | Extension: drop view |
+| `ViewSqlGenerator.GenerateCreateViewSql<T>(quoteChar)` | Generate CREATE VIEW DDL |
+| `ViewSqlGenerator.GenerateDropViewSql<T>()` | Generate DROP VIEW DDL |
+
+## Model Mapping Integration
+
+`FieldDescriptor` (Birko.Data.Patterns.Schema) is also used by the SQL model mapping framework. This means the same type describes fields for both migrations and model-to-table mapping:
+
+```csharp
+// In a mapping (Birko.Models.SQL)
+public class CurrencyMapping : IModelMapping<Currency>
+{
+    public void Configure(ModelMap<Currency> map)
+    {
+        map.ToTable("Currencies")
+            .HasPrimary(x => x.Guid)
+            .HasUnique(x => x.Guid);
+
+        map.Property(x => x.Code).HasPrecision(8).IsUnique();
+    }
+}
+```
+
+`FieldBuilder<T>` provides the fluent API for configuring `FieldDescriptor` properties in mappings.
 
 ## Best Practices
 
-1. **Versioning**: Use numeric versions (e.g., `20260301_001`) for ordering. Migrations run in ascending version order.
+1. **Versioning**: Use numeric versions (e.g., `20260423_001`) for ordering. Migrations run in ascending version order.
 2. **Reversibility**: Implement `Down()` for rollback support where possible.
-3. **Idempotency**: Use `TableExists()`, `ColumnExists()`, `IF EXISTS` guards.
+3. **Idempotency**: Use `CollectionExists()` guards and `IF EXISTS` patterns.
 4. **Small steps**: Each migration should make one logical change.
-5. **No data loss**: Prefer `ALTER` over `DROP + CREATE` for schema changes.
-6. **Testing**: Test both Up and Down paths.
-7. **Transactions**: SQL migrations support transactions via `DbTransaction?` parameter.
+5. **Provider checks**: Use `context.ProviderName` or try the agnostic API first — NoSQL providers silently skip inapplicable operations.
+6. **Raw escape hatch**: Use `context.Raw()` only when the platform-agnostic API doesn't cover your needs.
 
-## See Also
+## Architecture
 
-- [Birko.Data.Migrations](https://github.com/birko/Birko.Data.Migrations)
-- [Birko.Data.Migrations.SQL](https://github.com/birko/Birko.Data.Migrations.SQL)
-- [Birko.Data.Migrations.ElasticSearch](https://github.com/birko/Birko.Data.Migrations.ElasticSearch)
-- [Birko.Data.Migrations.MongoDB](https://github.com/birko/Birko.Data.Migrations.MongoDB)
-- [Birko.Data.Migrations.RavenDB](https://github.com/birko/Birko.Data.Migrations.RavenDB)
-- [Birko.Data.Migrations.InfluxDB](https://github.com/birko/Birko.Data.Migrations.InfluxDB)
-- [Birko.Data.Migrations.TimescaleDB](https://github.com/birko/Birko.Data.Migrations.TimescaleDB)
-- [Birko.Data.SQL.View.Migrations](https://github.com/birko/Birko.Data.SQL.View.Migrations)
+```
+Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, IIndexBuilder)
+  -> Birko.Data.Migrations (IMigration, IMigrationContext, IDataMigrator, AbstractMigration, AbstractMigrationRunner)
+    -> Birko.Data.Migrations.SQL (SqlMigrationContext, SqlSchemaBuilder, SqlDataMigrator, SqlMigrationRunner)
+    -> Birko.Data.Migrations.MongoDB (MongoMigrationContext, MongoSchemaBuilder, MongoDataMigrator, MongoMigrationRunner)
+    -> Birko.Data.Migrations.ElasticSearch (ElasticSearchMigrationContext, ...)
+    -> Birko.Data.Migrations.RavenDB (RavenDBMigrationContext, ...)
+    -> Birko.Data.Migrations.CosmosDB (CosmosDBMigrationContext, ...)
+    -> Birko.Data.Migrations.InfluxDB (InfluxMigrationContext, ...)
+    -> Birko.Data.Migrations.TimescaleDB (TimescaleDBMigrationContext extends SqlMigrationContext, TimescaleDBMigrationRunner)
+```

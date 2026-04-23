@@ -62,8 +62,9 @@ Birko.Data.Patterns + Birko.Data.Tenant + Birko.Time.Abstractions
 Birko.Data.Core
   -> Birko.Data.Tagging (ITaggable, Tag, EntityTag, ITagService, TagServiceBase)
 
-Birko.Data.Stores (OrderBy<T>, AggregateFunction, AggregateQuery, AggregateResult, IAggregatableStore, OrderByHelper, TimeIntervalParser)
-  -> Birko.Data.Views (ViewDefinitionBuilder, ViewMapRegistry, IViewStore, IViewManager)
+Birko.Data.Patterns (FieldType, FieldDescriptor, ISchemaBuilder, ICollectionBuilder, IIndexBuilder, IIndexManager, IndexDefinition, ISoftDeletable, IAuditable, ISpecification, IUnitOfWork, PagedResult)
+  -> Birko.Data.Migrations (IMigrationContext, IDataMigrator, IContextualMigration, IMigration, IMigrationRunner, IMigrationStore)
+    -> Birko.Data.Migrations.SQL (SqlMigrationContext — reuses AbstractConnector), .MongoDB, .ElasticSearch, .RavenDB, .CosmosDB, .InfluxDB, .TimescaleDB
 
 Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentOptions, LlmProviderFactory)
   -> Birko.AI (LlmProviderBase, Agent base, AgentFactory (registration-based), default tools)
@@ -74,6 +75,8 @@ Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentO
 
 Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
   -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
+
+Birko.Communication.GraphQL (IGraphQLClient, GraphQLClient, GraphQLSettings — queries, mutations, subscriptions over HttpClient + ClientWebSocket)
 
 Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy, JobProcessor, JobScheduler)
   -> 8 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .Redis, .CosmosDB
@@ -115,6 +118,28 @@ When using Birko.Framework projects in your solution, create a single aggregator
 ## Recent Updates
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
+
+### Platform-Agnostic Migrations (2026-04-23)
+All migrations are platform-agnostic — write once, run against any provider.
+- **`IMigration`** — `Up(IMigrationContext context)` / `Down(IMigrationContext context)` with Version, Name, Description, CreatedAt
+- **`AbstractMigration`** — base class implementing IMigration
+- **Schema abstractions** (Birko.Data.Patterns) — `FieldType` enum, `FieldDescriptor`, `ISchemaBuilder`, `ICollectionBuilder`, `IIndexBuilder`; reusable by stores and views
+- **`IMigrationContext`** — `Schema` (ISchemaBuilder), `Data` (IDataMigrator), `Raw(Action<object>)` escape hatch, `ProviderName`
+- **`IDataMigrator`** — UpdateDocuments, DeleteDocuments, CountDocuments, CopyData, BulkInsert
+- **Provider contexts** — each provider translates agnostic operations to native calls: SQL (reuses AbstractConnector from store), MongoDB (MongoDBClient from store), ElasticSearch (ElasticClient), RavenDB (IDocumentStore), CosmosDB (Container), InfluxDB (InfluxDBClient), TimescaleDB (extends SQL context)
+- **NoSQL providers** silently skip inapplicable operations (AddField/DropField are no-op on schema-less databases)
+- **Runner constructors** take the store's native connector: `new SqlMigrationRunner(store.Connector)`, `new MongoMigrationRunner(store.Client)`
+- **FieldDescriptor unified** — `PropertyMap` (Birko.Models.SQL) merged into `FieldDescriptor` (Birko.Data.Patterns). One type for both SQL model mapping and migration schema building. `PropertyMapBuilder<T>` renamed to `FieldBuilder<T>`
+
+### Birko.Communication.GraphQL (2026-04-23)
+New GraphQL client project with zero external dependencies (HttpClient + ClientWebSocket + Birko.Serialization):
+- **GraphQLSettings** — extends RemoteSettings, Endpoint = Location alias, adds SchemaPath, UseSubscriptions, SubscriptionProtocol, TimeoutSeconds, EnableAutoPersistedQueries, ExtraHeaders
+- **IGraphQLClient / GraphQLClient** — Query, Mutation, Subscription; static GetClient caching; optional HttpClient injection; OnRequest/OnResponse/OnError events
+- **GraphQLRequest / GraphQLResponse / GraphQLError** — request serialization via ISerializer, typed response deserialization, error model with locations/path/extensions
+- **GraphQLSubscription** — IObservable<T> over WebSocket; graphql-ws protocol (connection_init, start, stop, data, complete); lifecycle management
+- **GraphQLRequestBuilder** — fluent builder: Query(), Mutation(), Variables(), OperationName(), WithExtension(), Build()
+- **GraphQLException** — exception with Errors list and StatusCode (mirrors OAuthException)
+- 49 unit tests (xUnit + FluentAssertions)
 
 ### Birko.Web.Components — b-kanban Card Nesting (2026-04-22)
 Extended `b-kanban` with recursive card nesting, expand/collapse, and 3-zone drag-and-drop:
