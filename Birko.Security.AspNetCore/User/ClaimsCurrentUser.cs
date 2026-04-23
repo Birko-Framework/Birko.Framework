@@ -46,11 +46,19 @@ public sealed class ClaimsCurrentUser : ICurrentUser
     }
 
     public IReadOnlySet<string> Roles =>
-        Principal?.FindAll(_options.RoleClaim).Select(c => c.Value).ToHashSet()
+        Principal?.FindAll(_options.RoleClaim)
+            .SelectMany(c => c.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToHashSet()
         ?? new HashSet<string>();
 
+    // Permissions may be stored either as multiple claims with the same name OR, for JWT
+    // compactness, a single claim with a comma-joined value. Split on both paths so callers
+    // see discrete permissions (e.g. `Contains("*")` works for a superadmin + TenantAdmin
+    // combo where the server joined them as "*,users:user:read,...").
     public IReadOnlySet<string> Permissions =>
-        Principal?.FindAll(_options.PermissionClaim).Select(c => c.Value).ToHashSet()
+        Principal?.FindAll(_options.PermissionClaim)
+            .SelectMany(c => c.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .ToHashSet()
         ?? new HashSet<string>();
 
     public string? GetClaim(string claimType) => Principal?.FindFirstValue(claimType);
