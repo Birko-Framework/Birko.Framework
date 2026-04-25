@@ -18,9 +18,10 @@ Cosmos DB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncCosmos
 ## Dependencies
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, JobStatus)
 - Birko.Data.Core (AbstractModel)
-- Birko.Data.Stores (OrderBy, RemoteSettings)
-- Birko.Data.CosmosDB (AsyncCosmosDBStore)
+- Birko.Data.Stores (OrderBy)
+- Birko.Data.CosmosDB (AsyncCosmosDBStore, Settings)
 - Microsoft.Azure.Cosmos
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs
+- Settings type is `Birko.Data.CosmosDB.Stores.Settings` (typed descendant of RemoteSettings with PartitionKeyPath, RequestTimeout, AllowBulkExecution)

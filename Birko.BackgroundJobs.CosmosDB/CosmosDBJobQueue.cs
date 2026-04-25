@@ -1,7 +1,6 @@
 using Birko.BackgroundJobs.CosmosDB.Models;
 using Birko.Data.CosmosDB.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -25,7 +24,7 @@ public class CosmosDBJobQueue : IJobQueue
     /// <summary>
     /// Creates a new Cosmos DB job queue with settings.
     /// </summary>
-    public CosmosDBJobQueue(RemoteSettings settings)
+    public CosmosDBJobQueue(Birko.Data.CosmosDB.Stores.Settings settings)
     {
         _store = new AsyncCosmosDBStore<CosmosJobDescriptorModel>();
         _store.SetSettings(settings);
