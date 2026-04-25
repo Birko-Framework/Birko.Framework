@@ -38,6 +38,16 @@ ISettings (GetId)
   -> Settings (Location, Name)
     -> PasswordSettings (+Password)
       -> RemoteSettings (+UserName, +Port, +UseSecure)
+        -> SqlSettings (+CommandTimeout, +ConnectionTimeout, abstract GetConnectionString)
+          -> MSSqlSettings (+MultipleActiveResultSets, +TrustServerCertificate)
+          -> MySqlSettings (+BulkInsertBatchSize)
+          -> PostgreSqlSettings (+UseBinaryImport)
+          -> TimescaleDBSettings (+TimeColumn, +ChunkTimeInterval)
+    -> SqLiteSettings (+CommandTimeout, Path, GetConnectionString) — extends PasswordSettings
+    -> CosmosDB Settings (+PartitionKeyPath, +RequestTimeout, +AllowBulkExecution, GetCosmosClientOptions)
+    -> RavenDB Settings (+RequestTimeout, CreateDocumentStore)
+    -> MongoDB Settings (+AuthDatabase, +ReplicaSet, GetConnectionString) — already existed
+    -> RedisSettings (+Database, +KeyPrefix, GetConnectionString) — already existed
 ```
 
 ### Dependency Flow
@@ -118,6 +128,27 @@ When using Birko.Framework projects in your solution, create a single aggregator
 ## Recent Updates
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
+
+### Birko.Web — Unified i18n (2026-04-24)
+All three Birko.Web.* packages share a single global i18n singleton — no more per-component `this.attr('label-X', 'English')` islands or one-off `setTranslate` hooks.
+- **`birko-web-core` exports** `i18n` (default `I18n` instance), `t(key, params?, fallback?)`, `useI18n(instance)` (swap in an app-owned instance), `onI18nChange(fn)` (subscribers auto re-wire on swap), plus the existing `I18n` class, `createFormatter`, `getFormatter`
+- **`BaseComponent.label(attrName, i18nKey, fallback, params?)`** — new helper: explicit attribute wins > global i18n lookup > English fallback; all `bwc.*`-prefixed keys interpolate `{param}` placeholders; `BaseComponent` auto-subscribes to `onI18nChange` so components re-render on `setLocale()`
+- **`BaseComponent.listen<T extends Event>(...)`** — now generic so consumers can pass `(e: KeyboardEvent) => void` without casts
+- **~150 call sites migrated** across command-palette, ribbon, sidebar, tree-menu, pagination, toast, empty, confirm-dialog, modal, drawer, spinner, file-upload, search-input, json/xml-viewer, object-tree, table, markdown-editor, datetime-picker, time, date-picker
+- **Canonical key namespaces** — `bwc.*` for Components (`bwc.common.close`, `bwc.palette.placeholder`, `bwc.pagination.prev`, etc., shipped in `Birko.Web.Components/locales/en.json`); `bws.*` for Shell (`bws.common.new`, `bws.common.confirmDelete`, `bws.pagination.items`, `bws.ribbon.selectModule`). Shell's `t()` auto-interpolates `{entity}` with `this.entityLabel` so bundle entries like `"bws.common.new": "Nový {entity}"` produce localized entity-specific strings
+- **`b-app-shell.ts` simplified** — no longer passes `label-*` attributes to `<b-ribbon>` / `<b-command-palette>`; those components pull from `bwc.*` global i18n directly
+- **Backward-compatible shims preserved** — `BForm.setTranslate(fn)` still works (forwards to legacy path), `BDatePicker.setLocale(...)` / `BDatetimePicker.setLocale(...)` / `BTime.setLocale(...)` still win over global i18n for per-class month/day overrides, `base-crud-page.t(key)` still returns English defaults and can still be overridden
+- **Library ergonomics tuned** for strict-mode consumer apps: `TableColumn.render` now accepts `any`-typed callbacks, `FormGroupDef.layout`/`TableColumn.align`/`FieldType`/`RuleType` widened via `(string & {})` so inline object literals type-check
+- **Consumer migration** — one line: `useI18n(mineI18n)` in app bootstrap. Existing `label-*` attributes keep working unchanged
+
+### Provider-Specific Settings (2026-04-24)
+Created typed settings descendants for all store providers. Each provider now has its own `Settings` class with platform-specific configuration instead of relying on static properties or inline constants.
+- **New settings classes:** `SqlSettings` (abstract base with `CommandTimeout`, `ConnectionTimeout`, abstract `GetConnectionString()`), `MSSqlSettings`, `MySqlSettings`, `PostgreSqlSettings`, `SqLiteSettings`, CosmosDB `Settings`, RavenDB `Settings`
+- **Settings hierarchy:** `RemoteSettings → SqlSettings → MSSqlSettings/MySqlSettings/PostgreSqlSettings`; CosmosDB/RavenDB `Settings` extend `RemoteSettings` directly; `SqLiteSettings` extends `PasswordSettings`; `TimescaleDBSettings` now extends `SqlSettings`
+- **Store updates:** CosmosDB/RavenDB stores changed from `ISettingsStore<RemoteSettings>` to `ISettingsStore<Settings>`, removed static `PartitionKeyPath`/`RequestTimeout`
+- **SQL connectors:** read from typed settings first, use `GetConnectionString()` override
+- **Downstream:** BackgroundJobs and Workflow backends (SQL, CosmosDB, RavenDB) switched to typed settings
+- **Bug fix:** `AsyncRavenDBStore` now correctly applies `RequestTimeout` to `DocumentStore.Conventions`
 
 ### Platform-Agnostic Migrations (2026-04-23)
 All migrations are platform-agnostic — write once, run against any provider.

@@ -179,6 +179,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Communication.IR | Consumer IR (NEC, Samsung, RC5 protocols, pluggable transports) |
 | Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
 | Birko.Communication.OAuth.Providers | Pre-configured OAuth providers (e.g. GitHubOAuthProvider for Device Code flow) |
+| Birko.Communication.GraphQL | GraphQL client (queries, mutations, subscriptions over HttpClient + ClientWebSocket, zero external deps) |
 
 ### AI / LLM
 
@@ -287,6 +288,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Helpers.Tests | Helper utility tests |
 | Birko.Structures.Tests | Tree data structure tests |
 | Birko.BackgroundJobs.Tests | Background job processing tests |
+| Birko.Communication.GraphQL.Tests | GraphQL client tests (queries, mutations, subscriptions, request builder) |
 | Birko.MessageQueue.Tests | Message queue tests (core, InMemory, MQTT) |
 | Birko.EventBus.Tests | Event bus tests (core, distributed, outbox, event sourcing) |
 | Birko.Security.AspNetCore.Tests | ASP.NET Core security integration tests (JWT, permissions, tenants) |

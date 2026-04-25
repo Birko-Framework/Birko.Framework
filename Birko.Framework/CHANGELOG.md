@@ -4,6 +4,42 @@ Historical record of architectural changes that are no longer "recent" but prese
 
 ---
 
+## 2026-04-24 — Provider-Specific Settings Classes
+
+Created typed settings descendants for all store providers, replacing hardcoded configuration with per-instance settings. Stores and connectors now read from typed settings instead of static properties or inline constants.
+
+**New settings classes:**
+- `SqlSettings` (Birko.Data.SQL) — `CommandTimeout`, `ConnectionTimeout`, abstract `GetConnectionString()`
+- `MSSqlSettings` (Birko.Data.SQL.MSSql) — `MultipleActiveResultSets`, `TrustServerCertificate`; overrides `GetConnectionString()`
+- `MySqlSettings` (Birko.Data.SQL.MySQL) — `BulkInsertBatchSize` (previously hardcoded `const`); overrides `GetConnectionString()`
+- `PostgreSqlSettings` (Birko.Data.SQL.PostgreSQL) — `UseBinaryImport`; overrides `GetConnectionString()`
+- `SqLiteSettings` (Birko.Data.SQL.SqLite) — extends `PasswordSettings` (not `SqlSettings`), `CommandTimeout`; virtual `GetConnectionString()`
+- `Birko.Data.CosmosDB.Stores.Settings` — `PartitionKeyPath`, `RequestTimeout`, `AllowBulkExecution`, `GetCosmosClientOptions()`; `CreateDocumentStore()` helper
+- `Birko.Data.RavenDB.Stores.Settings` — `RequestTimeout`, `CreateDocumentStore()` helper
+
+**Settings hierarchy (final):**
+```
+Settings → PasswordSettings → RemoteSettings → SqlSettings → MSSqlSettings / MySqlSettings / PostgreSqlSettings
+                                                      → CosmosDB Settings / RavenDB Settings
+PasswordSettings → SqLiteSettings
+SqlSettings → TimescaleDBSettings
+```
+
+**Store changes:**
+- CosmosDB stores: `ISettingsStore<RemoteSettings>` → `ISettingsStore<Settings>`, removed static `PartitionKeyPath`/`RequestTimeout`
+- RavenDB stores: `ISettingsStore<RemoteSettings>` → `ISettingsStore<Settings>`, removed static `RequestTimeout`
+- SQL connectors: `CreateConnection` checks for typed settings first, uses `GetConnectionString()` when available
+- TimescaleDB `Settings`: now extends `SqlSettings` instead of `RemoteSettings`
+- Migration settings: `SqlMigrationSettings` extends `SqlSettings`; `CosmosMigrationSettings`/`RavenMigrationSettings` extend their provider `Settings`
+
+**Downstream consumers updated:**
+- BackgroundJobs (SQL, CosmosDB, RavenDB) — switched to typed settings
+- Workflow (SQL, CosmosDB, RavenDB) — switched to typed settings
+
+**Bug fix:** `AsyncRavenDBStore` previously ignored `RequestTimeout` entirely — now reads from `_settings.RequestTimeout` via `CreateDocumentStore()`.
+
+---
+
 ## 2026-04-23 — Platform-Agnostic Migrations + FieldDescriptor Unification
 
 Rewrote the migration system so migrations are written once and run against any provider. Unified `PropertyMap` (Birko.Models.SQL) with `FieldDescriptor` (Birko.Data.Patterns) into a single type.
