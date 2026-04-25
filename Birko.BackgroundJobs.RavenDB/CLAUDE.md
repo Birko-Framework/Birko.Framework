@@ -18,11 +18,11 @@ RavenDB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncRavenDBS
 ## Dependencies
 - Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy)
 - Birko.Data.Core (AbstractModel)
-- Birko.Data.Stores (OrderBy, RemoteSettings)
-- Birko.Data.RavenDB (AsyncRavenDBStore)
+- Birko.Data.Stores (OrderBy)
+- Birko.Data.RavenDB (AsyncRavenDBStore, Settings)
 - RavenDB.Client
 
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs
-- Settings type is `Birko.Data.Stores.RemoteSettings` (from Birko.Data.Stores)
+- Settings type is `Birko.Data.RavenDB.Stores.Settings` (typed descendant of RemoteSettings with RequestTimeout)
 - Store supports transactions via `SetTransactionContext(IAsyncDocumentSession)`

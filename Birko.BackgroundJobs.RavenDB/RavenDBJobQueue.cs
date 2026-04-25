@@ -22,7 +22,7 @@ namespace Birko.BackgroundJobs.RavenDB
         /// <summary>
         /// Creates a new RavenDB job queue.
         /// </summary>
-        public RavenDBJobQueue(RemoteSettings settings, RetryPolicy? retryPolicy = null)
+        public RavenDBJobQueue(Birko.Data.RavenDB.Stores.Settings settings, RetryPolicy? retryPolicy = null)
         {
             _store = new AsyncRavenDBStore<RavenJobDescriptorModel>();
             _store.SetSettings(settings);
