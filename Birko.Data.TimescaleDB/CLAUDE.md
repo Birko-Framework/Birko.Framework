@@ -28,6 +28,13 @@ TimescaleDB implementation for the Birko data layer providing time-series databa
 
 ## Connection
 
+### Settings (Birko.Data.TimescaleDB.Stores.Settings)
+Typed settings extending `SqlSettings` (from Birko.Data.SQL):
+- Inherits `CommandTimeout`, `ConnectionTimeout`, abstract `GetConnectionString()` from `SqlSettings`
+- `TimeColumn` (default: "time") — column used for hypertable time partitioning
+- `ChunkTimeInterval` — chunk time interval for hypertables
+- Overrides `GetConnectionString()` with PostgreSQL connection string format
+
 Connection string format (same as PostgreSQL):
 ```
 Host=server_address;Port=5432;Database=database_name;Username=user;Password=password;

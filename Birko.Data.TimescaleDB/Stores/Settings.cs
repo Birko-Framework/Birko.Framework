@@ -1,13 +1,13 @@
 using Birko.Data.Stores;
-using Birko.Configuration;
+using Birko.Data.SQL.Stores;
 
 namespace Birko.Data.SQL.TimescaleDB.Stores
 {
     /// <summary>
     /// Settings for TimescaleDB connections.
-    /// Extends RemoteSettings with TimescaleDB-specific hypertable configuration.
+    /// Extends SqlSettings with TimescaleDB-specific hypertable configuration.
     /// </summary>
-    public class TimescaleDBSettings : RemoteSettings, Models.ILoadable<TimescaleDBSettings>
+    public class TimescaleDBSettings : SqlSettings, Models.ILoadable<TimescaleDBSettings>
     {
         #region Properties
 
@@ -49,6 +49,16 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
             ChunkTimeInterval = chunkTimeInterval;
         }
 
+        public override string GetConnectionString()
+        {
+            var cs = $"Host={Location};Port={Port};Username={UserName};Password={Password};Database={Name};Timeout={ConnectionTimeout};Command Timeout={CommandTimeout};";
+            if (UseSecure)
+            {
+                cs += "SSL Mode=Require;";
+            }
+            return cs;
+        }
+
         #endregion
 
         #region ILoadable Implementation
@@ -61,11 +71,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
         {
             if (data != null)
             {
-                Location = data.Location;
-                Name = data.Name;
-                Password = data.Password;
-                UserName = data.UserName;
-                Port = data.Port;
+                base.LoadFrom((SqlSettings)data);
                 TimeColumn = data.TimeColumn;
                 ChunkTimeInterval = data.ChunkTimeInterval;
             }
