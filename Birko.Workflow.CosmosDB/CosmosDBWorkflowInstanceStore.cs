@@ -3,7 +3,6 @@ using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Data.CosmosDB.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,7 +29,7 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
     /// <summary>
     /// Creates a new Cosmos DB workflow instance store with settings.
     /// </summary>
-    public CosmosDBWorkflowInstanceStore(string workflowName, RemoteSettings settings)
+    public CosmosDBWorkflowInstanceStore(string workflowName, Birko.Data.CosmosDB.Stores.Settings settings)
     {
         _workflowName = workflowName ?? throw new ArgumentNullException(nameof(workflowName));
         _store = new AsyncCosmosDBStore<CosmosWorkflowInstanceModel>();

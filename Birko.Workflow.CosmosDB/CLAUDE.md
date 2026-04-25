@@ -13,5 +13,5 @@ Cosmos DB workflow instance persistence using AsyncCosmosDBStore.
 
 ## Dependencies
 - Birko.Workflow (IWorkflowInstanceStore, WorkflowInstance, WorkflowStatus)
-- Birko.Data.CosmosDB (AsyncCosmosDBStore)
+- Birko.Data.CosmosDB (AsyncCosmosDBStore, Settings)
 - Microsoft.Azure.Cosmos
