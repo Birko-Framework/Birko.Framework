@@ -12,4 +12,4 @@ RavenDB workflow instance persistence using AsyncRavenDBStore. Convention-based 
 - **RavenDBWorkflowInstanceSchema.cs** — Static EnsureCreatedAsync/DropAsync
 
 ## Dependencies
-Birko.Workflow, Birko.Data.RavenDB
+Birko.Workflow, Birko.Data.RavenDB (AsyncRavenDBStore, Settings)

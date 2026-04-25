@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.RavenDB.Models;
@@ -17,7 +16,7 @@ namespace Birko.Workflow.RavenDB
     {
         private readonly AsyncRavenDBStore<RavenWorkflowInstanceModel> _store;
 
-        public RavenDBWorkflowInstanceStore(RemoteSettings settings)
+        public RavenDBWorkflowInstanceStore(Birko.Data.RavenDB.Stores.Settings settings)
         {
             _store = new AsyncRavenDBStore<RavenWorkflowInstanceModel>();
             _store.SetSettings(settings);
