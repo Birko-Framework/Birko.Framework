@@ -17,5 +17,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncPostgreSQLModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\PostgreSQLStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\PostgreSqlIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\PostgreSqlSettings.cs" />
   </ItemGroup>
 </Project>

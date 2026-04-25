@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Fields;
+using Birko.Data.SQL.Stores;
+using PostgreSqlSettings = Birko.Data.SQL.PostgreSQL.Stores.PostgreSqlSettings;
 using Npgsql;
 using NpgsqlTypes;
 using PasswordSettings = Birko.Configuration.PasswordSettings;
@@ -72,7 +74,17 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override DbConnection CreateConnection(PasswordSettings settings)
         {
-            if (settings != null && !string.IsNullOrEmpty(settings.Location) && !string.IsNullOrEmpty(settings.Name) && settings is RemoteSettings remoteSettings)
+            if (settings == null || string.IsNullOrEmpty(settings.Location) || string.IsNullOrEmpty(settings.Name))
+            {
+                throw new Exception("Invalid settings provided for PostgreSQL connection");
+            }
+
+            if (settings is PostgreSqlSettings pgSettings)
+            {
+                return new NpgsqlConnection(pgSettings.GetConnectionString());
+            }
+
+            if (settings is RemoteSettings remoteSettings)
             {
                 var port = remoteSettings.Port > 0 ? remoteSettings.Port : 5432;
                 var connectionString = string.Format("Host={0};Port={1};Username={2};Password={3};Database={4}",
@@ -87,10 +99,8 @@ namespace Birko.Data.SQL.Connectors
                 }
                 return new NpgsqlConnection(connectionString);
             }
-            else
-            {
-                throw new Exception("Invalid settings provided for PostgreSQL connection");
-            }
+
+            throw new Exception("Invalid settings provided for PostgreSQL connection");
         }
 
         /// <inheritdoc />
