@@ -5,25 +5,29 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Birko.Data.Migrations.RavenDB.Settings;
 
 namespace Birko.Data.Migrations.RavenDB
 {
     /// <summary>
-    /// Stores migration state in a RavenDB document.
+    /// Stores migration state in a RavenDB document. Document id is configurable via
+    /// <see cref="RavenMigrationSettings"/> so multiple modules can share one Raven database
+    /// without colliding on the state document.
     /// </summary>
     public class RavenMigrationStore : Data.Migrations.IMigrationStore
     {
-        private const string MigrationsDocumentId = "Migrations/State";
         private readonly IDocumentStore _store;
+        private readonly RavenMigrationSettings _settings;
 
         private MigrationsStateDocument? _cachedState;
 
         /// <summary>
         /// Initializes a new instance of the RavenMigrationStore class.
         /// </summary>
-        public RavenMigrationStore(IDocumentStore store)
+        public RavenMigrationStore(IDocumentStore store, RavenMigrationSettings? settings = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _settings = settings ?? new RavenMigrationSettings();
         }
 
         /// <summary>
@@ -31,15 +35,14 @@ namespace Birko.Data.Migrations.RavenDB
         /// </summary>
         public void Initialize()
         {
-            // Load or create state document
             using var session = _store.OpenSession();
-            var state = session.Load<MigrationsStateDocument>(MigrationsDocumentId);
+            var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId);
 
             if (state == null)
             {
                 state = new MigrationsStateDocument
                 {
-                    Id = MigrationsDocumentId,
+                    Id = _settings.MigrationsDocumentId,
                     AppliedMigrations = new Dictionary<string, MigrationRecord>()
                 };
                 session.Store(state);
@@ -66,7 +69,7 @@ namespace Birko.Data.Migrations.RavenDB
             EnsureInitialized();
 
             using var session = _store.OpenSession();
-            var state = session.Load<MigrationsStateDocument>(MigrationsDocumentId);
+            var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId);
 
             if (state == null || state.AppliedMigrations == null)
             {
@@ -92,9 +95,9 @@ namespace Birko.Data.Migrations.RavenDB
             EnsureInitialized();
 
             using var session = _store.OpenSession();
-            var state = session.Load<MigrationsStateDocument>(MigrationsDocumentId) ?? new MigrationsStateDocument
+            var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId) ?? new MigrationsStateDocument
             {
-                Id = MigrationsDocumentId,
+                Id = _settings.MigrationsDocumentId,
                 AppliedMigrations = new Dictionary<string, MigrationRecord>()
             };
 
@@ -131,7 +134,7 @@ namespace Birko.Data.Migrations.RavenDB
             EnsureInitialized();
 
             using var session = _store.OpenSession();
-            var state = session.Load<MigrationsStateDocument>(MigrationsDocumentId);
+            var state = session.Load<MigrationsStateDocument>(_settings.MigrationsDocumentId);
 
             if (state?.AppliedMigrations != null)
             {
@@ -181,7 +184,7 @@ namespace Birko.Data.Migrations.RavenDB
         /// </summary>
         internal class MigrationsStateDocument
         {
-            public string Id { get; set; } = MigrationsDocumentId;
+            public string Id { get; set; } = string.Empty;
             public Dictionary<string, MigrationRecord> AppliedMigrations { get; set; } = new();
         }
 

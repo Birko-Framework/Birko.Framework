@@ -30,6 +30,7 @@ runner.Migrate();
 ## Dependencies
 - Birko.Data.Migrations
 - Birko.Data.Patterns
+- Birko.Data.RavenDB (Settings base class)
 - RavenDB.Client
 
 ## Maintenance

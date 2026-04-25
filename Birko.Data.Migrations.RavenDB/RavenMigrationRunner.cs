@@ -1,6 +1,7 @@
 using Raven.Client.Documents;
 using System;
 using System.Collections.Generic;
+using Birko.Data.Migrations.RavenDB.Settings;
 
 namespace Birko.Data.Migrations.RavenDB
 {
@@ -19,8 +20,11 @@ namespace Birko.Data.Migrations.RavenDB
         /// <summary>
         /// Initializes a new instance of the RavenMigrationRunner class.
         /// </summary>
-        public RavenMigrationRunner(IDocumentStore store)
-            : base(new RavenMigrationStore(store))
+        /// <param name="store">RavenDB document store.</param>
+        /// <param name="settings">Optional settings controlling the state document id
+        /// (for per-module isolation within one database).</param>
+        public RavenMigrationRunner(IDocumentStore store, RavenMigrationSettings? settings = null)
+            : base(new RavenMigrationStore(store, settings))
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
         }
@@ -40,7 +44,6 @@ namespace Birko.Data.Migrations.RavenDB
 
             var store = (RavenMigrationStore)Store;
 
-            // RavenDB uses implicit transactions in sessions
             try
             {
                 foreach (var migration in migrations)
@@ -51,7 +54,6 @@ namespace Birko.Data.Migrations.RavenDB
                     else
                         migration.Down(context);
 
-                    // Update store record
                     if (direction == Data.Migrations.MigrationDirection.Up)
                     {
                         store.RecordMigration(migration);

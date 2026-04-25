@@ -133,6 +133,14 @@ namespace Birko.Data.Migrations.RavenDB.Context
             public IIndexBuilder Sparse() => this;
 
             public IIndexBuilder WithProperty(string key, object value) => this;
+
+            /// <summary>
+            /// Exposes whether <see cref="Unique"/> was called. RavenDB enforces uniqueness via
+            /// application-level deduplication or compare-exchange operations rather than index
+            /// metadata, so <see cref="_unique"/> is captured here but not yet translated into a
+            /// store operation. Reserved for when that wiring lands.
+            /// </summary>
+            internal bool IsUnique => _unique;
         }
     }
 }

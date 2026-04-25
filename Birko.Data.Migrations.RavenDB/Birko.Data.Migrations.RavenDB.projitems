@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)RavenMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RavenMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Settings\RavenMigrationSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\RavenDBMigrationContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\RavenDBSchemaBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\RavenDBDataMigrator.cs" />
