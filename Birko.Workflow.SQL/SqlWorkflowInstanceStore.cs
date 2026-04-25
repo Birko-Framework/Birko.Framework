@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.SQL.Models;
@@ -23,7 +22,7 @@ namespace Birko.Workflow.SQL
     {
         private readonly AsyncDataBaseBulkStore<DB, WorkflowInstanceModel> _store;
 
-        public SqlWorkflowInstanceStore(PasswordSettings settings)
+        public SqlWorkflowInstanceStore(SqlSettings settings)
         {
             _store = new AsyncDataBaseBulkStore<DB, WorkflowInstanceModel>();
             _store.SetSettings(settings);
