@@ -27,13 +27,15 @@ dotnet add package Birko.Data.RavenDB
 ```csharp
 using Birko.Data.RavenDB.Stores;
 
-var settings = new RavenDBSettings
+var settings = new Birko.Data.RavenDB.Stores.Settings
 {
-    Url = "http://localhost:8080",
-    DatabaseName = "MyApp"
+    Location = "http://localhost:8080",
+    Name = "MyApp"
 };
 
-var store = new RavenDBStore<Customer>(settings);
+var store = new RavenDBStore<Customer>();
+store.SetSettings(settings);
+await store.InitAsync();
 var id = store.Create(customer);
 
 // Query with LINQ

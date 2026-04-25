@@ -29,19 +29,28 @@ RavenDB implementation for the Birko data layer providing document-based storage
 
 ## Connection
 
-Connection string format:
-```
-http://[host]:[port]/[database]
-```
+### Settings (Birko.Data.RavenDB.Stores.Settings)
+Typed settings class extending `RemoteSettings`:
+- `RequestTimeout` (default: 30 seconds) — request timeout applied to `DocumentStore.Conventions`
+- `CreateDocumentStore()` — builds and initializes `DocumentStore` from settings
+
+Settings mapping from `RemoteSettings`:
+- `Location` = RavenDB server URL
+- `Name` = database name
+
+### Legacy Settings (still supported)
+`SetSettings(ISettings)` accepts `Birko.Configuration.RemoteSettings` and wraps it into a `Settings` instance with defaults.
 
 Example:
 ```csharp
-var settings = new RavenDBSettings
+var settings = new Birko.Data.RavenDB.Stores.Settings
 {
-    Url = "http://localhost:8080",
-    DatabaseName = "MyApp",
-    Certificates = null // For secure connections
+    Location = "http://localhost:8080",
+    Name = "MyApp",
+    RequestTimeout = TimeSpan.FromSeconds(60)
 };
+var store = new RavenDBStore<Customer>();
+store.SetSettings(settings);
 ```
 
 ## Implementation

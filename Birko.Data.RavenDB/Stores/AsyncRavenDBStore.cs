@@ -1,7 +1,7 @@
 using Birko.Data.Models;
 using Birko.Data.RavenDB.Aggregation;
 using Birko.Data.Stores;
-using Birko.Configuration;
+using ISettings = Birko.Configuration.ISettings;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Linq;
@@ -23,12 +23,13 @@ namespace Birko.Data.RavenDB.Stores;
 /// </summary>
 public class AsyncRavenDBStore<T>
     : AbstractAsyncBulkStore<T>
-    , ISettingsStore<RemoteSettings>
+    , ISettingsStore<Settings>
     , IAsyncTransactionalStore<T, Raven.Client.Documents.Session.IAsyncDocumentSession>
     , IAsyncAggregatableStore<T>
     where T : AbstractModel
 {
     private IDocumentStore? _documentStore;
+    protected Settings? _settings;
 
     /// <summary>
     /// Get the underlying RavenDB document store.
@@ -86,8 +87,8 @@ public class AsyncRavenDBStore<T>
     /// <summary>
     /// Sets the connection settings.
     /// </summary>
-    /// <param name="settings">The remote settings to use.</param>
-    public virtual void SetSettings(RemoteSettings settings)
+    /// <param name="settings">The RavenDB settings to use.</param>
+    public virtual void SetSettings(Settings settings)
     {
         SetSettings((ISettings)settings);
     }
@@ -98,14 +99,16 @@ public class AsyncRavenDBStore<T>
     /// <param name="settings">The settings to use.</param>
     public virtual void SetSettings(ISettings settings)
     {
-        if (settings is RemoteSettings remote)
+        if (settings is Settings ravenSettings)
         {
-            _documentStore = new DocumentStore
-            {
-                Urls = new[] { remote.Location },
-                Database = remote.Name
-            };
-            _documentStore.Initialize();
+            _settings = ravenSettings;
+            _documentStore = ravenSettings.CreateDocumentStore();
+        }
+        else if (settings is Birko.Configuration.RemoteSettings remote)
+        {
+            _settings = new Settings();
+            _settings.LoadFrom(remote);
+            _documentStore = _settings.CreateDocumentStore();
         }
     }
 
