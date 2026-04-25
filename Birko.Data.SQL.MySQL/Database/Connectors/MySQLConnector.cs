@@ -9,6 +9,8 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Fields;
+using Birko.Data.SQL.Stores;
+using MySqlSettings = Birko.Data.SQL.MySQL.Stores.MySqlSettings;
 using MySqlConnector;
 using PasswordSettings = Birko.Configuration.PasswordSettings;
 using RemoteSettings = Birko.Configuration.RemoteSettings;
@@ -20,7 +22,7 @@ namespace Birko.Data.SQL.Connectors
     /// </summary>
     public partial class MySQLConnector : AbstractAsyncConnector
     {
-        private const int BulkInsertBatchSize = 1000;
+        private const int DefaultBulkInsertBatchSize = 1000;
 
         /// <summary>
         /// Initializes a new instance of the MySQLConnector class.
@@ -77,7 +79,17 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override DbConnection CreateConnection(PasswordSettings settings)
         {
-            if (settings != null && !string.IsNullOrEmpty(settings.Location) && !string.IsNullOrEmpty(settings.Name) && settings is RemoteSettings remoteSettings)
+            if (settings == null || string.IsNullOrEmpty(settings.Location) || string.IsNullOrEmpty(settings.Name))
+            {
+                throw new Exception("Invalid settings provided for MySQL connection");
+            }
+
+            if (settings is MySqlSettings mySettings)
+            {
+                return new MySqlConnection(mySettings.GetConnectionString());
+            }
+
+            if (settings is RemoteSettings remoteSettings)
             {
                 var port = remoteSettings.Port > 0 ? remoteSettings.Port : 3306;
                 var connectionString = string.Format("Server={0};Port={1};User ID={2};Password={3};Database={4}",
@@ -92,10 +104,8 @@ namespace Birko.Data.SQL.Connectors
                 }
                 return new MySqlConnection(connectionString);
             }
-            else
-            {
-                throw new Exception("Invalid settings provided for MySQL connection");
-            }
+
+            throw new Exception("Invalid settings provided for MySQL connection");
         }
 
         /// <inheritdoc />
@@ -245,7 +255,8 @@ namespace Birko.Data.SQL.Connectors
                 return;
 
             var fieldCount = fields.Count;
-            var maxBatchSize = Math.Min(BulkInsertBatchSize, 65535 / fieldCount);
+            var batchSize = _settings is MySqlSettings mySettings ? mySettings.BulkInsertBatchSize : DefaultBulkInsertBatchSize;
+            var maxBatchSize = Math.Min(batchSize, 65535 / fieldCount);
             if (maxBatchSize < 1)
                 maxBatchSize = 1;
 
@@ -321,7 +332,8 @@ namespace Birko.Data.SQL.Connectors
                 return;
 
             var fieldCount = fields.Count;
-            var maxBatchSize = Math.Min(BulkInsertBatchSize, 65535 / fieldCount);
+            var batchSize = _settings is MySqlSettings mySettings ? mySettings.BulkInsertBatchSize : DefaultBulkInsertBatchSize;
+            var maxBatchSize = Math.Min(batchSize, 65535 / fieldCount);
             if (maxBatchSize < 1)
                 maxBatchSize = 1;
 
