@@ -2,6 +2,7 @@ using Microsoft.Azure.Cosmos;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Birko.Data.Migrations.CosmosDB.Settings;
 
 namespace Birko.Data.Migrations.CosmosDB;
 
@@ -20,8 +21,11 @@ public class CosmosMigrationRunner : Data.Migrations.AbstractMigrationRunner
     /// <summary>
     /// Initializes a new instance of the CosmosMigrationRunner class.
     /// </summary>
-    public CosmosMigrationRunner(Database database)
-        : base(new CosmosMigrationStore(database))
+    /// <param name="database">Cosmos database to run migrations against.</param>
+    /// <param name="settings">Optional settings controlling the migrations container,
+    /// state document id, and partition key (for per-module isolation within one database).</param>
+    public CosmosMigrationRunner(Database database, CosmosMigrationSettings? settings = null)
+        : base(new CosmosMigrationStore(database, settings))
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
     }

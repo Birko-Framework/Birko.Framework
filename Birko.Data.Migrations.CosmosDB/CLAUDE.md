@@ -30,6 +30,7 @@ runner.Migrate();
 ## Dependencies
 - Birko.Data.Migrations
 - Birko.Data.Patterns
+- Birko.Data.CosmosDB (Settings base class)
 - Microsoft.Azure.Cosmos
 
 ## Maintenance

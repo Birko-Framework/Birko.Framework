@@ -190,5 +190,13 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
         public IIndexBuilder Sparse() => this;
 
         public IIndexBuilder WithProperty(string key, object value) => this;
+
+        /// <summary>
+        /// Exposes whether <see cref="Unique"/> was called. Cosmos DB expresses uniqueness via
+        /// unique-key policies declared at container creation time, not through index metadata,
+        /// so <see cref="_unique"/> is captured here but not yet translated into a container-level
+        /// policy. Reserved for when that wiring lands.
+        /// </summary>
+        internal bool IsUnique => _unique;
     }
 }

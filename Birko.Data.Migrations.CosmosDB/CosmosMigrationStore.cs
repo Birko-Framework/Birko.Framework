@@ -5,29 +5,29 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using Birko.Data.Migrations.CosmosDB.Settings;
 
 namespace Birko.Data.Migrations.CosmosDB;
 
 /// <summary>
-/// Stores migration state in a Cosmos DB container.
-/// Uses a single document with ID "Migrations/State" to track applied migrations.
+/// Stores migration state in a Cosmos DB container. Container name, state document id,
+/// and partition key are configurable via <see cref="CosmosMigrationSettings"/> so multiple
+/// modules can share one Cosmos database without colliding on the state document.
 /// </summary>
 public class CosmosMigrationStore : Data.Migrations.IMigrationStore
 {
-    private const string MigrationsContainerName = "Migrations";
-    private const string MigrationsDocumentId = "Migrations-State";
-    private const string MigrationsPartitionKey = "migrations";
-
     private readonly Database _database;
+    private readonly CosmosMigrationSettings _settings;
     private Container? _container;
     private MigrationsStateDocument? _cachedState;
 
     /// <summary>
     /// Initializes a new instance of the CosmosMigrationStore class.
     /// </summary>
-    public CosmosMigrationStore(Database database)
+    public CosmosMigrationStore(Database database, CosmosMigrationSettings? settings = null)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
+        _settings = settings ?? new CosmosMigrationSettings();
     }
 
     /// <summary>
@@ -36,13 +36,13 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     public void Initialize()
     {
         _container = _database.CreateContainerIfNotExistsAsync(
-            new ContainerProperties(MigrationsContainerName, "/partitionKey")
+            new ContainerProperties(_settings.MigrationsContainerName, "/partitionKey")
         ).GetAwaiter().GetResult().Container;
 
         try
         {
             var response = _container.ReadItemAsync<MigrationsStateDocument>(
-                MigrationsDocumentId, new PartitionKey(MigrationsPartitionKey)
+                _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
             ).GetAwaiter().GetResult();
             _cachedState = response.Resource;
         }
@@ -50,11 +50,11 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
         {
             _cachedState = new MigrationsStateDocument
             {
-                Id = MigrationsDocumentId,
-                PartitionKey = MigrationsPartitionKey,
+                Id = _settings.MigrationsDocumentId,
+                PartitionKey = _settings.MigrationsPartitionKey,
                 AppliedMigrations = new Dictionary<string, MigrationRecord>()
             };
-            _container.CreateItemAsync(_cachedState, new PartitionKey(MigrationsPartitionKey))
+            _container.CreateItemAsync(_cachedState, new PartitionKey(_settings.MigrationsPartitionKey))
                 .GetAwaiter().GetResult();
         }
     }
@@ -78,7 +78,7 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
         try
         {
             var response = _container!.ReadItemAsync<MigrationsStateDocument>(
-                MigrationsDocumentId, new PartitionKey(MigrationsPartitionKey)
+                _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
             ).GetAwaiter().GetResult();
 
             var state = response.Resource;
@@ -111,7 +111,7 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
         EnsureInitialized();
 
         var response = _container!.ReadItemAsync<MigrationsStateDocument>(
-            MigrationsDocumentId, new PartitionKey(MigrationsPartitionKey)
+            _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
         ).GetAwaiter().GetResult();
 
         var state = response.Resource;
@@ -126,7 +126,7 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
             AppliedAt = DateTime.UtcNow
         };
 
-        _container.ReplaceItemAsync(state, MigrationsDocumentId, new PartitionKey(MigrationsPartitionKey))
+        _container.ReplaceItemAsync(state, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey))
             .GetAwaiter().GetResult();
 
         _cachedState = state;
@@ -149,14 +149,14 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
         EnsureInitialized();
 
         var response = _container!.ReadItemAsync<MigrationsStateDocument>(
-            MigrationsDocumentId, new PartitionKey(MigrationsPartitionKey)
+            _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
         ).GetAwaiter().GetResult();
 
         var state = response.Resource;
         if (state?.AppliedMigrations != null)
         {
             state.AppliedMigrations.Remove(migration.Version.ToString());
-            _container.ReplaceItemAsync(state, MigrationsDocumentId, new PartitionKey(MigrationsPartitionKey))
+            _container.ReplaceItemAsync(state, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey))
                 .GetAwaiter().GetResult();
             _cachedState = state;
         }
@@ -201,8 +201,8 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     /// </summary>
     internal class MigrationsStateDocument
     {
-        public string Id { get; set; } = MigrationsDocumentId;
-        public string PartitionKey { get; set; } = MigrationsPartitionKey;
+        public string Id { get; set; } = string.Empty;
+        public string PartitionKey { get; set; } = string.Empty;
         public Dictionary<string, MigrationRecord> AppliedMigrations { get; set; } = new();
     }
 

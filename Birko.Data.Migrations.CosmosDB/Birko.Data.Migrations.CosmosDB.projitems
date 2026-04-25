@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)CosmosMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)CosmosMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Settings\CosmosMigrationSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\CosmosDBMigrationContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\CosmosDBSchemaBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\CosmosDBDataMigrator.cs" />
