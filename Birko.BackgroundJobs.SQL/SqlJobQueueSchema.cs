@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using Birko.BackgroundJobs.SQL.Models;
 
 namespace Birko.BackgroundJobs.SQL
@@ -22,7 +21,7 @@ namespace Birko.BackgroundJobs.SQL
         /// Initializes the jobs table using the Birko.Data.SQL connector.
         /// This is called automatically by SqlJobQueue on first use.
         /// </summary>
-        public static async Task EnsureCreatedAsync<DB>(PasswordSettings settings, CancellationToken cancellationToken = default)
+        public static async Task EnsureCreatedAsync<DB>(SqlSettings settings, CancellationToken cancellationToken = default)
             where DB : AbstractConnector
         {
             var store = new AsyncDataBaseBulkStore<DB, JobDescriptorModel>();
@@ -34,7 +33,7 @@ namespace Birko.BackgroundJobs.SQL
         /// Drops the jobs table using the Birko.Data.SQL connector.
         /// WARNING: This deletes all job data.
         /// </summary>
-        public static async Task DropAsync<DB>(PasswordSettings settings, CancellationToken cancellationToken = default)
+        public static async Task DropAsync<DB>(SqlSettings settings, CancellationToken cancellationToken = default)
             where DB : AbstractConnector
         {
             var store = new AsyncDataBaseBulkStore<DB, JobDescriptorModel>();

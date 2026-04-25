@@ -7,7 +7,6 @@ using Birko.BackgroundJobs.SQL.Models;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 
 namespace Birko.BackgroundJobs.SQL
 {
@@ -28,7 +27,7 @@ namespace Birko.BackgroundJobs.SQL
         /// </summary>
         /// <param name="settings">Connection settings for the SQL database.</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
-        public SqlJobQueue(PasswordSettings settings, RetryPolicy? retryPolicy = null)
+        public SqlJobQueue(SqlSettings settings, RetryPolicy? retryPolicy = null)
         {
             _store = new AsyncDataBaseBulkStore<DB, JobDescriptorModel>();
             _store.SetSettings(settings);

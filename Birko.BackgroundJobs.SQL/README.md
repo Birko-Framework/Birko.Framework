@@ -30,7 +30,7 @@ using Birko.BackgroundJobs.Processing;
 using Birko.Data.Stores;
 
 // Connection settings (same as any Birko.Data.SQL store)
-var settings = new PasswordSettings
+var settings = new Birko.Data.SQL.Stores.SqlSettings
 {
     Location = "localhost",
     Name = "mydb",
