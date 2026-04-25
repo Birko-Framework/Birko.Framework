@@ -131,7 +131,7 @@ namespace Birko.Models.Product.ViewModels
             SKUCode = data.SKUCode;
             BarCode = data.BarCode;
             Name = data.Name;
-            Slug = data.Slug;
+            Slug = data.Slug ?? string.Empty;
             Description = data.Description;
             Category = data.Category;
             if (this is IProductManufacturer pm && data is Birko.Models.Product.IProductManufacturer dm)
