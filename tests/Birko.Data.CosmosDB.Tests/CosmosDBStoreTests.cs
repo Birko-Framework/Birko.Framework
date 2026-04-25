@@ -88,14 +88,16 @@ public class CosmosDBStoreTests
     }
 
     [Fact]
-    public void PartitionKeyPath_Default_ShouldBeId()
+    public void Settings_PartitionKeyPath_Default_ShouldBeId()
     {
-        CosmosDBStore<TestModel>.PartitionKeyPath.Should().Be("/id");
+        var settings = new Birko.Data.CosmosDB.Stores.Settings();
+        settings.PartitionKeyPath.Should().Be("/id");
     }
 
     [Fact]
-    public void RequestTimeout_Default_ShouldBe30Seconds()
+    public void Settings_RequestTimeout_Default_ShouldBe30Seconds()
     {
-        CosmosDBStore<TestModel>.RequestTimeout.Should().Be(TimeSpan.FromSeconds(30));
+        var settings = new Birko.Data.CosmosDB.Stores.Settings();
+        settings.RequestTimeout.Should().Be(TimeSpan.FromSeconds(30));
     }
 }
