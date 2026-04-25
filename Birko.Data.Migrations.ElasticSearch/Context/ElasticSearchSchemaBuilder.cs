@@ -135,6 +135,15 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             public IIndexBuilder Sparse() => this;
 
             public IIndexBuilder WithProperty(string key, object value) => this;
+
+            /// <summary>
+            /// Exposes whether <see cref="Unique"/> was called. Elasticsearch has no native
+            /// unique-constraint concept — uniqueness is typically enforced at the application
+            /// layer or by using document _id as the uniqueness key. <see cref="_unique"/> is
+            /// captured here but not yet translated into an index mapping. Reserved for when
+            /// that wiring lands (likely as a create-if-not-exists + version constraint pattern).
+            /// </summary>
+            internal bool IsUnique => _unique;
         }
     }
 }
