@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Fields;
+using Birko.Data.SQL.Stores;
+using MSSqlSettings = Birko.Data.SQL.MSSql.Stores.MSSqlSettings;
 using PasswordSettings = Birko.Configuration.PasswordSettings;
 using RemoteSettings = Birko.Configuration.RemoteSettings;
 
@@ -77,10 +79,19 @@ namespace Birko.Data.SQL.Connectors
 
         public override DbConnection CreateConnection(PasswordSettings settings)
         {
-            if (settings != null && !string.IsNullOrEmpty(settings.Location) && !string.IsNullOrEmpty(settings.Name) && !string.IsNullOrEmpty(settings.Location) && settings is RemoteSettings remotesettings)
+            if (settings == null || string.IsNullOrEmpty(settings.Location) || string.IsNullOrEmpty(settings.Name))
             {
+                throw new Exception("No path provided");
+            }
 
-                var connection = new SqlConnection(string.Format("Server=tcp:{0},{4};Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt={5};", new object[] {
+            if (settings is MSSqlSettings msSettings)
+            {
+                return new SqlConnection(msSettings.GetConnectionString());
+            }
+
+            if (settings is RemoteSettings remotesettings)
+            {
+                return new SqlConnection(string.Format("Server=tcp:{0},{4};Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt={5};", new object[] {
                     remotesettings.Location,
                     remotesettings.Name,
                     remotesettings.UserName,
@@ -88,12 +99,9 @@ namespace Birko.Data.SQL.Connectors
                     remotesettings.Port,
                     remotesettings.UseSecure ? "True" : "False"
                 }));
-                return connection;
             }
-            else
-            {
-                throw new Exception("No path provided");
-            }
+
+            throw new Exception("No path provided");
         }
 
         public override string ConvertType(DbType type, AbstractField field)

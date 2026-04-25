@@ -34,13 +34,7 @@ namespace Birko.Data.SQL.MSSql.Stores
         {
             if (settings != null)
             {
-                var pwSettings = new PasswordSettings
-                {
-                    Location = settings.Location,
-                    Name = settings.Name,
-                    Password = settings.Password
-                };
-                base.SetSettings(pwSettings);
+                base.SetSettings((ISettings)settings);
             }
         }
 
