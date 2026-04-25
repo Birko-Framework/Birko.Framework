@@ -1,7 +1,7 @@
 using Birko.Data.CosmosDB.Aggregation;
 using Birko.Data.Models;
 using Birko.Data.Stores;
-using Birko.Configuration;
+using ISettings = Birko.Configuration.ISettings;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.Cosmos.Linq;
 using System;
@@ -20,7 +20,7 @@ namespace Birko.Data.CosmosDB.Stores;
 /// </summary>
 public class AsyncCosmosDBStore<T>
     : AbstractAsyncBulkStore<T>
-    , ISettingsStore<RemoteSettings>
+    , ISettingsStore<Settings>
     , IAsyncTransactionalStore<T, TransactionalBatch>
     , IAsyncAggregatableStore<T>
     where T : AbstractModel
@@ -30,6 +30,7 @@ public class AsyncCosmosDBStore<T>
     private Container? _container;
     private string? _databaseName;
     private string? _containerName;
+    protected Settings? _settings;
 
     /// <summary>
     /// Gets the underlying Cosmos DB client.
@@ -49,18 +50,6 @@ public class AsyncCosmosDBStore<T>
     {
         TransactionContext = context;
     }
-
-    /// <summary>
-    /// Partition key path used for the container. Default is "/id".
-    /// Set before calling SetSettings or InitAsync to take effect.
-    /// </summary>
-    public static string PartitionKeyPath { get; set; } = "/id";
-
-    /// <summary>
-    /// Request timeout for Cosmos DB operations. Default is 30 seconds.
-    /// Set before calling SetSettings to take effect.
-    /// </summary>
-    public static TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Initializes a new instance of the AsyncCosmosDBStore class.
@@ -86,14 +75,11 @@ public class AsyncCosmosDBStore<T>
             throw new ArgumentException("Database name cannot be empty", nameof(databaseName));
         }
 
+        _settings = new Settings();
         _databaseName = databaseName;
         _containerName = containerName ?? typeof(T).Name;
 
-        _cosmosClient = new CosmosClient(connectionString, new CosmosClientOptions
-        {
-            RequestTimeout = RequestTimeout,
-            AllowBulkExecution = true
-        });
+        _cosmosClient = new CosmosClient(connectionString, _settings.GetCosmosClientOptions());
     }
 
     /// <summary>
@@ -110,45 +96,46 @@ public class AsyncCosmosDBStore<T>
     /// <summary>
     /// Sets the connection settings.
     /// </summary>
-    /// <param name="settings">The remote settings to use.</param>
-    public virtual void SetSettings(RemoteSettings settings)
+    /// <param name="settings">The CosmosDB settings to use.</param>
+    public virtual void SetSettings(Settings settings)
     {
         SetSettings((ISettings)settings);
     }
 
     /// <summary>
     /// Sets the connection settings via the ISettings interface.
-    /// RemoteSettings.Location = connection string or endpoint URL,
-    /// RemoteSettings.Name = database name,
-    /// RemoteSettings.Password = account key (if using endpoint URL),
-    /// RemoteSettings.UserName = container name (optional, defaults to type name).
+    /// Settings.Location = connection string or endpoint URL,
+    /// Settings.Name = database name,
+    /// Settings.Password = account key (if using endpoint URL),
+    /// Settings.UserName = container name (optional, defaults to type name).
     /// </summary>
     /// <param name="settings">The settings to use.</param>
     public virtual void SetSettings(ISettings settings)
     {
-        if (settings is not RemoteSettings remote)
+        if (settings is Settings cosmosSettings)
+        {
+            _settings = cosmosSettings;
+        }
+        else if (settings is Birko.Configuration.RemoteSettings remote)
+        {
+            _settings = new Settings();
+            _settings.LoadFrom(remote);
+        }
+        else
         {
             return;
         }
 
-        _databaseName = remote.Name;
-        _containerName = !string.IsNullOrWhiteSpace(remote.UserName) ? remote.UserName : typeof(T).Name;
+        _databaseName = _settings.Name;
+        _containerName = !string.IsNullOrWhiteSpace(_settings.UserName) ? _settings.UserName : typeof(T).Name;
 
-        if (!string.IsNullOrWhiteSpace(remote.Password))
+        if (!string.IsNullOrWhiteSpace(_settings.Password))
         {
-            _cosmosClient = new CosmosClient(remote.Location, remote.Password, new CosmosClientOptions
-            {
-                RequestTimeout = RequestTimeout,
-                AllowBulkExecution = true
-            });
+            _cosmosClient = new CosmosClient(_settings.Location, _settings.Password, _settings.GetCosmosClientOptions());
         }
         else
         {
-            _cosmosClient = new CosmosClient(remote.Location, new CosmosClientOptions
-            {
-                RequestTimeout = RequestTimeout,
-                AllowBulkExecution = true
-            });
+            _cosmosClient = new CosmosClient(_settings.Location, _settings.GetCosmosClientOptions());
         }
     }
 
@@ -468,7 +455,7 @@ public class AsyncCosmosDBStore<T>
 
         var containerResponse = await _database.CreateContainerIfNotExistsAsync(
             _containerName ?? typeof(T).Name,
-            PartitionKeyPath,
+            _settings?.PartitionKeyPath ?? "/id",
             cancellationToken: ct
         );
         _container = containerResponse.Container;

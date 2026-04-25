@@ -20,10 +20,10 @@ Add the shared project reference to your `.csproj`:
 
 ## Connection
 
-### Via RemoteSettings
+### Via Typed Settings
 
 ```csharp
-var settings = new RemoteSettings
+var settings = new Birko.Data.CosmosDB.Stores.Settings
 {
     Location = "AccountEndpoint=https://myaccount.documents.azure.com:443/;AccountKey=...",
     Name = "MyDatabase",       // database name
@@ -173,11 +173,19 @@ await indexManager.SetIndexingPolicyAsync("MyContainer", newPolicy);
 
 ## Partition Key
 
-The default partition key path is `/id`. Change it before initialization:
+The default partition key path is `/id`. Change it via typed settings:
 
 ```csharp
-CosmosDBStore<Customer>.PartitionKeyPath = "/tenantId";
-AsyncCosmosDBStore<Customer>.PartitionKeyPath = "/tenantId";
+var settings = new Birko.Data.CosmosDB.Stores.Settings
+{
+    Location = "AccountEndpoint=https://...;AccountKey=...",
+    Name = "MyDatabase",
+    PartitionKeyPath = "/tenantId",
+    RequestTimeout = TimeSpan.FromSeconds(60)
+};
+var store = new AsyncCosmosDBStore<Customer>();
+store.SetSettings(settings);
+await store.InitAsync();
 ```
 
 ## Dependencies

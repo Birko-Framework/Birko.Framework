@@ -32,11 +32,21 @@ Azure Cosmos DB (NoSQL API) implementation for the Birko data layer providing do
 
 ## Connection
 
-RemoteSettings mapping:
+### Settings (Birko.Data.CosmosDB.Stores.Settings)
+Typed settings class extending `RemoteSettings`:
+- `PartitionKeyPath` (default: "/id") — Cosmos DB partition key path
+- `RequestTimeout` (default: 30 seconds) — request timeout
+- `AllowBulkExecution` (default: true) — enables bulk execution mode
+- `GetCosmosClientOptions()` — builds `CosmosClientOptions` from settings
+
+Settings mapping from `RemoteSettings`:
 - `Location` = connection string or endpoint URL
 - `Name` = database name
 - `Password` = account key (when using endpoint URL)
 - `UserName` = container name (optional, defaults to type name)
+
+### Legacy Settings (still supported)
+`SetSettings(ISettings)` accepts `Birko.Configuration.RemoteSettings` and wraps it into a `Settings` instance with defaults.
 
 ## Dependencies
 - Birko.Data.Core
@@ -46,8 +56,8 @@ RemoteSettings mapping:
 
 ## Important Notes
 - Transactional batches are scoped to a single partition key
-- Default partition key path is "/id" — configurable via `PartitionKeyPath` static property
-- Bulk execution is enabled by default via `AllowBulkExecution = true`
+- Default partition key path is "/id" — configurable via `Settings.PartitionKeyPath`
+- Bulk execution is enabled by default via `Settings.AllowBulkExecution = true`
 - Sync store operations use `.GetAwaiter().GetResult()` wrappers; prefer async store for production
 
 ## Maintenance
