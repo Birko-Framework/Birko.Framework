@@ -1,12 +1,12 @@
-using Birko.Data.Stores;
-using Birko.Configuration;
+using Birko.Data.SQL.Stores;
 
 namespace Birko.Data.Migrations.SQL.Settings
 {
     /// <summary>
     /// Settings for SQL migration runners.
+    /// Extends SqlSettings to inherit connection timeout and command timeout configuration.
     /// </summary>
-    public class SqlMigrationSettings : RemoteSettings
+    public class SqlMigrationSettings : SqlSettings
     {
         /// <summary>
         /// Gets or sets the name of the migrations table.

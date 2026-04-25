@@ -20,7 +20,7 @@ SQL migration backend using AbstractConnector from Birko.Data.SQL. Implements pl
 - `SqlMigrationStore` — Stores migration state in a SQL table. Takes connection factory + settings.
 
 ### Settings
-- `SqlMigrationSettings` — UseTransaction, MigrationsTable, SchemaName
+- `SqlMigrationSettings` — extends `SqlSettings` (Birko.Data.SQL). Adds `UseTransaction`, `MigrationsTable`, `SchemaName`. Inherits `CommandTimeout`, `ConnectionTimeout` from `SqlSettings`.
 
 ### Internal
 - `SchemaField` — Extends AbstractField with null PropertyInfo (DDL-only). Maps FieldType to DbType.
