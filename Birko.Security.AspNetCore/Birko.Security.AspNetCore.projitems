@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)User/ICurrentUser.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)User/ClaimMappingOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)User/ClaimsCurrentUser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)User/ResolvedPermissionsCurrentUser.cs" />
     <!-- Authentication -->
     <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtClaimNames.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authentication/JwtAuthenticationOptions.cs" />
@@ -21,6 +22,8 @@
     <!-- Authorization -->
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/ClaimsPermissionChecker.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Authorization/PermissionEndpointFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization/IUserPermissionResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Authorization/PermissionResolutionMiddleware.cs" />
     <!-- Tenant -->
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/ITenantResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/HeaderTenantResolver.cs" />
@@ -29,5 +32,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/TenantMiddleware.cs" />
     <!-- Extensions -->
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/SecurityServiceExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions/PermissionResolutionExtensions.cs" />
   </ItemGroup>
 </Project>
