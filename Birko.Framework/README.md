@@ -5,13 +5,14 @@ A modular .NET framework providing data access, communication, AI, and model inf
 ## Features
 
 - Multi-database support (SQL Server, PostgreSQL, MySQL, SQLite, MongoDB, RavenDB, Elasticsearch, InfluxDB, TimescaleDB, JSON, XML, Azure Cosmos DB)
+- Typed provider settings hierarchy — `MSSqlSettings`, `MySqlSettings`, `PostgreSqlSettings`, `SqLiteSettings`, `TimescaleDBSettings`, CosmosDB/RavenDB/MongoDB/Redis Settings — each layer adds only what it needs (`Settings → PasswordSettings → RemoteSettings → SqlSettings → MSSqlSettings`, etc.). See [docs/configuration.md](docs/configuration.md).
 - Sync and async store/repository abstractions with bulk operation support and lazy-init (auto-creates tables/indexes on first use)
 - ViewModel layer with model-to-viewmodel mapping
 - Database migrations framework (platform-agnostic — write once, run against any provider)
 - Data synchronization across stores
 - Multi-tenancy support
 - Event sourcing pattern
-- Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, Camera, IR, NFC)
+- Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, **GraphQL** queries/mutations/subscriptions, Camera, IR, NFC)
 - Domain model libraries (Product, Category, SEO, Customers, Users, Inventory, Pricing) with domain contracts
 - Fluent validation framework
 - Caching with in-memory, Redis, and hybrid (L1+L2) backends
@@ -37,7 +38,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
 - Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
-- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, 50 components across inputs/layout/data/feedback/nav/command palette, app shell)
+- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, unified i18n singleton, 54 components across inputs/layout/data/feedback/nav/command palette, three-level app shell hierarchy `BCoreAppShell → BSidebarAppShell → BAppShell`)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
 - AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
@@ -196,9 +197,9 @@ A modular .NET framework providing data access, communication, AI, and model inf
 
 | Project | Description |
 |---------|-------------|
-| Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, and hash router. No dependencies. |
-| Birko.Web.Components | Component library built on Birko.Web.Core — 50 Shadow DOM web components covering inputs (incl. `b-tag-input` for freeform multi-value entry), layout, data (incl. `b-code-block`, `b-json-viewer`, `b-xml-viewer`, `b-object-tree`, `b-definition-list`, `b-pre`), feedback, and navigation. |
-| Birko.Web.Shell | Application shell framework built on Birko.Web.Core — auth, modules, command palette, notifications, tenants. |
+| Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, hash router, **unified i18n singleton** (`i18n`, `t()`, `useI18n()`, `onI18nChange()`, `BaseComponent.label()`). No dependencies. |
+| Birko.Web.Components | Component library built on Birko.Web.Core — 54 Shadow DOM web components: 20 inputs (`b-tag-input`, `b-segmented`, `b-markdown-editor` with H1–H6/table/task-list/highlight/sup/sub, `b-datetime-picker`, `b-time`, ...), 9 layout (`b-chat`, `b-split-panel`, ...), 14 data (`b-kanban` with recursive nesting + 3-zone DnD, `b-editable-table`, `b-code-block`, `b-json-viewer`, `b-xml-viewer`, `b-object-tree`, `b-definition-list`, `b-pre`, ...), 6 feedback (`b-progress`, `b-stale-banner`, ...), 4 navigation, 1 command palette. Canonical `bwc.*` i18n keys. |
+| Birko.Web.Shell | Application shell framework built on Birko.Web.Core — three-level hierarchy (`BCoreAppShell → BSidebarAppShell → BAppShell`), auth, modules, command palette, notifications, tenants, page bases (`BaseListPage`/`BaseSplitPage`/`BaseDetailPage`/`BaseFormModal`/`BaseDashboardWidget`). Canonical `bws.*` i18n keys with automatic `{entity}` interpolation. |
 
 ### Workflow
 
@@ -392,6 +393,7 @@ dotnet test
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Configuration Guide](docs/configuration.md) (Settings hierarchy, provider-specific settings for SQL/Cosmos/Raven/SQLite/Timescale, `ILoadable<T>` layering)
 - [Store Implementation Guide](docs/store-implementation.md)
 - [Repository Implementation Guide](docs/repository-implementation.md)
 - [Store Composition Guide](docs/composition.md) (Runtime decorator composition — `StoreWrapperBuilder`)

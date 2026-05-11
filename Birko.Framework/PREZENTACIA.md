@@ -19,9 +19,9 @@ Birko Framework je komplexný .NET 10.0 framework postavený na princípe **jedn
 
 **Čísla:**
 
-- **162 produktových projektov** (z toho približne **81 platformových rozšírení**)
-- **55 testovacích projektov** (xUnit + FluentAssertions)
-- **12 databázových platforiem**, **11 LLM poskytovateľov**, **50 Web Components**
+- **163 produktových projektov** (z toho približne **82 platformových rozšírení**)
+- **56 testovacích projektov** (xUnit + FluentAssertions)
+- **12 databázových platforiem**, **11 LLM poskytovateľov**, **54 Web Components**
 - **0 externých závislostí** pre core contracts
 
 **Oblasti použitia:**
@@ -46,6 +46,8 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **NoSQL**: MongoDB, RavenDB, Elasticsearch, Cosmos DB (4 projekty)
 - **Time-series**: InfluxDB, TimescaleDB (2 projekty)
 - **Súborové**: JSON (System.Text.Json), XML (System.Xml.Serialization)
+- **Typovaná hierarchia nastavení** — `MSSqlSettings`, `MySqlSettings`, `PostgreSqlSettings`, `SqLiteSettings`, `TimescaleDBSettings`, CosmosDB/RavenDB `Settings` — každá úroveň pridáva iba to, čo je v nej skutočne nové (`Settings → PasswordSettings → RemoteSettings → SqlSettings → MSSqlSettings`, ...). Dialect-špecifický `GetConnectionString()` je `virtual` na úrovni providera. Pozri [docs/configuration.md](docs/configuration.md).
+- **Platformovo-agnostické migrácie** — `IMigration` + `IMigrationContext` (`Schema`, `Data`, `Raw`, `ProviderName`); jednu migráciu napíšete raz a spustíte voči ktorémukoľvek providerovi (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, InfluxDB, TimescaleDB). NoSQL providery ticho preskakujú nepoužiteľné operácie.
 - **Repository & Store pattern** s lazy-init a bulk operáciami (Create/Read/Update/Delete + filter-based Update/Delete s `PropertyUpdate<T>`)
 - **Agregácia na úrovni store** — `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` pre server-side GROUP BY, SUM, AVG, MIN, MAX, COUNT s time bucketing a stránkovaním
 
@@ -61,9 +63,10 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Tagging** – polymorfné priradenie tagov entitám
 - **Unit of Work** – transakčné spracovanie
 
-### 🌐 Komunikácia (15 projektov)
+### 🌐 Komunikácia (16 projektov)
 - **REST/SOAP** – API klienti a server (Birko.Communication.REST, .REST.Server, .SOAP, .SSE)
 - **WebSocket/SSE** – obojsmerná a server-sent real-time komunikácia
+- **GraphQL** – queries, mutations, subscriptions cez HttpClient + ClientWebSocket (graphql-ws), fluent `GraphQLRequestBuilder`, IObservable subscriptions, žiadne externé závislosti
 - **Modbus** – priemyselná komunikácia (RTU/TCP, funkčné kódy 01–06 / 15–16)
 - **OAuth 2.0** – Client Credentials, Auth Code, PKCE, Device Code, Refresh Token
 - **NFC/RFID** – čítanie tagov (ISO 14443A, NDEF)
@@ -213,6 +216,9 @@ Birko.AI.Contracts       → ILlmProvider, Message, ContentBlock, TokenUsage,
 ```
 Birko.Framework          → Main framework aggregator
 Birko.Configuration      → Settings, PasswordSettings, RemoteSettings
+                           (typované descendanty: SqlSettings → MSSql/MySql/
+                           PostgreSql/Timescale Settings; SqLiteSettings;
+                           CosmosDB/RavenDB/MongoDB/Redis Settings)
 Birko.Data.Core          → AbstractModel, ViewModels, Filters, Exceptions
 Birko.Data.Stores        → IStore, IAsyncStore, IBulkStore, OrderBy, StoreLocator,
                            AggregateFunction, AggregateQuery, AggregateResult,
@@ -288,7 +294,7 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Communication.OAuth.Providers → GitHub Device Code flow pre Copilot
 ```
 
-#### 6. 🌐 Communication (15 projektov – 🟩 1 core + 🟨 14 rozšírení)
+#### 6. 🌐 Communication (16 projektov – 🟩 1 core + 🟨 15 rozšírení)
 ```
 🟩 Birko.Communication             → Base interfaces
 🟨 Birko.Communication.Network     → TCP/UDP
@@ -299,6 +305,9 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Communication.REST.Server → REST server
 🟨 Birko.Communication.SOAP        → SOAP klient
 🟨 Birko.Communication.SSE         → Server-Sent Events
+🟨 Birko.Communication.GraphQL     → GraphQL queries/mutations/subscriptions
+                                      (HttpClient + ClientWebSocket graphql-ws,
+                                      žiadne externé závislosti)
 🟨 Birko.Communication.Modbus      → RTU/TCP (funkčné kódy 01-06, 15-16)
 🟨 Birko.Communication.OAuth       → OAuth 2.0 flows (Client Credentials,
                                       Auth Code, PKCE, Device Code, Refresh)
@@ -422,10 +431,25 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 #### 14. 🌐 Web (TypeScript, 3 projekty)
 ```
 🟩 Birko.Web.Core                 → Shadow DOM base, Signal/Store,
-                                     HTTP/SSE klient, hash router
-🟩 Birko.Web.Components           → 50 Shadow DOM komponentov
-                                     (inputs, layout, data, feedback, navigation,
-                                     command palette)
+                                     HTTP/SSE klient, hash router,
+                                     unified i18n singleton (i18n, t(),
+                                     useI18n(), onI18nChange(),
+                                     BaseComponent.label())
+🟩 Birko.Web.Components           → 54 Shadow DOM komponentov
+                                     (20 inputs vrátane b-tag-input,
+                                     b-segmented, b-markdown-editor s
+                                     H1–H6/table/task-list/highlight/sup/sub,
+                                     b-datetime-picker, b-time;
+                                     9 layout vrátane b-chat;
+                                     14 data vrátane b-kanban s rekurzívnym
+                                     vnorením a 3-zone DnD,
+                                     b-editable-table, b-code-block,
+                                     b-json-viewer, b-xml-viewer,
+                                     b-object-tree, b-definition-list, b-pre;
+                                     6 feedback vrátane b-progress,
+                                     b-stale-banner;
+                                     4 navigation; 1 command palette).
+                                     Kanonické bwc.* i18n kľúče.
 🟩 Birko.Web.Shell                → Application shell — trojvrstvová hierarchia:
                                      • BCoreAppShell (theme, online/offline,
                                        user dropdown, brand, breadcrumbs)
@@ -434,6 +458,8 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
                                      • BAppShell (ribbon, notifikácie,
                                        tenant switcher, status bar,
                                        command palette)
+                                     Kanonické bws.* i18n kľúče s
+                                     automatickou {entity} interpoláciou.
 ```
 
 ### Detailné popisy špeciálnych projektov
@@ -522,15 +548,20 @@ Utility funkcie pre bežné úlohy:
 - Reaktívny state (Signal/Store pattern)
 - HTTP/SSE klienti
 - Hash router
+- **Unified i18n** — jeden globálny singleton (`i18n`, `t(key, params?, fallback?)`, `useI18n(instance)`, `onI18nChange(fn)`) plus `BaseComponent.label(attrName, i18nKey, fallback, params?)`. Komponenty sa auto-prepojujú cez `onI18nChange` a automaticky sa prerenderujú pri zmene locale. Per-instance override cez `label-*` atribúty stále vyhráva nad globálnym lookupom.
 
 ### Birko.Web.Components
-**50 komponentov**: inputs (18), layout (9), data (13), feedback (5), navigation (4), command palette (1)
+**54 komponentov**: inputs (20), layout (9), data (14), feedback (6), navigation (4), command palette (1)
+
+Kanonický namespace kľúčov: **`bwc.*`** (`bwc.common.close`, `bwc.palette.placeholder`, `bwc.pagination.prev`, ...). Anglický bundle je v `birko-web-components/locales/en.json`.
 
 Nové display/inspection komponenty: `b-pre`, `b-code-block` (syntax-highlighted s copy button), `b-definition-list` (stacked/inline/horizontal/grid), `b-object-tree` (rekurzívny property tree s lazy expansion; voliteľný `show-header` režim s toolbarom), `b-json-viewer` (wrapper nad object-tree s JSON parse + Expand/Collapse/Copy), `b-xml-viewer` (DOM tree cez DOMParser — elementy, atribúty, CDATA, komentáre). Všetky štyri viewery podporujú `max-height` (vnútorný scroll s headerom nad ním) a `sticky-header="page"` (header sa prilepí k viewportu pri scrollovaní stránky) a zdieľajú nové CSS sheets `dataViewerCardSheet` / `dataViewerHeaderSheet` / `toolbarBtnSheet`.
 
 **b-kanban** podporuje rekurzívne vnorenie kariet: `KanbanCard.children` pre sub-úlohy, 3-zónový drag-and-drop (before/inside/after), expand/collapse prepínač na každej rodicovskej karte, `maxNestingDepth` config, depth-aware `renderCard(card, depth)` callback, keyboard navigácia cez vnorené úrovne (ArrowRight expanduje, ArrowLeft kolabuje/fokusuje rodica).
 
-Nové input: `b-tag-input` — freeform multi-value vstup s Enter-to-create a paste-split na oddeľovačoch (`,`, newline, tab).
+**b-markdown-editor** dostal rozšírenú toolbar: heading dropdown H1–H6, GFM tabuľky, task lists (`- [ ] task`), highlight (`==text==` → `<mark>`), superscript (`^text^` → `<sup>`), subscript (`~text~` → `<sub>`); split/source/preview módy, Word HTML paste cleanup, pluggable renderer cez `setRenderer()`.
+
+Nové input komponenty: `b-tag-input` (freeform multi-value vstup s Enter-to-create a paste-split na oddeľovačoch `,`/`\n`/`\t`) a `b-segmented` (single-select segmented control pre 3–5 krátkych volieb).
 
 ### Birko.Web.Shell
 Application shell framework s **trojvrstvovou hierarchiou** abstraktných tried:
@@ -540,6 +571,8 @@ Application shell framework s **trojvrstvovou hierarchiou** abstraktných tried:
 - **`BAppShell extends BSidebarAppShell`** — full Office-style ribbon shell: navigation tabs, notification bell, tenant switcher, status bar, command palette. Dedí sidebar capability — ribbon shell môže mať aj ľavé/pravé panely.
 
 Plus factory funkcie: autentifikácia (createAuthStore), dynamické moduly (createModuleStore), tenant switching, command palette providers, route guards, page base classes (BaseListPage, BaseSplitPage, BaseDetailPage, BaseFormModal, BaseDashboardWidget).
+
+Kanonický namespace kľúčov: **`bws.*`**. Shellov `t()` automaticky interpoluje `{entity}` s `entityLabel` aktuálnej CRUD stránky — jeden bundle entry typu `"bws.common.new": "Nový {entity}"` produkuje entitne-špecifické reťazce naprieč všetkými CRUD stránkami. Spätne-kompatibilné shims (`BForm.setTranslate`, `BDatePicker.setLocale`, atď.) sú zachované.
 
 ---
 
@@ -595,14 +628,14 @@ Vytvorte projekt `{YourSolution}.Birko` (napríklad `FisData.Birko`) a importujt
 
 | Metrika | Hodnota |
 |---|---:|
-| **Produktové projekty celkom** | **162** |
-| **z toho platformové rozšírenia** (🟨) | **~81** |
+| **Produktové projekty celkom** | **163** |
+| **z toho platformové rozšírenia** (🟨) | **~82** |
 | **z toho core / feature projekty** (🟦 + 🟩) | **~81** |
-| **Testovacie projekty** | **55** |
-| **Projekty celkom** | **217** |
+| **Testovacie projekty** | **56** |
+| **Projekty celkom** | **219** |
 | Databázové platformy | 12 |
 | LLM poskytovatelia | 11 |
-| Web Components | 50 |
+| Web Components | 54 |
 | Jazykové AI agenti | 10 |
 | Task AI agenti | 4 |
 | Communication protokoly | 14 |
@@ -617,6 +650,9 @@ Vytvorte projekt `{YourSolution}.Birko` (napríklad `FisData.Birko`) a importujt
 ## Dokumentácia
 
 - [README.md](README.md) – kompletná užívateľská dokumentácia
+- [docs/configuration.md](docs/configuration.md) – nastavenia (Settings hierarchy, provider-specific settings pre SQL/Cosmos/Raven/SQLite/Timescale, `ILoadable<T>` skladanie konfigurácie)
+- [docs/migrations.md](docs/migrations.md) – platformovo-agnostické migrácie (`IMigration`, `IMigrationContext`, schémové abstrakcie)
+- [docs/web.md](docs/web.md) – Web Components, Shell, **Internationalization** (`useI18n`, `onI18nChange`, `bwc.*`/`bws.*` namespaces)
 - [docs/](docs/) – detailné návody pre každú oblasť (architektúra, stores, repozitáre, migrácie, vzory, caching, validácia, background jobs, message queue, event bus, event sourcing, storage, messaging, telemetry, security, rules, workflow, CQRS, health, procesory, serializácia, sync, čas, lokalizácia, tenant, komunikácia, závislosti, konzumeri, AI/LLM)
 - Každý projekt má vlastný `README.md` s rýchlym prehľadom API a príkladmi použitia
 
@@ -642,4 +678,4 @@ Súčasť Birko Framework – pozri [License.md](License.md).
 
 ---
 
-*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-04-21*
+*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-05-11*

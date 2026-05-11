@@ -6,9 +6,9 @@ Birko ships three TypeScript projects for building modern Single-Page Applicatio
 
 | Project | Purpose |
 |---|---|
-| `Birko.Web.Core` | Minimal Web Component framework — Shadow DOM base class, reactive state, HTTP/SSE clients, hash router. No external dependencies. |
-| `Birko.Web.Components` | Component library of ~50 production-ready Shadow DOM web components (inputs, layout, data, feedback, navigation, command palette) built on Web.Core. |
-| `Birko.Web.Shell` | Application shell framework — abstract `BAppShell` with ribbon, status bar, notifications, tenant switcher, plus factory functions for auth, modules, routing, page bases. |
+| `Birko.Web.Core` | Minimal Web Component framework — Shadow DOM base class, reactive state, HTTP/SSE clients, hash router, **unified i18n singleton**. No external dependencies. |
+| `Birko.Web.Components` | Component library of 54 production-ready Shadow DOM web components (inputs, layout, data, feedback, navigation, command palette) built on Web.Core. Canonical `bwc.*` i18n key namespace. |
+| `Birko.Web.Shell` | Application shell framework — three-level hierarchy (`BCoreAppShell` → `BSidebarAppShell` → `BAppShell`) with ribbon, status bar, notifications, tenant switcher, plus factory functions for auth, modules, routing, page bases. Canonical `bws.*` i18n keys with automatic `{entity}` interpolation. |
 
 All three are **pure TypeScript ES modules** with no build tooling. They are consumed via TypeScript path aliases or esbuild path mappings in the downstream app. No virtual DOM, no bundler required.
 
@@ -130,15 +130,15 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 
 ## Birko.Web.Components
 
-~50 components grouped into 6 categories. All are Shadow DOM components built on `BaseComponent`, styled with design tokens (`--b-*` CSS variables).
+54 components grouped into 6 categories. All are Shadow DOM components built on `BaseComponent`, styled with design tokens (`--b-*` CSS variables), and integrated with the global i18n singleton (`bwc.*` key namespace — see the [Internationalization](#internationalization) section below).
 
-### Inputs (18)
+### Inputs (20)
 
-`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons), `b-form` (schema-driven form builder with validation and cascading selects), `b-markdown-editor` (toolbar: bold/italic/strikethrough/highlight/superscript/subscript, H1–H6 heading dropdown, blockquote, code, bullet/numbered/task lists, link, image, table, horizontal rule; split/source/preview modes; Word HTML paste cleanup; custom renderer).
+`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-segmented` (single-select connected buttons for 3–5 short choices), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons with icons), `b-form` (schema-driven form builder with validation and cascading selects), `b-markdown-editor` (toolbar: bold/italic/strikethrough/highlight/superscript/subscript, H1–H6 heading dropdown, blockquote, code, bullet/numbered/task lists, link, image, table, horizontal rule; split/source/preview modes; Word HTML paste cleanup; custom renderer).
 
 ### Layout (9)
 
-`b-card`, `b-modal` (sm/md/lg/xl/xxl sizes), `b-drawer`, `b-tabs`, `b-confirm-dialog` (`show(): Promise<boolean>`), `b-dropdown-menu`, `b-tooltip`, `b-split-panel` (master-detail with responsive collapse), `b-chat`.
+`b-card`, `b-modal` (sm/md/lg/xl/xxl sizes), `b-drawer`, `b-tabs`, `b-confirm-dialog` (`show(): Promise<boolean>`), `b-dropdown-menu`, `b-tooltip`, `b-split-panel` (master-detail with responsive collapse), `b-chat` (message list + composer for AI/agent UIs).
 
 ### Data (13)
 
@@ -159,10 +159,10 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 
 > **Sticky header modes (shared by all four viewers):** set `max-height="400px"` (or any CSS length) for internal scroll — the body becomes the scroll container and the header stays pinned above it; set `sticky-header="page"` to flip the card's `overflow` to `visible` so `position: sticky` pins the header to the page viewport as the user scrolls the page. The modes are mutually exclusive — `sticky-header="page"` takes precedence. The card chrome and toolbar are implemented via three shared `@sheet` sections (`dataViewerCard`, `dataViewerHeader`, `toolbarBtn`).
 
-### Feedback (5)
+### Feedback (6)
 
-- `toast` — function API (`toast.success()`, `toast.error()`, etc.)
-- `b-spinner`, `b-empty`, `b-skeleton` (text/circle/table/form), `b-stale-banner` (cache warning)
+- `toast` — function API (`toast.success()`, `toast.error()`, `toast.warning()`, `toast.info()`, `toast.notify()`)
+- `b-spinner`, `b-progress` (linear bar, determinate/indeterminate, variants/sizes), `b-empty`, `b-skeleton` (text/circle/table/form), `b-stale-banner` (cache warning)
 
 ### Navigation (4)
 
@@ -381,6 +381,58 @@ setBreadcrumbs(this, [
 ```
 
 Dispatches a bubbling `CustomEvent`; the shell listens and updates its breadcrumb strip.
+
+## Internationalization
+
+All three projects share a single global i18n singleton living in `birko-web-core`. There is no per-component `setTranslate()` plumbing and no one-off `label-X="..."` attribute boilerplate — every user-facing string in `birko-web-components` and `birko-web-shell` flows through `BaseComponent.label(attrName, i18nKey, fallback, params?)` and reacts to a single locale switch.
+
+**Resolution order** (per call site):
+
+1. Explicit `label-*` attribute on the host element wins — useful for per-instance overrides without touching bundles.
+2. Global i18n lookup against the active singleton (`bwc.*` for Components, `bws.*` for Shell, `common.*` for `BForm` validation).
+3. Hard-coded English fallback supplied at the call site.
+
+**Bootstrap (one line):**
+
+```typescript
+import { useI18n, I18n } from 'birko-web-core';
+
+const i18n = new I18n('sk');
+await i18n.loadBundle('sk', skBundle);
+useI18n(i18n);   // every BaseComponent re-renders automatically
+```
+
+**API summary** (re-exported from `birko-web-core`):
+
+| Export | Purpose |
+|--------|---------|
+| `i18n` | Default `I18n` singleton, preloaded with English fallback |
+| `t(key, params?, fallback?)` | Resolve against the active singleton; interpolates `{param}` placeholders |
+| `useI18n(instance)` | Replace the active singleton — subscribers auto re-wire |
+| `onI18nChange(fn)` | Subscribe to locale or singleton changes; `BaseComponent` does this for you |
+| `I18n` | The class — instantiate for isolated scopes (tests, micro-apps) |
+| `createFormatter(locale)` / `getFormatter(locale)` | Cached `Intl.NumberFormat` / `Intl.DateTimeFormat` factories |
+| `BaseComponent.label(attrName, i18nKey, fallback, params?)` | The helper every component template uses |
+
+**Canonical key namespaces:**
+
+- **`bwc.*`** — Birko.Web.Components (shipped at `birko-web-components/locales/en.json`). Examples: `bwc.common.close`, `bwc.palette.placeholder`, `bwc.pagination.prev`, `bwc.toast.dismiss`, `bwc.fileUpload.dropHint`.
+- **`bws.*`** — Birko.Web.Shell. Examples: `bws.common.new`, `bws.common.confirmDelete`, `bws.pagination.items`, `bws.ribbon.selectModule`. The shell's `t()` auto-interpolates `{entity}` with the page's `entityLabel`, so one bundle entry like `"bws.common.new": "Nový {entity}"` produces entity-specific strings across every CRUD page.
+- **`common.*`** — `BForm` validation messages (`common.required`, `common.minLength`, ...) — still falls back to English via `globalT()`.
+
+**Migrating from per-component translate hooks:**
+
+| Before | After |
+|---|---|
+| `BForm.setTranslate(fn)` on every form | `useI18n(myI18n)` once at app bootstrap |
+| `el.setAttribute('label-close', 'Zavrieť')` everywhere | Add `bwc.common.close: "Zavrieť"` to the locale bundle |
+| `setTranslate` hooks on individual components | Subscribe via `onI18nChange` — `BaseComponent` does this automatically |
+
+**Back-compat shims kept** so existing apps keep building unchanged:
+
+- `BForm.setTranslate(fn)` — still forwards to the legacy path.
+- `BDatePicker.setLocale({months, days, today, clear})` / `BDatetimePicker.setLocale(...)` / `BTime.setLocale(...)` — still win over global i18n for per-class month/day overrides.
+- `base-crud-page.t(key)` — still returns English defaults and can still be overridden per page class.
 
 ## Build system and dependencies
 

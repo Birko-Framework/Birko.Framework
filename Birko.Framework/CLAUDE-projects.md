@@ -56,6 +56,7 @@
 - **Birko.Communication.Network** / **.Hardware** / **.Bluetooth** / **.WebSocket** / **.REST** / **.REST.Server** / **.SOAP** / **.SSE**
 - **Birko.Communication.Modbus** - Modbus RTU/TCP (serial/network, function codes 01-06/15-16)
 - **Birko.Communication.OAuth** - OAuth2 client (Client Credentials, Auth Code, PKCE, Device Code, Refresh Token)
+- **Birko.Communication.GraphQL** - GraphQL client (queries, mutations, subscriptions over HttpClient + ClientWebSocket, zero external deps — GraphQLClient, GraphQLSettings, GraphQLRequestBuilder, GraphQLSubscription, GraphQLException)
 - **Birko.Communication.Camera** - Camera frame capture (FFmpeg-based JPEG snapshots)
 - **Birko.Communication.IR** - Consumer IR (38 kHz, NEC/Samsung/RC5, pluggable transports)
 - **Birko.Communication.NFC** - NFC/RFID tag reading (ISO 14443A, NDEF, pluggable transports)
@@ -144,9 +145,9 @@
 - **Birko.Communication.OAuth.Providers** - GitHubOAuthProvider (pre-configured OAuthSettings factory for GitHub Device Code flow, uses Birko.Communication.OAuth)
 
 ## Web (TypeScript)
-- **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP client, SSE client, hash router)
-- **Birko.Web.Components** - Component library (38 Shadow DOM web components: inputs, layout, data, feedback, navigation)
-- **Birko.Web.Shell** - Application shell framework (authentication, module loading, command palette, notifications, tenant switching)
+- **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP/SSE clients, hash router, unified i18n: `i18n` singleton, `t()`, `useI18n()`, `onI18nChange()`, `BaseComponent.label()` helper)
+- **Birko.Web.Components** - Component library (54 Shadow DOM web components: 20 inputs incl. b-tag-input, b-segmented, b-markdown-editor with H1–H6/table/task-list/highlight/sup/sub, b-datetime-picker, b-time; 9 layout incl. b-chat, b-split-panel; 14 data incl. b-kanban with recursive nesting + 3-zone DnD, b-editable-table, b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer with sticky-header modes; 6 feedback incl. b-progress, b-stale-banner; 4 navigation; 1 command palette. Canonical `bwc.*` i18n key namespace, shared sheets — `dataViewerCardSheet`/`dataViewerHeaderSheet`/`toolbarBtnSheet`)
+- **Birko.Web.Shell** - Application shell framework (three-level hierarchy: `BCoreAppShell` → `BSidebarAppShell` → `BAppShell`; authentication, module loading, command palette, notifications, tenant switching, page bases — `BaseListPage`/`BaseSplitPage`/`BaseDetailPage`/`BaseFormModal`/`BaseDashboardWidget`; canonical `bws.*` i18n keys with `{entity}` interpolation)
 
 ## Tests
 All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its own CLAUDE.md.
@@ -162,7 +163,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Messaging.Tests, Birko.Messaging.Razor.Tests
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
 - Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests
-- Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
+- Birko.Communication.Modbus.Tests, Birko.Communication.OAuth.Tests, Birko.Communication.GraphQL.Tests, Birko.Communication.IR.Tests, Birko.Communication.NFC.Tests
 - Birko.Data.MongoDB.Tests
 - Birko.Random.Tests
 - Birko.Data.RavenDB.Tests, Birko.Data.CosmosDB.Tests
