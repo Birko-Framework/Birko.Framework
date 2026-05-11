@@ -1,228 +1,136 @@
 # Birko.Data.EventSourcing
 
 ## Overview
-Event sourcing implementation for the Birko data layer providing audit trails and event replay capabilities.
+Decorator-style event sourcing for Birko stores. Wraps any `IStore<T>` / `IAsyncStore<T>` (incl. bulk variants) so every Create / Update / Delete also appends a `DomainEvent` to an `IEventStore`. Reads pass through to the inner store. Provides Replay + history APIs to rebuild aggregate state from the event stream.
+
+This project ships **interfaces, wrappers, and an aggregate base class only** — no concrete `IEventStore` backend, no snapshot store, no built-in projections. Bring your own event-store implementation (typically backed by another Birko store, e.g. SQL/Mongo/JSON).
 
 ## Project Location
 `C:\Source\Birko.Data.EventSourcing\`
 
-## Purpose
-- Store all changes as events
-- Rebuild state from events
-- Complete audit history
-- Temporal queries
+## Layout
+
+```
+Events/
+  IEvent.cs                — domain event contract
+  DomainEvent.cs           — default IEvent implementation
+  IEventStore.cs           — IEventStore + IAsyncEventStore (append + read by aggregate/version/time)
+Models/
+  IEventSourced.cs         — IEventSourced contract + EventSourcedAggregate base class
+Stores/
+  EventSourcingStoreWrapper.cs           — sync IStore<T> wrapper
+  AsyncEventSourcingStoreWrapper.cs      — async IAsyncStore<T> wrapper
+  EventSourcingBulkStoreWrapper.cs       — sync IBulkStore<T> wrapper (extends sync wrapper)
+  AsyncEventSourcingBulkStoreWrapper.cs  — async IAsyncBulkStore<T> wrapper
+  EventSourcingStoreExtensions.cs        — .WithEventSourcing(...) extension methods
+  EventSourcingRepositoryExtensions.cs   — EXCLUDED from compilation (depends on Birko.Data.ViewModel);
+                                           consumers needing event-sourced ViewModel repos include it explicitly
+```
 
 ## Components
 
-### Stores
-- `EventStore<T>` - Event store
-- `AsyncEventStore<T>` - Async event store
+### `IEvent` / `DomainEvent` (`Events/`)
+`IEvent` fields: `EventId`, `AggregateId`, `Version`, `EventType` (string — `"Created"` / `"Updated"` / `"Deleted"` by default), `OccurredAt`, `EventData` (serialized entity, JSON), `Metadata?`, `UserId?`.
 
-### Repositories
-- `EventSourcedRepository<T>` - Event-sourced repository
-- `AsyncEventSourcedRepository<T>` - Async event-sourced repository
+`DomainEvent` is the default `IEvent` implementation. Two constructors: parameterless (auto-assigns `EventId` + `OccurredAt`) and a fully-specified one used by the wrappers.
 
-### Models
-- `Event` - Base event
-- `EventStream` - Collection of events for an entity
-- `EventSnapshot` - Periodic state snapshot
+### `IEventStore` / `IAsyncEventStore` (`Events/IEventStore.cs`)
+The event-store contract consumed by the wrappers. Members:
+- `Append(IEvent)` / `AppendRange(IEnumerable<IEvent>)`
+- `Read(Guid aggregateId)` — all events for an aggregate, in order
+- `ReadUpToVersion(Guid, long)` / `ReadFromVersion(Guid, long)` — version-range slices
+- `GetVersion(Guid)` — current aggregate version (0 if none)
+- `ReadAllFrom(DateTime)` — global tail-read by time
 
-### Events
-- `CreatedEvent<T>` - Entity created
-- `UpdatedEvent<T>` - Entity updated
-- `DeletedEvent<T>` - Entity deleted
+Async variants take a `CancellationToken`. No concrete implementation lives here.
 
-## Event Model
+### `IEventSourced` / `EventSourcedAggregate` (`Models/IEventSourced.cs`)
+Entity contract for aggregates the wrappers can sit in front of:
+- `long Version { get; set; }` — optimistic-concurrency token
+- `ApplyEvent(IEvent)` — fold an event into the aggregate
+- `GetUncommittedEvents()` / `MarkEventsAsCommitted()` — uncommitted-event buffer
+- `LoadFromEvents(IEnumerable<IEvent>)` — replay helper
 
-```csharp
-public abstract class Event
-{
-    public Guid Id { get; set; }
-    public Guid EntityId { get; set; }
-    public string EventType { get; set; }
-    public DateTime Timestamp { get; set; }
-    public int Version { get; set; }
-    public string Data { get; set; } // Serialized event data
-}
-```
+`EventSourcedAggregate` is a default base class that tracks uncommitted events in a `List<IEvent>`, sets `Version` from the applied event, and clears the buffer on commit.
 
-## Creating Events
+### Wrappers (`Stores/`)
+All four implement the same store interface as the inner store **and** `IStoreWrapper<T>`. Generic constraint: `T : AbstractModel, IEventSourced`. Constructor takes `(innerStore, eventStore, ISerializer? serializer = null, IDateTimeProvider? clock = null)`. Defaults: `SystemJsonSerializer`, `SystemDateTimeProvider`.
 
-```csharp
-using Birko.Data.EventSourcing.Events;
+Write-side behavior is uniform across the four:
+1. Compute `newVersion = eventStore.GetVersion(aggregateId) + 1`
+2. Build a `DomainEvent("Created" | "Updated" | "Deleted", serializer.Serialize(item), CurrentUserId, clock)`
+3. **Append to event store first**, then delegate to the inner store
+4. Set `item.Version = newVersion` on the entity before persisting
 
-public class CustomerCreatedEvent : CreatedEvent<Customer>
-{
-    public string Name { get; set; }
-    public string Email { get; set; }
-}
+The bulk wrappers also implement the filter-based `Update(filter, PropertyUpdate<T>)`, `Update(filter, Action<T>)`, and `Delete(filter)` overloads — they read the matching entities, raise per-entity events via `AppendRange`, then call the inner bulk store. (No native UpdateByQuery / filter-delete optimization — event recording requires per-entity events.)
 
-public class CustomerEmailUpdatedEvent : Event
-{
-    public string OldEmail { get; set; }
-    public string NewEmail { get; set; }
-}
-```
+Replay APIs (sync + async):
+- `Replay(aggregateId)` — `CreateInstance()` + `IEventSourced.LoadFromEvents(events)`
+- `GetHistory(aggregateId)` — raw event list for the aggregate
 
-## Event Sourced Repository
+Optional `CurrentUserId` setter on the wrapper instance stamps `IEvent.UserId` on every emitted event.
+
+### `.WithEventSourcing(...)` extensions (`Stores/EventSourcingStoreExtensions.cs`)
+One overload per store interface (`IStore<T>`, `IAsyncStore<T>`, `IBulkStore<T>`, `IAsyncBulkStore<T>`). Returns the same interface. The `IStore<T>` / `IAsyncStore<T>` overloads upcast to the bulk wrapper automatically if the store is already bulk.
+
+## Usage
 
 ```csharp
-using Birko.Data.EventSourcing.Repositories;
-
-public class CustomerRepository : EventSourcedRepository<Customer>
+public class Customer : AbstractModel, IEventSourced
 {
-    public CustomerRepository(IEventStore<Event> eventStore) : base(eventStore)
-    {
-    }
+    public long Version { get; set; }
+    public string Name { get; set; } = string.Empty;
 
-    public override Guid Create(Customer entity)
-    {
-        var @event = new CustomerCreatedEvent
-        {
-            EntityId = Guid.NewGuid(),
-            Name = entity.Name,
-            Email = entity.Email
-        };
-
-        EventStore.Save(@event);
-        return @event.EntityId;
-    }
-
-    public override Customer Read(Guid id)
-    {
-        var events = EventStore.GetEvents(id);
-        return Rebuild(events);
-    }
-
-    private Customer Rebuild(IEnumerable<Event> events)
-    {
-        // Replay events to rebuild state
-        var customer = new Customer();
-        foreach (var @event in events)
-        {
-            Apply(customer, @event);
-        }
-        return customer;
-    }
+    // … implement ApplyEvent / GetUncommittedEvents / etc.
+    // or inherit EventSourcedAggregate
 }
+
+IAsyncEventStore eventStore = /* your backend */;
+IAsyncBulkStore<Customer> raw = new MongoStore<Customer>(/* … */);
+
+var store = raw.WithEventSourcing(eventStore);   // returns IAsyncBulkStore<Customer>
+
+await store.CreateAsync(new Customer { Name = "Acme" });
+// → eventStore.AppendAsync(DomainEvent("Created", …)) then raw.CreateAsync(…)
+
+var rebuilt = await ((AsyncEventSourcingBulkStoreWrapper<IAsyncBulkStore<Customer>, Customer>)store)
+    .ReplayAsync(aggregateId);
 ```
 
-## Event Storage
+To set the user on emitted events, cast to the wrapper type and set `CurrentUserId`.
 
-```sql
-CREATE TABLE events (
-    id UUID PRIMARY KEY,
-    entity_id UUID NOT NULL,
-    event_type TEXT NOT NULL,
-    data JSONB NOT NULL,
-    timestamp TIMESTAMP NOT NULL,
-    version INT NOT NULL,
-    CONSTRAINT unique_event_version UNIQUE (entity_id, version)
-);
-
-CREATE INDEX idx_events_entity_id ON events(entity_id);
-```
-
-## Snapshots
-
-For performance, create periodic snapshots:
+## Composition
+`Birko.Data.Composition.StoreWrapperBuilder.Build<T>` wires event sourcing into the decorator chain automatically — pass an `IAsyncEventStore` and any `T : IEventSourced` gets the wrapper applied innermost:
 
 ```csharp
-public class CustomerSnapshot
-{
-    public Guid EntityId { get; set; }
-    public Customer State { get; set; }
-    public int Version { get; set; }
-    public DateTime Timestamp { get; set; }
-}
-
-// Load from snapshot then replay events since snapshot
-public Customer Read(Guid id)
-{
-    var snapshot = SnapshotStore.GetLatest(id);
-    var events = EventStore.GetEvents(id, fromVersion: snapshot.Version);
-    return Rebuild(snapshot.State, events);
-}
+var store = StoreWrapperBuilder.Build(raw, clock, audit, tenant, eventStore);
 ```
 
-## Temporal Queries
+Chain order: `Tenant → Default → Sluggable → SoftDelete → Audit → Timestamp → EventSourcing → RawStore`. EventSourcing is innermost so the event payload reflects Timestamp/Audit enrichments and outer-wrapper rejections (slug collision, default conflict, tenant guard) do not produce orphan events. Soft-deletes emit an `"Updated"` event with `IsDeleted=true` because SoftDelete converts the delete before EventSourcing sees it.
 
-Query entity state at any point in time:
-
-```csharp
-public Customer GetAtTime(Guid id, DateTime timestamp)
-{
-    var events = EventStore.GetEvents(id)
-        .Where(e => e.Timestamp <= timestamp);
-
-    return Rebuild(events);
-}
-```
-
-## Audit Trail
-
-Complete history of all changes:
+To layer event sourcing manually (e.g. outside the builder, or to wrap an `IAsyncStore<T>` that isn't bulk), use the extension:
 
 ```csharp
-public IEnumerable<Event> GetAuditLog(Guid id)
-{
-    return EventStore.GetEvents(id);
-}
-```
-
-## Projections
-
-Build read models from events:
-
-```csharp
-public class CustomerSummaryProjection
-{
-    public void On(CustomerCreatedEvent @event)
-    {
-        // Update read model
-    }
-
-    public void On(CustomerEmailUpdatedEvent @event)
-    {
-        // Update read model
-    }
-}
+var store = raw.WithEventSourcing(eventStore, clock);
 ```
 
 ## Dependencies
-- Birko.Data.Core
-- Birko.Data.Stores
-- Birko.Serialization — ISerializer for event data serialization (optional, defaults to SystemJsonSerializer)
-- System.Text.Json (or Newtonsoft.Json)
+- Birko.Data.Core — `AbstractModel`, filters, `ModelByGuid<T>`
+- Birko.Data.Stores — `IStore<T>`, `IAsyncStore<T>`, `IBulkStore<T>`, `IAsyncBulkStore<T>`, `IStoreWrapper<T>`, `StoreDataDelegate<T>`, `PropertyUpdate<T>`, `OrderBy<T>`
+- Birko.Configuration
+- Birko.Serialization — `ISerializer`; defaults to `SystemJsonSerializer` from `Birko.Serialization.Json`
+- Birko.Time — `IDateTimeProvider`; defaults to `SystemDateTimeProvider`
 
-## Best Practices
+## Conventions
+- Concrete entities must implement `IEventSourced` (or extend `EventSourcedAggregate`).
+- `EventType` is a string — only `"Created"` / `"Updated"` / `"Deleted"` are emitted by the wrappers. Custom event types require a custom path (raise via `eventStore.Append` directly, or subclass a wrapper).
+- Events are appended **before** the inner write — if the inner write fails, you may end up with an event for a row that doesn't exist. Atomicity is the responsibility of the event-store backend (transaction with the inner store, outbox, etc.).
+- Bulk filter-based `Update(filter, …)` / `Delete(filter)` are read-modify-write internally so that per-aggregate events can be emitted. Do not expect native UpdateByQuery performance.
 
-1. **Event Versioning** - Use event version for compatibility
-2. **Immutable Events** - Never modify stored events
-3. **Snapshots** - Use snapshots for long event streams
-4. **Idempotency** - Ensure events can be replayed safely
-5. **Event Schema** - Design events carefully (they're permanent)
-
-## Use Cases
-- Financial systems (audit requirements)
-- Version control
-- Temporal data
-- Audit logging
-- CQRS read models
-- Debugging (replay to find issues)
-
-## Advantages
-- Complete audit trail
-- Temporal queries
-- Easy debugging
-- Event replay for recovery
-- Natural fit for CQRS
-
-## Challenges
-- More complex than traditional CRUD
-- Requires careful event design
-- Event versioning required
-- Snapshots needed for performance
+## Not Included (Plan If Needed)
+- Concrete `IEventStore` implementation — pick a Birko store and adapt it.
+- Snapshot store — not modeled here despite earlier docs mentioning it.
+- Projections / read-model fan-out — see `Birko.EventBus.EventSourcing` for replay/event-bus glue (`DomainEventPublished`, `EventReplayService`, `EventStoreEventBus`).
 
 ## Maintenance
 
