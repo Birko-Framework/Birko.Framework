@@ -102,7 +102,9 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 
 ## Usage in Consumer Solutions
 
-When using Birko.Framework projects in your solution, create a single aggregator library project named `{YourSolution}.Birko` (e.g. `FisData.Birko`) and include all `Birko.*` shared project references there. Your other projects then reference only `{YourSolution}.Birko`. This avoids compilation and transitive reference issues that arise when multiple projects import overlapping sets of shared projects independently.
+When using Birko.Framework projects in your solution, create **one or more aggregator library projects** that bundle the `Birko.*` shared projects you need (e.g. `FisData.Birko`, `Symbio.Birko`, or split by layer like `{Solution}.Birko.Core` + `{Solution}.Birko.Edge` + `{Solution}.Birko.Ai`). Your other projects reference the aggregator(s) instead of importing `.projitems` directly. Default to a single aggregator; split only when concrete pain shows up — bloated binaries, leaky transitive deps, or unused-heavy-dependency pull-ins (camera, AI, hardware). This avoids compilation and transitive reference issues that arise when multiple projects import overlapping sets of shared projects independently.
+
+Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import Project="…\Birko.X\Birko.X.projitems"` paths instead of hard-coded absolutes. The property reads `/p:BirkoSrc=…` first, then the `BIRKO_SRC` environment variable, then defaults to the parent of the consumer repo (assumes Birko.* folders are sibling checkouts). The same `BIRKO_SRC` env var is the convention for TypeScript bundlers consuming `Birko.Web.*` sources — so one override controls both backend MSBuild and frontend esbuild, which matters for Docker / CI. See [README — Usage in Consumer Solutions](README.md#usage-in-consumer-solutions) for the full pattern.
 
 ## Conventions
 - All stores implement: `IStore`, `IAsyncStore`, `IBulkStore`, `IAsyncBulkStore`

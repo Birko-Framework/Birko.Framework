@@ -611,16 +611,100 @@ Kanonický namespace kľúčov: **`bws.*`**. Shellov `t()` automaticky interpolu
 
 ## Použitie v konzumerských riešeniach
 
-Odporúčaný vzor – vytvoriť **jeden agregačný projekt** na strane konzumera a referenčne v ňom spojiť všetky potrebné Birko.* shared projekty:
+### Agregačný projekt (odporúčaný vzor)
+
+Odporúčaný vzor – vytvoriť **jeden alebo viac agregačných projektov** podľa potreby a includnúť do nich len tie `Birko.*` shared projekty, ktoré daná časť riešenia naozaj používa. Ostatné projekty potom referencujú agregátor(y) namiesto toho, aby každý nezávisle importoval `.projitems`. Každý `.projitems` sa tým skompiluje práve raz do jednej spoločnej assembly, čím predídete `CS0433`/`CS0436` type-clash chybám pri prekrývajúcich sa importoch.
+
+**Koľko agregátorov?** Podľa tvaru riešenia:
+
+- **Jeden agregátor** – `{YourSolution}.Birko` so všetkým. Najjednoduchšie, najmenej projektov. Hodí sa keď väčšina kódu používa väčšinu Birka, alebo keď ti nevadí "extra" tranzitívne závislosti. Symbio používa tento tvar (`Symbio.Birko`, ~90 importov).
+- **Viac agregátorov podľa vrstvy / účelu** – rozdeľ ak rôzne časti riešenia potrebujú disjunktné podmnožiny Birka, najmä keď niektorá podmnožina ťahá ťažké závislosti (ML, kamera, hardware), ktoré nechceš mať vo všetkých projektoch. Príklady:
+  - `{YourSolution}.Birko.Core` — Data, Models, Helpers, Security, Time
+  - `{YourSolution}.Birko.Edge` — Communication.Hardware, Communication.Bluetooth, Communication.Modbus, Communication.Camera
+  - `{YourSolution}.Birko.Ai` — AI.Contracts, AI, AI.Providers, AI.Agents
+  - `{YourSolution}.Birko.Web` — Web.Core, Web.Components, Web.Shell (pre riešenia s UI vedľa neUI služieb)
+
+Rozdelením držíš binárnu stopu downstream projektov tesnú: Edge collector neťahá AI providerov, backend API neťahá camera frame-capture knižnice.
 
 ```
+# Jeden agregátor
 YourSolution/
-  YourSolution.Birko/          # Agregátor všetkých Birko.* projektov
-  YourSolution.Core/           # Referencuje len YourSolution.Birko
-  YourSolution.Web/            # Referencuje len YourSolution.Birko
+  YourSolution.Birko/          # Jediný .csproj importujúci všetky potrebné Birko.* .projitems
+  YourSolution.Core/           # Referencuje YourSolution.Birko
+  YourSolution.Web/            # Referencuje YourSolution.Birko
+
+# Viac agregátorov
+YourSolution/
+  YourSolution.Birko.Core/     # Importuje Birko.Data.*, Birko.Models.*, Birko.Helpers, Birko.Security
+  YourSolution.Birko.Edge/     # Importuje Birko.Communication.*
+  YourSolution.Birko.Ai/       # Importuje Birko.AI.*
+  YourSolution.Api/            # Referencuje YourSolution.Birko.Core + .Ai
+  YourSolution.Edge.Service/   # Referencuje YourSolution.Birko.Core + .Edge
 ```
 
-Vytvorte projekt `{YourSolution}.Birko` (napríklad `FisData.Birko`) a importujte doň všetky potrebné `Birko.*` shared projekty. Vaše ostatné projekty potom referencujú iba tento jeden agregačný projekt. Predchádza to kompilačným a tranzitívnym konfliktom, keď viaceré projekty importujú prekrývajúce sa sady shared projektov nezávisle od seba.
+> **Pravidlo paláca:** keď neviete, začnite s **jedným** agregátorom. Rozdeľte ho až keď narazíte na konkrétnu bolesť — nafúknuté binárky, presakujúce tranzitívne referencie, alebo projekty čo pomaly buildia lebo ťahajú `.projitems` ktoré nepoužívajú. Predčasné rozdelenie je réžia bez výhody.
+
+Reálne príklady: **Symbio.Birko** (jeden agregátor, ~90 shared projektov, veľká enterprise platforma) a **WebFinstatApiTester** (bez agregátora — app csproj rovno importuje lean podmnožinu ~10 projitems lebo projekt je malý a riziko prekrývajúcich sa importov je nulové).
+
+### Cesta k Birko.Framework zdrojom – `$(BirkoSrc)` / `BIRKO_SRC`
+
+Cesty v `Import Project` v `csproj` agregátora **nehardcoduj** ako `C:\Source\Birko.Helpers\…`. Namiesto toho použi MSBuild premennú `$(BirkoSrc)` definovanú v `Directory.Build.props` v koreni tvojho repa:
+
+```xml
+<!-- {YourSolution}/Directory.Build.props -->
+<Project>
+  <PropertyGroup>
+    <BirkoSrc Condition="'$(BirkoSrc)' == '' and '$(BIRKO_SRC)' != ''">$(BIRKO_SRC)</BirkoSrc>
+    <BirkoSrc Condition="'$(BirkoSrc)' == ''">$(MSBuildThisFileDirectory)..</BirkoSrc>
+  </PropertyGroup>
+</Project>
+```
+
+Resolution chain (od najvyššej priority):
+
+| Zdroj | Použitie |
+|---|---|
+| **`/p:BirkoSrc=…`** CLI | Jednorazový override pri konkrétnom builde (porovnanie dvoch checkoutov) |
+| **`BIRKO_SRC`** env var | CI runner, Docker build, alternatívne dev layouty (`D:\src`, `/home/foo/code`) |
+| **Default** (parent adresára) | Lokálny dev so súrodencovými Birko.* repozitármi (`C:\Source\Birko.X` vedľa `C:\Source\YourSolution`) — bez konfigurácie |
+
+Aggregator csproj potom všade používa portable cestu:
+
+```xml
+<Import Project="$(BirkoSrc)\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+```
+
+#### Frontend (TypeScript) — to isté `BIRKO_SRC`
+
+`Birko.Web.Core` / `Birko.Web.Components` / `Birko.Web.Shell` sa konzumujú ako TypeScript zdroje cez esbuild alias map. Konvencia je rovnaká premenná, aby jeden override (`BIRKO_SRC`) kontroloval **aj** backend `dotnet build` **aj** frontend bundle — kľúčové pre Docker, kde všetko žije pod `/src/`:
+
+```js
+// build.js
+const BIRKO_SRC = (process.env.BIRKO_SRC ?? 'C:/Source').replace(/\/+$/, '');
+const aliases = {
+  'birko-web-core':       `${BIRKO_SRC}/Birko.Web.Core/src/index.ts`,
+  'birko-web-components': `${BIRKO_SRC}/Birko.Web.Components/src/index.ts`,
+  'birko-web-shell':      `${BIRKO_SRC}/Birko.Web.Shell/src/index.ts`,
+};
+```
+
+#### Docker príklad
+
+```dockerfile
+# Build context = parent tvojho repa (Birko.* + YourSolution sú súrodenci)
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY Birko.Helpers/    Birko.Helpers/
+COPY Birko.Data.Core/  Birko.Data.Core/
+# …
+COPY YourSolution/     YourSolution/
+
+ENV BIRKO_SRC=/src
+
+WORKDIR /src/YourSolution
+RUN dotnet publish src/Host/YourSolution.Api.csproj -c Release -o /app/publish
+```
 
 ---
 
