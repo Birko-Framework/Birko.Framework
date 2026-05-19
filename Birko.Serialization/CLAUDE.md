@@ -20,7 +20,7 @@ Unified serialization abstraction for the Birko Framework. Provides a common `IS
   - `DeserializeFromBytes(byte[], Type)` / `DeserializeFromBytes<T>(byte[])` — Byte array deserialization
 
 ### Core/SerializationFormat.cs
-- `SerializationFormat` — Enum: `Json`, `MessagePack`, `Protobuf`, `Xml`
+- `SerializationFormat` — Enum: `Json`, `MessagePack`, `Protobuf`, `Xml`, `Yaml`
 
 ### Json/SystemJsonSerializer.cs
 - `SystemJsonSerializer` — System.Text.Json implementation of `ISerializer`
@@ -40,6 +40,7 @@ Unified serialization abstraction for the Birko Framework. Provides a common `IS
 - **Birko.Serialization.Newtonsoft** — Newtonsoft.Json implementation
 - **Birko.Serialization.MessagePack** — MessagePack implementation
 - **Birko.Serialization.Protobuf** — Protobuf implementation
+- **Birko.Serialization.Yaml** — YamlDotNet implementation
 - **Birko.Serialization.Tests** — Unit tests
 
 ## Maintenance

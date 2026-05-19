@@ -23,6 +23,11 @@ namespace Birko.Serialization
         /// <summary>
         /// XML format (System.Xml.Serialization).
         /// </summary>
-        Xml
+        Xml,
+
+        /// <summary>
+        /// YAML format (YamlDotNet).
+        /// </summary>
+        Yaml
     }
 }

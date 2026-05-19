@@ -5,7 +5,7 @@ Unified serialization abstraction for the Birko Framework. Provides a common `IS
 ## Features
 
 - **ISerializer** — Common interface for string and byte array serialization
-- **SerializationFormat** — Enum identifying the serialization format (Json, MessagePack, Protobuf, Xml)
+- **SerializationFormat** — Enum identifying the serialization format (Json, MessagePack, Protobuf, Xml, Yaml)
 - **SystemJsonSerializer** — Built-in JSON serializer using System.Text.Json (no external dependencies)
 - **SystemXmlSerializer** — Built-in XML serializer using System.Xml.Serialization (no external dependencies)
 - Configurable `JsonSerializerOptions` / `XmlWriterSettings`
@@ -19,6 +19,7 @@ Unified serialization abstraction for the Birko Framework. Provides a common `IS
 | Birko.Serialization.Newtonsoft | JSON (Newtonsoft.Json) | Newtonsoft.Json |
 | Birko.Serialization.MessagePack | MessagePack | MessagePack |
 | Birko.Serialization.Protobuf | Protocol Buffers | protobuf-net |
+| Birko.Serialization.Yaml | YAML | YamlDotNet |
 
 ## Usage
 
