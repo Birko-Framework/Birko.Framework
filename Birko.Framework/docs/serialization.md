@@ -5,10 +5,11 @@ Birko.Serialization provides a unified serialization abstraction for the Birko F
 ## Architecture
 
 ```
-Birko.Serialization          — ISerializer interface + System.Text.Json (built-in)
+Birko.Serialization          — ISerializer interface + System.Text.Json + System.Xml.Serialization (built-in)
 Birko.Serialization.Newtonsoft  — Newtonsoft.Json implementation
 Birko.Serialization.MessagePack — MessagePack binary implementation
 Birko.Serialization.Protobuf    — Protocol Buffers implementation
+Birko.Serialization.Yaml        — YamlDotNet implementation
 ```
 
 ## ISerializer Interface
@@ -125,6 +126,34 @@ ISerializer serializer = new SystemXmlSerializer(
 
 **Requirement:** Types must be public with a parameterless constructor. Use `[XmlRoot]`, `[XmlElement]`, `[XmlAttribute]`, `[XmlArray]`, `[XmlArrayItem]`, `[XmlIgnore]` to control the XML shape.
 
+### YamlDotNetSerializer
+
+Uses YamlDotNet for human-readable YAML serialization (configuration files, CI manifests, document interchange).
+
+**NuGet:** `YamlDotNet`
+
+```csharp
+ISerializer serializer = new YamlDotNetSerializer();
+
+string yaml = serializer.Serialize(myObject);
+var result = serializer.Deserialize<MyType>(yaml);
+```
+
+Custom YamlDotNet pipeline (e.g., underscored naming):
+
+```csharp
+var yamlSer = new SerializerBuilder()
+    .WithNamingConvention(UnderscoredNamingConvention.Instance)
+    .Build();
+var yamlDeser = new DeserializerBuilder()
+    .WithNamingConvention(UnderscoredNamingConvention.Instance)
+    .Build();
+
+ISerializer serializer = new YamlDotNetSerializer(yamlSer, yamlDeser);
+```
+
+**Defaults:** CamelCaseNamingConvention; deserializer ignores unmatched properties. Byte serialization uses UTF-8 encoding of YAML text. Async stream overloads are sync-wrapped (YamlDotNet has no async API).
+
 ## String Encoding for Binary Formats
 
 Binary serializers (MessagePack, Protobuf) use **Base64 encoding** for string serialization methods. For optimal performance with binary formats, prefer `SerializeToBytes` / `DeserializeFromBytes`.
@@ -138,6 +167,7 @@ Binary serializers (MessagePack, Protobuf) use **Base64 encoding** for string se
 | MessagePack | Compact | Fast | No (contractless) | No |
 | Protobuf | Most compact | Fastest | Yes ([ProtoContract]) | No |
 | XML | Large (verbose) | Moderate | No (public types) | Yes |
+| YAML | Medium | Moderate | No | Yes (most readable) |
 
 ## Integration with Existing Framework Components
 

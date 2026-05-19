@@ -36,7 +36,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Localization framework (CLDR pluralization, JSON/RESX/DB providers, entity-level localization)
 - Time utilities (business calendar, holidays, working hours, time zones)
 - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
-- Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf)
+- Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf, YAML)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, unified i18n singleton, 54 components across inputs/layout/data/feedback/nav/command palette, three-level app shell hierarchy `BCoreAppShell → BSidebarAppShell → BAppShell`)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
@@ -270,6 +270,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Serialization.Newtonsoft | Newtonsoft.Json serializer |
 | Birko.Serialization.MessagePack | MessagePack serializer |
 | Birko.Serialization.Protobuf | Protocol Buffers serializer |
+| Birko.Serialization.Yaml | YAML serializer (YamlDotNet) |
 | Birko.Time.Abstractions | IDateTimeProvider (zero deps) |
 | Birko.Time | Time zones, business calendar, holidays, working hours |
 | Birko.Localization | Translation framework, CLDR pluralization, JSON/RESX/InMemory providers |
@@ -544,7 +545,7 @@ dotnet test
 - [Data Processors Guide](docs/processors.md) (XML, CSV, HTTP, ZIP, decorator composition)
 - [Tagging Guide](docs/tagging.md) (Entity tagging, polymorphic junction, tenant-scoped tags)
 - [Views Guide](docs/views.md) (Fluent view builder, cross-platform projections, aggregations)
-- [Serialization Guide](docs/serialization.md) (System.Text.Json, Newtonsoft, MessagePack, Protobuf)
+- [Serialization Guide](docs/serialization.md) (System.Text.Json, Newtonsoft, MessagePack, Protobuf, YAML)
 - [Localization Guide](docs/localization.md) (Translations, CLDR pluralization, entity-level)
 - [Time Guide](docs/time.md) (Business calendar, holidays, working hours, time zones)
 - [Random Guide](docs/random.md) (RNG providers, distributions, sequences, noise)

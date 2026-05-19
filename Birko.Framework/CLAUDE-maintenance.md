@@ -51,7 +51,7 @@ Existing folder groups:
 - **Models/** — Birko.Models.*
 - **Redis/** — Birko.Redis
 - **Security/** — Birko.Security, Birko.Security.Jwt/AspNetCore/BCrypt/Vault/AzureKeyVault/NFC
-- **Serialization/** — Birko.Serialization, .Newtonsoft, .MessagePack, .Protobuf
+- **Serialization/** — Birko.Serialization, .Newtonsoft, .MessagePack, .Protobuf, .Yaml
 - **Storage/** — Birko.Storage, Birko.Storage.AzureBlob
 - **Telemetry/** — Birko.Telemetry, Birko.Telemetry.OpenTelemetry
 - **Tests/** — All *.Tests projects

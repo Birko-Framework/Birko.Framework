@@ -86,7 +86,7 @@
 
 ## Serialization
 - **Birko.Serialization** - Abstraction (ISerializer, SystemJsonSerializer, SystemXmlSerializer)
-- **Birko.Serialization.Newtonsoft** / **.MessagePack** / **.Protobuf**
+- **Birko.Serialization.Newtonsoft** / **.MessagePack** / **.Protobuf** / **.Yaml**
 
 ## Caching & Redis
 - **Birko.Caching** - ICache, MemoryCache, CacheSerializer

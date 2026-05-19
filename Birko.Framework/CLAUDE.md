@@ -131,6 +131,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Serialization.Yaml (2026-05-19)
+Added YAML serializer sibling project alongside `.Newtonsoft` / `.MessagePack` / `.Protobuf`.
+- **`YamlDotNetSerializer`** — implements `ISerializer` over YamlDotNet; `ContentType` = `application/yaml`, `Format` = `SerializationFormat.Yaml`
+- **`SerializationFormat.Yaml`** added to the enum
+- Constructor accepts optional `YamlDotNet.Serialization.ISerializer` / `IDeserializer` to override the default pipeline (camelCase + `IgnoreUnmatchedProperties()`)
+- Stream overloads wrap UTF-8 `StreamReader`/`StreamWriter` (`leaveOpen: true`); async methods are sync-wrapped since YamlDotNet has no async API
+- 13 new tests in `Birko.Serialization.Tests/Yaml/` (xUnit + FluentAssertions)
+
 ### Birko.Web — Unified i18n (2026-04-24)
 All three Birko.Web.* packages share a single global i18n singleton — no more per-component `this.attr('label-X', 'English')` islands or one-off `setTranslate` hooks.
 - **`birko-web-core` exports** `i18n` (default `I18n` instance), `t(key, params?, fallback?)`, `useI18n(instance)` (swap in an app-owned instance), `onI18nChange(fn)` (subscribers auto re-wire on swap), plus the existing `I18n` class, `createFormatter`, `getFormatter`

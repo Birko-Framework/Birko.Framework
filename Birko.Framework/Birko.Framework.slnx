@@ -253,6 +253,7 @@
     <Project Path="../Birko.Serialization.Newtonsoft/Birko.Serialization.Newtonsoft.shproj" />
     <Project Path="../Birko.Serialization.MessagePack/Birko.Serialization.MessagePack.shproj" />
     <Project Path="../Birko.Serialization.Protobuf/Birko.Serialization.Protobuf.shproj" />
+    <Project Path="../Birko.Serialization.Yaml/Birko.Serialization.Yaml.shproj" />
   </Folder>
   <Folder Name="/Workflow/">
     <Project Path="../Birko.Workflow/Birko.Workflow.shproj" />

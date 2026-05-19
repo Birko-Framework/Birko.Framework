@@ -577,6 +577,10 @@
 			"path": "../Birko.Serialization.Protobuf"
 		},
 		{
+			"name": "Serialization / Birko.Serialization.Yaml",
+			"path": "../Birko.Serialization.Yaml"
+		},
+		{
 			"name": "Storage / Birko.Storage",
 			"path": "../Birko.Storage"
 		},
