@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>e0fab6e3-d6e2-4e53-a9a0-79f8e34d0bf4</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Models.Users.SQL</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserLoginMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserProfileMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserRoleMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\UserTenantMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\RoleMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\RolePermissionMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\TenantMapping.cs" />
+  </ItemGroup>
+</Project>
