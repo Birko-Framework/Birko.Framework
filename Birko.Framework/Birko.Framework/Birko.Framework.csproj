@@ -227,7 +227,17 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.SQL\Birko.Models.SQL.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Customers.SQL\Birko.Models.Customers.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Inventory.SQL\Birko.Models.Inventory.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Pricing.SQL\Birko.Models.Pricing.SQL.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Product.SQL\Birko.Models.Product.SQL.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Users\Birko.Models.Users.projitems" Label="Shared" />
+
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Models.Users.SQL\Birko.Models.Users.SQL.projitems" Label="Shared" />
 
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Caching\Birko.Caching.projitems" Label="Shared" />

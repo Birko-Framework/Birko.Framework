@@ -150,14 +150,32 @@ Mixin interfaces: `IProductManufacturer`, `IProductProperties`, `IProductTags`.
 - `URLAlias` — friendly-URL redirect (`IsPermanent` = 301 vs 302)
 - `SitemapItem` — sitemap entry with `ChangeFrequency`, `Priority`
 
-## Layer 4: SQL Mapping (`Birko.Models.SQL`)
+## Layer 4: SQL Mapping (`Birko.Models.SQL` + domain siblings)
 
 Replaces attribute-based SQL mapping (`[Table]`, `[UniqueField]`, `[PrecisionField]`) with a fluent registry. Concrete models stay clean.
+
+The framework is split into two layers so consumers only pull in what they need:
+
+| Project | Contents |
+|---|---|
+| `Birko.Models.SQL` | Framework only — `ModelMap<T>`, `FieldBuilder<T>`, `IModelMapping<T>`, `ModelMapRegistry`. No canonical mappings. |
+| `Birko.Models.Users.SQL` | Canonical mappings for `Birko.Models.Users`: UserMapping, UserLoginMapping, UserProfileMapping, UserRoleMapping, UserTenantMapping, RoleMapping, RolePermissionMapping, TenantMapping |
+| `Birko.Models.Customers.SQL` | Canonical mappings for `Birko.Models.Customers`: AddressMapping (Address + InvoiceAddress + ContactPerson), CustomerMapping |
+| `Birko.Models.Inventory.SQL` | Canonical mappings for `Birko.Models.Inventory`: StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping |
+| `Birko.Models.Pricing.SQL` | Canonical mappings for `Birko.Models.Pricing`: CurrencyMapping (Currency + Tax + PriceGroup) |
+| `Birko.Models.Product.SQL` | Canonical mappings for `Birko.Models.Product`: MeasureUnitMapping (MeasureUnit + UnitConversion), ProductPartnerCodeMapping |
+
+Import only the SQL-mapping siblings whose models you actually persist. A consumer that uses `Birko.Models.Inventory` but doesn't touch users or pricing just imports `Birko.Models.SQL` + `Birko.Models.Inventory.SQL`.
+
+> **Framework vs. consumer aggregator.** The repo's own `Birko.Framework.csproj` imports all five domain `.SQL` siblings — that project is the kitchen-sink build validator and intentionally compiles everything together. **Consumer aggregators (`{YourSolution}.Birko`) should not mirror that.** Treat each `Birko.Models.{Domain}.SQL` as opt-in per persisted domain: import the framework (`Birko.Models.SQL`) once, then add a domain sibling only if you actually persist that domain's models via SQL. Skipping unused siblings keeps your aggregator's binary footprint tight and avoids dragging `Birko.Data.SQL` mappings into NoSQL-only or read-only consumers.
 
 ### Defining a mapping
 
 ```csharp
-using Birko.Models.SQL;
+using Birko.Models.Inventory;
+using Birko.Models.SQL.Mapping;
+
+namespace MyApp.Mappings;
 
 public class StockItemMapping : IModelMapping<StockItem>
 {
@@ -177,10 +195,15 @@ public class StockItemMapping : IModelMapping<StockItem>
 
 ```csharp
 var registry = new ModelMapRegistry();
-registry.RegisterFromAssembly(typeof(StockItemMapping).Assembly);  // auto-discovers all IModelMapping<>
+
+// Auto-discover all IModelMapping<> in the consumer assembly (picks up every domain sibling
+// you imported via .projitems — they all compile into the same aggregator DLL)
+registry.RegisterFromAssembly(typeof(Program).Assembly);
+
+// Apply table names + field metadata to the SQL layer
+registry.ApplyToDatabase();
 
 var map = registry.GetMap<StockItem>();
-// Pass `map` into your SQL store or migration generator
 ```
 
 ### Fluent API

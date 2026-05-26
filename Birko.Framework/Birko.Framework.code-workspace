@@ -497,16 +497,32 @@
 			"path": "../Birko.Models.Customers"
 		},
 		{
+			"name": "Models / Birko.Models.Customers.SQL",
+			"path": "../Birko.Models.Customers.SQL"
+		},
+		{
 			"name": "Models / Birko.Models.Inventory",
 			"path": "../Birko.Models.Inventory"
+		},
+		{
+			"name": "Models / Birko.Models.Inventory.SQL",
+			"path": "../Birko.Models.Inventory.SQL"
 		},
 		{
 			"name": "Models / Birko.Models.Pricing",
 			"path": "../Birko.Models.Pricing"
 		},
 		{
+			"name": "Models / Birko.Models.Pricing.SQL",
+			"path": "../Birko.Models.Pricing.SQL"
+		},
+		{
 			"name": "Models / Birko.Models.Product",
 			"path": "../Birko.Models.Product"
+		},
+		{
+			"name": "Models / Birko.Models.Product.SQL",
+			"path": "../Birko.Models.Product.SQL"
 		},
 		{
 			"name": "Models / Birko.Models.SEO",
@@ -519,6 +535,10 @@
 		{
 			"name": "Models / Birko.Models.Users",
 			"path": "../Birko.Models.Users"
+		},
+		{
+			"name": "Models / Birko.Models.Users.SQL",
+			"path": "../Birko.Models.Users.SQL"
 		},
 		{
 			"name": "Redis / Birko.Redis",

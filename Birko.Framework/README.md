@@ -429,6 +429,8 @@ A minimal aggregator `csproj` looks like:
 
 > **Rule of thumb for choosing aggregator boundaries:** when in doubt, start with **one** aggregator. Split it only when you hit a concrete pain point — bloated binaries, leaky transitive references, or projects that build slowly because they pull in `.projitems` they don't use. Splitting too early is overhead with no payoff.
 
+> **`Birko.Models.*.SQL` are opt-in per persisted domain.** Import `Birko.Models.SQL` (the fluent mapping framework) once, then add a domain sibling — `Birko.Models.Users.SQL`, `.Customers.SQL`, `.Inventory.SQL`, `.Pricing.SQL`, `.Product.SQL` — only if you actually persist that domain's models via SQL. The repo's own `Birko.Framework.csproj` imports all five as a build-validation kitchen sink; **don't mirror that in your aggregator** — NoSQL-only consumers or apps that touch a subset of domains should skip the unused siblings to keep their footprint tight. See [docs/models.md — Layer 4](docs/models.md#layer-4-sql-mapping-birkomodelssql--domain-siblings) for the full table.
+
 **Live examples** of these patterns:
 - `Symbio.Birko.csproj` — single aggregator, ~90 Birko shared projects consolidated into one DLL (large enterprise platform)
 - `WebFinstatApiTester.csproj` — no aggregator at all; the app `csproj` directly imports a lean subset (~10 projitems) because the project is small and overlapping-import risk is nil

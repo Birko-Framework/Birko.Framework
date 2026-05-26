@@ -139,7 +139,12 @@
     <Project Path="../Birko.Models.Product/Birko.Models.Product.shproj" />
     <Project Path="../Birko.Models.SEO/Birko.Models.SEO.shproj" />
     <Project Path="../Birko.Models.SQL/Birko.Models.SQL.shproj" />
+    <Project Path="../Birko.Models.Customers.SQL/Birko.Models.Customers.SQL.shproj" />
+    <Project Path="../Birko.Models.Inventory.SQL/Birko.Models.Inventory.SQL.shproj" />
+    <Project Path="../Birko.Models.Pricing.SQL/Birko.Models.Pricing.SQL.shproj" />
+    <Project Path="../Birko.Models.Product.SQL/Birko.Models.Product.SQL.shproj" />
     <Project Path="../Birko.Models.Users/Birko.Models.Users.shproj" />
+    <Project Path="../Birko.Models.Users.SQL/Birko.Models.Users.SQL.shproj" />
   </Folder>
   <Folder Name="/Redis/">
     <Project Path="../Birko.Redis/Birko.Redis.shproj" />
