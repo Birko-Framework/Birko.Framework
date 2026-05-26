@@ -30,7 +30,7 @@
 ## ViewModel Layer
 - **Birko.Data.ViewModel** - Base ViewModel repository abstractions
 - **Birko.Data.SQL.ViewModel** - SQL ViewModel repositories
-- **Birko.Data.ElasticSearch.ViewModel** / **InfluxDB.ViewModel** / **JSON.ViewModel** / **MongoDB.ViewModel** / **RavenDB.ViewModel** / **TimescaleDB.ViewModel** / **CosmosDB.ViewModel**
+- **Birko.Data.ElasticSearch.ViewModel** / **InfluxDB.ViewModel** / **JSON.ViewModel** / **XML.ViewModel** / **MongoDB.ViewModel** / **RavenDB.ViewModel** / **TimescaleDB.ViewModel** / **CosmosDB.ViewModel**
 
 ## Data Features
 - **Birko.Data.Patterns** - Cross-cutting patterns (Unit of Work, Soft Delete, Audit, Timestamp, Default Constraint, Sluggable, Paging)
@@ -73,7 +73,12 @@
 - **Birko.Models.Users** - User, UserLogin, UserProfile, RBAC (Role, RolePermission, UserRole), Tenant, UserTenant
 - **Birko.Models.Inventory** - StockItem, StockItemVariant, StorageLocation, StockMovement, InventoryDocument (clean, no SQL attrs)
 - **Birko.Models.Pricing** - Currency, Tax, PriceGroup, PriceList, PriceListEntry, Discount (clean, no SQL attrs)
-- **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry) — replaces attribute-based mapping
+- **Birko.Models.SQL** - Fluent SQL mapping framework (ModelMap, IModelMapping, ModelMapRegistry, FieldBuilder) — framework only, no canonical mappings
+- **Birko.Models.Users.SQL** - Canonical SQL mappings for `Birko.Models.Users`: UserMapping, UserLoginMapping, UserProfileMapping, UserRoleMapping, UserTenantMapping, RoleMapping, RolePermissionMapping, TenantMapping
+- **Birko.Models.Customers.SQL** - Canonical SQL mappings for `Birko.Models.Customers`: AddressMapping (Address + InvoiceAddress + ContactPerson), CustomerMapping
+- **Birko.Models.Inventory.SQL** - Canonical SQL mappings for `Birko.Models.Inventory`: StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping
+- **Birko.Models.Pricing.SQL** - Canonical SQL mappings for `Birko.Models.Pricing`: CurrencyMapping (Currency + Tax + PriceGroup)
+- **Birko.Models.Product.SQL** - Canonical SQL mappings for `Birko.Models.Product`: MeasureUnitMapping (MeasureUnit + UnitConversion), ProductPartnerCodeMapping
 
 ## Validation & Rules
 - **Birko.Validation** - Fluent validation (IValidator<T>, AbstractValidator<T>, built-in rules, store wrappers)
@@ -146,7 +151,7 @@
 
 ## Web (TypeScript)
 - **Birko.Web.Core** - Minimal Web Component framework (Shadow DOM base class, reactive state, HTTP/SSE clients, hash router, unified i18n: `i18n` singleton, `t()`, `useI18n()`, `onI18nChange()`, `BaseComponent.label()` helper)
-- **Birko.Web.Components** - Component library (54 Shadow DOM web components: 20 inputs incl. b-tag-input, b-segmented, b-markdown-editor with H1–H6/table/task-list/highlight/sup/sub, b-datetime-picker, b-time; 9 layout incl. b-chat, b-split-panel; 14 data incl. b-kanban with recursive nesting + 3-zone DnD, b-editable-table, b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer with sticky-header modes; 6 feedback incl. b-progress, b-stale-banner; 4 navigation; 1 command palette. Canonical `bwc.*` i18n key namespace, shared sheets — `dataViewerCardSheet`/`dataViewerHeaderSheet`/`toolbarBtnSheet`)
+- **Birko.Web.Components** - Component library (55 Shadow DOM web components: 21 inputs incl. b-tag-input, b-segmented, b-markdown-editor with H1–H6/table/task-list/highlight/sup/sub, b-datetime-picker, b-time, b-date-range-picker with 2-month layout/hover-preview/opt-in presets/`confirm` mode; 9 layout incl. b-chat, b-split-panel; 14 data incl. b-kanban with recursive nesting + 3-zone DnD, b-editable-table, b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer with sticky-header modes; 6 feedback incl. b-progress, b-stale-banner; 4 navigation; 1 command palette. Canonical `bwc.*` i18n key namespace, shared sheets — `dataViewerCardSheet`/`dataViewerHeaderSheet`/`toolbarBtnSheet`)
 - **Birko.Web.Shell** - Application shell framework (three-level hierarchy: `BCoreAppShell` → `BSidebarAppShell` → `BAppShell`; authentication, module loading, command palette, notifications, tenant switching, page bases — `BaseListPage`/`BaseSplitPage`/`BaseDetailPage`/`BaseFormModal`/`BaseDashboardWidget`; canonical `bws.*` i18n keys with `{entity}` interpolation)
 
 ## Tests

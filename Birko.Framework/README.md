@@ -38,7 +38,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Pluggable RNG (SystemRandom, CryptoRandom, XorShift, MersenneTwister, SplitMix), distributions, sequences, noise
 - Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf, YAML)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
-- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, unified i18n singleton, 54 components across inputs/layout/data/feedback/nav/command palette, three-level app shell hierarchy `BCoreAppShell → BSidebarAppShell → BAppShell`)
+- Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, unified i18n singleton, 55 components across inputs/layout/data/feedback/nav/command palette, three-level app shell hierarchy `BCoreAppShell → BSidebarAppShell → BAppShell`)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
 - AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
@@ -159,7 +159,12 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Models.Users | User, UserLogin, UserProfile, Role, Tenant, UserTenant |
 | Birko.Models.Inventory | StockItem, StockItemVariant, StorageLocation, InventoryDocument |
 | Birko.Models.Pricing | Currency, Tax, PriceGroup, PriceList, Discount |
-| Birko.Models.SQL | Fluent SQL mapping framework (ModelMap, FieldBuilder, IModelMapping, ModelMapRegistry — uses FieldDescriptor from Data.Patterns) |
+| Birko.Models.SQL | Fluent SQL mapping framework (ModelMap, FieldBuilder, IModelMapping, ModelMapRegistry — uses FieldDescriptor from Data.Patterns). Framework only — canonical mappings live in the `.SQL` siblings below. |
+| Birko.Models.Users.SQL | Canonical IModelMapping<T> for User, UserLogin, UserProfile, UserRole, UserTenant, Role, RolePermission, Tenant |
+| Birko.Models.Customers.SQL | Canonical IModelMapping<T> for Address, InvoiceAddress, ContactPerson, Customer |
+| Birko.Models.Inventory.SQL | Canonical IModelMapping<T> for StockItem, StorageLocation, InventoryDocumentLine |
+| Birko.Models.Pricing.SQL | Canonical IModelMapping<T> for Currency, Tax, PriceGroup |
+| Birko.Models.Product.SQL | Canonical IModelMapping<T> for MeasureUnit, UnitConversion, ProductPartnerCode |
 
 ### Communication
 
@@ -198,7 +203,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Project | Description |
 |---------|-------------|
 | Birko.Web.Core | Minimal Web Component framework — Shadow DOM base class, reactive state (Signal/Store), fetch-based HTTP client, SSE client, hash router, **unified i18n singleton** (`i18n`, `t()`, `useI18n()`, `onI18nChange()`, `BaseComponent.label()`). No dependencies. |
-| Birko.Web.Components | Component library built on Birko.Web.Core — 54 Shadow DOM web components: 20 inputs (`b-tag-input`, `b-segmented`, `b-markdown-editor` with H1–H6/table/task-list/highlight/sup/sub, `b-datetime-picker`, `b-time`, ...), 9 layout (`b-chat`, `b-split-panel`, ...), 14 data (`b-kanban` with recursive nesting + 3-zone DnD, `b-editable-table`, `b-code-block`, `b-json-viewer`, `b-xml-viewer`, `b-object-tree`, `b-definition-list`, `b-pre`, ...), 6 feedback (`b-progress`, `b-stale-banner`, ...), 4 navigation, 1 command palette. Canonical `bwc.*` i18n keys. |
+| Birko.Web.Components | Component library built on Birko.Web.Core — 55 Shadow DOM web components: 21 inputs (`b-tag-input`, `b-segmented`, `b-markdown-editor` with H1–H6/table/task-list/highlight/sup/sub, `b-datetime-picker`, `b-time`, `b-date-range-picker` with 2-month layout + hover-preview + opt-in presets + `confirm` mode, ...), 9 layout (`b-chat`, `b-split-panel`, ...), 14 data (`b-kanban` with recursive nesting + 3-zone DnD, `b-editable-table`, `b-code-block`, `b-json-viewer`, `b-xml-viewer`, `b-object-tree`, `b-definition-list`, `b-pre`, ...), 6 feedback (`b-progress`, `b-stale-banner`, ...), 4 navigation, 1 command palette. Canonical `bwc.*` i18n keys. |
 | Birko.Web.Shell | Application shell framework built on Birko.Web.Core — three-level hierarchy (`BCoreAppShell → BSidebarAppShell → BAppShell`), auth, modules, command palette, notifications, tenants, page bases (`BaseListPage`/`BaseSplitPage`/`BaseDetailPage`/`BaseFormModal`/`BaseDashboardWidget`). Canonical `bws.*` i18n keys with automatic `{entity}` interpolation. |
 
 ### Workflow

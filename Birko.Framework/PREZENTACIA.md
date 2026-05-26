@@ -19,9 +19,9 @@ Birko Framework je komplexný .NET 10.0 framework postavený na princípe **jedn
 
 **Čísla:**
 
-- **163 produktových projektov** (z toho približne **82 platformových rozšírení**)
+- **164 produktových projektov** (z toho približne **83 platformových rozšírení**)
 - **56 testovacích projektov** (xUnit + FluentAssertions)
-- **12 databázových platforiem**, **11 LLM poskytovateľov**, **54 Web Components**
+- **12 databázových platforiem**, **11 LLM poskytovateľov**, **55 Web Components**
 - **0 externých závislostí** pre core contracts
 
 **Oblasti použitia:**
@@ -96,7 +96,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 | **Background Jobs** | 9 | Base + SQL, ES, MongoDB, RavenDB, JSON, XML, Redis, CosmosDB |
 | **Health Checks** | 4 | Core + Data (SQL, NoSQL, MQTT, SMTP, WebSocket, ...), Redis, Azure |
 | **Telemetry** | 2 | System.Diagnostics.Metrics, OpenTelemetry (OTLP + Console) |
-| **Serialization** | 4 | System JSON/XML + Newtonsoft, MessagePack, Protobuf |
+| **Serialization** | 5 | System JSON/XML + Newtonsoft, MessagePack, Protobuf, YAML |
 | **Storage** | 2 | Lokálny FS, Azure Blob Storage (REST + OAuth2 + SAS) |
 
 ### 🌍 Ďalšie funkcie
@@ -171,7 +171,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 │   Ollama, AzureOpenAI, GitHubCopilot,  │  Telemetry: OpenTelemetry           │
 │   ZAi, vLLM, SGLang, LlamaCpp          │  Secrets: Vault, AzureKeyVault      │
 │ Sync/Mig/ViewModel/Views/Workflow/     │  Serialization: Newtonsoft,         │
-│   BgJobs na každej hlavnej platforme   │    MessagePack, Protobuf            │
+│   BgJobs na každej hlavnej platforme   │    MessagePack, Protobuf, YAML      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
          Všetky feature moduly závisia len na Contracts, nie medzi sebou.
@@ -347,7 +347,7 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Telemetry.OpenTelemetry → OTLP + Console, ASP.NET Core
 
 🟩 Birko.Serialization          → ISerializer, SystemJson, SystemXml
-🟨 Birko.Serialization.Newtonsoft / .MessagePack / .Protobuf
+🟨 Birko.Serialization.Newtonsoft / .MessagePack / .Protobuf / .Yaml
 
 🟩 Birko.Storage                → IFileStorage, LocalFileStorage, presigned URLs
 🟨 Birko.Storage.AzureBlob      → REST + OAuth2 + SAS
@@ -435,11 +435,14 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
                                      unified i18n singleton (i18n, t(),
                                      useI18n(), onI18nChange(),
                                      BaseComponent.label())
-🟩 Birko.Web.Components           → 54 Shadow DOM komponentov
-                                     (20 inputs vrátane b-tag-input,
+🟩 Birko.Web.Components           → 55 Shadow DOM komponentov
+                                     (21 inputs vrátane b-tag-input,
                                      b-segmented, b-markdown-editor s
                                      H1–H6/table/task-list/highlight/sup/sub,
-                                     b-datetime-picker, b-time;
+                                     b-datetime-picker, b-time,
+                                     b-date-range-picker s 2-mesačným
+                                     layoutom, hover-preview, opt-in
+                                     presetmi a `confirm` režimom;
                                      9 layout vrátane b-chat;
                                      14 data vrátane b-kanban s rekurzívnym
                                      vnorením a 3-zone DnD,
@@ -488,6 +491,7 @@ Unifikovaný interface pre viaceré serializačné formáty:
 - **Newtonsoft**: Newtonsoft JSON serializer
 - **MessagePack**: Binárna serializácia (rýchla a kompaktná)
 - **Protobuf**: Protocol Buffers serializácia
+- **YAML**: YamlDotNet (čitateľný text pre konfiguráciu, CI manifesty)
 
 **Poznámka**: `Birko.Data.JSON` a `Birko.Data.XML` stores akceptujú `ISerializer` v konštruktore a default používajú `SystemJsonSerializer` / `SystemXmlSerializer` z tejto abstrakcie — takže je možné injectnúť aj iný serializer (napr. Newtonsoft) bez zmeny store kódu.
 
@@ -551,7 +555,7 @@ Utility funkcie pre bežné úlohy:
 - **Unified i18n** — jeden globálny singleton (`i18n`, `t(key, params?, fallback?)`, `useI18n(instance)`, `onI18nChange(fn)`) plus `BaseComponent.label(attrName, i18nKey, fallback, params?)`. Komponenty sa auto-prepojujú cez `onI18nChange` a automaticky sa prerenderujú pri zmene locale. Per-instance override cez `label-*` atribúty stále vyhráva nad globálnym lookupom.
 
 ### Birko.Web.Components
-**54 komponentov**: inputs (20), layout (9), data (14), feedback (6), navigation (4), command palette (1)
+**55 komponentov**: inputs (21), layout (9), data (14), feedback (6), navigation (4), command palette (1)
 
 Kanonický namespace kľúčov: **`bwc.*`** (`bwc.common.close`, `bwc.palette.placeholder`, `bwc.pagination.prev`, ...). Anglický bundle je v `birko-web-components/locales/en.json`.
 
@@ -712,14 +716,14 @@ RUN dotnet publish src/Host/YourSolution.Api.csproj -c Release -o /app/publish
 
 | Metrika | Hodnota |
 |---|---:|
-| **Produktové projekty celkom** | **163** |
-| **z toho platformové rozšírenia** (🟨) | **~82** |
+| **Produktové projekty celkom** | **164** |
+| **z toho platformové rozšírenia** (🟨) | **~83** |
 | **z toho core / feature projekty** (🟦 + 🟩) | **~81** |
 | **Testovacie projekty** | **56** |
-| **Projekty celkom** | **219** |
+| **Projekty celkom** | **220** |
 | Databázové platformy | 12 |
 | LLM poskytovatelia | 11 |
-| Web Components | 54 |
+| Web Components | 55 |
 | Jazykové AI agenti | 10 |
 | Task AI agenti | 4 |
 | Communication protokoly | 14 |
@@ -762,4 +766,4 @@ Súčasť Birko Framework – pozri [License.md](License.md).
 
 ---
 
-*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-05-11*
+*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-05-19*

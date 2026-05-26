@@ -130,11 +130,11 @@ Hash-based (`#/route`), supports guards, child routes, parameter extraction.
 
 ## Birko.Web.Components
 
-54 components grouped into 6 categories. All are Shadow DOM components built on `BaseComponent`, styled with design tokens (`--b-*` CSS variables), and integrated with the global i18n singleton (`bwc.*` key namespace — see the [Internationalization](#internationalization) section below).
+55 components grouped into 6 categories. All are Shadow DOM components built on `BaseComponent`, styled with design tokens (`--b-*` CSS variables), and integrated with the global i18n singleton (`bwc.*` key namespace — see the [Internationalization](#internationalization) section below).
 
-### Inputs (20)
+### Inputs (21)
 
-`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-segmented` (single-select connected buttons for 3–5 short choices), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-option-group` (segmented buttons with icons), `b-form` (schema-driven form builder with validation and cascading selects), `b-markdown-editor` (toolbar: bold/italic/strikethrough/highlight/superscript/subscript, H1–H6 heading dropdown, blockquote, code, bullet/numbered/task lists, link, image, table, horizontal rule; split/source/preview modes; Word HTML paste cleanup; custom renderer).
+`b-input`, `b-select`, `b-multi-select`, `b-tag-input` (freeform Enter-to-create + paste-split), `b-button`, `b-checkbox`, `b-switch`, `b-radio`, `b-textarea`, `b-search-input` (debounced), `b-file-upload`, `b-inline-edit`, `b-range` (slider/from-to), `b-segmented` (single-select connected buttons for 3–5 short choices), `b-date-picker`, `b-time`, `b-datetime-picker`, `b-date-range-picker` (2-month side-by-side, instant or `confirm`-button modes, hover-preview, `min-days`/`max-days` constraints, opt-in JSON `presets` with `today`/`-7d`/`month-start` token resolver, ISO interval `value="start/end"`), `b-option-group` (segmented buttons with icons), `b-form` (schema-driven form builder with validation and cascading selects), `b-markdown-editor` (toolbar: bold/italic/strikethrough/highlight/superscript/subscript, H1–H6 heading dropdown, blockquote, code, bullet/numbered/task lists, link, image, table, horizontal rule; split/source/preview modes; Word HTML paste cleanup; custom renderer).
 
 ### Layout (9)
 
