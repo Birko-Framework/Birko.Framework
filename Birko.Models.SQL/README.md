@@ -1,6 +1,6 @@
 # Birko.Models.SQL
 
-Fluent SQL mapping framework for Birko domain models.
+Fluent SQL mapping framework for Birko domain models. Framework only — canonical mappings live in the sibling projects.
 
 ## Features
 
@@ -8,6 +8,7 @@ Fluent SQL mapping framework for Birko domain models.
 - Expression-based property configuration (type-safe)
 - `ModelMapRegistry` with assembly scanning for auto-discovery
 - Supports: table name, column name, unique, primary, precision, scale, max length, index, ignore
+- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches field metadata onto the SQL layer
 
 ## Installation
 
@@ -17,9 +18,22 @@ Shared project — import in your `.csproj`:
 <Import Project="..\Birko.Models.SQL\Birko.Models.SQL.projitems" Label="Shared" />
 ```
 
+For pre-built canonical mappings of standard Birko domain models, also import one or more of:
+
+```xml
+<Import Project="..\Birko.Models.Users.SQL\Birko.Models.Users.SQL.projitems"       Label="Shared" />
+<Import Project="..\Birko.Models.Customers.SQL\Birko.Models.Customers.SQL.projitems" Label="Shared" />
+<Import Project="..\Birko.Models.Inventory.SQL\Birko.Models.Inventory.SQL.projitems" Label="Shared" />
+<Import Project="..\Birko.Models.Pricing.SQL\Birko.Models.Pricing.SQL.projitems"     Label="Shared" />
+<Import Project="..\Birko.Models.Product.SQL\Birko.Models.Product.SQL.projitems"     Label="Shared" />
+```
+
+Each sibling depends on its corresponding domain model project (e.g. `Birko.Models.Users.SQL` requires `Birko.Models.Users` to be imported too).
+
 ## Dependencies
 
-- Birko.Models.Inventory (for example mappings only)
+- [`Birko.Data.Patterns`](../Birko.Data.Patterns/) — `FieldDescriptor`
+- [`Birko.Data.SQL`](../Birko.Data.SQL/) — `DataBase.RegisterTableNames`, `DataBase.LoadTable`
 
 ## Usage
 
@@ -36,7 +50,7 @@ public class CustomerMapping : IModelMapping<Customer>
             .HasPrimary(x => x.Guid)
             .HasUnique(x => x.Guid);
 
-        map.Property(x => x.Name).HasPrecision(256).IsRequired();
+        map.Property(x => x.Name).HasPrecision(256);
         map.Property(x => x.Email).HasPrecision(256);
         map.Property(x => x.Balance)
             .HasPrecision(22)
@@ -51,10 +65,13 @@ public class CustomerMapping : IModelMapping<Customer>
 var registry = new ModelMapRegistry();
 
 // Register from assembly (scans for IModelMapping<T> implementations)
-registry.RegisterFromAssembly(typeof(CustomerMapping).Assembly);
+registry.RegisterFromAssembly(typeof(Program).Assembly);
 
 // Or register individually
 registry.Register(new CustomerMapping());
+
+// Apply to SQL layer (registers table names + patches field metadata)
+registry.ApplyToDatabase();
 
 // Retrieve mapping
 var map = registry.GetMap<Customer>();
@@ -77,11 +94,15 @@ Console.WriteLine(map?.TableName); // "Customers"
 | `[IndexedField("idx", order)]` | `.HasIndex("idx", order)` |
 | `[IncrementField]` | `.IsIncrement()` |
 
-## Related Projects
+## Sibling projects
 
-- [Birko.Data.SQL](../Birko.Data.SQL/) — SQL base classes (attribute-based, legacy)
-- [Birko.Models.Inventory](../Birko.Models.Inventory/) — Clean inventory models
-- [Birko.Models.Pricing](../Birko.Models.Pricing/) — Clean pricing models
+Pre-built canonical mappings — pick the domains you actually persist:
+
+- [`Birko.Models.Users.SQL`](../Birko.Models.Users.SQL/) — User, UserLogin, UserProfile, UserRole, UserTenant, Role, RolePermission, Tenant
+- [`Birko.Models.Customers.SQL`](../Birko.Models.Customers.SQL/) — Address, InvoiceAddress, ContactPerson, Customer
+- [`Birko.Models.Inventory.SQL`](../Birko.Models.Inventory.SQL/) — StockItem, StorageLocation, InventoryDocumentLine
+- [`Birko.Models.Pricing.SQL`](../Birko.Models.Pricing.SQL/) — Currency, Tax, PriceGroup
+- [`Birko.Models.Product.SQL`](../Birko.Models.Product.SQL/) — MeasureUnit, UnitConversion, ProductPartnerCode
 
 ## License
 

@@ -3,22 +3,16 @@
 ## Overview
 Fluent SQL mapping framework for Birko domain models. Replaces attribute-based mapping (`[Table]`, `[UniqueField]`, `[PrecisionField]`, etc.) with a code-first fluent API.
 
+**This project is framework-only as of 2026-05-24.** The canonical `IModelMapping<T>` implementations for `Birko.Models.Users` / `.Customers` / `.Inventory` / `.Pricing` / `.Product` moved into dedicated sibling projects (`Birko.Models.{Domain}.SQL`) so consumers can pick exactly the domains they persist.
+
 ## Project Location
 `C:\Source\Birko.Models.SQL\`
 
-## Components
-
-### Mapping Framework (`Birko.Models.SQL.Mapping`)
+## Components (`Birko.Models.SQL.Mapping`)
 - **ModelMap\<T\>** — Fluent configuration: `ToTable()`, `HasUnique()`, `HasPrimary()`, `Ignore()`, `Property()`
 - **FieldBuilder\<T\>** — Fluent field builder wrapping `FieldDescriptor` from Birko.Data.Patterns: `HasColumnName()`, `HasPrecision()`, `HasScale()`, `IsUnique()`, `IsPrimary()`, `IsAutoIncrement()`, `IsIgnored()`, `HasMaxLength()`, `HasIndex()`, `And()`
 - **IModelMapping\<T\>** — Implement to define SQL mappings for a model type
 - **ModelMapRegistry** — Central registry with assembly scanning (`RegisterFromAssembly`), `GetMap<T>()`, `GetPropertyMaps()`, `ApplyToDatabase()`
-
-### Example Mappings (`Birko.Models.SQL.Mappings`)
-- **StockItemMapping** — Maps StockItem to "Items" table
-- **StorageLocationMapping** — Maps StorageLocation to "Repositories" table
-- **InventoryDocumentLineMapping** — Maps InventoryDocumentLine with decimal precision
-- Plus 14 additional model mappings for Users, Roles, Customers, Currencies, etc.
 
 ## File Structure
 ```
@@ -27,26 +21,27 @@ Mapping/
 ├── ModelMap.cs
 ├── ModelMapRegistry.cs
 └── FieldBuilder.cs
-Mappings/
-├── StockItemMapping.cs
-├── StorageLocationMapping.cs
-├── InventoryDocumentLineMapping.cs
-├── CurrencyMapping.cs
-├── UserMapping.cs
-├── TenantMapping.cs
-├── RoleMapping.cs
-├── ... (14 more)
 ```
 
 ## Dependencies
-- **Birko.Data.Patterns** — FieldDescriptor (shared type for both mapping and migrations)
-- **Birko.Data.SQL** — ApplyToDatabase() registers table names and field metadata with the SQL layer
-- **Birko.Models.Inventory** / **Birko.Models.Pricing** / **Birko.Models.Users** / **Birko.Models.Customers** — For example mappings
+- **Birko.Data.Patterns** — `FieldDescriptor` (shared type for both mapping and migrations)
+- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and field metadata with the SQL layer
+
+## Sibling Projects (canonical mappings)
+| Sibling | Contains |
+|---|---|
+| `Birko.Models.Users.SQL` | UserMapping, UserLoginMapping, UserProfileMapping, UserRoleMapping, UserTenantMapping, RoleMapping, RolePermissionMapping, TenantMapping |
+| `Birko.Models.Customers.SQL` | AddressMapping (Address + InvoiceAddress + ContactPerson), CustomerMapping |
+| `Birko.Models.Inventory.SQL` | StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping |
+| `Birko.Models.Pricing.SQL` | CurrencyMapping (Currency + Tax + PriceGroup) |
+| `Birko.Models.Product.SQL` | MeasureUnitMapping (MeasureUnit + UnitConversion), ProductPartnerCodeMapping |
+
+Consumers import only the siblings they need; they all share the same `Birko.Models.SQL.Mapping` namespace via `IModelMapping<T>` but live in `Birko.Models.{Domain}.SQL.Mappings` namespaces.
 
 ## Usage
 
 ```csharp
-// Define a mapping
+// 1. Define a mapping (in your own assembly or use a sibling project's canonical one)
 public class StockItemMapping : IModelMapping<StockItem>
 {
     public void Configure(ModelMap<StockItem> map)
@@ -58,12 +53,12 @@ public class StockItemMapping : IModelMapping<StockItem>
     }
 }
 
-// Register and use
+// 2. Register and use
 var registry = new ModelMapRegistry();
-registry.RegisterFromAssembly(typeof(StockItemMapping).Assembly);
+registry.RegisterFromAssembly(typeof(Program).Assembly);   // picks up every IModelMapping<T> in the consumer DLL
 var map = registry.GetMap<StockItem>();
 
-// Apply to database (registers table names + field metadata)
+// 3. Apply to database (registers table names + field metadata)
 registry.ApplyToDatabase();
 ```
 
