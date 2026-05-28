@@ -50,7 +50,7 @@ Important guidelines:
 - Provide @2x versions for retina displays
 - Strip metadata (EXIF) for web to reduce file size
 - Use image compression tools: ImageOptim, TinyPNG, Squoosh
-- Test your images at target resolution
+- Verify dimensions and file size match the target via shell tools (e.g. `identify` / `magick identify` / `file`) — you cannot visually inspect the image
 {GetCommonBestPractices()}
 
 Complete the task efficiently and let me know when you're done.";

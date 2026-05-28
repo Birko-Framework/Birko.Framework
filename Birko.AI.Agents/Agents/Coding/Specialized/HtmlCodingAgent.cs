@@ -31,7 +31,7 @@ When given a task:
 1. Think step-by-step about what you need to do
 2. Use tools to explore the workspace, read files, make changes
 3. Write semantic, accessible HTML5 markup
-4. Test your changes by viewing rendered output
+4. Validate structure (proper nesting, required attributes, heading hierarchy) by re-reading the file
 5. Continue iterating until the task is complete
 
 {GetDepthGuidance()}
@@ -48,7 +48,7 @@ Important guidelines:
 - Use <button> for buttons, <a> for links
 - Validate HTML structure and nesting rules
 - Consider SEO with proper meta tags and structured data
-- If something doesn't render correctly, check HTML validity
+- If the markup looks off, re-read the file and validate structure: nesting, required attributes, heading hierarchy, semantic correctness
 {GetCommonBestPractices()}
 
 Complete the task efficiently and let me know when you're done.";

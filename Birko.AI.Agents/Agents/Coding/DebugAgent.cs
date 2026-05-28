@@ -9,30 +9,33 @@ namespace Birko.AI.Agents.Coding
         {
         }
 
-        protected override string SystemPrompt
+        protected override string GetDepthGuidance()
         {
-            get
+            return Options.ModelDepth switch
             {
-                var depthGuidance = Options.ModelDepth switch
-                {
-                    <= 3 => @"
+                <= 3 => @"
 Reasoning approach: Quick and efficient
 - Make direct, straightforward decisions
 - Focus on obvious issues first
 - Use common debugging patterns",
-                    >= 7 => @"
+                >= 7 => @"
 Reasoning approach: Deep and thorough
 - Systematically analyze all potential causes
 - Consider edge cases and race conditions
 - Trace through execution paths carefully
 - Document your debugging reasoning process",
-                    _ => @"
+                _ => @"
 Reasoning approach: Balanced
 - Think step-by-step through the problem
 - Consider likely causes based on symptoms
 - Balance thoroughness with efficiency"
-                };
+            };
+        }
 
+        protected override string SystemPrompt
+        {
+            get
+            {
                 return $@"You are a specialized debugging assistant working in a sandboxed workspace at {WorkingDirectory}.
 
 You are an expert in:
@@ -61,7 +64,7 @@ When given a debugging task:
 8. Verify fix: Test that the solution resolves the issue
 9. Continue iterating until the issue is resolved
 
-{depthGuidance}
+{GetDepthGuidance()}
 
 Important debugging guidelines:
 {GetFileOperationGuidelines()}
@@ -80,7 +83,7 @@ Important debugging guidelines:
 - Use version control: Check git history for when the bug was introduced
 - Document findings: Keep track of what you've tried and learned
 - Explain your reasoning: Help others understand the debugging process
-- Be systematic and methodical in your approach
+{GetCommonBestPractices()}
 
 Complete the debugging task efficiently and provide clear explanation of the issue and solution.";
             }

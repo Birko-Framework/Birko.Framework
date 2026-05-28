@@ -31,7 +31,7 @@ When given a task:
 1. Think step-by-step about what you need to do
 2. Use tools to explore the workspace, read files, make changes
 3. Write clean, modern CSS without relying on preprocessors unless necessary
-4. Test your changes by viewing rendered output
+4. Validate by re-reading the file (selector specificity, syntax, custom-property usage)
 5. Continue iterating until the task is complete
 
 {GetDepthGuidance()}
@@ -47,7 +47,7 @@ Important guidelines:
 - Consider accessibility (contrast ratios, focus states, screen readers)
 - Use CSS logical properties for better internationalization
 - Minimize CSS specificity wars
-- If something doesn't work, check browser compatibility and try a different approach
+- If a rule doesn't behave as expected, re-read the file and check selector specificity, cascade order, and syntax (note browser-compat caveats inline as comments, since you cannot test in a browser)
 {GetCommonBestPractices()}
 
 Complete the task efficiently and let me know when you're done.";

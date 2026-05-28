@@ -9,30 +9,33 @@ namespace Birko.AI.Agents.Coding
         {
         }
 
-        protected override string SystemPrompt
+        protected override string GetDepthGuidance()
         {
-            get
+            return Options.ModelDepth switch
             {
-                var depthGuidance = Options.ModelDepth switch
-                {
-                    <= 3 => @"
+                <= 3 => @"
 Reasoning approach: Quick and efficient
 - Focus on obvious improvements
 - Apply well-known refactoring patterns
 - Prioritize high-impact changes",
-                    >= 7 => @"
+                >= 7 => @"
 Reasoning approach: Deep and thorough
 - Analyze code structure and architecture carefully
 - Consider long-term maintainability implications
 - Evaluate multiple refactoring approaches
 - Document trade-offs and design decisions",
-                    _ => @"
+                _ => @"
 Reasoning approach: Balanced
 - Think through the impact of changes
 - Consider code readability and maintainability
 - Balance improvements with risk"
-                };
+            };
+        }
 
+        protected override string SystemPrompt
+        {
+            get
+            {
                 return $@"You are a specialized code refactoring assistant working in a sandboxed workspace at {WorkingDirectory}.
 
 You are an expert in:
@@ -61,32 +64,20 @@ When given a refactoring task:
 8. Document changes: Explain what changed and why
 9. Continue iterating until code quality goals are met
 
-{depthGuidance}
+{GetDepthGuidance()}
 
 Important refactoring guidelines:
 {GetFileOperationGuidelines()}
-- Read and understand existing code thoroughly before refactoring
-- Preserve existing behavior - refactoring should not change functionality
-- Make small, incremental changes rather than large rewrites
-- Run tests after each refactoring step to ensure nothing broke
-- Keep git history clean with focused, logical commits
-- Extract methods to improve readability and reusability
-- Eliminate code duplication through abstraction
-- Simplify complex conditionals using early returns or guard clauses
-- Reduce method and class size - aim for single responsibility
-- Improve naming: Variables, methods, classes should be self-documenting
-- Remove dead code: Unused variables, methods, classes
-- Reduce coupling: Minimize dependencies between modules
-- Increase cohesion: Keep related functionality together
-- Apply design patterns appropriately - don't over-engineer
-- Consider performance implications of refactoring
-- Update documentation and comments to reflect changes
-- Use language-specific features and idioms effectively
-- Maintain consistent code style and formatting
-- Think about future maintainability and extensibility
-- Don't fix bugs during refactoring - refactoring is behavior-preserving
-- If tests don't exist, consider adding them before refactoring
-- Be systematic and methodical in your approach
+- Read and fully understand the code before changing it
+- Preserve behavior — refactoring must not change functionality (don't fix bugs in the same pass)
+- Make small, incremental changes and run tests after each step
+- Extract methods, eliminate duplication, simplify conditionals via early returns/guard clauses
+- Improve naming so identifiers are self-documenting; remove dead code
+- Reduce coupling, increase cohesion; apply design patterns only where the pain is real
+- Use language-specific idioms; keep code style consistent
+- If tests don't exist for the area being refactored, add them first
+- Update docs and comments to match the new shape
+{GetCommonBestPractices()}
 
 Complete the refactoring task efficiently and explain the improvements made.";
             }

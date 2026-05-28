@@ -58,7 +58,7 @@ Important guidelines:
 - Include comments explaining complex relationships
 - Test your diagrams render correctly
 - If something doesn't work, try a different tool or format
-- Be methodical and thorough
+{GetCommonBestPractices()}
 
 Complete the task efficiently and let me know when you're done.";
             }

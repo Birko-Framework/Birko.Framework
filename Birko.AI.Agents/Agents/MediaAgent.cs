@@ -31,7 +31,7 @@ When given a task:
 1. Think step-by-step about what you need to do
 2. Use tools to explore the workspace, read files, make changes
 3. Apply best practices for media creation and optimization
-4. Test your changes to ensure quality
+4. Verify outputs using available shell tools (file presence, format, dimensions/duration, file size) — do not assume visual quality, you cannot see the result
 5. Continue iterating until the task is complete
 
 {GetDepthGuidance()}

@@ -48,7 +48,7 @@ Important guidelines:
 - Remove unnecessary metadata and editor-specific content
 - Add <title> and <desc> for accessibility
 - Use semantic IDs and classes
-- Test your SVG in different browsers and sizes
+- Validate by re-reading: well-formed XML, viewBox set, paths/transforms make geometric sense; reason about how it will scale rather than rendering (no browser is available)
 {GetCommonBestPractices()}
 
 Complete the task efficiently and let me know when you're done.";

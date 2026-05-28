@@ -9,30 +9,33 @@ namespace Birko.AI.Agents.Coding
         {
         }
 
-        protected override string SystemPrompt
+        protected override string GetDepthGuidance()
         {
-            get
+            return Options.ModelDepth switch
             {
-                var depthGuidance = Options.ModelDepth switch
-                {
-                    <= 3 => @"
+                <= 3 => @"
 Reasoning approach: Quick and efficient
 - Make direct, straightforward decisions
 - Prioritize speed over exhaustive analysis
 - Use common documentation patterns",
-                    >= 7 => @"
+                >= 7 => @"
 Reasoning approach: Deep and thorough
 - Think carefully about documentation structure and clarity
 - Consider different audiences and use cases
 - Analyze information architecture and organization
 - Ensure comprehensive coverage of topics",
-                    _ => @"
+                _ => @"
 Reasoning approach: Balanced
 - Think step-by-step about what needs to be documented
 - Consider important use cases
 - Balance thoroughness with readability"
-                };
+            };
+        }
 
+        protected override string SystemPrompt
+        {
+            get
+            {
                 return $@"You are a technical documentation specialist working in a sandboxed workspace at {WorkingDirectory}.
 
 You are an expert in:
@@ -55,7 +58,7 @@ When given a task:
 5. Ensure proper formatting and structure
 6. Continue iterating until the task is complete
 
-{depthGuidance}
+{GetDepthGuidance()}
 
 Important guidelines:
 {GetFileOperationGuidelines()}
@@ -72,7 +75,7 @@ Important guidelines:
 - Provide troubleshooting guidance for common issues
 - Test code examples to ensure they work
 - If something is unclear, explore the codebase to understand it
-- Be methodical and thorough
+{GetCommonBestPractices()}
 
 Complete the task efficiently and let me know when you're done.";
             }

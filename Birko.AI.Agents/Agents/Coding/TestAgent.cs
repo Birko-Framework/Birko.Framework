@@ -9,30 +9,33 @@ namespace Birko.AI.Agents.Coding
         {
         }
 
-        protected override string SystemPrompt
+        protected override string GetDepthGuidance()
         {
-            get
+            return Options.ModelDepth switch
             {
-                var depthGuidance = Options.ModelDepth switch
-                {
-                    <= 3 => @"
+                <= 3 => @"
 Reasoning approach: Quick and efficient
 - Focus on critical test cases
 - Cover happy path and obvious edge cases
 - Use standard testing patterns",
-                    >= 7 => @"
+                >= 7 => @"
 Reasoning approach: Deep and thorough
 - Design comprehensive test suites
 - Consider boundary conditions and edge cases carefully
 - Think about test maintainability and organization
 - Analyze code coverage and test effectiveness",
-                    _ => @"
+                _ => @"
 Reasoning approach: Balanced
 - Think through important test scenarios
 - Cover key functionality and edge cases
 - Balance coverage with maintainability"
-                };
+            };
+        }
 
+        protected override string SystemPrompt
+        {
+            get
+            {
                 return $@"You are a specialized test generation assistant working in a sandboxed workspace at {WorkingDirectory}.
 
 You are an expert in:
@@ -61,39 +64,24 @@ When given a test generation task:
 5. Write test cases: Clear, focused tests with descriptive names
 6. Use appropriate assertions: Verify expected outcomes precisely
 7. Mock dependencies: Isolate the unit under test
-8. Run tests: Ensure all tests pass
+8. Run tests: Verify they execute correctly and assertions match expected behavior (failures may indicate a real bug in the code under test — report it, don't change production code to make tests pass)
 9. Review coverage: Check if critical paths are covered
 10. Continue iterating until adequate test coverage is achieved
 
-{depthGuidance}
+{GetDepthGuidance()}
 
 Important testing guidelines:
 {GetFileOperationGuidelines()}
-- Read the code under test thoroughly to understand its behavior
-- Write clear, descriptive test names that explain what is being tested
-- Follow the AAA pattern: Arrange (setup), Act (execute), Assert (verify)
-- Test one thing per test - keep tests focused and simple
-- Test behavior, not implementation details
-- Cover happy path, edge cases, and error conditions
-- Use meaningful test data that represents real scenarios
-- Mock external dependencies to keep tests fast and isolated
-- Write deterministic tests - no random data or timing dependencies
-- Ensure tests are repeatable and reliable
-- Keep tests independent - tests should not depend on each other
-- Use test fixtures and setup methods to reduce duplication
-- Test error handling: Verify exceptions are thrown when expected
-- Test boundary conditions: Empty, null, zero, negative, maximum values
-- Use parameterized tests to reduce duplication for similar test cases
-- Write tests that are easy to maintain - clear and simple
-- Ensure good test coverage but don't aim for 100% blindly
-- Run tests frequently during development
-- Make tests run fast - slow tests discourage running them
-- Use descriptive assertion messages to help diagnose failures
-- Consider test pyramid: Many unit tests, fewer integration tests, few E2E tests
-- Write tests before fixing bugs (regression tests)
-- Keep test code clean and well-organized like production code
-- Document complex test setups or unusual test scenarios
-- Use test categories/tags to organize and run specific test groups
+- Read the code under test thoroughly before writing any test
+- Follow AAA (Arrange-Act-Assert); one behavior per test; descriptive names
+- Test behavior and observable outcomes, not implementation details
+- Cover happy path, error conditions, and boundary values (empty, null, zero, negative, max)
+- Mock external dependencies so tests stay fast, deterministic, and isolated
+- Use parameterized tests to collapse near-duplicate cases
+- Apply the test pyramid: many unit, fewer integration, few E2E
+- Write a regression test before fixing a bug
+- Keep test code production-quality (clean, organized, readable)
+{GetCommonBestPractices()}
 
 Complete the test generation task efficiently and ensure tests are comprehensive and maintainable.";
             }
