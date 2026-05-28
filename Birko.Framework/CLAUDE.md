@@ -134,6 +134,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Task tracking — `tasks/` folder + `/tasks` skill (2026-05-28)
+Introduced hierarchical task tracking (Epics → Stories → Tasks) as markdown files under `tasks/`. Pilot import migrated all open work from the former `TODO.md` into a structured backlog: **12 EPICs, 22 STORIES, 34 TASKs**, organized by area of concern (Web.Components polish, Data.Redis, Caching.NCache, Storage cloud providers, Messaging/MessageQueue expansion, Telemetry exporters, Health checks, Communication protocols, RavenDB index ergonomics, Test coverage gaps, MQTT v5). Each TASK is self-contained (Context / Acceptance criteria / Out of scope) so a human or AI agent can pick it without re-discovery. Old `TODO.md` removed (history preserved in git).
+- **Skill location** — `~/.claude/skills/tasks/` (global, reusable across projects)
+- **Verbs** — `/tasks new`, `/tasks triage`, `/tasks pick`, `/tasks close <ID>`, `/tasks import <file|--github|--jira>`, `/tasks export <ID> --to github|jira`, `/tasks migrate --to github|jira`
+- **Modes** — `local` (file-only, default) and `hybrid` (files + GitHub Issues / Jira export via `gh` CLI / Atlassian MCP). Configured per project in `tasks/.config.yml`
+- **Shape detection** — meta-repo (Birko.Framework) uses per-sub-project `Birko.X/tasks/` for project-local work and root `tasks/` for cross-cutting epics with `affects: [Birko.AI, Birko.Data, ...]`; consumer solutions use solution-root `tasks/`
+- **Lifecycle** — status-only, no archiving. Dashboard hides done by default; epics/stories are often open-ended areas of concern
+- See [tasks/README.md](tasks/README.md) for the live dashboard
+
 ### Birko.AI.Agents — Prompt convention realignment (2026-05-28)
 Audited all 20 agents in `Birko.AI.Agents` against Anthropic's "Building Effective Agents" principles (simplicity, transparency, well-documented tools) and the helper pattern in `Agent.cs` (`GetDepthGuidance()` virtual + `GetFileOperationGuidelines()` + `GetCommonBestPractices()` statics). Realigned 5 outlier agents so the catalogue is consistent.
 - **`RefactorAgent` / `TestAgent` / `DebugAgent` / `DocumentationAgent`** — were inlining a local `Options.ModelDepth switch` directly in `SystemPrompt`'s getter, bypassing the `protected virtual string GetDepthGuidance()` hook in `Agent.cs:126`. Now each `protected override`s the method (same shape `OrchestratorAgent` already uses) and the prompt interpolates `{GetDepthGuidance()}` like every other agent. Depth-behavior tuning is now in one method per agent instead of buried in a string literal

@@ -562,7 +562,7 @@ dotnet test
 - [Web Components Guide](docs/web.md) (`Birko.Web.Core`/`.Components`/`.Shell` — Shadow DOM, Signal/Store, ribbon shell)
 - [Dependencies Guide](docs/dependencies.md)
 - [Consumers Guide](docs/consumers.md)
-- [TODO / Roadmap](TODO.md)
+- [Open backlog](tasks/README.md) — hierarchical task tracker (Epics → Stories → Tasks) managed by the `/tasks` Claude Code skill
 
 ## License
 
