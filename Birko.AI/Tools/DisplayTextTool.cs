@@ -15,7 +15,7 @@ namespace Birko.AI.Tools
             required = new[] { "text" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -23,16 +23,16 @@ namespace Birko.AI.Tools
                 var title = input.TryGetValue("title", out var titleVal) ? titleVal?.ToString() : null;
 
                 if (string.IsNullOrWhiteSpace(text))
-                    return "Error: text parameter is required";
+                    return Task.FromResult("Error: text parameter is required");
 
                 var displayMsg = string.IsNullOrWhiteSpace(title) ? text : $"{title}\n{text}";
                 SendMessage("display", displayMsg ?? "");
 
-                return "Text displayed successfully";
+                return Task.FromResult("Text displayed successfully");
             }
             catch (Exception ex)
             {
-                return $"Error displaying text: {ex.Message}";
+                return Task.FromResult($"Error displaying text: {ex.Message}");
             }
         }
     }

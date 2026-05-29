@@ -17,7 +17,7 @@ namespace Birko.AI.Tools
 
         public Func<string, string, Task<string>>? PromptCallback { get; set; }
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -52,12 +52,12 @@ namespace Birko.AI.Tools
                     var promptTask = PromptCallback(question ?? "", context ?? "");
                     var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeout));
 
-                    var completedTask = Task.WhenAny(promptTask, timeoutTask).GetAwaiter().GetResult();
+                    var completedTask = await Task.WhenAny(promptTask, timeoutTask);
 
                     if (completedTask == timeoutTask)
                         return $"Error: Prompt timed out after {timeout} seconds.";
 
-                    return promptTask.GetAwaiter().GetResult();
+                    return await promptTask;
                 }
 
                 var promptMsg = string.IsNullOrWhiteSpace(context)

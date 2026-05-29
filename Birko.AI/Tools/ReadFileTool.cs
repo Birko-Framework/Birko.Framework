@@ -16,7 +16,7 @@ namespace Birko.AI.Tools
             required = new[] { "file_path" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -33,13 +33,13 @@ namespace Birko.AI.Tools
                 var fullPath = Path.GetFullPath(Path.Combine(normalizedWorkingDir, relativePath));
 
                 if (!PathHelper.IsPathSafe(fullPath, normalizedWorkingDir, Options?.AllowedExternalPaths))
-                    return "Error: Access denied. Path must be in workspace or an allowed external path.";
+                    return Task.FromResult("Error: Access denied. Path must be in workspace or an allowed external path.");
 
-                return File.ReadAllText(fullPath);
+                return Task.FromResult(File.ReadAllText(fullPath));
             }
             catch (Exception ex)
             {
-                return $"Error reading file: {ex.Message}";
+                return Task.FromResult($"Error reading file: {ex.Message}");
             }
         }
     }

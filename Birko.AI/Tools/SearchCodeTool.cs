@@ -22,7 +22,7 @@ namespace Birko.AI.Tools
             required = new[] { "query" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -39,10 +39,10 @@ namespace Birko.AI.Tools
                 var targetDir = string.IsNullOrWhiteSpace(relDir) ? workingDirectory : Path.Combine(workingDirectory, relDir!);
 
                 if (!PathHelper.IsPathSafe(targetDir, workingDirectory))
-                    return $"Error: Access denied. Directory must be in {workingDirectory}";
+                    return Task.FromResult($"Error: Access denied. Directory must be in {workingDirectory}");
 
                 if (!Directory.Exists(targetDir))
-                    return $"Error: Directory not found: {relDir ?? "."}";
+                    return Task.FromResult($"Error: Directory not found: {relDir ?? "."}");
 
                 var files = Directory.EnumerateFiles(targetDir, filePattern, recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly).ToList();
                 var results = new List<string>();
@@ -75,11 +75,11 @@ namespace Birko.AI.Tools
                     }
                 }
 
-                return string.Join(Environment.NewLine, results);
+                return Task.FromResult(string.Join(Environment.NewLine, results));
             }
             catch (Exception ex)
             {
-                return $"Error searching code: {ex.Message}";
+                return Task.FromResult($"Error searching code: {ex.Message}");
             }
         }
     }

@@ -18,7 +18,7 @@ namespace Birko.AI.Tools
             required = new[] { "command" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -45,25 +45,25 @@ namespace Birko.AI.Tools
 
                 using var proc = Process.Start(psi);
                 if (proc == null)
-                    return "Error: Failed to start process";
+                    return Task.FromResult("Error: Failed to start process");
 
                 if (!proc.WaitForExit(timeoutSeconds * 1000))
                 {
                     try { proc.Kill(true); } catch { }
-                    return "Error: Process timed out";
+                    return Task.FromResult("Error: Process timed out");
                 }
 
                 var stdout = proc.StandardOutput.ReadToEnd();
                 var stderr = proc.StandardError.ReadToEnd();
 
                 if (!string.IsNullOrEmpty(stderr))
-                    return stdout.Length > 0 ? stdout + "\n" + stderr : stderr;
+                    return Task.FromResult(stdout.Length > 0 ? stdout + "\n" + stderr : stderr);
 
-                return stdout;
+                return Task.FromResult(stdout);
             }
             catch (Exception ex)
             {
-                return $"Error running command: {ex.Message}";
+                return Task.FromResult($"Error running command: {ex.Message}");
             }
         }
     }

@@ -18,7 +18,7 @@ namespace Birko.AI.Tools
             required = new[] { "file_path", "content" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -32,21 +32,21 @@ namespace Birko.AI.Tools
                 var fullPath = Path.Combine(workingDirectory, filePath);
 
                 if (!PathHelper.IsPathSafe(fullPath, workingDirectory, Options?.AllowedExternalPaths))
-                    return "Error: Access denied. Path must be in workspace or an allowed external path.";
+                    return Task.FromResult("Error: Access denied. Path must be in workspace or an allowed external path.");
 
                 var dir = Path.GetDirectoryName(fullPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 {
                     if (createDirs) Directory.CreateDirectory(dir);
-                    else return $"Error: Directory does not exist: {dir}";
+                    else return Task.FromResult($"Error: Directory does not exist: {dir}");
                 }
 
                 File.AppendAllText(fullPath, content);
-                return "OK";
+                return Task.FromResult("OK");
             }
             catch (Exception ex)
             {
-                return $"Error appending to file: {ex.Message}";
+                return Task.FromResult($"Error appending to file: {ex.Message}");
             }
         }
     }

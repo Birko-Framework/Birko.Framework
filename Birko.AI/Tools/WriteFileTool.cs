@@ -19,7 +19,7 @@ namespace Birko.AI.Tools
             required = new[] { "file_path", "content" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -34,24 +34,24 @@ namespace Birko.AI.Tools
                 var fullPath = Path.Combine(workingDirectory, filePath);
 
                 if (!PathHelper.IsPathSafe(fullPath, workingDirectory, Options?.AllowedExternalPaths))
-                    return "Error: Access denied. Path must be in workspace or an allowed external path.";
+                    return Task.FromResult("Error: Access denied. Path must be in workspace or an allowed external path.");
 
                 if (checkExists && File.Exists(fullPath))
-                    return $"Warning: File '{filePath}' already exists. Use edit_file to modify it, or call write_file with check_exists=false to overwrite.";
+                    return Task.FromResult($"Warning: File '{filePath}' already exists. Use edit_file to modify it, or call write_file with check_exists=false to overwrite.");
 
                 var dir = Path.GetDirectoryName(fullPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 {
                     if (createDirs) Directory.CreateDirectory(dir);
-                    else return $"Error: Directory does not exist: {dir}";
+                    else return Task.FromResult($"Error: Directory does not exist: {dir}");
                 }
 
                 File.WriteAllText(fullPath, content);
-                return "OK";
+                return Task.FromResult("OK");
             }
             catch (Exception ex)
             {
-                return $"Error writing file: {ex.Message}";
+                return Task.FromResult($"Error writing file: {ex.Message}");
             }
         }
     }

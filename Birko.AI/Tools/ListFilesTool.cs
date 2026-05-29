@@ -16,7 +16,7 @@ namespace Birko.AI.Tools
             }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -39,10 +39,10 @@ namespace Birko.AI.Tools
                 }
 
                 if (!PathHelper.IsPathSafe(targetDir, normalizedWorkingDir, Options?.AllowedExternalPaths))
-                    return $"Error: Access denied. Path must be in workspace or an allowed external path.";
+                    return Task.FromResult($"Error: Access denied. Path must be in workspace or an allowed external path.");
 
                 if (!Directory.Exists(targetDir))
-                    return $"Error: Directory not found: {relDir ?? "."}";
+                    return Task.FromResult($"Error: Directory not found: {relDir ?? "."}");
 
                 var files = Directory.EnumerateFiles(targetDir, "*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
                     .Select(p => Path.GetRelativePath(normalizedWorkingDir, p))
@@ -50,7 +50,7 @@ namespace Birko.AI.Tools
                     .ToList();
 
                 if (files.Count == 0)
-                    return $"No files found in: {relDir ?? "."}";
+                    return Task.FromResult($"No files found in: {relDir ?? "."}");
 
                 var result = new System.Text.StringBuilder();
                 result.AppendLine($"Files in {(string.IsNullOrEmpty(relDir) ? "." : relDir)}:");
@@ -62,11 +62,11 @@ namespace Birko.AI.Tools
                 result.AppendLine();
                 result.AppendLine($"Total: {files.Count} file(s)");
 
-                return result.ToString();
+                return Task.FromResult(result.ToString());
             }
             catch (Exception ex)
             {
-                return $"Error listing files: {ex.Message}";
+                return Task.FromResult($"Error listing files: {ex.Message}");
             }
         }
     }

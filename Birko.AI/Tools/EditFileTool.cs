@@ -18,7 +18,7 @@ namespace Birko.AI.Tools
             required = new[] { "file_path", "old_text", "new_text" }
         };
 
-        public override string Execute(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -34,10 +34,10 @@ namespace Birko.AI.Tools
                 var fullPath = Path.Combine(workingDirectory, filePath);
 
                 if (!PathHelper.IsPathSafe(fullPath, workingDirectory, Options?.AllowedExternalPaths))
-                    return "Error: Access denied. Path must be in workspace or an allowed external path.";
+                    return Task.FromResult("Error: Access denied. Path must be in workspace or an allowed external path.");
 
                 if (!File.Exists(fullPath))
-                    return $"Error: File does not exist: {filePath}";
+                    return Task.FromResult($"Error: File does not exist: {filePath}");
 
                 var content = File.ReadAllText(fullPath);
 
@@ -46,20 +46,20 @@ namespace Birko.AI.Tools
                     var contentPreview = content.Length > 8000
                         ? content[..8000] + $"\n\n... (truncated, {content.Length} chars total)"
                         : content;
-                    return $"Error: old_text not found in file. Read the file content below and retry with exact text.\n\nFull file content:\n```\n{contentPreview}\n```";
+                    return Task.FromResult($"Error: old_text not found in file. Read the file content below and retry with exact text.\n\nFull file content:\n```\n{contentPreview}\n```");
                 }
 
                 var occurrences = CountOccurrences(content, oldText);
                 if (occurrences > 1)
-                    return $"Error: old_text appears {occurrences} times. Provide a more specific text block.";
+                    return Task.FromResult($"Error: old_text appears {occurrences} times. Provide a more specific text block.");
 
                 var newContent = content.Replace(oldText, newText);
                 File.WriteAllText(fullPath, newContent);
-                return "OK";
+                return Task.FromResult("OK");
             }
             catch (Exception ex)
             {
-                return $"Error editing file: {ex.Message}";
+                return Task.FromResult($"Error editing file: {ex.Message}");
             }
         }
 
