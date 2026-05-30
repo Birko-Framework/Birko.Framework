@@ -217,14 +217,15 @@ Use **`BCoreAppShell`** directly when you need a different layout — mobile-fir
 ### `BCoreAppShell` — shared infrastructure
 
 Abstract core (~280 LOC). Provides:
-- Theme + layout persistence from `localStorage` (`data-theme`, `data-layout` on `<html>`)
+- Theme + layout persistence from `localStorage` (`data-theme`, `data-layout` on `<html>`). Built-in themes: default (light), `dark`, and `neon` (dark navy base with neon green/cyan accents). Any `data-theme` value saved to `{storagePrefix}-theme` is restored on mount
+- Built-in **theme switcher** in the header (all shells) — a dropdown listing the available themes with a checkmark on the active one. `setTheme(id)` applies + persists + emits `theme-change`; `currentTheme` getter reads the active id. Customize via `getAvailableThemes()` (override to add/remove/localize themes), `themeMenuLabel`, or hide entirely with `showThemeSwitcher = false`
 - Online / offline tracking exposed as `protected get isOnline(): boolean`
 - Default user dropdown (profile / settings / signout) with built-in handler
 - Brand link with configurable target (`brandHref`)
 - Breadcrumb event listener (`set-breadcrumbs` from pages)
-- Default minimal layout (brand + user dropdown + content slot) — usable as-is
-- Base CSS tokens (`:host` flex column, `.app-brand`, `.user-trigger`, `.app-content`, `.app-status-bar` skeleton, `.status-dot` variants)
-- Render helpers: `renderBrand()`, `renderUserDropdown()` for subclasses
+- Default minimal layout (brand + theme switcher + user dropdown + content slot) — usable as-is
+- Base CSS tokens (`:host` flex column, `.app-brand`, `.theme-trigger`, `.user-trigger`, `.app-content`, `.app-status-bar` skeleton, `.status-dot` variants). The content area uses `var(--b-bg-gradient, var(--b-bg-secondary))` so themes can supply a radial backdrop (the `neon` theme does)
+- Render helpers: `renderBrand()`, `renderThemeDropdown()`, `renderUserDropdown()` for subclasses
 
 **Required (4 abstract methods):**
 ```typescript
