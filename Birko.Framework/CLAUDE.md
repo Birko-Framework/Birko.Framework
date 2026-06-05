@@ -134,6 +134,11 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Components — b-button-group + b-toolbar (2026-06-05)
+Two new layout components backported from the Gameshow control surface (its contest transport controls):
+- **`<b-button-group>`** — bordered, padded, rounded cluster (`--b-bg-secondary` fill, `--b-radius-lg`) that makes related `b-button`s read as one unit (e.g. Start/Pause/Stop). Purely presentational: `role="group"`, optional `label` → aria-label, default slot only — slotted buttons keep their own variant/size/clicks.
+- **`<b-toolbar>`** — flex row (`--b-space-lg` gap, wraps) laying out the clusters; `role="toolbar"`, optional `label`. An `end` slot pushes content to the far edge — the conventional spot for destructive/exit actions (the end container hides itself when empty so no phantom trailing gap, same slotchange pattern as `b-card`).
+
 ### Birko.Web.Shell — user area hides for anonymous apps (2026-06-05)
 `BCoreAppShell.renderUserDropdown()` (inherited by `BSidebarAppShell` + `BAppShell`/ribbon) now follows the shell's return-value feature-toggle convention instead of always rendering a dropdown:
 - **`getUserName()` returns `''`** → the whole user area (avatar + name + dropdown) is omitted — for anonymous apps (kiosks, public dashboards, ribbon apps without auth)
