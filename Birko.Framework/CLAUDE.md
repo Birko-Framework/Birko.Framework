@@ -134,6 +134,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Shell — user area hides for anonymous apps (2026-06-05)
+`BCoreAppShell.renderUserDropdown()` (inherited by `BSidebarAppShell` + `BAppShell`/ribbon) now follows the shell's return-value feature-toggle convention instead of always rendering a dropdown:
+- **`getUserName()` returns `''`** → the whole user area (avatar + name + dropdown) is omitted — for anonymous apps (kiosks, public dashboards, ribbon apps without auth)
+- **`getUserMenuItems()` returns `[]`** → static avatar + name badge (`.user-trigger.is-static`, no pointer cursor/hover) instead of a dropdown that opened an empty list
+- `refreshUserMenu()` no-ops when items are empty; switching anonymous ↔ signed-in needs a full `update()` (apps already re-render on auth change since the username is baked into `render()`)
+
 ### Birko.Web — `neon` theme + header theme switcher (2026-05-30)
 Added a third built-in theme and a built-in theme switcher to all shells.
 - **`neon` theme** — new `[data-theme="neon"]` token block in `Birko.Web.Components/css/tokens.css`: dark navy base (`#0b0f1a`), neon green primary (`#8cffb0` with dark `#06301a` text), magenta danger (`#ff4466`), cyan info (`#66e0ff`), amber warning (`#ffaa44`). Mirrors the `dark` theme's override set plus neon focus glows and an `--b-input-thumb-bg` flip
