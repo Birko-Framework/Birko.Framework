@@ -108,6 +108,7 @@
 - **Birko.Security.Jwt** - JWT ITokenProvider
 - **Birko.Security.AspNetCore** - ASP.NET Core integration (JWT Bearer, ICurrentUser, permissions, tenant middleware)
 - **Birko.Security.NFC** - NFC-based authentication (tag-to-user mapping, enrollment, revocation)
+- **Birko.Security.OAuth.Server** - OAuth2 authorization server (token/authorize/device_authorization/dynamic-client-registration endpoints, all four grant types, PKCE, refresh-token rotation, persistence via Birko.Data.Stores)
 
 ## Background Jobs & Message Queue
 - **Birko.BackgroundJobs** - Job interfaces, in-memory queue, processor, dispatcher, scheduler
@@ -160,7 +161,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Helpers.Tests, Birko.Structures.Tests
 - Birko.BackgroundJobs.Tests, Birko.MessageQueue.Tests, Birko.MessageQueue.Redis.Tests
 - Birko.EventBus.Tests, Birko.CQRS.Tests, Birko.Workflow.Tests
-- Birko.Security.AspNetCore.Tests, Birko.Security.BCrypt.Tests, Birko.Security.Vault.Tests, Birko.Security.AzureKeyVault.Tests, Birko.Security.NFC.Tests (Vault.Tests also covers Vault.Configuration)
+- Birko.Security.AspNetCore.Tests, Birko.Security.BCrypt.Tests, Birko.Security.Vault.Tests, Birko.Security.AzureKeyVault.Tests, Birko.Security.NFC.Tests, Birko.Security.OAuth.Server.Tests (Vault.Tests also covers Vault.Configuration)
 - Birko.Storage.Tests, Birko.Storage.AzureBlob.Tests
 - Birko.Telemetry.Tests, Birko.Telemetry.OpenTelemetry.Tests
 - Birko.Rules.Tests, Birko.Data.Processors.Tests, Birko.Data.Aggregates.Tests

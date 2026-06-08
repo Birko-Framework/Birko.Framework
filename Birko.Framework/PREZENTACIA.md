@@ -79,10 +79,11 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Resilience**: Rate limiting (sliding window), Circuit Breaker (3-stavový), Cost Tracking (budget enforcement)
 - **Orchestration**: Task dispatcher, implementation plán, paralelné vykonávanie, závislostná analýza, eskalácie
 
-### 🔒 Bezpečnosť (8 projektov)
+### 🔒 Bezpečnosť (9 projektov)
 - **Hashovanie**: PBKDF2 (core), BCrypt (pure C# Blowfish)
 - **Šifrovanie**: AES-256-GCM
 - **Autentifikácia**: JWT, NFC-based auth (tag-to-user mapovanie)
+- **OAuth2 authorization server**: vlastný issuer (token, authorize, device_authorization, dynamic client registration) — všetky štyri grant typy vrátane PKCE a RFC 8628 device flow; perzistencia cez `Birko.Data.Stores` (provider-agnostic)
 - **Secret Management**: HashiCorp Vault (KV v1/v2), Azure Key Vault (OAuth2 + REST API), konfiguračný bridge (Microsoft.Extensions.Configuration)
 - **Configuration bridge**: `AddSecretConfiguration(any ISecretProvider)` — Vault, Azure Key Vault, čiľubovoľný provider do `IConfiguration`
 - **ASP.NET Core** integrácia – JWT Bearer, `ICurrentUser`, permissions, tenant middleware, RBAC
@@ -353,7 +354,7 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Storage.AzureBlob      → REST + OAuth2 + SAS
 ```
 
-#### 8. 🔒 Security (8 projektov)
+#### 8. 🔒 Security (9 projektov)
 ```
 🟩 Birko.Security                → PBKDF2, AES-256-GCM, RBAC interfaces
 🟨 Birko.Security.BCrypt         → BCrypt (pure C# Blowfish)
@@ -364,6 +365,9 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Security.AzureKeyVault  → Azure Key Vault (OAuth2 + REST)
 🟨 Birko.Security.AspNetCore     → JWT Bearer, ICurrentUser, tenant middleware
 🟨 Birko.Security.NFC            → NFC tag-to-user auth (enrollment, revocation)
+🟨 Birko.Security.OAuth.Server   → OAuth2 authorization server (token, authorize,
+                                    device_authorization, dynamic client registration;
+                                    všetky štyri grant typy + PKCE; persistuje cez Birko.Data.Stores)
 ```
 
 #### 9. Models (10 projektov)
@@ -596,7 +600,7 @@ Kanonický namespace kľúčov: **`bws.*`**. Shellov `t()` automaticky interpolu
 | **Background Jobs & MQ** | 4 | BackgroundJobs core + SQL backend; MessageQueue (InMemory) + Redis backend |
 | **Event Bus** | 1 | In-process bus, pipeline, deduplikácia, outbox |
 | **Caching** | 2 | Caching core + Hybrid (L1+L2) |
-| **Security** | 5 | ASP.NET Core (JWT, tenant middleware), BCrypt, Vault + Vault.Configuration, AzureKeyVault, NFC auth |
+| **Security** | 6 | ASP.NET Core (JWT, tenant middleware), BCrypt, Vault + Vault.Configuration, AzureKeyVault, NFC auth, OAuth2 authorization server |
 | **Communication** | 6 | Modbus (RTU/TCP), OAuth (všetky flows), IR, NFC, Camera, REST, WebSocket |
 | **Messaging** | 2 | SMTP + string templates; Razor template engine |
 | **Storage** | 2 | LocalFileStorage; Azure Blob |

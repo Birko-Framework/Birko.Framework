@@ -134,6 +134,19 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Shell — `renderHeaderActions()` hook (2026-06-08)
+Added a first-class extension seam for app-specific header controls, replacing the prior practice of overriding `renderThemeDropdown()` to smuggle in unrelated buttons.
+- **`BCoreAppShell.renderHeaderActions(): string`** — new `protected` hook, returns `''` by default. Rendered at the left edge of the header action cluster (before the theme switcher and user area) in all three layouts: the core/minimal `renderHeader()`, the sidebar shell (reuses core's header), and `BAppShell`'s ribbon `after-tabs` slot. The header is not re-rendered by `refresh*()`, so subclasses wire returned controls once in `onMount()` and keep mutable state in sync from store subscriptions
+- **Why** — `renderThemeDropdown()` is documented as rendering only the theme switcher, and the shell's `refreshThemeMenu()`/`_setupThemeDropdown()` assume its markup *is* the switcher. The old hack (prepend custom markup, chain `super.renderThemeDropdown()`) silently dropped the custom controls whenever `showThemeSwitcher` was false, and hid the extension point from the base class
+- **Consumer migration** — the gameshow control shell (`gs-control-shell`, the only consumer that was overriding `renderThemeDropdown`) now overrides `renderHeaderActions()` for its key-color picker + reload button; its `onMount` wiring is unchanged. `renderThemeDropdown()` remains for legitimately restyling the switcher itself. Documented in `Birko.Web.Shell` CLAUDE.md + README
+
+### Birko.Web.Components — b-color-picker (2026-06-08)
+New `inputs` component backported from the Gameshow control surface (its chroma-key backdrop picker, previously a raw native `<input type="color">`).
+- **`<b-color-picker>`** — pairs a native color swatch (reskinned with `--b-*` tokens; the swatch opens the OS color dialog) with a monospace hex text field. Both stay in sync: dragging the swatch live-previews into the text field, typing a valid hex live-previews on the swatch, and either control commits on `change`.
+- Accepts loose hex input (`#rgb`, `rgb`, `#rrggbb`, `rrggbb`); the canonical `value` and the `change` detail are normalized to lowercase `#rrggbb`. Bad hex snaps back to the current value on commit.
+- **Opt-in `alpha`** — adding the attribute shows an opacity slider (native `<input type="range">`, track tinted over a token checkerboard so opacity reads visually) and switches the canonical value to 8-digit `#rrggbbaa`; the text field then accepts `#rgba`/`#rrggbbaa` too. The native swatch is sRGB-only, so RGB comes from the swatch and the alpha byte from the slider. Typing a 6-digit hex in alpha mode preserves the current slider alpha.
+- Two-event contract mirroring native: `input` = ephemeral live preview during any drag/typing (no attribute reflection → no re-render storm), `change` = committed (attribute reflected). Standard form-input surface: `formFieldSheet` + `formControlSheet`, `label`/`hint`/`error`/`required`/`disabled`, `size` (vertical-footprint — swatch matches `--b-control-min-height*`), i18n via `bwc.colorPicker.*`.
+
 ### Birko.Web.Components — b-button-group + b-toolbar (2026-06-05)
 Two new layout components backported from the Gameshow control surface (its contest transport controls):
 - **`<b-button-group>`** — bordered, padded, rounded cluster (`--b-bg-secondary` fill, `--b-radius-lg`) that makes related `b-button`s read as one unit (e.g. Start/Pause/Stop). Purely presentational: `role="group"`, optional `label` → aria-label, default slot only — slotted buttons keep their own variant/size/clicks.

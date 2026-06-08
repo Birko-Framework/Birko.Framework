@@ -1,10 +1,11 @@
 ---
 id: TASK-027
 parent: STORY-020
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-05-28
+closed: 2026-05-29
 depends-on: []
 blocks: []
 pr: null
@@ -20,14 +21,14 @@ OAuth2 authorization server. The client side already exists in `Birko.Communicat
 
 ## Acceptance criteria
 
-- [ ] `Birko.Security.OAuth.Server` shared project exists, registered everywhere
-- [ ] Token endpoint (client credentials, authorization code + PKCE, refresh token, device code)
-- [ ] Authorization endpoint with consent management
-- [ ] Client registration endpoint
-- [ ] Models persist via `Birko.Data.Stores` (provider-agnostic)
-- [ ] DI extensions wire endpoints + storage
-- [ ] xUnit tests covering each grant type
-- [ ] CLAUDE.md / README.md / License.md / .gitignore
+- [x] `Birko.Security.OAuth.Server` shared project exists, registered everywhere
+- [x] Token endpoint (client credentials, authorization code + PKCE, refresh token, device code)
+- [x] Authorization endpoint with consent management
+- [x] Client registration endpoint
+- [x] Models persist via `Birko.Data.Stores` (provider-agnostic)
+- [x] DI extensions wire endpoints + storage (`OAuthServer` composition root — host registers as singleton)
+- [x] xUnit tests covering each grant type (43 tests, all passing)
+- [x] CLAUDE.md / README.md / License.md / .gitignore
 
 ## Out of scope
 

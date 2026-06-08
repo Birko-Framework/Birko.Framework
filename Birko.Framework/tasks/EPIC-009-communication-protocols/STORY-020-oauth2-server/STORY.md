@@ -1,8 +1,9 @@
 ---
 id: STORY-020
 parent: EPIC-009
-status: planned
+status: done
 created: 2026-05-28
+closed: 2026-05-29
 ---
 
 # OAuth2 authorization server

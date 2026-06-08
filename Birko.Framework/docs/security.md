@@ -359,13 +359,140 @@ Features:
 - `INfcTagMappingStore` persistence interface (implement with any Birko.Data store)
 - `InMemoryNfcTagMappingStore` included for testing
 
+## OAuth2 Authorization Server (Birko.Security.OAuth.Server)
+
+`Birko.Security.OAuth.Server` is the issuer-side counterpart to `Birko.Communication.OAuth` — your service can mint access and refresh tokens for first-party apps or third-party clients. Pure handler library (no ASP.NET dependency); persistence flows through `Birko.Data.Stores` so the same code runs against SQL, ElasticSearch, MongoDB, etc.
+
+### Supported grant types
+
+| Grant | Constant | When to use |
+|---|---|---|
+| `client_credentials` | `OAuthGrantTypes.ClientCredentials` | Machine-to-machine — confidential clients only. No refresh token (RFC 6749 §4.4.3). |
+| `authorization_code` | `OAuthGrantTypes.AuthorizationCode` | Server-side web apps. PKCE is enforced for public clients by default. |
+| `refresh_token` | `OAuthGrantTypes.RefreshToken` | Rotation enabled by default — every refresh revokes the old token (RFC 6819 §5.2.2.3). |
+| `urn:ietf:params:oauth:grant-type:device_code` | `OAuthGrantTypes.DeviceCode` | RFC 8628 — input-constrained devices (CLI, IoT, smart TV). Poll-interval enforced as `slow_down`. |
+
+`password` (resource-owner) and implicit (`response_type=token`) are intentionally **not** supported — both are deprecated by OAuth 2.1.
+
+### Composition root
+
+`OAuthServer` owns one handler per endpoint. The host instantiates one (typically as a singleton) and routes incoming HTTP requests to the matching handler.
+
+```csharp
+using Birko.Security;
+using Birko.Security.Jwt;
+using Birko.Security.OAuth.Server;
+using Birko.Security.OAuth.Server.Endpoints.Token;
+
+var settings = new OAuthServerSettings
+{
+    Location = "https://auth.example.com/",
+    Issuer = "https://auth.example.com/",
+    AccessTokenLifetimeSeconds = 3600,
+    SupportedScopes = { "read", "write", "admin" }
+};
+
+var tokenOptions = new TokenOptions
+{
+    Secret = builder.Configuration["Oauth:SigningSecret"]!,
+    Issuer = settings.Issuer,
+    Audience = "https://api.example.com/"
+};
+
+var server = new OAuthServer(
+    settings,
+    tokens: new JwtTokenProvider(tokenOptions),
+    tokenOptions: tokenOptions,
+    clientStore: clientStore,
+    codeStore: codeStore,
+    refreshStore: refreshStore,
+    deviceStore: deviceStore,
+    consentStore: consentStore,
+    deviceVerificationUri: "https://auth.example.com/device");
+```
+
+### Wiring the /token endpoint
+
+```csharp
+app.MapPost("/token", async (HttpRequest req) =>
+{
+    var form = await req.ReadFormAsync();
+    var request = new TokenRequest
+    {
+        GrantType = form["grant_type"]!,
+        ClientId = form["client_id"]!,
+        ClientSecret = form["client_secret"],
+        Code = form["code"],
+        RedirectUri = form["redirect_uri"],
+        CodeVerifier = form["code_verifier"],
+        RefreshToken = form["refresh_token"],
+        DeviceCode = form["device_code"],
+        Scope = form["scope"]
+    };
+    try
+    {
+        var response = await server.Token.HandleAsync(request);
+        return Results.Json(new
+        {
+            access_token = response.AccessToken,
+            token_type = response.TokenType,
+            expires_in = response.ExpiresIn,
+            refresh_token = response.RefreshToken,
+            scope = response.Scope
+        });
+    }
+    catch (OAuthServerException ex)
+    {
+        return Results.Json(TokenErrorResponse.From(ex), statusCode: 400);
+    }
+});
+```
+
+### Persistence
+
+You supply implementations of five interfaces — any `IAsyncStore<T>` backend works:
+
+- `IOAuthClientStore` — registered OAuth clients
+- `IAuthorizationCodeStore` — one-shot authorization codes
+- `IRefreshTokenStore` — refresh tokens (stored as SHA-256 hashes, never plaintext)
+- `IDeviceCodeStore` — in-flight RFC 8628 device-code requests
+- `IConsentStore` — prior user-consent records (used to skip the consent UI on repeat visits)
+
+Tokens use whatever `ITokenProvider` you supply — typically `JwtTokenProvider` from `Birko.Security.Jwt`.
+
+### Dynamic client registration
+
+`ClientRegistrationHandler` implements RFC 7591:
+
+```csharp
+var registration = await server.ClientRegistration.RegisterAsync(new ClientRegistrationRequest
+{
+    Name = "My App",
+    ClientType = OAuthClientType.Confidential,
+    RedirectUris = { "https://app.example.com/callback" },
+    AllowedGrantTypes = { OAuthGrantTypes.AuthorizationCode, OAuthGrantTypes.RefreshToken },
+    AllowedScopes = { "read", "write" }
+});
+
+// registration.ClientSecret is returned ONCE here — never retrievable again.
+```
+
+The plaintext secret is shown only at registration; subsequent `GetAsync` calls omit it. Hosts should gate this endpoint behind their own admin-only authorization policy.
+
+### What's out of scope
+
+- **OpenID Connect** — `id_token`, UserInfo endpoint, discovery document. A separate `Birko.Security.OIDC.Server` is planned.
+- **SAML 2.0** — different protocol entirely.
+
 ## See Also
 
 - [Birko.Security](https://github.com/birko/Birko.Security)
 - [Birko.Security.Jwt](https://github.com/birko/Birko.Security.Jwt)
 - [Birko.Security.AspNetCore](https://github.com/birko/Birko.Security.AspNetCore)
 - [Birko.Security.BCrypt](https://github.com/birko/Birko.Security.BCrypt)
+- [Birko.Security.OAuth.Server](https://github.com/birko/Birko.Security.OAuth.Server)
 - [Birko.Security.Vault](https://github.com/birko/Birko.Security.Vault)
 - [Birko.Security.Vault.Configuration](https://github.com/birko/Birko.Security.Vault.Configuration)
+- [Birko.Communication.OAuth](https://github.com/birko/Birko.Communication.OAuth) — client-side flows (companion to the server)
 - [Birko.Security.AzureKeyVault](https://github.com/birko/Birko.Security.AzureKeyVault)
 - [Birko.Security.NFC](https://github.com/birko/Birko.Security.NFC)

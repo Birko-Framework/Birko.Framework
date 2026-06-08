@@ -573,6 +573,10 @@
 			"path": "../Birko.Security.NFC"
 		},
 		{
+			"name": "Security / Birko.Security.OAuth.Server",
+			"path": "../Birko.Security.OAuth.Server"
+		},
+		{
 			"name": "Security / Birko.Security.Vault",
 			"path": "../Birko.Security.Vault"
 		},
@@ -795,6 +799,10 @@
 		{
 			"name": "Tests / Birko.Security.NFC.Tests",
 			"path": "../Birko.Security.NFC.Tests"
+		},
+		{
+			"name": "Tests / Birko.Security.OAuth.Server.Tests",
+			"path": "../Birko.Security.OAuth.Server.Tests"
 		},
 		{
 			"name": "Tests / Birko.Security.Vault.Tests",

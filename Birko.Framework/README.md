@@ -245,6 +245,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.Vault.Configuration | Microsoft.Extensions.Configuration integration for any ISecretProvider (Vault, Azure Key Vault, etc.) |
 | Birko.Security.AzureKeyVault | Azure Key Vault secret provider (OAuth2, REST API) |
 | Birko.Security.NFC | NFC-based authentication (tag-to-user mapping, JWT integration) |
+| Birko.Security.OAuth.Server | OAuth2 authorization server (token/authorize/device/registration endpoints; client-credentials, authcode+PKCE, refresh, device-code; persists via Birko.Data.Stores) |
 | Birko.BackgroundJobs | Background job processing framework |
 | Birko.BackgroundJobs.SQL | SQL-based persistent job queue |
 | Birko.BackgroundJobs.ElasticSearch | Elasticsearch-based persistent job queue |
@@ -305,6 +306,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Security.BCrypt.Tests | BCrypt password hashing tests |
 | Birko.Security.Vault.Tests | Vault secret provider tests |
 | Birko.Security.AzureKeyVault.Tests | Azure Key Vault secret provider tests |
+| Birko.Security.OAuth.Server.Tests | OAuth2 authorization server tests (43 tests; all four grant types + PKCE/consent/registration paths) |
 | Birko.Rules.Tests | Rule engine tests (core types, contexts, evaluator) |
 | Birko.Data.Processors.Tests | Data processor tests (CSV parser, XML/CSV/ZIP processors, HTTP transport) |
 | Birko.Telemetry.OpenTelemetry.Tests | OpenTelemetry integration tests (options, DI, providers) |

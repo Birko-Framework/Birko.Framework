@@ -64,6 +64,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Security.OAuth.Server\Birko.Security.OAuth.Server.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Bluetooth\Birko.Communication.Bluetooth.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Communication.Hardware\Birko.Communication.Hardware.projitems" Label="Shared" />

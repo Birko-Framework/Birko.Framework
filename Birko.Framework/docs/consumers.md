@@ -235,6 +235,118 @@ FisData.Stock.Core models were refactored in March 2026 to extend Birko.Models.*
 
 ---
 
+## Presenter
+
+**Location:** `C:\Source\Presenter`
+**Description:** Web app that renders markdown files as slide decks with a paired-mobile remote. ASP.NET Core host + esbuild TypeScript SPA.
+**Birko projects referenced:** 20 (18 backend + 2 frontend)
+
+### Presenter.Birko.Core (18 projects)
+Single backend aggregator for the Kestrel host. SQLite-backed persistence for saved presentations.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Helpers | String, HTML, Object, Enumerable utilities |
+| Birko.Random | Random value generation |
+| Birko.Time.Abstractions | `IDateTimeProvider` for testable time |
+| Birko.Serialization | Serialization abstraction |
+| Birko.Serialization.Yaml | YamlDotNet-backed `ISerializer` (deck front-matter) |
+| Birko.Caching | `ICache` with MemoryCache (MD fetch cache) |
+| Birko.Rules | Data-driven rule engine (transitive dep of Data.Patterns + Data.SQL) |
+| Birko.Data.Core | Models, ViewModels, Filters, Exceptions |
+| Birko.Data.Stores | Store interfaces and abstractions |
+| Birko.Data.Repositories | Repository interfaces |
+| Birko.Data.Patterns | Unit of Work, Soft Delete, Audit, Paging |
+| Birko.Data.ViewModel | Base ViewModel repository |
+| Birko.Data.SQL | SQL base classes |
+| Birko.Data.SQL.View | SQL view generation |
+| Birko.Data.SQL.ViewModel | SQL ViewModel repository |
+| Birko.Data.SQL.SqLite | SQLite store/repository (saved decks) |
+| Birko.Models.Contracts | Domain interfaces |
+| Birko.Models | Base models (AbstractPercentage, AbstractTree, ValueData) + Value Objects |
+
+> Birko.Contracts and Birko.Configuration are pulled in transitively via `Birko.Data.Stores.projitems`.
+
+### Presenter.Web (2 projects)
+TypeScript SPA bundled by esbuild; resolves Birko.Web.* sources via the same `BIRKO_SRC` env var as the MSBuild aggregator.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Web.Core | i18n, state, http, router primitives |
+| Birko.Web.Components | `b-*` Shadow DOM component library |
+
+---
+
+## Gameshow
+
+**Location:** `C:\Source\gameshow`
+**Description:** Convention gameshow control + display server. Single ASP.NET host serving an OBS browser-source display, a Birko.Web operator UI, and authoritative WebSocket state. Replaces a legacy React app (`C:\Source\gameshow-app`).
+**Birko projects referenced:** 15 (12 backend + 3 frontend)
+
+### Gameshow.Birko (12 projects)
+Single lean aggregator for the host. No data store — game state lives in-memory and is broadcast over WebSockets; the existing CRUD backend is proxied via REST.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Contracts | Zero-dep contracts (ILoadable, ICopyable, IGuidEntity, RetryPolicy) |
+| Birko.Configuration | Settings hierarchy |
+| Birko.Data.Core | Models, ViewModels, Filters |
+| Birko.Data.Stores | Store interfaces |
+| Birko.Helpers | Utility helpers |
+| Birko.Serialization | Serialization abstraction (WebSocket frame payloads) |
+| Birko.Time | Time utilities, calendars |
+| Birko.Health | Health check framework |
+| Birko.Security | Password hashing, AES-256-GCM, RBAC |
+| Birko.Communication | Base communication interfaces |
+| Birko.Communication.REST | REST client (proxy to upstream consiteinfo backend) |
+| Birko.Communication.WebSocket | WebSocket real-time (`/ws/display`, `/ws/control`) |
+
+### Gameshow.Web (3 projects)
+TypeScript bundle for the operator UI; the display surface is plain HTML/CSS/JS with no framework runtime.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Web.Core | i18n, state, http, router primitives |
+| Birko.Web.Components | `b-*` Shadow DOM component library |
+| Birko.Web.Shell | Application shell (ribbon, modules, base CRUD/list/detail pages) |
+
+---
+
+## WebFinstatApiTester
+
+**Location:** `C:\Source\ClientApi.CSharp\Tester\WebFinstatApiTester`
+**Description:** ASP.NET Core web tester for the public FinStat / FinStat.cz APIs (`FinStatApi` / `FinStatApiCZ`). Browser UI for exercising every endpoint of the C# client. Companion to the WPF `DesktopFinstatApiTester` (which uses no Birko projects).
+**Birko projects referenced:** 11 (8 backend + 3 frontend)
+
+> **No aggregator.** The csproj imports the lean Birko subset directly — the project is small enough that overlapping-import risk is nil. Used in the framework README as the canonical example of skipping the aggregator pattern.
+
+### WebFinstatApiTester (8 backend projects)
+Backend uses Birko.Security.Vault to load the dev client-cert fingerprint at startup, plus health/validation primitives.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Contracts | Zero-dep contracts (Data.Models interfaces) |
+| Birko.Configuration | Settings hierarchy (Vault `PasswordSettings` lives here) |
+| Birko.Serialization | `ISerializer` + `SystemJsonSerializer` |
+| Birko.Security | Password hashing, AES-256-GCM, RBAC |
+| Birko.Security.Vault | HashiCorp Vault secret loader |
+| Birko.Security.Vault.Configuration | Vault-backed configuration provider |
+| Birko.Health | Health check framework — powers `/health` (disk/memory + FinStat outbound reachability) |
+| Birko.Validation *(cherry-picked)* | `Core/`, `Rules/`, `Fluent/` only — `Integration/*.cs` is skipped to avoid pulling in `Birko.Data.Stores` + `Birko.Rules` |
+
+> The Birko.Validation cherry-pick uses direct `<Compile Include="$(BirkoSrc)\Birko.Validation\…\*.cs">` items instead of importing `Birko.Validation.projitems`. The rest are normal `projitems` imports.
+
+### WebFinstatApiTester wwwroot (3 frontend projects)
+TypeScript SPA bundled by esbuild; copies `Birko.Web.Components/css/tokens.css` and `reset.css` into `wwwroot/css/` and uses asset hashing for cache busting.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Web.Core | i18n, state, http, router, offline primitives |
+| Birko.Web.Components | `b-*` Shadow DOM component library |
+| Birko.Web.Shell | Application shell (ribbon, modules, base CRUD/list/detail pages) |
+
+---
+
 ## Summary
 
 | Consumer | Birko Projects | Primary Data Store | Key Features Used |
@@ -242,4 +354,7 @@ FisData.Stock.Core models were refactored in March 2026 to extend Birko.Models.*
 | Symbio | 50 | PostgreSQL, MSSql, MongoDB, TimescaleDB, RavenDB, ES | Full stack: IoT, multi-tenant, event sourcing, health, telemetry |
 | DraCode | 26 | SQLite | WebSocket real-time, event sourcing, in-memory messaging |
 | Affiliate | 22 | Elasticsearch, InfluxDB | Product aggregation, data import/processing |
+| Presenter | 20 | SQLite | Markdown slide rendering, YAML deck metadata, Birko.Web SPA |
+| Gameshow | 15 | *(in-memory + REST proxy)* | Authoritative WebSocket state, Birko.Web.Shell operator UI |
+| WebFinstatApiTester | 11 | *(none — calls public APIs)* | Vault-backed secrets, health checks, Birko.Web.Shell test harness |
 | FisData.Stock | 0 | *(inactive)* | Models extracted to Birko.Models.* |

@@ -183,6 +183,7 @@ Unified caching interface:
 - `IEncryptionProvider` - Encrypt/Decrypt bytes and strings (`AesEncryptionProvider` - AES-256-GCM)
 - `ITokenProvider` - GenerateToken/ValidateToken with `TokenResult`, `TokenValidationResult`, `TokenOptions`
 - **Birko.Security.Jwt** - JWT implementation of ITokenProvider (`JwtTokenProvider`)
+- **Birko.Security.OAuth.Server** - OAuth2 authorization server (issuer side): token / authorize / device_authorization / dynamic client registration endpoints; all four standard grant types (`client_credentials`, `authorization_code` + PKCE, `refresh_token`, RFC 8628 device code); persistence via `Birko.Data.Stores`. Companion to `Birko.Communication.OAuth` (consumer side)
 - Static token authentication (moved from Birko.Communication.Authentication)
 - RBAC interfaces
 

@@ -53,6 +53,8 @@ OAuth2 client library supporting multiple grant types with automatic token cachi
 - **PkceChallenge** — built-in SHA-256 PKCE challenge pair generation
 - **OAuthSettings** — extends `RemoteSettings` (ClientId=UserName, ClientSecret=Password, TokenEndpoint=Location)
 
+> Issuing tokens (not just consuming them)? See `Birko.Security.OAuth.Server` for the authorization-server side — full /token, /authorize, /device_authorization, and dynamic client registration endpoints. Documented in [docs/security.md](security.md#oauth2-authorization-server-birkosecurityoauthserver).
+
 ### Birko.Communication.GraphQL
 GraphQL client with zero external dependencies (HttpClient + ClientWebSocket + Birko.Serialization):
 - **Queries and Mutations** — typed responses via `GraphQLResponse<T>` with automatic error handling
