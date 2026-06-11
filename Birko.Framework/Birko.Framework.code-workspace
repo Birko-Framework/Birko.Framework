@@ -89,6 +89,14 @@
 			"path": "../Birko.Communication.GraphQL"
 		},
 		{
+			"name": "Communication / Birko.Communication.gRPC",
+			"path": "../Birko.Communication.gRPC"
+		},
+		{
+			"name": "Communication / Birko.Communication.gRPC.Server",
+			"path": "../Birko.Communication.gRPC.Server"
+		},
+		{
 			"name": "Communication / Birko.Communication.Hardware",
 			"path": "../Birko.Communication.Hardware"
 		},
@@ -643,6 +651,14 @@
 		{
 			"name": "Tests / Birko.Communication.GraphQL.Tests",
 			"path": "../Birko.Communication.GraphQL.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.gRPC.Tests",
+			"path": "../Birko.Communication.gRPC.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.gRPC.Server.Tests",
+			"path": "../Birko.Communication.gRPC.Server.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.IR.Tests",

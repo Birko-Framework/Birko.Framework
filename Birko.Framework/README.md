@@ -12,7 +12,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Data synchronization across stores
 - Multi-tenancy support
 - Event sourcing pattern
-- Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, **GraphQL** queries/mutations/subscriptions, Camera, IR, NFC)
+- Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, **GraphQL** queries/mutations/subscriptions, **gRPC** client/server, Camera, IR, NFC)
 - Domain model libraries (Product, Category, SEO, Customers, Users, Inventory, Pricing) with domain contracts
 - Fluent validation framework
 - Caching with in-memory, Redis, and hybrid (L1+L2) backends
@@ -186,6 +186,8 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Communication.NFC | NFC/RFID tag reading (ISO 14443A, NDEF, Serial/HTTP/HID transports) |
 | Birko.Communication.OAuth.Providers | Pre-configured OAuth providers (e.g. GitHubOAuthProvider for Device Code flow) |
 | Birko.Communication.GraphQL | GraphQL client (queries, mutations, subscriptions over HttpClient + ClientWebSocket, zero external deps) |
+| Birko.Communication.gRPC | gRPC client (channel pool, typed client factory, auth interceptor, settings over Grpc.Net.Client) |
+| Birko.Communication.gRPC.Server | gRPC server (AddBirkoGrpc DI wiring, server auth interceptor over Grpc.AspNetCore) |
 
 ### AI / LLM
 
@@ -297,6 +299,8 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Structures.Tests | Tree data structure tests |
 | Birko.BackgroundJobs.Tests | Background job processing tests |
 | Birko.Communication.GraphQL.Tests | GraphQL client tests (queries, mutations, subscriptions, request builder) |
+| Birko.Communication.gRPC.Tests | gRPC client tests (settings, channel pool, auth interceptor, client factory, exception) |
+| Birko.Communication.gRPC.Server.Tests | gRPC server tests (settings, AddBirkoGrpc DI, server auth interceptor) |
 | Birko.MessageQueue.Tests | Message queue tests (core, InMemory, MQTT) |
 | Birko.EventBus.Tests | Event bus tests (core, distributed, outbox, event sourcing) |
 | Birko.Security.AspNetCore.Tests | ASP.NET Core security integration tests (JWT, permissions, tenants) |

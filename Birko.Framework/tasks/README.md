@@ -6,11 +6,11 @@ _Generated 2026-05-28 by `/tasks import` from `TODO.md`. Run `/tasks triage` to 
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 11    | 21      | —     |
-| todo         | —     | —       | 33    |
-| in-progress  | 1     | 0       | 0     |
+| planned      | 10    | 20      | —     |
+| todo         | —     | —       | 32    |
+| in-progress  | 0     | 0       | 0     |
 | blocked      | —     | —       | 0     |
-| done         | 0     | 1       | 1     |
+| done         | 1     | 2       | 2     |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -70,9 +70,9 @@ _None — start with `/tasks pick` or pick by reading the tree below._
   - STORY-018 [Cloud queue health checks](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/STORY.md) — planned (0/2)
     - [ ] [TASK-024](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/TASK-024-azure-service-bus-health-check.md) AzureServiceBusHealthCheck (P2, ai)
     - [ ] [TASK-025](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/TASK-025-aws-sqs-health-check.md) AwsSqsHealthCheck (P2, ai)
-- **EPIC-009** [Birko.Communication — Remaining protocols](EPIC-009-communication-protocols/EPIC.md) — in-progress (1/2)
-  - STORY-019 [gRPC support](EPIC-009-communication-protocols/STORY-019-grpc/STORY.md) — planned (0/1)
-    - [ ] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2, ai)
+- **EPIC-009** [Birko.Communication — Remaining protocols](EPIC-009-communication-protocols/EPIC.md) — done (2/2)
+  - STORY-019 [gRPC support](EPIC-009-communication-protocols/STORY-019-grpc/STORY.md) — done (1/1)
+    - [x] [TASK-026](EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md) gRPC client + server support (P2, ai)
   - STORY-020 [OAuth2 server](EPIC-009-communication-protocols/STORY-020-oauth2-server/STORY.md) — done (1/1)
     - [x] [TASK-027](EPIC-009-communication-protocols/STORY-020-oauth2-server/TASK-027-birko-security-oauth-server.md) Implement Birko.Security.OAuth.Server (P2, ai)
 - **EPIC-010** [Birko.Data.RavenDB — Index ergonomics](EPIC-010-ravendb-index-ergonomics/EPIC.md) — planned (0/1)

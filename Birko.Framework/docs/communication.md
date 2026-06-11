@@ -65,6 +65,20 @@ GraphQL client with zero external dependencies (HttpClient + ClientWebSocket + B
 - **GraphQLSettings** — extends `RemoteSettings` (Endpoint=Location), adds SchemaPath, UseSubscriptions, SubscriptionProtocol, TimeoutSeconds, ExtraHeaders
 - **ISerializer integration** — uses `Birko.Serialization.ISerializer` (SystemJsonSerializer) for all JSON
 
+### Birko.Communication.gRPC
+gRPC **client** primitives over `Grpc.Net.Client` (mirrors the REST / REST.Server split). Code generation (`.proto` → C#) is out of scope — bring generated clients via `Grpc.Tools`; these primitives configure and wrap them:
+- **`GrpcChannelPool`** — endpoint-keyed cache of reusable, thread-safe `GrpcChannel`s (`GetChannel` / `Remove` / `Clear`)
+- **`GrpcClientFactory`** — `CreateClient<TClient>()` builds any generated `ClientBase` over a pooled channel or explicit `CallInvoker`, applying interceptors in order
+- **`GrpcAuthenticationInterceptor`** — client interceptor injecting auth metadata into all five call kinds; token-provider (bearer header + static metadata) or raw `Action<Metadata>` constructor
+- **`GrpcSettings`** — extends `RemoteSettings` (Endpoint=Location), adds MaxReceive/SendMessageSizeBytes, DeadlineSeconds, Credentials, ExtraMetadata
+- **`GrpcException`** — wraps `RpcException` → `StatusCode` / `Detail` / `Trailers`
+
+### Birko.Communication.gRPC.Server
+gRPC **server** primitives over `Grpc.AspNetCore` (requires the `Microsoft.AspNetCore.App` shared framework in the host):
+- **`AddBirkoGrpc(this IServiceCollection, GrpcServerSettings?)`** — registers gRPC with Birko defaults (detailed errors, message-size caps); returns `IGrpcServerBuilder` for chaining
+- **`GrpcServerAuthenticationInterceptor`** — server interceptor validating request metadata across all four handler kinds via `Func<Metadata, ServerCallContext, Task<bool>>`; throws `RpcException(Unauthenticated)` on failure
+- **`GrpcServerSettings`** — extends `Settings`; `EnableDetailedErrors`, MaxReceive/SendMessageSizeBytes, `EnableReflection`
+
 ### Birko.Communication.IR
 Consumer infrared (38 kHz modulated) communication for remote control — **not** IrDA/IrCOMM (see `Birko.Communication.Hardware.Ports.Infraport` for serial IrCOMM):
 - **InfraredPort** — extends AbstractPort with async send/receive and learning mode
@@ -198,6 +212,43 @@ var subscription = await client.SubscribeAsync<Message>(
 
 subscription.AsObservable().Subscribe(msg =>
     Console.WriteLine($"{msg.Author}: {msg.Text}"));
+```
+
+### gRPC Client
+
+```csharp
+using Birko.Communication.gRPC;
+
+var settings = new GrpcSettings { Endpoint = "https://api.example.com:443" };
+
+// Bearer token injected on every call.
+var auth = new GrpcAuthenticationInterceptor(() => tokenStore.CurrentAccessToken);
+
+// Greeter.GreeterClient is generated from your .proto by Grpc.Tools.
+var client = GrpcClientFactory.CreateClient<Greeter.GreeterClient>(settings, auth);
+
+try
+{
+    var reply = await client.SayHelloAsync(new HelloRequest { Name = "Birko" });
+}
+catch (RpcException ex)
+{
+    throw GrpcException.FromRpcException(ex);
+}
+```
+
+### gRPC Server
+
+```csharp
+using Birko.Communication.gRPC.Server;
+using Microsoft.Extensions.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddBirkoGrpc(new GrpcServerSettings { EnableDetailedErrors = true });
+
+var app = builder.Build();
+app.MapGrpcService<GreeterService>();   // GreeterService generated from your .proto
+app.Run();
 ```
 
 ### OAuth2 Client Credentials (Original)
@@ -339,6 +390,8 @@ if (result.IsAuthenticated)
 - [Birko.Communication.Modbus](https://github.com/birko/Birko.Communication.Modbus)
 - [Birko.Communication.OAuth](https://github.com/birko/Birko.Communication.OAuth)
 - [Birko.Communication.GraphQL](https://github.com/birko/Birko.Communication.GraphQL)
+- [Birko.Communication.gRPC](https://github.com/birko/Birko.Communication.gRPC)
+- [Birko.Communication.gRPC.Server](https://github.com/birko/Birko.Communication.gRPC.Server)
 - [Birko.Communication.Camera](https://github.com/birko/Birko.Communication.Camera)
 - [Birko.Communication.IR](https://github.com/birko/Birko.Communication.IR)
 - [Birko.Communication.NFC](https://github.com/birko/Birko.Communication.NFC)

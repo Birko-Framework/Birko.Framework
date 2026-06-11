@@ -1,6 +1,6 @@
 ---
 id: EPIC-009
-status: in-progress
+status: done
 created: 2026-05-28
 owner: ai
 affects: [Birko.Communication.gRPC, Birko.Security.OAuth.Server]

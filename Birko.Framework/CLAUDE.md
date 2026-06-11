@@ -91,6 +91,9 @@ Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
 
 Birko.Communication.GraphQL (IGraphQLClient, GraphQLClient, GraphQLSettings — queries, mutations, subscriptions over HttpClient + ClientWebSocket)
 
+Birko.Communication.gRPC (GrpcSettings, GrpcChannelPool, GrpcClientFactory, GrpcAuthenticationInterceptor, GrpcException — client over Grpc.Net.Client)
+  -> Birko.Communication.gRPC.Server (GrpcServerSettings, AddBirkoGrpc, GrpcServerAuthenticationInterceptor — server over Grpc.AspNetCore; mirrors REST / REST.Server split)
+
 Birko.BackgroundJobs (IJobQueue, JobDescriptor, RetryPolicy, JobProcessor, JobScheduler)
   -> 8 backends: .SQL, .ElasticSearch, .MongoDB, .RavenDB, .JSON, .XML, .Redis, .CosmosDB
 
@@ -133,6 +136,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 ## Recent Updates
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
+
+### Birko.Communication.gRPC + .Server — gRPC client/server primitives (2026-06-11)
+New gRPC support split into a client and a server shared project, mirroring the existing `Birko.Communication.REST` / `.REST.Server` split (client over `Grpc.Net.Client`, server over `Grpc.AspNetCore` which pulls in ASP.NET). Closes [tasks/EPIC-009/STORY-019/TASK-026](tasks/EPIC-009-communication-protocols/STORY-019-grpc/TASK-026-grpc-client-server.md). Code generation (`.proto` → C#) is intentionally out of scope — consumers bring generated clients/services via `Grpc.Tools`; these primitives configure and wrap them.
+- **`Birko.Communication.gRPC`** (client) — `GrpcSettings : RemoteSettings` (`Endpoint` aliases `Location`; `MaxReceiveMessageSizeBytes` / `MaxSendMessageSizeBytes` / `DeadlineSeconds` / `Credentials` / `ExtraMetadata`); `GrpcChannelPool` (endpoint-keyed `ConcurrentDictionary` cache of reusable `GrpcChannel`s — `GetChannel` / `Remove` / `Clear`, mirrors `RestClient.GetClient`); `GrpcClientFactory.CreateClient<TClient>()` (constructs any generated `ClientBase` over a pooled channel or explicit `CallInvoker`, applying interceptors via `CallInvoker.Intercept`); `GrpcAuthenticationInterceptor` (client `Interceptor` overriding all five call kinds, token-provider or raw `Action<Metadata>` constructor); `GrpcException` (wraps `RpcException` → `StatusCode` / `Detail` / `Trailers`, mirrors `GraphQLException`)
+- **`Birko.Communication.gRPC.Server`** (server) — `GrpcServerSettings : Settings` (`EnableDetailedErrors`, message-size caps, `EnableReflection`); `AddBirkoGrpc(this IServiceCollection, GrpcServerSettings?)` DI extension (in `Microsoft.Extensions.DependencyInjection` namespace, returns `IGrpcServerBuilder`); `GrpcServerAuthenticationInterceptor` (server `Interceptor` overriding all four handler kinds, validates request metadata via a `Func<Metadata, ServerCallContext, Task<bool>>`, throws `RpcException(Unauthenticated)` on failure)
+- **Settings** descend the `RemoteSettings` (client) / `Settings` (server) chain; shared projects carry no `PackageReference` — the importing csproj supplies `Grpc.Net.Client` / `Grpc.AspNetCore` (+ the `Microsoft.AspNetCore.App` framework reference for the server)
+- **32 xUnit + FluentAssertions tests** (24 client + 8 server) — settings, channel-pool caching/eviction/guards, interceptor metadata injection (captured-continuation), client factory over an in-memory `CallInvoker`, exception mapping; server settings, `AddBirkoGrpc` DI registration, and the auth interceptor against an in-memory `ServerCallContext`
+- Registered in `Birko.Framework.slnx` (Communication + Tests folders) and `Birko.Framework.code-workspace`
 
 ### Birko.Web.Components — `b-table` uniform row height (2026-06-10)
 Fixed the long-standing visual mismatch where the `b-table` / `b-data-table` header band rendered shorter than body rows. The header CSS was already balanced for *plain text* (the `th` carries `+1px` extra vertical padding and a `2px` bottom border to offset its smaller `--b-text-xs` font vs the body's `--b-text-sm`), so text-only tables matched within a pixel. The visible gap appeared in `b-data-table`, whose body cells carry **controls** — the `size="sm"` row-action `⋮` `b-button` (`b-data-table.ts:451`), selection checkboxes, badges — whose intrinsic height (~24–26px) inflates `tbody` rows past the ~33px header. `vertical-align: middle` centred them but couldn't shrink the band.

@@ -304,6 +304,9 @@ Only 4 projitems-level import chains exist:
 | **Birko.Communication.NFC** | Birko.Communication |
 | **Birko.Communication.REST.Server** | Birko.Communication, Birko.Communication.REST |
 | **Birko.Communication.OAuth.Providers** | Birko.Communication.OAuth |
+| **Birko.Communication.GraphQL** | Birko.Configuration, Birko.Serialization |
+| **Birko.Communication.gRPC** | Birko.Configuration + NuGet: Grpc.Net.Client (→ Grpc.Core.Api) |
+| **Birko.Communication.gRPC.Server** | Birko.Configuration + NuGet: Grpc.AspNetCore + framework: Microsoft.AspNetCore.App |
 
 ## Message Queue
 
