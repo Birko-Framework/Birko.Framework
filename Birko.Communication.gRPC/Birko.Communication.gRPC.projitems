@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>ecf79379-f127-4618-8001-41481398215c</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Communication.gRPC</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcChannelPool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcClientFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcAuthenticationInterceptor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GrpcException.cs" />
+  </ItemGroup>
+</Project>
