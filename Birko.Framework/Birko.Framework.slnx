@@ -69,6 +69,7 @@
     <Project Path="../Birko.Data.InfluxDB/Birko.Data.InfluxDB.shproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
     <Project Path="../Birko.Data.JSON/Birko.Data.JSON.shproj" />
     <Project Path="../Birko.Data.XML/Birko.Data.XML.shproj" />
+    <Project Path="../Birko.Data.InMemory/Birko.Data.InMemory.shproj" />
     <Project Path="../Birko.Data.MongoDB/Birko.Data.MongoDB.shproj" Id="9d0b1c33-e449-5c0f-d758-76348e110ddd" />
     <Project Path="../Birko.Data.RavenDB/Birko.Data.RavenDB.shproj" />
     <Project Path="../Birko.Data.TimescaleDB/Birko.Data.TimescaleDB.shproj" Id="b2c3d4e5-f6a7-8901-bcde-f12345678901" />
@@ -227,6 +228,7 @@
     <Project Path="../Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
     <Project Path="../Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
     <Project Path="../Birko.Data.XML.Tests/Birko.Data.XML.Tests.csproj" />
+    <Project Path="../Birko.Data.InMemory.Tests/Birko.Data.InMemory.Tests.csproj" />
     <Project Path="../Birko.Data.Views.Tests/Birko.Data.Views.Tests.csproj" />
     <Project Path="../Birko.Validation.Tests/Birko.Validation.Tests.csproj" />
     <Project Path="../Birko.Data.Sync.Tests/Birko.Data.Sync.Tests.csproj" />

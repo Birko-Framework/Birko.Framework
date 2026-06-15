@@ -68,6 +68,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Data.SQL.SqLite | SQLite implementation |
 | Birko.Data.JSON | JSON file-based storage |
 | Birko.Data.XML | XML file-based storage |
+| Birko.Data.InMemory | In-memory (ConcurrentDictionary) store — testing / prototyping, no persistence |
 | Birko.Data.ElasticSearch | Elasticsearch repository/store |
 | Birko.Data.MongoDB | MongoDB repository/store |
 | Birko.Data.RavenDB | RavenDB repository/store |

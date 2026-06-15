@@ -41,11 +41,12 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 
 ## Kľúčové vlastnosti
 
-### 🗄️ Vrstva prístupu k dátam (13 storage projektov)
+### 🗄️ Vrstva prístupu k dátam (14 storage projektov)
 - **SQL**: SQL Server, PostgreSQL, MySQL, SQLite (5 projektov vrátane základu)
 - **NoSQL**: MongoDB, RavenDB, Elasticsearch, Cosmos DB (4 projekty)
 - **Time-series**: InfluxDB, TimescaleDB (2 projekty)
 - **Súborové**: JSON (System.Text.Json), XML (System.Xml.Serialization)
+- **In-memory**: `ConcurrentDictionary` store (testovanie, prototypy, demá — bez perzistencie; zároveň najjednoduchšia referenčná implementácia)
 - **Typovaná hierarchia nastavení** — `MSSqlSettings`, `MySqlSettings`, `PostgreSqlSettings`, `SqLiteSettings`, `TimescaleDBSettings`, CosmosDB/RavenDB `Settings` — každá úroveň pridáva iba to, čo je v nej skutočne nové (`Settings → PasswordSettings → RemoteSettings → SqlSettings → MSSqlSettings`, ...). Dialect-špecifický `GetConnectionString()` je `virtual` na úrovni providera. Pozri [docs/configuration.md](docs/configuration.md).
 - **Platformovo-agnostické migrácie** — `IMigration` + `IMigrationContext` (`Schema`, `Data`, `Raw`, `ProviderName`); jednu migráciu napíšete raz a spustíte voči ktorémukoľvek providerovi (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, InfluxDB, TimescaleDB). NoSQL providery ticho preskakujú nepoužiteľné operácie.
 - **Repository & Store pattern** s lazy-init a bulk operáciami (Create/Read/Update/Delete + filter-based Update/Delete s `PropertyUpdate<T>`)
@@ -166,7 +167,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 │          🟨 PLATFORMOVÉ ROZŠÍRENIA (vymeniteľné bez zmeny kódu)              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ SQL: MSSql, PostgreSQL, MySQL, SQLite  │  NoSQL: Mongo, Raven, ES, Cosmos   │
-│ Time-series: Influx, Timescale         │  Files: JSON, XML                   │
+│ Time-series: Influx, Timescale         │  Files: JSON, XML, InMemory         │
 │ Caching: Redis, Hybrid                 │  Queue: InMemory, MQTT, Redis       │
 │ AI Providers: Claude, OpenAI, Gemini,  │  Storage: AzureBlob                 │
 │   Ollama, AzureOpenAI, GitHubCopilot,  │  Telemetry: OpenTelemetry           │
@@ -227,7 +228,7 @@ Birko.Data.Stores        → IStore, IAsyncStore, IBulkStore, OrderBy, StoreLoca
 Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 ```
 
-#### 3. Data Layer – Storage Providers (13 projektov – 🟩 1 core + 🟨 12 platformových rozšírení)
+#### 3. Data Layer – Storage Providers (14 projektov – 🟩 1 core + 🟨 13 platformových rozšírení)
 ```
 🟩 Birko.Data.SQL                → Base: DataBaseStore, AsyncDataBaseStore
 🟨 Birko.Data.SQL.MSSql          → Microsoft SQL Server
@@ -242,6 +243,7 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
 🟨 Birko.Data.TimescaleDB        → TimescaleDB (time-series nad PostgreSQL)
 🟨 Birko.Data.JSON               → Súborový JSON (referenčná file-based implementácia)
 🟨 Birko.Data.XML                → Súborový XML
+🟨 Birko.Data.InMemory           → In-memory ConcurrentDictionary (testovanie / prototypy)
 ```
 
 #### 4. Data Features + platformové rozšírenia (celkovo 43 projektov)

@@ -105,6 +105,7 @@ Birko.Workflow (WorkflowBuilder, WorkflowEngine, guards, actions, Mermaid/DOT)
 - **ElasticSearch** store — reference for async/bulk operations
 - **JSON** store — reference for file-based storage
 - **XML** store — reference for file-based storage with `System.Xml.Serialization` (note: no native `Dictionary` support — use wrapper types)
+- **InMemory** store (`Birko.Data.InMemory`) — simplest possible store (thread-safe `ConcurrentDictionary`, no persistence); the canonical test double / prototyping backend
 
 ## Usage in Consumer Solutions
 
@@ -137,6 +138,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 ## Recent Updates
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
+
+### Birko.Data.InMemory — in-memory store backend + test-fake consolidation (2026-06-15)
+New `Birko.Data.InMemory` sibling: the simplest possible store, backing the entity set with a thread-safe `ConcurrentDictionary<Guid, T>` and no persistence. Built to be the canonical **test double** (one correct implementation instead of a hand-rolled fake per test project), a **reference implementation** (the `AbstractJsonStore` dictionary model minus the file I/O), and a zero-setup **prototyping/demo** backend.
+- **Stores** — `InMemoryStore<T>` (sync, `AbstractBulkStore<T>`) and `AsyncInMemoryStore<T>` (async, `AbstractAsyncBulkStore<T>`), plus `AbstractInMemoryStore<T>` / `AbstractAsyncInMemoryStore<T>` base classes. Both implement the **full** `IBulkStore<T>` / `IAsyncBulkStore<T>` contract — filter-based `Update(filter, …)` / `Delete(filter)`, `ReadFirst`/`ReadFirstAsync`, ordering + paging, and `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` via `AggregateHelper.LinqAggregate(Async)` — which the ad-hoc fakes never fully did
+- **Conventions honored** — overrides only the `*Core` methods (lazy-init preserved); `Read(Guid)` / `ReadAsync(Guid)` do O(1) dictionary lookups; `Delete(filter)` / `DeleteAsync(filter)` do a single pass; bulk reads return a `List<T>` snapshot so the concurrent dictionary can mutate mid-enumeration. No settings class — `ISettingsStore<Settings>` is implemented as a no-op purely for drop-in compatibility (an in-memory store can stand in for a JSON/SQL store in the same wiring)
+- **40 xUnit + FluentAssertions tests** (`Birko.Data.InMemory.Tests`) covering both stores: CRUD, bulk ops, filter update/delete, ordering/paging, lazy-init, aggregation, `Save`, `Destroy`, settings surface, and async cancellation
+- **Fake consolidation** — migrated five hand-rolled in-memory stores across four sibling test repos to subclass the new store, deleting ~250 lines of duplicated boilerplate: `Birko.Security.OAuth.Server.Tests` (78→14 lines; the 5 marker stores are now bare subclasses), `Birko.Validation.Tests` (~90-line nested fake → 4 lines), `Birko.Localization.Data.Tests` (kept only `Seed`), and `Birko.Data.Sync.Tests` (`TestBulkStore` + `TestSyncKnowledgeItemStore`, keeping only the sync-bookkeeping members). All four suites stay green (43 / 122 / 26 / 21)
+- Registered in `Birko.Framework.slnx` (Data.NoSQL + Tests folders), `Birko.Framework.code-workspace`, and the `Birko.Framework.csproj` aggregator
 
 ### Birko.Data.Stores — async stores observe cancellation consistently (2026-06-15)
 `AbstractAsyncStore.EnsureInitializedAsync` now calls `ct.ThrowIfCancellationRequested()` at the top. **Behavior change:** every public async CRUD method funnels through this gate, so an already-cancelled `CancellationToken` now surfaces as `OperationCanceledException` even on an already-initialized store (previously the gate returned at `if (_initialized) return;` without checking the token, so cancellation was only observed on the very first, uninitialized call). This is the idiomatic .NET contract and affects only callers that pass a cancelled token — which is what they asked for.

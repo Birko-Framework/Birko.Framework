@@ -333,6 +333,7 @@ public override void Delete(Expression<Func<T, bool>> filter)
 | RavenDB | fallback | fallback | read-modify-save |
 | CosmosDB | fallback | fallback | read-modify-save |
 | JSON | fallback | fallback | read-modify-save |
+| InMemory | fallback | single-pass | read-modify-save |
 | TimescaleDB | inherits SQL | inherits SQL | read-modify-save |
 
 ## Connector Pattern

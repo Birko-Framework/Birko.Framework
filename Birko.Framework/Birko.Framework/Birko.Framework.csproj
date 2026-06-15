@@ -116,6 +116,8 @@
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.JSON.ViewModel\Birko.Data.JSON.ViewModel.projitems" Label="Shared" />
 
+  <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
+
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations\Birko.Data.Migrations.projitems" Label="Shared" />
 
   <Import Project="$(MSBuildThisFileDirectory)..\..\Birko.Data.Migrations.ElasticSearch\Birko.Data.Migrations.ElasticSearch.projitems" Label="Shared" />

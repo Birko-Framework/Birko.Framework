@@ -100,6 +100,7 @@ All connectors are in `Birko.Data.SQL.Connectors` namespace.
 - **InfluxDB** - InfluxDB time-series database
 - **CosmosDB** - Azure Cosmos DB NoSQL API (`CosmosDBStore<T>`, `AsyncCosmosDBStore<T>`)
 - **JSON** - File-based JSON storage (`JsonStore<T>`)
+- **InMemory** - Thread-safe in-memory storage, no persistence — for testing/prototyping (`InMemoryStore<T>`, `AsyncInMemoryStore<T>`)
 
 #### Repositories
 

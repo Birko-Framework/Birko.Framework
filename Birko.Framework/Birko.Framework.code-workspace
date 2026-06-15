@@ -225,6 +225,10 @@
 			"path": "../Birko.Data.JSON"
 		},
 		{
+			"name": "Data.NoSQL / Birko.Data.InMemory",
+			"path": "../Birko.Data.InMemory"
+		},
+		{
 			"name": "Data.NoSQL / Birko.Data.MongoDB",
 			"path": "../Birko.Data.MongoDB"
 		},
@@ -707,6 +711,10 @@
 		{
 			"name": "Tests / Birko.Data.JSON.Tests",
 			"path": "../Birko.Data.JSON.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.InMemory.Tests",
+			"path": "../Birko.Data.InMemory.Tests"
 		},
 		{
 			"name": "Tests / Birko.Data.Localization.Tests",

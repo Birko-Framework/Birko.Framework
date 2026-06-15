@@ -173,6 +173,7 @@ Only 4 projitems-level import chains exist:
 |---------|-------------|
 | **Birko.Data.ElasticSearch** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.JSON** | Birko.Data.Core, Birko.Data.Stores |
+| **Birko.Data.InMemory** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.MongoDB** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.RavenDB** | Birko.Data.Core, Birko.Data.Stores |
 | **Birko.Data.InfluxDB** | Birko.Data.Core, Birko.Data.Stores |
