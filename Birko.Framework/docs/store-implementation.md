@@ -51,6 +51,7 @@ public interface IBulkStore<T> : IStore<T> where T : AbstractModel
     IEnumerable<T> Read();
     IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null,
                         int? limit = null, int? offset = null);
+    T? ReadFirst(Expression<Func<T, bool>>? filter = null);   // single-result; see note below
     void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
     void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null);
     void Delete(IEnumerable<T> data);
@@ -430,7 +431,7 @@ store.AddOnInit((connector) => {
 
 1. **Model constraint**: All stores use `where T : AbstractModel` (not `Entity`)
 2. **Read by ID**: `Read(Guid guid)` / `ReadAsync(Guid guid)` returns `T?`
-3. **Read by filter**: `Read(Expression<Func<T, bool>>?)` returns single `T?`
+3. **Read by filter**: `Read(Expression<Func<T, bool>>?)` returns single `T?` — **but on a bulk store this overload is shadowed** by the collection overload (see note 11), so it returns `IEnumerable<T>` there
 4. **Bulk read**: `Read()` returns `IEnumerable<T>`, supports filter/orderBy/limit/offset
 5. **Delete**: Takes the model object `Delete(T data)`, not a Guid
 6. **Destroy**: Takes no arguments - `Destroy()` / `DestroyAsync()`
@@ -438,6 +439,7 @@ store.AddOnInit((connector) => {
 8. **Create**: Returns `Guid` (the assigned ID)
 9. **StoreDataDelegate**: Optional callback for pre-processing data before persistence
 10. **CancellationToken**: All async methods accept `CancellationToken ct = default`
+11. **Single result on bulk stores**: Because a bulk store declares `Read(filter, orderBy, limit, offset)`, C# member lookup drops the inherited single-result `Read(filter)` (it only keeps methods named `Read` from the most-derived declaring type), so `bulkStore.Read(filter)` returns the **collection**. Use `ReadFirst(filter)` / `ReadFirstAsync(filter, ct)` for a single `T?`, or cast to `IReadStore<T>` / `IAsyncReadStore<T>`
 11. **Connector property**: `protected set` - derived classes can modify
 
 ## Aggregation Interfaces
