@@ -27,6 +27,23 @@ namespace Birko.Data.Stores
         /// <param name="offset">Number of entities to skip.</param>
         /// <returns>A collection of matching entities.</returns>
         IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null);
+
+        /// <summary>
+        /// Reads the first entity matching the specified filter, or null if none match.
+        /// </summary>
+        /// <remarks>
+        /// Single-result counterpart of <see cref="IReadStore{T}.Read(Expression{Func{T, bool}}?)"/>.
+        /// It is re-surfaced here because declaring the bulk
+        /// <see cref="Read(Expression{Func{T, bool}}?, OrderBy{T}?, int?, int?)"/> overload hides the inherited
+        /// single-result <c>Read(filter)</c> from member lookup on bulk-store types — C# only considers methods
+        /// declared in the most-derived type that declares any method of that name, so on a bulk store
+        /// <c>Read(filter)</c> binds to the collection overload. Call <see cref="ReadFirst"/> (or cast to
+        /// <see cref="IReadStore{T}"/>) when a single entity is wanted.
+        /// </remarks>
+        /// <param name="filter">Optional filter expression to match the entity.</param>
+        /// <returns>The first matching entity if found; otherwise, null.</returns>
+        T? ReadFirst(Expression<Func<T, bool>>? filter = null)
+            => ((IReadStore<T>)this).Read(filter);
     }
 
     #endregion

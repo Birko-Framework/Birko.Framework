@@ -31,6 +31,23 @@ namespace Birko.Data.Stores
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         /// <returns>A collection of matching entities.</returns>
         Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously reads the first entity matching the specified filter, or null if none match.
+        /// </summary>
+        /// <remarks>
+        /// Single-result counterpart of <see cref="IAsyncReadStore{T}.ReadAsync(Expression{Func{T, bool}}?, CancellationToken)"/>.
+        /// It is re-surfaced here because declaring the bulk
+        /// <see cref="ReadAsync(Expression{Func{T, bool}}?, OrderBy{T}?, int?, int?, CancellationToken)"/> overload hides
+        /// the inherited single-result <c>ReadAsync(filter, ct)</c> from member lookup on bulk-store types — C# only
+        /// considers methods declared in the most-derived type that declares any method of that name. Call
+        /// <see cref="ReadFirstAsync"/> (or cast to <see cref="IAsyncReadStore{T}"/>) when a single entity is wanted.
+        /// </remarks>
+        /// <param name="filter">Optional filter expression to match the entity.</param>
+        /// <param name="ct">A cancellation token to cancel the operation.</param>
+        /// <returns>The first matching entity if found; otherwise, null.</returns>
+        Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+            => ((IAsyncReadStore<T>)this).ReadAsync(filter, ct);
     }
 
     #endregion

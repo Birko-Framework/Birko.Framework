@@ -46,6 +46,13 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
+        public virtual T? ReadFirst(Expression<Func<T, bool>>? filter = null)
+        {
+            // base = AbstractStore<T> — resolves to the single-result Read(filter) the bulk overload hides here.
+            return base.Read(filter);
+        }
+
+        /// <inheritdoc />
         public virtual void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
             EnsureInitialized();

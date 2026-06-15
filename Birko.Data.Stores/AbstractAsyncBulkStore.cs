@@ -75,6 +75,13 @@ namespace Birko.Data.Stores
         }
 
         /// <inheritdoc />
+        public virtual Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        {
+            // base = AbstractAsyncStore<T> — resolves to the single-result ReadAsync(filter, ct) the bulk overload hides here.
+            return base.ReadAsync(filter, ct);
+        }
+
+        /// <inheritdoc />
         public virtual async Task UpdateAsync(
             IEnumerable<T> data,
             StoreDataDelegate<T>? storeDelegate = null,
