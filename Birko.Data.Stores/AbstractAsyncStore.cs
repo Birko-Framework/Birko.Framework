@@ -32,6 +32,9 @@ namespace Birko.Data.Stores
         /// </summary>
         protected async Task EnsureInitializedAsync(CancellationToken ct = default)
         {
+            // Observe cancellation on every operation — all public async CRUD methods funnel through here,
+            // including already-initialized stores that would otherwise return below without checking the token.
+            ct.ThrowIfCancellationRequested();
             if (_initialized) return;
             await _initLock.WaitAsync(ct).ConfigureAwait(false);
             try
