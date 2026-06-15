@@ -23,6 +23,7 @@
   <Import Project="..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
   <Import Project="..\Birko.Data.Sync\Birko.Data.Sync.projitems" Label="Shared" />
 
 </Project>
