@@ -293,12 +293,13 @@ namespace Birko.Data.Tests.Stores
 
             var model = new TestModel();
 
-            // Act & Assert
+            // Act & Assert — an already-cancelled token is observed and surfaces as OperationCanceledException
+            // (TaskCanceledException derives from it) on every operation, via EnsureInitializedAsync.
             await store.Invoking(s => s.CreateAsync(model, null, cts.Token))
-                .Should().NotThrowAsync<TaskCanceledException>();
+                .Should().ThrowAsync<OperationCanceledException>();
 
             await store.Invoking(s => s.ReadAsync(null, cts.Token))
-                .Should().NotThrowAsync<TaskCanceledException>();
+                .Should().ThrowAsync<OperationCanceledException>();
         }
     }
 }
