@@ -32,96 +32,9 @@ public class AsyncValidatingBulkStoreWrapperTests
         }
     }
 
-    private class TestAsyncBulkStore : AbstractAsyncBulkStore<TestModel>
+    // Backed by Birko.Data.InMemory's AsyncInMemoryStore<T> — no per-test overrides needed.
+    private class TestAsyncBulkStore : Birko.Data.InMemory.Stores.AsyncInMemoryStore<TestModel>
     {
-        private readonly Dictionary<Guid, TestModel> _data = new();
-
-        public override Task<TestModel?> ReadAsync(Guid guid, CancellationToken ct = default) =>
-            Task.FromResult<TestModel?>(_data.GetValueOrDefault(guid));
-
-        protected override Task<TestModel?> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default)
-        {
-            if (filter == null) return Task.FromResult<TestModel?>(_data.Values.FirstOrDefault());
-            return Task.FromResult<TestModel?>(_data.Values.AsQueryable().FirstOrDefault(filter));
-        }
-
-        public override Task<IEnumerable<TestModel>> ReadAsync(CancellationToken ct = default) =>
-            Task.FromResult<IEnumerable<TestModel>>(_data.Values.ToList());
-
-        protected override Task<IEnumerable<TestModel>> ReadCoreAsync(Expression<Func<TestModel, bool>>? filter = null, OrderBy<TestModel>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default)
-        {
-            IEnumerable<TestModel> result = _data.Values;
-            if (filter != null) result = result.AsQueryable().Where(filter);
-            return Task.FromResult(result);
-        }
-
-        protected override Task<long> CountCoreAsync(Expression<Func<TestModel, bool>>? filter = null, CancellationToken ct = default) =>
-            Task.FromResult((long)_data.Count);
-
-        protected override Task<Guid> CreateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
-        {
-            data.Guid ??= Guid.NewGuid();
-            _data[data.Guid.Value] = data;
-            return Task.FromResult(data.Guid.Value);
-        }
-
-        protected override Task CreateCoreAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default)
-        {
-            foreach (var item in data)
-            {
-                item.Guid ??= Guid.NewGuid();
-                _data[item.Guid.Value] = item;
-            }
-            return Task.CompletedTask;
-        }
-
-        protected override Task UpdateCoreAsync(TestModel data, StoreDataDelegate<TestModel>? processDelegate = null, CancellationToken ct = default)
-        {
-            if (data.Guid.HasValue) _data[data.Guid.Value] = data;
-            return Task.CompletedTask;
-        }
-
-        protected override Task UpdateCoreAsync(IEnumerable<TestModel> data, StoreDataDelegate<TestModel>? storeDelegate = null, CancellationToken ct = default)
-        {
-            foreach (var item in data)
-                if (item.Guid.HasValue) _data[item.Guid.Value] = item;
-            return Task.CompletedTask;
-        }
-
-        public override Task UpdateAsync(Expression<Func<TestModel, bool>> filter, Action<TestModel> updateAction, CancellationToken ct = default)
-        {
-            var matches = _data.Values.AsQueryable().Where(filter).ToList();
-            foreach (var item in matches) updateAction(item);
-            return Task.CompletedTask;
-        }
-
-        public override Task UpdateAsync(Expression<Func<TestModel, bool>> filter, PropertyUpdate<TestModel> updates, CancellationToken ct = default) =>
-            Task.CompletedTask;
-
-        protected override Task DeleteCoreAsync(TestModel data, CancellationToken ct = default)
-        {
-            if (data.Guid.HasValue) _data.Remove(data.Guid.Value);
-            return Task.CompletedTask;
-        }
-
-        protected override Task DeleteCoreAsync(IEnumerable<TestModel> data, CancellationToken ct = default)
-        {
-            foreach (var item in data)
-                if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
-            return Task.CompletedTask;
-        }
-
-        public override Task DeleteAsync(Expression<Func<TestModel, bool>> filter, CancellationToken ct = default)
-        {
-            var toDelete = _data.Values.AsQueryable().Where(filter).ToList();
-            foreach (var item in toDelete)
-                if (item.Guid.HasValue) _data.Remove(item.Guid.Value);
-            return Task.CompletedTask;
-        }
-
-        protected override Task InitCoreAsync(CancellationToken ct = default) => Task.CompletedTask;
-        public override Task DestroyAsync(CancellationToken ct = default) => Task.CompletedTask;
-        public override TestModel CreateInstance() => new();
     }
 
     #endregion
