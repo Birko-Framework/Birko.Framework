@@ -34,3 +34,14 @@ The same audit already shipped the SR/ARIA validation layer (a stable `BaseCompo
 
 - New ARIA / screen-reader semantics (already delivered in the 2026-06-15 accessibility pass)
 - Cross-shadow tooltip accessible-name association (documented as a known Shadow DOM limitation)
+
+## Human test plan
+
+_For behaviour that unit/AI tests can't fully cover (UI/UX, edge cases, system integrations, manual verification). A human or agent runs these steps at `/tasks close` time and when `/feature review` checks the feature._
+
+- [ ] Put converted controls inside a native `<form>`, submit it, and inspect the `FormData` (or server payload) — confirm each control's value is present under its `name`
+- [ ] Mark a control invalid (set `error` / leave a `required` empty) and call `form.reportValidity()` — confirm the browser-native validation bubble appears anchored to the component
+- [ ] Trigger a native form **reset** and confirm `formResetCallback` restores each control to its initial value
+- [ ] Disable the form (`<fieldset disabled>`) and confirm `formDisabledCallback` propagates the disabled state into each control
+- [ ] Regression: run an existing `b-form`-based screen and confirm value collection / validation behaves exactly as before (this layer must not break the programmatic path)
+- [ ] Verify in Chromium + Firefox + WebKit (Safari) — `ElementInternals` / form-association support and validation-bubble behaviour differ across engines

@@ -30,3 +30,15 @@ jira-key: null
 
 - Other table component changes
 - Generic Shadow-DOM-per-cell optimization
+
+## Human test plan
+
+_For behaviour that unit/AI tests can't fully cover (UI/UX, edge cases, system integrations, manual verification). A human or agent runs these steps at `/tasks close` time and when `/feature review` checks the feature._
+
+- [ ] Run the 500-row benchmark harness by hand and confirm the recorded numbers are reproducible across runs (note machine + browser)
+- [ ] **Caret survival** — type continuously in a cell and confirm the caret position does not jump or reset on each keystroke (the core risk of the migration)
+- [ ] **Selection survival** — select a text range inside a cell, trigger a sibling re-render, and confirm the selection is preserved
+- [ ] **IME / composition** — verify a multi-keystroke composition (e.g. accented input) commits correctly without losing characters
+- [ ] No visible flicker or layout shift while editing a cell; row height matches `--b-control-min-height-sm` density
+- [ ] If the decision is "migrate" — tab/arrow navigation between editable cells still works; if "don't migrate" — confirm the documented numbers justify it
+- [ ] Verify in Chromium + Firefox

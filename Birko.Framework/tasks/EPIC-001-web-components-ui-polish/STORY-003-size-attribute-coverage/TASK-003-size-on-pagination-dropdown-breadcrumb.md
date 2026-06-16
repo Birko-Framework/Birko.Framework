@@ -29,3 +29,13 @@ The `size` convention is documented in `Birko.Web.Components/CLAUDE.md` (five ca
 ## Out of scope
 
 - Adding `size` to other components without a use case
+
+## Human test plan
+
+_For behaviour that unit/AI tests can't fully cover (UI/UX, edge cases, system integrations, manual verification). A human or agent runs these steps at `/tasks close` time and when `/feature review` checks the feature._
+
+- [ ] Render `b-pagination` at `size="sm"`, default, and `size="lg"` side by side and confirm the chip proportions scale sensibly (no clipped numbers or misaligned arrows)
+- [ ] Render `b-dropdown-menu` at `size="sm"` and confirm the trigger + menu items follow the text-scale category (font/padding shrink together, menu still readable)
+- [ ] Confirm the **default** (no `size`) rendering of all three is pixel-unchanged from before the change (compare against current build)
+- [ ] If `b-breadcrumb` sizing was implemented, verify the variant against its driving consumer use case; if it was skipped, confirm the deferral note is present in CLAUDE.md
+- [ ] Verify in Chromium + Firefox
