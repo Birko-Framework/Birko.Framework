@@ -315,7 +315,9 @@ ASALocalRun/
 *.code-workspace
 
 ## Claude Code
-.claude/
+.claude/*
+# but do share the framework-scoped skills
+!.claude/skills/
 
 ## Local environment
 *.env
