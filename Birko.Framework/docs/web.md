@@ -73,6 +73,18 @@ store.onChange('user', v => console.log('user:', v));
 
 `persistSet` / `persistGet` / `persistRemove` are localStorage helpers that JSON-serialize safely.
 
+### Storage (`IndexedDbStore`)
+
+For keyed collections too large/structured for localStorage (cached read data, large app state), `birko-web-core/storage` exposes `IndexedDbStore<T>` — a generic, zero-dependency wrapper over a single IndexedDB object store (`get`/`set`/`getAll`/`getAllByIndex`/`count`/`update`/`forEach`, a reactive `size` signal, and `onChange`). One store = one database (`birko_${storeName}` by default). The offline `ActionQueue` is built on the same low-level `idb.ts` helpers.
+
+```typescript
+import { IndexedDbStore } from 'birko-web-core/storage';
+
+const products = new IndexedDbStore<Product>({ storeName: 'products', keyPath: 'id' });
+await products.set({ id: 'p1', name: 'Widget', price: 9.99 });
+const p = await products.get('p1');
+```
+
 ### HTTP client (`ApiClient`)
 
 Fetch-based with automatic token and tenant header injection.
