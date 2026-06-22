@@ -208,46 +208,43 @@ namespace Birko.Data.Migrations.SQL
 
         #region Private Methods
 
+        // Probe for the migrations table by selecting against it rather than reading the schema catalog:
+        // DbConnection.GetSchema("Tables") is not implemented by every ADO.NET provider (notably
+        // Microsoft.Data.Sqlite, which throws "The requested collection 'Tables' is not defined"), whereas
+        // a guarded "SELECT ... WHERE 1=0" is portable across SQLite/MySQL/Postgres/MSSql — it touches no
+        // rows and fails only when the table is absent, which is exactly the signal we want.
+        // Only DbException is treated as "absent" (every ADO provider surfaces a missing table as a
+        // DbException subclass); other exceptions — e.g. a misused/closed connection — propagate rather
+        // than being silently read as "no table". A transient DbException (e.g. a lock) is still read as
+        // absent; callers create this table with the runner single-threaded at startup, where that is moot.
         private bool TableExists(DbConnection connection)
         {
-            var schema = connection.GetSchema("Tables");
-            var tableName = _settings.MigrationsTable;
-
-            foreach (DataRow row in schema.Rows)
+            try
             {
-                var schemaName = row["TABLE_SCHEMA"] as string;
-                var currentTableName = row["TABLE_NAME"] as string;
-
-                if (string.Equals(currentTableName, tableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (string.IsNullOrEmpty(_settings.Schema) || string.Equals(schemaName, _settings.Schema, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
+                using var command = connection.CreateCommand();
+                command.CommandText = $"SELECT 1 FROM {_settings.FullTableName} WHERE 1 = 0";
+                command.ExecuteNonQuery();
+                return true;
             }
-            return false;
+            catch (DbException)
+            {
+                return false;
+            }
         }
 
         private async Task<bool> TableExistsAsync(DbConnection connection)
         {
-            var table = await connection.GetSchemaAsync("Tables");
-            var tableName = _settings.MigrationsTable;
-
-            foreach (DataRow row in table.Rows)
+            try
             {
-                var schemaName = row["TABLE_SCHEMA"] as string;
-                var currentTableName = row["TABLE_NAME"] as string;
-
-                if (string.Equals(currentTableName, tableName, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (string.IsNullOrEmpty(_settings.Schema) || string.Equals(schemaName, _settings.Schema, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return true;
-                    }
-                }
+                using var command = connection.CreateCommand();
+                command.CommandText = $"SELECT 1 FROM {_settings.FullTableName} WHERE 1 = 0";
+                await command.ExecuteNonQueryAsync();
+                return true;
             }
-            return false;
+            catch (DbException)
+            {
+                return false;
+            }
         }
 
         private void CreateMigrationsTable(DbConnection connection)
