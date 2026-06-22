@@ -71,19 +71,27 @@ store.set('user', 'alice');
 store.onChange('user', v => console.log('user:', v));
 ```
 
-`persistSet` / `persistGet` / `persistRemove` are localStorage helpers that JSON-serialize safely.
+`persistSet` / `persistGet` / `persistRemove` are localStorage helpers that JSON-serialize safely; `sessionSet` / `sessionGet` / `sessionRemove` are the same API over `sessionStorage` (per-tab, cleared on close).
 
-### Storage (`IndexedDbStore`)
+### Storage (`IndexedDbStore`, `CacheStore`)
 
-For keyed collections too large/structured for localStorage (cached read data, large app state), `birko-web-core/storage` exposes `IndexedDbStore<T>` — a generic, zero-dependency wrapper over a single IndexedDB object store (`get`/`set`/`getAll`/`getAllByIndex`/`count`/`update`/`forEach`, a reactive `size` signal, and `onChange`). One store = one database (`birko_${storeName}` by default). The offline `ActionQueue` is built on the same low-level `idb.ts` helpers.
+`birko-web-core/storage` covers the larger client-side backends:
+
+- **`IndexedDbStore<T>`** — generic, zero-dependency wrapper over a single IndexedDB object store (`get`/`set`/`getAll`/`getAllByIndex`/`count`/`update`/`forEach`, a reactive `size` signal, and `onChange`) for keyed/structured collections. One store = one database (`birko_${storeName}` by default). The offline `ActionQueue` is built on the same low-level `idb.ts` helpers.
+- **`CacheStore`** — wrapper over the Cache API for HTTP responses / assets, with a cache-first `fetch({ maxAgeMs })`, JSON `putJson`/`matchJson`, and the raw cache ops. Requires a secure context.
 
 ```typescript
-import { IndexedDbStore } from 'birko-web-core/storage';
+import { IndexedDbStore, CacheStore } from 'birko-web-core/storage';
 
 const products = new IndexedDbStore<Product>({ storeName: 'products', keyPath: 'id' });
 await products.set({ id: 'p1', name: 'Widget', price: 9.99 });
 const p = await products.get('p1');
+
+const cache = new CacheStore('api-v1');
+const res = await cache.fetch('/api/config', { maxAgeMs: 5 * 60_000 });
 ```
+
+Backend guide: localStorage/sessionStorage for small flags, `IndexedDbStore` for structured collections, `CacheStore` for network payloads.
 
 ### HTTP client (`ApiClient`)
 
