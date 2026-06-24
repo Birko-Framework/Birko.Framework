@@ -9,10 +9,10 @@ Add a new Shadow DOM web component to `Birko.Web.Components` — the framework l
 
 ## Authoritative references — READ THESE FIRST when invoked
 
-- `C:\Source\Birko.Web.Components\CLAUDE.md` — **the spec**. Contains the directory structure, the "New component checklist" (10 steps), the mandatory token + shared-sheet rules, the `size` attribute taxonomy (five categories), and the live component inventory table. **If anything below disagrees with that file, follow the file.**
-- `C:\Source\Birko.Web.Components\src\shared-styles.ts` — the shared `@sheet` exports (`backdropSheet`, `overlayHeaderSheet`, `formFieldSheet`, `formControlSheet`, `dataViewerCardSheet`, etc.). Browse this before writing any CSS.
-- `C:\Source\Birko.Web.Components\css\tokens.css` — full `--b-*` token catalogue (light + dark theme).
-- `C:\Source\Birko.Web.Core\src` — `BaseComponent`, `i18n` global, `useI18n`, `onI18nChange`, `t(key, params, fallback)` (loaded via `BaseComponent.label()`).
+- `C:\Source\Birko\Web\Birko.Web.Components\CLAUDE.md` — **the spec**. Contains the directory structure, the "New component checklist" (10 steps), the mandatory token + shared-sheet rules, the `size` attribute taxonomy (five categories), and the live component inventory table. **If anything below disagrees with that file, follow the file.**
+- `C:\Source\Birko\Web\Birko.Web.Components\src\shared-styles.ts` — the shared `@sheet` exports (`backdropSheet`, `overlayHeaderSheet`, `formFieldSheet`, `formControlSheet`, `dataViewerCardSheet`, etc.). Browse this before writing any CSS.
+- `C:\Source\Birko\Web\Birko.Web.Components\css\tokens.css` — full `--b-*` token catalogue (light + dark theme).
+- `C:\Source\Birko\Web\Birko.Web.Core\src` — `BaseComponent`, `i18n` global, `useI18n`, `onI18nChange`, `t(key, params, fallback)` (loaded via `BaseComponent.label()`).
 - A **reference component close to what you're building** — pick one and mirror its file shape:
   - Inputs → `src/inputs/b-date-range-picker.ts` (recent, 21st input, mature pattern with static `setLocale`, complex internal state)
   - Layout → `src/layout/b-modal.ts` or `b-drawer.ts` (overlay sheet reuse)
@@ -93,7 +93,7 @@ Per [[feedback_update_docs]] and CLAUDE.md "Recent Updates" cadence:
 
 1. **Component inventory table** in `Birko.Web.Components/CLAUDE.md` — add a row.
 2. **`src/locales/en.json`** — add the new `bwc.*` keys.
-3. **Root `C:\Source\Birko.Framework\CLAUDE.md`** § "Recent Updates" — add a `### Birko.Web.Components — b-{name} (YYYY-MM-DD)` entry describing what the component does and any notable patterns. Use [[roll-changelog]] when that section gets long.
+3. **Root `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md`** § "Recent Updates" — add a `### Birko.Web.Components — b-{name} (YYYY-MM-DD)` entry describing what the component does and any notable patterns. Use [[roll-changelog]] when that section gets long.
 4. **`README.md`** — update the components-by-category list if you add a notable component.
 5. **API.md** in `Birko.Web.Components/` (if present) — add the new component's API surface.
 

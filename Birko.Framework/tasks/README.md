@@ -1,25 +1,33 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-06-15. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-06-19. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 11    | 21      | —     |
+| planned      | 11    | 25      | —     |
 | todo         | —     | —       | 33    |
-| in-progress  | 0     | 0       | 0     |
+| in-progress  | 2     | 1       | 1     |
+| review       | —     | —       | 4     |
 | blocked      | —     | —       | 0     |
-| done         | 1     | 2       | 2     |
+| done         | 1     | 2       | 3     |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
 
-_None — start with `/tasks pick` or pick by reading the tree below._
+- [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: gallery + live token editor + theme-CSS export (P2, ai)
+
+## In review
+
+- [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Web,Framework.Tests,Consumers} + aicode bucket (P1, ai) — framework build green; Symbio build sign-off pending
+- [TASK-041](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-041-shared-coerce-css-length.md) Shared coerceCssLength helper + fix unitless-length across 6 components (P2, ai) — landed in Birko.Web.Core; playground bundles green
+- [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce unitless height — avoid endless SVG stretch (P3, ai) — component fix landed; in-browser playground check pending
+- [TASK-040](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-040-b-accordion-component.md) Add a b-accordion (collapsible / disclosure group) component (P2, ai) — built + in playground gallery; in-browser interaction check pending
 
 ## Tree
 
-- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — planned (0/4 tasks done)
+- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (0/7 tasks done)
   - STORY-001 [bare attribute for inline form usage](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/STORY.md) — planned (0/1)
     - [ ] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add bare attribute to all form controls (P2, ai)
   - STORY-002 [b-editable-table migration](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/STORY.md) — planned (0/1)
@@ -28,6 +36,10 @@ _None — start with `/tasks pick` or pick by reading the tree below._
     - [ ] [TASK-003](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/TASK-003-size-on-pagination-dropdown-breadcrumb.md) size on b-pagination, b-dropdown-menu, b-breadcrumb (P2, ai)
   - STORY-023 [form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — planned (0/1)
     - [ ] [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai)
+  - STORY-028 [display & disclosure components](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/STORY.md) — in-progress (0/3)
+    - [ ] [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce unitless height — avoid endless SVG stretch (P3, ai) 🔍 review
+    - [ ] [TASK-040](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-040-b-accordion-component.md) Add a b-accordion (collapsible / disclosure group) component (P2, ai) 🔍 review
+    - [ ] [TASK-041](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-041-shared-coerce-css-length.md) Shared coerceCssLength helper + fix unitless-length across 6 components (P2, ai) 🔍 review
 - **EPIC-002** [Birko.Data.Redis](EPIC-002-birko-data-redis/EPIC.md) — planned (0/1)
   - [ ] [TASK-004](EPIC-002-birko-data-redis/TASK-004-implement-birko-data-redis.md) Implement Birko.Data.Redis (P2, ai)
 - **EPIC-003** [Birko.Caching.NCache](EPIC-003-birko-caching-ncache/EPIC.md) — planned (0/1)
@@ -84,6 +96,18 @@ _None — start with `/tasks pick` or pick by reading the tree below._
     - [ ] [TASK-033](EPIC-011-test-coverage-gaps/STORY-022-phase-4-tests/TASK-033-configuration-contracts-tests.md) Birko.Configuration + Birko.Contracts DTO tests (P2, ai)
 - **EPIC-012** [Birko.MessageQueue.MQTT — v5 features](EPIC-012-mqtt-v5-features/EPIC.md) — planned (0/1)
   - [ ] [TASK-034](EPIC-012-mqtt-v5-features/TASK-034-mqtt-v5-topic-aliases-user-properties.md) MQTT v5 topic aliases + user properties (P2, ai)
+- **EPIC-013** [Reference consumers — smoke harness + Web playground](EPIC-013-reference-consumers/EPIC.md) — in-progress (1/2)
+  - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace TUI example with extracted backend smoke-harness consumer (P2, ai) — **done**
+  - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: gallery + live token editor + theme-CSS export (P2, ai) ← in-progress
+- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — planned (0/4 stories; 864 findings, tasks extracted on demand from CODE-REVIEW-AUDIT-2026-06-17.md)
+  - STORY-024 [Critical findings (24)](EPIC-014-code-review-remediation/STORY-024-critical-findings/STORY.md) — planned (CR-C01 … CR-C24)
+  - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — planned (CR-H001 … CR-H147)
+  - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — planned (CR-M001 …)
+  - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
+
+### Loose tasks (no parent epic)
+
+- [ ] [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Web,Framework.Tests,Consumers} + aicode bucket (P1, ai) 🔍 review
 
 <details>
 <summary>Completed (1 epic)</summary>

@@ -441,10 +441,11 @@ A minimal aggregator `csproj` looks like:
 **Live examples** of these patterns:
 - `Symbio.Birko.csproj` — single aggregator, ~90 Birko shared projects consolidated into one DLL (large enterprise platform)
 - `WebFinstatApiTester.csproj` — no aggregator at all; the app `csproj` directly imports a lean subset (~10 projitems) because the project is small and overlapping-import risk is nil
+- `Birko.Sandbox` (`Birko\Consumers\Birko.Sandbox`) — the runnable integration **smoke harness**: app csproj directly imports the lean slice it exercises and runs a tiny round-trip per layer (`dotnet run`, exits non-zero on failure). The "first test place" for framework changes
 
 ### Locating Birko.Framework sources — `$(BirkoSrc)` / `BIRKO_SRC`
 
-The `Import Project` paths in your aggregator `csproj` need to resolve to wherever you have the `Birko.*` source folders checked out. **Don't hard-code** absolute paths like `C:\Source\Birko.Helpers\…` — instead use the `$(BirkoSrc)` MSBuild property, resolved from a `Directory.Build.props` at your repo root:
+The `Import Project` paths in your aggregator `csproj` need to resolve to wherever you have the `Birko.*` source folders checked out. **Don't hard-code** absolute paths like `C:\Source\Birko\Framework\Birko.Helpers\…` — instead use the `$(BirkoSrc)` MSBuild property, resolved from a `Directory.Build.props` at your repo root:
 
 ```xml
 <!-- {YourSolution}/Directory.Build.props -->
@@ -453,11 +454,17 @@ The `Import Project` paths in your aggregator `csproj` need to resolve to wherev
     <!-- Resolution order:
            1. /p:BirkoSrc=...      MSBuild CLI parameter (highest priority)
            2. BIRKO_SRC env var    Shell environment
-           3. Default              Parent directory of this Directory.Build.props
-         The default assumes Birko.* folders are sibling checkouts of your repo
-         (i.e. C:\Source\Birko.Helpers next to C:\Source\YourSolution\). -->
+           3. Default              Path to the Birko\Framework checkout, relative
+                                   to this Directory.Build.props
+         The recommended layout nests the framework under a Birko\Framework bucket
+         and consumers under a sibling Birko\Consumers bucket, e.g.
+           C:\Source\Birko\Framework\Birko.Helpers
+           C:\Source\Birko\Consumers\YourSolution
+         so a consumer one bucket over reaches the framework via ..\..\Framework.
+         (If you instead keep Birko.* as flat siblings of your repo, the default
+         is just "..".) -->
     <BirkoSrc Condition="'$(BirkoSrc)' == '' and '$(BIRKO_SRC)' != ''">$(BIRKO_SRC)</BirkoSrc>
-    <BirkoSrc Condition="'$(BirkoSrc)' == ''">$(MSBuildThisFileDirectory)..</BirkoSrc>
+    <BirkoSrc Condition="'$(BirkoSrc)' == ''">$(MSBuildThisFileDirectory)..\..\Framework</BirkoSrc>
   </PropertyGroup>
 </Project>
 ```
@@ -472,17 +479,30 @@ Then any consumer csproj imports become portable:
 
 | Channel | Use case |
 |---|---|
-| **Default** (parent dir) | Local dev with `Birko.*` checked out as siblings (`C:\Source\Birko.X` + `C:\Source\YourSolution`). Zero configuration. |
+| **Default** (relative to repo) | Local dev with the bucket layout — framework at `C:\Source\Birko\Framework\Birko.X`, your repo at `C:\Source\Birko\Consumers\YourSolution`. Zero configuration. |
 | **`BIRKO_SRC` env var** | CI runners, Docker builds, custom workstation layouts (e.g. `D:\src` or `/home/foo/code`). Set once per shell session. |
 | **`/p:BirkoSrc=…` CLI** | One-off override for a single build, e.g. comparing two checkouts side by side. |
 
 #### Frontend (TypeScript) consumers
 
-`Birko.Web.Core`, `Birko.Web.Components`, and `Birko.Web.Shell` ship as TypeScript sources, consumed by esbuild via an alias map. The same `BIRKO_SRC` env var is the convention for bundlers — your `build.js` should read it with the same fallback:
+`Birko.Web.Core`, `Birko.Web.Components`, and `Birko.Web.Shell` ship as TypeScript sources, consumed by esbuild via an alias map. They live in their **own `Birko\Web` bucket**, separate from the .NET `Birko\Framework` bucket the MSBuild side resolves — so `BIRKO_SRC` (frontend) points at `Birko\Web`, while MSBuild's `$(BirkoSrc)` points at `Birko\Framework`. **Don't bake a machine-specific absolute path into the committed fallback** — prefer the env var, then walk up to find the `Birko\Web` checkout (depth-independent, safe to commit):
 
 ```js
 // build.js — esbuild config
-const BIRKO_SRC = (process.env.BIRKO_SRC ?? 'C:/Source').replace(/\/+$/, '');
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+function resolveBirkoSrc() {
+  if (process.env.BIRKO_SRC) return process.env.BIRKO_SRC.replace(/[\\/]+$/, '').replaceAll('\\', '/');
+  for (let d = __dirname; d !== dirname(d); d = dirname(d)) {
+    const c = resolve(d, 'Birko/Web');
+    if (existsSync(resolve(c, 'Birko.Web.Core'))) return c.replaceAll('\\', '/');
+  }
+  throw new Error('Set BIRKO_SRC to your Birko\\Web path.');
+}
+const BIRKO_SRC = resolveBirkoSrc();
 
 const aliases = {
   'birko-web-core':       `${BIRKO_SRC}/Birko.Web.Core/src/index.ts`,

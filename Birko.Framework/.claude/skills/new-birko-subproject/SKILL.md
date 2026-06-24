@@ -5,13 +5,13 @@ description: Scaffold a new sibling `Birko.X` shared project inside the Birko.Fr
 
 # Birko Framework — New Sibling Project Scaffolder
 
-Add a new `Birko.X` shared project to the Birko.Framework workspace, following the **New Project Checklist** documented in `C:\Source\Birko.Framework\CLAUDE-maintenance.md`.
+Add a new `Birko.X` shared project to the Birko.Framework workspace, following the **New Project Checklist** documented in `C:\Source\Birko\Framework\Birko.Framework\CLAUDE-maintenance.md`.
 
 This skill is the inverse of [[birko-new-project]]: that one scaffolds a **consumer** of Birko; this one extends Birko itself.
 
 ## Authoritative references — READ THESE FIRST when invoked
 
-Before generating anything, open and re-read these files in `C:\Source\Birko.Framework\`. They are the source of truth — if anything in this skill drifts from them, **follow the files**.
+Before generating anything, open and re-read these files in `C:\Source\Birko\Framework\Birko.Framework\`. They are the source of truth — if anything in this skill drifts from them, **follow the files**.
 
 - `CLAUDE-maintenance.md` — full new-project checklist, GUID requirements, solution + workspace folder groups, test + health-check requirements.
 - `CLAUDE.md` — root architecture overview + dependency flow diagram (helps decide which existing project the new one depends on).
@@ -41,7 +41,7 @@ Everything below comes from `CLAUDE-maintenance.md` § "New Project Checklist". 
 - Visual Studio Shared Project file.
 - `<ProjectGuid>` must be a fresh **hex-only** GUID (`0-9`, `a-f`). Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. Do **not** put human-readable letters (`g-z`) in GUIDs.
 - Generate with PowerShell: `[guid]::NewGuid().ToString()`.
-- Copy structure from a similar existing `.shproj` (e.g. `C:\Source\Birko.Data.JSON\Birko.Data.JSON.shproj`).
+- Copy structure from a similar existing `.shproj` (e.g. `C:\Source\Birko\Framework\Birko.Data.JSON\Birko.Data.JSON.shproj`).
 
 ### 2. `Birko.X.projitems`
 
@@ -52,8 +52,8 @@ Everything below comes from `CLAUDE-maintenance.md` § "New Project Checklist". 
 ### 3. `CLAUDE.md`
 
 - Project-specific equivalent of root `CLAUDE.md`.
-- Required sections: **Overview**, **Project Location** (`C:\Source\Birko.X\`), **Components** (key types + their responsibilities), **Dependencies** (which `Birko.*` it depends on, which NuGet packages), **Maintenance** (link back to root `CLAUDE-maintenance.md`).
-- Copy structure from a comparable existing project's `CLAUDE.md` (e.g. `C:\Source\Birko.Data.ElasticSearch\CLAUDE.md`).
+- Required sections: **Overview**, **Project Location** (`C:\Source\Birko\Framework\Birko.X\`), **Components** (key types + their responsibilities), **Dependencies** (which `Birko.*` it depends on, which NuGet packages), **Maintenance** (link back to root `CLAUDE-maintenance.md`).
+- Copy structure from a comparable existing project's `CLAUDE.md` (e.g. `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\CLAUDE.md`).
 
 ### 4. `README.md`
 
@@ -98,7 +98,7 @@ Add the `.projitems` import alongside the existing imports for that folder group
 
 ### Root `CLAUDE.md` — Dependency Flow
 
-If the new project changes the dependency tree (most do), update the **Dependency Flow** ASCII diagram in `C:\Source\Birko.Framework\CLAUDE.md` so future reads of the architecture stay accurate.
+If the new project changes the dependency tree (most do), update the **Dependency Flow** ASCII diagram in `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` so future reads of the architecture stay accurate.
 
 ### Root `README.md` + `docs/`
 
@@ -110,7 +110,7 @@ Per the user's [[feedback_update_docs]] preference, **always update `README.md` 
 
 ## Companion test project (if selected)
 
-Create `C:\Source\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
+Create `C:\Source\Birko\Framework.Tests\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
 
 - `Microsoft.NET.Sdk` target framework matching the rest of the framework (`net10.0` currently).
 - `<PackageReference>` for **xUnit**, **xUnit.runner.visualstudio**, **Microsoft.NET.Test.Sdk**, **FluentAssertions**.
@@ -121,8 +121,8 @@ Create `C:\Source\Birko.X.Tests\` as a regular `.csproj` (NOT shared):
 ## After scaffolding
 
 1. **Verify the workspace loads** — open `Birko.Framework.code-workspace` in VS Code and confirm the new folder appears.
-2. **Verify the solution builds** — `dotnet build C:\Source\Birko.Framework\Birko.Framework.slnx` (the aggregator `Birko.Framework.csproj` must compile with the new `.projitems` imported).
-3. **Run the new project's tests** — `dotnet test C:\Source\Birko.X.Tests\Birko.X.Tests.csproj`.
+2. **Verify the solution builds** — `dotnet build C:\Source\Birko\Framework\Birko.Framework\Birko.Framework.slnx` (the aggregator `Birko.Framework.csproj` must compile with the new `.projitems` imported).
+3. **Run the new project's tests** — `dotnet test C:\Source\Birko\Framework.Tests\Birko.X.Tests\Birko.X.Tests.csproj`.
 4. **Consider running [[verify-birko-conventions]]** to catch nullable-warning / `*Core`-override / settings-passing issues before commit.
 5. **Add a `Recent Updates` entry** to root `CLAUDE.md` describing what the new project does. Follow the format of the existing entries (header `### Birko.X (YYYY-MM-DD)`).
 

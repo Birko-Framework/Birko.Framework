@@ -13,16 +13,16 @@ Implement a new persistence backend that plugs into one of Birko's abstract stor
 
 ## Authoritative references — READ THESE FIRST when invoked
 
-Open these in `C:\Source\Birko.Framework\` before generating anything. If anything below contradicts them, **follow the files**.
+Open these in `C:\Source\Birko\Framework\Birko.Framework\` before generating anything. If anything below contradicts them, **follow the files**.
 
 - `CLAUDE.md` § "Architecture / Store Hierarchy" — diagrams the `AbstractStore → AbstractBulkStore` chain and the `AsyncDataBaseStore<DB,T>` SQL variant.
 - `CLAUDE.md` § "Conventions" — the contract every store must implement and the `*Core`-override rule.
 - `CLAUDE.md` § "Reference Implementations" — points to ElasticSearch (async/bulk), JSON (file), XML (file with `System.Xml.Serialization` quirks), InMemory (simplest store, `ConcurrentDictionary`, no persistence).
-- `C:\Source\Birko.Data.Stores\CLAUDE.md` — the abstract base classes the new store inherits from.
-- `C:\Source\Birko.Data.ElasticSearch\CLAUDE.md` + `C:\Source\Birko.Data.ElasticSearch\Stores\` — **canonical async/bulk reference**. Mirror its file layout, async patterns, bulk batching, and `*Core` overrides.
-- `C:\Source\Birko.Data.JSON\CLAUDE.md` + `C:\Source\Birko.Data.JSON\Stores\` — **canonical file-based reference**. Use this when the new backend is a single-file format.
-- `C:\Source\Birko.Data.InMemory\CLAUDE.md` + `C:\Source\Birko.Data.InMemory\Stores\` — **simplest reference** (thread-safe `ConcurrentDictionary`, no persistence; `*Core` overrides only, no settings class). Start here when the new backend has no connection/file (in-memory, mock, or a cache-like store), or just to see the minimal shape of a complete `IBulkStore`/`IAsyncBulkStore` implementation.
-- `C:\Source\Birko.Configuration\` — settings hierarchy (`ISettings → Settings → PasswordSettings → RemoteSettings → SqlSettings → MSSqlSettings/MySqlSettings/PostgreSqlSettings`). Pick the right ancestor before adding a new settings descendant.
+- `C:\Source\Birko\Framework\Birko.Data.Stores\CLAUDE.md` — the abstract base classes the new store inherits from.
+- `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\CLAUDE.md` + `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\Stores\` — **canonical async/bulk reference**. Mirror its file layout, async patterns, bulk batching, and `*Core` overrides.
+- `C:\Source\Birko\Framework\Birko.Data.JSON\CLAUDE.md` + `C:\Source\Birko\Framework\Birko.Data.JSON\Stores\` — **canonical file-based reference**. Use this when the new backend is a single-file format.
+- `C:\Source\Birko\Framework\Birko.Data.InMemory\CLAUDE.md` + `C:\Source\Birko\Framework\Birko.Data.InMemory\Stores\` — **simplest reference** (thread-safe `ConcurrentDictionary`, no persistence; `*Core` overrides only, no settings class). Start here when the new backend has no connection/file (in-memory, mock, or a cache-like store), or just to see the minimal shape of a complete `IBulkStore`/`IAsyncBulkStore` implementation.
+- `C:\Source\Birko\Framework\Birko.Configuration\` — settings hierarchy (`ISettings → Settings → PasswordSettings → RemoteSettings → SqlSettings → MSSqlSettings/MySqlSettings/PostgreSqlSettings`). Pick the right ancestor before adding a new settings descendant.
 
 ## Prerequisite: project skeleton
 
@@ -58,7 +58,7 @@ Add platform-specific knobs as new properties with **protected setters** (per th
 
 ### 2. Sync store — `XStore<T> : AbstractBulkStore<T>`
 
-In `C:\Source\Birko.Data.X\Stores\XStore.cs`:
+In `C:\Source\Birko\Framework\Birko.Data.X\Stores\XStore.cs`:
 
 - `public class XStore<T> : AbstractBulkStore<T>, ISettingsStore<XSettings> where T : class`
 - Constructor takes the platform's native client / connection / file path. Do **not** open it in the constructor — `Init()` does that.
@@ -87,13 +87,13 @@ Optional. `Birko.Data.Repositories` already provides generic repositories on top
 
 ### 5. ConnectorBase (SQL only)
 
-If the new store is a SQL dialect: subclass `AbstractConnector` in `C:\Source\Birko.Data.SQL\`. Override `GetSqlFunctionName()` for dialect-specific function names, parameter syntax, identifier quoting. **Reuse the connector from the migration context** (`Birko.Data.Migrations.SQL.SqlMigrationContext` takes an `AbstractConnector` — same instance the store uses).
+If the new store is a SQL dialect: subclass `AbstractConnector` in `C:\Source\Birko\Framework\Birko.Data.SQL\`. Override `GetSqlFunctionName()` for dialect-specific function names, parameter syntax, identifier quoting. **Reuse the connector from the migration context** (`Birko.Data.Migrations.SQL.SqlMigrationContext` takes an `AbstractConnector` — same instance the store uses).
 
 ## Tests
 
 Per `CLAUDE-maintenance.md` § "Test Requirements" — every new public method needs xUnit + FluentAssertions coverage.
 
-In `C:\Source\Birko.Data.X.Tests\`:
+In `C:\Source\Birko\Framework.Tests\Birko.Data.X.Tests\`:
 
 - `XStoreTests.cs` — CRUD round-trip, filter-based bulk Update/Delete, lazy-init (calling CRUD without explicit `Init()`), edge cases (null filter, empty result, concurrent access if relevant).
 - `AsyncXStoreTests.cs` — same as above, async variant. Include cancellation tests (`CancellationTokenSource.CancelAfter(…)`).
@@ -135,6 +135,6 @@ If `family = BackgroundJobs`:
 
 ## After implementing
 
-1. **Build** — `dotnet build C:\Source\Birko.Framework\Birko.Framework.slnx`.
-2. **Run tests** — `dotnet test C:\Source\Birko.Data.X.Tests\Birko.Data.X.Tests.csproj`.
+1. **Build** — `dotnet build C:\Source\Birko\Framework\Birko.Framework\Birko.Framework.slnx`.
+2. **Run tests** — `dotnet test C:\Source\Birko\Framework.Tests\Birko.Data.X.Tests\Birko.Data.X.Tests.csproj`.
 3. **Run [[verify-birko-conventions]]** to catch nullable warnings, missed `*Core` overrides, missing tests, hard-coded paths.

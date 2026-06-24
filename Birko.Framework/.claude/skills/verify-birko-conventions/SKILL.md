@@ -7,8 +7,8 @@ description: Lint the staged or current diff against the conventions documented 
 
 A pre-commit / post-change lint that enforces the rules listed in:
 
-- `C:\Source\Birko.Framework\CLAUDE.md` § "Conventions" and § "Code Style"
-- `C:\Source\Birko.Framework\CLAUDE-maintenance.md` § "New Project Checklist" and § "Solution & Workspace Registration"
+- `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` § "Conventions" and § "Code Style"
+- `C:\Source\Birko\Framework\Birko.Framework\CLAUDE-maintenance.md` § "New Project Checklist" and § "Solution & Workspace Registration"
 
 Run this skill **before** every commit on Birko.Framework. It catches violations that the C# compiler doesn't surface (e.g. overriding `CreateAsync` instead of `CreateCoreAsync` compiles fine but bypasses lazy-init).
 
@@ -26,14 +26,14 @@ These files are the source of truth. If they change, the checks below should ada
 ## What to lint
 
 Run these checks in order. For each violation found, report:
-- **File** (with path relative to `C:\Source\Birko.Framework\` where applicable)
+- **File** (with path relative to `C:\Source\Birko\Framework\Birko.Framework\` where applicable)
 - **Line number**
 - **The rule violated**
 - **Suggested fix** (one-line)
 
 ### 1. Nullable warnings (CS8600–CS8625)
 
-Run `dotnet build C:\Source\Birko.Framework\Birko.Framework.slnx -warnaserror /p:TreatWarningsAsErrors=true` and report any of:
+Run `dotnet build C:\Source\Birko\Framework\Birko.Framework\Birko.Framework.slnx -warnaserror /p:TreatWarningsAsErrors=true` and report any of:
 - CS8600 (converting null literal or possible null value to non-nullable type)
 - CS8601 (possible null reference assignment)
 - CS8602 (dereference of a possibly null reference)
@@ -69,7 +69,7 @@ Grep changed `.cs` files for `new RemoteSettings\b` outside of `base.SetSettings
 
 Per CLAUDE.md § "Usage in Consumer Solutions": *Use `$(BirkoSrc)` … for all `Import Project="…\Birko.X\Birko.X.projitems"` paths instead of hard-coded absolutes.*
 
-Grep changed `.csproj` / `.projitems` files for `<Import Project="C:\\` or `<Import Project="\\.\\\.\\Birko` (relative-but-fragile) or any literal path containing `C:\Source\Birko.` outside of doc files. Report violations and suggest `$(BirkoSrc)\Birko.X\…`.
+Grep changed `.csproj` / `.projitems` files for `<Import Project="C:\\` or `<Import Project="\\.\\\.\\Birko` (relative-but-fragile) or any literal path containing `C:\Source\Birko\Framework\Birko.` outside of doc files. Report violations and suggest `$(BirkoSrc)\Birko.X\…`.
 
 ### 5. New public methods without tests
 
@@ -88,7 +88,7 @@ Note: this is a heuristic. False positives are possible (e.g. method tested thro
 
 Per CLAUDE-maintenance.md § "New Project Checklist": every project dir must have `License.md`, `README.md`, `CLAUDE.md`, `.gitignore`.
 
-For every new directory under `C:\Source\Birko.*\` introduced in the diff, verify all four files exist. Report missing files.
+For every new directory under `C:\Source\Birko\Framework\Birko.*\` introduced in the diff, verify all four files exist. Report missing files.
 
 Also check GUID requirements: if a new `.shproj` or `.projitems` was added, verify:
 - `ProjectGuid` / `SharedGUID` is a valid hex-only GUID (`0-9a-f`, format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
@@ -136,15 +136,15 @@ Group findings by severity:
 Sample output:
 
 ```
-🛑 Blocker — C:\Source\Birko.Data.Foo\Stores\FooStore.cs:42
+🛑 Blocker — C:\Source\Birko\Framework\Birko.Data.Foo\Stores\FooStore.cs:42
    Concrete store overrides public CreateAsync — should override CreateCoreAsync instead.
    Fix: rename CreateAsync to CreateCoreAsync; remove the `Init()` call (base class handles it).
 
-⚠ Warning — C:\Source\Birko.Data.Foo\Stores\FooStore.cs:118
+⚠ Warning — C:\Source\Birko\Framework\Birko.Data.Foo\Stores\FooStore.cs:118
    Public method BulkUpsertAsync added with no test reference in Birko.Data.Foo.Tests.
    Fix: add BulkUpsertAsync_RoundTrip to BulkOperationsTests.cs.
 
-💡 Suggestion — C:\Source\Birko.Framework\CLAUDE.md
+💡 Suggestion — C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md
    Diff touches 7 files but no Recent Updates entry was added.
    Fix: prepend a `### Birko.Data.Foo — bulk upsert (YYYY-MM-DD)` entry.
 ```

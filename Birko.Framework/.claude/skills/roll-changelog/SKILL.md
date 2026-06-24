@@ -5,14 +5,14 @@ description: Prune the "Recent Updates" section in `Birko.Framework/CLAUDE.md` b
 
 # Birko Framework — Roll Recent Updates into CHANGELOG
 
-The `## Recent Updates` section at the bottom of `C:\Source\Birko.Framework\CLAUDE.md` is a rolling log of architectural changes. It grows on every change and would eventually bloat the project instructions (which Claude reads on every invocation). When it has more than ~5–8 entries, the oldest entries should be moved to `CHANGELOG.md` for long-term preservation while keeping `CLAUDE.md` focused on the latest changes.
+The `## Recent Updates` section at the bottom of `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` is a rolling log of architectural changes. It grows on every change and would eventually bloat the project instructions (which Claude reads on every invocation). When it has more than ~5–8 entries, the oldest entries should be moved to `CHANGELOG.md` for long-term preservation while keeping `CLAUDE.md` focused on the latest changes.
 
 This is the same manual chore the user performed in commit `0f51a01` (*docs: backfill CHANGELOG with 5 entries from CLAUDE.md Recent Updates*).
 
 ## Authoritative references — READ BOTH FILES FIRST when invoked
 
-- `C:\Source\Birko.Framework\CLAUDE.md` — source of entries. Locate the `## Recent Updates` heading (near the bottom of the file). Entries below it have the form `### Title (YYYY-MM-DD)` followed by a paragraph and bullet list.
-- `C:\Source\Birko.Framework\CHANGELOG.md` — destination. Look at the existing format: `## YYYY-MM-DD — Title` (em-dash `—` between date and title, NOT a hyphen), then a paragraph, then bullets. Existing entries are sorted **newest-first**.
+- `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md` — source of entries. Locate the `## Recent Updates` heading (near the bottom of the file). Entries below it have the form `### Title (YYYY-MM-DD)` followed by a paragraph and bullet list.
+- `C:\Source\Birko\Framework\Birko.Framework\CHANGELOG.md` — destination. Look at the existing format: `## YYYY-MM-DD — Title` (em-dash `—` between date and title, NOT a hyphen), then a paragraph, then bullets. Existing entries are sorted **newest-first**.
 
 If either file's structure has evolved since this skill was written, **follow the files** — this skill is a recipe, not a spec.
 
