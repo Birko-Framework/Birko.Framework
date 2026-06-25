@@ -464,6 +464,7 @@ All three projects are **pure TypeScript ES modules**. Each has a `package.json`
 | `birko-web-core` | (none) |
 | `birko-web-components` | `birko-web-core` |
 | `birko-web-shell` | `birko-web-core`, `birko-web-components` |
+| `birko-web-testing` | `@playwright/test`, `puppeteer` (peer — consumer-provided) |
 
 Consumer apps wire these up via TypeScript path aliases or esbuild path mappings pointing directly to the source files — no compilation or bundling of the libraries themselves.
 
@@ -474,6 +475,33 @@ Consumer apps wire these up via TypeScript path aliases or esbuild path mappings
 - **Design tokens** — `--b-color-*`, `--b-space-*`, `--b-font-*` CSS variables are themeable per app or per tenant (`applyBranding`).
 - **Factory over singleton** — stores and guards are created by factory functions so the same code works in tests and across multiple apps.
 - **No runtime dependency on Birko backend** — the client libraries are backend-agnostic; they just issue HTTP requests. Any API shape compatible with `ApiClient` works.
+
+## Testing & browser automation — `birko-web-testing`
+
+A fourth source-only `Birko/Web/*` package (`Birko.Web.Testing`, pkg `birko-web-testing`) gives every
+consumer a shared browser-automation toolkit. Like the others it is consumed by TypeScript `paths`
+(here by the **Node test runner**, not esbuild — no `build.js` alias). Two lanes over one core:
+
+| Lane | Import | Use |
+|---|---|---|
+| **Playwright** | `birko-web-testing/playwright` | The **test suite** — `runSmoke(manifest)` route sweeps + CRUD via fixtures/page-objects; `birkoPlaywrightPreset({ baseURL })` for the config. |
+| **Puppeteer** | `birko-web-testing/puppeteer` | **Utility scripts** — PDF/screenshot/perf/scrape via `launchSession()`. Not a second suite. |
+| **Core** | `birko-web-testing/core` | Driver-agnostic `RouteEntry` manifests, `b-*` selectors, `loginViaApi` (+ the `localStorage` auth snapshot `createAuthStore` expects), console/4xx-5xx collectors. |
+
+The whole UI is Shadow-DOM Web Components: Playwright CSS pierces open shadow roots automatically;
+Puppeteer uses `>>>`. Selectors are grounded in the real components (`b-data-table` row actions →
+`b-dropdown-menu`, `b-form`, `b-sidebar`/`b-ribbon`, the `BaseCrudPage` `#btn-create`/`#modal`/
+`#form`/`#btn-save`). **One Chromium per machine** — Playwright owns it (`npx playwright install
+chromium`), Puppeteer reuses it (`PUPPETEER_SKIP_DOWNLOAD=1` + `PUPPETEER_EXECUTABLE_PATH`); never
+install the drivers globally.
+
+**Adopt** (per consumer): add a `birko-web-testing` `paths` entry (+ map `@playwright/test` /
+`puppeteer` to your `node_modules`, since the source package resolves its deps relative to its own
+dir), pin the two drivers as devDeps, spread `birkoPlaywrightPreset` in `playwright.config.ts`, add an
+`auth.setup.ts` (`loginViaApi` → seed `localStorage[storageKey]` → save storageState), and feed a
+route manifest to `runSmoke`. Full recipe + env vars: the package's `README.md` / `ENV.md`. Reference
+implementation: `Birko.Consumers/Symbio/tests/ui-e2e/`. The [[birko-new-project]] skill scaffolds this
+for new Web UI consumers.
 
 ## See also
 

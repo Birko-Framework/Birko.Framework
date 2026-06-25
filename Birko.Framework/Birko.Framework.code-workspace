@@ -897,6 +897,10 @@
 			"path": "../../Web/Birko.Web.Shell"
 		},
 		{
+			"name": "Web / Birko.Web.Testing",
+			"path": "../../Web/Birko.Web.Testing"
+		},
+		{
 			"name": "Workflow / Birko.Workflow",
 			"path": "../Birko.Workflow"
 		},
