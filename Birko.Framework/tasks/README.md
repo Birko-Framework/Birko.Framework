@@ -1,12 +1,12 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-06-19. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-06-25. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 11    | 25      | —     |
+| planned      | 12    | 33      | —     |
 | todo         | —     | —       | 33    |
 | in-progress  | 2     | 1       | 1     |
 | review       | —     | —       | 4     |
@@ -104,6 +104,15 @@ _Generated 2026-06-19. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — planned (CR-H001 … CR-H147)
   - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — planned (CR-M001 …)
   - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — planned (0/8 stories; tasks not yet decomposed)
+  - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — planned
+  - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — planned
+  - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — planned
+  - STORY-032 [Birko.Xaml.Core — i18n + base ViewModels (Avalonia-free)](EPIC-015-birko-xaml-ui-framework/STORY-032-xaml-core-foundation/STORY.md) — planned
+  - STORY-033 [Building blocks — schema-driven Form, Drawer, SplitPanel](EPIC-015-birko-xaml-ui-framework/STORY-033-building-blocks-form-drawer-splitpanel/STORY.md) — planned
+  - STORY-034 [Tier 1 — restyled native controls (~20)](EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md) — planned
+  - STORY-035 [Tier 2 — composite controls with no native peer](EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) — planned
+  - STORY-036 [Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation](EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) — planned
 
 ### Loose tasks (no parent epic)
 
