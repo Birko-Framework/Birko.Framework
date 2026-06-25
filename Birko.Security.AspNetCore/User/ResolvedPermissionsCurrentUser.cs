@@ -52,11 +52,24 @@ public sealed class ResolvedPermissionsCurrentUser : ICurrentUser
         }
     }
 
-    public IReadOnlySet<string> Roles =>
-        Principal?.FindAll(_options.RoleClaim)
-            .SelectMany(c => c.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .ToHashSet()
-        ?? new HashSet<string>();
+    public IReadOnlySet<string> Roles
+    {
+        get
+        {
+            // Resolved server-side per request (parallel to Permissions) — roles are kept out of
+            // the JWT, so prefer the middleware-populated set; fall back to claims when present.
+            if (_httpContextAccessor.HttpContext?.Items[PermissionResolutionMiddleware.RolesItemsKey] is IReadOnlySet<string> resolved)
+                return resolved;
+            return Principal?.FindAll(_options.RoleClaim)
+                .SelectMany(c => c.Value.Split(RoleSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToHashSet()
+                ?? new HashSet<string>();
+        }
+    }
+
+    // A role claim value may be joined with ',' or ';' depending on producer (TokenServiceAdapter
+    // emits ';'); split on both so the reader is robust regardless.
+    private static readonly char[] RoleSeparators = [',', ';'];
 
     public IReadOnlySet<string> Permissions =>
         _httpContextAccessor.HttpContext?.Items[PermissionResolutionMiddleware.ItemsKey]

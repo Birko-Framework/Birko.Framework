@@ -22,6 +22,9 @@ public sealed class PermissionResolutionMiddleware
     /// <summary>Key used to store the resolved permission set in <see cref="HttpContext.Items"/>.</summary>
     public const string ItemsKey = "birko:resolved-permissions";
 
+    /// <summary>Key used to store the resolved role-name set in <see cref="HttpContext.Items"/>.</summary>
+    public const string RolesItemsKey = "birko:resolved-roles";
+
     private readonly RequestDelegate _next;
 
     public PermissionResolutionMiddleware(RequestDelegate next) => _next = next;
@@ -38,6 +41,11 @@ public sealed class PermissionResolutionMiddleware
 
                 var perms = await resolver.GetAsync(userId, tenantId, context.RequestAborted);
                 context.Items[ItemsKey] = perms;
+
+                // Roles are resolved server-side too (kept out of the JWT like permissions), so
+                // ICurrentUser.Roles works without a role claim. See ResolvedPermissionsCurrentUser.
+                var roles = await resolver.GetRolesAsync(userId, tenantId, context.RequestAborted);
+                context.Items[RolesItemsKey] = roles;
             }
         }
 

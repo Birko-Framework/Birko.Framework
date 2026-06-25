@@ -22,4 +22,14 @@ public interface IUserPermissionResolver
     /// <paramref name="tenantId"/> scope. May return an empty set; never null.
     /// </summary>
     Task<IReadOnlySet<string>> GetAsync(Guid userId, Guid? tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns the effective role names for <paramref name="userId"/> in the optional
+    /// <paramref name="tenantId"/> scope. Resolved server-side per request (parallel to
+    /// <see cref="GetAsync"/>) so <see cref="ICurrentUser.Roles"/> works even when roles are
+    /// kept out of the JWT. The default returns an empty set — implementations that back a
+    /// role store should override it. Must never return null.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetRolesAsync(Guid userId, Guid? tenantId, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
 }
