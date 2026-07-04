@@ -1,17 +1,17 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-06-25. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-07-04. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 12    | 33      | —     |
+| planned      | 11    | 29      | —     |
 | todo         | —     | —       | 33    |
-| in-progress  | 2     | 1       | 1     |
+| in-progress  | 3     | 2       | 1     |
 | review       | —     | —       | 4     |
 | blocked      | —     | —       | 0     |
-| done         | 1     | 2       | 3     |
+| done         | 1     | 5       | 3     |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -104,13 +104,14 @@ _Generated 2026-06-25. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — planned (CR-H001 … CR-H147)
   - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — planned (CR-M001 …)
   - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — planned (0/8 stories; tasks not yet decomposed)
-  - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — planned
-  - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — planned
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (3/8 stories done)
+  - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (Birko.DesignTokens: byte-identical CSS + AXAML, 30 tests)
+  - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (Birko.Xaml.Core + .Avalonia: ThemeDictionaries + runtime swap, 8 headless tests)
+  - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (gate GO: Button/TextBox/Card/Badge + gallery, 15 tests + per-theme screenshots)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — planned
   - STORY-032 [Birko.Xaml.Core — i18n + base ViewModels (Avalonia-free)](EPIC-015-birko-xaml-ui-framework/STORY-032-xaml-core-foundation/STORY.md) — planned
   - STORY-033 [Building blocks — schema-driven Form, Drawer, SplitPanel](EPIC-015-birko-xaml-ui-framework/STORY-033-building-blocks-form-drawer-splitpanel/STORY.md) — planned
-  - STORY-034 [Tier 1 — restyled native controls (~20)](EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md) — planned
+  - STORY-034 [Tier 1 — restyled native controls (~20)](EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md) — in-progress (11 done: Button/TextBox/Card/Badge/Tag/Tabs/CheckBox/Radio/Progress/ToolTip/ComboBox; ToggleSwitch/DataGrid/modal/dropdown/spinner/breadcrumb remaining)
   - STORY-035 [Tier 2 — composite controls with no native peer](EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) — planned
   - STORY-036 [Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation](EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) — planned
 

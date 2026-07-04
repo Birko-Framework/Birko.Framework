@@ -1,9 +1,27 @@
 ---
 id: STORY-034
 parent: EPIC-015
-status: planned
+status: in-progress
 created: 2026-06-25
 ---
+
+## Progress (2026-07-04)
+
+Tier-1 sweep underway in `Birko.Xaml.Avalonia/Controls/` (split into category files: Buttons /
+Inputs / Toggles / Surfaces / Indicators / Overlays, merged by `Controls.axaml`). All token-driven
+via `{DynamicResource B*}`; verified across all four themes in the gallery + screenshots. **23
+headless tests green.**
+
+**Done (11):** Button, TextBox (single + multiline), Card, Badge, Tag, TabControl/TabItem,
+CheckBox, RadioButton, ProgressBar, ToolTip, ComboBox (+ ComboBoxItem).
+
+**Remaining / deferred (need more than a mechanical restyle — some are STORY-035 candidates):**
+- `ToggleSwitch` — enforces `PART_MovingKnobs`/`PART_SwitchKnob` + built-in knob animation.
+- `Spinner` — no native peer; custom control + rotation animation.
+- `Menu`/dropdown, `table`, `data-table` (Avalonia `DataGrid` = separate package + row-height parity), `modal` overlay, `breadcrumb`.
+
+**Gotcha fixed:** a `double` radius token can't bind to `CornerRadius`; the STORY-029 generator now
+emits `--b-radius*` as `CornerRadius` resources (CSS byte-parity unaffected).
 
 # Tier 1 — restyled native controls (~20)
 

@@ -242,6 +242,14 @@
     <Project Path="../../Framework.Tests/Birko.Communication.GraphQL.Tests/Birko.Communication.GraphQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.gRPC.Tests/Birko.Communication.gRPC.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.gRPC.Server.Tests/Birko.Communication.gRPC.Server.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.DesignTokens.Tests/Birko.DesignTokens.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Xaml.Avalonia.Tests/Birko.Xaml.Avalonia.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Xaml/">
+    <Project Path="../Birko.DesignTokens/Birko.DesignTokens.csproj" />
+    <Project Path="../Birko.Xaml.Core/Birko.Xaml.Core.csproj" />
+    <Project Path="../Birko.Xaml.Avalonia/Birko.Xaml.Avalonia.csproj" />
+    <Project Path="../Birko.Xaml.Gallery/Birko.Xaml.Gallery.csproj" />
   </Folder>
   <Folder Name="/Time/">
     <Project Path="../Birko.Time.Abstractions/Birko.Time.Abstractions.shproj" />

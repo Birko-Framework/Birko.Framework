@@ -1,6 +1,6 @@
 ---
 id: EPIC-015
-status: planned
+status: in-progress
 created: 2026-06-25
 owner: both
 affects: [Birko.Xaml.Core, Birko.Xaml.Avalonia, Birko.Xaml.Shell, Birko.DesignTokens, Birko.Web.Components]

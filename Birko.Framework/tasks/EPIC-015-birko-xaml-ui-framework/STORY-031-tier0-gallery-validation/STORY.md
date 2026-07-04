@@ -1,9 +1,29 @@
 ---
 id: STORY-031
 parent: EPIC-015
-status: planned
+status: done
 created: 2026-06-25
+closed: 2026-07-04
 ---
+
+## Resolution (2026-07-04) — GATE: **GO**
+
+Built the first restyled ControlThemes (`Button`, `TextBox` + reusable `Card`/`Badge` themes) in
+`Birko.Xaml.Avalonia/Controls/Controls.axaml` (+ a one-include `BirkoTheme.axaml`), and a runnable
+`Birko.Xaml.Gallery` desktop app. **15 headless tests** (Avalonia.Headless.XUnit) prove controls
+resolve the correct token values per variant and re-theme live; a Skia screenshot test renders the
+gallery to a PNG per theme.
+
+**Visual parity confirmed** across light/dark/neon/finstat — colors match the shared token source,
+and finstat's **flat/square corners** come through (proving the radius token re-themes). Verdict:
+**GO** — Tier-1 (STORY-034) proceeds.
+
+**Fix surfaced by the gate:** a `double` radius token can't bind to a `CornerRadius` property
+(runtime `InvalidCastException`), so the STORY-029 generator now emits `--b-radius*` tokens as
+`CornerRadius` resources (not `x:Double`). CSS byte-parity unaffected.
+
+**Deferred:** the full restyled-control sweep (STORY-034); composite/motion tokens; Card/Badge as
+first-class custom controls (currently named `ControlTheme`s on `ContentControl`).
 
 # Tier 0 validation — Avalonia gallery app + first restyled controls
 

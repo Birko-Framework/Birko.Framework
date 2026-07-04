@@ -933,6 +933,30 @@
 			"path": "../Birko.Workflow.XML"
 		},
 		{
+			"name": "Xaml / Birko.DesignTokens",
+			"path": "../Birko.DesignTokens"
+		},
+		{
+			"name": "Xaml / Birko.Xaml.Core",
+			"path": "../Birko.Xaml.Core"
+		},
+		{
+			"name": "Xaml / Birko.Xaml.Avalonia",
+			"path": "../Birko.Xaml.Avalonia"
+		},
+		{
+			"name": "Xaml / Birko.Xaml.Gallery",
+			"path": "../Birko.Xaml.Gallery"
+		},
+		{
+			"name": "Tests / Birko.DesignTokens.Tests",
+			"path": "../../Framework.Tests/Birko.DesignTokens.Tests"
+		},
+		{
+			"name": "Tests / Birko.Xaml.Avalonia.Tests",
+			"path": "../../Framework.Tests/Birko.Xaml.Avalonia.Tests"
+		},
+		{
 			"path": "."
 		}
 	]
