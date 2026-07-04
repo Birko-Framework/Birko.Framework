@@ -1,9 +1,31 @@
 ---
 id: STORY-036
 parent: EPIC-015
-status: planned
+status: in-progress
 created: 2026-06-25
 ---
+
+## Progress (2026-07-04)
+
+Delivered the shell **MVP** — a working desktop CRUD app shape end-to-end.
+
+**Done:**
+- **Navigation (Core, Avalonia-free):** `ModuleDefinition` (the `buildModuleRoutes`/`ModuleManifest`
+  analogue), `INavigationService`/`NavigationService` (module map + history + `Current`), `ShellViewModel`
+  (nav + `IThemeManager` + title, Navigate/Back/SetTheme commands), `SplitPageViewModel<T>`. Page-base
+  VMs get a `Fields` schema.
+- **`Birko.Xaml.Shell` (Avalonia):** `ViewLocator` (naming convention + generic base-page mapping),
+  `ShellView` (**sidebar** chrome: module nav + header title + theme switcher + content region + status
+  bar — the `BSidebarAppShell` analogue), and generic `ListPageView` (gated toolbar + search + inline
+  create/edit `Form`), `DetailPageView` (`Form` + Save/Cancel), `SplitPageView` (master list + detail
+  `Form` over `SplitPanel`).
+- **Proven:** 6 headless tests (navigation, ViewLocator resolves Split/List/Detail, shell renders the
+  active page via the locator, nav swaps the page) + a full-shell screenshot. Avalonia suite now 38.
+  Constraint #3 honored (nav + shell VMs are Avalonia-free in Core).
+
+**Remaining / deferred (some are STORY-035 territory):** the **ribbon** chrome (`BAppShell`), command
+palette, user-area / tenant switcher, a `FormModal` dialog (inline edit covers create/edit for now),
+content-transition animations, ListBox restyle/display templating.
 
 # Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation
 

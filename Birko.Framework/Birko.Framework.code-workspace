@@ -949,6 +949,10 @@
 			"path": "../Birko.Xaml.Gallery"
 		},
 		{
+			"name": "Xaml / Birko.Xaml.Shell",
+			"path": "../Birko.Xaml.Shell"
+		},
+		{
 			"name": "Tests / Birko.DesignTokens.Tests",
 			"path": "../../Framework.Tests/Birko.DesignTokens.Tests"
 		},
