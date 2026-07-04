@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls;assembly=Birko.Xaml.Avalonia"
+             x:Class="Birko.Xaml.Shell.Views.SplitPageView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}">
+  <c:SplitPanel MasterWidth="260" CollapseWidth="620">
+    <c:SplitPanel.Master>
+      <DockPanel>
+        <TextBox DockPanel.Dock="Top" Watermark="Search…" Text="{Binding SearchText}" Margin="0,0,0,8" />
+        <ListBox ItemsSource="{Binding Filtered}" SelectedItem="{Binding SelectedItem}" />
+      </DockPanel>
+    </c:SplitPanel.Master>
+    <c:SplitPanel.Detail>
+      <ScrollViewer Margin="16,0,0,0">
+        <c:Form Fields="{Binding Fields}" Model="{Binding SelectedItem}" />
+      </ScrollViewer>
+    </c:SplitPanel.Detail>
+  </c:SplitPanel>
+</UserControl>

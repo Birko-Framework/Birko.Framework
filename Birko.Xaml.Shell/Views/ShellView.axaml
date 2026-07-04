@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:Birko.Xaml.Shell"
+             x:Class="Birko.Xaml.Shell.Views.ShellView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}"
+             Background="{DynamicResource BBgSecondaryBrush}">
+
+  <UserControl.Resources>
+    <shell:ViewLocator x:Key="ViewLocator" />
+  </UserControl.Resources>
+
+  <Grid ColumnDefinitions="Auto,*">
+
+    <!-- Sidebar: app title + module navigation -->
+    <Border Grid.Column="0" Width="{DynamicResource BSidebarWidth}"
+            Background="{DynamicResource BBgBrush}"
+            BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,0,1,0">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Text="{Binding Title}"
+                   FontWeight="Bold" FontSize="18" Margin="16"
+                   Foreground="{DynamicResource BTextBrush}" />
+        <ItemsControl ItemsSource="{Binding Nav.Modules}" Margin="8">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                      Margin="0,2" Background="Transparent"
+                      Foreground="{DynamicResource BTextBrush}"
+                      Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                      CommandParameter="{Binding Id}">
+                <TextBlock Text="{Binding Label}" />
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </DockPanel>
+    </Border>
+
+    <!-- Main: header (title + theme switcher) / status bar / content region -->
+    <DockPanel Grid.Column="1">
+      <Border DockPanel.Dock="Top" Height="{DynamicResource BHeaderHeight}"
+              Background="{DynamicResource BBgBrush}"
+              BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Grid.Column="0" Text="{Binding Nav.CurrentModule.Label}"
+                     VerticalAlignment="Center" Margin="16,0" FontWeight="SemiBold"
+                     Foreground="{DynamicResource BTextBrush}" />
+          <ItemsControl Grid.Column="1" ItemsSource="{Binding Themes.Available}"
+                        VerticalAlignment="Center" Margin="0,0,12,0">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Padding="10,4" ToolTip.Tip="{Binding Label}"
+                        Command="{Binding DataContext.SetThemeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding Id}">
+                  <TextBlock Text="{Binding Icon}" />
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Grid>
+      </Border>
+
+      <Border DockPanel.Dock="Bottom" Height="{DynamicResource BStatusBarHeight}"
+              Background="{DynamicResource BBgBrush}"
+              BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,1,0,0">
+        <TextBlock Text="Birko.Xaml.Shell" VerticalAlignment="Center" Margin="12,0"
+                   Foreground="{DynamicResource BTextMutedBrush}" />
+      </Border>
+
+      <ScrollViewer>
+        <ContentControl Content="{Binding Nav.Current}"
+                        ContentTemplate="{StaticResource ViewLocator}" Margin="16" />
+      </ScrollViewer>
+    </DockPanel>
+
+  </Grid>
+</UserControl>

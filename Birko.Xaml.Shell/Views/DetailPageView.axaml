@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls;assembly=Birko.Xaml.Avalonia"
+             x:Class="Birko.Xaml.Shell.Views.DetailPageView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}">
+  <StackPanel Spacing="16" MaxWidth="480" HorizontalAlignment="Left">
+    <c:Form Fields="{Binding Fields}" Model="{Binding Model}" />
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Content="Save" Command="{Binding SaveCommand}" />
+      <Button Content="Cancel" Command="{Binding CancelCommand}"
+              Background="{DynamicResource BColorSecondaryBrush}" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

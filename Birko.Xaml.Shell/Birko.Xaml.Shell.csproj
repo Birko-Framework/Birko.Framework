@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Real Avalonia class-library assembly (EPIC-015 convention break). App chrome + page views;
+       the platform-neutral shell/nav VMs live in Birko.Xaml.Core (WPF-addendum constraint #3). -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Birko.Xaml.Shell</RootNamespace>
+    <AssemblyName>Birko.Xaml.Shell</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Birko.Xaml.Core\Birko.Xaml.Core.csproj" />
+    <ProjectReference Include="..\Birko.Xaml.Avalonia\Birko.Xaml.Avalonia.csproj" />
+  </ItemGroup>
+
+</Project>
