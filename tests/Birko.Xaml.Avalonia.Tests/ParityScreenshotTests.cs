@@ -26,7 +26,7 @@ public class ParityScreenshotTests
     {
         Directory.CreateDirectory(OutDir);
         var view = new GalleryView();
-        var window = new Window { Content = view, Width = 520, Height = 620 };
+        var window = new Window { Content = view, Width = 520, Height = 900 };
         window.Show();
 
         (string id, global::Avalonia.Styling.ThemeVariant v)[] themes =
@@ -41,8 +41,8 @@ public class ParityScreenshotTests
         foreach (var (id, variant) in themes)
         {
             Application.Current!.RequestedThemeVariant = variant;
-            window.Measure(new Size(520, 620));
-            window.Arrange(new Rect(0, 0, 520, 620));
+            window.Measure(new Size(520, 900));
+            window.Arrange(new Rect(0, 0, 520, 900));
             Dispatcher.UIThread.RunJobs();
 
             var frame = window.CaptureRenderedFrame();
