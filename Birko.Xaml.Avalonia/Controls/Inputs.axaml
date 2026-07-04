@@ -1,0 +1,117 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── TextBox — surface + border + focus ring (single-line & multiline) ── -->
+  <ControlTheme x:Key="{x:Type TextBox}" TargetType="TextBox">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}">
+          <!-- Foreground inherits from the TextBox (TextElement.Foreground). -->
+          <TextPresenter x:Name="PART_TextPresenter"
+                         Text="{TemplateBinding Text, Mode=TwoWay}"
+                         Margin="{TemplateBinding Padding}"
+                         TextWrapping="{TemplateBinding TextWrapping}"
+                         TextAlignment="{TemplateBinding TextAlignment}"
+                         VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderHoverBrush}" />
+    </Style>
+    <Style Selector="^:focus /template/ Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderFocusBrush}" />
+    </Style>
+    <!-- Multiline (textarea): top-align text and grow. -->
+    <Style Selector="^[AcceptsReturn=True]">
+      <Setter Property="VerticalContentAlignment" Value="Top" />
+      <Setter Property="MinHeight" Value="80" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── ComboBox (select) — box + chevron + token-styled popup ─────────── -->
+  <ControlTheme x:Key="{x:Type ComboBox}" TargetType="ComboBox">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="*,Auto">
+          <Border x:Name="box" Grid.ColumnSpan="2"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}" />
+          <ContentControl Grid.Column="0" Margin="{TemplateBinding Padding}"
+                          Content="{TemplateBinding SelectionBoxItem}"
+                          Foreground="{TemplateBinding Foreground}"
+                          VerticalAlignment="Center" />
+          <Path Grid.Column="1" Width="10" Height="6" Margin="0,0,10,0"
+                VerticalAlignment="Center" Stretch="Uniform"
+                Data="M0,0 L5,5 L10,0" Fill="{DynamicResource BTextSecondaryBrush}" />
+          <Popup x:Name="PART_Popup" Grid.ColumnSpan="2"
+                 IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
+                 IsLightDismissEnabled="True"
+                 PlacementMode="Bottom" PlacementTarget="{TemplateBinding}">
+            <Border Background="{DynamicResource BBgElevatedBrush}"
+                    BorderBrush="{DynamicResource BBorderBrush}"
+                    BorderThickness="1" CornerRadius="{DynamicResource BRadius}"
+                    Padding="4" Margin="0,4,0,0" MinWidth="{Binding $parent[ComboBox].Bounds.Width}">
+              <ItemsPresenter x:Name="PART_ItemsPresenter"
+                              ItemsPanel="{TemplateBinding ItemsPanel}" />
+            </Border>
+          </Popup>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#box">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderHoverBrush}" />
+    </Style>
+    <Style Selector="^:focus /template/ Border#box">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderFocusBrush}" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── ComboBoxItem — dropdown row with hover/selected states ─────────── -->
+  <ControlTheme x:Key="{x:Type ComboBoxItem}" TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Padding" Value="10,6" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="row" Background="Transparent"
+                CornerRadius="{DynamicResource BRadiusSm}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                            Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#row">
+      <Setter Property="Background" Value="{DynamicResource BRowHoverBgBrush}" />
+    </Style>
+    <Style Selector="^:selected /template/ Border#row">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryLightBrush}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

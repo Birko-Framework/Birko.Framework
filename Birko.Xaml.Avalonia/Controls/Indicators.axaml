@@ -1,0 +1,65 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── Badge — pill accent (apply via Theme="{StaticResource BBadge}") ──── -->
+  <ControlTheme x:Key="BBadge" TargetType="ContentControl">
+    <Setter Property="Background" Value="{DynamicResource BColorPrimaryLightBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusFull}" />
+    <Setter Property="Padding" Value="10,2" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ── Tag — neutral chip (apply via Theme="{StaticResource BTag}") ─────── -->
+  <ControlTheme x:Key="BTag" TargetType="ContentControl">
+    <Setter Property="Background" Value="{DynamicResource BBgTertiaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusSm}" />
+    <Setter Property="Padding" Value="8,2" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            Foreground="{TemplateBinding Foreground}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ── ProgressBar — token track + fill ──────────────────────────────── -->
+  <ControlTheme x:Key="{x:Type ProgressBar}" TargetType="ProgressBar">
+    <Setter Property="Height" Value="8" />
+    <Setter Property="MinWidth" Value="120" />
+    <Setter Property="Background" Value="{DynamicResource BBgTertiaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusFull}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                ClipToBounds="True">
+          <Border x:Name="PART_Indicator"
+                  Background="{TemplateBinding Foreground}"
+                  CornerRadius="{TemplateBinding CornerRadius}"
+                  HorizontalAlignment="Left" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+</ResourceDictionary>

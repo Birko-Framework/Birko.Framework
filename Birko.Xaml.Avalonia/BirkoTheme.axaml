@@ -1,0 +1,17 @@
+<!--
+  One-stop Birko theme include for Avalonia apps:
+
+    <Application.Resources>
+      <ResourceInclude Source="avares://Birko.Xaml.Avalonia/BirkoTheme.axaml" />
+    </Application.Resources>
+
+  Merge AFTER the Fluent base theme. Bundles the generated design tokens (Tokens.axaml) and the
+  Birko restyled ControlThemes (Controls.axaml). Switch theme with AvaloniaThemeManager / RequestedThemeVariant.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Themes/Tokens.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Controls.axaml" />
+  </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

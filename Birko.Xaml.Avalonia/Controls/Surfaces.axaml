@@ -1,0 +1,74 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── Card — elevated surface (apply via Theme="{StaticResource BCard}") ── -->
+  <ControlTheme x:Key="BCard" TargetType="ContentControl">
+    <Setter Property="Background" Value="{DynamicResource BBgElevatedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadiusLg}" />
+    <Setter Property="Padding" Value="20" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ── TabControl — token-driven tab strip + content ─────────────────── -->
+  <ControlTheme x:Key="{x:Type TabControl}" TargetType="TabControl">
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent">
+          <DockPanel>
+            <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BBorderBrush}"
+                    BorderThickness="0,0,0,1">
+              <ItemsPresenter x:Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+            </Border>
+            <ContentPresenter x:Name="PART_SelectedContentHost"
+                              Margin="0,12,0,0"
+                              Content="{TemplateBinding SelectedContent}"
+                              ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+          </DockPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type TabItem}" TargetType="TabItem">
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    <Setter Property="Padding" Value="12,8" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_Border" Background="Transparent"
+                BorderBrush="Transparent" BorderThickness="0,0,0,2"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Header}"
+                            ContentTemplate="{TemplateBinding HeaderTemplate}"
+                            Foreground="{TemplateBinding Foreground}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+    <Style Selector="^:selected /template/ Border#PART_Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

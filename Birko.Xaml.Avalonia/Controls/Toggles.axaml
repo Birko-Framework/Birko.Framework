@@ -1,0 +1,76 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ── CheckBox ───────────────────────────────────────────────────────── -->
+  <ControlTheme x:Key="{x:Type CheckBox}" TargetType="CheckBox">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="8" Background="Transparent">
+          <Border x:Name="box" Width="18" Height="18" VerticalAlignment="Center"
+                  Background="{DynamicResource BBgBrush}"
+                  BorderBrush="{DynamicResource BBorderBrush}"
+                  BorderThickness="1" CornerRadius="{DynamicResource BRadiusSm}">
+            <Path x:Name="check" Margin="3" Stretch="Uniform"
+                  Data="M0,5 L4,9 L11,0"
+                  Stroke="{DynamicResource BInputThumbBgBrush}" StrokeThickness="2"
+                  IsVisible="False" />
+          </Border>
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            Foreground="{TemplateBinding Foreground}"
+                            VerticalAlignment="Center" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#box">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderHoverBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Border#box">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Path#check">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── RadioButton ────────────────────────────────────────────────────── -->
+  <ControlTheme x:Key="{x:Type RadioButton}" TargetType="RadioButton">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="8" Background="Transparent">
+          <Border x:Name="ring" Width="18" Height="18" VerticalAlignment="Center"
+                  Background="{DynamicResource BBgBrush}"
+                  BorderBrush="{DynamicResource BBorderBrush}"
+                  BorderThickness="1" CornerRadius="9">
+            <Ellipse x:Name="dot" Width="8" Height="8"
+                     Fill="{DynamicResource BInputThumbBgBrush}" IsVisible="False" />
+          </Border>
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            Foreground="{TemplateBinding Foreground}"
+                            VerticalAlignment="Center" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#ring">
+      <Setter Property="BorderBrush" Value="{DynamicResource BBorderHoverBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Border#ring">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Ellipse#dot">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ToggleSwitch deferred: it enforces required template parts (PART_MovingKnobs /
+       PART_SwitchKnob) with built-in knob-animation logic; a correct token-driven template is
+       more than a mechanical restyle. Tracked for a follow-up pass. -->
+
+</ResourceDictionary>
