@@ -1,0 +1,150 @@
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
+using Birko.Xaml.Avalonia.Theming;
+using Birko.Xaml.Core.Data;
+using Birko.Xaml.Core.Forms;
+using Birko.Xaml.Core.Mvvm;
+using Birko.Xaml.Core.Navigation;
+using Birko.Xaml.Shell;
+using Birko.Xaml.Shell.Views;
+using FluentAssertions;
+using Xunit;
+
+namespace Birko.Xaml.Avalonia.Tests;
+
+// A tiny in-memory data source (the port a real app adapts its Birko.Data store to).
+file sealed class Contacts : ICrudDataSource<Contact>
+{
+    private readonly List<Contact> _items = new()
+    {
+        new Contact { Name = "Ada" }, new Contact { Name = "Grace" }, new Contact { Name = "Linus" },
+    };
+    public Task<IReadOnlyList<Contact>> GetAllAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Contact>>(_items);
+    public Task<Contact?> GetAsync(Guid id, CancellationToken ct = default) => Task.FromResult<Contact?>(_items.FirstOrDefault());
+    public Task<Guid> SaveAsync(Contact item, CancellationToken ct = default) { if (!_items.Contains(item)) _items.Add(item); return Task.FromResult(Guid.NewGuid()); }
+    public Task DeleteAsync(Contact item, CancellationToken ct = default) { _items.Remove(item); return Task.CompletedTask; }
+    public Contact NewInstance() => new();
+}
+
+public class NavigationTests
+{
+    private static (NavigationService nav, int aBuilt, int bBuilt) Setup()
+    {
+        int a = 0, b = 0;
+        var nav = new NavigationService().Register(
+            new ModuleDefinition { Id = "a", Label = "Alpha", CreateViewModel = () => { a++; return new object(); } },
+            new ModuleDefinition { Id = "b", Label = "Beta", CreateViewModel = () => { b++; return new object(); } });
+        return (nav, a, b);
+    }
+
+    [Fact]
+    public void Navigate_sets_current_and_module()
+    {
+        var (nav, _, _) = Setup();
+        nav.Navigate("a").Should().BeTrue();
+        nav.Current.Should().NotBeNull();
+        nav.CurrentModule!.Id.Should().Be("a");
+    }
+
+    [Fact]
+    public void Unknown_module_is_ignored()
+    {
+        var (nav, _, _) = Setup();
+        nav.Navigate("nope").Should().BeFalse();
+        nav.Current.Should().BeNull();
+    }
+
+    [Fact]
+    public void Back_returns_to_previous()
+    {
+        var (nav, _, _) = Setup();
+        nav.Navigate("a");
+        nav.Navigate("b");
+        nav.CanGoBack.Should().BeTrue();
+        nav.Back();
+        nav.CurrentModule!.Id.Should().Be("a");
+    }
+}
+
+public class ViewLocatorTests
+{
+    private static readonly ViewLocator Locator = new();
+
+    [AvaloniaFact]
+    public void Maps_split_list_detail_page_vms_to_generic_views()
+    {
+        var data = new Contacts();
+        Locator.Build(new SplitPageViewModel<Contact>(data)).Should().BeOfType<SplitPageView>();
+        Locator.Build(new ListPageViewModel<Contact>(data)).Should().BeOfType<ListPageView>();
+        Locator.Build(new TestDetailVm(data)).Should().BeOfType<DetailPageView>();
+    }
+
+    private sealed class TestDetailVm : DetailPageViewModel<Contact>
+    {
+        public TestDetailVm(ICrudDataSource<Contact> d) : base(d) { }
+    }
+}
+
+public class ShellRenderTests
+{
+    private static ShellViewModel BuildShell()
+    {
+        var data = new Contacts();
+        var fields = new[] { new FormField { Name = nameof(Contact.Name), Label = "Name", Required = true } };
+        var nav = new NavigationService().Register(
+            new ModuleDefinition
+            {
+                Id = "contacts", Label = "Contacts",
+                CreateViewModel = () => { var vm = new SplitPageViewModel<Contact>(data) { Fields = fields }; vm.LoadAsync(); return vm; },
+            },
+            new ModuleDefinition { Id = "about", Label = "About", CreateViewModel = () => new ListPageViewModel<Contact>(data) });
+        var shell = new ShellViewModel(nav, new AvaloniaThemeManager()) { Title = "Demo" };
+        nav.Navigate("contacts");
+        return shell;
+    }
+
+    [AvaloniaFact]
+    public void Shell_renders_the_active_page_via_the_view_locator()
+    {
+        var shell = BuildShell();
+        var view = new ShellView { DataContext = shell };
+        var window = new Window { Content = view, Width = 900, Height = 600 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(900, 600));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 900, 600));
+
+        // The content region resolved the SplitPageViewModel to a SplitPageView.
+        view.GetVisualDescendants().OfType<SplitPageView>().Should().ContainSingle();
+    }
+
+    [AvaloniaFact]
+    public void Shell_navigation_swaps_the_page()
+    {
+        var shell = BuildShell();
+        shell.Nav.CurrentModule!.Id.Should().Be("contacts");
+        shell.NavigateCommand.Execute("about");
+        shell.Nav.CurrentModule!.Id.Should().Be("about");
+        shell.Nav.Current.Should().BeOfType<ListPageViewModel<Contact>>();
+    }
+
+    [AvaloniaFact]
+    public void Capture_shell_screenshot()
+    {
+        var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
+                  ?? Path.Combine(Path.GetTempPath(), "birko-xaml-shots");
+        Directory.CreateDirectory(dir);
+
+        var shell = BuildShell();
+        var view = new ShellView { DataContext = shell };
+        var window = new Window { Content = view, Width = 900, Height = 600 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(900, 600));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 900, 600));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+        frame?.Save(Path.Combine(dir, "shell.png"));
+        view.IsInitialized.Should().BeTrue();
+    }
+}

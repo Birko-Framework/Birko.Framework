@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\Framework\Birko.Xaml.Avalonia\Birko.Xaml.Avalonia.csproj" />
     <!-- Referenced so the parity-screenshot test can render the real GalleryView. -->
     <ProjectReference Include="..\..\Framework\Birko.Xaml.Gallery\Birko.Xaml.Gallery.csproj" />
+    <ProjectReference Include="..\..\Framework\Birko.Xaml.Shell\Birko.Xaml.Shell.csproj" />
     <PackageReference Include="Avalonia.Skia" Version="11.2.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
   </ItemGroup>
