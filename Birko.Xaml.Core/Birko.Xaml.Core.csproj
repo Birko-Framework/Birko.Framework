@@ -13,4 +13,9 @@
     <!-- WPF-addendum constraint #1: this assembly must stay Avalonia-free. -->
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Platform-neutral MVVM (works on Avalonia + WPF). The only dependency Core takes. -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+  </ItemGroup>
+
 </Project>
