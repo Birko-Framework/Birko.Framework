@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Birko.Xaml.Core.Data;
+using Birko.Xaml.Core.Forms;
 using Birko.Xaml.Core.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -22,6 +23,9 @@ public abstract partial class CrudViewModelBase<T> : BasePageViewModel
 
     /// <summary>The loaded entities.</summary>
     public ObservableCollection<T> Items { get; } = new();
+
+    /// <summary>Field schema for the create/edit form (bound to <see cref="EditingItem"/> by the view).</summary>
+    public IEnumerable<FormField>? Fields { get; set; }
 
     [ObservableProperty]
     private T? _selectedItem;

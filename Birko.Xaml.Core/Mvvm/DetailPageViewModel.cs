@@ -1,4 +1,5 @@
 using Birko.Xaml.Core.Data;
+using Birko.Xaml.Core.Forms;
 using Birko.Xaml.Core.Localization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -22,6 +23,9 @@ public abstract partial class DetailPageViewModel<T> : BasePageViewModel
 
     [ObservableProperty]
     private bool _canSave = true;
+
+    /// <summary>Field schema for the detail form (bound to <see cref="Model"/> by the view).</summary>
+    public IEnumerable<FormField>? Fields { get; set; }
 
     /// <summary>Load an existing entity by id, or start a new one when <paramref name="id"/> is null.</summary>
     public async Task LoadAsync(Guid? id, CancellationToken ct = default)
