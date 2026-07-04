@@ -957,6 +957,10 @@
 			"path": "../../Framework.Tests/Birko.Xaml.Avalonia.Tests"
 		},
 		{
+			"name": "Tests / Birko.Xaml.Core.Tests",
+			"path": "../../Framework.Tests/Birko.Xaml.Core.Tests"
+		},
+		{
 			"path": "."
 		}
 	]
