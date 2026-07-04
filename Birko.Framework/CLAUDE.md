@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — building blocks: Form + Drawer + SplitPanel (EPIC-015 / STORY-033) (2026-07-04)
+The three controls the page layer composes, so the CRUD page bases stay declarative. Closes [tasks/EPIC-015/STORY-033](tasks/EPIC-015-birko-xaml-ui-framework/STORY-033-building-blocks-form-drawer-splitpanel/STORY.md). EPIC-015 now **5/8 stories done**.
+- **`Form`** (keystone) — schema-driven (`Birko.Xaml.Avalonia/Controls/Form.cs`): binds `Fields` (`Birko.Xaml.Core.Forms.FormField[]`) + `Model` and generates labeled, two-way-bound inputs (Text/TextArea/Number→`TextBox`, Checkbox→`CheckBox`, Select→`ComboBox`) with a required asterisk, all token-styled. **Pairs directly with the STORY-032 VMs** — bind `Fields` + `CrudViewModelBase.EditingItem` / `DetailPageViewModel.Model` instead of hand-rolling XAML per screen. Verified in the gallery (renders + re-themes incl. finstat flat corners).
+- **`Drawer`** — slide-in overlay (`IsOpen`/`Placement` left|right, backdrop-click closes), token width/bg.
+- **`SplitPanel`** — master/detail over `GridSplitter` with responsive collapse (`:collapsed` below `CollapseWidth` hides the master; pixel master column so the splitter can drag).
+- **Schema in Core, control in `.Avalonia`** — the `FormField` schema is platform-neutral (Avalonia-free, reusable by a future WPF `Form`); the control is the Avalonia view. Same split as i18n's logic/markup-extension.
+- **8 headless tests** (Form generate/initial-bind/two-way/required-asterisk, Drawer visibility toggle, SplitPanel wide-vs-narrow collapse) + per-theme gallery screenshots. Avalonia suite now **31**.
+- **Deferred:** DataAnnotations validation (only the required asterisk today), Drawer slide animation, `GridSplitter` drag precision.
+
 ### Birko.Xaml.Core — i18n + base ViewModels (EPIC-015 / STORY-032) (2026-07-04)
 `Birko.Xaml.Core` grew from theme abstractions into the thin, **Avalonia-free** platform core: i18n + base MVVM ViewModels + a CRUD port. Closes [tasks/EPIC-015/STORY-032](tasks/EPIC-015-birko-xaml-ui-framework/STORY-032-xaml-core-foundation/STORY.md). Its only dependency is CommunityToolkit.Mvvm (platform-neutral, works Avalonia + WPF).
 - **i18n** — `Localization.II18n`/`I18n` (+ `I18n.Instance` singleton, mirrors Birko.Web's `i18n`): locale dictionaries, `this[key]` indexer (fallback → key), `SetLocale` (raises `INotifyPropertyChanged` + `LocaleChanged`), `Translate(key, args)` with `{placeholder}` interpolation.
