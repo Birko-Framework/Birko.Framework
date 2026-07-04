@@ -20,6 +20,9 @@ Core rather than source-including it twice.
 - **`Mvvm.ListPageViewModel<T>`** — adds client-side `SearchText` + `Filtered`.
 - **`Mvvm.DetailPageViewModel<T>`** — load-by-id (or new), `Model`, permission-gated `Save`/`Cancel`.
 
+### Forms schema (STORY-033)
+- **`Forms.FormField` / `FieldType`** — platform-neutral field schema (`Name`/`Label`/`Type`/`Required`/`Options`/`Placeholder`/`ReadOnly`). The Avalonia `Form` control renders it into labeled, two-way-bound inputs; a WPF `Form` would consume the same schema.
+
 ### Data port (STORY-032)
 - **`Data.ICrudDataSource<T>`** — the thin CRUD port the VMs depend on (Guid-keyed, store-shaped: `GetAll`/`Get`/`Save`/`Delete`/`NewInstance`). **Not** `IAsyncBulkStore<T>` directly — see the CLAUDE.md note on the assembly-vs-projitems boundary. A consumer adapts their Birko.Data store to this port in their own assembly:
 
