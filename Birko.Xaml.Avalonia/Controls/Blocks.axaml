@@ -1,0 +1,57 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls">
+
+  <!-- ── Drawer — slide-in overlay panel ───────────────────────────────── -->
+  <ControlTheme x:Key="{x:Type c:Drawer}" TargetType="c:Drawer">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Border x:Name="PART_Backdrop" Background="{DynamicResource BBackdropBgBrush}" />
+          <Border x:Name="PART_Panel"
+                  Width="{DynamicResource BDrawerWidth}"
+                  HorizontalAlignment="Right"
+                  Background="{DynamicResource BBgElevatedBrush}"
+                  BorderBrush="{DynamicResource BBorderBrush}"
+                  BorderThickness="1,0,0,0"
+                  Padding="20">
+            <ContentPresenter Content="{TemplateBinding Content}"
+                              Foreground="{DynamicResource BTextBrush}" />
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:open">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:left /template/ Border#PART_Panel">
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="BorderThickness" Value="0,0,1,0" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── SplitPanel — master/detail with responsive collapse ───────────── -->
+  <ControlTheme x:Key="{x:Type c:SplitPanel}" TargetType="c:SplitPanel">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid x:Name="PART_Grid" ColumnDefinitions="280,Auto,*">
+          <ContentControl x:Name="PART_Master" Grid.Column="0"
+                          Content="{TemplateBinding Master}" />
+          <GridSplitter x:Name="PART_Splitter" Grid.Column="1" Width="4"
+                        ResizeDirection="Columns"
+                        Background="{DynamicResource BBorderBrush}" />
+          <ContentControl x:Name="PART_Detail" Grid.Column="2"
+                          Content="{TemplateBinding Detail}" />
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:collapsed /template/ ContentControl#PART_Master">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^:collapsed /template/ GridSplitter#PART_Splitter">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+  </ControlTheme>
+
+</ResourceDictionary>

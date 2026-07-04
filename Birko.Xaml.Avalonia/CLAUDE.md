@@ -42,8 +42,10 @@ it's a new category, to the `Controls.axaml` merge list.
 - **Surfaces.axaml** — `BCard` (ContentControl theme), `TabControl` + `TabItem`
 - **Indicators.axaml** — `BBadge`, `BTag` (ContentControl themes), `ProgressBar`
 - **Overlays.axaml** — `ToolTip`
+- **Blocks.axaml** + control classes — the STORY-033 building blocks: **`Form`** (schema-driven, `Controls/Form.cs` — code-built from `Fields`+`Model`, no XAML template), **`Drawer`** (slide-in overlay, `IsOpen`/`Placement`, backdrop-click closes), **`SplitPanel`** (master/detail over `GridSplitter`, responsive `:collapsed` below `CollapseWidth`).
 
 Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="{StaticResource BCard}"`.
+`Form` binds each `FormField` to `Model.[Name]` (reflection binding, two-way); it pairs with `CrudViewModelBase.EditingItem` / `DetailPageViewModel.Model`.
 
 ## Scope / deferred
 
