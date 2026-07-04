@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Real class-library assembly (not .shproj/.projitems) — the EPIC-015 convention break:
+       Birko.Xaml.* ship as actual assemblies so the platform skins (Avalonia now, WPF later)
+       reference ONE shared Core rather than source-including it twice. See CLAUDE.md. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Birko.Xaml.Core</RootNamespace>
+    <AssemblyName>Birko.Xaml.Core</AssemblyName>
+    <!-- WPF-addendum constraint #1: this assembly must stay Avalonia-free. -->
+  </PropertyGroup>
+
+</Project>
