@@ -32,8 +32,13 @@ created: 2026-06-25
   best-effort pointer drag-drop between columns. Verified (render + reactive-move tests + screenshot).
   Recursive card nesting deferred.
 
-**Remaining composites:** markdown-editor, chart (chart needs a both-platforms plotting lib —
-LiveCharts2/ScottPlot/OxyPlot per the EPIC — a dependency decision).
+- **markdown-editor** — `MarkdownEditor` (`Controls/MarkdownEditor.cs`, split editor + live preview)
+  + dependency-free `MarkdownRenderer` (static): common Markdown subset (headings, bold/italic/code/
+  links, unordered lists, fenced code, hr) → token-styled Avalonia controls. Verified (block/inline
+  render + editor tests + screenshot). Covers `b-markdown-editor`; Markdig can replace the parser later.
+
+**Remaining composite:** **chart** — needs a both-platforms plotting-library decision
+(LiveCharts2 / ScottPlot / OxyPlot per the EPIC). Parked for that choice.
 
 # Tier 2 — composite controls with no native peer
 
