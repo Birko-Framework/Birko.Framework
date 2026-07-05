@@ -41,8 +41,8 @@ public class ParityScreenshotTests
         foreach (var (id, variant) in themes)
         {
             Application.Current!.RequestedThemeVariant = variant;
-            window.Measure(new Size(520, 900));
-            window.Arrange(new Rect(0, 0, 520, 900));
+            window.Measure(new Size(520, 1180));
+            window.Arrange(new Rect(0, 0, 520, 1180));
             Dispatcher.UIThread.RunJobs();
 
             var frame = window.CaptureRenderedFrame();
