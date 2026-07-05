@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml.Avalonia — Tier-1 complete: Modal + DataGrid (EPIC-015 / STORY-034 done) (2026-07-05)
+The last two Tier-1 controls, closing **STORY-034** (all ~20 restyled controls done). [tasks/EPIC-015/STORY-034](tasks/EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md).
+- **`Modal`** — centered dialog over a dimming backdrop (`IsOpen`/`Title`, backdrop-click closes, `--b-modal-width` card). A `Form` + Save/Cancel inside it = the **FormModal** pattern (screenshot-verified: titled card, required-asterisk form, buttons).
+- **`DataGrid`** (`data-table`) — restyled with Birko tokens. DataGrid ships its theme as **Styles** (not a ResourceDictionary), so it's a separate `Controls/DataGridStyles.axaml` (includes DataGrid's Fluent theme + layers Birko tokens: header band via `--b-table-header-*`, cell text/font, grid lines) added to `Application.Styles`; needs the `Avalonia.Controls.DataGrid` package. Finstat's dark charcoal header band verified in the gallery.
+- **3 new tests** (Modal toggle + FormModal screenshot, DataGrid header token) — Avalonia suite now **45**. CSS parity clean.
+- **EPIC-015 is now 6/8 stories done** (029/030/031/032/033/034); only STORY-036 tail (ribbon/command-palette/user-tenant) and STORY-035 (Tier-2 composites) remain.
+
 ### Birko.Xaml.Avalonia — Tier-1 tail: ToggleSwitch, BusySpinner, dropdown menu, Breadcrumb (EPIC-015 / STORY-034) (2026-07-05)
 Filled in most of STORY-034's deferred controls — now **16 Tier-1 controls** done, only `DataGrid`/`modal` remain. [tasks/EPIC-015/STORY-034](tasks/EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md).
 - **`ToggleSwitch`** — token-driven; correctly declares the required `PART_MovingKnobs` + `PART_SwitchKnob` (the latter must be a `Panel`) so the XAML compiler's `AVLN2207`/`AVLN2205` contract passes; `:checked` moves the knob + turns the track primary.

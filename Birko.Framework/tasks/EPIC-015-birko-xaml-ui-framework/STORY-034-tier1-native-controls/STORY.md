@@ -1,9 +1,19 @@
 ---
 id: STORY-034
 parent: EPIC-015
-status: in-progress
+status: done
 created: 2026-06-25
+closed: 2026-07-05
 ---
+
+## Done (2026-07-05) — Tier-1 complete
+
+All ~20 Tier-1 controls delivered, token-driven, tested headlessly, shown in the gallery across
+all four themes. Final additions: **Modal** (centered dialog over a backdrop; a `Form` inside it =
+the FormModal pattern, screenshot-verified) and **DataGrid** (`data-table`) restyled with Birko
+tokens — the signature header band via `--b-table-header-*` (finstat's dark charcoal band verified),
+shipped as `Controls/DataGridStyles.axaml` (Styles + the `Avalonia.Controls.DataGrid` package;
+added to `Application.Styles`).
 
 ## Progress (2026-07-04)
 
