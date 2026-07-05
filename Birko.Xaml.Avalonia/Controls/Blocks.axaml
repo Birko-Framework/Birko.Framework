@@ -31,6 +31,37 @@
     </Style>
   </ControlTheme>
 
+  <!-- ── Modal — centered dialog over a backdrop ───────────────────────── -->
+  <ControlTheme x:Key="{x:Type c:Modal}" TargetType="c:Modal">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Border x:Name="PART_Backdrop" Background="{DynamicResource BBackdropBgBrush}" />
+          <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Width="{DynamicResource BModalWidth}"
+                  Background="{DynamicResource BBgElevatedBrush}"
+                  BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="1"
+                  CornerRadius="{DynamicResource BRadiusLg}">
+            <DockPanel>
+              <Border DockPanel.Dock="Top" Padding="20,14"
+                      BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,0,0,1"
+                      IsVisible="{TemplateBinding Title, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <TextBlock Text="{TemplateBinding Title}" FontWeight="SemiBold" FontSize="16"
+                           Foreground="{DynamicResource BTextBrush}" />
+              </Border>
+              <ContentPresenter Content="{TemplateBinding Content}" Margin="20"
+                                Foreground="{DynamicResource BTextBrush}" />
+            </DockPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:open">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+
   <!-- ── SplitPanel — master/detail with responsive collapse ───────────── -->
   <ControlTheme x:Key="{x:Type c:SplitPanel}" TargetType="c:SplitPanel">
     <Setter Property="Template">

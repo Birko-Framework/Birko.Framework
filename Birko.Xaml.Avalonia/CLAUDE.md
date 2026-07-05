@@ -43,7 +43,8 @@ it's a new category, to the `Controls.axaml` merge list.
 - **Indicators.axaml** — `BBadge`, `BTag` (ContentControl themes), `ProgressBar`, `BusySpinner` (custom, rotating `Arc`)
 - **Overlays.axaml** — `ToolTip`, `MenuFlyoutPresenter` + `MenuItem` (dropdown menus)
 - **Breadcrumb** (`Controls/Breadcrumb.cs`) — ContentControl building crumbs + separators in code
-- **Blocks.axaml** + control classes — the STORY-033 building blocks: **`Form`** (schema-driven, `Controls/Form.cs` — code-built from `Fields`+`Model`, no XAML template), **`Drawer`** (slide-in overlay, `IsOpen`/`Placement`, backdrop-click closes), **`SplitPanel`** (master/detail over `GridSplitter`, responsive `:collapsed` below `CollapseWidth`).
+- **DataGridStyles.axaml** (`data-table`) — token restyle of Avalonia `DataGrid`. **Styles, not resources** (DataGrid ships its theme as Styles): add `<StyleInclude Source="avares://Birko.Xaml.Avalonia/Controls/DataGridStyles.axaml" />` to `Application.Styles` after `FluentTheme`. It includes DataGrid's Fluent theme then layers Birko tokens (header band via `--b-table-header-*`, cell text/font, grid lines). Needs the `Avalonia.Controls.DataGrid` package.
+- **Blocks.axaml** + control classes — the building blocks: **`Form`** (schema-driven, `Controls/Form.cs` — code-built from `Fields`+`Model`, no XAML template), **`Drawer`** (slide-in overlay, `IsOpen`/`Placement`, backdrop-click closes), **`SplitPanel`** (master/detail over `GridSplitter`, responsive `:collapsed` below `CollapseWidth`), **`Modal`** (centered dialog over a backdrop, `IsOpen`/`Title`, backdrop-click closes — compose a "FormModal" by putting a `Form` + Save/Cancel in its content).
 
 Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="{StaticResource BCard}"`.
 `Form` binds each `FormField` to `Model.[Name]` (reflection binding, two-way); it pairs with `CrudViewModelBase.EditingItem` / `DetailPageViewModel.Model`.
@@ -51,10 +52,9 @@ Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="
 ## Scope / deferred
 
 - **STORY-030** = tokens + swap. **STORY-034** = the Tier-1 restyle sweep (above).
-- **Deferred:** `table` / `data-table` (Avalonia `DataGrid` is a separate package + row-height
-  parity — the last heavy Tier-1 item) and a `modal` overlay (overlaps STORY-035/036). Spinner
-  animations are scoped inside `Arc.Styles` (a top-level ControlTheme animation `Style` silently
-  breaks theme application — see the gotcha below).
+- **Tier-1 is complete** — nothing deferred. (DataGrid is Styles-based and needs the separate
+  `StyleInclude`; see the DataGrid entry above.) Spinner animations are scoped inside `Arc.Styles`
+  (a top-level ControlTheme animation `Style` silently breaks theme application — see the gotcha below).
 - Composite/motion **tokens** (shadows, focus rings, transitions, easings, gradients) are still not
   mapped — add them when a control needs them.
 - The CSS-only scoped `inverse` theme is not emitted to AXAML.
