@@ -139,11 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
-### Birko.Xaml.Avalonia — Tier-2 composites: tree-menu + command-palette (EPIC-015 / STORY-035) (2026-07-05)
+### Birko.Xaml.Avalonia — Tier-2 composites: tree-menu, command-palette, object/JSON viewer (EPIC-015 / STORY-035) (2026-07-05)
 Building the Tier-2 composites. [tasks/EPIC-015/STORY-035](tasks/EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) in-progress.
 - **tree-menu** — `TreeView`/`TreeViewItem` token restyle (`Controls/Tree.axaml`): expander chevron (`PART_ExpandCollapseChevron`), token hover/selected, indented children, `:empty` hides the chevron on leaves. Screenshot-verified.
 - **command-palette** — `CommandPalette` (`Controls/CommandPalette.cs` + Blocks.axaml template) over a platform-neutral `CommandItem` model (`Birko.Xaml.Core.Commands`): an overlay whose search box filters commands, keyboard-navigable (Up/Down/Enter/Esc), invokes `Run` + closes. Screenshot-verified (search box + grouped command list). This is also the **STORY-036** shell palette — the control exists; wiring Ctrl+K into `ShellView` is a small follow-up.
-- Avalonia suite now **51**. Remaining composites: kanban, json/xml/object-tree viewers, markdown-editor, chart.
+- **object-tree / JSON viewer** — `ObjectTree` (`Controls/ObjectTree.cs`): `Source` (object graph) or `Json` (string) → recursive tree over the restyled `TreeView`, type-colored monospaced values (string=success/number=primary/bool=warning/null=muted); walks `JsonNode`/dict/enumerable/POCO; invalid JSON → raw-string leaf. Screenshot-verified (nested `user{}`/`roles[]`/`null`). Covers `b-object-tree` + `b-json-viewer`.
+- Avalonia suite now **55**. Remaining composites: xml-viewer, kanban, markdown-editor, chart.
 
 ### Birko.Xaml.Gallery moved to the Consumers bucket (2026-07-05)
 Relocated the gallery from `Birko/Framework/Birko.Xaml.Gallery` → `Birko/Consumers/Birko.Xaml.Gallery` so it mirrors `Birko.Web.Playground`: a **consumer/demo app**, not a framework project. It now references the `Birko.Xaml.*` assemblies via `ProjectReference` across the bucket (`../../Framework/...`), is **removed from `Birko.Framework.slnx` + `.code-workspace`**, and the framework test suite no longer depends on it (dropped the gallery-only `ParityScreenshotTests`; the gallery is run/validated standalone via `dotnet run`, like the Web playground's `verify.mjs`). Keeps its own git history. Framework Avalonia suite: 45 → 44.

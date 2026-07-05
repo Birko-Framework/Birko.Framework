@@ -17,8 +17,13 @@ created: 2026-06-25
   (Up/Down/Enter/Esc), invoke `Run` + close. Verified (filter/invoke/close tests + screenshot). Also
   the **STORY-036** shell palette — the control exists; wiring Ctrl+K into `ShellView` is a small follow-up.
 
-**Remaining composites:** kanban, json/xml/object-tree viewers, markdown-editor, chart (chart needs a
-both-platforms plotting lib — LiveCharts2/ScottPlot/OxyPlot per the EPIC).
+- **object-tree / JSON viewer** — `ObjectTree` (`Controls/ObjectTree.cs`): `Source` (object graph) or
+  `Json` (string) → recursive tree over the restyled `TreeView`, type-colored monospaced values
+  (string/number/bool/null), walks `JsonNode`/dict/enumerable/POCO; invalid JSON → raw-string leaf.
+  Verified (json/object/invalid tests + screenshot). Covers `b-object-tree` + `b-json-viewer`.
+
+**Remaining composites:** xml-viewer, kanban, markdown-editor, chart (chart needs a both-platforms
+plotting lib — LiveCharts2/ScottPlot/OxyPlot per the EPIC).
 
 # Tier 2 — composite controls with no native peer
 
