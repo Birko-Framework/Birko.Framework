@@ -26,8 +26,14 @@ created: 2026-06-25
   restyled `TreeView` (elements `<tag>`, `@attributes`/`#text` leaves, token-colored, monospace);
   invalid XML → raw leaf. Verified (elements/attrs/text + invalid tests + screenshot). Covers `b-xml-viewer`.
 
-**Remaining composites:** kanban, markdown-editor, chart (chart needs a both-platforms plotting lib —
-LiveCharts2/ScottPlot/OxyPlot per the EPIC).
+- **kanban** — `Kanban` (`Controls/Kanban.cs`) over `Birko.Xaml.Core.Kanban.{KanbanColumn,KanbanCard}`:
+  horizontal token-styled columns (header + live count), each an `ItemsControl` bound to
+  `column.Cards` (`ObservableCollection` → model moves update live), card surfaces via `FuncDataTemplate`,
+  best-effort pointer drag-drop between columns. Verified (render + reactive-move tests + screenshot).
+  Recursive card nesting deferred.
+
+**Remaining composites:** markdown-editor, chart (chart needs a both-platforms plotting lib —
+LiveCharts2/ScottPlot/OxyPlot per the EPIC — a dependency decision).
 
 # Tier 2 — composite controls with no native peer
 

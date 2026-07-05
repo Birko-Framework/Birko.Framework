@@ -139,13 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
-### Birko.Xaml.Avalonia — Tier-2 composites: tree-menu, command-palette, object/JSON + XML viewers (EPIC-015 / STORY-035) (2026-07-05)
+### Birko.Xaml.Avalonia — Tier-2 composites: tree-menu, command-palette, object/JSON + XML viewers, kanban (EPIC-015 / STORY-035) (2026-07-05)
 Building the Tier-2 composites. [tasks/EPIC-015/STORY-035](tasks/EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) in-progress.
 - **tree-menu** — `TreeView`/`TreeViewItem` token restyle (`Controls/Tree.axaml`): expander chevron (`PART_ExpandCollapseChevron`), token hover/selected, indented children, `:empty` hides the chevron on leaves. Screenshot-verified.
 - **command-palette** — `CommandPalette` (`Controls/CommandPalette.cs` + Blocks.axaml template) over a platform-neutral `CommandItem` model (`Birko.Xaml.Core.Commands`): an overlay whose search box filters commands, keyboard-navigable (Up/Down/Enter/Esc), invokes `Run` + closes. Screenshot-verified (search box + grouped command list). This is also the **STORY-036** shell palette — the control exists; wiring Ctrl+K into `ShellView` is a small follow-up.
 - **object-tree / JSON viewer** — `ObjectTree` (`Controls/ObjectTree.cs`): `Source` (object graph) or `Json` (string) → recursive tree over the restyled `TreeView`, type-colored monospaced values (string=success/number=primary/bool=warning/null=muted); walks `JsonNode`/dict/enumerable/POCO; invalid JSON → raw-string leaf. Screenshot-verified (nested `user{}`/`roles[]`/`null`). Covers `b-object-tree` + `b-json-viewer`.
 - **xml-viewer** — `XmlViewer` (`Controls/XmlViewer.cs`): `Xml` string → `XDocument` → tree (elements `<tag>` primary, `@attributes`/`#text` success-colored leaves, monospace); invalid XML → raw leaf. Screenshot-verified. Covers `b-xml-viewer`.
-- Avalonia suite now **58**. Remaining composites: kanban, markdown-editor, chart.
+- **kanban** — `Kanban` (`Controls/Kanban.cs`) over Core `KanbanColumn`/`KanbanCard`: horizontal token-styled columns (header + live count) each an `ItemsControl` bound to `column.Cards` (`ObservableCollection` → model moves update live), card surfaces; best-effort pointer drag-drop between columns. Screenshot-verified (3-column board). Covers `b-kanban` (recursive nesting deferred).
+- Avalonia suite now **61**. Remaining composites: markdown-editor, chart (chart needs a both-platforms plotting-lib decision).
 
 ### Birko.Xaml.Gallery moved to the Consumers bucket (2026-07-05)
 Relocated the gallery from `Birko/Framework/Birko.Xaml.Gallery` → `Birko/Consumers/Birko.Xaml.Gallery` so it mirrors `Birko.Web.Playground`: a **consumer/demo app**, not a framework project. It now references the `Birko.Xaml.*` assemblies via `ProjectReference` across the bucket (`../../Framework/...`), is **removed from `Birko.Framework.slnx` + `.code-workspace`**, and the framework test suite no longer depends on it (dropped the gallery-only `ParityScreenshotTests`; the gallery is run/validated standalone via `dotnet run`, like the Web playground's `verify.mjs`). Keeps its own git history. Framework Avalonia suite: 45 → 44.
