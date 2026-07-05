@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls">
 
   <!-- ── Badge — pill accent (apply via Theme="{StaticResource BBadge}") ──── -->
   <ControlTheme x:Key="BBadge" TargetType="ContentControl">
@@ -58,6 +59,33 @@
                   CornerRadius="{TemplateBinding CornerRadius}"
                   HorizontalAlignment="Left" />
         </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ── BusySpinner — rotating token-colored arc (indeterminate loading) ── -->
+  <ControlTheme x:Key="{x:Type c:BusySpinner}" TargetType="c:BusySpinner">
+    <Setter Property="Width" Value="{DynamicResource BSpinnerSize}" />
+    <Setter Property="Height" Value="{DynamicResource BSpinnerSize}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Arc x:Name="arc" StartAngle="0" SweepAngle="270"
+             Stroke="{DynamicResource BColorPrimaryBrush}" StrokeThickness="3"
+             StrokeLineCap="Round" RenderTransformOrigin="50%,50%">
+          <Arc.Styles>
+            <Style Selector="Arc">
+              <Style.Animations>
+                <Animation Duration="0:0:0.8" IterationCount="INFINITE">
+                  <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+                  <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
+                </Animation>
+              </Style.Animations>
+            </Style>
+          </Arc.Styles>
+          <Arc.RenderTransform>
+            <RotateTransform />
+          </Arc.RenderTransform>
+        </Arc>
       </ControlTemplate>
     </Setter>
   </ControlTheme>

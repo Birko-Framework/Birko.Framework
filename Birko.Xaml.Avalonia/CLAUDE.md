@@ -38,10 +38,11 @@ it's a new category, to the `Controls.axaml` merge list.
 
 - **Buttons.axaml** — `Button`
 - **Inputs.axaml** — `TextBox` (single + multiline via `AcceptsReturn`), `ComboBox` + `ComboBoxItem`
-- **Toggles.axaml** — `CheckBox`, `RadioButton`
+- **Toggles.axaml** — `CheckBox`, `RadioButton`, `ToggleSwitch` (declares the required `PART_MovingKnobs`/`PART_SwitchKnob`)
 - **Surfaces.axaml** — `BCard` (ContentControl theme), `TabControl` + `TabItem`
-- **Indicators.axaml** — `BBadge`, `BTag` (ContentControl themes), `ProgressBar`
-- **Overlays.axaml** — `ToolTip`
+- **Indicators.axaml** — `BBadge`, `BTag` (ContentControl themes), `ProgressBar`, `BusySpinner` (custom, rotating `Arc`)
+- **Overlays.axaml** — `ToolTip`, `MenuFlyoutPresenter` + `MenuItem` (dropdown menus)
+- **Breadcrumb** (`Controls/Breadcrumb.cs`) — ContentControl building crumbs + separators in code
 - **Blocks.axaml** + control classes — the STORY-033 building blocks: **`Form`** (schema-driven, `Controls/Form.cs` — code-built from `Fields`+`Model`, no XAML template), **`Drawer`** (slide-in overlay, `IsOpen`/`Placement`, backdrop-click closes), **`SplitPanel`** (master/detail over `GridSplitter`, responsive `:collapsed` below `CollapseWidth`).
 
 Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="{StaticResource BCard}"`.
@@ -50,10 +51,10 @@ Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="
 ## Scope / deferred
 
 - **STORY-030** = tokens + swap. **STORY-034** = the Tier-1 restyle sweep (above).
-- **Deferred (need more than a mechanical restyle, tracked in STORY-034 / candidates for STORY-035):**
-  `ToggleSwitch` (enforces `PART_MovingKnobs`/`PART_SwitchKnob` + knob-animation logic), a `Spinner`
-  (custom control + rotation animation), `Menu`/dropdown, `table`, `data-table` (Avalonia `DataGrid`
-  is a separate package + row-height parity), `modal` overlay, `breadcrumb`.
+- **Deferred:** `table` / `data-table` (Avalonia `DataGrid` is a separate package + row-height
+  parity — the last heavy Tier-1 item) and a `modal` overlay (overlaps STORY-035/036). Spinner
+  animations are scoped inside `Arc.Styles` (a top-level ControlTheme animation `Style` silently
+  breaks theme application — see the gotcha below).
 - Composite/motion **tokens** (shadows, focus rings, transitions, easings, gradients) are still not
   mapped — add them when a control needs them.
 - The CSS-only scoped `inverse` theme is not emitted to AXAML.
@@ -65,6 +66,8 @@ Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="
 - Some native controls enforce required template parts (`ToggleSwitch`, and heavier ones); the XAML
   compiler reports `AVLN2205`. Either supply the parts correctly or defer — don't ship a half-templated control.
 - `TextPresenter.Foreground` is a plain CLR setter (not bindable) — let `Foreground` inherit from the parent `TextBox` instead of binding it.
+- **Animations belong inside the templated element's own `.Styles`, not as a top-level ControlTheme animation `Style`** — a `<Style Selector="^ /template/ X"><Style.Animations>` at the ControlTheme level silently broke the whole theme's application (control got no template). `BusySpinner` puts its rotation in `Arc.Styles` with a `RotateTransform` + `RotateTransform.Angle` animation.
+- Custom control names can collide with Avalonia's (`Spinner` → `Avalonia.Controls.Spinner`); the loading indicator is `BusySpinner`.
 
 ## Testing
 

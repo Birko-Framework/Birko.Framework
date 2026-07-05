@@ -69,8 +69,35 @@
     </Style>
   </ControlTheme>
 
-  <!-- ToggleSwitch deferred: it enforces required template parts (PART_MovingKnobs /
-       PART_SwitchKnob) with built-in knob-animation logic; a correct token-driven template is
-       more than a mechanical restyle. Tracked for a follow-up pass. -->
+  <!-- ── ToggleSwitch — token-driven; declares the required PART_MovingKnobs/PART_SwitchKnob ── -->
+  <ControlTheme x:Key="{x:Type ToggleSwitch}" TargetType="ToggleSwitch">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="8" Background="Transparent">
+          <Panel Width="40" Height="22" VerticalAlignment="Center">
+            <Border x:Name="track" CornerRadius="11" Background="{DynamicResource BBorderBrush}" />
+            <Panel x:Name="PART_MovingKnobs" Margin="2" HorizontalAlignment="Left">
+              <Panel x:Name="PART_SwitchKnob">
+                <Border Width="18" Height="18" CornerRadius="9"
+                        Background="{DynamicResource BInputThumbBgBrush}" />
+              </Panel>
+            </Panel>
+          </Panel>
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            Foreground="{TemplateBinding Foreground}"
+                            VerticalAlignment="Center" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:checked /template/ Border#track">
+      <Setter Property="Background" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+    <Style Selector="^:checked /template/ Panel#PART_MovingKnobs">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+  </ControlTheme>
 
 </ResourceDictionary>
