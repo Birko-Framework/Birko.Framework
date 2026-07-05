@@ -22,8 +22,12 @@ created: 2026-06-25
   (string/number/bool/null), walks `JsonNode`/dict/enumerable/POCO; invalid JSON → raw-string leaf.
   Verified (json/object/invalid tests + screenshot). Covers `b-object-tree` + `b-json-viewer`.
 
-**Remaining composites:** xml-viewer, kanban, markdown-editor, chart (chart needs a both-platforms
-plotting lib — LiveCharts2/ScottPlot/OxyPlot per the EPIC).
+- **xml-viewer** — `XmlViewer` (`Controls/XmlViewer.cs`): `Xml` string → `XDocument` → tree over the
+  restyled `TreeView` (elements `<tag>`, `@attributes`/`#text` leaves, token-colored, monospace);
+  invalid XML → raw leaf. Verified (elements/attrs/text + invalid tests + screenshot). Covers `b-xml-viewer`.
+
+**Remaining composites:** kanban, markdown-editor, chart (chart needs a both-platforms plotting lib —
+LiveCharts2/ScottPlot/OxyPlot per the EPIC).
 
 # Tier 2 — composite controls with no native peer
 
