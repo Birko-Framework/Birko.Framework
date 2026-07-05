@@ -1,6 +1,7 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls">
+                    xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls"
+                    xmlns:cmd="clr-namespace:Birko.Xaml.Core.Commands;assembly=Birko.Xaml.Core">
 
   <!-- ── Drawer — slide-in overlay panel ───────────────────────────────── -->
   <ControlTheme x:Key="{x:Type c:Drawer}" TargetType="c:Drawer">
@@ -28,6 +29,44 @@
     <Style Selector="^:left /template/ Border#PART_Panel">
       <Setter Property="HorizontalAlignment" Value="Left" />
       <Setter Property="BorderThickness" Value="0,0,1,0" />
+    </Style>
+  </ControlTheme>
+
+  <!-- ── CommandPalette — searchable command overlay (Ctrl+K style) ─────── -->
+  <ControlTheme x:Key="{x:Type c:CommandPalette}" TargetType="c:CommandPalette">
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel>
+          <Border x:Name="PART_Backdrop" Background="{DynamicResource BBackdropBgBrush}" />
+          <Border Width="480" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,88,0,0"
+                  Background="{DynamicResource BBgElevatedBrush}"
+                  BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="1"
+                  CornerRadius="{DynamicResource BRadiusLg}">
+            <DockPanel>
+              <TextBox x:Name="PART_SearchBox" DockPanel.Dock="Top" Margin="8"
+                       Watermark="Type a command…"
+                       Text="{TemplateBinding SearchText, Mode=TwoWay}" />
+              <ListBox x:Name="PART_List" Margin="8,0,8,8" MaxHeight="320"
+                       ItemsSource="{TemplateBinding FilteredCommands}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="cmd:CommandItem">
+                    <StackPanel Spacing="1">
+                      <TextBlock Text="{Binding Label}" Foreground="{DynamicResource BTextBrush}" />
+                      <TextBlock Text="{Binding Group}" FontSize="{DynamicResource BTextXs}"
+                                 Foreground="{DynamicResource BTextMutedBrush}"
+                                 IsVisible="{Binding Group, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </DockPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:open">
+      <Setter Property="IsVisible" Value="True" />
     </Style>
   </ControlTheme>
 
