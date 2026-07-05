@@ -12,8 +12,13 @@ created: 2026-06-25
   (nested render/expand tests + screenshot). Chevron rotation keys off the expand toggle's `:checked`
   (real click-driven use); the programmatic headless capture shows the resting chevron.
 
-**Remaining composites:** command-palette, kanban, json/xml/object-tree viewers, markdown-editor, chart
-(chart needs a both-platforms plotting lib — LiveCharts2/ScottPlot/OxyPlot per the EPIC).
+- **command-palette** — `CommandPalette` control (`Controls/CommandPalette.cs` + Blocks.axaml
+  template) over a platform-neutral `CommandItem` model (Core): search filter, keyboard nav
+  (Up/Down/Enter/Esc), invoke `Run` + close. Verified (filter/invoke/close tests + screenshot). Also
+  the **STORY-036** shell palette — the control exists; wiring Ctrl+K into `ShellView` is a small follow-up.
+
+**Remaining composites:** kanban, json/xml/object-tree viewers, markdown-editor, chart (chart needs a
+both-platforms plotting lib — LiveCharts2/ScottPlot/OxyPlot per the EPIC).
 
 # Tier 2 — composite controls with no native peer
 
