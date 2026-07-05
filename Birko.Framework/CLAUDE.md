@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml.Avalonia — Tier-1 tail: ToggleSwitch, BusySpinner, dropdown menu, Breadcrumb (EPIC-015 / STORY-034) (2026-07-05)
+Filled in most of STORY-034's deferred controls — now **16 Tier-1 controls** done, only `DataGrid`/`modal` remain. [tasks/EPIC-015/STORY-034](tasks/EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md).
+- **`ToggleSwitch`** — token-driven; correctly declares the required `PART_MovingKnobs` + `PART_SwitchKnob` (the latter must be a `Panel`) so the XAML compiler's `AVLN2207`/`AVLN2205` contract passes; `:checked` moves the knob + turns the track primary.
+- **`BusySpinner`** — custom `TemplatedControl` (renamed from `Spinner` to avoid colliding with Avalonia's built-in `Spinner`): a rotating token-colored `Arc`, default size from `BSpinnerSize`.
+- **Dropdown menu** — `MenuFlyoutPresenter` (token surface) + `MenuItem` (hover/padding) ControlThemes.
+- **`Breadcrumb`** — `ContentControl` that builds token-styled crumbs + separators in code, last crumb emphasized.
+- **Gotcha captured** (project CLAUDE.md): a top-level ControlTheme animation `Style` (`<Style Selector="^ /template/ X"><Style.Animations>`) **silently breaks the whole theme's application** — scope animations inside the templated element's own `.Styles` (BusySpinner rotates via `Arc.Styles` + a `RotateTransform.Angle` animation).
+- **6 headless tests** (ToggleSwitch checked-track, BusySpinner theme+arc, Breadcrumb crumbs+separators, dropdown themes registered, + the existing) — Avalonia suite now **42**; shown across themes in the gallery.
+
 ### Birko.Xaml.Shell — app shell + navigation + page views (EPIC-015 / STORY-036, MVP) (2026-07-04)
 The capstone: a working desktop CRUD app shape — sidebar chrome + navigation + generic list/detail/split page views binding the STORY-032 base VMs. New `Birko.Xaml.Shell` Avalonia assembly + platform-neutral nav/shell VMs in `Birko.Xaml.Core`. [tasks/EPIC-015/STORY-036](tasks/EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) is **in-progress** (MVP done; ribbon/command-palette/user-tenant/FormModal deferred).
 - **Navigation (Core, Avalonia-free — constraint #3):** `Navigation/ModuleDefinition` (the `buildModuleRoutes`/`ModuleManifest` analogue), `INavigationService`/`NavigationService` (module map + back-history + `Current` page VM), `Mvvm/ShellViewModel` (nav + `IThemeManager` + title; Navigate/Back/SetTheme commands), `Mvvm/SplitPageViewModel<T>`. Page-base VMs (`CrudViewModelBase`/`DetailPageViewModel`) gained a `Fields` schema so the generic views render a `Form`.

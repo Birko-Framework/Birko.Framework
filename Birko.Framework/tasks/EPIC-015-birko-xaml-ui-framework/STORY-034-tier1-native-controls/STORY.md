@@ -12,13 +12,18 @@ Inputs / Toggles / Surfaces / Indicators / Overlays, merged by `Controls.axaml`)
 via `{DynamicResource B*}`; verified across all four themes in the gallery + screenshots. **23
 headless tests green.**
 
-**Done (11):** Button, TextBox (single + multiline), Card, Badge, Tag, TabControl/TabItem,
-CheckBox, RadioButton, ProgressBar, ToolTip, ComboBox (+ ComboBoxItem).
+**Done (16):** Button, TextBox (single + multiline), Card, Badge, Tag, TabControl/TabItem,
+CheckBox, RadioButton, ProgressBar, ToolTip, ComboBox (+ ComboBoxItem), **ToggleSwitch**,
+**BusySpinner** (rotating Arc), **dropdown menu** (`MenuFlyoutPresenter` + `MenuItem`), **Breadcrumb**.
 
-**Remaining / deferred (need more than a mechanical restyle — some are STORY-035 candidates):**
-- `ToggleSwitch` — enforces `PART_MovingKnobs`/`PART_SwitchKnob` + built-in knob animation.
-- `Spinner` — no native peer; custom control + rotation animation.
-- `Menu`/dropdown, `table`, `data-table` (Avalonia `DataGrid` = separate package + row-height parity), `modal` overlay, `breadcrumb`.
+**Remaining (the two heavy ones):**
+- `table` / `data-table` — Avalonia `DataGrid` is a separate package + row-height parity (last Tier-1 item).
+- `modal` overlay — overlaps STORY-035/036 (like `Drawer`, an overlay control).
+
+**Gotchas found:** `ToggleSwitch` needs `PART_MovingKnobs`/`PART_SwitchKnob` (and `PART_SwitchKnob`
+must be a `Panel`); a top-level ControlTheme animation `Style` silently breaks theme application
+(scope animations inside the element's own `.Styles`); `Spinner` collides with Avalonia's built-in
+(named `BusySpinner`).
 
 **Gotcha fixed:** a `double` radius token can't bind to `CornerRadius`; the STORY-029 generator now
 emits `--b-radius*` as `CornerRadius` resources (CSS byte-parity unaffected).
