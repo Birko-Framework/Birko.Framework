@@ -1,9 +1,19 @@
 ---
 id: STORY-035
 parent: EPIC-015
-status: planned
+status: in-progress
 created: 2026-06-25
 ---
+
+## Progress (2026-07-05)
+
+- **tree-menu** — `TreeView` + `TreeViewItem` token restyle (`Controls/Tree.axaml`): expander
+  chevron, token hover/selected, indented children, `:empty` hides the chevron on leaves. Verified
+  (nested render/expand tests + screenshot). Chevron rotation keys off the expand toggle's `:checked`
+  (real click-driven use); the programmatic headless capture shows the resting chevron.
+
+**Remaining composites:** command-palette, kanban, json/xml/object-tree viewers, markdown-editor, chart
+(chart needs a both-platforms plotting lib — LiveCharts2/ScottPlot/OxyPlot per the EPIC).
 
 # Tier 2 — composite controls with no native peer
 

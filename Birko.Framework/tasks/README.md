@@ -6,9 +6,9 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
-| planned      | 11    | 26      | —     |
+| planned      | 11    | 25      | —     |
 | todo         | —     | —       | 33    |
-| in-progress  | 3     | 2       | 1     |
+| in-progress  | 3     | 3       | 1     |
 | review       | —     | —       | 4     |
 | blocked      | —     | —       | 0     |
 | done         | 1     | 8       | 3     |
@@ -112,7 +112,7 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-032 [Birko.Xaml.Core — i18n + base ViewModels (Avalonia-free)](EPIC-015-birko-xaml-ui-framework/STORY-032-xaml-core-foundation/STORY.md) — done (i18n + {l:Tr} + base VMs + CRUD port, 15+1 tests, Avalonia-free enforced)
   - STORY-033 [Building blocks — schema-driven Form, Drawer, SplitPanel](EPIC-015-birko-xaml-ui-framework/STORY-033-building-blocks-form-drawer-splitpanel/STORY.md) — done (Form + Drawer + SplitPanel, 8 tests + gallery)
   - STORY-034 [Tier 1 — restyled native controls (~20)](EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md) — done (all ~20 Tier-1 controls incl. Modal + DataGrid; 45 tests + gallery)
-  - STORY-035 [Tier 2 — composite controls with no native peer](EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) — planned
+  - STORY-035 [Tier 2 — composite controls with no native peer](EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) — in-progress (tree-menu done; command-palette/kanban/viewers/markdown-editor/chart remain)
   - STORY-036 [Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation](EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) — in-progress (MVP: nav + sidebar shell + ViewLocator + list/detail/split page views, 6 tests + screenshot; ribbon/command-palette/user-tenant/FormModal deferred)
 
 ### Loose tasks (no parent epic)
