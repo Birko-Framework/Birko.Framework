@@ -1,0 +1,81 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Birko.Xaml.Avalonia.Controls;
+using Birko.Xaml.Avalonia.Theming;
+using FluentAssertions;
+using Xunit;
+
+namespace Birko.Xaml.Avalonia.Tests;
+
+/// <summary>STORY-035: the object / JSON viewer (b-object-tree + b-json-viewer).</summary>
+public class ObjectTreeTests
+{
+    private static T Show<T>(T control) where T : Control
+    {
+        var window = new Window { Content = control, Width = 420, Height = 320 };
+        window.Show();
+        window.Measure(new Size(420, 320));
+        window.Arrange(new Rect(0, 0, 420, 320));
+        Dispatcher.UIThread.RunJobs();
+        return control;
+    }
+
+    private static IEnumerable<string?> Texts(Control c) =>
+        c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
+
+    [AvaloniaFact]
+    public void Renders_json_as_a_tree()
+    {
+        var tree = Show(new ObjectTree { Json = "{\"name\":\"Ada\",\"age\":36,\"tags\":[\"x\",\"y\"]}" });
+        tree.GetVisualDescendants().OfType<TreeViewItem>().Should().NotBeEmpty();
+        Texts(tree).Should().Contain("name:");
+        Texts(tree).Should().Contain("\"Ada\"");
+        Texts(tree).Should().Contain("tags:");
+    }
+
+    [AvaloniaFact]
+    public void Renders_object_properties()
+    {
+        var tree = Show(new ObjectTree { Source = new Contact { Name = "Grace", Active = true } });
+        Texts(tree).Should().Contain("Name:");
+        Texts(tree).Should().Contain("\"Grace\"");
+        Texts(tree).Should().Contain("Active:");
+    }
+
+    [AvaloniaFact]
+    public void Invalid_json_falls_back_to_raw_string()
+    {
+        var tree = Show(new ObjectTree { Json = "{ not valid" });
+        // Doesn't throw; shows the raw text as a leaf.
+        tree.GetVisualDescendants().OfType<TreeViewItem>().Should().NotBeEmpty();
+    }
+
+    [AvaloniaFact]
+    public void Capture_object_tree_screenshot()
+    {
+        Application.Current!.RequestedThemeVariant = BirkoThemeVariants.Light;
+        var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
+                  ?? Path.Combine(Path.GetTempPath(), "birko-xaml-shots");
+        Directory.CreateDirectory(dir);
+
+        var viewer = new ObjectTree
+        {
+            Margin = new Thickness(16),
+            Json = "{\"user\":{\"name\":\"Ada Lovelace\",\"age\":36,\"active\":true},"
+                 + "\"roles\":[\"admin\",\"editor\"],\"lastLogin\":null}",
+        };
+        var page = new Border { Background = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#FFFFFF")), Child = viewer };
+        var window = new Window { Content = page, Width = 380, Height = 340 };
+        window.Show();
+        window.Measure(new Size(380, 340));
+        window.Arrange(new Rect(0, 0, 380, 340));
+        Dispatcher.UIThread.RunJobs();
+
+        var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+        frame?.Save(Path.Combine(dir, "object-tree.png"));
+        viewer.GetVisualDescendants().OfType<TreeViewItem>().Should().NotBeEmpty();
+    }
+}
