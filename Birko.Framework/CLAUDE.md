@@ -139,6 +139,9 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml.Gallery moved to the Consumers bucket (2026-07-05)
+Relocated the gallery from `Birko/Framework/Birko.Xaml.Gallery` → `Birko/Consumers/Birko.Xaml.Gallery` so it mirrors `Birko.Web.Playground`: a **consumer/demo app**, not a framework project. It now references the `Birko.Xaml.*` assemblies via `ProjectReference` across the bucket (`../../Framework/...`), is **removed from `Birko.Framework.slnx` + `.code-workspace`**, and the framework test suite no longer depends on it (dropped the gallery-only `ParityScreenshotTests`; the gallery is run/validated standalone via `dotnet run`, like the Web playground's `verify.mjs`). Keeps its own git history. Framework Avalonia suite: 45 → 44.
+
 ### Birko.Xaml.Avalonia — Tier-1 complete: Modal + DataGrid (EPIC-015 / STORY-034 done) (2026-07-05)
 The last two Tier-1 controls, closing **STORY-034** (all ~20 restyled controls done). [tasks/EPIC-015/STORY-034](tasks/EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md).
 - **`Modal`** — centered dialog over a dimming backdrop (`IsOpen`/`Title`, backdrop-click closes, `--b-modal-width` card). A `Form` + Save/Cancel inside it = the **FormModal** pattern (screenshot-verified: titled card, required-asterisk form, buttons).

@@ -945,10 +945,6 @@
 			"path": "../Birko.Xaml.Avalonia"
 		},
 		{
-			"name": "Xaml / Birko.Xaml.Gallery",
-			"path": "../Birko.Xaml.Gallery"
-		},
-		{
 			"name": "Xaml / Birko.Xaml.Shell",
 			"path": "../Birko.Xaml.Shell"
 		},
