@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### EPIC-015 (Birko.Xaml) complete — shell polish closes STORY-036 (2026-07-06)
+Final polish, closing STORY-036 and the whole **EPIC-015**. [tasks/EPIC-015](tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md).
+- **RibbonShellView** (`BAppShell`): a second shell chrome — a `Ribbon` (bound to `ShellViewModel.RibbonTabs`) over the content region + status bar, in place of the sidebar, on the same `ShellViewModel` (+ Ctrl+K palette). Screenshot-verified (ribbon tabs/groups + ListPage content).
+- **Cross-fade page transitions**: both shells' content regions use a `TransitioningContentControl` (`CrossFade`) so navigation fades.
+- **`ListBoxItem` restyle** (`Controls/Lists.axaml`): token hover/selected — improves the command palette, split-page list, kanban.
+- Avalonia suite now **84**; CSS parity clean.
+- **EPIC-015 done (8/8 stories):** single-source design tokens (byte-identical web CSS + Avalonia AXAML), the theme system (4 variants, runtime swap), Avalonia-free Core (i18n + MVVM base VMs), ~20 Tier-1 controls + building blocks (Form/Drawer/SplitPanel/Modal), 7 Tier-2 composites (tree-menu, command-palette, object/JSON + XML viewers, kanban, markdown-editor, chart), and the app shell with **both** sidebar + ribbon chrome, nav, page bases, palette, user/tenant, and transitions. WPF skin deferred (shares tokens/VMs; forks templates). Gallery lives in `Birko/Consumers`.
+
 ### Birko.Xaml.Avalonia — BChart on LiveCharts2 → STORY-035 done (EPIC-015) (2026-07-06)
 The final Tier-2 composite, closing **STORY-035** (all 7 done). [tasks/EPIC-015/STORY-035](tasks/EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md).
 - **`BChart`** (`b-chart`) over **LiveCharts2** (`LiveChartsCore.SkiaSharpView.Avalonia` 2.0.5) — chosen over ScottPlot/OxyPlot for the best API + UX (modern/animated, MVVM-first) and Avalonia+WPF support (the epic's both-platforms constraint). Bind `Series` (Core `ChartSeries`) + `Kind` (Line/Column) + `Labels`; series colored from the token palette (`BColorPrimary`/`Info`/`Success`/`Warning`/`Danger` → `SKColor`). Verified: series/kind config tests + a screenshot (token-blue line + axes/labels; LiveCharts animates on load so the headless frame is mid-animation). **First external UI dependency beyond Avalonia**; SkiaSharp aligns cleanly with Avalonia 11.2.3 (spike-checked).

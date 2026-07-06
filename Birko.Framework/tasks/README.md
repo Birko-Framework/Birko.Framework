@@ -8,10 +8,10 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 |--------------|-------|---------|-------|
 | planned      | 11    | 25      | —     |
 | todo         | —     | —       | 33    |
-| in-progress  | 3     | 2       | 1     |
+| in-progress  | 2     | 1       | 1     |
 | review       | —     | —       | 4     |
 | blocked      | —     | —       | 0     |
-| done         | 1     | 9       | 3     |
+| done         | 2     | 10      | 3     |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -104,7 +104,7 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — planned (CR-H001 … CR-H147)
   - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — planned (CR-M001 …)
   - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (7/8 stories done; only STORY-036 shell polish remains)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — **done** (8/8 stories; tokens → theme system → Core → Tier-1 controls → building blocks → Tier-2 composites → dual-chrome shell)
   - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (Birko.DesignTokens: byte-identical CSS + AXAML, 30 tests)
   - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (Birko.Xaml.Core + .Avalonia: ThemeDictionaries + runtime swap, 8 headless tests)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (gate GO: Button/TextBox/Card/Badge + gallery, 15 tests + per-theme screenshots)
@@ -113,7 +113,7 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-033 [Building blocks — schema-driven Form, Drawer, SplitPanel](EPIC-015-birko-xaml-ui-framework/STORY-033-building-blocks-form-drawer-splitpanel/STORY.md) — done (Form + Drawer + SplitPanel, 8 tests + gallery)
   - STORY-034 [Tier 1 — restyled native controls (~20)](EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md) — done (all ~20 Tier-1 controls incl. Modal + DataGrid; 45 tests + gallery)
   - STORY-035 [Tier 2 — composite controls with no native peer](EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) — done (all 7: tree-menu, command-palette, object/JSON + XML viewers, kanban, markdown-editor, chart)
-  - STORY-036 [Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation](EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) — in-progress (MVP: nav + sidebar shell + ViewLocator + list/detail/split page views, 6 tests + screenshot; ribbon/command-palette/user-tenant/FormModal deferred)
+  - STORY-036 [Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation](EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) — done (dual chrome sidebar+ribbon, nav, page bases, Ctrl+K palette, user/tenant, FormModal, transitions)
 
 ### Loose tasks (no parent epic)
 

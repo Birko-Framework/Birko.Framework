@@ -1,9 +1,19 @@
 ---
 id: STORY-036
 parent: EPIC-015
-status: in-progress
+status: done
 created: 2026-06-25
+closed: 2026-07-06
 ---
+
+## Done (2026-07-06)
+
+Full shell delivered — **both chrome styles**: sidebar (`ShellView`/`BSidebarAppShell`) and **ribbon
+(`RibbonShellView`/`BAppShell`)** over the same `ShellViewModel`. Plus nav + ViewLocator +
+List/Detail/Split page views, Ctrl+K command palette, user area, tenant switcher, `FormModal`
+page-shape, **cross-fade page transitions** (`TransitioningContentControl`), and a token-restyled
+`ListBoxItem`. Ribbon-shell render + ListBox-selection tests + screenshot. Only genuinely-optional
+extras (fancier transitions, ListBox display templating) left unbuilt.
 
 ## Progress (2026-07-04)
 

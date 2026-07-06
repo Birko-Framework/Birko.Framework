@@ -1,10 +1,22 @@
 ---
 id: EPIC-015
-status: in-progress
+status: done
 created: 2026-06-25
+closed: 2026-07-06
 owner: both
 affects: [Birko.Xaml.Core, Birko.Xaml.Avalonia, Birko.Xaml.Shell, Birko.DesignTokens, Birko.Web.Components]
 ---
+
+## Completion (2026-07-06)
+
+All 8 stories done. Delivered `Birko.DesignTokens` (single-source tokens → byte-identical web CSS +
+Avalonia AXAML), the Avalonia theme system (4 variants, runtime swap), `Birko.Xaml.Core` (i18n +
+MVVM base VMs, Avalonia-free), ~20 Tier-1 restyled controls + building blocks (Form/Drawer/SplitPanel/
+Modal), 7 Tier-2 composites (tree-menu, command-palette, object/JSON + XML viewers, kanban,
+markdown-editor, chart on LiveCharts2), and `Birko.Xaml.Shell` with both sidebar and ribbon chrome,
+nav, page bases, command palette, user/tenant areas, and page transitions. WPF deferred (shares
+tokens/VMs; forks templates). The gallery lives in Consumers/. ~130 tests across the DesignTokens +
+Xaml suites, CSS parity guarded.
 
 # Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web
 
