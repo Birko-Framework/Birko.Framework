@@ -1,6 +1,7 @@
 using Birko.Xaml.Core.Commands;
 using Birko.Xaml.Core.Localization;
 using Birko.Xaml.Core.Navigation;
+using Birko.Xaml.Core.Ribbon;
 using Birko.Xaml.Core.Theming;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -40,6 +41,9 @@ public partial class ShellViewModel : BasePageViewModel
 
     /// <summary>Menu entries for the user dropdown (e.g. Profile, Sign out). Empty = static badge.</summary>
     public IReadOnlyList<CommandItem> UserCommands { get; set; } = Array.Empty<CommandItem>();
+
+    /// <summary>Ribbon tabs for the ribbon shell variant (`RibbonShellView` / BAppShell chrome).</summary>
+    public IReadOnlyList<RibbonTab> RibbonTabs { get; set; } = Array.Empty<RibbonTab>();
 
     /// <summary>Tenants the user can switch between. Fewer than 2 hides the header tenant switcher.</summary>
     public IReadOnlyList<string> Tenants { get; set; } = Array.Empty<string>();
