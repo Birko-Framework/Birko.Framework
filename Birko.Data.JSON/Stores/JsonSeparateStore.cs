@@ -131,14 +131,21 @@ namespace Birko.Data.JSON.Stores
 
             foreach (var item in _items)
             {
-                if (_files.ContainsKey(item.Key))
+                // A newly-created entity is present in _items but not yet in _files, so its file path
+                // must be computed and registered here — otherwise the write below is skipped and the
+                // unconditional _files[item.Key] access throws KeyNotFoundException on first save
+                // (see CODE-REVIEW-AUDIT CR-C08). Mirrors AsyncJsonSeparateStore.SaveDataAsync.
+                if (!_files.ContainsKey(item.Key))
                 {
                     var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key.ToString("D")}";
                     // Validate the combined path even though fileName is constructed internally
                     var path = PathValidator.CombineAndValidate(Path ?? throw new InvalidOperationException("Path cannot be null"), fileName);
-                    _files[item.Key] = path;
-                    File.Delete(_files[item.Key]);
-                    using FileStream fileStream = File.OpenWrite(_files[item.Key]);
+                    _files.Add(item.Key, path);
+                }
+
+                File.Delete(_files[item.Key]);
+                using (FileStream fileStream = File.OpenWrite(_files[item.Key]))
+                {
                     WriteToStream(fileStream, item.Value);
                 }
 
