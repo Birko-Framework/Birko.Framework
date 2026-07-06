@@ -789,6 +789,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.Providers.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.SqLite.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.SqLite.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Sync.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Sync.Tests"
 		},
