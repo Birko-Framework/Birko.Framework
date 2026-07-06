@@ -721,6 +721,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Migrations.RavenDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Sync.RavenDB.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.RavenDB.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
 			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
 		},

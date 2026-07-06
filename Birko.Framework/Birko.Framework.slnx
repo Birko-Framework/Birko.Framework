@@ -229,6 +229,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.EventSourcing.Tests/Birko.Data.EventSourcing.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Migrations.RavenDB.Tests/Birko.Data.Migrations.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.RavenDB.Tests/Birko.Data.Sync.RavenDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.XML.Tests/Birko.Data.XML.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.InMemory.Tests/Birko.Data.InMemory.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Views.Tests/Birko.Data.Views.Tests.csproj" />
