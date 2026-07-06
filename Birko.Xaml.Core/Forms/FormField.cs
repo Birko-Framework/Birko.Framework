@@ -7,6 +7,7 @@ public enum FieldType
     TextArea,
     Number,
     Percent,
+    Range,
     Password,
     Email,
     Search,
