@@ -41,6 +41,16 @@ public partial class ShellViewModel : BasePageViewModel
     /// <summary>Menu entries for the user dropdown (e.g. Profile, Sign out). Empty = static badge.</summary>
     public IReadOnlyList<CommandItem> UserCommands { get; set; } = Array.Empty<CommandItem>();
 
+    /// <summary>Tenants the user can switch between. Fewer than 2 hides the header tenant switcher.</summary>
+    public IReadOnlyList<string> Tenants { get; set; } = Array.Empty<string>();
+
+    /// <summary>Whether to show the tenant switcher (more than one tenant).</summary>
+    public bool HasMultipleTenants => Tenants.Count > 1;
+
+    /// <summary>The active tenant (two-way bound to the switcher).</summary>
+    [ObservableProperty]
+    private string? _currentTenant;
+
     [RelayCommand]
     private void Navigate(string moduleId) => Nav.Navigate(moduleId);
 
