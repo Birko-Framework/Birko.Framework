@@ -7,11 +7,11 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 11    | 25      | —     |
-| todo         | —     | —       | 33    |
-| in-progress  | 3     | 2       | 1     |
+| todo         | —     | —       | 38    |
+| in-progress  | 4     | 2       | 1     |
 | review       | —     | —       | 5     |
 | blocked      | —     | —       | 0     |
-| done         | 2     | 14      | 12    |
+| done         | 1     | 14      | 12    |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -28,7 +28,8 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 
 ## Tree
 
-- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (0/7 tasks done)
+- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (0/8 tasks done)
+  - [ ] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer slider) (P3, ai)
   - STORY-001 [bare attribute for inline form usage](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/STORY.md) — planned (0/1)
     - [ ] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add bare attribute to all form controls (P2, ai)
   - STORY-002 [b-editable-table migration](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/STORY.md) — planned (0/1)
@@ -87,7 +88,8 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
     - [ ] [TASK-025](EPIC-008-health-mq-cloud-checks/STORY-018-cloud-health-checks/TASK-025-aws-sqs-health-check.md) AwsSqsHealthCheck (P2, ai)
 - **EPIC-010** [Birko.Data.RavenDB — Index ergonomics](EPIC-010-ravendb-index-ergonomics/EPIC.md) — planned (0/1)
   - [ ] [TASK-028](EPIC-010-ravendb-index-ergonomics/TASK-028-attribute-driven-raven-indexes.md) Attribute-driven RavenDB index definitions (P2, ai)
-- **EPIC-011** [Birko.Framework — Test coverage gaps](EPIC-011-test-coverage-gaps/EPIC.md) — planned (0/5)
+- **EPIC-011** [Birko.Framework — Test coverage gaps](EPIC-011-test-coverage-gaps/EPIC.md) — planned (0/6)
+  - [ ] [TASK-052](EPIC-011-test-coverage-gaps/TASK-052-birko-web-unit-test-runner.md) Adopt a web unit-test runner for Birko.Web.* (migrate backport-smoke) (P2, ai)
   - STORY-021 [Redis-dependent tests](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/STORY.md) — planned (0/2)
     - [ ] [TASK-029](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/TASK-029-backgroundjobs-redis-tests.md) Birko.BackgroundJobs.Redis.Tests (P2, ai)
     - [ ] [TASK-030](EPIC-011-test-coverage-gaps/STORY-021-redis-dependent-tests/TASK-030-caching-redis-tests.md) Birko.Caching.Redis.Tests (P2, ai)
@@ -105,7 +107,10 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — planned (CR-H001 … CR-H147)
   - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — planned (CR-M001 …)
   - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — **done** (8/8 stories; tokens → theme system → Core → Tier-1 controls → building blocks → Tier-2 composites → dual-chrome shell)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (8 stories done; reopened for follow-up controls)
+  - [ ] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Restyled Slider (Tier-1 gap) + Range Form field type (P3, ai)
+  - [ ] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Form field-type parity with b-form: wire existing controls + FormField props (P2, ai)
+  - [ ] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Date & time picker controls + field types (P2, ai)
   - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (Birko.DesignTokens: byte-identical CSS + AXAML, 30 tests)
   - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (Birko.Xaml.Core + .Avalonia: ThemeDictionaries + runtime swap, 8 headless tests)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (gate GO: Button/TextBox/Card/Badge + gallery, 15 tests + per-theme screenshots)
