@@ -6,8 +6,16 @@ public enum FieldType
     Text,
     TextArea,
     Number,
+    Percent,
+    Password,
+    Email,
+    Search,
     Checkbox,
+    Switch,
     Select,
+    Radio,
+    OptionGroup,
+    Markdown,
 }
 
 /// <summary>
@@ -31,9 +39,24 @@ public sealed class FormField
     /// <summary>Placeholder / watermark for text-like fields.</summary>
     public string? Placeholder { get; init; }
 
-    /// <summary>Options for <see cref="FieldType.Select"/>.</summary>
+    /// <summary>Options for <see cref="FieldType.Select"/> / <see cref="FieldType.Radio"/> / <see cref="FieldType.OptionGroup"/>.</summary>
     public IReadOnlyList<object>? Options { get; init; }
 
     /// <summary>Disable editing.</summary>
     public bool ReadOnly { get; init; }
+
+    /// <summary>Optional helper text shown under the field.</summary>
+    public string? Hint { get; init; }
+
+    /// <summary>Initial value applied to the model property when it is null at bind time.</summary>
+    public object? Default { get; init; }
+
+    /// <summary>Lower bound for numeric / range fields (<see cref="FieldType.Number"/>, <see cref="FieldType.Percent"/>).</summary>
+    public double? Min { get; init; }
+
+    /// <summary>Upper bound for numeric / range fields.</summary>
+    public double? Max { get; init; }
+
+    /// <summary>Step increment for range / spinner fields (carried for slider-style consumers).</summary>
+    public double? Step { get; init; }
 }
