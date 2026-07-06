@@ -41,7 +41,7 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         int? offset = null,
         CancellationToken ct = default)
     {
-        var pipeline = BuildPipeline(filter, orderBy, offset, limit);
+        var pipeline = BuildQueryStages(filter, orderBy, offset, limit);
         var results = await ExecutePipelineAsync(pipeline, ct).ConfigureAwait(false);
         return results.Select(DeserializeView);
     }
@@ -50,7 +50,7 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
-        var pipeline = BuildPipeline(filter, null, null, 1);
+        var pipeline = BuildQueryStages(filter, null, null, 1);
         var results = await ExecutePipelineAsync(pipeline, ct).ConfigureAwait(false);
         var first = results.FirstOrDefault();
         return first != null ? DeserializeView(first) : null;
@@ -60,7 +60,7 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
-        var pipeline = BuildPipeline(filter, null, null, null);
+        var pipeline = BuildQueryStages(filter, null, null, null);
         pipeline.Add(new BsonDocument("$count", "count"));
 
         var results = await ExecutePipelineAsync(pipeline, ct).ConfigureAwait(false);
@@ -68,15 +68,20 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         return countDoc?.GetValue("count", 0).ToInt64() ?? 0;
     }
 
-    private List<BsonDocument> BuildPipeline(
+    // Query-time stages only ($match/$sort/$skip/$limit over the VIEW's field shape). The base
+    // pipeline ($lookup/$group/$project) is prepended ONLY when running on-the-fly against the source
+    // collection; the persistent MongoDB view already has the base pipeline applied, so re-adding it
+    // would re-run the base over already-projected documents and produce wrong/empty results (CR-C15).
+    private List<BsonDocument> BuildQueryStages(
         Expression<Func<TView, bool>>? filter,
         OrderBy<TView>? orderBy,
         int? offset,
         int? limit)
     {
-        var pipeline = new List<BsonDocument>(_basePipeline);
+        var pipeline = new List<BsonDocument>();
 
-        // Add $match for filter (after $project, so it works on view fields)
+        // Add $match for filter (operates on view fields — valid both against the persistent view and
+        // after the base $project on the on-the-fly path)
         if (filter != null)
         {
             var filterDef = Builders<TView>.Filter.Where(filter);
@@ -136,9 +141,14 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
             }
         }
 
-        // On-the-fly: run against the primary source collection
+        // On-the-fly: run against the primary source collection. The base pipeline
+        // ($lookup/$group/$project) must run first to shape the documents into the view, then the
+        // query stages ($match/$sort/$skip/$limit) apply on the projected view fields.
+        var onTheFlyStages = new List<BsonDocument>(_basePipeline);
+        onTheFlyStages.AddRange(stages);
+
         var collection = _database.GetCollection<BsonDocument>(collectionName);
-        var pipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(stages);
+        var pipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(onTheFlyStages);
         var result = await collection.AggregateAsync(pipeline, null, ct).ConfigureAwait(false);
         return await result.ToListAsync(ct).ConfigureAwait(false);
     }
