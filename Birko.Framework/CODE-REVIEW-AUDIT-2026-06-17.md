@@ -222,7 +222,7 @@ _(medium/low listed in full in their own sections below, each with the same ID s
 - **Title:** LPT.Write/Read pass the LPT number as the hardware I/O address
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\Ports/LPT.cs:42 (and Read at :51)`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — fixed 2026-07-06: added `LPT.ResolvePortAddress(int)` mapping the logical LPT number 1/2/3 → base I/O address 0x378/0x278/0x3BC (raw addresses ≥ 0x100 pass through; ambiguous small values throw); Write/Read now use the resolved address. Comment typo (623→632) fixed. New `Birko.Communication.Hardware.Tests` covers the mapping (the P/Invoke itself needs real hardware).
 - **Detail:** Output(portnumber, d) and Input(portnumber) pass portnumber (the logical LPT number, e.g. 1 or 2 from LPTSettings.Number) as the first argument, which inpout32 Out32/Inp32 interpret as the absolute port ADDRESS. The class's own comment (lines 22-23) documents that LPT1 = 0x378 (888) and LPT2 = 0x278 (632), so passing 1/2 writes to I/O ports 1/2 instead of the parallel port data register. Hardware writes/reads will go to the wrong address.
 - **Fix:** Map Number -> base address (e.g. 1 => 0x378, 2 => 0x278) and pass that address to Output/Input, or store the address directly in settings instead of a port number.
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Communication.Hardware\Ports\LPT.cs.

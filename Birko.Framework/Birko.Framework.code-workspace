@@ -729,6 +729,10 @@
 			"path": "../../Framework.Tests/Birko.AI.Providers.Tests"
 		},
 		{
+			"name": "Tests / Birko.Communication.Hardware.Tests",
+			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
 			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
 		},

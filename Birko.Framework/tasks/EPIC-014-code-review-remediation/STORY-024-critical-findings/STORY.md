@@ -34,7 +34,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [x] **CR-C08** · Birko.Data.JSON · `JsonSeparateStore.SaveData` guard inverted + path registered — write test
 - [x] **CR-C01** · Birko.AI.Providers · Ollama streaming posts to `/api/chat` (+ `num_predict`) — new `.Tests` (fake handler)
 - [ ] CR-C02 · Birko.BackgroundJobs.Redis · scheduled-job score scale
-- [ ] CR-C03 · Birko.Communication.Hardware · LPT address mapping
+- [x] **CR-C03** · Birko.Communication.Hardware · `ResolvePortAddress` maps LPT#→base I/O address — new `.Tests`
 - [ ] CR-C04 · Birko.Data.CosmosDB · missing `id` property
 - [x] **CR-C05** · Birko.Data.EventSourcing · single Create Guid linkage — new `.Tests` project + test
 - [x] **CR-C06** · Birko.Data.EventSourcing · bulk Create Guid linkage (sync + async) — tests
