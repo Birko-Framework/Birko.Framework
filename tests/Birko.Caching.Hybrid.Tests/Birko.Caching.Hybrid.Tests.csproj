@@ -18,8 +18,8 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\Birko.Caching\Birko.Caching.projitems" Label="Shared" />
-  <Import Project="..\Birko.Caching.Hybrid\Birko.Caching.Hybrid.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Caching\Birko.Caching.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Caching.Hybrid\Birko.Caching.Hybrid.projitems" Label="Shared" />
 
 </Project>
