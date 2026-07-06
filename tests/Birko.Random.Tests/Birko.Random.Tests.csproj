@@ -18,6 +18,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Random\Birko.Random.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Random\Birko.Random.projitems" Label="Shared" />
 
 </Project>
