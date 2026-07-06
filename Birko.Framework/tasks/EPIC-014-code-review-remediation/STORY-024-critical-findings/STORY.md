@@ -53,7 +53,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [x] **CR-C21** · Birko.Data.XML · real batched List<T> persistence (sync+async, store+bulk) + fixed a pre-existing SetSettings stack-overflow — 3 tests
 - [x] **CR-C22** · Birko.Data.XML · separate stores override bulk Core to write per-file (sync+async) — test
 - [x] **CR-C23** · Birko.Security.AspNetCore · already resolved by the 2026-06-25 delimiter fix (both readers split `[',',';']`); verified + tested
-- [ ] CR-C24 · Birko.Security.BCrypt · unvalidated hand-rolled BCrypt
+- [x] **CR-C24** · Birko.Security.BCrypt · corrected EksBlowfish + encipher to canonical bcrypt; validated vs published `$2a$` reference vectors (also closes CR-H138); README notes the NuGet option. Confirmed unused by consumers.
 
 **Test-infra gaps noted while working** (true regression tests need infra / a missing `.Tests` sibling):
 CR-C10–C13 (RavenDB migrations — no `.Tests`, needs a Raven server), CR-C04 (Cosmos emulator),
