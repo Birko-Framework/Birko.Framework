@@ -86,6 +86,30 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Collapsing_hides_the_groups_but_keeps_the_tab_strip()
+    {
+        var ribbon = Show(Build(out _));
+        Texts(ribbon).Should().Contain("Clipboard", "groups show when expanded");
+
+        ribbon.IsCollapsed = true;
+        Dispatcher.UIThread.RunJobs();
+
+        Texts(ribbon).Should().NotContain("Clipboard", "groups are hidden when collapsed");
+        Texts(ribbon).Should().Contain("Home", "the tab strip stays visible");
+    }
+
+    [AvaloniaFact]
+    public void Clicking_the_active_tab_toggles_collapse()
+    {
+        var ribbon = Show(Build(out _)); // Home (index 0) is active
+        var home = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Home"));
+
+        home.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ribbon.IsCollapsed.Should().BeTrue("clicking the active tab collapses the ribbon");
+    }
+
+    [AvaloniaFact]
     public void Capture_ribbon_screenshot()
     {
         Application.Current!.RequestedThemeVariant = BirkoThemeVariants.Light;
@@ -115,6 +139,15 @@ public class RibbonTests
 
         var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
         frame?.Save(Path.Combine(dir, "ribbon.png"));
+
+        // Collapsed (tabs-only) variant
+        ribbon.IsCollapsed = true;
+        window.Measure(new Size(700, 160));
+        window.Arrange(new Rect(0, 0, 700, 160));
+        Dispatcher.UIThread.RunJobs();
+        global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window)?
+            .Save(Path.Combine(dir, "ribbon-collapsed.png"));
+
         ribbon.GetVisualDescendants().OfType<Button>().Should().NotBeEmpty();
     }
 }
