@@ -16,6 +16,8 @@
     <PackageReference Include="Avalonia" Version="11.2.3" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
     <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.2.3" />
+    <!-- Charts: LiveCharts2 (SkiaSharp) — modern/animated, MVVM-first, targets Avalonia + WPF. -->
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.0.5" />
   </ItemGroup>
 
   <ItemGroup>
