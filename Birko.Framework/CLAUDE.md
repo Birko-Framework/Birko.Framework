@@ -139,6 +139,9 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — Ribbon (BAppShell chrome) (EPIC-015 / STORY-036) (2026-07-06)
+The last big chrome piece: **`Ribbon`** (`b-ribbon`) — a tab strip whose active tab shows labeled groups of icon+label command buttons, model-driven via Core `RibbonTab`/`RibbonGroup`/`RibbonItem` (`Tabs` + `SelectedIndex`, item `Run` on click), token-styled. Screenshot-verified (Home/View tabs; Clipboard + Records groups). Avalonia suite now **78**. Remaining STORY-036: a thin RibbonAppShell view (compose the ribbon over the content region), transition animations, ListBox restyle. [tasks/EPIC-015/STORY-036](tasks/EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md).
+
 ### Birko.Xaml.Shell — command palette (Ctrl+K), user area, tenant switcher, FormModal (EPIC-015 / STORY-036) (2026-07-06)
 Advanced the shell chrome + page shapes. [tasks/EPIC-015/STORY-036](tasks/EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md).
 - **Command palette (Ctrl+K):** `ShellViewModel` builds `PaletteCommands` from the nav modules (go-to) + themes (switch), exposes `IsPaletteOpen`/`OpenPaletteCommand`; `ShellView` overlays the `CommandPalette` (from STORY-035) bound to those, opened by a `Ctrl+K` `KeyBinding`.

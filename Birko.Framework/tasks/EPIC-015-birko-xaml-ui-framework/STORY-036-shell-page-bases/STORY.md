@@ -38,8 +38,14 @@ Delivered the shell **MVP** — a working desktop CRUD app shape end-to-end.
   `Form` + Save/Cancel (`IsOpen`/`Title`/`Fields`/`Model`/`SaveCommand`/`CancelCommand`). Verified
   (hosts modal+form, Save runs command + closes, Cancel closes, screenshot). The epic's `FormModal<T>`.
 
-**Remaining / deferred:** the **ribbon** chrome (`BAppShell`), `TransitioningContentControl`
-animations, ListBox restyle/display templating.
+- **Ribbon (`BAppShell` chrome):** `Ribbon` control (`Birko.Xaml.Avalonia`) over Core
+  `RibbonTab`/`RibbonGroup`/`RibbonItem` — tab strip + active tab's labeled groups of icon+label
+  command buttons, `SelectedIndex` switching, item `Run`. Verified (render/click/switch tests +
+  screenshot). Covers `b-ribbon`.
+
+**Remaining / deferred:** a first-class **RibbonAppShell view** composing the `Ribbon` over the
+content region (the control exists; a shell wired to `ShellViewModel.RibbonTabs` is a thin follow-up),
+`TransitioningContentControl` animations, ListBox restyle/display templating.
 
 # Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation
 
