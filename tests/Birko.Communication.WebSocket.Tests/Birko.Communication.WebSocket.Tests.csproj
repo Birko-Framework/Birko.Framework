@@ -23,12 +23,12 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
-  <Import Project="..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
-  <Import Project="..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security\Birko.Security.projitems" Label="Shared" />
-  <Import Project="..\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
-  <Import Project="..\Birko.Communication.WebSocket\Birko.Communication.WebSocket.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Communication.WebSocket\Birko.Communication.WebSocket.projitems" Label="Shared" />
 
 </Project>
