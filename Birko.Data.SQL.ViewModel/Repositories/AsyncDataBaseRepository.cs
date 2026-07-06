@@ -11,20 +11,41 @@ namespace Birko.Data.SQL.Repositories
     /// Async database repository for SQL-based storage.
     /// Works with wrapped stores (e.g., tenant wrappers).
     /// </summary>
+    /// <typeparam name="TConnector">The SQL connector type (e.g. MSSqlConnector, SqLiteConnector).</typeparam>
     /// <typeparam name="TViewModel">The type of view model.</typeparam>
     /// <typeparam name="TModel">The type of data model.</typeparam>
-    public abstract class AsyncDataBaseRepository<TViewModel, TModel> : Data.Repositories.AbstractAsyncBulkViewModelRepository<TViewModel, TModel>
+    /// <remarks>
+    /// This must be generic over <typeparamref name="TConnector"/> (mirroring the sync
+    /// <c>DataBaseRepository&lt;TConnector, TViewModel, TModel&gt;</c>): C# generics are invariant, so a
+    /// concrete store such as <c>AsyncDataBaseBulkStore&lt;SqLiteConnector, TModel&gt;</c> is NOT an
+    /// <c>AsyncDataBaseBulkStore&lt;AbstractConnector, TModel&gt;</c>. Hard-coding <c>AbstractConnector</c>
+    /// made the type-check reject every real store (constructor threw) and the store accessor always
+    /// return null (CR-C17).
+    /// </remarks>
+    public abstract class AsyncDataBaseRepository<TConnector, TViewModel, TModel> : Data.Repositories.AbstractAsyncBulkViewModelRepository<TViewModel, TModel>
+        where TConnector : SQL.Connectors.AbstractConnector
         where TModel : Data.Models.AbstractModel
         where TViewModel : Data.Models.ILoadable<TModel>
     {
         /// <summary>
-        /// Gets the database store.
+        /// Gets the database store from the (potentially wrapped) store.
         /// This works with wrapped stores (e.g., tenant wrappers).
         /// </summary>
-        public AsyncDataBaseBulkStore<SQL.Connectors.AbstractConnector, TModel>? DataBaseStore =>
-            Store?.GetUnwrappedStore<TModel, Stores.AsyncDataBaseBulkStore<SQL.Connectors.AbstractConnector, TModel>>();
+        public AsyncDataBaseBulkStore<TConnector, TModel>? DataBaseStore =>
+            Store?.GetUnwrappedStore<TModel, Stores.AsyncDataBaseBulkStore<TConnector, TModel>>();
 
-        //public TConnector Connector => DataBaseStore?.Connector;
+        /// <summary>
+        /// Gets the database connector from the (potentially wrapped) store.
+        /// </summary>
+        public TConnector? Connector => DataBaseStore?.Connector;
+
+        /// <summary>
+        /// Initializes a new instance with a default <see cref="AsyncDataBaseBulkStore{TConnector, TModel}"/>.
+        /// </summary>
+        public AsyncDataBaseRepository()
+            : this(new AsyncDataBaseBulkStore<TConnector, TModel>())
+        {
+        }
 
         /// <summary>
         /// Initializes a new instance with dependency injection support.
@@ -33,10 +54,10 @@ namespace Birko.Data.SQL.Repositories
         public AsyncDataBaseRepository(Data.Stores.IAsyncBulkStore<TModel>? store)
             : base(null)
         {
-            if (store != null && !store.IsStoreOfType<TModel, Stores.AsyncDataBaseBulkStore<SQL.Connectors.AbstractConnector, TModel>>())
+            if (store != null && !store.IsStoreOfType<TModel, Stores.AsyncDataBaseBulkStore<TConnector, TModel>>())
             {
                 throw new ArgumentException(
-                    "Store must be of type AsyncDataBaseBulkStore<TModel> or a wrapper around it (e.g., AsyncTenantBulkStoreWrapper).",
+                    "Store must be of type AsyncDataBaseBulkStore<TConnector, TModel> or a wrapper around it (e.g., AsyncTenantBulkStoreWrapper).",
                     nameof(store));
             }
             // Set the store after validation - base constructor handles null by creating default
