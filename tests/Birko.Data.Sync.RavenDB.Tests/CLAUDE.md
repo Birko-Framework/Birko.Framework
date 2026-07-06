@@ -11,10 +11,10 @@ xUnit + FluentAssertions
 
 ## Scope & conventions
 - **Compile guard + model tests.** Building against the shared projitems compile-verifies the store
-  fixes: CR-C19 (tenant queries now filter on `RavenSyncKnowledgeItem.TenantGuid` instead of a
-  StartsWith on the record's random Guid) and CR-C20 (async `DeleteKnowledgeAsync` deletes the
-  tracked entity, not a `Guid?`).
+  fixes: CR-C19 (`RavenSyncKnowledgeItem` implements the canonical `ITenant`; tenant queries filter
+  on `ITenant.TenantGuid` instead of a StartsWith on the record's random Guid, and
+  `ConvertToRavenItem` copies the tenant from any incoming `ITenant` item so the write path
+  populates it) and CR-C20 (async `DeleteKnowledgeAsync` deletes the tracked entity, not a `Guid?`).
 - **No live server.** The Raven query/delete paths need a running RavenDB instance and are not
-  exercised. Only the model (`TenantGuid`, `GenerateDocumentId`) is tested offline.
-- Populating `TenantGuid` on the write path (threading `tenantId` through the update methods) is
-  tracked follow-up work for CR-C19.
+  exercised. Only the model (`ITenant` conformance, `TenantGuid`/`TenantName`, `GenerateDocumentId`)
+  is tested offline.
