@@ -20,6 +20,10 @@ RavenDB-specific sync knowledge item and store implementations for the Birko.Dat
 ## Dependencies
 - Birko.Data.Sync
 - Birko.Data.RavenDB
+- Birko.Data.Tenant — `RavenSyncKnowledgeItem` implements `ITenant` so tenant-aware sync knowledge
+  (emitted by `TenantSyncProvider` as `ITenantSyncKnowledgeItem`) is persisted and queryable by
+  tenant. Consumers importing this project's projitems must also import `Birko.Data.Tenant`
+  (and its `Birko.Serialization` dependency).
 
 ## Maintenance
 

@@ -1,13 +1,16 @@
 using Birko.Data.Sync.Models;
 using Birko.Data.Models;
+using Birko.Data.Tenant.Models;
 
 namespace Birko.Data.Sync.RavenDB.Models;
 
 /// <summary>
-/// RavenDB implementation of ISyncKnowledgeItem extending AbstractModel
+/// RavenDB implementation of ISyncKnowledgeItem extending AbstractModel.
+/// Also implements <see cref="ITenant"/> so tenant-aware sync knowledge (produced by
+/// TenantSyncProvider as ITenantSyncKnowledgeItem) is persisted and queryable by tenant.
 /// Optimized for RavenDB document storage
 /// </summary>
-public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
+public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem, ITenant
 {
     /// <summary>
     /// Internal record ID for database compatibility
@@ -20,11 +23,17 @@ public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     public Guid EntityGuid { get; set; }
 
     /// <summary>
-    /// Optional tenant this knowledge item belongs to. Used to scope tenant-aware queries.
-    /// Null for single-tenant / tenant-agnostic knowledge. (CR-C19: tenant scoping previously
-    /// filtered on the record's own random Guid, which could never match.)
+    /// Tenant this knowledge item belongs to (canonical <see cref="ITenant"/> member). Used to scope
+    /// tenant-aware queries; <see cref="Guid.Empty"/> for single-tenant / tenant-agnostic knowledge,
+    /// which ModelByTenant treats as "no tenant filter". (CR-C19: tenant scoping previously filtered
+    /// on the record's own random Guid, which could never match.)
     /// </summary>
-    public Guid? TenantGuid { get; set; }
+    public Guid TenantGuid { get; set; }
+
+    /// <summary>
+    /// Optional tenant display name (canonical <see cref="ITenant"/> member).
+    /// </summary>
+    public string? TenantName { get; set; }
 
     private string _scope = string.Empty;
 

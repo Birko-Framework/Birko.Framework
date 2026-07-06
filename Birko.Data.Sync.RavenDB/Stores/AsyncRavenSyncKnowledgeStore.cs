@@ -3,6 +3,7 @@ using Birko.Data.Sync.RavenDB.Models;
 using Birko.Data.Sync.Stores;
 using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
+using Birko.Data.Tenant.Models;
 using Birko.Configuration;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Linq;
@@ -52,7 +53,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         // Apply tenant filter if needed
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.TenantGuid == tenantId);
+            query = query.Where(x => x.TenantGuid == tenantId.Value);
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -115,7 +116,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.TenantGuid == tenantId);
+            query = query.Where(x => x.TenantGuid == tenantId.Value);
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -157,7 +158,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.TenantGuid == tenantId);
+            query = query.Where(x => x.TenantGuid == tenantId.Value);
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -179,7 +180,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
             return ravenItem;
         }
 
-        return new RavenSyncKnowledgeItem
+        var converted = new RavenSyncKnowledgeItem
         {
             Guid = item.Guid ?? Guid.NewGuid(),
             EntityGuid = item.EntityGuid,
@@ -190,9 +191,18 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
             IsLocalDeleted = item.IsLocalDeleted,
             IsRemoteDeleted = item.IsRemoteDeleted,
             Metadata = item.Metadata
-            // Note: ISyncKnowledgeItem carries no tenant, so TenantGuid stays null on this path.
-            // Threading tenantId through the update methods to populate it is follow-up work (CR-C19).
         };
+
+        // Carry the tenant through when the source is tenant-aware (e.g. TenantSyncProvider emits
+        // ITenantSyncKnowledgeItem). This is what makes the tenant-scoped queries actually match
+        // (CR-C19) — the tenant travels on the item rather than as a store-method parameter.
+        if (item is ITenant tenant)
+        {
+            converted.TenantGuid = tenant.TenantGuid;
+            converted.TenantName = tenant.TenantName;
+        }
+
+        return converted;
     }
 
     /// <summary>

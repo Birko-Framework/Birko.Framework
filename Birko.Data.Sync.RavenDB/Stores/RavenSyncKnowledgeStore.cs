@@ -3,6 +3,7 @@ using Birko.Data.Sync.RavenDB.Models;
 using Birko.Data.Sync.Stores;
 using Birko.Data.RavenDB.Stores;
 using Birko.Data.Stores;
+using Birko.Data.Tenant.Models;
 using Birko.Configuration;
 using System.Linq;
 using System.Linq.Expressions;
@@ -46,11 +47,10 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         var query = session.Query<RavenSyncKnowledgeItem>()
             .Where(x => x.Scope == scope);
 
-        // Apply tenant filter if a collection name strategy is used
+        // Scope to the tenant carried on each item (ITenant.TenantGuid), mirroring ModelByTenant.
         if (tenantId.HasValue)
         {
-            // For tenant-aware storage, could use collection prefix/suffix or document ID filtering
-            query = query.Where(x => x.TenantGuid == tenantId);
+            query = query.Where(x => x.TenantGuid == tenantId.Value);
         }
 
         var items = query.ToList();
@@ -113,7 +113,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.TenantGuid == tenantId);
+            query = query.Where(x => x.TenantGuid == tenantId.Value);
         }
 
         var items = query.ToList();
@@ -153,7 +153,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.TenantGuid == tenantId);
+            query = query.Where(x => x.TenantGuid == tenantId.Value);
         }
 
         var items = query.ToList();
@@ -175,7 +175,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
             return ravenItem;
         }
 
-        return new RavenSyncKnowledgeItem
+        var converted = new RavenSyncKnowledgeItem
         {
             Guid = item.Guid ?? Guid.NewGuid(),
             EntityGuid = item.EntityGuid,
@@ -187,6 +187,17 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
             IsRemoteDeleted = item.IsRemoteDeleted,
             Metadata = item.Metadata
         };
+
+        // Carry the tenant through when the source is tenant-aware (e.g. TenantSyncProvider emits
+        // ITenantSyncKnowledgeItem). This is what makes the tenant-scoped queries actually match
+        // (CR-C19) — the tenant travels on the item rather than as a store-method parameter.
+        if (item is ITenant tenant)
+        {
+            converted.TenantGuid = tenant.TenantGuid;
+            converted.TenantName = tenant.TenantName;
+        }
+
+        return converted;
     }
 
 }
