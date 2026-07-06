@@ -115,8 +115,12 @@
         </Border>
 
         <ScrollViewer>
-          <ContentControl Content="{Binding Nav.Current}"
-                          ContentTemplate="{StaticResource ViewLocator}" Margin="16" />
+          <TransitioningContentControl Content="{Binding Nav.Current}"
+                                       ContentTemplate="{StaticResource ViewLocator}" Margin="16">
+            <TransitioningContentControl.PageTransition>
+              <CrossFade Duration="0:0:0.18" />
+            </TransitioningContentControl.PageTransition>
+          </TransitioningContentControl>
         </ScrollViewer>
       </DockPanel>
 

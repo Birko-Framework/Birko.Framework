@@ -12,7 +12,12 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
   / `IsPaletteOpen`, populated from modules + themes). The user area (avatar + name) shows when
   `ShellViewModel.UserName` is non-empty, with a Flyout of `UserCommands`. A **tenant switcher**
   (`ComboBox` bound to `Tenants`/`CurrentTenant`) shows when `HasMultipleTenants` (> 1 tenant).
+- `Views/RibbonShellView` — the **ribbon** chrome variant (`BAppShell`): a `Ribbon` (bound to
+  `ShellViewModel.RibbonTabs`) over the content region + status bar, in place of the sidebar. Same
+  `ShellViewModel` + Ctrl+K palette.
 - `Views/{List,Detail,Split}PageView` — generic page views over the Core base VMs.
+- Both shells' content regions use a `TransitioningContentControl` (`CrossFade`) so page navigation
+  fades. `ListBoxItem` is token-restyled (`Controls/Lists.axaml`) — hover/selected use tokens.
 
 ## Conventions / gotchas
 
@@ -25,13 +30,12 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
   inline (`EditingItem` + `SaveEditing`/`CancelEdit`), gated by the VM permission flags.
 - The demo list shows entity `ToString()` — a real app sets a `ListBox` `ItemTemplate` / display member.
 
-## Scope / deferred (STORY-036 in-progress)
+## Scope (STORY-036 done)
 
-Delivered: the **sidebar shell** (`BSidebarAppShell` analogue) + nav + ViewLocator + page views, the
-**Ctrl+K command palette** (populated from modules + themes), the **header user area** (avatar +
-name + `UserCommands` dropdown), a **tenant switcher**, and a reusable **`FormModal`** page-shape
-(`Birko.Xaml.Avalonia`). **Deferred:** the **ribbon** chrome (`BAppShell`),
-`TransitioningContentControl` animations, ListBox restyle.
+Delivered: **sidebar shell** (`BSidebarAppShell`) + **ribbon shell** (`BAppShell`, `RibbonShellView`),
+nav + ViewLocator + List/Detail/Split page views, **Ctrl+K command palette**, **header user area**,
+**tenant switcher**, reusable **`FormModal`** page-shape, **cross-fade page transitions**, and a
+token-restyled `ListBoxItem`. STORY-036 complete → EPIC-015 complete.
 
 ## Testing
 

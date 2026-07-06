@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:Birko.Xaml.Shell"
+             xmlns:c="clr-namespace:Birko.Xaml.Avalonia.Controls;assembly=Birko.Xaml.Avalonia"
+             x:Class="Birko.Xaml.Shell.Views.RibbonShellView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}"
+             Background="{DynamicResource BBgSecondaryBrush}">
+
+  <UserControl.KeyBindings>
+    <KeyBinding Gesture="Ctrl+K" Command="{Binding OpenPaletteCommand}" />
+  </UserControl.KeyBindings>
+
+  <UserControl.Resources>
+    <shell:ViewLocator x:Key="ViewLocator" />
+  </UserControl.Resources>
+
+  <Panel>
+    <DockPanel>
+      <!-- Ribbon chrome (BAppShell) — tabs of command groups replace the sidebar -->
+      <c:Ribbon DockPanel.Dock="Top" Tabs="{Binding RibbonTabs}" />
+
+      <Border DockPanel.Dock="Bottom" Height="{DynamicResource BStatusBarHeight}"
+              Background="{DynamicResource BBgBrush}"
+              BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,1,0,0">
+        <TextBlock Text="{Binding Nav.CurrentModule.Label}" VerticalAlignment="Center" Margin="12,0"
+                   Foreground="{DynamicResource BTextMutedBrush}" />
+      </Border>
+
+      <!-- Content region with a cross-fade page transition -->
+      <TransitioningContentControl Content="{Binding Nav.Current}"
+                                   ContentTemplate="{StaticResource ViewLocator}" Margin="16">
+        <TransitioningContentControl.PageTransition>
+          <CrossFade Duration="0:0:0.18" />
+        </TransitioningContentControl.PageTransition>
+      </TransitioningContentControl>
+    </DockPanel>
+
+    <c:CommandPalette Commands="{Binding PaletteCommands}"
+                      IsOpen="{Binding IsPaletteOpen, Mode=TwoWay}" />
+  </Panel>
+</UserControl>
