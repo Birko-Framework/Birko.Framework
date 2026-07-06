@@ -27,6 +27,9 @@ public class FormFieldTypesTests
         public TimeSpan? Time1 { get; set; }
         public DateTime? When1 { get; set; }
         public DateRange? Range1 { get; set; }
+        public List<string> Skills { get; set; } = new();
+        public List<string>? Labels { get; set; }
+        public string? Attachment { get; set; }
     }
 
     private static Form Show(object model, params FormField[] fields)
@@ -211,6 +214,56 @@ public class FormFieldTypesTests
     }
 
     [AvaloniaFact]
+    public void MultiSelect_syncs_selection_to_the_model_list()
+    {
+        var model = new Model { Skills = new List<string> { "b" } };
+        var form = Show(model, new FormField
+        {
+            Name = nameof(Model.Skills), Type = FieldType.MultiSelect,
+            Options = new object[] { "a", "b", "c" },
+        });
+
+        var list = form.GetVisualDescendants().OfType<ListBox>().Should().ContainSingle().Subject;
+        list.SelectedItems!.Contains("b").Should().BeTrue("the initial model selection is reflected");
+
+        list.SelectedItems.Add("a");
+        model.Skills.Should().BeEquivalentTo(new[] { "a", "b" });
+    }
+
+    [AvaloniaFact]
+    public void Tags_seeds_the_list_and_adds_on_enter()
+    {
+        var model = new Model(); // Labels == null
+        var form = Show(model, new FormField { Name = nameof(Model.Labels), Type = FieldType.Tags });
+
+        model.Labels.Should().NotBeNull("the tags field seeds the list when the model prop is null");
+        var input = form.GetVisualDescendants().OfType<TextBox>().Should().ContainSingle().Subject;
+        input.Text = "design";
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+
+        model.Labels!.Should().Contain("design");
+    }
+
+    [AvaloniaFact]
+    public void Tags_renders_a_chip_per_existing_tag()
+    {
+        var model = new Model { Labels = new List<string> { "p", "q" } };
+        var form = Show(model, new FormField { Name = nameof(Model.Labels), Type = FieldType.Tags });
+
+        var texts = form.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+        texts.Should().Contain("p").And.Contain("q");
+    }
+
+    [AvaloniaFact]
+    public void File_field_renders_path_box_and_browse_button()
+    {
+        var form = Show(new Model(), new FormField { Name = nameof(Model.Attachment), Type = FieldType.File });
+
+        form.GetVisualDescendants().OfType<Button>().Any(b => (string?)b.Content == "Browse…").Should().BeTrue();
+        form.GetVisualDescendants().OfType<TextBox>().Any(t => t.IsReadOnly).Should().BeTrue();
+    }
+
+    [AvaloniaFact]
     public void Capture_equalizer_screenshot()
     {
         var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
@@ -259,6 +312,35 @@ public class FormFieldTypesTests
         var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
         frame?.Save(Path.Combine(dir, "datetime-fields.png"));
         form.GetVisualDescendants().OfType<CalendarDatePicker>().Should().HaveCountGreaterThanOrEqualTo(3);
+    }
+
+    [AvaloniaFact]
+    public void Capture_multiselect_tags_file_screenshot()
+    {
+        var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
+                  ?? Path.Combine(Path.GetTempPath(), "birko-xaml-shots");
+        Directory.CreateDirectory(dir);
+
+        var model = new Model { Skills = new List<string> { "Music", "Tech" }, Labels = new List<string> { "birko", "xaml", "forms" } };
+        var form = new Form
+        {
+            Model = model,
+            Fields = new[]
+            {
+                new FormField { Name = nameof(Model.Skills), Label = "Interests", Type = FieldType.MultiSelect, Options = new object[] { "Music", "Sports", "Travel", "Tech" } },
+                new FormField { Name = nameof(Model.Labels), Label = "Keywords", Type = FieldType.Tags },
+                new FormField { Name = nameof(Model.Attachment), Label = "Résumé", Type = FieldType.File },
+            },
+        };
+        var window = new Window { Content = form, Width = 360, Height = 360 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(360, 360));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 360, 360));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+        frame?.Save(Path.Combine(dir, "multiselect-tags-file.png"));
+        form.GetVisualDescendants().OfType<ListBox>().Should().ContainSingle();
     }
 
     [AvaloniaFact]
