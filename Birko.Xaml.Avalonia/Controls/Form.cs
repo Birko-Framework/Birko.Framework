@@ -1,12 +1,17 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Birko.Xaml.Core.Forms;
 
 namespace Birko.Xaml.Avalonia.Controls;
@@ -136,6 +141,15 @@ public class Form : ContentControl
                 combo.Bind(SelectingItemsControl.SelectedItemProperty, Bound());
                 return combo;
 
+            case FieldType.MultiSelect:
+                return BuildMultiSelect(field);
+
+            case FieldType.Tags:
+                return BuildTags(field);
+
+            case FieldType.File:
+                return BuildFile(field);
+
             case FieldType.Radio:
                 return BuildRadioGroup(field, Orientation.Vertical);
 
@@ -213,6 +227,127 @@ public class Form : ContentControl
                 box.Bind(TextBox.TextProperty, Bound());
                 return box;
         }
+    }
+
+    // Multi-select over Options: a restyled multi-ListBox synced to an IList model prop (SelectedItems
+    // isn't bindable, so we sync on SelectionChanged).
+    private Control BuildMultiSelect(FormField field)
+    {
+        var list = new ListBox
+        {
+            SelectionMode = SelectionMode.Multiple | SelectionMode.Toggle,
+            ItemsSource = field.Options,
+            IsEnabled = !field.ReadOnly,
+            MaxHeight = 160,
+        };
+        var prop = Model!.GetType().GetProperty(field.Name);
+        var current = prop?.GetValue(Model) as IList;
+        if (current is not null)
+            foreach (var item in current)
+                list.SelectedItems!.Add(item);
+
+        if (!field.ReadOnly && prop is not null && prop.CanWrite)
+        {
+            list.SelectionChanged += (_, _) =>
+            {
+                if (prop.GetValue(Model) is not IList target) return;
+                target.Clear();
+                foreach (var it in list.SelectedItems!) target.Add(it);
+            };
+        }
+        return list;
+    }
+
+    // Freeform tags: a WrapPanel of removable chips + a text box (Enter adds, Backspace removes the last).
+    private Control BuildTags(FormField field)
+    {
+        var prop = Model!.GetType().GetProperty(field.Name);
+        var tags = prop?.GetValue(Model) as IList<string>;
+        if (tags is null && prop is not null && prop.CanWrite)
+        {
+            tags = new List<string>();
+            try { prop.SetValue(Model, tags); } catch { tags = null; }
+        }
+
+        var wrap = new WrapPanel();
+        var input = new TextBox { Watermark = field.Placeholder, MinWidth = 90, IsReadOnly = field.ReadOnly, BorderThickness = new Thickness(0) };
+
+        void Rebuild()
+        {
+            wrap.Children.Clear();
+            if (tags is not null)
+            {
+                foreach (var t in tags.ToList())
+                {
+                    var value = t;
+                    var chip = new Border
+                    {
+                        CornerRadius = new CornerRadius(4),
+                        Padding = new Thickness(8, 2),
+                        Margin = new Thickness(0, 0, 4, 4),
+                    };
+                    Themed(chip, Border.BackgroundProperty, "BColorPrimaryLightBrush");
+                    var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+                    row.Children.Add(new TextBlock { Text = value, VerticalAlignment = VerticalAlignment.Center });
+                    if (!field.ReadOnly)
+                    {
+                        var x = new Button { Content = "✕", Background = null, BorderThickness = new Thickness(0), Padding = new Thickness(2, 0), FontSize = 11 };
+                        x.Click += (_, _) => { tags!.Remove(value); Rebuild(); };
+                        row.Children.Add(x);
+                    }
+                    chip.Child = row;
+                    wrap.Children.Add(chip);
+                }
+            }
+            wrap.Children.Add(input);
+        }
+
+        if (!field.ReadOnly && tags is not null)
+        {
+            input.KeyDown += (_, e) =>
+            {
+                if (e.Key == Key.Enter && !string.IsNullOrWhiteSpace(input.Text))
+                {
+                    tags.Add(input.Text.Trim());
+                    input.Text = string.Empty;
+                    Rebuild();
+                }
+                else if (e.Key == Key.Back && string.IsNullOrEmpty(input.Text) && tags.Count > 0)
+                {
+                    tags.RemoveAt(tags.Count - 1);
+                    Rebuild();
+                }
+            };
+        }
+
+        Rebuild();
+        return wrap;
+    }
+
+    // File pick: a read-only path box (bound to a string prop) + a Browse button using the platform StorageProvider.
+    private Control BuildFile(FormField field)
+    {
+        var box = new TextBox { IsReadOnly = true, Watermark = field.Placeholder ?? "No file selected", MinWidth = 200 };
+        box.Bind(TextBox.TextProperty, new Binding(field.Name) { Source = Model, Mode = BindingMode.TwoWay });
+
+        var browse = new Button { Content = "Browse…", IsEnabled = !field.ReadOnly, Margin = new Thickness(8, 0, 0, 0) };
+        browse.Click += async (_, _) =>
+        {
+            var top = TopLevel.GetTopLevel(this);
+            if (top?.StorageProvider is not { } storage) return; // headless / unsupported → no-op
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                AllowMultiple = false,
+                Title = field.Label ?? "Select a file",
+            });
+            if (files.Count > 0)
+                box.Text = files[0].TryGetLocalPath() ?? files[0].Name;
+        };
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(box);
+        panel.Children.Add(browse);
+        return panel;
     }
 
     // A single-select group of RadioButtons over Options, each two-way bound to the model value via an
