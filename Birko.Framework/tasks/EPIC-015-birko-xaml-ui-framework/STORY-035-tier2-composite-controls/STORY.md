@@ -1,9 +1,17 @@
 ---
 id: STORY-035
 parent: EPIC-015
-status: in-progress
+status: done
 created: 2026-06-25
+closed: 2026-07-06
 ---
+
+## Done (2026-07-06) — all 7 Tier-2 composites
+
+tree-menu, command-palette, object/JSON viewer, xml-viewer, kanban, markdown-editor, and **chart**
+(`BChart` over **LiveCharts2** — chosen for the best API + UX and Avalonia+WPF support; `ChartSeries`
+model in Core, series colored from tokens; render/kind tests + screenshot). All token-styled and
+tested headlessly.
 
 ## Progress (2026-07-05)
 
