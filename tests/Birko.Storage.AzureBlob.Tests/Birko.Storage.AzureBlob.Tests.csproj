@@ -18,11 +18,11 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
-  <Import Project="..\Birko.Storage\Birko.Storage.projitems" Label="Shared" />
-  <Import Project="..\Birko.Storage.AzureBlob\Birko.Storage.AzureBlob.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Storage\Birko.Storage.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Storage.AzureBlob\Birko.Storage.AzureBlob.projitems" Label="Shared" />
 
 </Project>
