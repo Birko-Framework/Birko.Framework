@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml.Shell — Ctrl+K command palette + user area wired into the shell (EPIC-015 / STORY-036) (2026-07-06)
+Advanced the shell chrome. [tasks/EPIC-015/STORY-036](tasks/EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md).
+- **Command palette (Ctrl+K):** `ShellViewModel` builds `PaletteCommands` from the nav modules (go-to) + themes (switch), and exposes `IsPaletteOpen` + `OpenPaletteCommand`. `ShellView` overlays the `CommandPalette` (from STORY-035) bound to those, opened by a `Ctrl+K` `KeyBinding` — the palette control built earlier is now the live shell palette.
+- **User area:** the header shows an avatar + `UserName` (hidden when empty, via `StringConverters.IsNotNullOrEmpty`) with a Flyout of `UserCommands` invoked through `RunUserCommand`. Screenshot-verified (theme switcher + "Ada Lovelace" badge).
+- **4 tests** (palette commands built from modules+themes, `OpenPalette` opens, a palette command navigates, the `Ctrl+K` binding drives the bound palette's `IsOpen`). Avalonia suite now **69**. Remaining STORY-036: ribbon, tenant switcher, `FormModal` page-shape.
+
 ### Birko.Xaml.Avalonia — Tier-2 composites: tree-menu, command-palette, viewers, kanban, markdown-editor (EPIC-015 / STORY-035) (2026-07-05)
 Building the Tier-2 composites. [tasks/EPIC-015/STORY-035](tasks/EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) in-progress.
 - **tree-menu** — `TreeView`/`TreeViewItem` token restyle (`Controls/Tree.axaml`): expander chevron (`PART_ExpandCollapseChevron`), token hover/selected, indented children, `:empty` hides the chevron on leaves. Screenshot-verified.

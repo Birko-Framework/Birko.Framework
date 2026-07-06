@@ -23,9 +23,17 @@ Delivered the shell **MVP** — a working desktop CRUD app shape end-to-end.
   active page via the locator, nav swaps the page) + a full-shell screenshot. Avalonia suite now 38.
   Constraint #3 honored (nav + shell VMs are Avalonia-free in Core).
 
-**Remaining / deferred (some are STORY-035 territory):** the **ribbon** chrome (`BAppShell`), command
-palette, user-area / tenant switcher, a `FormModal` dialog (inline edit covers create/edit for now),
-content-transition animations, ListBox restyle/display templating.
+## Update (2026-07-06)
+
+- **Command palette wired (Ctrl+K):** `ShellViewModel` builds `PaletteCommands` from modules
+  (navigate) + themes (switch), exposes `IsPaletteOpen`/`OpenPaletteCommand`; `ShellView` overlays a
+  `CommandPalette` bound to it, opened by a `Ctrl+K` `KeyBinding`. Tested (commands built,
+  OpenPalette opens, palette command navigates, Ctrl+K binding → `IsOpen`).
+- **User area:** header shows an avatar + `UserName` (hidden when empty) with a Flyout of
+  `UserCommands` (`RunUserCommand`). Screenshot-verified.
+
+**Remaining / deferred:** the **ribbon** chrome (`BAppShell`), a tenant switcher, a `FormModal`
+page-shape (inline edit covers create/edit for now), content-transition animations, ListBox restyle.
 
 # Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation
 
