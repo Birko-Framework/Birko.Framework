@@ -18,6 +18,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
 
 </Project>
