@@ -17,8 +17,8 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.InMemory\Birko.Data.InMemory.projitems" Label="Shared" />
 </Project>
