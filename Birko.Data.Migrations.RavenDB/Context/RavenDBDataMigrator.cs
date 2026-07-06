@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Birko.Data.Migrations.Context;
 using Raven.Client.Documents;
@@ -61,29 +62,30 @@ namespace Birko.Data.Migrations.RavenDB.Context
                 ApplyFilterToQuery(query, filterJson);
             }
 
-            var stats = session.Query<dynamic>()
-                .Statistics(out var queryStats)
-                .Take(0)
-                .ToList();
+            // Execute the query that was actually built so the collection scope and filter are honored.
+            // Previously a separate, unscoped session.Query<dynamic>() was counted, returning the total
+            // document count of the whole database regardless of collection/filter (CR-C12).
+            query.Statistics(out var queryStats).Take(0).ToList();
 
             return queryStats.TotalResults;
         }
 
         public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
         {
-            using var session = _store.OpenSession();
-
-            var sourceDocs = session.Query<dynamic>(sourceCollection)
-                .Customize(x => x.NoCaching())
-                .Take(int.MaxValue)
-                .ToList();
-
-            foreach (var doc in sourceDocs)
-            {
-                session.Store(doc);
-            }
-
-            session.SaveChanges();
+            // The previous implementation loaded documents from sourceCollection and re-stored them;
+            // because RavenDB session-loaded documents retain their existing ids and @collection
+            // metadata, Store + SaveChanges re-saved them into the SOURCE collection — targetCollection
+            // and transformJson were ignored and nothing was copied (CR-C13). It also loaded the entire
+            // collection into one session via Take(int.MaxValue).
+            //
+            // A correct cross-collection copy requires re-keying each document into targetCollection
+            // (new id / @collection metadata) and applying transformJson, ideally via a server-side
+            // PatchByQueryOperation. Rather than silently doing the wrong thing, fail fast until a
+            // verified implementation lands.
+            throw new NotSupportedException(
+                "RavenDBDataMigrator.CopyData is not yet implemented. Cross-collection copy must re-key " +
+                "documents into the target collection (and apply the transform); use a server-side " +
+                "PatchByQueryOperation. Tracked as a follow-up to CODE-REVIEW-AUDIT CR-C13.");
         }
 
         public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)

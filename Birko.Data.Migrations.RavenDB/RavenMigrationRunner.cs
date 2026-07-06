@@ -1,6 +1,7 @@
 using Raven.Client.Documents;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Birko.Data.Migrations.RavenDB.Settings;
 
 namespace Birko.Data.Migrations.RavenDB
