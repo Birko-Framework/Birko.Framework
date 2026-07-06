@@ -1,7 +1,10 @@
+using System;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
+using Avalonia.Data.Converters;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Birko.Xaml.Core.Forms;
@@ -14,7 +17,8 @@ namespace Birko.Xaml.Avalonia.Controls;
 /// <c>CrudViewModelBase</c>/<c>DetailPageViewModel</c> declarative — a view binds
 /// <c>Fields</c> + <c>Model</c> (the VM's <c>EditingItem</c>/<c>Model</c>) instead of hand-rolling
 /// XAML per screen. Every value comes from design tokens; the generated inputs reuse the Birko
-/// restyled <c>TextBox</c>/<c>CheckBox</c>/<c>ComboBox</c> themes.
+/// restyled control themes (<c>TextBox</c>/<c>CheckBox</c>/<c>ToggleSwitch</c>/<c>ComboBox</c>/
+/// <c>RadioButton</c>/<c>MarkdownEditor</c>).
 /// </summary>
 public class Form : ContentControl
 {
@@ -50,10 +54,29 @@ public class Form : ContentControl
             return;
         }
 
+        ApplyDefaults();
+
         var panel = new StackPanel();
         foreach (var field in Fields)
             panel.Children.Add(BuildRow(field));
         Content = panel;
+    }
+
+    // Seed the model property from FormField.Default when it is currently null (a "new record" default).
+    private void ApplyDefaults()
+    {
+        foreach (var field in Fields!)
+        {
+            if (field.Default is null) continue;
+            var prop = Model!.GetType().GetProperty(field.Name);
+            if (prop is null || !prop.CanWrite || prop.GetValue(Model) is not null) continue;
+            try
+            {
+                var target = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                prop.SetValue(Model, Convert.ChangeType(field.Default, target, CultureInfo.InvariantCulture));
+            }
+            catch { /* best-effort: an incompatible default is ignored */ }
+        }
     }
 
     private Control BuildRow(FormField field)
@@ -74,20 +97,34 @@ public class Form : ContentControl
         row.Children.Add(labelRow);
 
         row.Children.Add(BuildInput(field));
+
+        if (!string.IsNullOrEmpty(field.Hint))
+        {
+            var hint = new TextBlock { Text = field.Hint, TextWrapping = TextWrapping.Wrap, FontSize = 12 };
+            Themed(hint, TextBlock.ForegroundProperty, "BTextMutedBrush");
+            Themed(hint, TextBlock.FontFamilyProperty, "BFont");
+            row.Children.Add(hint);
+        }
+
         return row;
     }
 
     private Control BuildInput(FormField field)
     {
         var mode = field.ReadOnly ? BindingMode.OneWay : BindingMode.TwoWay;
-        var binding = new Binding(field.Name) { Source = Model, Mode = mode };
+        Binding Bound() => new Binding(field.Name) { Source = Model, Mode = mode };
 
         switch (field.Type)
         {
             case FieldType.Checkbox:
                 var check = new CheckBox { IsEnabled = !field.ReadOnly };
-                check.Bind(ToggleButton.IsCheckedProperty, binding);
+                check.Bind(ToggleButton.IsCheckedProperty, Bound());
                 return check;
+
+            case FieldType.Switch:
+                var toggle = new ToggleSwitch { IsEnabled = !field.ReadOnly };
+                toggle.Bind(ToggleButton.IsCheckedProperty, Bound());
+                return toggle;
 
             case FieldType.Select:
                 var combo = new ComboBox
@@ -96,8 +133,14 @@ public class Form : ContentControl
                     IsEnabled = !field.ReadOnly,
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                 };
-                combo.Bind(SelectingItemsControl.SelectedItemProperty, binding);
+                combo.Bind(SelectingItemsControl.SelectedItemProperty, Bound());
                 return combo;
+
+            case FieldType.Radio:
+                return BuildRadioGroup(field, Orientation.Vertical);
+
+            case FieldType.OptionGroup:
+                return BuildRadioGroup(field, Orientation.Horizontal);
 
             case FieldType.TextArea:
                 var area = new TextBox
@@ -107,14 +150,87 @@ public class Form : ContentControl
                     Watermark = field.Placeholder,
                     IsReadOnly = field.ReadOnly,
                 };
-                area.Bind(TextBox.TextProperty, binding);
+                area.Bind(TextBox.TextProperty, Bound());
                 return area;
 
-            default: // Text, Number
+            case FieldType.Markdown:
+                var md = new MarkdownEditor { IsEnabled = !field.ReadOnly };
+                md.Bind(MarkdownEditor.MarkdownProperty, Bound());
+                return md;
+
+            case FieldType.Password:
+                var pwd = new TextBox
+                {
+                    Watermark = field.Placeholder,
+                    IsReadOnly = field.ReadOnly,
+                    PasswordChar = '●', // ●
+                };
+                pwd.Bind(TextBox.TextProperty, Bound());
+                return pwd;
+
+            case FieldType.Number:
+            case FieldType.Percent:
+                var num = new TextBox { Watermark = field.Placeholder, IsReadOnly = field.ReadOnly };
+                num.Bind(TextBox.TextProperty, Bound());
+                if (!field.ReadOnly && (field.Min is not null || field.Max is not null))
+                    num.LostFocus += (_, _) => ClampNumeric(num, field);
+                return num;
+
+            default: // Text, Email, Search — plain text box (semantic type; desktop has no input-type widget)
                 var box = new TextBox { Watermark = field.Placeholder, IsReadOnly = field.ReadOnly };
-                box.Bind(TextBox.TextProperty, binding);
+                box.Bind(TextBox.TextProperty, Bound());
                 return box;
         }
+    }
+
+    // A single-select group of RadioButtons over Options, each two-way bound to the model value via an
+    // equality converter (checked ⇔ model == option); clicking one writes that option back.
+    private Control BuildRadioGroup(FormField field, Orientation orientation)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = orientation,
+            Spacing = orientation == Orientation.Horizontal ? 12 : 4,
+        };
+        foreach (var option in field.Options ?? Array.Empty<object>())
+        {
+            var rb = new RadioButton
+            {
+                Content = option?.ToString(),
+                GroupName = "grp_" + field.Name,
+                IsEnabled = !field.ReadOnly,
+            };
+            rb.Bind(ToggleButton.IsCheckedProperty, new Binding(field.Name)
+            {
+                Source = Model,
+                Mode = field.ReadOnly ? BindingMode.OneWay : BindingMode.TwoWay,
+                Converter = OptionEquals,
+                ConverterParameter = option,
+            });
+            panel.Children.Add(rb);
+        }
+        return panel;
+    }
+
+    private static void ClampNumeric(TextBox box, FormField field)
+    {
+        if (!double.TryParse(box.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out var v)) return;
+        var clamped = v;
+        if (field.Min is double min) clamped = Math.Max(clamped, min);
+        if (field.Max is double max) clamped = Math.Min(clamped, max);
+        if (clamped != v) box.Text = clamped.ToString(CultureInfo.CurrentCulture);
+    }
+
+    private static readonly IValueConverter OptionEquals = new OptionEqualsConverter();
+
+    private sealed class OptionEqualsConverter : IValueConverter
+    {
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => Equals(value, parameter);
+
+        // Only the newly-checked radio writes back; unchecking is a no-op (its peer wrote the new value).
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+            => value is true ? parameter : BindingOperations.DoNothing;
     }
 
     // Follow a design token by observable so generated controls re-theme with the app.
