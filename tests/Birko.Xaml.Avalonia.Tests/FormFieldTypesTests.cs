@@ -23,6 +23,10 @@ public class FormFieldTypesTests
         public string? Color { get; set; }
         public string? Plan { get; set; }
         public double Amount { get; set; }
+        public DateTime? Date1 { get; set; }
+        public TimeSpan? Time1 { get; set; }
+        public DateTime? When1 { get; set; }
+        public DateRange? Range1 { get; set; }
     }
 
     private static Form Show(object model, params FormField[] fields)
@@ -155,6 +159,58 @@ public class FormFieldTypesTests
     }
 
     [AvaloniaFact]
+    public void Date_field_renders_calendar_picker_and_binds()
+    {
+        var model = new Model();
+        var form = Show(model, new FormField { Name = nameof(Model.Date1), Type = FieldType.Date });
+
+        var picker = form.GetVisualDescendants().OfType<CalendarDatePicker>().Should().ContainSingle().Subject;
+        picker.SelectedDate = new DateTime(2026, 1, 5);
+        model.Date1.Should().Be(new DateTime(2026, 1, 5));
+    }
+
+    [AvaloniaFact]
+    public void Time_field_renders_time_picker_and_binds()
+    {
+        var model = new Model();
+        var form = Show(model, new FormField { Name = nameof(Model.Time1), Type = FieldType.Time });
+
+        var picker = form.GetVisualDescendants().OfType<TimePicker>().Should().ContainSingle().Subject;
+        picker.SelectedTime = new TimeSpan(9, 30, 0);
+        model.Time1.Should().Be(new TimeSpan(9, 30, 0));
+    }
+
+    [AvaloniaFact]
+    public void DateTime_field_combines_date_and_time_into_the_model()
+    {
+        var model = new Model();
+        var form = Show(model, new FormField { Name = nameof(Model.When1), Type = FieldType.DateTime });
+
+        var date = form.GetVisualDescendants().OfType<CalendarDatePicker>().Single();
+        var time = form.GetVisualDescendants().OfType<TimePicker>().Single();
+        date.SelectedDate = new DateTime(2026, 1, 5);
+        time.SelectedTime = new TimeSpan(9, 30, 0);
+
+        model.When1.Should().Be(new DateTime(2026, 1, 5, 9, 30, 0));
+    }
+
+    [AvaloniaFact]
+    public void DateRange_field_seeds_a_range_and_writes_both_ends()
+    {
+        var model = new Model(); // Range1 == null
+        var form = Show(model, new FormField { Name = nameof(Model.Range1), Type = FieldType.DateRange });
+
+        model.Range1.Should().NotBeNull("the field seeds a DateRange when the model prop is null");
+        var pickers = form.GetVisualDescendants().OfType<CalendarDatePicker>().ToList();
+        pickers.Should().HaveCount(2);
+        pickers[0].SelectedDate = new DateTime(2026, 1, 1);
+        pickers[1].SelectedDate = new DateTime(2026, 1, 31);
+
+        model.Range1!.From.Should().Be(new DateTime(2026, 1, 1));
+        model.Range1!.To.Should().Be(new DateTime(2026, 1, 31));
+    }
+
+    [AvaloniaFact]
     public void Capture_equalizer_screenshot()
     {
         var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
@@ -173,6 +229,36 @@ public class FormFieldTypesTests
         var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
         frame?.Save(Path.Combine(dir, "slider-equalizer.png"));
         bank.GetVisualDescendants().OfType<Slider>().Should().HaveCount(6);
+    }
+
+    [AvaloniaFact]
+    public void Capture_datetime_fields_screenshot()
+    {
+        var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
+                  ?? Path.Combine(Path.GetTempPath(), "birko-xaml-shots");
+        Directory.CreateDirectory(dir);
+
+        var model = new Model { Date1 = new DateTime(2026, 1, 5), Time1 = new TimeSpan(9, 30, 0), When1 = new DateTime(2026, 1, 5, 14, 0, 0) };
+        var form = new Form
+        {
+            Model = model,
+            Fields = new[]
+            {
+                new FormField { Name = nameof(Model.Date1), Label = "Date", Type = FieldType.Date },
+                new FormField { Name = nameof(Model.Time1), Label = "Time", Type = FieldType.Time },
+                new FormField { Name = nameof(Model.When1), Label = "Date + time", Type = FieldType.DateTime },
+                new FormField { Name = nameof(Model.Range1), Label = "Date range", Type = FieldType.DateRange },
+            },
+        };
+        var window = new Window { Content = form, Width = 380, Height = 420 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(380, 420));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 380, 420));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+        frame?.Save(Path.Combine(dir, "datetime-fields.png"));
+        form.GetVisualDescendants().OfType<CalendarDatePicker>().Should().HaveCountGreaterThanOrEqualTo(3);
     }
 
     [AvaloniaFact]
