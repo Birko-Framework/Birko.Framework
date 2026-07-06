@@ -24,12 +24,12 @@
     <PackageReference Include="Moq" Version="4.20.72" />
   </ItemGroup>
 
-  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.MongoDB\Birko.Data.MongoDB.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
-  <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.MongoDB\Birko.Data.MongoDB.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
 
 </Project>
