@@ -32,7 +32,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 
 - [x] **CR-C07** · Birko.Data.JSON · `JsonStore.SaveData` writes `_items.Values` (array) — round-trip test
 - [x] **CR-C08** · Birko.Data.JSON · `JsonSeparateStore.SaveData` guard inverted + path registered — write test
-- [ ] CR-C01 · Birko.AI.Providers · Ollama streaming URL
+- [x] **CR-C01** · Birko.AI.Providers · Ollama streaming posts to `/api/chat` (+ `num_predict`) — new `.Tests` (fake handler)
 - [ ] CR-C02 · Birko.BackgroundJobs.Redis · scheduled-job score scale
 - [ ] CR-C03 · Birko.Communication.Hardware · LPT address mapping
 - [ ] CR-C04 · Birko.Data.CosmosDB · missing `id` property

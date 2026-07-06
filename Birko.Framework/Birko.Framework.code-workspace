@@ -725,6 +725,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Sync.RavenDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.AI.Providers.Tests",
+			"path": "../../Framework.Tests/Birko.AI.Providers.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
 			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
 		},
