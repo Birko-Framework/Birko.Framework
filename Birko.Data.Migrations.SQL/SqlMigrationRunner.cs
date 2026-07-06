@@ -11,6 +11,21 @@ namespace Birko.Data.Migrations.SQL
     /// <summary>
     /// Executes migrations against a SQL database.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Failure model: a migration that throws surfaces as a <see cref="MigrationException"/> (under
+    /// <c>UseTransaction = true</c> the batch is rolled back first). The runner does <b>not</b>
+    /// return a failed <see cref="Data.Migrations.MigrationResult"/> for an execution error — a
+    /// non-successful result is only produced by the target/downgrade guard — so callers wrap
+    /// <c>Migrate()</c> in <c>try/catch (MigrationException)</c> rather than checking
+    /// <c>result.Success</c>.
+    /// </para>
+    /// <para>
+    /// Version bookkeeping shares the runner's connection/transaction (see
+    /// <c>UpdateStoreRecord</c>), so the default <c>UseTransaction = true</c> is safe on
+    /// single-writer SQLite — there is no second-connection lock contention to work around.
+    /// </para>
+    /// </remarks>
     public class SqlMigrationRunner : Data.Migrations.AbstractMigrationRunner
     {
         private readonly AbstractConnector _connector;
@@ -142,13 +157,19 @@ namespace Birko.Data.Migrations.SQL
             DbConnection connection,
             DbTransaction? transaction)
         {
+            // Record the applied/removed version on the runner's OWN already-open connection (and
+            // active transaction, if any) rather than letting the store open a second connection.
+            // On single-writer databases (SQLite) the outer migration transaction still holds the
+            // write lock from the DDL, so a second connection's INSERT would block and fail
+            // (SQLITE_BUSY) — the reason consumers previously had to set UseTransaction = false.
+            // Reusing the connection also makes the DDL + version row atomic under a transaction.
             if (direction == Data.Migrations.MigrationDirection.Up)
             {
-                store.RecordMigration(migration);
+                store.RecordMigration(connection, transaction, migration);
             }
             else
             {
-                store.RemoveMigration(migration);
+                store.RemoveMigration(connection, transaction, migration);
             }
         }
     }

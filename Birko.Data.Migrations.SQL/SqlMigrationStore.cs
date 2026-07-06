@@ -323,7 +323,11 @@ namespace Birko.Data.Migrations.SQL
             return result;
         }
 
-        private void RecordMigration(DbConnection connection, DbTransaction transaction, Data.Migrations.IMigration migration)
+        // Records a version row on a caller-supplied connection (and optional transaction) instead of
+        // opening its own. The runner uses this so the version write participates in the same
+        // connection/transaction as the migration DDL — see SqlMigrationRunner.UpdateStoreRecord for
+        // why that matters on single-writer SQLite.
+        internal void RecordMigration(DbConnection connection, DbTransaction? transaction, Data.Migrations.IMigration migration)
         {
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -357,7 +361,9 @@ namespace Birko.Data.Migrations.SQL
             await command.ExecuteNonQueryAsync();
         }
 
-        private void RemoveMigration(DbConnection connection, DbTransaction transaction, Data.Migrations.IMigration migration)
+        // Removes a version row on a caller-supplied connection (and optional transaction); the
+        // connection-reusing counterpart to RecordMigration above, used by the runner on downgrade.
+        internal void RemoveMigration(DbConnection connection, DbTransaction? transaction, Data.Migrations.IMigration migration)
         {
             using var command = connection.CreateCommand();
             command.Transaction = transaction;

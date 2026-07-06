@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)SqlMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SqlMigrationRunner.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)CreateTablesMigration.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Settings\SqlMigrationSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\SqlMigrationContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\SqlSchemaBuilder.cs" />

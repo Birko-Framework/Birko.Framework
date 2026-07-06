@@ -22,7 +22,9 @@ namespace Birko.Data.Migrations.SQL.Settings
 
         /// <summary>
         /// Gets or sets whether to use transactions during migrations.
-        /// Default is true.
+        /// Default is true. Safe on single-writer SQLite: the runner records applied versions on its
+        /// own connection/transaction (not a second connection), so there is no lock contention that
+        /// would otherwise require turning this off.
         /// </summary>
         public bool UseTransaction { get; set; } = true;
 
