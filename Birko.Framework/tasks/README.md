@@ -7,11 +7,11 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 11    | 25      | —     |
-| todo         | —     | —       | 35    |
+| todo         | —     | —       | 34    |
 | in-progress  | 3     | 2       | 1     |
 | review       | —     | —       | 5     |
 | blocked      | —     | —       | 0     |
-| done         | 2     | 14      | 15    |
+| done         | 2     | 14      | 16    |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -28,8 +28,8 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 
 ## Tree
 
-- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (0/8 tasks done)
-  - [ ] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer slider) (P3, ai)
+- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (1/8 tasks done)
+  - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer slider) (P3, ai) — **done**
   - STORY-001 [bare attribute for inline form usage](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/STORY.md) — planned (0/1)
     - [ ] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add bare attribute to all form controls (P2, ai)
   - STORY-002 [b-editable-table migration](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/STORY.md) — planned (0/1)

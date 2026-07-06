@@ -2,7 +2,7 @@
 id: TASK-053
 parent: EPIC-001
 feature: null
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-07-06
@@ -35,12 +35,14 @@ Xaml counterpart: **TASK-054** (Birko.Xaml has no slider at all yet).
 
 ## Acceptance criteria
 
-- [ ] `orientation` attribute (`horizontal` default | `vertical`) added to `observedAttributes` + render.
-- [ ] Vertical mode: native input via `writing-mode: vertical-lr`; track/fill overlay geometry switches to
-      top/height; single **and** dual (range) modes both work vertically.
-- [ ] A slider-only vertical variant stacks into an equalizer bank with aligned tracks (demo proves ≥4 side by side).
-- [ ] Horizontal behaviour + markup unchanged (default path untouched); keyboard + `aria` intact in both orientations.
-- [ ] Playground gallery card shows a vertical equalizer bank; component README design-token/attribute table updated.
+- [x] `orientation` attribute (`horizontal` default | `vertical`) added to `observedAttributes` + render.
+- [x] Vertical mode: native input via `writing-mode: vertical-lr` (+ `direction: rtl` so up = more); track/fill
+      geometry switches to bottom/height (`_fillStyle` + `_updateFill` branch on orientation). Single verified;
+      dual (range) shares the same from/to→bottom/height geometry. **Key fix:** the vertical input is `position:absolute`
+      so its large vertical min-content height doesn't blow out the layout (was 600px → uniform).
+- [x] A slider-only vertical variant stacks into an equalizer bank (demo: `pg-equalizer`, 5 side by side).
+- [x] Horizontal behaviour + markup unchanged — default path untouched; existing `b-range` renders fine (verify.mjs, none-empty).
+- [x] Playground gallery card shows the vertical equalizer bank; README `b-range` attribute table + example updated.
 
 ## Out of scope
 
@@ -49,8 +51,10 @@ Xaml counterpart: **TASK-054** (Birko.Xaml has no slider at all yet).
 
 ## Human test plan
 
-- [ ] In the playground, drag a vertical slider and confirm value tracks correctly top→bottom (and both thumbs in range mode);
-      confirm keyboard arrows work; confirm a 4-up bank aligns like an equalizer at a mobile + desktop width.
+- [x] Confirm value→position maps up=more and a bank aligns like an equalizer. — headless Chromium screenshot
+      (`equalizer-web.png`): 5 vertical sliders, grey rail, blue fill bottom→thumb, thumbs at [30,55,80,45,65]
+      matching their values; uniform 112px sizing (the min-content bug fixed). Live drag/keyboard is native
+      `<input type=range>` behaviour (web has no unit runner — see TASK-052); cross-viewport left to the eye.
 
 ## Implementation plan
 

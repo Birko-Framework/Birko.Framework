@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Web.Components — b-range vertical orientation (equalizer) (EPIC-001 / TASK-053) (2026-07-06)
+The web counterpart to the Xaml Slider work: `b-range` gained a vertical mode so it can stack into an equalizer/mixer. [tasks/EPIC-001/TASK-053](tasks/EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md).
+- **`orientation` attribute** (`horizontal` default | `vertical`). Vertical: native input via `writing-mode: vertical-lr` + `direction: rtl` (up = more); the custom rail/fill overlay geometry switches to bottom/height (`_fillStyle` + `_updateFill` branch). Horizontal path untouched.
+- **Layout fix:** a vertical `<input type=range>` has a huge (~600px) vertical min-content height that blew out the container; positioning it `absolute` (fills the definite slider box) makes sizing uniform.
+- Playground `pg-equalizer` demo (5 slider-only vertical ranges) + README updated. Screenshot-verified in headless Chromium (grey rail, primary fill bottom→thumb, thumbs at their values). Web has no unit runner (TASK-052), so verification is verify.mjs + the screenshot.
+
 ### Birko.Xaml — date/time picker field types; EPIC-015 complete again (TASK-056) (2026-07-06)
 The last EPIC-015 gap: the Form had no date/time inputs. [tasks/EPIC-015/TASK-056](tasks/EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md).
 - **`FieldType` +4:** `Date` (→`CalendarDatePicker.SelectedDate`), `Time` (→`TimePicker.SelectedTime`), `DateTime` (a date+time composite; handlers recombine into one `DateTime?`), `DateRange` (two pickers over a shared `Forms.DateRange` value class, seeded when the model prop is null). Core stays Avalonia-free (the composites/handlers live in the Avalonia `Form`).
