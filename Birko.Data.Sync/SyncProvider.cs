@@ -166,8 +166,29 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
                     break;
             }
 
-            // Update sync knowledge
-            _knowledgeStore.Update(knowledgeUpdates, null);
+            // Persist sync knowledge. CreateKnowledgeItem returns items with a null store PK, so a
+            // plain Update never inserts them and first-run knowledge was silently lost (CR-C18).
+            // Split into inserts (no existing row → let the store assign a PK) and updates (reuse the
+            // existing row's PK), so knowledge is durably upserted without creating duplicate rows.
+            var knowledgeCreates = new List<TKnowledge>();
+            var knowledgeUpdatesToApply = new List<TKnowledge>();
+            foreach (var item in knowledgeUpdates)
+            {
+                if (knowledge.TryGetValue(GetGuid((ISyncKnowledgeItem)item), out var existing) && existing.Guid.HasValue)
+                {
+                    item.Guid = existing.Guid;
+                    knowledgeUpdatesToApply.Add(item);
+                }
+                else
+                {
+                    item.Guid = null;
+                    knowledgeCreates.Add(item);
+                }
+            }
+            if (knowledgeCreates.Count > 0)
+                _knowledgeStore.Create(knowledgeCreates, null);
+            if (knowledgeUpdatesToApply.Count > 0)
+                _knowledgeStore.Update(knowledgeUpdatesToApply, null);
             _knowledgeStore.SetLastSyncTime(options.Scope, DateTime.UtcNow);
 
             // Fill result

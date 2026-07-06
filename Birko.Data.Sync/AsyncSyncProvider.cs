@@ -167,8 +167,29 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
                     break;
             }
 
-            // Update sync knowledge
-            await _knowledgeStore.UpdateAsync(knowledgeUpdates, null, options.CancellationToken);
+            // Persist sync knowledge. CreateKnowledgeItem returns items with a null store PK, so a
+            // plain Update never inserts them and first-run knowledge was silently lost (CR-C18).
+            // Split into inserts (no existing row → let the store assign a PK) and updates (reuse the
+            // existing row's PK), so knowledge is durably upserted without creating duplicate rows.
+            var knowledgeCreates = new List<TKnowledge>();
+            var knowledgeUpdatesToApply = new List<TKnowledge>();
+            foreach (var item in knowledgeUpdates)
+            {
+                if (knowledge.TryGetValue(GetGuid((ISyncKnowledgeItem)item), out var existing) && existing.Guid.HasValue)
+                {
+                    item.Guid = existing.Guid;
+                    knowledgeUpdatesToApply.Add(item);
+                }
+                else
+                {
+                    item.Guid = null;
+                    knowledgeCreates.Add(item);
+                }
+            }
+            if (knowledgeCreates.Count > 0)
+                await _knowledgeStore.CreateAsync(knowledgeCreates, null, options.CancellationToken);
+            if (knowledgeUpdatesToApply.Count > 0)
+                await _knowledgeStore.UpdateAsync(knowledgeUpdatesToApply, null, options.CancellationToken);
             await _knowledgeStore.SetLastSyncTimeAsync(options.Scope, DateTime.UtcNow, options.CancellationToken);
 
             // Fill result
