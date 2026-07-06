@@ -11,37 +11,48 @@ namespace Birko.Data.Migrations.MongoDB.Context
     public class MongoSchemaBuilder : ISchemaBuilder
     {
         private readonly IMongoDatabase _database;
+        private readonly IClientSessionHandle? _session;
 
-        public MongoSchemaBuilder(IMongoDatabase database)
+        // The session must be threaded to every operation for it to participate in the runner's
+        // transaction — operations issued without the session commit immediately regardless of any
+        // enclosing transaction (CR-C09).
+        public MongoSchemaBuilder(IMongoDatabase database, IClientSessionHandle? session = null)
         {
             _database = database;
+            _session = session;
         }
 
         public ICollectionBuilder CreateCollection(string name)
         {
-            _database.CreateCollection(name);
+            if (_session != null) _database.CreateCollection(_session, name);
+            else _database.CreateCollection(name);
             return new MongoCollectionBuilder(name, _database);
         }
 
         public void DropCollection(string name)
         {
-            _database.DropCollection(name);
+            if (_session != null) _database.DropCollection(_session, name);
+            else _database.DropCollection(name);
         }
 
         public bool CollectionExists(string name)
         {
             var filter = new ListCollectionNamesOptions { Filter = Builders<BsonDocument>.Filter.Eq("name", name) };
-            return _database.ListCollectionNames(filter).Any();
+            return (_session != null
+                ? _database.ListCollectionNames(_session, filter)
+                : _database.ListCollectionNames(filter)).Any();
         }
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
         {
-            return new MongoIndexBuilder(collectionName, indexName, _database);
+            return new MongoIndexBuilder(collectionName, indexName, _database, _session);
         }
 
         public void DropIndex(string collectionName, string indexName)
         {
-            _database.GetCollection<BsonDocument>(collectionName).Indexes.DropOne(indexName);
+            var indexes = _database.GetCollection<BsonDocument>(collectionName).Indexes;
+            if (_session != null) indexes.DropOne(_session, indexName);
+            else indexes.DropOne(indexName);
         }
 
         public void AddField(string collectionName, FieldDescriptor field)
@@ -58,7 +69,8 @@ namespace Birko.Data.Migrations.MongoDB.Context
         {
             var collection = _database.GetCollection<BsonDocument>(collectionName);
             var update = Builders<BsonDocument>.Update.Rename(oldName, newName);
-            collection.UpdateMany(Builders<BsonDocument>.Filter.Empty, update);
+            if (_session != null) collection.UpdateMany(_session, Builders<BsonDocument>.Filter.Empty, update);
+            else collection.UpdateMany(Builders<BsonDocument>.Filter.Empty, update);
         }
 
         private class MongoCollectionBuilder : ICollectionBuilder
@@ -92,14 +104,16 @@ namespace Birko.Data.Migrations.MongoDB.Context
             private readonly string _collectionName;
             private readonly string _indexName;
             private readonly IMongoDatabase _database;
+            private readonly IClientSessionHandle? _session;
             private readonly List<IndexFieldDefinition> _fields = new();
             private bool _unique;
 
-            public MongoIndexBuilder(string collectionName, string indexName, IMongoDatabase database)
+            public MongoIndexBuilder(string collectionName, string indexName, IMongoDatabase database, IClientSessionHandle? session = null)
             {
                 _collectionName = collectionName;
                 _indexName = indexName;
                 _database = database;
+                _session = session;
             }
 
             public IIndexBuilder WithField(string name, bool descending = false, IndexFieldType fieldType = IndexFieldType.Standard)
@@ -118,7 +132,10 @@ namespace Birko.Data.Migrations.MongoDB.Context
 
             public IIndexBuilder WithProperty(string key, object value) => this;
 
-            internal void Build()
+            // Public so it overrides the IIndexBuilder.Build() terminal (CR-C14): the internal version
+            // was never reachable, so CreateIndex(...) created nothing (CR-H062). Uses the session when
+            // present so the index creation joins the migration transaction (CR-C09).
+            public void Build()
             {
                 if (_fields.Count == 0) return;
 
@@ -129,7 +146,9 @@ namespace Birko.Data.Migrations.MongoDB.Context
 
                 var options = new CreateIndexOptions { Name = _indexName, Unique = _unique };
                 var model = new CreateIndexModel<BsonDocument>(keys, options);
-                _database.GetCollection<BsonDocument>(_collectionName).Indexes.CreateOne(model);
+                var indexes = _database.GetCollection<BsonDocument>(_collectionName).Indexes;
+                if (_session != null) indexes.CreateOne(_session, model);
+                else indexes.CreateOne(model);
             }
 
             private record IndexFieldDefinition(string Name, bool Descending, IndexFieldType Type);

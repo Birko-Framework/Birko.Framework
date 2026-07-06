@@ -13,11 +13,13 @@ namespace Birko.Data.Migrations.MongoDB.Context
         public IDataMigrator Data { get; }
         public string ProviderName => "MongoDB";
 
-        public MongoMigrationContext(IMongoDatabase database)
+        // The optional session is threaded into the schema builder + data migrator so their operations
+        // participate in the runner's transaction (CR-C09). Without it, driver calls commit immediately.
+        public MongoMigrationContext(IMongoDatabase database, IClientSessionHandle? session = null)
         {
             _database = database ?? throw new ArgumentNullException(nameof(database));
-            Schema = new MongoSchemaBuilder(database);
-            Data = new MongoDataMigrator(database);
+            Schema = new MongoSchemaBuilder(database, session);
+            Data = new MongoDataMigrator(database, session);
         }
 
         public void Raw(Action<object> providerAction)

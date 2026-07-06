@@ -65,7 +65,8 @@ namespace Birko.Data.Migrations.MongoDB
 
                 foreach (var migration in migrations)
                 {
-                    var context = new Context.MongoMigrationContext(_database);
+                    // Thread the session so the migration's operations join the transaction (CR-C09).
+                    var context = new Context.MongoMigrationContext(_database, session);
                     if (direction == Data.Migrations.MigrationDirection.Up)
                         migration.Up(context);
                     else
