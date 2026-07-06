@@ -17,6 +17,10 @@ public enum FieldType
     Radio,
     OptionGroup,
     Markdown,
+    Date,
+    Time,
+    DateTime,
+    DateRange,
 }
 
 /// <summary>
