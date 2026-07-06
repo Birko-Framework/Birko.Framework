@@ -168,6 +168,22 @@ public class Form : ContentControl
                 pwd.Bind(TextBox.TextProperty, Bound());
                 return pwd;
 
+            case FieldType.Range:
+                var slider = new Slider
+                {
+                    Minimum = field.Min ?? 0,
+                    Maximum = field.Max ?? 100,
+                    IsEnabled = !field.ReadOnly,
+                };
+                if (field.Step is double step)
+                {
+                    slider.SmallChange = step;
+                    slider.TickFrequency = step;
+                    slider.IsSnapToTickEnabled = true;
+                }
+                slider.Bind(RangeBase.ValueProperty, Bound());
+                return slider;
+
             case FieldType.Number:
             case FieldType.Percent:
                 var num = new TextBox { Watermark = field.Placeholder, IsReadOnly = field.ReadOnly };

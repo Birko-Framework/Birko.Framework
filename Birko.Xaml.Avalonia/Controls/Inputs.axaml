@@ -114,4 +114,97 @@
     </Style>
   </ControlTheme>
 
+  <!-- ── Slider — token-driven, horizontal + vertical (EPIC-016/TASK-054) ──
+       Track lays out DecreaseButton (the filled portion) | Thumb | IncreaseButton (transparent, so the
+       rail shows through). Cross-axis thickness + alignment are set per orientation via pseudo-class
+       styles on the named parts, so one template serves both. -->
+  <ControlTheme x:Key="BSliderRepeat" TargetType="RepeatButton">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}" CornerRadius="{DynamicResource BRadiusFull}" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <ControlTheme x:Key="BSliderThumb" TargetType="Thumb">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Width="16" Height="16" CornerRadius="{DynamicResource BRadiusFull}"
+                Background="{DynamicResource BInputThumbBgBrush}"
+                BorderBrush="{DynamicResource BColorPrimaryBrush}" BorderThickness="2" />
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border">
+      <Setter Property="BorderBrush" Value="{DynamicResource BColorPrimaryHoverBrush}" />
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type Slider}" TargetType="Slider">
+    <Setter Property="Background" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid>
+          <Border x:Name="rail" Background="{TemplateBinding Background}"
+                  CornerRadius="{DynamicResource BRadiusFull}" />
+          <Track Name="PART_Track"
+                 Minimum="{TemplateBinding Minimum}"
+                 Maximum="{TemplateBinding Maximum}"
+                 Value="{TemplateBinding Value, Mode=TwoWay}"
+                 Orientation="{TemplateBinding Orientation}"
+                 IsDirectionReversed="{TemplateBinding IsDirectionReversed}">
+            <Track.DecreaseButton>
+              <RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource BSliderRepeat}"
+                            Background="{TemplateBinding Foreground}" />
+            </Track.DecreaseButton>
+            <Thumb Theme="{StaticResource BSliderThumb}" />
+            <Track.IncreaseButton>
+              <RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource BSliderRepeat}"
+                            Background="Transparent" />
+            </Track.IncreaseButton>
+          </Track>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+
+    <!-- Horizontal: thin centered rail/fill, thumb rides the middle. -->
+    <Style Selector="^:horizontal">
+      <Setter Property="MinHeight" Value="24" />
+    </Style>
+    <Style Selector="^:horizontal /template/ Border#rail">
+      <Setter Property="Height" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="^:horizontal /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Height" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="^:horizontal /template/ RepeatButton#PART_IncreaseButton">
+      <Setter Property="Height" Value="4" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Vertical: thin centered rail/fill down the column (equalizer). -->
+    <Style Selector="^:vertical">
+      <Setter Property="MinWidth" Value="24" />
+    </Style>
+    <Style Selector="^:vertical /template/ Border#rail">
+      <Setter Property="Width" Value="4" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="^:vertical /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Width" Value="4" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="^:vertical /template/ RepeatButton#PART_IncreaseButton">
+      <Setter Property="Width" Value="4" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="{DynamicResource BDisabledOpacity}" />
+    </Style>
+  </ControlTheme>
+
 </ResourceDictionary>
