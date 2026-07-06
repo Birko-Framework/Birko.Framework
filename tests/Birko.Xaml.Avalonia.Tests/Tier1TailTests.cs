@@ -2,11 +2,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Birko.Xaml.Avalonia.Controls;
 using Birko.Xaml.Avalonia.Theming;
+using Birko.Xaml.Core.Navigation;
 using FluentAssertions;
 using Xunit;
 
@@ -51,6 +53,66 @@ public class Tier1TailTests
         texts.Should().Contain("Home");
         texts.Should().Contain("Ada");
         texts.Count(t => t == "/").Should().Be(2, "two separators between three crumbs");
+    }
+
+    [AvaloniaFact]
+    public void Breadcrumb_renders_clickable_links_for_non_last_items_with_a_target()
+    {
+        var crumb = Show(new Breadcrumb
+        {
+            ItemsSource = new[]
+            {
+                new BreadcrumbItem { Label = "Home", Run = () => { } },   // has a Run → link
+                new BreadcrumbItem { Label = "Users", Href = "#/users" }, // has an Href → link
+                new BreadcrumbItem { Label = "Ada" },                     // current → static
+            },
+        });
+
+        var links = crumb.GetVisualDescendants().OfType<Button>().ToList();
+        links.Should().HaveCount(2, "the two non-last crumbs with a target are links; the last is not");
+        links.Select(b => b.Content).Should().BeEquivalentTo(new object[] { "Home", "Users" });
+    }
+
+    [AvaloniaFact]
+    public void Breadcrumb_click_invokes_run_and_raises_ItemInvoked()
+    {
+        var ran = false;
+        BreadcrumbItem? invoked = null;
+        var crumb = new Breadcrumb
+        {
+            ItemsSource = new[]
+            {
+                new BreadcrumbItem { Label = "Home", Href = "#/", Run = () => ran = true },
+                new BreadcrumbItem { Label = "Here" },
+            },
+        };
+        crumb.ItemInvoked += (_, item) => invoked = item;
+        Show(crumb);
+
+        var home = crumb.GetVisualDescendants().OfType<Button>().First(b => (string?)b.Content == "Home");
+        home.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        ran.Should().BeTrue("the crumb's Run action fires on click");
+        invoked.Should().NotBeNull();
+        invoked!.Href.Should().Be("#/", "ItemInvoked carries the clicked item so a shell can route on its Href");
+    }
+
+    [AvaloniaFact]
+    public void Breadcrumb_last_item_is_never_a_link_even_with_a_run()
+    {
+        var crumb = Show(new Breadcrumb
+        {
+            ItemsSource = new[]
+            {
+                new BreadcrumbItem { Label = "Home", Run = () => { } },
+                new BreadcrumbItem { Label = "Current", Run = () => { } }, // last → current, static
+            },
+        });
+
+        var links = crumb.GetVisualDescendants().OfType<Button>().ToList();
+        links.Should().ContainSingle().Which.Content.Should().Be("Home");
+        crumb.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should()
+            .Contain("Current", "the last crumb is the current location, rendered as static text");
     }
 
     [AvaloniaFact]
