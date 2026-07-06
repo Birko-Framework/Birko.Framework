@@ -18,6 +18,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
 
 </Project>
