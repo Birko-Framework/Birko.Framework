@@ -20,11 +20,29 @@ public partial class ShellViewModel : BasePageViewModel
     {
         Nav = navigation;
         Themes = themes;
-        Nav.Navigated += (_, _) => BackCommand.NotifyCanExecuteChanged();
+        NavItems = Nav.Modules.Select(m => new MobileNavItem(m.Id, m.Label, m.Icon)).ToList();
+        Nav.Navigated += (_, _) =>
+        {
+            BackCommand.NotifyCanExecuteChanged();
+            RefreshActiveNav();
+        };
         PaletteCommands = BuildPaletteCommands();
+        RefreshActiveNav();
     }
 
     public INavigationService Nav { get; }
+
+    /// <summary>Bottom-nav items for the mobile shell (`MobileShellView` / BMobileAppShell) — one per
+    /// module, projected from <see cref="INavigationService.Modules"/>, with live <see cref="MobileNavItem.IsActive"/>.
+    /// The desktop shells ignore this; the mobile shell binds its bottom nav to it.</summary>
+    public IReadOnlyList<MobileNavItem> NavItems { get; }
+
+    private void RefreshActiveNav()
+    {
+        var currentId = Nav.CurrentModule?.Id;
+        foreach (var item in NavItems)
+            item.IsActive = item.Id == currentId;
+    }
 
     /// <summary>Theme switcher (null for a single-theme app — the view hides the switcher).</summary>
     public IThemeManager? Themes { get; }

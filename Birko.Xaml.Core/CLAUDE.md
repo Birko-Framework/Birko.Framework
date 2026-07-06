@@ -22,9 +22,18 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
 - **i18n (STORY-032):** `Localization.II18n` / `I18n` (+ `I18n.Instance` singleton). The `{l:Tr}`
   markup extension is NOT here — it must return a platform `Binding`, so it lives in
   `Birko.Xaml.Avalonia`. Core holds only the Avalonia-free logic.
+- **Formatting (EPIC-016 / TASK-044):** `Localization.IFormatter` / `Formatter` — the XAML analogue
+  of Birko.Web's `createFormatter`, bound to an `II18n` and resolving `CultureInfo` from the active
+  locale at call time. `Duration(seconds)` is locale-independent (exact web parity); `Date` / `Time` /
+  `DateTime` / `Number` / `Currency` / `Percent` map onto .NET `CultureInfo`. `Currency`'s symbol is
+  driven by the currency *code* (not the culture), matching the web's Intl behaviour.
 - **Base VMs (STORY-032):** `Mvvm.BasePageViewModel`, `CrudViewModelBase<T>`, `ListPageViewModel<T>`,
   `DetailPageViewModel<T>` on CommunityToolkit.Mvvm (the ONLY dependency Core takes — platform-neutral).
 - **Data port (STORY-032):** `Data.ICrudDataSource<T>`.
+- **Offline mirror (EPIC-016 / TASK-046):** `Data.MirrorDataSource<T>` — network-first read-through over
+  the port (refresh mirror on read, fall back offline, evict on 404), with an observable `SyncStatus`.
+- **Device (EPIC-016 / TASK-045, 048):** `Device.IWakeLock`, `Device.IAudioCue` (+ `AudioCueOptions`) —
+  neutral device-capability contracts; Avalonia implementations live in `Birko.Xaml.Avalonia`.
 
 ## The `ICrudDataSource<T>` port — why not `IAsyncBulkStore<T>` directly
 
