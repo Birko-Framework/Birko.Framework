@@ -23,6 +23,9 @@ Core rather than source-including it twice.
 ### Forms schema (STORY-033)
 - **`Forms.FormField` / `FieldType`** — platform-neutral field schema (`Name`/`Label`/`Type`/`Required`/`Options`/`Placeholder`/`ReadOnly`). The Avalonia `Form` control renders it into labeled, two-way-bound inputs; a WPF `Form` would consume the same schema.
 
+### Navigation
+- **`Navigation.BreadcrumbItem`** — a crumb model (`Label` + optional `Href` / `Run`), the XAML analogue of Birko.Web's `b-breadcrumb` `{ label, href? }` items. The Avalonia `Breadcrumb` renders non-last items with a `Run`/`Href` as clickable links (last = current location). Also: `Navigation.ModuleDefinition` / `INavigationService` / `MobileNavItem` (the module/route map + shell nav).
+
 ### Data port (STORY-032)
 - **`Data.ICrudDataSource<T>`** — the thin CRUD port the VMs depend on (Guid-keyed, store-shaped: `GetAll`/`Get`/`Save`/`Delete`/`NewInstance`). **Not** `IAsyncBulkStore<T>` directly — see the CLAUDE.md note on the assembly-vs-projitems boundary. A consumer adapts their Birko.Data store to this port in their own assembly:
 
