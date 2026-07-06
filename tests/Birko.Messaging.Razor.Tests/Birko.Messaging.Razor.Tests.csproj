@@ -20,10 +20,10 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Messaging\Birko.Messaging.projitems" Label="Shared" />
-  <Import Project="..\Birko.Messaging.Razor\Birko.Messaging.Razor.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Messaging\Birko.Messaging.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Messaging.Razor\Birko.Messaging.Razor.projitems" Label="Shared" />
 
 </Project>
