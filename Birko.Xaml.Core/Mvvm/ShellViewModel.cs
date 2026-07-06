@@ -1,3 +1,4 @@
+using Birko.Xaml.Core.Commands;
 using Birko.Xaml.Core.Localization;
 using Birko.Xaml.Core.Navigation;
 using Birko.Xaml.Core.Theming;
@@ -7,8 +8,9 @@ using CommunityToolkit.Mvvm.Input;
 namespace Birko.Xaml.Core.Mvvm;
 
 /// <summary>
-/// The app-shell ViewModel: the navigation service (module list + active page), the theme manager,
-/// and a title. Platform-neutral — the Avalonia <c>ShellView</c> (and a future WPF one) binds to it.
+/// The app-shell ViewModel: navigation (module list + active page), the theme manager, a title, a
+/// command palette (populated from modules + themes), and an optional user area. Platform-neutral —
+/// the Avalonia <c>ShellView</c> (and a future WPF one) binds to it.
 /// </summary>
 public partial class ShellViewModel : BasePageViewModel
 {
@@ -18,12 +20,26 @@ public partial class ShellViewModel : BasePageViewModel
         Nav = navigation;
         Themes = themes;
         Nav.Navigated += (_, _) => BackCommand.NotifyCanExecuteChanged();
+        PaletteCommands = BuildPaletteCommands();
     }
 
     public INavigationService Nav { get; }
 
     /// <summary>Theme switcher (null for a single-theme app — the view hides the switcher).</summary>
     public IThemeManager? Themes { get; }
+
+    /// <summary>Commands shown in the Ctrl+K palette — navigate-to-module + switch-theme entries.</summary>
+    public IReadOnlyList<CommandItem> PaletteCommands { get; }
+
+    [ObservableProperty]
+    private bool _isPaletteOpen;
+
+    /// <summary>Signed-in user's display name. Empty/null hides the header user area.</summary>
+    [ObservableProperty]
+    private string? _userName;
+
+    /// <summary>Menu entries for the user dropdown (e.g. Profile, Sign out). Empty = static badge.</summary>
+    public IReadOnlyList<CommandItem> UserCommands { get; set; } = Array.Empty<CommandItem>();
 
     [RelayCommand]
     private void Navigate(string moduleId) => Nav.Navigate(moduleId);
@@ -35,4 +51,41 @@ public partial class ShellViewModel : BasePageViewModel
 
     [RelayCommand]
     private void SetTheme(string id) => Themes?.SetTheme(id);
+
+    [RelayCommand]
+    private void OpenPalette() => IsPaletteOpen = true;
+
+    [RelayCommand]
+    private void RunUserCommand(CommandItem? item) => item?.Run?.Invoke();
+
+    private List<CommandItem> BuildPaletteCommands()
+    {
+        var commands = new List<CommandItem>();
+        foreach (var module in Nav.Modules)
+        {
+            var id = module.Id;
+            commands.Add(new CommandItem
+            {
+                Id = "nav:" + id,
+                Label = "Go to " + module.Label,
+                Group = "Navigate",
+                Run = () => Nav.Navigate(id),
+            });
+        }
+        if (Themes is not null)
+        {
+            foreach (var theme in Themes.Available)
+            {
+                var themeId = theme.Id;
+                commands.Add(new CommandItem
+                {
+                    Id = "theme:" + themeId,
+                    Label = "Theme: " + theme.Label,
+                    Group = "Appearance",
+                    Run = () => Themes.SetTheme(themeId),
+                });
+            }
+        }
+        return commands;
+    }
 }
