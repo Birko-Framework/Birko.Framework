@@ -158,6 +158,22 @@ public class Form : ContentControl
                 md.Bind(MarkdownEditor.MarkdownProperty, Bound());
                 return md;
 
+            case FieldType.Date:
+                var date = new CalendarDatePicker { IsEnabled = !field.ReadOnly };
+                date.Bind(CalendarDatePicker.SelectedDateProperty, Bound());
+                return date;
+
+            case FieldType.Time:
+                var time = new TimePicker { IsEnabled = !field.ReadOnly };
+                time.Bind(TimePicker.SelectedTimeProperty, Bound());
+                return time;
+
+            case FieldType.DateTime:
+                return BuildDateTime(field);
+
+            case FieldType.DateRange:
+                return BuildDateRange(field);
+
             case FieldType.Password:
                 var pwd = new TextBox
                 {
@@ -225,6 +241,60 @@ public class Form : ContentControl
             });
             panel.Children.Add(rb);
         }
+        return panel;
+    }
+
+    // DateTime = a date picker + a time picker; either change recombines into the single DateTime? model prop.
+    private Control BuildDateTime(FormField field)
+    {
+        var prop = Model!.GetType().GetProperty(field.Name);
+        var current = prop?.GetValue(Model) as DateTime?;
+        var datePick = new CalendarDatePicker { SelectedDate = current?.Date, IsEnabled = !field.ReadOnly };
+        var timePick = new TimePicker { SelectedTime = current?.TimeOfDay, IsEnabled = !field.ReadOnly };
+
+        if (!field.ReadOnly && prop is not null && prop.CanWrite)
+        {
+            void Combine()
+            {
+                var d = datePick.SelectedDate;
+                DateTime? val = d is null ? null : d.Value.Date + (timePick.SelectedTime ?? TimeSpan.Zero);
+                try { prop.SetValue(Model, val); } catch { /* prop not DateTime? — ignore */ }
+            }
+            datePick.PropertyChanged += (_, e) => { if (e.Property == CalendarDatePicker.SelectedDateProperty) Combine(); };
+            timePick.PropertyChanged += (_, e) => { if (e.Property == TimePicker.SelectedTimeProperty) Combine(); };
+        }
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        panel.Children.Add(datePick);
+        panel.Children.Add(timePick);
+        return panel;
+    }
+
+    // DateRange = two date pickers writing the From/To of a shared DateRange value on the model.
+    private Control BuildDateRange(FormField field)
+    {
+        var prop = Model!.GetType().GetProperty(field.Name);
+        var range = prop?.GetValue(Model) as DateRange;
+        if (range is null && prop is not null && prop.CanWrite)
+        {
+            range = new DateRange();
+            prop.SetValue(Model, range);
+        }
+
+        var from = new CalendarDatePicker { SelectedDate = range?.From, IsEnabled = !field.ReadOnly };
+        var to = new CalendarDatePicker { SelectedDate = range?.To, IsEnabled = !field.ReadOnly };
+        if (!field.ReadOnly && range is not null)
+        {
+            from.PropertyChanged += (_, e) => { if (e.Property == CalendarDatePicker.SelectedDateProperty) range.From = from.SelectedDate; };
+            to.PropertyChanged += (_, e) => { if (e.Property == CalendarDatePicker.SelectedDateProperty) range.To = to.SelectedDate; };
+        }
+
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        panel.Children.Add(from);
+        var dash = new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center };
+        Themed(dash, TextBlock.ForegroundProperty, "BTextMutedBrush");
+        panel.Children.Add(dash);
+        panel.Children.Add(to);
         return panel;
     }
 

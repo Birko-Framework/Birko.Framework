@@ -37,7 +37,7 @@ colors/sizes — so controls re-theme live. Add new controls to the matching cat
 it's a new category, to the `Controls.axaml` merge list.
 
 - **Buttons.axaml** — `Button`
-- **Inputs.axaml** — `TextBox` (single + multiline via `AcceptsReturn`), `ComboBox` + `ComboBoxItem`, `Slider` (TASK-054: horizontal + vertical, `Track`+`Thumb`+RepeatButton template, cross-axis set per-orientation via `:horizontal`/`:vertical`; sub-themes `BSliderRepeat`/`BSliderThumb` — the equalizer-capable slider)
+- **Inputs.axaml** — `TextBox` (single + multiline via `AcceptsReturn`), `ComboBox` + `ComboBoxItem`, `Slider` (TASK-054: horizontal + vertical, `Track`+`Thumb`+RepeatButton template, cross-axis set per-orientation via `:horizontal`/`:vertical`; sub-themes `BSliderRepeat`/`BSliderThumb` — the equalizer-capable slider), `CalendarDatePicker` + `TimePicker` (TASK-056: light restyle — `BasedOn` Fluent + Birko token setters on the resting surface; flyout internals stay Fluent. Form composes `DateTime` (date+time) and `DateRange` (two pickers) field types)
 - **Toggles.axaml** — `CheckBox`, `RadioButton`, `ToggleSwitch` (declares the required `PART_MovingKnobs`/`PART_SwitchKnob`)
 - **Surfaces.axaml** — `BCard` (ContentControl theme), `TabControl` + `TabItem`
 - **Indicators.axaml** — `BBadge`, `BTag` (ContentControl themes), `ProgressBar`, `BusySpinner` (custom, rotating `Arc`)

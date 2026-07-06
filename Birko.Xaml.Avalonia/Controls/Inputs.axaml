@@ -207,4 +207,23 @@
     </Style>
   </ControlTheme>
 
+  <!-- ── Date/time pickers (EPIC-015/TASK-056) — light restyle: extend Fluent's template (BasedOn),
+       layer Birko tokens on the resting surface. The flyout calendar/clock keep Fluent internals. -->
+  <ControlTheme x:Key="{x:Type CalendarDatePicker}" TargetType="CalendarDatePicker"
+                BasedOn="{StaticResource {x:Type CalendarDatePicker}}">
+    <Setter Property="Background" Value="{DynamicResource BBgBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BBorderBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource BRadius}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type TimePicker}" TargetType="TimePicker"
+                BasedOn="{StaticResource {x:Type TimePicker}}">
+    <Setter Property="Foreground" Value="{DynamicResource BTextBrush}" />
+    <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
+    <Setter Property="MinHeight" Value="{DynamicResource BControlMinHeight}" />
+  </ControlTheme>
+
 </ResourceDictionary>
