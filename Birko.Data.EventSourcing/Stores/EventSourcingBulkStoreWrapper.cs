@@ -46,11 +46,16 @@ namespace Birko.Data.EventSourcing.Stores
             {
                 storeDelegate?.Invoke(item);
 
-                var currentVersion = _eventStore.GetVersion(item.Guid ?? Guid.Empty);
+                // Assign the Guid up front so the event AggregateId, version lookup, and inner-store
+                // row all key off the SAME id (CR-C06); the throwaway Guid.NewGuid() was never written
+                // back, so the inner bulk store assigned a different Guid and orphaned the event.
+                item.Guid ??= Guid.NewGuid();
+
+                var currentVersion = _eventStore.GetVersion(item.Guid.Value);
                 var newVersion = currentVersion + 1;
 
                 var @event = new DomainEvent(
-                    item.Guid ?? Guid.NewGuid(),
+                    item.Guid.Value,
                     newVersion,
                     "Created",
                     _serializer.Serialize(item),
