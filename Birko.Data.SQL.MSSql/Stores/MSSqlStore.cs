@@ -30,18 +30,16 @@ namespace Birko.Data.SQL.MSSql.Stores
         {
             if (settings != null)
             {
-                var pwSettings = new Birko.Configuration.PasswordSettings
-                {
-                    Location = settings.Location,
-                    Name = settings.Name,
-                    Password = settings.Password
-                };
-                base.SetSettings(pwSettings);
+                // Pass the FULL settings through — narrowing to PasswordSettings here dropped
+                // UserName/Port/MultipleActiveResultSets/TrustServerCertificate (mirrors AsyncMSSqlStore
+                // and the MySQL/PostgreSQL sync stores).
+                base.SetSettings((Birko.Configuration.ISettings)settings);
             }
         }
 
         /// <summary>
-        /// Sets the connection settings.
+        /// Sets the connection settings. Redirects a <see cref="Birko.Configuration.RemoteSettings"/>
+        /// arriving through this base overload to the full-settings path.
         /// </summary>
         /// <param name="settings">The password settings to use.</param>
         public override void SetSettings(Birko.Configuration.PasswordSettings settings)
