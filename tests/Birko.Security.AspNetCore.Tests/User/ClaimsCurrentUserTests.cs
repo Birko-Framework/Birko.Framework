@@ -119,6 +119,40 @@ public class ClaimsCurrentUserTests
         user.Email.Should().Be("custom@example.com");
     }
 
+    [Theory]
+    [InlineData("Admin,User,Guest")]
+    [InlineData("Admin;User;Guest")]
+    [InlineData("Admin, User; Guest")]
+    public void Roles_SingleJoinedClaim_SplitsOnBothDelimiters(string joined)
+    {
+        // The producer (TokenServiceAdapter) joins multi-values with ';'; older paths used ','.
+        // A single joined claim must split into discrete roles regardless of delimiter.
+        var claims = new List<Claim> { new(ClaimTypes.Role, joined) };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        var user = CreateUser(principal);
+
+        user.Roles.Should().BeEquivalentTo("Admin", "User", "Guest");
+    }
+
+    [Theory]
+    [InlineData("*,users:user:read,users:user:write")]
+    [InlineData("*;users:user:read;users:user:write")]
+    public void Permissions_SingleJoinedClaim_SplitsOnBothDelimiters(string joined)
+    {
+        // Locks the delimiter fix: a superadmin '*' packed into a joined permission claim must
+        // surface as a discrete value so Contains("*") works.
+        var claims = new List<Claim> { new(JwtClaimNames.Permission, joined) };
+        var identity = new ClaimsIdentity(claims, "TestAuth");
+        var principal = new ClaimsPrincipal(identity);
+
+        var user = CreateUser(principal);
+
+        user.Permissions.Should().BeEquivalentTo("*", "users:user:read", "users:user:write");
+        user.Permissions.Should().Contain("*");
+    }
+
     [Fact]
     public void InvalidGuid_ForUserId_ReturnsNull()
     {
