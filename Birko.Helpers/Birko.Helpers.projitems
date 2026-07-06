@@ -13,6 +13,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)HtmlHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ObjectHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)EnumerableHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)EnumHelper.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GuidHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StringHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)PathValidator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ExpressionBuilder.cs" />
