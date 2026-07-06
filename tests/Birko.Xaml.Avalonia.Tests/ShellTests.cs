@@ -99,7 +99,16 @@ public class ShellRenderTests
                 CreateViewModel = () => { var vm = new SplitPageViewModel<Contact>(data) { Fields = fields }; vm.LoadAsync(); return vm; },
             },
             new ModuleDefinition { Id = "about", Label = "About", CreateViewModel = () => new ListPageViewModel<Contact>(data) });
-        var shell = new ShellViewModel(nav, new AvaloniaThemeManager()) { Title = "Demo" };
+        var shell = new ShellViewModel(nav, new AvaloniaThemeManager())
+        {
+            Title = "Demo",
+            UserName = "Ada Lovelace",
+            UserCommands = new[]
+            {
+                new Birko.Xaml.Core.Commands.CommandItem { Id = "profile", Label = "Profile" },
+                new Birko.Xaml.Core.Commands.CommandItem { Id = "signout", Label = "Sign out" },
+            },
+        };
         nav.Navigate("contacts");
         return shell;
     }
@@ -146,5 +155,64 @@ public class ShellRenderTests
         var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
         frame?.Save(Path.Combine(dir, "shell.png"));
         view.IsInitialized.Should().BeTrue();
+    }
+}
+
+public class ShellChromeTests
+{
+    private static ShellViewModel Shell()
+    {
+        var data = new Contacts();
+        var nav = new NavigationService().Register(
+            new ModuleDefinition { Id = "contacts", Label = "Contacts", CreateViewModel = () => new ListPageViewModel<Contact>(data) },
+            new ModuleDefinition { Id = "about", Label = "About", CreateViewModel = () => new ListPageViewModel<Contact>(data) });
+        return new ShellViewModel(nav, new AvaloniaThemeManager()) { Title = "Demo" };
+    }
+
+    [Fact]
+    public void Palette_commands_come_from_modules_and_themes()
+    {
+        var shell = Shell();
+        // 2 modules + 4 themes
+        shell.PaletteCommands.Should().HaveCount(6);
+        shell.PaletteCommands.Should().Contain(c => c.Label == "Go to Contacts");
+        shell.PaletteCommands.Should().Contain(c => c.Label == "Theme: Neon");
+    }
+
+    [Fact]
+    public void OpenPalette_command_opens_the_palette()
+    {
+        var shell = Shell();
+        shell.IsPaletteOpen.Should().BeFalse();
+        shell.OpenPaletteCommand.Execute(null);
+        shell.IsPaletteOpen.Should().BeTrue();
+    }
+
+    [AvaloniaFact]
+    public void Palette_command_navigates()
+    {
+        var shell = Shell();
+        shell.Nav.Navigate("contacts");
+        var about = shell.PaletteCommands.First(c => c.Label == "Go to About");
+        about.Run!.Invoke();
+        shell.Nav.CurrentModule!.Id.Should().Be("about");
+    }
+
+    [AvaloniaFact]
+    public void Ctrl_K_binding_opens_the_palette_via_the_view()
+    {
+        var shell = Shell();
+        var view = new ShellView { DataContext = shell };
+        var window = new Window { Content = view, Width = 800, Height = 500 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(800, 500));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 800, 500));
+
+        // The view hosts a CommandPalette bound to the shell.
+        view.GetVisualDescendants().OfType<Birko.Xaml.Avalonia.Controls.CommandPalette>().Should().ContainSingle();
+
+        shell.OpenPaletteCommand.Execute(null);
+        view.GetVisualDescendants().OfType<Birko.Xaml.Avalonia.Controls.CommandPalette>()
+            .Single().IsOpen.Should().BeTrue("the palette IsOpen is bound to the shell");
     }
 }
