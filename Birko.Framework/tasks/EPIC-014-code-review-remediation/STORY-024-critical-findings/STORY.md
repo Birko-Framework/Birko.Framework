@@ -50,8 +50,8 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [x] **CR-C18** · Birko.Data.Sync · knowledge upserted (create-new/update-existing split), sync + async — 2 regression tests
 - [x] **CR-C19** · Birko.Data.Sync.RavenDB · model implements canonical `ITenant`; `ConvertToRavenItem` copies tenant → end-to-end tenant scoping (reworked to reuse tenant infra) — new `.Tests`
 - [x] **CR-C20** · Birko.Data.Sync.RavenDB · async delete uses tracked entity — compile-guarded
-- [ ] CR-C21 · Birko.Data.XML · batch write single / read List
-- [ ] CR-C22 · Birko.Data.XML · bulk Create/Update/Delete never write
+- [x] **CR-C21** · Birko.Data.XML · real batched List<T> persistence (sync+async, store+bulk) + fixed a pre-existing SetSettings stack-overflow — 3 tests
+- [x] **CR-C22** · Birko.Data.XML · separate stores override bulk Core to write per-file (sync+async) — test
 - [x] **CR-C23** · Birko.Security.AspNetCore · already resolved by the 2026-06-25 delimiter fix (both readers split `[',',';']`); verified + tested
 - [ ] CR-C24 · Birko.Security.BCrypt · unvalidated hand-rolled BCrypt
 
