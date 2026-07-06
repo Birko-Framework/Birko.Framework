@@ -48,7 +48,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [ ] CR-C16 · Birko.Data.SQL.Caching · filter Update/Delete bypass invalidation
 - [ ] CR-C17 · Birko.Data.SQL.ViewModel · hard-coded AbstractConnector generic
 - [ ] CR-C18 · Birko.Data.Sync · knowledge never persisted (Update on null PK)
-- [x] **CR-C19** · Birko.Data.Sync.RavenDB · `TenantGuid` field + `x.TenantGuid == tenantId` filter — new `.Tests` (write-path populate = follow-up)
+- [x] **CR-C19** · Birko.Data.Sync.RavenDB · model implements canonical `ITenant`; `ConvertToRavenItem` copies tenant → end-to-end tenant scoping (reworked to reuse tenant infra) — new `.Tests`
 - [x] **CR-C20** · Birko.Data.Sync.RavenDB · async delete uses tracked entity — compile-guarded
 - [ ] CR-C21 · Birko.Data.XML · batch write single / read List
 - [ ] CR-C22 · Birko.Data.XML · bulk Create/Update/Delete never write
