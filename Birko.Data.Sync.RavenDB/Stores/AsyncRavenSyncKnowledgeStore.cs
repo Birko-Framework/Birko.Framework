@@ -52,7 +52,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         // Apply tenant filter if needed
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.TenantGuid == tenantId);
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -115,13 +115,15 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.TenantGuid == tenantId);
         }
 
         var items = await query.ToListAsync(cancellationToken);
         foreach (var item in items)
         {
-            session.Delete(item.Guid);
+            // Delete the tracked entity, not its Guid — IAsyncDocumentSession has no Guid overload,
+            // so session.Delete(item.Guid) bound to Delete<T>(T) and failed at runtime (CR-C20).
+            session.Delete(item);
         }
 
         await session.SaveChangesAsync(cancellationToken);
@@ -155,7 +157,7 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.TenantGuid == tenantId);
         }
 
         var items = await query.ToListAsync(cancellationToken);
@@ -188,6 +190,8 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
             IsLocalDeleted = item.IsLocalDeleted,
             IsRemoteDeleted = item.IsRemoteDeleted,
             Metadata = item.Metadata
+            // Note: ISyncKnowledgeItem carries no tenant, so TenantGuid stays null on this path.
+            // Threading tenantId through the update methods to populate it is follow-up work (CR-C19).
         };
     }
 

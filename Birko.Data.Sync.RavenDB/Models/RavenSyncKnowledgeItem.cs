@@ -19,6 +19,13 @@ public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// </summary>
     public Guid EntityGuid { get; set; }
 
+    /// <summary>
+    /// Optional tenant this knowledge item belongs to. Used to scope tenant-aware queries.
+    /// Null for single-tenant / tenant-agnostic knowledge. (CR-C19: tenant scoping previously
+    /// filtered on the record's own random Guid, which could never match.)
+    /// </summary>
+    public Guid? TenantGuid { get; set; }
+
     private string _scope = string.Empty;
 
     /// <summary>

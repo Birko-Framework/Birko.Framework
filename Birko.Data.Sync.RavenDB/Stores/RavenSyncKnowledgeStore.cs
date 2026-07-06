@@ -50,7 +50,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
         if (tenantId.HasValue)
         {
             // For tenant-aware storage, could use collection prefix/suffix or document ID filtering
-            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.TenantGuid == tenantId);
         }
 
         var items = query.ToList();
@@ -113,7 +113,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.TenantGuid == tenantId);
         }
 
         var items = query.ToList();
@@ -153,7 +153,7 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
 
         if (tenantId.HasValue)
         {
-            query = query.Where(x => x.Guid!.Value.ToString().StartsWith(tenantId.Value.ToString()));
+            query = query.Where(x => x.TenantGuid == tenantId);
         }
 
         var items = query.ToList();
