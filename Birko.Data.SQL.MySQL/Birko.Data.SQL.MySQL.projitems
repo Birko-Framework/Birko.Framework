@@ -21,5 +21,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\MySqlIndexManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MySqlSettings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStoreFactoryOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\IMySQLStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\MySQLStoreFactory.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions\MySQLServiceCollectionExtensions.cs" />
   </ItemGroup>
 </Project>
