@@ -19,8 +19,8 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Health\Birko.Health.projitems" Label="Shared" />
-  <Import Project="..\Birko.Health.Data\Birko.Health.Data.projitems" Label="Shared" />
-  <Import Project="..\Birko.Health.Redis\Birko.Health.Redis.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Health\Birko.Health.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Health.Data\Birko.Health.Data.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Health.Redis\Birko.Health.Redis.projitems" Label="Shared" />
 
 </Project>
