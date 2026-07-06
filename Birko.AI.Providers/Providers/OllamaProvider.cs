@@ -13,11 +13,12 @@ namespace Birko.AI.Providers
 
         public override string Name => $"Ollama ({_model})";
 
-        public OllamaProvider(string model = "llama3.2", string baseUrl = "http://localhost:11434")
+        public OllamaProvider(string model = "llama3.2", string baseUrl = "http://localhost:11434", HttpMessageHandler? handler = null)
         {
             _model = model;
             _baseUrl = baseUrl.TrimEnd('/');
-            _httpClient = new HttpClient
+            // handler is a test seam (inject a fake HttpMessageHandler); production callers omit it.
+            _httpClient = new HttpClient(handler ?? new HttpClientHandler())
             {
                 Timeout = TimeSpan.FromMinutes(5) // Local models can be slow
             };
@@ -145,15 +146,19 @@ namespace Birko.AI.Providers
                     model = _model,
                     messages = BuildOpenAiStyleMessages(messages, systemPrompt),
                     tools = BuildOpenAiStyleTools(tools),
-                    stream = true
+                    stream = true,
+                    num_predict = -1  // match the non-streaming path (Ollama's max_tokens; -1 = unlimited)
                 };
                 var json = JsonSerializer.Serialize(payload);
+                // POST to the chat endpoint, not the server root — the streaming path previously used
+                // _baseUrl directly, so every streaming call hit e.g. http://localhost:11434 (404). (CR-C01)
+                var url = $"{_baseUrl}/api/chat";
 
                 var response = await SendStreamingWithRetryAsync(
                     _httpClient,
                     () =>
                     {
-                        var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl);
+                        var request = new HttpRequestMessage(HttpMethod.Post, url);
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
