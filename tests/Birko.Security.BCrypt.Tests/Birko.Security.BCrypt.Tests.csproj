@@ -19,7 +19,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Security\Birko.Security.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security.BCrypt\Birko.Security.BCrypt.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security.BCrypt\Birko.Security.BCrypt.projitems" Label="Shared" />
 
 </Project>
