@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — Form field-type parity with b-form (EPIC-015 / TASK-055) (2026-07-06)
+The schema-driven Xaml `Form` supported only 5 field types (Text/TextArea/Number/Checkbox/Select) vs `b-form`'s ~22; this lands the "cheap half" — the types whose restyled Avalonia control already exists. [tasks/EPIC-015/TASK-055](tasks/EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md).
+- **`FieldType` +8:** `Switch` (→ToggleSwitch), `Markdown` (→MarkdownEditor), `Password` (TextBox `PasswordChar`), `Email` / `Search` (TextBox — semantic), `Percent` (numeric TextBox), `Radio` / `OptionGroup` (RadioButton group, vertical/horizontal). `Form.cs` grew the render branches; a radio group two-way-binds each button to the model via an equality converter (checked ⇔ value == option; only the newly-checked one writes back).
+- **`FormField` +5 props (Core, neutral):** `Min` / `Max` (Number/Percent clamp on commit) · `Step` (carried for slider/spinner consumers — TASK-054) · `Default` (seeds the model property when null at bind time) · `Hint` (muted helper text rendered under the field).
+- **Tests:** the `Form` control is Avalonia-side, so tests live in `Birko.Xaml.Avalonia.Tests` (`FormFieldTypesTests`, 8 headless) — Avalonia suite **94→102**; Core stays Avalonia-free (suite 41). Gallery `DemoForm` now shows Email/Password/Switch/Radio/Number+Hint.
+- **Deferred (own tasks):** Range slider (TASK-054), date/time pickers (TASK-056), and MultiSelect/Tags/File (new controls).
+
 ### Birko.Xaml — offline mirror + device utils (EPIC-016 / STORY-040 P3) (2026-07-06)
 Closed STORY-040 (6/6) with the offline/device trio, ported as **neutral abstractions + desktop impls** (mobile backends slot in once `Birko.Xaml.Avalonia` targets mobile TFMs). [tasks/EPIC-016/STORY-040](tasks/EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/STORY.md).
 - **`Data.MirrorDataSource<T>`** (`Birko.Xaml.Core`, Avalonia-free) — network-first read-through over the `ICrudDataSource<T>` port (the web `MirrorStore`/`readThrough` analogue): reads try the remote and refresh a local mirror; on failure fall back to the mirror; a remote 404 evicts the stale entry; writes pass through remote→mirror. Exposes an observable `Status` (`SyncStatus` Synced/Syncing/Offline). Caller supplies an `idOf` selector (the port has no id accessor).

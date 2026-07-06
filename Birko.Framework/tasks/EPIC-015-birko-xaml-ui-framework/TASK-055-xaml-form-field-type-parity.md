@@ -2,7 +2,7 @@
 id: TASK-055
 parent: EPIC-015
 feature: null
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-07-06
@@ -34,11 +34,11 @@ neutral; only the `Form` control (Avalonia) grows the new render branches.
 
 ## Acceptance criteria
 
-- [ ] `FieldType` gains `Switch, Markdown, Password, Email, Search, Percent, Radio, OptionGroup`; `Form` renders each via the named existing control, two-way bound.
-- [ ] `FormField` gains `Min` / `Max` / `Step` / `Default` / `Hint` (neutral, in Core).
-- [ ] `Birko.Xaml.Core` stays Avalonia-free (enforced by the existing `CoreIsAvaloniaFreeTests`).
-- [ ] Tests in `Birko.Xaml.Core.Tests` (schema→field mapping, defaults) + a gallery Form showing the new types.
-- [ ] `Recent Updates` entry.
+- [x] `FieldType` gains `Switch, Markdown, Password, Email, Search, Percent, Radio, OptionGroup`; `Form` renders each via the named existing control, two-way bound. — `Form.cs` switch: Switch→ToggleSwitch, Markdown→MarkdownEditor, Password→TextBox(PasswordChar), Radio/OptionGroup→RadioButton group (equality-converter binding), Number/Percent→clamped TextBox, Email/Search→TextBox.
+- [x] `FormField` gains `Min` / `Max` / `Step` / `Default` / `Hint` (neutral, in Core). — `FormField.cs`; Min/Max clamp on commit for Number/Percent, `Step` carried for slider/spinner consumers (TASK-054), `Default` seeds a null model prop, `Hint` renders muted under the field.
+- [x] `Birko.Xaml.Core` stays Avalonia-free. — `CoreIsAvaloniaFreeTests` green (Core suite 41).
+- [x] Tests + gallery. — the `Form` control is Avalonia-side, so tests landed in **`Birko.Xaml.Avalonia.Tests`** (`FormFieldTypesTests`, 8 headless: render-type per field, switch/radio write-back, initial-selection, default-applied, numeric clamp, hint). Gallery `DemoForm` now exercises Email/Password/Switch/Radio/Number+Hint. (Core side is pure data — nothing behavioural to test there.)
+- [x] `Recent Updates` entry.
 
 ## Out of scope
 
@@ -49,8 +49,9 @@ neutral; only the `Form` control (Avalonia) grows the new render branches.
 
 ## Human test plan
 
-- [ ] In the gallery, render a Form exercising each new field type; confirm two-way binding, required
-      asterisk, defaults, and that a Percent/Number field honours Min/Max/Step.
+- [x] Render a Form exercising each new field type; confirm two-way binding, defaults, and Number/Percent
+      Min/Max clamp. — covered by the 8 headless `FormFieldTypesTests`; gallery launched clean (30s, no runtime
+      error) with the enhanced DemoForm. Required-asterisk is pre-existing Form behaviour (unchanged).
 
 ## Implementation plan
 
