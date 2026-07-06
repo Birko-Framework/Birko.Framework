@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Birko.Xaml.Avalonia.Controls;
 using Birko.Xaml.Avalonia.Theming;
@@ -50,6 +51,16 @@ public class Tier1TailTests
         texts.Should().Contain("Home");
         texts.Should().Contain("Ada");
         texts.Count(t => t == "/").Should().Be(2, "two separators between three crumbs");
+    }
+
+    [AvaloniaFact]
+    public void ListBoxItem_selected_uses_token_foreground()
+    {
+        var list = Show(new ListBox { ItemsSource = new[] { "Alpha", "Beta", "Gamma" } });
+        list.SelectedIndex = 0;
+        Dispatcher.UIThread.RunJobs();
+        var item = list.GetVisualDescendants().OfType<ListBoxItem>().First(i => i.IsSelected);
+        (item.Foreground as ISolidColorBrush)!.Color.Should().Be(Color.Parse("#2563EB"), "selected list items use the primary token");
     }
 
     [AvaloniaFact]

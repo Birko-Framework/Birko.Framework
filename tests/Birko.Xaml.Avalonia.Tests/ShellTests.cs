@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
@@ -207,6 +208,81 @@ public class ShellChromeTests
         var about = shell.PaletteCommands.First(c => c.Label == "Go to About");
         about.Run!.Invoke();
         shell.Nav.CurrentModule!.Id.Should().Be("about");
+    }
+
+    [AvaloniaFact]
+    public void Ribbon_shell_hosts_the_ribbon_and_active_page()
+    {
+        var shell = Shell();
+        shell.RibbonTabs = new[]
+        {
+            new Birko.Xaml.Core.Ribbon.RibbonTab
+            {
+                Id = "home", Label = "Home",
+                Groups = new[]
+                {
+                    new Birko.Xaml.Core.Ribbon.RibbonGroup
+                    {
+                        Label = "Navigate",
+                        Items = new[]
+                        {
+                            new Birko.Xaml.Core.Ribbon.RibbonItem { Id = "c", Label = "Contacts", Icon = "\U0001F465", Run = () => shell.Nav.Navigate("contacts") },
+                            new Birko.Xaml.Core.Ribbon.RibbonItem { Id = "a", Label = "About", Icon = "ℹ", Run = () => shell.Nav.Navigate("about") },
+                        },
+                    },
+                },
+            },
+        };
+        shell.Nav.Navigate("contacts");
+
+        var view = new RibbonShellView { DataContext = shell };
+        var window = new Window { Content = view, Width = 800, Height = 500 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(800, 500));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 800, 500));
+
+        view.GetVisualDescendants().OfType<Birko.Xaml.Avalonia.Controls.Ribbon>().Should().ContainSingle();
+        view.GetVisualDescendants().OfType<ListPageView>().Should().ContainSingle("the active page renders in the content region");
+    }
+
+    [AvaloniaFact]
+    public void Capture_ribbon_shell_screenshot()
+    {
+        var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
+                  ?? Path.Combine(Path.GetTempPath(), "birko-xaml-shots");
+        Directory.CreateDirectory(dir);
+        Application.Current!.RequestedThemeVariant = BirkoThemeVariants.Light;
+
+        var shell = Shell();
+        shell.RibbonTabs = new[]
+        {
+            new Birko.Xaml.Core.Ribbon.RibbonTab { Id = "home", Label = "Home", Groups = new[]
+            {
+                new Birko.Xaml.Core.Ribbon.RibbonGroup { Label = "Navigate", Items = new[]
+                {
+                    new Birko.Xaml.Core.Ribbon.RibbonItem { Id = "c", Label = "Contacts", Icon = "\U0001F465", Run = () => shell.Nav.Navigate("contacts") },
+                    new Birko.Xaml.Core.Ribbon.RibbonItem { Id = "a", Label = "About", Icon = "ℹ" },
+                }},
+                new Birko.Xaml.Core.Ribbon.RibbonGroup { Label = "Records", Items = new[]
+                {
+                    new Birko.Xaml.Core.Ribbon.RibbonItem { Id = "new", Label = "New", Icon = "➕" },
+                    new Birko.Xaml.Core.Ribbon.RibbonItem { Id = "del", Label = "Delete", Icon = "\U0001F5D1" },
+                }},
+            }},
+            new Birko.Xaml.Core.Ribbon.RibbonTab { Id = "view", Label = "View", Groups = Array.Empty<Birko.Xaml.Core.Ribbon.RibbonGroup>() },
+        };
+        shell.Nav.Navigate("contacts");
+
+        var view = new RibbonShellView { DataContext = shell };
+        var window = new Window { Content = view, Width = 820, Height = 520 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(820, 520));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 820, 520));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+        frame?.Save(Path.Combine(dir, "ribbon-shell.png"));
+        view.GetVisualDescendants().OfType<Birko.Xaml.Avalonia.Controls.Ribbon>().Should().ContainSingle();
     }
 
     [AvaloniaFact]
