@@ -108,6 +108,8 @@ public class ShellRenderTests
                 new Birko.Xaml.Core.Commands.CommandItem { Id = "profile", Label = "Profile" },
                 new Birko.Xaml.Core.Commands.CommandItem { Id = "signout", Label = "Sign out" },
             },
+            Tenants = new[] { "Acme Inc.", "Globex" },
+            CurrentTenant = "Acme Inc.",
         };
         nav.Navigate("contacts");
         return shell;
@@ -177,6 +179,15 @@ public class ShellChromeTests
         shell.PaletteCommands.Should().HaveCount(6);
         shell.PaletteCommands.Should().Contain(c => c.Label == "Go to Contacts");
         shell.PaletteCommands.Should().Contain(c => c.Label == "Theme: Neon");
+    }
+
+    [Fact]
+    public void Tenant_switcher_visibility_tracks_tenant_count()
+    {
+        var shell = Shell();
+        shell.HasMultipleTenants.Should().BeFalse("no tenants configured");
+        shell.Tenants = new[] { "A", "B" };
+        shell.HasMultipleTenants.Should().BeTrue();
     }
 
     [Fact]
