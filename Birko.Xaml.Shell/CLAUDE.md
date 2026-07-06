@@ -7,7 +7,10 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
 
 - `ViewLocator.cs` — VM→View: naming convention (`*ViewModel`→`*View`) then generic base-page
   mapping (Split before List, since `SplitPageViewModel<T>` derives from `ListPageViewModel<T>`).
-- `Views/ShellView` — sidebar + header (title + theme switcher) + content region + status bar.
+- `Views/ShellView` — sidebar + header (title + theme switcher + user area) + content region + status
+  bar, with a **Ctrl+K `CommandPalette`** overlaying the whole shell (bound to `ShellViewModel.PaletteCommands`
+  / `IsPaletteOpen`, populated from modules + themes). The user area (avatar + name) shows when
+  `ShellViewModel.UserName` is non-empty, with a Flyout of `UserCommands`.
 - `Views/{List,Detail,Split}PageView` — generic page views over the Core base VMs.
 
 ## Conventions / gotchas
@@ -23,9 +26,11 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
 
 ## Scope / deferred (STORY-036 in-progress)
 
-Delivered the **sidebar shell** (`BSidebarAppShell` analogue) + nav + ViewLocator + page views.
-**Deferred:** ribbon chrome (`BAppShell`), command palette, user-area / tenant switcher, a `FormModal`
-dialog (inline edit covers create/edit), `TransitioningContentControl` animations, ListBox restyle.
+Delivered: the **sidebar shell** (`BSidebarAppShell` analogue) + nav + ViewLocator + page views, the
+**Ctrl+K command palette** (populated from modules + themes), and the **header user area** (avatar +
+name + `UserCommands` dropdown, hidden when no user). **Deferred:** ribbon chrome (`BAppShell`), a
+tenant switcher, a `FormModal` page-shape (inline edit covers create/edit today),
+`TransitioningContentControl` animations, ListBox restyle.
 
 ## Testing
 
