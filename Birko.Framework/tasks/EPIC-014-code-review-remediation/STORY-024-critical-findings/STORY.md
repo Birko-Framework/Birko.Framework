@@ -43,7 +43,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [x] **CR-C11** · Birko.Data.Migrations.RavenDB · `using System.Linq;` added — compile guard
 - [x] **CR-C12** · Birko.Data.Migrations.RavenDB · CountDocuments executes the built query (behavioral test = infra gap)
 - [x] **CR-C13** · Birko.Data.Migrations.RavenDB · CopyData fail-fast `NotSupportedException` — test (full copy = follow-up)
-- [ ] CR-C14 · Birko.Data.Migrations.SQL · schema builder never emits CREATE
+- [x] **CR-C14** · Birko.Data.Migrations.SQL · terminal `Build()` (default iface method) → SQL emits CREATE TABLE/INDEX — SQLite-backed tests
 - [ ] CR-C15 · Birko.Data.MongoDB.Views · persistent view re-runs base pipeline
 - [x] **CR-C16** · Birko.Data.SQL.Caching · filter Update/Delete now invalidate cache — new `.Tests` (key-invariant + mechanism; e2e = infra gap)
 - [x] **CR-C17** · Birko.Data.SQL.ViewModel · repo generic over TConnector (mirrors sync) — new `.Tests` + BardStudio consumer updated
