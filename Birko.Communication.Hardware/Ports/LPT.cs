@@ -20,8 +20,10 @@ namespace Birko.Communication.Hardware.Ports
     {
         private readonly string portname;
         private readonly int portnumber;
+        private readonly int portaddress;
         //  LPT1 : hex:0x378 int:888
-        //  LPT2 : hex:0x278 int: 623
+        //  LPT2 : hex:0x278 int:632
+        //  LPT3 : hex:0x3BC int:956
         [DllImport("inpout32.dll", EntryPoint = "Out32")]
         public static extern void Output(int adress, int value);
 
@@ -32,14 +34,36 @@ namespace Birko.Communication.Hardware.Ports
         public LPT(LPTSettings settings) : base(settings)
         {
             portnumber = settings.Number;
+            portaddress = ResolvePortAddress(settings.Number);
             portname = settings.Name;
+        }
+
+        /// <summary>
+        /// Maps a logical LPT number (1/2/3) to its standard parallel-port base I/O address, which is
+        /// what inpout32 Out32/Inp32 expect as their first argument. Previously the logical number was
+        /// passed straight to Out32/Inp32, so writes/reads hit I/O ports 1/2 instead of the parallel
+        /// data register (CR-C03). Values that are already a raw address (>= 0x100) are passed through
+        /// unchanged, so a caller may specify a non-standard address directly.
+        /// </summary>
+        public static int ResolvePortAddress(int number)
+        {
+            return number switch
+            {
+                1 => 0x378,
+                2 => 0x278,
+                3 => 0x3BC,
+                _ => number >= 0x100 ? number : throw new ArgumentOutOfRangeException(
+                    nameof(number),
+                    number,
+                    "LPT number must be 1, 2 or 3, or a raw I/O address >= 0x100."),
+            };
         }
 
         public override void Write(byte[] data)
         {
             foreach (byte d in data)
             {
-               Output(portnumber, d);
+               Output(portaddress, d);
             }
         }
 
@@ -48,7 +72,7 @@ namespace Birko.Communication.Hardware.Ports
             List<byte> o = new List<byte>();
             for (int i = 0; i < size; i++)
             {
-                o.Add((byte)Input(portnumber));
+                o.Add((byte)Input(portaddress));
             }
             return o.ToArray();
         }
