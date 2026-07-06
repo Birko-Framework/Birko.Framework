@@ -19,7 +19,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
-  <Import Project="..\Birko.Communication.NFC\Birko.Communication.NFC.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Communication\Birko.Communication.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Communication.NFC\Birko.Communication.NFC.projitems" Label="Shared" />
 
 </Project>
