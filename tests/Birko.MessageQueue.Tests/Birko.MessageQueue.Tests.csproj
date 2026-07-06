@@ -20,14 +20,14 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Time\Birko.Time.projitems" Label="Shared" />
-  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
-  <Import Project="..\Birko.Models\Birko.Models.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
-  <Import Project="..\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
-  <Import Project="..\Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Models.Contracts\Birko.Models.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Models\Birko.Models.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.MessageQueue\Birko.MessageQueue.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.MessageQueue.InMemory\Birko.MessageQueue.InMemory.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems" Label="Shared" />
 
 </Project>
