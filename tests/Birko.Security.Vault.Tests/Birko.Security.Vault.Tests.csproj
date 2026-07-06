@@ -20,11 +20,11 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security\Birko.Security.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security.Vault\Birko.Security.Vault.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security.Vault.Configuration\Birko.Security.Vault.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security.Vault\Birko.Security.Vault.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security.Vault.Configuration\Birko.Security.Vault.Configuration.projitems" Label="Shared" />
 
 </Project>
