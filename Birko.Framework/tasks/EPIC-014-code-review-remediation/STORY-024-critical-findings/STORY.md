@@ -52,7 +52,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [ ] CR-C20 · Birko.Data.Sync.RavenDB · async Delete wrong overload
 - [ ] CR-C21 · Birko.Data.XML · batch write single / read List
 - [ ] CR-C22 · Birko.Data.XML · bulk Create/Update/Delete never write
-- [ ] CR-C23 · Birko.Security.AspNetCore · role/permission separator mismatch
+- [x] **CR-C23** · Birko.Security.AspNetCore · already resolved by the 2026-06-25 delimiter fix (both readers split `[',',';']`); verified + tested
 - [ ] CR-C24 · Birko.Security.BCrypt · unvalidated hand-rolled BCrypt
 
 **Test-infra gaps noted while working** (true regression tests need infra / a missing `.Tests` sibling):
