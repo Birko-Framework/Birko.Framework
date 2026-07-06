@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — Slider control + Range field type (EPIC-015 / TASK-054) (2026-07-06)
+Closed the Tier-1 `Slider` gap and wired a `Range` form field — the vertical/equalizer slider the review surfaced. [tasks/EPIC-015/TASK-054](tasks/EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md).
+- **Token-restyled `Slider` ControlTheme** (`Inputs.axaml`), horizontal **and** vertical. Custom template: a rail `Border` + a `Track` laying out DecreaseButton (primary fill) | `Thumb` (white circle, primary border) | transparent IncreaseButton; cross-axis thickness/alignment set per orientation via `:horizontal`/`:vertical` styles on the named parts (one template, both orientations). Sub-themes `BSliderRepeat` / `BSliderThumb`. All `{DynamicResource B*}`.
+- **`Forms.FieldType.Range`** — `Form` renders it as a `Slider` (Min/Max, `Step`→SmallChange+TickFrequency+snap), `RangeBase.Value` two-way bound to the model. (`Min`/`Max`/`Step` came from TASK-055.)
+- **Tests:** Avalonia suite **102→106** — Range-field bind, `Slider_uses_the_birko_template` (both orientations, rail+thumb present), + an equalizer screenshot. Gallery Controls tab shows a horizontal slider + a 6-up vertical equalizer bank; verified visually (grey rail, primary fill bottom→thumb).
+
 ### Birko.Xaml — Form field-type parity with b-form (EPIC-015 / TASK-055) (2026-07-06)
 The schema-driven Xaml `Form` supported only 5 field types (Text/TextArea/Number/Checkbox/Select) vs `b-form`'s ~22; this lands the "cheap half" — the types whose restyled Avalonia control already exists. [tasks/EPIC-015/TASK-055](tasks/EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md).
 - **`FieldType` +8:** `Switch` (→ToggleSwitch), `Markdown` (→MarkdownEditor), `Password` (TextBox `PasswordChar`), `Email` / `Search` (TextBox — semantic), `Percent` (numeric TextBox), `Radio` / `OptionGroup` (RadioButton group, vertical/horizontal). `Form.cs` grew the render branches; a radio group two-way-binds each button to the model via an equality converter (checked ⇔ value == option; only the newly-checked one writes back).

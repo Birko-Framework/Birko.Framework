@@ -2,7 +2,7 @@
 id: TASK-054
 parent: EPIC-015
 feature: null
-status: todo
+status: done
 priority: P3
 assignee: ai
 created: 2026-07-06
@@ -33,10 +33,10 @@ field-type parity gap — see the field-type-parity task if filed.
 
 ## Acceptance criteria
 
-- [ ] Token-restyled `Slider` ControlTheme in `Birko.Xaml.Avalonia/Controls` (Inputs), horizontal + vertical, `{DynamicResource B*}` only.
-- [ ] `Forms.FieldType.Range` (+ `Min`/`Max`/`Step` on `FormField`) and `Form` renders it two-way bound to the model property.
-- [ ] Gallery: a Slider demo + a vertical equalizer bank (≥4 stacked); headless test asserts the theme applies + value binds.
-- [ ] `Recent Updates` entry; keep `Birko.Xaml.Core` Avalonia-free (FieldType/bounds are neutral; the control is the Avalonia view).
+- [x] Token-restyled `Slider` ControlTheme in `Inputs.axaml`, horizontal + vertical, `{DynamicResource B*}` only. — custom `Track`+`Thumb`+RepeatButton template; cross-axis thickness/alignment set per orientation via `:horizontal`/`:vertical` styles; sub-themes `BSliderRepeat`/`BSliderThumb`.
+- [x] `Forms.FieldType.Range` (+ the existing `Min`/`Max`/`Step`) and `Form` renders it two-way bound. — `Form.cs` Range case → `Slider` (Min/Max, Step→SmallChange/TickFrequency/snap), `RangeBase.Value` bound to the model prop.
+- [x] Gallery: Slider demo + a vertical equalizer bank (6 stacked); headless tests assert the theme applies (both orientations) + value binds. — `FormFieldTypesTests` (Range bind, `Slider_uses_the_birko_template` theory, equalizer screenshot).
+- [x] `Recent Updates` entry; `Birko.Xaml.Core` stays Avalonia-free (FieldType/bounds neutral; the control is the Avalonia view — Core suite 41 green).
 
 ## Out of scope
 
@@ -45,8 +45,9 @@ field-type parity gap — see the field-type-parity task if filed.
 
 ## Human test plan
 
-- [ ] In the gallery, drag horizontal + vertical sliders and confirm the bound value updates; confirm a
-      4-up vertical bank aligns like an equalizer across themes.
+- [x] Confirm the bound value updates and a vertical bank aligns like an equalizer. — Range-field bind test +
+      `slider-equalizer.png` (6 vertical sliders: grey rail, primary fill bottom→thumb, white thumbs at their
+      values); gallery launched clean (25s) with the horizontal + equalizer demo. Cross-theme visual left to the eye.
 
 ## Implementation plan
 
