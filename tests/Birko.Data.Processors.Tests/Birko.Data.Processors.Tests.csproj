@@ -23,7 +23,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Processors\Birko.Data.Processors.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Processors\Birko.Data.Processors.projitems" Label="Shared" />
 
 </Project>
