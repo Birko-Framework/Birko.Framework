@@ -77,6 +77,10 @@
 			"path": "../Birko.Communication"
 		},
 		{
+			"name": "Communication / Birko.Communication.AspNetCore",
+			"path": "../Birko.Communication.AspNetCore"
+		},
+		{
 			"name": "Communication / Birko.Communication.Bluetooth",
 			"path": "../Birko.Communication.Bluetooth"
 		},
@@ -647,6 +651,10 @@
 		{
 			"name": "Tests / Birko.Caching.Tests",
 			"path": "../../Framework.Tests/Birko.Caching.Tests"
+		},
+		{
+			"name": "Tests / Birko.Communication.AspNetCore.Tests",
+			"path": "../../Framework.Tests/Birko.Communication.AspNetCore.Tests"
 		},
 		{
 			"name": "Tests / Birko.Communication.Camera.Tests",

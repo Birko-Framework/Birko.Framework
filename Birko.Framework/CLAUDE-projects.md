@@ -60,6 +60,7 @@
 - **Birko.Communication.Camera** - Camera frame capture (FFmpeg-based JPEG snapshots)
 - **Birko.Communication.IR** - Consumer IR (38 kHz, NEC/Samsung/RC5, pluggable transports)
 - **Birko.Communication.NFC** - NFC/RFID tag reading (ISO 14443A, NDEF, pluggable transports)
+- **Birko.Communication.AspNetCore** - ASP.NET Core minimal-API helpers (owner-scoped CRUD skeleton: MapOwnedCrud, OwnedCrudResults, OwnedCrudMapping)
 
 ## Messaging
 - **Birko.Messaging** - Core interfaces (IMessageSender, IEmailSender, ISmsSender, IPushSender), SMTP, string templates

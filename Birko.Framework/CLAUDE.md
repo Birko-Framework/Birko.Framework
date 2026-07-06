@@ -139,6 +139,11 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Communication.AspNetCore — docs backfill + workspace registration (2026-07-06)
+The `Birko.Communication.AspNetCore` project (owner-scoped minimal-API CRUD helpers) had shipped its code + tests but was missing the mandatory per-project docs and its `.code-workspace` folder entries. Backfilled to convention — no code change.
+- **Per-project docs added** — `README.md`, `CLAUDE.md`, `License.md` (the standard trio every sibling carries), documenting `MapOwnedCrud<TModel,TRequest,TRepo>`, the host-free `OwnedCrudResults` guards (404-absent/foreign, 409-own-vs-404-foreign id, PUT/DELETE gate), and the per-resource `OwnedCrudMapping` delegate set. Requires the `Microsoft.AspNetCore.App` shared framework in the host (like `.gRPC.Server`).
+- **Root registration** — added to `README.md` (Communication table), `CLAUDE-projects.md` (Communication list), `docs/communication.md` (new section), and `Birko.Framework.code-workspace` (project + `.Tests` folders; it was already in `Birko.Framework.slnx`).
+
 ### Birko.Xaml — clickable Breadcrumb (web b-breadcrumb parity) (2026-07-06)
 The Avalonia `Breadcrumb` was display-only (static `TextBlock`s from an `IEnumerable` of arbitrary objects) while the web `b-breadcrumb` renders non-last crumbs as `<a href>` links. Brought them to parity.
 - **`Navigation.BreadcrumbItem`** (`Birko.Xaml.Core`, Avalonia-free) — the crumb model (`Label` + optional `Href` / `Run`), mirroring the web `{ label, href? }` items.

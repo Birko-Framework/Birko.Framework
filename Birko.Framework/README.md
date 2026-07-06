@@ -190,6 +190,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Communication.GraphQL | GraphQL client (queries, mutations, subscriptions over HttpClient + ClientWebSocket, zero external deps) |
 | Birko.Communication.gRPC | gRPC client (channel pool, typed client factory, auth interceptor, settings over Grpc.Net.Client) |
 | Birko.Communication.gRPC.Server | gRPC server (AddBirkoGrpc DI wiring, server auth interceptor over Grpc.AspNetCore) |
+| Birko.Communication.AspNetCore | ASP.NET Core minimal-API helpers — owner-scoped CRUD skeleton (MapOwnedCrud + ownership guards) |
 
 ### AI / LLM
 
