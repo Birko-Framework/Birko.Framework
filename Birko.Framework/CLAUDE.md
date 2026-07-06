@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — Form MultiSelect / Tags / File field types (EPIC-015 / TASK-057) (2026-07-06)
+The remaining `b-form` field types that needed new Xaml controls — closes the field-type parity gap entirely. [tasks/EPIC-015/TASK-057](tasks/EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md).
+- **MultiSelect** → a multi-`ListBox` (`SelectionMode=Multiple|Toggle`) over `Options`, synced to an `IList` model prop on SelectionChanged (SelectedItems isn't bindable); initial model selection reflected.
+- **Tags** → a `WrapPanel` chip input over an `IList<string>` (seeded when null): Enter adds, ✕/Backspace removes, chips re-render (token-styled).
+- **File** → a read-only path `TextBox` (bound to a `string`) + a Browse `Button` via `TopLevel.StorageProvider.OpenFilePickerAsync` (no-op headless/unsupported).
+- Core stays Avalonia-free (FieldType neutral; controls in the Avalonia `Form`). Avalonia suite **111→116** (MultiSelect/Tags bind, File render, screenshot); gallery `DemoForm` exercises all three; screenshot-verified. **`FieldType` is now 21** — full parity with `b-form` (the File OS-dialog pick is the one manual check). EPIC-015 complete.
+
 ### Birko.Web.Components — b-range vertical orientation (equalizer) (EPIC-001 / TASK-053) (2026-07-06)
 The web counterpart to the Xaml Slider work: `b-range` gained a vertical mode so it can stack into an equalizer/mixer. [tasks/EPIC-001/TASK-053](tasks/EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md).
 - **`orientation` attribute** (`horizontal` default | `vertical`). Vertical: native input via `writing-mode: vertical-lr` + `direction: rtl` (up = more); the custom rail/fill overlay geometry switches to bottom/height (`_fillStyle` + `_updateFill` branch). Horizontal path untouched.

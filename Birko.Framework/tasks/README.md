@@ -11,7 +11,7 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 3     | 2       | 1     |
 | review       | —     | —       | 5     |
 | blocked      | —     | —       | 0     |
-| done         | 2     | 14      | 16    |
+| done         | 2     | 14      | 17    |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -107,10 +107,11 @@ _Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — planned (CR-H001 … CR-H147)
   - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — planned (CR-M001 …)
   - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — done (8 stories + 3 follow-up controls: Slider, field-type parity, date/time pickers)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — done (8 stories + follow-up controls: Slider, field-type parity, date/time pickers, multi-select/tags/file)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Restyled Slider (Tier-1 gap) + Range Form field type (P3, ai) — **done**
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Form field-type parity with b-form: wire existing controls + FormField props (P2, ai) — **done**
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Date & time picker controls + field types (P2, ai) — **done**
+  - [x] [TASK-057](EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md) Form field types: MultiSelect / Tags / File (P2, ai) — **done** (File OS-dialog pick = manual)
   - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (Birko.DesignTokens: byte-identical CSS + AXAML, 30 tests)
   - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (Birko.Xaml.Core + .Avalonia: ThemeDictionaries + runtime swap, 8 headless tests)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (gate GO: Button/TextBox/Card/Badge + gallery, 15 tests + per-theme screenshots)
