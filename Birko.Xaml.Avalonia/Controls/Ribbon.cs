@@ -21,22 +21,30 @@ public class Ribbon : ContentControl
     public static readonly StyledProperty<int> SelectedIndexProperty =
         AvaloniaProperty.Register<Ribbon, int>(nameof(SelectedIndex));
 
+    public static readonly StyledProperty<bool> IsCollapsedProperty =
+        AvaloniaProperty.Register<Ribbon, bool>(nameof(IsCollapsed));
+
     static Ribbon()
     {
         TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
     }
 
     public IEnumerable<RibbonTab>? Tabs { get => GetValue(TabsProperty); set => SetValue(TabsProperty, value); }
     public int SelectedIndex { get => GetValue(SelectedIndexProperty); set => SetValue(SelectedIndexProperty, value); }
+
+    /// <summary>When true, only the tab strip shows (the "tabs-only" / minimized ribbon). The chevron
+    /// at the strip's end toggles it; clicking the active tab also toggles.</summary>
+    public bool IsCollapsed { get => GetValue(IsCollapsedProperty); set => SetValue(IsCollapsedProperty, value); }
 
     private void Rebuild()
     {
         var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
         int selected = tabs.Count == 0 ? -1 : System.Math.Clamp(SelectedIndex, 0, tabs.Count - 1);
 
-        // Tab strip
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(8, 4, 8, 0) };
+        // Tab strip (tabs on the left, a collapse chevron on the right)
+        var tabButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         for (int i = 0; i < tabs.Count; i++)
         {
             int index = i;
@@ -48,20 +56,45 @@ public class Ribbon : ContentControl
             };
             tabButton.Bind(ForegroundProperty, tabButton.GetResourceObservable(
                 i == selected ? "BColorPrimaryBrush" : "BTextSecondaryBrush"));
-            tabButton.Click += (_, _) => SelectedIndex = index;
-            strip.Children.Add(tabButton);
+            // Selecting a tab shows it; clicking the already-active tab toggles collapse (Office-style).
+            tabButton.Click += (_, _) =>
+            {
+                if (index == SelectedIndex) IsCollapsed = !IsCollapsed;
+                else { SelectedIndex = index; IsCollapsed = false; }
+            };
+            tabButtons.Children.Add(tabButton);
         }
 
-        // Active tab groups
-        var groupsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8) };
-        if (selected >= 0)
-            foreach (var group in tabs[selected].Groups)
-                groupsPanel.Children.Add(BuildGroup(group));
+        var chevron = new Button
+        {
+            Content = new TextBlock { Text = IsCollapsed ? "⌄" : "⌃" },
+            Background = Brushes.Transparent,
+            Padding = new Thickness(10, 6),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            [ToolTip.TipProperty] = IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon",
+        };
+        chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
+        chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
+
+        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 4, 8, 0) };
+        Grid.SetColumn(tabButtons, 0);
+        Grid.SetColumn(chevron, 1);
+        strip.Children.Add(tabButtons);
+        strip.Children.Add(chevron);
 
         var body = new DockPanel();
         DockPanel.SetDock(strip, Dock.Top);
         body.Children.Add(strip);
-        body.Children.Add(groupsPanel);
+
+        // Active tab groups — hidden when collapsed (tabs-only mode)
+        if (!IsCollapsed)
+        {
+            var groupsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8) };
+            if (selected >= 0)
+                foreach (var group in tabs[selected].Groups)
+                    groupsPanel.Children.Add(BuildGroup(group));
+            body.Children.Add(groupsPanel);
+        }
 
         var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
