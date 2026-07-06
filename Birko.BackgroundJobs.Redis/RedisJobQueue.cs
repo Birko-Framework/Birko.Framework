@@ -97,7 +97,10 @@ namespace Birko.BackgroundJobs.Redis
         {
             var db = _connectionManager.GetDatabase();
             var queueKey = GetQueueKey(queueName);
-            var now = DateTime.UtcNow.Ticks;
+            // Encode the threshold on the SAME scale as the stored score's time component (CR-C02):
+            // previously this passed raw ticks while the score used ticks/1e4, so the threshold was
+            // ~4 orders of magnitude larger than any score and every future job dequeued immediately.
+            var now = GetDequeueThreshold(DateTime.UtcNow);
 
             // Atomic dequeue using Lua script
             var result = await db.ScriptEvaluateAsync(
@@ -342,15 +345,36 @@ namespace Birko.BackgroundJobs.Redis
 
         #region Scoring
 
+        // The dequeue threshold uses this exact time encoding (scheduledAt.Ticks / TimeScale). Keep
+        // the two in lock-step — a mismatch is what made every future-scheduled job dequeue
+        // immediately (CR-C02).
+        private const double TimeScale = 1e4; // ticks -> 0.1ms units (keeps values in double's precise range)
+
+        // The priority tiebreaker is deliberately bounded to strictly less than one time unit so it
+        // can reorder jobs of (effectively) the same scheduled time WITHOUT ever pulling a
+        // future-scheduled job across the eligibility threshold. Higher priority -> larger bonus
+        // subtracted -> lower score -> dequeued first among ready jobs.
+        private const double MaxPriorityBonus = 0.999;
+
         /// <summary>
-        /// Calculates queue score for sorted set ordering.
-        /// Lower score = dequeued first. Higher priority jobs get lower scores.
-        /// Score = -(priority * 1e13) + scheduledAt.Ticks / 1e4
-        /// This ensures priority dominates, with FIFO within same priority.
+        /// Calculates the sorted-set score. Time dominates (so scheduled/delayed jobs are not
+        /// eligible until their time), with priority as a bounded tiebreaker among ready jobs.
+        /// Lower score = dequeued first.
         /// </summary>
         private static double GetQueueScore(int priority, DateTime scheduledAt)
         {
-            return -(priority * 1e13) + (scheduledAt.Ticks / 1e4);
+            var priorityBonus = Math.Clamp(priority, 0, 999) * (MaxPriorityBonus / 999.0);
+            return (scheduledAt.Ticks / TimeScale) - priorityBonus;
+        }
+
+        /// <summary>
+        /// The dequeue eligibility threshold for "now": a job is eligible once its scheduled time has
+        /// passed, regardless of priority. Encoded on the same scale as <see cref="GetQueueScore"/>'s
+        /// time component so the comparison is meaningful.
+        /// </summary>
+        private static double GetDequeueThreshold(DateTime now)
+        {
+            return now.Ticks / TimeScale;
         }
 
         #endregion
