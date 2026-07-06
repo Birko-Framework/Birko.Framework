@@ -205,7 +205,9 @@ namespace Birko.Data.Migrations.SQL.Context
                 return this;
             }
 
-            internal void Build()
+            // Public so it satisfies ICollectionBuilder.Build() — the terminal a migration calls to
+            // actually emit the CREATE TABLE. Previously internal + never invoked (CR-C14).
+            public void Build()
             {
                 if (_built) return;
                 _built = true;
@@ -294,7 +296,9 @@ namespace Birko.Data.Migrations.SQL.Context
 
             public IIndexBuilder WithProperty(string key, object value) => this;
 
-            internal void Build()
+            // Public so it satisfies IIndexBuilder.Build() — the terminal a migration calls to emit
+            // the CREATE INDEX. Previously internal + never invoked (CR-C14).
+            public void Build()
             {
                 if (_built) return;
                 _built = true;
