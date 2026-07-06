@@ -105,7 +105,9 @@ colors/sizes), split by category under `Controls/` and merged by `Controls.axaml
 
 - **Tier-1 (~20 restyled native controls)** — `Button`, `TextBox` (single + multiline), `ComboBox`,
   `CheckBox`, `RadioButton`, `ToggleSwitch`, `Card`, `TabControl`, `Badge`, `Tag`, `ProgressBar`,
-  `ToolTip`, dropdown `Menu`, `BusySpinner`, `Breadcrumb`, `TreeView`, `ListBoxItem`, and the
+  `ToolTip`, dropdown `Menu`, `BusySpinner`, `Breadcrumb` (crumbs are clickable when fed
+  `BreadcrumbItem`s with a `Run`/`Href` — the last is the current location; parity with web
+  `b-breadcrumb`), `TreeView`, `ListBoxItem`, and the
   token-restyled `DataGrid` (its theme ships as **Styles**, so it's a separate `StyleInclude`).
 - **Building blocks** — `Form` (schema-driven from `FormField[]` + a model, two-way reflection
   binding), `Drawer` (slide-in overlay), `SplitPanel` (master/detail over a `GridSplitter`,

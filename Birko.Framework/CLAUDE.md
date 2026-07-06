@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — clickable Breadcrumb (web b-breadcrumb parity) (2026-07-06)
+The Avalonia `Breadcrumb` was display-only (static `TextBlock`s from an `IEnumerable` of arbitrary objects) while the web `b-breadcrumb` renders non-last crumbs as `<a href>` links. Brought them to parity.
+- **`Navigation.BreadcrumbItem`** (`Birko.Xaml.Core`, Avalonia-free) — the crumb model (`Label` + optional `Href` / `Run`), mirroring the web `{ label, href? }` items.
+- **`Breadcrumb` control** (`Birko.Xaml.Avalonia`) — `ItemsSource` now accepts plain values (static text, **backward compatible** — strings still render as before) **or** `BreadcrumbItem`s. A non-last item carrying a `Run` action or an `Href` renders as a clickable text link; clicking invokes `Run` and raises a new `ItemInvoked` event (so a shell can route on `Href`). The **last** crumb is the current location and is never clickable (exact web behaviour).
+- **`BBreadcrumbLink` ControlTheme** (`Controls/Nav.axaml`, merged by `Controls.axaml`) — a chrome-free `Button` styled as a link: token-driven secondary text that turns primary + underlined on hover (web `a` / `a:hover`), disabled-opacity aware. Resolved in code via `Application.Current.TryGetResource` (falls back to a plain clickable button if absent).
+- **Tests:** Avalonia suite **116→119** (`Tier1TailTests`: links render only for non-last items with a target; click fires `Run` + `ItemInvoked` carrying the item/`Href`; last item is never a link). Core stays Avalonia-free (suite 41 — `BreadcrumbItem` is pure model).
+
 ### Birko.Xaml — Form MultiSelect / Tags / File field types (EPIC-015 / TASK-057) (2026-07-06)
 The remaining `b-form` field types that needed new Xaml controls — closes the field-type parity gap entirely. [tasks/EPIC-015/TASK-057](tasks/EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md).
 - **MultiSelect** → a multi-`ListBox` (`SelectionMode=Multiple|Toggle`) over `Options`, synced to an `IList` model prop on SelectionChanged (SelectedItems isn't bindable); initial model selection reflected.
