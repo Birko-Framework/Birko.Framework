@@ -32,8 +32,14 @@ Delivered the shell **MVP** — a working desktop CRUD app shape end-to-end.
 - **User area:** header shows an avatar + `UserName` (hidden when empty) with a Flyout of
   `UserCommands` (`RunUserCommand`). Screenshot-verified.
 
-**Remaining / deferred:** the **ribbon** chrome (`BAppShell`), a tenant switcher, a `FormModal`
-page-shape (inline edit covers create/edit for now), content-transition animations, ListBox restyle.
+- **Tenant switcher:** header `ComboBox` bound to `ShellViewModel.Tenants`/`CurrentTenant`, shown when
+  `HasMultipleTenants`. Screenshot-verified.
+- **`FormModal` page-shape:** reusable `FormModal` control (`Birko.Xaml.Avalonia`) composing `Modal` +
+  `Form` + Save/Cancel (`IsOpen`/`Title`/`Fields`/`Model`/`SaveCommand`/`CancelCommand`). Verified
+  (hosts modal+form, Save runs command + closes, Cancel closes, screenshot). The epic's `FormModal<T>`.
+
+**Remaining / deferred:** the **ribbon** chrome (`BAppShell`), `TransitioningContentControl`
+animations, ListBox restyle/display templating.
 
 # Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation
 

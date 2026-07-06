@@ -139,11 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
-### Birko.Xaml.Shell — Ctrl+K command palette + user area wired into the shell (EPIC-015 / STORY-036) (2026-07-06)
-Advanced the shell chrome. [tasks/EPIC-015/STORY-036](tasks/EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md).
-- **Command palette (Ctrl+K):** `ShellViewModel` builds `PaletteCommands` from the nav modules (go-to) + themes (switch), and exposes `IsPaletteOpen` + `OpenPaletteCommand`. `ShellView` overlays the `CommandPalette` (from STORY-035) bound to those, opened by a `Ctrl+K` `KeyBinding` — the palette control built earlier is now the live shell palette.
-- **User area:** the header shows an avatar + `UserName` (hidden when empty, via `StringConverters.IsNotNullOrEmpty`) with a Flyout of `UserCommands` invoked through `RunUserCommand`. Screenshot-verified (theme switcher + "Ada Lovelace" badge).
-- **4 tests** (palette commands built from modules+themes, `OpenPalette` opens, a palette command navigates, the `Ctrl+K` binding drives the bound palette's `IsOpen`). Avalonia suite now **69**. Remaining STORY-036: ribbon, tenant switcher, `FormModal` page-shape.
+### Birko.Xaml.Shell — command palette (Ctrl+K), user area, tenant switcher, FormModal (EPIC-015 / STORY-036) (2026-07-06)
+Advanced the shell chrome + page shapes. [tasks/EPIC-015/STORY-036](tasks/EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md).
+- **Command palette (Ctrl+K):** `ShellViewModel` builds `PaletteCommands` from the nav modules (go-to) + themes (switch), exposes `IsPaletteOpen`/`OpenPaletteCommand`; `ShellView` overlays the `CommandPalette` (from STORY-035) bound to those, opened by a `Ctrl+K` `KeyBinding`.
+- **User area:** header avatar + `UserName` (hidden when empty) with a Flyout of `UserCommands` (`RunUserCommand`).
+- **Tenant switcher:** header `ComboBox` bound to `Tenants`/`CurrentTenant`, shown when `HasMultipleTenants`.
+- **`FormModal` page-shape** (`Birko.Xaml.Avalonia`): reusable create/edit dialog composing `Modal` + `Form` + Save/Cancel (`IsOpen`/`Title`/`Fields`/`Model`/`SaveCommand`/`CancelCommand`). The epic's `FormModal<T>`.
+- Screenshot-verified (full header chrome: tenant + theme + user; and the FormModal dialog). **11 shell/formmodal tests**, Avalonia suite now **74**. Remaining STORY-036: the ribbon (`BAppShell`), transition animations, ListBox restyle.
 
 ### Birko.Xaml.Avalonia — Tier-2 composites: tree-menu, command-palette, viewers, kanban, markdown-editor (EPIC-015 / STORY-035) (2026-07-05)
 Building the Tier-2 composites. [tasks/EPIC-015/STORY-035](tasks/EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) in-progress.
