@@ -741,6 +741,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.Caching.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Migrations.MongoDB.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Migrations.MongoDB.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
 			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
 		},

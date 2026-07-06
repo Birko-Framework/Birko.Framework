@@ -38,13 +38,13 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [ ] CR-C04 · Birko.Data.CosmosDB · missing `id` property
 - [x] **CR-C05** · Birko.Data.EventSourcing · single Create Guid linkage — new `.Tests` project + test
 - [x] **CR-C06** · Birko.Data.EventSourcing · bulk Create Guid linkage (sync + async) — tests
-- [ ] CR-C09 · Birko.Data.Migrations.MongoDB · transaction wraps no ops
+- [x] **CR-C09** · Birko.Data.Migrations.MongoDB · session threaded through context/migrator/schema-builder → ops join the txn (+ bonus CR-H062) — compile-guard `.Tests` (behavioral = replica-set gap; store-record residual)
 - [x] **CR-C10** · Birko.Data.Migrations.RavenDB · `using System.Linq;` added — new `.Tests` compile guard
 - [x] **CR-C11** · Birko.Data.Migrations.RavenDB · `using System.Linq;` added — compile guard
 - [x] **CR-C12** · Birko.Data.Migrations.RavenDB · CountDocuments executes the built query (behavioral test = infra gap)
 - [x] **CR-C13** · Birko.Data.Migrations.RavenDB · CopyData fail-fast `NotSupportedException` — test (full copy = follow-up)
 - [x] **CR-C14** · Birko.Data.Migrations.SQL · terminal `Build()` (default iface method) → SQL emits CREATE TABLE/INDEX — SQLite-backed tests
-- [ ] CR-C15 · Birko.Data.MongoDB.Views · persistent view re-runs base pipeline
+- [x] **CR-C15** · Birko.Data.MongoDB.Views · query-only stages on the view; base prepended only on-the-fly (behavioral test = live Mongo infra gap)
 - [x] **CR-C16** · Birko.Data.SQL.Caching · filter Update/Delete now invalidate cache — new `.Tests` (key-invariant + mechanism; e2e = infra gap)
 - [x] **CR-C17** · Birko.Data.SQL.ViewModel · repo generic over TConnector (mirrors sync) — new `.Tests` + BardStudio consumer updated
 - [x] **CR-C18** · Birko.Data.Sync · knowledge upserted (create-new/update-existing split), sync + async — 2 regression tests
