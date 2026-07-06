@@ -121,6 +121,61 @@ public class FormFieldTypesTests
     }
 
     [AvaloniaFact]
+    public void Range_field_renders_slider_and_binds()
+    {
+        var model = new Model();
+        var form = Show(model, new FormField
+        {
+            Name = nameof(Model.Amount), Type = FieldType.Range, Min = 0, Max = 10, Step = 1,
+        });
+
+        var slider = form.GetVisualDescendants().OfType<Slider>().Should().ContainSingle().Subject;
+        slider.Minimum.Should().Be(0);
+        slider.Maximum.Should().Be(10);
+
+        slider.Value = 7;
+        model.Amount.Should().Be(7, "dragging the slider writes back to the model");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(Orientation.Horizontal)]
+    [InlineData(Orientation.Vertical)]
+    public void Slider_uses_the_birko_template(Orientation orientation)
+    {
+        var slider = new Slider { Orientation = orientation, Minimum = 0, Maximum = 100, Value = 50, Width = 200, Height = 200 };
+        var window = new Window { Content = slider, Width = 240, Height = 240 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(240, 240));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 240, 240));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        // The Birko ControlTheme names its rail Border "rail" — its presence proves our theme won over Fluent's.
+        slider.GetVisualDescendants().OfType<Border>().Any(b => b.Name == "rail").Should().BeTrue();
+        slider.GetVisualDescendants().OfType<Thumb>().Should().ContainSingle("the slider template must expose a draggable thumb");
+    }
+
+    [AvaloniaFact]
+    public void Capture_equalizer_screenshot()
+    {
+        var dir = Environment.GetEnvironmentVariable("BIRKO_SHOTS")
+                  ?? Path.Combine(Path.GetTempPath(), "birko-xaml-shots");
+        Directory.CreateDirectory(dir);
+
+        var bank = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, Margin = new global::Avalonia.Thickness(20) };
+        foreach (var v in new double[] { 30, 55, 80, 45, 65, 20 })
+            bank.Children.Add(new Slider { Orientation = Orientation.Vertical, Minimum = 0, Maximum = 100, Value = v });
+        var window = new Window { Content = bank, Width = 260, Height = 220 };
+        window.Show();
+        window.Measure(new global::Avalonia.Size(260, 220));
+        window.Arrange(new global::Avalonia.Rect(0, 0, 260, 220));
+        global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+        var frame = global::Avalonia.Headless.HeadlessWindowExtensions.CaptureRenderedFrame(window);
+        frame?.Save(Path.Combine(dir, "slider-equalizer.png"));
+        bank.GetVisualDescendants().OfType<Slider>().Should().HaveCount(6);
+    }
+
+    [AvaloniaFact]
     public void Hint_is_rendered_under_the_field()
     {
         var form = Show(new Model(), new FormField { Name = nameof(Model.Text), Type = FieldType.Text, Hint = "we never share it" });
