@@ -19,10 +19,10 @@
     </PackageReference>
   </ItemGroup>
 
-  <Import Project="..\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security\Birko.Security.projitems" Label="Shared" />
-  <Import Project="..\Birko.Security.AzureKeyVault\Birko.Security.AzureKeyVault.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Serialization\Birko.Serialization.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security\Birko.Security.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Security.AzureKeyVault\Birko.Security.AzureKeyVault.projitems" Label="Shared" />
 
 </Project>
