@@ -200,6 +200,37 @@ namespace Birko.Data.XML.Stores
             }
         }
 
+        // The bulk *CoreAsync overloads inherited from AbstractAsyncXmlStore only mutate _items and
+        // call the no-op SaveDataAsync(), so bulk Create/Update/Delete never wrote files (CR-C22).
+        // Route them through the per-file single-item CoreAsync methods so they persist to disk.
+
+        /// <inheritdoc />
+        protected override async Task CreateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        {
+            foreach (var item in data.Where(x => x != null))
+            {
+                await CreateCoreAsync(item, storeDelegate, ct);
+            }
+        }
+
+        /// <inheritdoc />
+        protected override async Task UpdateCoreAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+        {
+            foreach (var item in data.Where(x => x != null))
+            {
+                await UpdateCoreAsync(item, storeDelegate, ct);
+            }
+        }
+
+        /// <inheritdoc />
+        protected override async Task DeleteCoreAsync(IEnumerable<T> data, CancellationToken ct = default)
+        {
+            foreach (var item in data.Where(x => x != null))
+            {
+                await DeleteCoreAsync(item, ct);
+            }
+        }
+
         #endregion
     }
 }

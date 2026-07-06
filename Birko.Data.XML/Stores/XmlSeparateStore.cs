@@ -183,6 +183,37 @@ namespace Birko.Data.XML.Stores
             }
         }
 
+        // The bulk Core overloads inherited from AbstractXmlStore only mutate _items and call the
+        // no-op SaveData(), so bulk Create/Update/Delete never wrote files (CR-C22). Route them
+        // through the per-file single-item Core methods so bulk operations persist to disk.
+
+        /// <inheritdoc />
+        protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            foreach (var item in data.Where(x => x != null))
+            {
+                CreateCore(item, storeDelegate);
+            }
+        }
+
+        /// <inheritdoc />
+        protected override void UpdateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
+        {
+            foreach (var item in data.Where(x => x != null))
+            {
+                UpdateCore(item, storeDelegate);
+            }
+        }
+
+        /// <inheritdoc />
+        protected override void DeleteCore(IEnumerable<T> data)
+        {
+            foreach (var item in data.Where(x => x != null))
+            {
+                DeleteCore(item);
+            }
+        }
+
         #endregion
     }
 }
