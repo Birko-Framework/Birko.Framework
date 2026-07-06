@@ -12,6 +12,11 @@ Birko ships three TypeScript projects for building modern Single-Page Applicatio
 
 All three are **pure TypeScript ES modules** with no build tooling. They are consumed via TypeScript path aliases or esbuild path mappings in the downstream app. No virtual DOM, no bundler required.
 
+> **Desktop counterpart:** [Birko.Xaml](xaml.md) is the Avalonia-first XAML analogue of this
+> stack — same design system, theming, i18n, and MVVM shapes, driven from the **same single
+> source of design tokens** (`Birko.DesignTokens` generates byte-identical web CSS *and* Avalonia
+> AXAML), so a web screen and its desktop equivalent can never drift on colors/spacing/radii.
+
 ## Birko.Web.Core
 
 ### `BaseComponent`

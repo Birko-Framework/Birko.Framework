@@ -39,6 +39,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - Serialization abstractions (System.Text.Json, Newtonsoft.Json, MessagePack, Protobuf, YAML)
 - Data structures (trees, AVL, interval tree, graphs, heaps, tries, LRU cache, Bloom filter, ring buffer, disjoint set, skip list, deque)
 - Web component framework (Shadow DOM, reactive state, HTTP/SSE clients, hash router, unified i18n singleton, 55 components across inputs/layout/data/feedback/nav/command palette, three-level app shell hierarchy `BCoreAppShell → BSidebarAppShell → BAppShell`)
+- Desktop / XAML UI framework (Birko.Xaml — Avalonia-first, single-source design tokens shared byte-for-byte with the web CSS, 4 runtime-swappable themes, ~20 restyled controls + Tier-2 composites, Avalonia-free MVVM core, sidebar + ribbon app shell)
 - Health checks (disk, memory, SQL, NoSQL, Redis, Azure, MQTT, SMTP, WebSocket, TCP, SSE)
 - Helper utilities and extensions (including RFC 4180 CSV parser, PathHelper)
 - AI/LLM agent framework (multi-provider, coding/media/task agents, orchestration, resilience)
@@ -209,6 +210,15 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Web.Components | Component library built on Birko.Web.Core — 55 Shadow DOM web components: 21 inputs (`b-tag-input`, `b-segmented`, `b-markdown-editor` with H1–H6/table/task-list/highlight/sup/sub, `b-datetime-picker`, `b-time`, `b-date-range-picker` with 2-month layout + hover-preview + opt-in presets + `confirm` mode, ...), 9 layout (`b-chat`, `b-split-panel`, ...), 14 data (`b-kanban` with recursive nesting + 3-zone DnD, `b-editable-table`, `b-code-block`, `b-json-viewer`, `b-xml-viewer`, `b-object-tree`, `b-definition-list`, `b-pre`, ...), 6 feedback (`b-progress`, `b-stale-banner`, ...), 4 navigation, 1 command palette. Canonical `bwc.*` i18n keys. |
 | Birko.Web.Shell | Application shell framework built on Birko.Web.Core — three-level hierarchy (`BCoreAppShell → BSidebarAppShell → BAppShell`), auth, modules, command palette, notifications, tenants, page bases (`BaseListPage`/`BaseSplitPage`/`BaseDetailPage`/`BaseFormModal`/`BaseDashboardWidget`). Canonical `bws.*` i18n keys with automatic `{entity}` interpolation. |
 
+### Desktop / XAML UI
+
+| Project | Description |
+|---------|-------------|
+| Birko.DesignTokens | Build-time token generator (`generate`/`verify`/`extract`) — `tokens.json` → **byte-identical** web CSS + Avalonia AXAML, so the web and desktop design systems can't drift |
+| Birko.Xaml.Core | Avalonia-free platform core — theming abstractions, i18n, base MVVM ViewModels (CrudViewModelBase, ListPage/DetailPage/SplitPage/ShellViewModel), FormField/Navigation/Command/Kanban/Ribbon/Chart models, `ICrudDataSource<T>` port. Dep: CommunityToolkit.Mvvm |
+| Birko.Xaml.Avalonia | Avalonia skin — theme system (4 runtime-swappable variants: light/dark/neon/finstat), ~20 restyled Tier-1 controls, building blocks (Form/Drawer/SplitPanel/Modal/FormModal), 7 Tier-2 composites (tree-menu, command-palette, object/JSON + XML viewers, kanban, markdown-editor, chart-on-LiveCharts2) |
+| Birko.Xaml.Shell | Application shell — sidebar + ribbon chrome, ViewLocator, generic list/detail/split page views, command palette (Ctrl+K), user/tenant areas, cross-fade page transitions |
+
 ### Workflow
 
 | Project | Description |
@@ -352,6 +362,9 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.Storage.AzureBlob.Tests | Azure Blob Storage tests (REST API, SAS, presigned URLs) |
 | Birko.Time.Tests | Time utility tests (calendar, holidays, working hours, zones) |
 | Birko.Workflow.Tests | Workflow engine tests (state machine, guards, actions, Mermaid/DOT) |
+| Birko.DesignTokens.Tests | Token generator tests (CSS byte-parity round-trip, extractor, AXAML per-variant resolution, cross-theme key parity) |
+| Birko.Xaml.Core.Tests | XAML core tests (i18n, CRUD ViewModels over a fake port, permission gating, Avalonia-free enforcement) |
+| Birko.Xaml.Avalonia.Tests | Avalonia skin tests (headless + Skia — theme system, all controls, per-theme parity screenshots) |
 
 ## Architecture
 
@@ -587,6 +600,7 @@ dotnet test
 - [Health Guide](docs/health.md) (Health checks, runners, platform probes)
 - [AI / LLM Guide](docs/ai.md) (Multi-provider LLM, agents, orchestration, resilience)
 - [Web Components Guide](docs/web.md) (`Birko.Web.Core`/`.Components`/`.Shell` — Shadow DOM, Signal/Store, ribbon shell)
+- [XAML / Desktop UI Guide](docs/xaml.md) (`Birko.DesignTokens` + `Birko.Xaml.Core`/`.Avalonia`/`.Shell` — Avalonia skin, single-source design tokens, theme system, MVVM shell)
 - [Dependencies Guide](docs/dependencies.md)
 - [Consumers Guide](docs/consumers.md)
 - [Open backlog](tasks/README.md) — hierarchical task tracker (Epics → Stories → Tasks) managed by the `/tasks` Claude Code skill

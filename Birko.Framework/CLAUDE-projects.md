@@ -155,6 +155,13 @@
 - **Birko.Web.Components** - Component library (55 Shadow DOM web components: 21 inputs incl. b-tag-input, b-segmented, b-markdown-editor with H1–H6/table/task-list/highlight/sup/sub, b-datetime-picker, b-time, b-date-range-picker with 2-month layout/hover-preview/opt-in presets/`confirm` mode; 9 layout incl. b-chat, b-split-panel; 14 data incl. b-kanban with recursive nesting + 3-zone DnD, b-editable-table, b-pre, b-code-block, b-definition-list, b-object-tree, b-json-viewer, b-xml-viewer with sticky-header modes; 6 feedback incl. b-progress, b-stale-banner; 4 navigation; 1 command palette. Canonical `bwc.*` i18n key namespace, shared sheets — `dataViewerCardSheet`/`dataViewerHeaderSheet`/`toolbarBtnSheet`)
 - **Birko.Web.Shell** - Application shell framework (three-level hierarchy: `BCoreAppShell` → `BSidebarAppShell` → `BAppShell`; authentication, module loading, command palette, notifications, tenant switching, page bases — `BaseListPage`/`BaseSplitPage`/`BaseDetailPage`/`BaseFormModal`/`BaseDashboardWidget`; canonical `bws.*` i18n keys with `{entity}` interpolation)
 
+## Desktop / XAML UI (EPIC-015)
+First real, buildable `.csproj` assemblies in the `Birko\Framework` bucket (every other sibling is `.shproj`/`.projitems`). Referenced via `ProjectReference`, **not** the `Birko.Framework.csproj` aggregator. Avalonia-targeting projects are `net8.0` (Avalonia 11.2.3). The runnable gallery (`Birko.Xaml.Gallery`) lives in `Birko\Consumers`, not here.
+- **Birko.DesignTokens** (net10.0) - Build-time token generator. `tokens.json` → **byte-identical** web CSS + Avalonia AXAML (`generate`/`verify`/`extract` CLI). Single source of truth for all design tokens; language-neutral schema. A tool, not a runtime library
+- **Birko.Xaml.Core** (net8.0) - Avalonia-free platform core (enforced by test): `Theming` (ThemeInfo, BirkoThemes, IThemeManager), `Localization` (II18n/I18n + singleton), base MVVM ViewModels (BasePageViewModel, CrudViewModelBase, ListPageViewModel, DetailPageViewModel, SplitPageViewModel, ShellViewModel), `Forms.FormField`, `Navigation`, `Commands.CommandItem`, Kanban/Ribbon/Chart models, `Data.ICrudDataSource<T>` port. Dep: CommunityToolkit.Mvvm
+- **Birko.Xaml.Avalonia** (net8.0) - Avalonia skin: theme system (ThemeDictionaries, 4 runtime-swappable variants light/dark/neon/finstat), ~20 restyled Tier-1 controls, building blocks (Form/Drawer/SplitPanel/Modal/FormModal), 7 Tier-2 composites (tree-menu, command-palette, object-tree/json-viewer, xml-viewer, kanban, markdown-editor, BChart on LiveCharts2), `{l:Tr}` markup extension. Deps: Avalonia, Avalonia.Themes.Fluent, Avalonia.Controls.DataGrid, LiveChartsCore.SkiaSharpView.Avalonia
+- **Birko.Xaml.Shell** (net8.0) - Application shell: ViewLocator, `ShellView` (sidebar chrome), `RibbonShellView` (ribbon/BAppShell chrome), generic List/Detail/Split page views, Ctrl+K command palette, user/tenant areas, cross-fade page transitions
+
 ## Tests
 All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its own CLAUDE.md.
 - Birko.Data.Tests, Birko.Data.SQL.Tests, Birko.Data.ElasticSearch.Tests
@@ -180,6 +187,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Communication.Camera.Tests, Birko.Communication.REST.Tests, Birko.Communication.WebSocket.Tests
 - Birko.Data.Migrations.SQL.Tests, Birko.Data.XML.Tests
 - Birko.Caching.Tests
+- Birko.DesignTokens.Tests, Birko.Xaml.Core.Tests, Birko.Xaml.Avalonia.Tests (EPIC-015; Avalonia tests are headless + Skia)
 
 ## Per-Project CLAUDE.md
 Each project has its own CLAUDE.md at `../Birko.{ProjectName}/CLAUDE.md` with specific details about components, dependencies, and conventions.

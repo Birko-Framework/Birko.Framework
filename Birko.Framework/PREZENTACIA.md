@@ -19,9 +19,10 @@ Birko Framework je komplexný .NET 10.0 framework postavený na princípe **jedn
 
 **Čísla:**
 
-- **164 produktových projektov** (z toho približne **83 platformových rozšírení**)
-- **56 testovacích projektov** (xUnit + FluentAssertions)
+- **168 produktových projektov** (z toho približne **83 platformových rozšírení**)
+- **59 testovacích projektov** (xUnit + FluentAssertions)
 - **12 databázových platforiem**, **11 LLM poskytovateľov**, **55 Web Components**
+- **Birko.Xaml** — desktopový (Avalonia) UI framework so **spoločným zdrojom design tokenov** s webom a **4 témami**
 - **0 externých závislostí** pre core contracts
 
 **Oblasti použitia:**
@@ -31,7 +32,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Podnikové aplikácie (back-office, ERP)** – CRUD, multi-tenancy, RBAC, audit, workflow, CQRS, reporting
 - **E-shopy a e-commerce** – domain modely (Customers, Products, Category, Pricing: Currency/Tax/PriceGroup/PriceList/Discount, Inventory, IDocument/IDocumentLine pre objednávky), Workflow pre stavy objednávok, Background Jobs, Messaging (Email/SMS/Push), ElasticSearch vyhľadávanie, multi-currency a multi-language
 - **Prezentačné a CMS aplikácie** – Web.Components (Shadow DOM UI), Web.Shell, hash router, Razor templates (RazorLight), SEO modely, Localization (CLDR pluralizácia), JSON/XML content storage, Azure Blob pre médiá, slug generátor
-- **Desktopové aplikácie** – SQLite / JSON / XML stores, lokálny filesystem storage, hardvér (NFC, RFID, Bluetooth, Camera, IR, Modbus), offline background jobs (XML job queue), AI/LLM integrácia pre local-first nástroje
+- **Desktopové aplikácie** – **Birko.Xaml** (Avalonia UI so spoločnými design tokenmi a MVVM ako web), SQLite / JSON / XML stores, lokálny filesystem storage, hardvér (NFC, RFID, Bluetooth, Camera, IR, Modbus), offline background jobs (XML job queue), AI/LLM integrácia pre local-first nástroje
 - **IoT a priemysel** – Modbus (RTU/TCP, funkčné kódy 01–16), NFC/RFID (ISO 14443A, NDEF), Bluetooth, IR (NEC/Samsung/RC5 @ 38 kHz), Camera, Hardware, time-series (InfluxDB, TimescaleDB)
 - **AI-riadené aplikácie a devtools** – 11 LLM poskytovateľov, 10 jazykových a 4 task agenti, orchestrácia, resilience (rate limit / circuit breaker / cost tracking)
 - **Real-time systémy** – WebSocket, SSE, MessageQueue, EventBus, distribuovaná synchronizácia
@@ -112,6 +113,14 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Random & Sequences** – 6 RNG algoritmov (System, Crypto, XorShift, MersenneTwister, SplitMix, Test), distribúcie (Uniform, Normal, Exponential, Poisson), GuidV4/V7, NanoId, Snowflake, Perlin/Simplex noise
 - **Time** – kalendáre, pracovné hodiny, časové zóny, sviatky
 - **Helpers** – PathHelper, StringHelper, ConvertHelper, SlugGenerator
+
+### 🖥️ Desktop / XAML UI (Birko.Xaml — 4 projekty)
+- **Spoločný zdroj design tokenov** – `Birko.DesignTokens` generuje z jedného `tokens.json` **byte-identickú** webovú CSS **aj** Avalonia AXAML, takže webový a desktopový dizajn nemôžu nikdy divergovať (`generate` / `verify` / `extract` CLI)
+- **Theme systém** – 4 témy (light / dark / neon / finstat) prepínateľné za behu bez reštartu (Avalonia `ThemeDictionaries` + `RequestedThemeVariant`), zhodné s Birko.Web
+- **~20 Tier-1 controlov** – token-driven `ControlTheme`s (Button, TextBox, ComboBox, CheckBox, RadioButton, ToggleSwitch, Card, TabControl, Badge, Tag, ProgressBar, DataGrid, ...) + building blocks (Form, Drawer, SplitPanel, Modal, FormModal)
+- **7 Tier-2 kompozitov** – tree-menu, command-palette, object-tree/json-viewer, xml-viewer, kanban, markdown-editor, chart (na LiveCharts2)
+- **Avalonia-free MVVM core** – `Birko.Xaml.Core` (i18n, base ViewModels, CRUD port) neobsahuje žiadnu Avalonia závislosť (vynútené testom) → znovupoužiteľné budúcim WPF skinom
+- **App shell** – sidebar **aj** ribbon chrome nad jedným `ShellViewModel`, navigácia, generické list/detail/split page views, command palette (Ctrl+K), user/tenant oblasti, cross-fade prechody
 
 ---
 
@@ -471,6 +480,35 @@ Birko.Data.Repositories  → IRepository, RepositoryLocator, DI extensions
                                      automatickou {entity} interpoláciou.
 ```
 
+#### 15. 🖥️ Desktop / XAML UI — Birko.Xaml (4 projekty, EPIC-015)
+```
+🟩 Birko.DesignTokens   → Build-time generátor tokenov (net10.0):
+                          tokens.json → byte-identická web CSS + Avalonia
+                          AXAML (generate / verify / extract). Jediný zdroj
+                          pravdy pre všetky design tokeny; jazykovo-neutrálna
+                          schéma. Nástroj, nie runtime knižnica
+🟩 Birko.Xaml.Core      → Avalonia-free platform core (net8.0, vynútené testom):
+                          theming abstrakcie, i18n (I18n singleton), base MVVM
+                          ViewModels (CrudViewModelBase, ListPage/DetailPage/
+                          SplitPage/ShellViewModel), FormField/Navigation/
+                          Command/Kanban/Ribbon/Chart modely, ICrudDataSource<T>
+                          port. Dep: CommunityToolkit.Mvvm
+🟨 Birko.Xaml.Avalonia  → Avalonia skin (net8.0, Avalonia 11.2.3): theme systém
+                          (4 varianty light/dark/neon/finstat prepínateľné za
+                          behu), ~20 Tier-1 controlov, building blocks (Form/
+                          Drawer/SplitPanel/Modal/FormModal), 7 Tier-2 kompozitov
+                          (tree-menu, command-palette, object/JSON + XML viewery,
+                          kanban, markdown-editor, chart na LiveCharts2),
+                          {l:Tr} markup extension
+🟨 Birko.Xaml.Shell     → Application shell (net8.0): ViewLocator, ShellView
+                          (sidebar chrome), RibbonShellView (ribbon/BAppShell
+                          chrome), generické List/Detail/Split page views,
+                          Ctrl+K command palette, user/tenant oblasti,
+                          cross-fade prechody
+```
+
+**Poznámka**: `Birko.Xaml.*` a `Birko.DesignTokens` sú prvé skutočné, buildovateľné `.csproj` **assemblies** v `Birko\Framework` buckete (všetci ostatní súrodenci sú `.shproj`/`.projitems`). Referencujú sa cez `ProjectReference`, **nie** cez `Birko.Framework.csproj` agregátor. Avalonia projekty sú `net8.0` (Avalonia 11.2.3 cieli net8.0). Spustiteľná galéria (`Birko.Xaml.Gallery`) žije v `Birko\Consumers`, nie tu. WPF skin je odložený — zdieľal by rovnaké tokeny a Core ViewModely a forkoval by len šablóny controlov.
+
 ### Detailné popisy špeciálnych projektov
 
 #### 🏗️ Birko.Structures – Dátové štruktúry
@@ -588,7 +626,7 @@ Kanonický namespace kľúčov: **`bws.*`**. Shellov `t()` automaticky interpolu
 
 ## Testovacie pokrytie
 
-**55 testovacích projektov** (xUnit + FluentAssertions, každý má vlastný `CLAUDE.md`). Každý testovací projekt pokrýva zodpovedajúci produktový projekt rovnakým názvom (napr. `Birko.Data.Tests` testuje `Birko.Data.*` base abstrakcie).
+**59 testovacích projektov** (xUnit + FluentAssertions, každý má vlastný `CLAUDE.md`). Každý testovací projekt pokrýva zodpovedajúci produktový projekt rovnakým názvom (napr. `Birko.Data.Tests` testuje `Birko.Data.*` base abstrakcie). Avalonia skin (`Birko.Xaml.Avalonia.Tests`) beží headless + Skia a zachytáva parity screenshoty per téma.
 
 ### Rozdelenie testovacích projektov podľa oblasti
 
@@ -722,14 +760,16 @@ RUN dotnet publish src/Host/YourSolution.Api.csproj -c Release -o /app/publish
 
 | Metrika | Hodnota |
 |---|---:|
-| **Produktové projekty celkom** | **164** |
+| **Produktové projekty celkom** | **168** |
 | **z toho platformové rozšírenia** (🟨) | **~83** |
-| **z toho core / feature projekty** (🟦 + 🟩) | **~81** |
-| **Testovacie projekty** | **56** |
-| **Projekty celkom** | **220** |
+| **z toho core / feature projekty** (🟦 + 🟩) | **~85** |
+| **Testovacie projekty** | **59** |
+| **Projekty celkom** | **227** |
 | Databázové platformy | 12 |
 | LLM poskytovatelia | 11 |
 | Web Components | 55 |
+| Desktop / XAML UI projekty (Birko.Xaml) | 4 |
+| XAML témy (light/dark/neon/finstat) | 4 |
 | Jazykové AI agenti | 10 |
 | Task AI agenti | 4 |
 | Communication protokoly | 14 |
@@ -747,6 +787,7 @@ RUN dotnet publish src/Host/YourSolution.Api.csproj -c Release -o /app/publish
 - [docs/configuration.md](docs/configuration.md) – nastavenia (Settings hierarchy, provider-specific settings pre SQL/Cosmos/Raven/SQLite/Timescale, `ILoadable<T>` skladanie konfigurácie)
 - [docs/migrations.md](docs/migrations.md) – platformovo-agnostické migrácie (`IMigration`, `IMigrationContext`, schémové abstrakcie)
 - [docs/web.md](docs/web.md) – Web Components, Shell, **Internationalization** (`useI18n`, `onI18nChange`, `bwc.*`/`bws.*` namespaces)
+- [docs/xaml.md](docs/xaml.md) – **Desktop / XAML UI** (Birko.Xaml): single-source design tokeny, Avalonia theme systém, controly, MVVM shell
 - [docs/](docs/) – detailné návody pre každú oblasť (architektúra, stores, repozitáre, migrácie, vzory, caching, validácia, background jobs, message queue, event bus, event sourcing, storage, messaging, telemetry, security, rules, workflow, CQRS, health, procesory, serializácia, sync, čas, lokalizácia, tenant, komunikácia, závislosti, konzumeri, AI/LLM)
 - Každý projekt má vlastný `README.md` s rýchlym prehľadom API a príkladmi použitia
 
@@ -772,4 +813,4 @@ Súčasť Birko Framework – pozri [License.md](License.md).
 
 ---
 
-*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-05-19*
+*Prezentácia pre .NET 10.0 · Birko Framework · aktualizované 2026-07-06*
