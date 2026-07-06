@@ -36,8 +36,8 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [ ] CR-C02 · Birko.BackgroundJobs.Redis · scheduled-job score scale
 - [ ] CR-C03 · Birko.Communication.Hardware · LPT address mapping
 - [ ] CR-C04 · Birko.Data.CosmosDB · missing `id` property
-- [ ] CR-C05 · Birko.Data.EventSourcing · single Create Guid mismatch
-- [ ] CR-C06 · Birko.Data.EventSourcing · bulk Create Guid mismatch
+- [x] **CR-C05** · Birko.Data.EventSourcing · single Create Guid linkage — new `.Tests` project + test
+- [x] **CR-C06** · Birko.Data.EventSourcing · bulk Create Guid linkage (sync + async) — tests
 - [ ] CR-C09 · Birko.Data.Migrations.MongoDB · transaction wraps no ops
 - [ ] CR-C10 · Birko.Data.Migrations.RavenDB · missing `using System.Linq;` (DataMigrator)
 - [ ] CR-C11 · Birko.Data.Migrations.RavenDB · missing `using System.Linq;` (Runner)

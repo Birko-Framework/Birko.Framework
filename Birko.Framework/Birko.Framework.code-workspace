@@ -713,6 +713,10 @@
 			"path": "../../Framework.Tests/Birko.Data.JSON.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.EventSourcing.Tests",
+			"path": "../../Framework.Tests/Birko.Data.EventSourcing.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
 			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
 		},
