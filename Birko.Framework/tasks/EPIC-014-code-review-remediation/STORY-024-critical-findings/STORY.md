@@ -45,7 +45,7 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [x] **CR-C13** · Birko.Data.Migrations.RavenDB · CopyData fail-fast `NotSupportedException` — test (full copy = follow-up)
 - [ ] CR-C14 · Birko.Data.Migrations.SQL · schema builder never emits CREATE
 - [ ] CR-C15 · Birko.Data.MongoDB.Views · persistent view re-runs base pipeline
-- [ ] CR-C16 · Birko.Data.SQL.Caching · filter Update/Delete bypass invalidation
+- [x] **CR-C16** · Birko.Data.SQL.Caching · filter Update/Delete now invalidate cache — new `.Tests` (key-invariant + mechanism; e2e = infra gap)
 - [x] **CR-C17** · Birko.Data.SQL.ViewModel · repo generic over TConnector (mirrors sync) — new `.Tests` + BardStudio consumer updated
 - [x] **CR-C18** · Birko.Data.Sync · knowledge upserted (create-new/update-existing split), sync + async — 2 regression tests
 - [x] **CR-C19** · Birko.Data.Sync.RavenDB · model implements canonical `ITenant`; `ConvertToRavenItem` copies tenant → end-to-end tenant scoping (reworked to reuse tenant infra) — new `.Tests`

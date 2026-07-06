@@ -737,6 +737,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.Caching.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.Caching.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.InMemory.Tests",
 			"path": "../../Framework.Tests/Birko.Data.InMemory.Tests"
 		},
