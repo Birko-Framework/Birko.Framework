@@ -53,6 +53,12 @@
                        Foreground="{DynamicResource BTextBrush}" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12"
                         VerticalAlignment="Center" Margin="0,0,12,0">
+              <!-- Tenant switcher (hidden unless >1 tenant) -->
+              <ComboBox Width="160" VerticalAlignment="Center"
+                        IsVisible="{Binding HasMultipleTenants}"
+                        ItemsSource="{Binding Tenants}"
+                        SelectedItem="{Binding CurrentTenant, Mode=TwoWay}" />
+
               <!-- Theme switcher -->
               <ItemsControl ItemsSource="{Binding Themes.Available}" VerticalAlignment="Center">
                 <ItemsControl.ItemsPanel>

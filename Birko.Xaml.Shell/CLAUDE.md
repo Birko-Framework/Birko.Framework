@@ -10,7 +10,8 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
 - `Views/ShellView` — sidebar + header (title + theme switcher + user area) + content region + status
   bar, with a **Ctrl+K `CommandPalette`** overlaying the whole shell (bound to `ShellViewModel.PaletteCommands`
   / `IsPaletteOpen`, populated from modules + themes). The user area (avatar + name) shows when
-  `ShellViewModel.UserName` is non-empty, with a Flyout of `UserCommands`.
+  `ShellViewModel.UserName` is non-empty, with a Flyout of `UserCommands`. A **tenant switcher**
+  (`ComboBox` bound to `Tenants`/`CurrentTenant`) shows when `HasMultipleTenants` (> 1 tenant).
 - `Views/{List,Detail,Split}PageView` — generic page views over the Core base VMs.
 
 ## Conventions / gotchas
@@ -27,9 +28,9 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
 ## Scope / deferred (STORY-036 in-progress)
 
 Delivered: the **sidebar shell** (`BSidebarAppShell` analogue) + nav + ViewLocator + page views, the
-**Ctrl+K command palette** (populated from modules + themes), and the **header user area** (avatar +
-name + `UserCommands` dropdown, hidden when no user). **Deferred:** ribbon chrome (`BAppShell`), a
-tenant switcher, a `FormModal` page-shape (inline edit covers create/edit today),
+**Ctrl+K command palette** (populated from modules + themes), the **header user area** (avatar +
+name + `UserCommands` dropdown), a **tenant switcher**, and a reusable **`FormModal`** page-shape
+(`Birko.Xaml.Avalonia`). **Deferred:** the **ribbon** chrome (`BAppShell`),
 `TransitioningContentControl` animations, ListBox restyle.
 
 ## Testing
