@@ -39,10 +39,10 @@ Acceptance → derive + add a regression test. Flip each finding's `Status` in t
 - [x] **CR-C05** · Birko.Data.EventSourcing · single Create Guid linkage — new `.Tests` project + test
 - [x] **CR-C06** · Birko.Data.EventSourcing · bulk Create Guid linkage (sync + async) — tests
 - [ ] CR-C09 · Birko.Data.Migrations.MongoDB · transaction wraps no ops
-- [ ] CR-C10 · Birko.Data.Migrations.RavenDB · missing `using System.Linq;` (DataMigrator)
-- [ ] CR-C11 · Birko.Data.Migrations.RavenDB · missing `using System.Linq;` (Runner)
-- [ ] CR-C12 · Birko.Data.Migrations.RavenDB · CountDocuments ignores built query
-- [ ] CR-C13 · Birko.Data.Migrations.RavenDB · CopyData ignores target/transform
+- [x] **CR-C10** · Birko.Data.Migrations.RavenDB · `using System.Linq;` added — new `.Tests` compile guard
+- [x] **CR-C11** · Birko.Data.Migrations.RavenDB · `using System.Linq;` added — compile guard
+- [x] **CR-C12** · Birko.Data.Migrations.RavenDB · CountDocuments executes the built query (behavioral test = infra gap)
+- [x] **CR-C13** · Birko.Data.Migrations.RavenDB · CopyData fail-fast `NotSupportedException` — test (full copy = follow-up)
 - [ ] CR-C14 · Birko.Data.Migrations.SQL · schema builder never emits CREATE
 - [ ] CR-C15 · Birko.Data.MongoDB.Views · persistent view re-runs base pipeline
 - [ ] CR-C16 · Birko.Data.SQL.Caching · filter Update/Delete bypass invalidation
