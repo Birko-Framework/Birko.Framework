@@ -1,6 +1,6 @@
 ---
 id: EPIC-015
-status: in-progress
+status: done
 created: 2026-06-25
 closed: 2026-07-06
 owner: both

@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Birko.Xaml — date/time picker field types; EPIC-015 complete again (TASK-056) (2026-07-06)
+The last EPIC-015 gap: the Form had no date/time inputs. [tasks/EPIC-015/TASK-056](tasks/EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md).
+- **`FieldType` +4:** `Date` (→`CalendarDatePicker.SelectedDate`), `Time` (→`TimePicker.SelectedTime`), `DateTime` (a date+time composite; handlers recombine into one `DateTime?`), `DateRange` (two pickers over a shared `Forms.DateRange` value class, seeded when the model prop is null). Core stays Avalonia-free (the composites/handlers live in the Avalonia `Form`).
+- **Light restyle:** `CalendarDatePicker` + `TimePicker` ControlThemes `BasedOn` Fluent's + Birko token setters on the resting surface (border/bg/radius/font). Verified to resolve at runtime (whole theme loads). The flyout calendar/clock keep Fluent internals — full grid re-theming is a deferred follow-up. Native pickers are culture-aware automatically (screenshot: `5. 1. 2026`).
+- **Tests:** Avalonia suite **106→111** (Date/Time bind, DateTime combine, DateRange seed+write, datetime screenshot). Gallery `DemoForm` now exercises all four.
+- **EPIC-015 is complete again** (TASK-054/055/056 done) — the field-type/Slider follow-ups that reopened it are all landed.
+
 ### Birko.Xaml — Slider control + Range field type (EPIC-015 / TASK-054) (2026-07-06)
 Closed the Tier-1 `Slider` gap and wired a `Range` form field — the vertical/equalizer slider the review surfaced. [tasks/EPIC-015/TASK-054](tasks/EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md).
 - **Token-restyled `Slider` ControlTheme** (`Inputs.axaml`), horizontal **and** vertical. Custom template: a rail `Border` + a `Track` laying out DecreaseButton (primary fill) | `Thumb` (white circle, primary border) | transparent IncreaseButton; cross-axis thickness/alignment set per orientation via `:horizontal`/`:vertical` styles on the named parts (one template, both orientations). Sub-themes `BSliderRepeat` / `BSliderThumb`. All `{DynamicResource B*}`.
