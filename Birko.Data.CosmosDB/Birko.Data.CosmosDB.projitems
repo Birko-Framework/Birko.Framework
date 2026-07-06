@@ -20,5 +20,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\CosmosDBIndexManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Aggregation\CosmosAggregationHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\CosmosGuidIdSerializer.cs" />
   </ItemGroup>
 </Project>

@@ -41,7 +41,10 @@ namespace Birko.Data.CosmosDB.Stores
             return new CosmosClientOptions
             {
                 RequestTimeout = RequestTimeout,
-                AllowBulkExecution = AllowBulkExecution
+                AllowBulkExecution = AllowBulkExecution,
+                // Ensures every AbstractModel document carries an 'id' == its Guid, so point
+                // reads/writes keyed by guid.ToString() resolve against the '/id' partition key (CR-C04).
+                Serializer = new Serialization.CosmosGuidIdSerializer()
             };
         }
 
