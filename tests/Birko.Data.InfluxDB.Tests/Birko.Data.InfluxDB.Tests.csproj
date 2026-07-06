@@ -19,13 +19,13 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.*" />
   </ItemGroup>
 
-  <Import Project="..\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
-  <Import Project="..\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
-  <Import Project="..\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems" Label="Shared" />
-  <Import Project="..\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
-  <Import Project="..\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Core\Birko.Data.Core.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Stores\Birko.Data.Stores.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Repositories\Birko.Data.Repositories.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.Patterns\Birko.Data.Patterns.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Rules\Birko.Rules.projitems" Label="Shared" />
 </Project>
