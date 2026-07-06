@@ -143,6 +143,26 @@ namespace Birko.Data.SQL.Stores
             await InvalidateCacheAsync(ct);
         }
 
+        // The filter-based native write methods below bypass the *Core template (they issue the write
+        // straight through the connector), so overriding only the *Core methods left them without cache
+        // invalidation — a filter Update/Delete produced stale cached reads until TTL expiry (CR-C16).
+        // (The UpdateAsync(filter, Action<T>) overload is already safe: it loops per-item through
+        // UpdateAsync -> UpdateCoreAsync, which invalidates.)
+
+        /// <inheritdoc />
+        public override async Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken ct = default)
+        {
+            await base.UpdateAsync(filter, updates, ct);
+            await InvalidateCacheAsync(ct);
+        }
+
+        /// <inheritdoc />
+        public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
+        {
+            await base.DeleteAsync(filter, ct);
+            await InvalidateCacheAsync(ct);
+        }
+
         #endregion
 
         #region Private Helpers
