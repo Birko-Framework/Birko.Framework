@@ -14,6 +14,7 @@
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Indicators.axaml" />
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Overlays.axaml" />
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Tree.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Lists.axaml" />
     <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Blocks.axaml" />
   </ResourceDictionary.MergedDictionaries>
 </ResourceDictionary>
