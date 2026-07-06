@@ -1,6 +1,6 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-07-06. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -8,10 +8,10 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 |--------------|-------|---------|-------|
 | planned      | 11    | 25      | —     |
 | todo         | —     | —       | 33    |
-| in-progress  | 2     | 1       | 1     |
-| review       | —     | —       | 4     |
+| in-progress  | 3     | 2       | 1     |
+| review       | —     | —       | 5     |
 | blocked      | —     | —       | 0     |
-| done         | 2     | 10      | 3     |
+| done         | 2     | 14      | 12    |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -24,6 +24,7 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 - [TASK-041](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-041-shared-coerce-css-length.md) Shared coerceCssLength helper + fix unitless-length across 6 components (P2, ai) — landed in Birko.Web.Core; playground bundles green
 - [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce unitless height — avoid endless SVG stretch (P3, ai) — component fix landed; in-browser playground check pending
 - [TASK-040](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-040-b-accordion-component.md) Add a b-accordion (collapsible / disclosure group) component (P2, ai) — built + in playground gallery; in-browser interaction check pending
+- [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Cross-provider SQL store-factory + DI (P2, ai) — offline tests green; live CRUD round-trip deferred (Docker later)
 
 ## Tree
 
@@ -114,6 +115,22 @@ _Generated 2026-07-05. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-034 [Tier 1 — restyled native controls (~20)](EPIC-015-birko-xaml-ui-framework/STORY-034-tier1-native-controls/STORY.md) — done (all ~20 Tier-1 controls incl. Modal + DataGrid; 45 tests + gallery)
   - STORY-035 [Tier 2 — composite controls with no native peer](EPIC-015-birko-xaml-ui-framework/STORY-035-tier2-composite-controls/STORY.md) — done (all 7: tree-menu, command-palette, object/JSON + XML viewers, kanban, markdown-editor, chart)
   - STORY-036 [Tier 3 — Birko.Xaml.Shell: page bases + app chrome + navigation](EPIC-015-birko-xaml-ui-framework/STORY-036-shell-page-bases/STORY.md) — done (dual chrome sidebar+ribbon, nav, page bases, Ctrl+K palette, user/tenant, FormModal, transitions)
+- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (migrated from Consumers/WorkoutTracker EPIC-002; 2/5 stories done)
+  - STORY-037 [Backend / SQL framework backports](EPIC-016-birko-backports-from-reps/STORY-037-backend-sql-backports/STORY.md) — done (shipped; compact ledger, detail in Reps)
+  - STORY-038 [Frontend Birko.Web backports](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/STORY.md) — done (shipped; compact ledger, detail in Reps)
+  - STORY-039 [Cross-provider SQL store-factory + DI backport](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/STORY.md) — in-progress (0/1; 1 in review)
+    - [ ] [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2, ai) 🔍 review — live CRUD env-gated
+    - [x] [TASK-051](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-051-fix-mssqlstore-setsettings-lossy.md) FIX: MSSqlStore.SetSettings drops connection fields (P2, ai) — **done**
+  - STORY-040 [Web → Xaml UI / offline / device backports](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/STORY.md) — done (6/6)
+    - [x] [TASK-043](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-043-xaml-mobile-app-shell.md) Xaml mobile app-shell (BMobileAppShell equivalent) (P2, ai) — **done**
+    - [x] [TASK-044](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-044-xaml-formatter.md) Formatter for Birko.Xaml.Core (duration + culture-aware) (P2, ai) — **done**
+    - [x] [TASK-045](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-045-xaml-wake-lock.md) Xaml wake-lock device abstraction (IWakeLock) (P3, ai) — **done**
+    - [x] [TASK-046](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-046-xaml-offline-mirror.md) Xaml offline read-through mirror (MirrorDataSource) (P3, ai) — **done**
+    - [x] [TASK-047](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-047-xaml-sync-status-indicator.md) Xaml sync-status indicator — offline/syncing/synced (P3, ai) — **done**
+    - [x] [TASK-048](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/TASK-048-xaml-audio-cue.md) Xaml audio-cue device util (beep + vibrate) (P3, ai) — **done**
+  - STORY-041 [BMobileAppShell showcase / placement](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/STORY.md) — done (2/2)
+    - [x] [TASK-049](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-049-bmobileappshell-playground-placement.md) BMobileAppShell — better placement / demo in Birko.Web.Playground (P2, ai) — **done**
+    - [x] [TASK-050](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-050-bmobileappshell-xaml-gallery.md) BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery (P3, ai) — **done**
 
 ### Loose tasks (no parent epic)
 

@@ -777,6 +777,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.Providers.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.Providers.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Sync.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Sync.Tests"
 		},

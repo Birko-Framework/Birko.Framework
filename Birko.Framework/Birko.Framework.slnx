@@ -42,6 +42,7 @@
     <Project Path="../Birko.Communication.IR/Birko.Communication.IR.shproj" />
     <Project Path="../Birko.Communication.NFC/Birko.Communication.NFC.shproj" />
     <Project Path="../Birko.Communication.REST.Server/Birko.Communication.REST.Server.shproj" />
+    <Project Path="../Birko.Communication.AspNetCore/Birko.Communication.AspNetCore.shproj" />
     <Project Path="../Birko.Communication.OAuth.Providers/Birko.Communication.OAuth.Providers.shproj" />
     <Project Path="../Birko.Communication.GraphQL/Birko.Communication.GraphQL.shproj" />
     <Project Path="../Birko.Communication.gRPC/Birko.Communication.gRPC.shproj" />
@@ -184,6 +185,9 @@
   <Folder Name="/Tests/">
     <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Tests/Birko.Data.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.SqLite.Tests/Birko.Data.SQL.SqLite.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.Providers.Tests/Birko.Data.SQL.Providers.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.AspNetCore.Tests/Birko.Communication.AspNetCore.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Tests/Birko.Data.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Helpers.Tests/Birko.Helpers.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
