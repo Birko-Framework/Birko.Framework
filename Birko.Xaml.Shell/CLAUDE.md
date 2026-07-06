@@ -15,6 +15,12 @@ navigation VMs live in `Birko.Xaml.Core` (constraint #3); only views/chrome are 
 - `Views/RibbonShellView` — the **ribbon** chrome variant (`BAppShell`): a `Ribbon` (bound to
   `ShellViewModel.RibbonTabs`) over the content region + status bar, in place of the sidebar. Same
   `ShellViewModel` + Ctrl+K palette.
+- `Views/MobileShellView` — the **mobile** chrome variant (BMobileAppShell equivalent, EPIC-016 /
+  TASK-043): fixed top-bar (active-surface title + theme switcher) + scrolling content + fixed
+  bottom-nav. The bottom-nav binds `ShellViewModel.NavItems` (`MobileNavItem` — a projection of the
+  same `ModuleDefinition` list, adding an observable `IsActive`); the active item highlights primary
+  via `Classes.active`. Code-behind reads the platform `IInsetsManager` and pads the top-bar / bottom-nav
+  for the notch + home indicator (null on desktop → no-op). Same `ShellViewModel`; no Ctrl+K palette.
 - `Views/{List,Detail,Split}PageView` — generic page views over the Core base VMs.
 - Both shells' content regions use a `TransitioningContentControl` (`CrossFade`) so page navigation
   fades. `ListBoxItem` is token-restyled (`Controls/Lists.axaml`) — hover/selected use tokens.

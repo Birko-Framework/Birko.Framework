@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:shell="clr-namespace:Birko.Xaml.Shell"
+             x:Class="Birko.Xaml.Shell.Views.MobileShellView"
+             x:CompileBindings="False"
+             FontFamily="{DynamicResource BFont}"
+             Background="{DynamicResource BBgSecondaryBrush}">
+
+  <!-- Mobile-first chrome: fixed top bar, scrolling content, fixed bottom nav — the XAML counterpart
+       of Birko.Web's BMobileAppShell. Desktop-oriented sidebar/ribbon shells live beside this. -->
+
+  <UserControl.Resources>
+    <shell:ViewLocator x:Key="ViewLocator" />
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <!-- Bottom-nav item: muted by default, primary when the surface is active (Classes.active). -->
+    <Style Selector="Button.navitem">
+      <Setter Property="Foreground" Value="{DynamicResource BTextMutedBrush}" />
+    </Style>
+    <Style Selector="Button.navitem:pointerover">
+      <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="Button.navitem.active">
+      <Setter Property="Foreground" Value="{DynamicResource BColorPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel x:Name="Root">
+
+    <!-- Fixed top bar: active surface title + theme switcher. Top padding gets the safe-area inset. -->
+    <Border x:Name="TopBar" DockPanel.Dock="Top"
+            MinHeight="{DynamicResource BHeaderHeight}"
+            Padding="16,0"
+            Background="{DynamicResource BBgBrush}"
+            BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBlock Grid.Column="0" Text="{Binding Nav.CurrentModule.Label}"
+                   VerticalAlignment="Center" FontWeight="SemiBold" FontSize="16"
+                   Foreground="{DynamicResource BTextBrush}" />
+        <ItemsControl Grid.Column="1" ItemsSource="{Binding Themes.Available}" VerticalAlignment="Center">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="4" /></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Padding="8,4" Background="Transparent" ToolTip.Tip="{Binding Label}"
+                      Command="{Binding DataContext.SetThemeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                      CommandParameter="{Binding Id}">
+                <TextBlock Text="{Binding Icon}" />
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Grid>
+    </Border>
+
+    <!-- Fixed bottom nav: one item per surface, evenly split. Bottom padding gets the safe-area inset. -->
+    <Border x:Name="BottomNav" DockPanel.Dock="Bottom"
+            Background="{DynamicResource BBgBrush}"
+            BorderBrush="{DynamicResource BBorderBrush}" BorderThickness="0,1,0,0">
+      <ItemsControl ItemsSource="{Binding NavItems}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Rows="1" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Classes="navitem" Classes.active="{Binding IsActive}"
+                    Background="Transparent" BorderThickness="0"
+                    MinHeight="52" Padding="0,6"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                    CommandParameter="{Binding Id}">
+              <StackPanel HorizontalAlignment="Center" Spacing="2">
+                <TextBlock Text="{Binding Icon}" FontSize="20" HorizontalAlignment="Center"
+                           IsVisible="{Binding Icon, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{Binding Label}" FontSize="11" HorizontalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Border>
+
+    <!-- Scrolling content region — active page resolved from its VM via the ViewLocator, cross-faded. -->
+    <ScrollViewer>
+      <TransitioningContentControl Content="{Binding Nav.Current}"
+                                   ContentTemplate="{StaticResource ViewLocator}" Margin="16">
+        <TransitioningContentControl.PageTransition>
+          <CrossFade Duration="0:0:0.18" />
+        </TransitioningContentControl.PageTransition>
+      </TransitioningContentControl>
+    </ScrollViewer>
+
+  </DockPanel>
+</UserControl>
