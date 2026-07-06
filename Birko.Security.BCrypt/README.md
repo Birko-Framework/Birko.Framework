@@ -2,6 +2,15 @@
 
 BCrypt password hashing implementation for the Birko framework. Implements `IPasswordHasher` using the BCrypt adaptive hashing algorithm with no external NuGet dependencies — a pure C# Blowfish/BCrypt implementation.
 
+> **Maintenance note — consider replacing with `BCrypt.Net-Next`.** This is hand-rolled cryptography.
+> The EksBlowfish key schedule was rewritten in 2026-07 to match the canonical OpenBSD/Provos–Mazières
+> algorithm and is now validated against published `$2a$` reference vectors (see
+> `Birko.Security.BCrypt.Tests/BCryptReferenceVectorTests`), but maintaining bespoke crypto is a
+> long-term liability. If a NuGet dependency becomes acceptable, prefer swapping the internals for the
+> vetted [`BCrypt.Net-Next`](https://www.nuget.org/packages/BCrypt.Net-Next) package (keeping the
+> `IPasswordHasher` surface) — it is continuously reviewed and reference-tested by the community.
+> Any change here **must** keep the reference-vector tests green so interoperability is never lost again.
+
 ## Features
 
 - **BCrypt adaptive hashing** — work factor can be increased over time as hardware improves

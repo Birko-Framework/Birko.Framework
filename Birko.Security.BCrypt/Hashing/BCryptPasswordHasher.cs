@@ -327,30 +327,48 @@ public class BCryptPasswordHasher : IPasswordHasher
         return $"{salt[..29]}{EncodeBCryptBase64(hashBytes, 23)}";
     }
 
+    /// <summary>All-zero 128-bit "data" block used by the expensive-loop ExpandKey passes.</summary>
+    private static readonly byte[] ZeroData = new byte[16];
+
+    /// <summary>
+    /// Canonical bcrypt EksBlowfish key schedule (Provos &amp; Mazières / OpenBSD, matches jBCrypt):
+    /// <c>ExpandKey(state, salt, key)</c> once, then <c>2^cost</c> times
+    /// <c>ExpandKey(state, 0, key)</c> followed by <c>ExpandKey(state, 0, salt)</c>.
+    /// </summary>
     private static void EksBlowfishSetup(uint[] P, uint[] S, byte[] salt, byte[] key, int cost)
     {
-        // XOR P-array with key
+        ExpandKey(P, S, salt, key);
+
+        long rounds = 1L << cost;
+        for (long n = 0; n < rounds; n++)
+        {
+            ExpandKey(P, S, ZeroData, key);
+            ExpandKey(P, S, ZeroData, salt);
+        }
+    }
+
+    /// <summary>
+    /// Blowfish ExpandKey: XOR the P-array with the key stream (cyclic 32-bit big-endian words), then
+    /// fill P and then the S-boxes by encrypting a running (l,r) that is pre-XORed with the data
+    /// stream (cyclic 32-bit words), the (l,r) carrying continuously across both loops. When
+    /// <paramref name="data"/> is all zero this is the "cheap" key(x) step; when it is the salt it is
+    /// the initial ekskey step. This continuous cyclic salt stream is what the previous
+    /// implementation got wrong (double-XOR + offset reset + absolute indexing).
+    /// </summary>
+    private static void ExpandKey(uint[] P, uint[] S, byte[] data, byte[] key)
+    {
         int keyOffset = 0;
         for (int i = 0; i < 18; i++)
         {
-            uint data = 0;
-            for (int k = 0; k < 4; k++)
-            {
-                data = (data << 8) | key[keyOffset];
-                keyOffset = (keyOffset + 1) % key.Length;
-            }
-            P[i] ^= data;
+            P[i] ^= StreamToWord(key, ref keyOffset, key.Length);
         }
 
-        // Expand key with salt
         uint l = 0, r = 0;
+        int dataOffset = 0;
         for (int i = 0; i < 18; i += 2)
         {
-            l ^= StreamToWord(salt, ref keyOffset, salt.Length);
-            r ^= StreamToWord(salt, ref keyOffset, salt.Length);
-            keyOffset = (i * 4) % salt.Length; // Reset for salt streaming
-            l ^= GetSaltWord(salt, i);
-            r ^= GetSaltWord(salt, i + 1);
+            l ^= StreamToWord(data, ref dataOffset, data.Length);
+            r ^= StreamToWord(data, ref dataOffset, data.Length);
             BlowfishEncrypt(P, S, ref l, ref r);
             P[i] = l;
             P[i + 1] = r;
@@ -358,53 +376,12 @@ public class BCryptPasswordHasher : IPasswordHasher
 
         for (int i = 0; i < 1024; i += 2)
         {
-            l ^= GetSaltWord(salt, i);
-            r ^= GetSaltWord(salt, i + 1);
+            l ^= StreamToWord(data, ref dataOffset, data.Length);
+            r ^= StreamToWord(data, ref dataOffset, data.Length);
             BlowfishEncrypt(P, S, ref l, ref r);
             S[i] = l;
             S[i + 1] = r;
         }
-
-        // Expensive key schedule: 2^cost iterations
-        int rounds = 1 << cost;
-        for (int n = 0; n < rounds; n++)
-        {
-            // Re-key with password
-            keyOffset = 0;
-            for (int i = 0; i < 18; i++)
-            {
-                uint data = 0;
-                for (int k = 0; k < 4; k++)
-                {
-                    data = (data << 8) | key[keyOffset];
-                    keyOffset = (keyOffset + 1) % key.Length;
-                }
-                P[i] ^= data;
-            }
-            l = 0; r = 0;
-            for (int i = 0; i < 18; i += 2) { BlowfishEncrypt(P, S, ref l, ref r); P[i] = l; P[i + 1] = r; }
-            for (int i = 0; i < 1024; i += 2) { BlowfishEncrypt(P, S, ref l, ref r); S[i] = l; S[i + 1] = r; }
-
-            // Re-key with salt
-            int saltOff = 0;
-            for (int i = 0; i < 18; i++)
-            {
-                P[i] ^= StreamToWord(salt, ref saltOff, salt.Length);
-            }
-            l = 0; r = 0;
-            for (int i = 0; i < 18; i += 2) { BlowfishEncrypt(P, S, ref l, ref r); P[i] = l; P[i + 1] = r; }
-            for (int i = 0; i < 1024; i += 2) { BlowfishEncrypt(P, S, ref l, ref r); S[i] = l; S[i + 1] = r; }
-        }
-    }
-
-    private static uint GetSaltWord(byte[] salt, int index)
-    {
-        int off = (index * 4) % salt.Length;
-        return (uint)(
-            salt[off % salt.Length] << 24 |
-            salt[(off + 1) % salt.Length] << 16 |
-            salt[(off + 2) % salt.Length] << 8 |
-            salt[(off + 3) % salt.Length]);
     }
 
     private static uint StreamToWord(byte[] data, ref int offset, int length)
@@ -418,19 +395,21 @@ public class BCryptPasswordHasher : IPasswordHasher
         return word;
     }
 
-    private static void BlowfishEncrypt(uint[] P, uint[] S, ref uint l, ref uint r)
+    private static void BlowfishEncrypt(uint[] P, uint[] S, ref uint xl, ref uint xr)
     {
-        for (int i = 0; i < 16; i += 2)
+        // Canonical 16-round Blowfish encipher (matches OpenBSD/jBCrypt exactly): the P-array is
+        // applied as P[0] up front, then P[1..16] inside the 8-iteration loop, and the final swap is
+        // folded into returning (r ^ P[17], l). The previous form applied P[0..15] in the loop and
+        // P[16]/P[17] after an explicit swap, which is NOT standard Blowfish (CR-C24).
+        uint l = xl, r = xr;
+        l ^= P[0];
+        for (int i = 0; i <= 14; )
         {
-            l ^= P[i];
-            r ^= BlowfishF(S, l);
-            r ^= P[i + 1];
-            l ^= BlowfishF(S, r);
+            r ^= BlowfishF(S, l) ^ P[++i];
+            l ^= BlowfishF(S, r) ^ P[++i];
         }
-        l ^= P[16];
-        r ^= P[17];
-        // Swap
-        (l, r) = (r, l);
+        xl = r ^ P[17];
+        xr = l;
     }
 
     private static uint BlowfishF(uint[] S, uint x)
