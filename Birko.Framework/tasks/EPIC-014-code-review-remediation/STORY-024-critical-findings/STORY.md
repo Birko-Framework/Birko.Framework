@@ -1,7 +1,7 @@
 ---
 id: STORY-024
 parent: EPIC-014
-status: planned
+status: in-progress
 created: 2026-06-18
 source: CODE-REVIEW-AUDIT-2026-06-17.md
 severity: critical
@@ -27,3 +27,34 @@ adversarially re-verified (a second agent re-opened the cited file), so these ar
 **Not pre-created.** Extract tasks from `CODE-REVIEW-AUDIT-2026-06-17.md` on demand — one task per
 `CR-Cxx` entry, copying its ID/Title → title, Path → file:line, Detail → context, Fix → approach,
 Acceptance → derive + add a regression test. Flip each finding's `Status` in the audit as it lands.
+
+## Progress (worked project-by-project, testable-in-session batches first)
+
+- [x] **CR-C07** · Birko.Data.JSON · `JsonStore.SaveData` writes `_items.Values` (array) — round-trip test
+- [x] **CR-C08** · Birko.Data.JSON · `JsonSeparateStore.SaveData` guard inverted + path registered — write test
+- [ ] CR-C01 · Birko.AI.Providers · Ollama streaming URL
+- [ ] CR-C02 · Birko.BackgroundJobs.Redis · scheduled-job score scale
+- [ ] CR-C03 · Birko.Communication.Hardware · LPT address mapping
+- [ ] CR-C04 · Birko.Data.CosmosDB · missing `id` property
+- [ ] CR-C05 · Birko.Data.EventSourcing · single Create Guid mismatch
+- [ ] CR-C06 · Birko.Data.EventSourcing · bulk Create Guid mismatch
+- [ ] CR-C09 · Birko.Data.Migrations.MongoDB · transaction wraps no ops
+- [ ] CR-C10 · Birko.Data.Migrations.RavenDB · missing `using System.Linq;` (DataMigrator)
+- [ ] CR-C11 · Birko.Data.Migrations.RavenDB · missing `using System.Linq;` (Runner)
+- [ ] CR-C12 · Birko.Data.Migrations.RavenDB · CountDocuments ignores built query
+- [ ] CR-C13 · Birko.Data.Migrations.RavenDB · CopyData ignores target/transform
+- [ ] CR-C14 · Birko.Data.Migrations.SQL · schema builder never emits CREATE
+- [ ] CR-C15 · Birko.Data.MongoDB.Views · persistent view re-runs base pipeline
+- [ ] CR-C16 · Birko.Data.SQL.Caching · filter Update/Delete bypass invalidation
+- [ ] CR-C17 · Birko.Data.SQL.ViewModel · hard-coded AbstractConnector generic
+- [ ] CR-C18 · Birko.Data.Sync · knowledge never persisted (Update on null PK)
+- [ ] CR-C19 · Birko.Data.Sync.RavenDB · tenant filter can never match
+- [ ] CR-C20 · Birko.Data.Sync.RavenDB · async Delete wrong overload
+- [ ] CR-C21 · Birko.Data.XML · batch write single / read List
+- [ ] CR-C22 · Birko.Data.XML · bulk Create/Update/Delete never write
+- [ ] CR-C23 · Birko.Security.AspNetCore · role/permission separator mismatch
+- [ ] CR-C24 · Birko.Security.BCrypt · unvalidated hand-rolled BCrypt
+
+**Test-infra gaps noted while working** (true regression tests need infra / a missing `.Tests` sibling):
+CR-C10–C13 (RavenDB migrations — no `.Tests`, needs a Raven server), CR-C04 (Cosmos emulator),
+CR-C09 (Mongo replica set), CR-C02 (Redis), CR-C15/C16/C17/C19/C20 (no `.Tests` sibling).

@@ -1,6 +1,6 @@
 ---
 id: EPIC-014
-status: planned
+status: in-progress
 created: 2026-06-18
 owner: ai
 affects: [Birko.Framework]
