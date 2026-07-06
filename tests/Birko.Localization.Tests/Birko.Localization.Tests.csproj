@@ -23,6 +23,6 @@
     <EmbeddedResource Remove="TestResources\**\*.resx" />
   </ItemGroup>
 
-  <Import Project="..\Birko.Localization\Birko.Localization.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Localization\Birko.Localization.projitems" Label="Shared" />
 
 </Project>
