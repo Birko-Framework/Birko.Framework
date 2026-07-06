@@ -30,8 +30,8 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
 - **Base VMs (STORY-032):** `Mvvm.BasePageViewModel`, `CrudViewModelBase<T>`, `ListPageViewModel<T>`,
   `DetailPageViewModel<T>` on CommunityToolkit.Mvvm (the ONLY dependency Core takes — platform-neutral).
 - **Data port (STORY-032):** `Data.ICrudDataSource<T>`.
-- **Forms (STORY-033; field types EPIC-016/TASK-055):** `Forms.FormField` + `FieldType` (18 types:
-  Text/TextArea/Number/Percent/Range/Password/Email/Search/Checkbox/Switch/Select/Radio/OptionGroup/Markdown/Date/Time/DateTime/DateRange;
+- **Forms (STORY-033; field types EPIC-016/TASK-055):** `Forms.FormField` + `FieldType` (21 types:
+  Text/TextArea/Number/Percent/Range/Password/Email/Search/Checkbox/Switch/Select/MultiSelect/Radio/OptionGroup/Tags/File/Markdown/Date/Time/DateTime/DateRange;
   `Forms.DateRange` is the value type for the DateRange field).
   `FormField` carries `Min`/`Max`/`Step`/`Default`/`Hint`/`Options`/`Required`/`ReadOnly` — all neutral;
   the Avalonia `Form` control maps each `FieldType` to a restyled control.
