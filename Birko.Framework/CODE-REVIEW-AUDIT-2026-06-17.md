@@ -730,7 +730,7 @@ Genuine, actionable, high-severity correctness bug.
 - **Title:** README.md and CLAUDE.md document a non-existent API
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication\CLAUDE.md (and README.md)`
 - **Category:** convention · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — both docs rewritten to the actual IPort / AbstractPort / PortSettings / ProcessDataDelegate surface with a compiling AbstractPort example.
 - **Detail:** Both docs describe ICommunicator, IAsyncCommunicator, IStreamCommunicator, AbstractCommunicator, AbstractAsyncCommunicator with methods Connect/Send/Receive and Connected/Disconnected/DataReceived/ErrorOccurred events. None of these types exist. The entire actual public surface is IPort + AbstractPort + PortSettings + ProcessDataDelegate (byte-buffer port abstraction). Every usage example (e.g. 'class MyCommunicator : AbstractCommunicator, ICommunicator') will not compile. The framework's maintenance convention explicitly requires CLAUDE.md/README updates to track the real component signatures.
 - **Fix:** Rewrite both docs to describe the actual IPort/AbstractPort/PortSettings API, or restore the documented ICommunicator family if it was intended to live here.
 - **Verify reasoning:** Confirmed by reading the actual source and both docs.
