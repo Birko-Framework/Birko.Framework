@@ -63,11 +63,25 @@ namespace Birko.Communication.IR.Protocols
 
             // Convert raw durations to half-bit slots
             var halfBits = new List<bool>();
-            bool isMark = true; // first duration is always mark
+            bool isMark = true; // first duration is nominally a mark
+            bool firstEntry = true;
 
             foreach (int duration in timing.Durations)
             {
                 int slots = (int)Math.Round((double)duration / HalfBit);
+
+                // Tolerate a leading zero-length mark: an RC5 frame starts with S1 = 1, whose
+                // Manchester encoding is space-then-mark, so Encode emits a 0µs mark first to keep
+                // the mark/space alternation aligned. Consume it (flip level) without emitting a
+                // half-bit — otherwise the encoder's own output decodes to null (CR-H024).
+                if (firstEntry && slots == 0)
+                {
+                    isMark = !isMark;
+                    firstEntry = false;
+                    continue;
+                }
+                firstEntry = false;
+
                 if (slots < 1 || slots > 3)
                 {
                     return null;
