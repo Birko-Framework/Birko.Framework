@@ -2,6 +2,7 @@ using Birko.Data.SQL.Attributes;
 using Birko.Data.SQL.Conditions;
 using Birko.Data.SQL.Fields;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -13,7 +14,9 @@ namespace Birko.Data.SQL
 {
     public static partial class DataBase
     {
-        private static Dictionary<Type, Tables.View>? _viewCache = null;
+        // Concurrent to match the sibling _fieldsCache; a plain Dictionary mutated from the static
+        // LoadView across concurrent requests could corrupt its buckets (CR-H094).
+        private static readonly ConcurrentDictionary<Type, Tables.View> _viewCache = new();
 
         private static void EnsureViewResolverRegistered()
         {
@@ -78,10 +81,6 @@ namespace Birko.Data.SQL
         public static Tables.View LoadView(Type type)
         {
             EnsureViewResolverRegistered();
-            if (_viewCache == null)
-            {
-                _viewCache = new Dictionary<Type, Tables.View>();
-            }
             if (!_viewCache.ContainsKey(type))
             {
                 object[] attrs = type.GetCustomAttributes(typeof(ViewAttribute), true).ToArray();
