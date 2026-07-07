@@ -171,16 +171,27 @@ namespace Birko.EventBus.MessageQueue
 
                 await _pipeline.ExecuteAsync(@event, context, async () =>
                 {
+                    List<Exception>? failures = null;
                     foreach (var handler in handlers)
                     {
                         try
                         {
                             await handler.HandleAsync(@event, context, ct).ConfigureAwait(false);
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // Error isolation: continue to next handler
+                            // Error isolation: keep dispatching to the remaining handlers, but record
+                            // the failure and rethrow it after the loop. The transport drives
+                            // retry / dead-letter by whether this delivery callback faults, so
+                            // swallowing every exception acked failed messages and lost the event
+                            // (CR-H114).
+                            (failures ??= new List<Exception>()).Add(ex);
                         }
+                    }
+
+                    if (failures != null)
+                    {
+                        throw failures.Count == 1 ? failures[0] : new AggregateException(failures);
                     }
                 }, ct).ConfigureAwait(false);
             }, _options.ConsumerOptions, cancellationToken).ConfigureAwait(false);
