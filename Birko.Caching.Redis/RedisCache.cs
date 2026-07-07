@@ -73,12 +73,17 @@ public sealed class RedisCache : ICache
 
         await db.StringSetAsync(fullKey, serialized, expiry);
 
-        // Store sliding expiration metadata if needed
+        // Store sliding expiration metadata if needed. The absolute cap is persisted as a fixed
+        // DEADLINE (unix seconds), not the original window — otherwise every refresh recomputes
+        // min(sliding, window) against a constant window and the entry lives forever (CR-H014).
         if (opts.SlidingExpiration.HasValue)
         {
+            var absoluteDeadline = opts.AbsoluteExpiration.HasValue
+                ? DateTimeOffset.UtcNow.ToUnixTimeSeconds() + (long)opts.AbsoluteExpiration.Value.TotalSeconds
+                : -1;
             await db.HashSetAsync(GetMetaKey(fullKey), [
                 new HashEntry("sliding", opts.SlidingExpiration.Value.TotalSeconds),
-                new HashEntry("absolute", opts.AbsoluteExpiration?.TotalSeconds ?? -1)
+                new HashEntry("absoluteDeadline", absoluteDeadline)
             ]);
             await db.KeyExpireAsync(GetMetaKey(fullKey), expiry);
         }
@@ -186,24 +191,41 @@ public sealed class RedisCache : ICache
         var slidingSeconds = (double)sliding;
         if (slidingSeconds <= 0) return;
 
+        var absolute = await db.HashGetAsync(metaKey, "absoluteDeadline");
+        var absoluteDeadline = absolute.HasValue ? (long)absolute : -1;
+
+        var newExpiry = ComputeRefreshedTtl(slidingSeconds, absoluteDeadline, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+        if (newExpiry == null)
+        {
+            // Past the absolute deadline — expire now instead of re-extending.
+            await db.KeyDeleteAsync([fullKey, metaKey]);
+            return;
+        }
+
+        await db.KeyExpireAsync(fullKey, newExpiry.Value);
+        await db.KeyExpireAsync(metaKey, newExpiry.Value);
+    }
+
+    /// <summary>
+    /// Computes the refreshed TTL for a sliding entry, capped by the absolute deadline (CR-H014).
+    /// Returns min(sliding, time-remaining-to-deadline); or the full sliding span when there is no
+    /// absolute cap; or <c>null</c> when the deadline has already passed (caller should expire the
+    /// entry). Because the cap is a fixed deadline, the remaining budget strictly shrinks over
+    /// time, so an always-accessed entry can no longer live forever.
+    /// </summary>
+    internal static TimeSpan? ComputeRefreshedTtl(double slidingSeconds, long absoluteDeadlineUnix, long nowUnix)
+    {
         var slidingSpan = TimeSpan.FromSeconds(slidingSeconds);
+        if (absoluteDeadlineUnix <= 0)
+            return slidingSpan; // no absolute cap
 
-        // Determine max TTL (absolute expiration cap)
-        var absolute = await db.HashGetAsync(metaKey, "absolute");
-        var absoluteSeconds = absolute.HasValue ? (double)absolute : -1;
+        var remaining = absoluteDeadlineUnix - nowUnix;
+        if (remaining <= 0)
+            return null; // past the deadline
 
-        if (absoluteSeconds > 0)
-        {
-            var ttl = await db.KeyTimeToLiveAsync(fullKey);
-            var newExpiry = slidingSpan < TimeSpan.FromSeconds(absoluteSeconds) ? slidingSpan : TimeSpan.FromSeconds(absoluteSeconds);
-            await db.KeyExpireAsync(fullKey, newExpiry);
-            await db.KeyExpireAsync(metaKey, newExpiry);
-        }
-        else
-        {
-            await db.KeyExpireAsync(fullKey, slidingSpan);
-            await db.KeyExpireAsync(metaKey, slidingSpan);
-        }
+        var remainingSpan = TimeSpan.FromSeconds(remaining);
+        return slidingSpan < remainingSpan ? slidingSpan : remainingSpan;
     }
 
     public void Dispose()
