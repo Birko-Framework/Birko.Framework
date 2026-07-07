@@ -741,6 +741,10 @@
 			"path": "../../Framework.Tests/Birko.AI.Tests"
 		},
 		{
+			"name": "Tests / Birko.AI.Orchestration.Tests",
+			"path": "../../Framework.Tests/Birko.AI.Orchestration.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
