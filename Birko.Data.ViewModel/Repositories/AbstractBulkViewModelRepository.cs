@@ -64,7 +64,10 @@ namespace Birko.Data.Repositories
             (Store as IBulkStore<TModel>)?.Create(data.Select(x =>
             {
                 TModel item = LoadModelInstance(x);
-                processDelegate?.Invoke(item);
+                // Capture the delegate's return value (ProcessDataDelegate is a transform); the bulk
+                // path previously invoked it for side effects only and discarded a returned/wrapped
+                // instance, unlike the single-item path (CR-H110).
+                item = processDelegate?.Invoke(item) ?? item;
                 return item;
             }));
         }
@@ -79,7 +82,7 @@ namespace Birko.Data.Repositories
             (Store as IBulkStore<TModel>)?.Update(data.Select(x =>
             {
                 TModel item = LoadModelInstance(x);
-                processDelegate?.Invoke(item);
+                item = processDelegate?.Invoke(item) ?? item;  // honor the transform result (CR-H110)
                 return item;
             }));
         }
