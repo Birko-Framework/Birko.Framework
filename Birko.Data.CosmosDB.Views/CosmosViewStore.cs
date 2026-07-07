@@ -215,10 +215,11 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
         var sb = new StringBuilder(selectFromSql);
 
-        // WHERE clause (must come before GROUP BY)
+        // WHERE clause (must come before GROUP BY). Translate view property names to source field
+        // names — the query runs against the raw documents (FROM c) (CR-H045).
         if (filter != null)
         {
-            var whereClause = CosmosFilterTranslator.Translate(filter);
+            var whereClause = CosmosFilterTranslator.Translate(filter, MapViewPropertyToSource);
             if (!string.IsNullOrEmpty(whereClause))
             {
                 sb.Append(" WHERE ").Append(whereClause);
@@ -231,11 +232,12 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
             sb.Append(groupBySql);
         }
 
-        // ORDER BY clause
+        // ORDER BY clause — order keys are view property names; map group keys back to their source
+        // field and reference aggregate results by their SELECT alias (CR-H044).
         if (orderBy?.Fields.Count > 0)
         {
             var orderParts = orderBy.Fields
-                .Select(f => $"c.{f.PropertyName}{(f.Descending ? " DESC" : " ASC")}");
+                .Select(f => $"{ResolveOrderKey(f.PropertyName)}{(f.Descending ? " DESC" : " ASC")}");
             sb.Append(" ORDER BY ").Append(string.Join(", ", orderParts));
         }
 
@@ -259,7 +261,7 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
 
         if (filter != null)
         {
-            var whereClause = CosmosFilterTranslator.Translate(filter);
+            var whereClause = CosmosFilterTranslator.Translate(filter, MapViewPropertyToSource);
             if (!string.IsNullOrEmpty(whereClause))
             {
                 sb.Append(" WHERE ").Append(whereClause);
@@ -291,6 +293,32 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         return field?.ViewProperty ?? groupBy.PropertyName;
     }
 
+    /// <summary>
+    /// Maps a TView property name to its raw source-document field name (CR-H045). Falls back to
+    /// the name unchanged when no renamed field matches (identity fields, id, etc.).
+    /// </summary>
+    private string MapViewPropertyToSource(string viewProperty)
+    {
+        var field = _definition.Fields.FirstOrDefault(f => f.ViewProperty == viewProperty);
+        return field?.SourceProperty ?? viewProperty;
+    }
+
+    /// <summary>
+    /// Resolves an ORDER BY key expressed as a TView property name (CR-H044): a group key maps back
+    /// to its source field (<c>c.{source}</c>); an aggregate result orders by its SELECT alias.
+    /// </summary>
+    private string ResolveOrderKey(string viewProperty)
+    {
+        // Aggregate result column — order by the projected alias, not a raw document field.
+        if (_definition.Aggregates.Any(a => a.ViewProperty == viewProperty))
+        {
+            return viewProperty;
+        }
+
+        // Group key / passthrough field — order by the source field the GROUP BY uses.
+        return $"c.{MapViewPropertyToSource(viewProperty)}";
+    }
+
     #endregion
 
     #region Helpers
@@ -317,11 +345,17 @@ internal static class CosmosFilterTranslator
     /// Translates a filter expression into a Cosmos SQL WHERE clause string.
     /// Returns an empty string if the expression cannot be translated.
     /// </summary>
-    public static string Translate<T>(Expression<Func<T, bool>> filter)
+    /// <param name="mapMember">
+    /// Optional map from a TView property name to the raw source-document field name. The aggregate
+    /// SQL path runs the WHERE against the source documents (FROM c), so a renamed view field must
+    /// be translated back to its source name or the predicate targets a non-existent field and
+    /// silently matches nothing (CR-H045). Null (LINQ path) leaves names unchanged.
+    /// </param>
+    public static string Translate<T>(Expression<Func<T, bool>> filter, Func<string, string>? mapMember = null)
     {
         try
         {
-            return TranslateExpression(filter.Body);
+            return TranslateExpression(filter.Body, mapMember);
         }
         catch
         {
@@ -329,27 +363,27 @@ internal static class CosmosFilterTranslator
         }
     }
 
-    private static string TranslateExpression(Expression expression)
+    private static string TranslateExpression(Expression expression, Func<string, string>? mapMember)
     {
         return expression switch
         {
-            BinaryExpression binary => TranslateBinary(binary),
-            UnaryExpression { NodeType: ExpressionType.Not } unary => $"NOT ({TranslateExpression(unary.Operand)})",
-            MethodCallExpression method => TranslateMethodCall(method),
+            BinaryExpression binary => TranslateBinary(binary, mapMember),
+            UnaryExpression { NodeType: ExpressionType.Not } unary => $"NOT ({TranslateExpression(unary.Operand, mapMember)})",
+            MethodCallExpression method => TranslateMethodCall(method, mapMember),
             _ => throw new NotSupportedException($"Expression type {expression.NodeType} is not supported for SQL translation.")
         };
     }
 
-    private static string TranslateBinary(BinaryExpression binary)
+    private static string TranslateBinary(BinaryExpression binary, Func<string, string>? mapMember)
     {
         if (binary.NodeType == ExpressionType.AndAlso)
         {
-            return $"({TranslateExpression(binary.Left)} AND {TranslateExpression(binary.Right)})";
+            return $"({TranslateExpression(binary.Left, mapMember)} AND {TranslateExpression(binary.Right, mapMember)})";
         }
 
         if (binary.NodeType == ExpressionType.OrElse)
         {
-            return $"({TranslateExpression(binary.Left)} OR {TranslateExpression(binary.Right)})";
+            return $"({TranslateExpression(binary.Left, mapMember)} OR {TranslateExpression(binary.Right, mapMember)})";
         }
 
         var op = binary.NodeType switch
@@ -363,17 +397,17 @@ internal static class CosmosFilterTranslator
             _ => throw new NotSupportedException($"Binary operator {binary.NodeType} is not supported.")
         };
 
-        var left = TranslateFieldAccess(binary.Left);
+        var left = TranslateFieldAccess(binary.Left, mapMember);
         var right = TranslateValue(binary.Right);
 
         return $"{left} {op} {right}";
     }
 
-    private static string TranslateMethodCall(MethodCallExpression method)
+    private static string TranslateMethodCall(MethodCallExpression method, Func<string, string>? mapMember)
     {
         if (method.Method.Name == "Contains" && method.Object != null)
         {
-            var field = TranslateFieldAccess(method.Object);
+            var field = TranslateFieldAccess(method.Object, mapMember);
             var value = TranslateValue(method.Arguments[0]);
             return $"CONTAINS({field}, {value})";
         }
@@ -381,20 +415,22 @@ internal static class CosmosFilterTranslator
         throw new NotSupportedException($"Method {method.Method.Name} is not supported for SQL translation.");
     }
 
-    private static string TranslateFieldAccess(Expression expression)
+    private static string TranslateFieldAccess(Expression expression, Func<string, string>? mapMember)
     {
         if (expression is MemberExpression member)
         {
-            return $"c.{member.Member.Name}";
+            return $"c.{Map(member.Member.Name, mapMember)}";
         }
 
         if (expression is UnaryExpression unary && unary.Operand is MemberExpression unaryMember)
         {
-            return $"c.{unaryMember.Member.Name}";
+            return $"c.{Map(unaryMember.Member.Name, mapMember)}";
         }
 
         throw new NotSupportedException("Cannot translate field access expression.");
     }
+
+    private static string Map(string name, Func<string, string>? mapMember) => mapMember?.Invoke(name) ?? name;
 
     private static string TranslateValue(Expression expression)
     {
