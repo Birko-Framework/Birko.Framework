@@ -812,10 +812,11 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// <summary>
     /// Get UpdatedAt from entity
     /// </summary>
-    private DateTime? GetUpdatedAt(T entity)
+    internal static DateTime? GetUpdatedAt(T entity)
     {
         var prop = typeof(T).GetProperty("UpdatedAt");
-        if (prop != null && prop.PropertyType == typeof(DateTime))
+        // Match both DateTime and DateTime? — the exact-DateTime guard missed nullable timestamps.
+        if (prop != null && (prop.PropertyType == typeof(DateTime) || Nullable.GetUnderlyingType(prop.PropertyType) == typeof(DateTime)))
         {
             var value = prop.GetValue(entity);
             return value as DateTime?;
@@ -826,12 +827,30 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// <summary>
     /// Get version hash for entity
     /// </summary>
-    private string? GetVersionHash(T? entity)
+    internal static string? GetVersionHash(T? entity)
     {
         if (entity == null) return null;
 
         var updatedAt = GetUpdatedAt(entity);
-        return updatedAt?.ToString("O") ?? Guid.NewGuid().ToString();
+        if (updatedAt.HasValue)
+        {
+            return updatedAt.Value.ToString("O");
+        }
+
+        // No timestamp source: derive a DETERMINISTIC hash from the entity's serialized state instead
+        // of a random GUID (CR-H104). A fresh GUID per call made the recorded version never match
+        // across syncs and made Preview/Sync results non-reproducible; a content hash is stable and
+        // actually reflects whether the entity changed.
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(entity);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            return Convert.ToHexString(sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json)));
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     /// <summary>
