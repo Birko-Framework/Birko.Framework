@@ -50,6 +50,23 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        /// <summary>
+        /// Honors <see cref="TimescaleDBSettings.GetConnectionString"/> (CommandTimeout /
+        /// ConnectionTimeout / SSL). The base PostgreSQLConnector only calls GetConnectionString for
+        /// a <c>PostgreSqlSettings</c>; a TimescaleDBSettings is a sibling, not a PostgreSqlSettings,
+        /// so it fell through to the generic branch that dropped those timeouts entirely (CR-H109).
+        /// </summary>
+        public override System.Data.Common.DbConnection CreateConnection(Birko.Configuration.PasswordSettings settings)
+        {
+            if (settings is TimescaleDBSettings tsSettings
+                && !string.IsNullOrEmpty(tsSettings.Location) && !string.IsNullOrEmpty(tsSettings.Name))
+            {
+                return new NpgsqlConnection(tsSettings.GetConnectionString());
+            }
+
+            return base.CreateConnection(settings);
+        }
+
         /// <inheritdoc />
         public override void CreateTable(string name, IEnumerable<string> fields)
         {
