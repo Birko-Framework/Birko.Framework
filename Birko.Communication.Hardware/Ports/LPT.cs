@@ -94,12 +94,10 @@ namespace Birko.Communication.Hardware.Ports
 
         public override byte[] RemoveReadData(int size)
         {
-            byte[] result = Read(size);
-            if (HasReadData(size))
-            {
-                ReadData.RemoveRange(0, size);
-            }
-            return result;
+            // LPT is stateless: Read() polls the port directly and never buffers into ReadData, so
+            // there is nothing to remove. Return the freshly-read bytes (CR-H022: RemoveRange(0, size)
+            // on the always-empty ReadData threw ArgumentException for any size > 0).
+            return Read(size);
         }
     }
 }

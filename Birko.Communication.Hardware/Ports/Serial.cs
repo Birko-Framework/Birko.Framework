@@ -19,9 +19,10 @@ namespace Birko.Communication.Hardware.Ports
         }
     }
 
-    public class Serial : AbstractPort
+    public class Serial : AbstractPort, IDisposable
     {
         private readonly SerialPort port = null!;
+        private bool _disposed;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Serial"/> class.
@@ -99,9 +100,33 @@ namespace Birko.Communication.Hardware.Ports
         public override void Close()
         {
             if (!IsOpen()) return;
-            port.Close();
+            // Unsubscribe before closing so no late DataReceived callback fires mid-close.
             port.DataReceived -= new SerialDataReceivedEventHandler(DataReceviedHandler);
+            port.Close();
             _isOpen = false;
+        }
+
+        /// <summary>
+        /// Releases the underlying <see cref="SerialPort"/> (an IDisposable holding an unmanaged OS
+        /// handle). Close() alone never disposed it, leaking handles across open/close cycles (CR-H023).
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            if (disposing && port != null)
+            {
+                try { port.DataReceived -= new SerialDataReceivedEventHandler(DataReceviedHandler); } catch { }
+                port.Dispose();
+                _isOpen = false;
+            }
         }
 
         /// <summary>
