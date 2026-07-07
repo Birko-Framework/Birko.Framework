@@ -275,6 +275,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.Sync.Tests/Birko.Data.Sync.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Sync.CosmosDB.Tests/Birko.Data.Sync.CosmosDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Sync.ElasticSearch.Tests/Birko.Data.Sync.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Sync.MongoDb.Tests/Birko.Data.Sync.MongoDb.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.SQL.Tests/Birko.BackgroundJobs.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Workflow.SQL.Tests/Birko.Workflow.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Camera.Tests/Birko.Communication.Camera.Tests.csproj" />
