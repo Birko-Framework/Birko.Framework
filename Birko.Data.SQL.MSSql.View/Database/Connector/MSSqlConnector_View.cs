@@ -289,6 +289,10 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.ExecuteNonQuery();
             }, true);
+
+            // Invalidate the shared view-existence cache so Auto-mode re-checks and starts using the
+            // now-created view, mirroring the base CreateView/DropView (CR-H090).
+            InvalidateViewExistsCache(name!);
         }
 
         /// <summary>
@@ -319,6 +323,9 @@ namespace Birko.Data.SQL.Connectors
             {
                 command.ExecuteNonQuery();
             }, true);
+
+            // Invalidate the cached 'exists' so Auto-mode stops targeting the dropped view (CR-H090).
+            InvalidateViewExistsCache(viewName);
         }
 
         /// <summary>
