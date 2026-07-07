@@ -45,8 +45,10 @@ namespace Birko.Data.Repositories
                 {
                     _repositories[id].Add(type, (TRepository)Activator.CreateInstance(type, store)!);
                 }
+                // Read inside the lock (CR-H081): _repositories is a plain Dictionary, so an
+                // unlocked read can race a concurrent writer's resize/Remove (undefined behavior).
+                return (TRepository)_repositories[id][type];
             }
-            return (TRepository)_repositories[id][type];
         }
 
         /// <summary>
@@ -74,8 +76,8 @@ namespace Birko.Data.Repositories
                     var store = storeFactory();
                     _repositories[id].Add(type, (TRepository)Activator.CreateInstance(type, store)!);
                 }
+                return (TRepository)_repositories[id][type];
             }
-            return (TRepository)_repositories[id][type];
         }
 
         /// <summary>
@@ -104,8 +106,8 @@ namespace Birko.Data.Repositories
                 {
                     _repositories[id].Add(type, (TRepository)Activator.CreateInstance(type)!);
                 }
+                return (TRepository)_repositories[id][type];
             }
-            return (TRepository)_repositories[id][type];
         }
 
         #endregion
@@ -120,24 +122,30 @@ namespace Birko.Data.Repositories
         public static void Destroy<TRepository>(string? key = null)
             where TRepository : IBaseRepository
         {
-            if (_repositories != null)
+            // Mutate the shared (non-concurrent) dictionary under the lock (CR-H081); the original
+            // Destroy took no lock at all, racing concurrent GetRepository writers. Capture the
+            // repository under the lock but call its Destroy() outside, so external code doesn't run
+            // while the lock is held (avoids re-entrancy deadlocks).
+            TRepository? repository = default;
+            lock (_lockObject)
             {
+                if (_repositories == null) return;
+
                 var id = key ?? typeof(TRepository).FullName ?? string.Empty;
-                if (_repositories.ContainsKey(id))
+                if (!_repositories.TryGetValue(id, out var byType)) return;
+
+                var type = typeof(TRepository);
+                if (!byType.TryGetValue(type, out var repoObj)) return;
+
+                repository = (TRepository)repoObj;
+                byType.Remove(type);
+                if (!byType.Any())
                 {
-                    var type = typeof(TRepository);
-                    if (_repositories[id].ContainsKey(type))
-                    {
-                        var repository = (TRepository)_repositories[id][type];
-                        _repositories[id].Remove(type);
-                        repository.Destroy();
-                        if (!_repositories[id].Any())
-                        {
-                            _repositories.Remove(id);
-                        }
-                    }
+                    _repositories.Remove(id);
                 }
             }
+
+            repository?.Destroy();
         }
 
         /// <summary>
