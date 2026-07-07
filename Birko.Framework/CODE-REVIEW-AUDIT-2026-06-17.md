@@ -945,7 +945,7 @@ One minor caveat: "high" severity is somewhat generous since the crash only mani
 - **Title:** NfcReaderPort never disposes its owned IDisposable transport (resource leak)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Ports/NfcReaderPort.cs:16`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — NfcReaderPort implements IDisposable: unsubscribes TagDetected/TagRemoved and disposes the owned transport. Test verifies dispose + unsubscribe + idempotency.
 - **Detail:** NfcReaderPort wraps an INfcTransport (which is IDisposable and owns a SerialPort / HttpClient / CancellationTokenSource), but the port itself does not implement IDisposable and never calls _transport.Dispose(). AbstractPort.Close() only calls DisconnectAsync, which for SerialNfcTransport disposes the port but leaves the _pollCts undisposed, and for HttpNfcTransport leaves the owned HttpClient and _pollCts undisposed. A consumer that constructs and discards NfcReaderPort instances leaks serial handles, HttpClients, and CancellationTokenSources. The port also subscribes to transport.TagDetected/TagRemoved in the constructor and never unsubscribes, keeping the port alive via the transport.
 - **Fix:** Implement IDisposable on NfcReaderPort: unsubscribe the two event handlers and call _transport.Dispose(). Alternatively dispose the transport (or at least _pollCts) in Close().
 - **Verify reasoning:** Verified every claim against the actual source.
@@ -970,7 +970,7 @@ Minor caveat (does not change the verdict): the transport is constructor-injecte
 - **Title:** HID transport cancellation callback dereferences possibly-null _readTcs and can complete the wrong read
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Transports/HidNfcTransport.cs:90`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — ReadTagAsync captures the TCS in a local and registers against it (disposing the registration on return), so a late timer can neither NRE on the nulled field nor complete the next read. Stress test loops short-timeout reads.
 - **Detail:** ReadTagAsync registers `cts.Token.Register(() => _readTcs.TrySetResult(null))` capturing the _readTcs field (not the local). After the await completes, line 93 sets `_readTcs = null`. If the linked timeout/cancellation fires after that point (e.g. timer races with the await completion, common during polling), the lambda dereferences a null field -> NullReferenceException on a thread-pool/timer thread. Worse, during StartPollingAsync's tight loop the next iteration assigns a NEW _readTcs before the previous timer callback runs, so a stale timeout can complete the wrong (current) read with null, dropping a tag that was actually fed. This is also a CS8602 nullable-warning (_readTcs is `TaskCompletionSource<string?>?`) under the consumer's Nullable=enable build.
 - **Fix:** Capture the TCS in a local and register against it: `var tcs = _readTcs; cts.Token.Register(() => tcs.TrySetResult(null));` Also gate FeedInputAsync against a possibly-null _readTcs (already uses ?.) and consider not nulling the field while a timer may still reference it.
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Communication.NFC\Transports\HidNfcTransport.cs. The finding is accurate on all three points.
