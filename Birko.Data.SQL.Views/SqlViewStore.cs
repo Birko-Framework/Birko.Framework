@@ -40,7 +40,7 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
         _sqlView = sqlView ?? throw new ArgumentNullException(nameof(sqlView));
     }
 
-    public Task<IEnumerable<TView>> QueryAsync(
+    public async Task<IEnumerable<TView>> QueryAsync(
         Expression<Func<TView, bool>>? filter = null,
         OrderBy<TView>? orderBy = null,
         int? limit = null,
@@ -55,18 +55,24 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
 
         var orderFields = TranslateOrderBy(orderBy);
 
-        var results = _connector.Select(
-            _sqlView,
-            CreateTransformFunction(),
-            conditions,
-            orderFields,
-            limit,
-            offset);
+        // Use the genuine async reader (threads ct into the DB call) when the connector supports it,
+        // instead of blocking the calling thread on synchronous I/O (CR-H096).
+        if (_connector is AbstractAsyncConnector asyncConnector)
+        {
+            var list = new List<TView>();
+            await foreach (var item in asyncConnector
+                .SelectAsync(_sqlView, CreateTransformFunction(), conditions, orderFields, limit, offset, ct)
+                .ConfigureAwait(false))
+            {
+                if (item is TView view) list.Add(view);
+            }
+            return list;
+        }
 
-        return Task.FromResult(results.Cast<TView>());
+        return _connector.Select(_sqlView, CreateTransformFunction(), conditions, orderFields, limit, offset).Cast<TView>();
     }
 
-    public Task<TView?> QueryFirstAsync(
+    public async Task<TView?> QueryFirstAsync(
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
@@ -76,18 +82,21 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
             ? DataBase.ParseConditionExpression(filter)
             : null;
 
-        var results = _connector.Select(
-            _sqlView,
-            CreateTransformFunction(),
-            conditions,
-            null,
-            1,
-            null);
+        if (_connector is AbstractAsyncConnector asyncConnector)
+        {
+            await foreach (var item in asyncConnector
+                .SelectAsync(_sqlView, CreateTransformFunction(), conditions, null, 1, null, ct)
+                .ConfigureAwait(false))
+            {
+                if (item is TView view) return view;
+            }
+            return null;
+        }
 
-        return Task.FromResult(results.Cast<TView>().FirstOrDefault());
+        return _connector.Select(_sqlView, CreateTransformFunction(), conditions, null, 1, null).Cast<TView>().FirstOrDefault();
     }
 
-    public Task<long> CountAsync(
+    public async Task<long> CountAsync(
         Expression<Func<TView, bool>>? filter = null,
         CancellationToken ct = default)
     {
@@ -97,8 +106,12 @@ public class SqlViewStore<TView> : IViewStore<TView> where TView : class, new()
             ? DataBase.ParseConditionExpression(filter)
             : null;
 
-        var count = _connector.SelectCount(_sqlView, conditions);
-        return Task.FromResult(count);
+        if (_connector is AbstractAsyncConnector asyncConnector)
+        {
+            return await asyncConnector.SelectCountAsync(_sqlView, conditions, ct).ConfigureAwait(false);
+        }
+
+        return _connector.SelectCount(_sqlView, conditions);
     }
 
     private Func<IDictionary<int, string>, DbDataReader, object> CreateTransformFunction()
