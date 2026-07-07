@@ -89,7 +89,8 @@ namespace Birko.AI
                 AllowedExternalPaths = new List<string>(AllowedExternalPaths),
                 EnableStreaming = EnableStreaming,
                 StreamingFallbackToSync = StreamingFallbackToSync,
-                CheckpointInterval = CheckpointInterval
+                CheckpointInterval = CheckpointInterval,
+                OnLlmResponseReceived = OnLlmResponseReceived
             };
         }
 
@@ -112,6 +113,8 @@ namespace Birko.AI
             EnableStreaming = other.EnableStreaming;
             StreamingFallbackToSync = other.StreamingFallbackToSync;
             CheckpointInterval = other.CheckpointInterval;
+            if (other.OnLlmResponseReceived != null)
+                OnLlmResponseReceived = other.OnLlmResponseReceived;
         }
 
         public static AgentOptions FromDictionary(Dictionary<string, string> config)
