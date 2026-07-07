@@ -215,6 +215,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Repositories.Tests/Birko.Data.Repositories.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Tagging.Tests/Birko.Data.Tagging.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Tenant.Tests/Birko.Data.Tenant.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Tests/Birko.Health.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
