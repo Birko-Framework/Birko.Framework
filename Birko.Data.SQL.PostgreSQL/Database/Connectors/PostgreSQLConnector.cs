@@ -143,6 +143,10 @@ namespace Birko.Data.SQL.Connectors
                 case DbType.UInt64:
                     return "BIGINT";
                 case DbType.Single:
+                    // A C# float grouped with SByte/Byte produced a SMALLINT (integer) column,
+                    // truncating the value and dropping fractions. REAL is PostgreSQL's 4-byte
+                    // single-precision float (same class of bug as MSSql CR-H087).
+                    return "REAL";
                 case DbType.SByte:
                 case DbType.Byte:
                     return "SMALLINT";
