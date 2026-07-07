@@ -110,16 +110,9 @@ namespace Birko.Data.Repositories
 
         #endregion
 
-        #region Lifecycle Methods
-
-        /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
-        {
-            await base.DestroyAsync(ct);
-            if (BulkStore == null) return;
-            await BulkStore.DestroyAsync(ct);
-        }
-
-        #endregion
+        // No DestroyAsync override: BulkStore is `Store as IAsyncBulkStore<T>` — the SAME instance
+        // the base AbstractAsyncRepository.DestroyAsync already destroys. Overriding to also call
+        // BulkStore.DestroyAsync destroyed one store twice, which is unsafe for a non-idempotent
+        // DestroyAsync (double-dispose / double-close) (CR-H080).
     }
 }
