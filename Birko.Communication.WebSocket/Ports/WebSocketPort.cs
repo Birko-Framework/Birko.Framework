@@ -165,20 +165,28 @@ namespace Birko.Communication.WebSocket.Ports
 
         public override bool HasReadData(int size)
         {
-            return (ReadData.Count >= size);
+            lock (ReadData)
+            {
+                if (size < 0)
+                    return ReadData.Count > 0; // "all available" — true only when there is data (CR-H036)
+                return ReadData.Count >= size;
+            }
         }
 
         public override byte[] RemoveReadData(int size)
         {
-            byte[] result = Read(size);
-            if (HasReadData(size))
+            // Read + remove atomically under one lock, removing exactly what was read (whole buffer
+            // for size < 0) so RemoveRange(0, -1) can't throw and the ReadWorker can't change Count
+            // between the read and the remove (CR-H036).
+            lock (ReadData)
             {
-                lock (ReadData)
+                byte[] result = Read(size);
+                if (result.Length > 0)
                 {
-                    ReadData.RemoveRange(0, size);
+                    ReadData.RemoveRange(0, result.Length);
                 }
+                return result;
             }
-            return result;
         }
     }
 }
