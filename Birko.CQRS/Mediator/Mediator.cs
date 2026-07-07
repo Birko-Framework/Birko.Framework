@@ -13,7 +13,10 @@ namespace Birko.CQRS
     public class Mediator : IMediator
     {
         private readonly IServiceProvider _serviceProvider;
-        private static readonly ConcurrentDictionary<Type, RequestHandlerBase> _handlerCache = new();
+        // Keyed on (requestType, resultType): the wrapper bakes in TResult, so caching by request
+        // type alone returned a wrapper built for a different TResult on covariant dispatch,
+        // throwing InvalidCastException / resolving the wrong handler (CR-H039).
+        private static readonly ConcurrentDictionary<(Type RequestType, Type ResultType), RequestHandlerBase> _handlerCache = new();
 
         public Mediator(IServiceProvider serviceProvider)
         {
@@ -29,7 +32,7 @@ namespace Birko.CQRS
             }
 
             var requestType = request.GetType();
-            var handler = _handlerCache.GetOrAdd(requestType, CreateHandler<TResult>);
+            var handler = _handlerCache.GetOrAdd((requestType, typeof(TResult)), static key => CreateHandler(key.RequestType, key.ResultType));
             return ((RequestHandler<TResult>)handler).HandleAsync(request, _serviceProvider, cancellationToken);
         }
 
@@ -39,9 +42,9 @@ namespace Birko.CQRS
             await SendAsync<Unit>(command, cancellationToken).ConfigureAwait(false);
         }
 
-        private static RequestHandlerBase CreateHandler<TResult>(Type requestType)
+        private static RequestHandlerBase CreateHandler(Type requestType, Type resultType)
         {
-            var handlerType = typeof(RequestHandlerWrapper<,>).MakeGenericType(requestType, typeof(TResult));
+            var handlerType = typeof(RequestHandlerWrapper<,>).MakeGenericType(requestType, resultType);
             return (RequestHandlerBase)Activator.CreateInstance(handlerType)!;
         }
 
