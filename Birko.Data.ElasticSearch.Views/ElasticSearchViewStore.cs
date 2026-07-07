@@ -316,19 +316,30 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             return new MatchAllQuery();
         }
 
-        // Attempt to translate the expression using the shared ElasticSearch expression parser.
-        // The parser handles common binary expressions (==, !=, <, >, <=, >=) and logical
-        // operators (&&, ||). For expressions it cannot translate, fall back to MatchAll.
+        // Translate the expression via the shared parser (binary comparisons + &&/||). A supplied
+        // filter that can't be translated must NOT silently widen to match-all (CR-H047): that
+        // turns a filtered/existence/permission query into a false full-result set. Fail loudly.
+        QueryContainer? query;
         try
         {
-            return Data.ElasticSearch.ElasticSearch.ParseExpression(filter);
+            query = Data.ElasticSearch.ElasticSearch.ParseExpression(filter);
         }
-        catch
+        catch (Exception ex)
         {
-            // If expression parsing fails, fall back to match-all.
-            // This is a safety net; callers should prefer simple filter expressions.
-            return new MatchAllQuery();
+            throw new NotSupportedException(
+                $"The filter expression could not be translated to an ElasticSearch query: {filter}. " +
+                "Use a simpler filter (binary comparisons and && / || are supported).", ex);
         }
+
+        if (query == null)
+        {
+            // ParseExpression returns null (no throw) for node types it doesn't support.
+            throw new NotSupportedException(
+                $"The filter expression could not be translated to an ElasticSearch query: {filter}. " +
+                "Use a simpler filter (binary comparisons and && / || are supported).");
+        }
+
+        return query;
     }
 
     #endregion
