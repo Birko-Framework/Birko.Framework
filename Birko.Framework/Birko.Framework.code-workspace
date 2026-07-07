@@ -749,6 +749,10 @@
 			"path": "../../Framework.Tests/Birko.AI.Resilience.Tests"
 		},
 		{
+			"name": "Tests / Birko.BackgroundJobs.CosmosDB.Tests",
+			"path": "../../Framework.Tests/Birko.BackgroundJobs.CosmosDB.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
