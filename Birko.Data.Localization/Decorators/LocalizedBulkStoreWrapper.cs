@@ -278,6 +278,14 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     protected void ApplyTranslations(T entity)
     {
+        // No translations exist for the default culture (IEntityLocalizationContext contract), so
+        // skip the per-entity query and avoid overwriting base fields with a stray default-culture
+        // translation row — matching the non-bulk wrapper (CR-H053).
+        if (!IsNonDefaultCulture())
+        {
+            return;
+        }
+
         if (entity.Guid == null)
         {
             return;
