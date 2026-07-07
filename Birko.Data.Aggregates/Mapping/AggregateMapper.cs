@@ -189,12 +189,21 @@ public class AggregateMapper<T> : IAggregateMapper<T> where T : AbstractModel
         List<SyncOperation> operations)
     {
         IEnumerable<AbstractModel> desiredEntities = [];
-        if (aggregate.NestedCollections.TryGetValue(relationship.NavigationProperty, out var collection))
+        if (aggregate.NestedCollections.TryGetValue(relationship.NavigationProperty, out var collection) && collection != null)
         {
             desiredEntities = collection;
         }
 
-        var diff = EnumerableHelper.DiffByKey(currentEntities, desiredEntities, e => e.Guid);
+        // New children have no Guid yet; DiffByKey excludes null-key items, so they'd never appear
+        // in diff.Added and would be silently dropped. Treat them as unconditional inserts and diff
+        // only the already-keyed entities (CR-H041).
+        var desiredList = desiredEntities.ToList();
+        foreach (var newChild in desiredList.Where(e => e.Guid == null))
+        {
+            operations.Add(new SyncOperation(SyncOperationType.Insert, relationship.ChildType, newChild, relationship.NavigationProperty));
+        }
+
+        var diff = EnumerableHelper.DiffByKey(currentEntities, desiredList.Where(e => e.Guid != null), e => e.Guid);
 
         foreach (var added in diff.Added)
         {

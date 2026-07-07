@@ -1,6 +1,7 @@
 using Birko.Data.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Birko.Data.Aggregates.Mapping;
 
@@ -43,8 +44,10 @@ public class FlattenResult<T> where T : AbstractModel
     /// </summary>
     public IEnumerable<TChild>? GetCollection<TChild>(string navigationProperty) where TChild : AbstractModel
     {
+        // OfType, not a reference cast: a provider that materializes to List<AbstractModel> is not
+        // reference-assignable to IEnumerable<TChild>, so `as` returned null silently (CR-H040).
         if (NestedCollections.TryGetValue(navigationProperty, out var collection))
-            return collection as IEnumerable<TChild>;
+            return collection?.OfType<TChild>();
         return null;
     }
 
