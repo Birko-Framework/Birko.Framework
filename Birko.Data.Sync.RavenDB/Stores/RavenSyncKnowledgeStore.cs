@@ -168,36 +168,8 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
     /// <summary>
     /// Convert ISyncKnowledgeItem to RavenSyncKnowledgeItem
     /// </summary>
-    private RavenSyncKnowledgeItem ConvertToRavenItem(ISyncKnowledgeItem item)
-    {
-        if (item is RavenSyncKnowledgeItem ravenItem)
-        {
-            return ravenItem;
-        }
-
-        var converted = new RavenSyncKnowledgeItem
-        {
-            Guid = item.Guid ?? Guid.NewGuid(),
-            EntityGuid = item.EntityGuid,
-            Scope = item.Scope,
-            LastSyncedAt = item.LastSyncedAt,
-            LocalVersion = item.LocalVersion,
-            RemoteVersion = item.RemoteVersion,
-            IsLocalDeleted = item.IsLocalDeleted,
-            IsRemoteDeleted = item.IsRemoteDeleted,
-            Metadata = item.Metadata
-        };
-
-        // Carry the tenant through when the source is tenant-aware (e.g. TenantSyncProvider emits
-        // ITenantSyncKnowledgeItem). This is what makes the tenant-scoped queries actually match
-        // (CR-C19) — the tenant travels on the item rather than as a store-method parameter.
-        if (item is ITenant tenant)
-        {
-            converted.TenantGuid = tenant.TenantGuid;
-            converted.TenantName = tenant.TenantName;
-        }
-
-        return converted;
-    }
-
+    // Delegates to the async store's shared logic, which derives a deterministic Guid from the
+    // natural key so re-syncs upsert instead of creating duplicate documents (CR-H103).
+    private static RavenSyncKnowledgeItem ConvertToRavenItem(ISyncKnowledgeItem item)
+        => AsyncRavenSyncKnowledgeStore.ConvertToRavenItem(item);
 }

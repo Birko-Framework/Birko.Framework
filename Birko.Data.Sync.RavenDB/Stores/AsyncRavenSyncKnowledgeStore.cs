@@ -173,16 +173,21 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
     /// <summary>
     /// Convert ISyncKnowledgeItem to RavenSyncKnowledgeItem
     /// </summary>
-    private RavenSyncKnowledgeItem ConvertToRavenItem(ISyncKnowledgeItem item)
+    internal static RavenSyncKnowledgeItem ConvertToRavenItem(ISyncKnowledgeItem item)
     {
         if (item is RavenSyncKnowledgeItem ravenItem)
         {
             return ravenItem;
         }
 
+        var tenantGuid = item is ITenant t ? t.TenantGuid : Guid.Empty;
+
         var converted = new RavenSyncKnowledgeItem
         {
-            Guid = item.Guid ?? Guid.NewGuid(),
+            // Derive a DETERMINISTIC id from the natural key when the item has no Guid, so re-syncing
+            // the same (EntityGuid, Scope, Tenant) reuses the same document identity and upserts
+            // instead of creating a duplicate row every time (CR-H103).
+            Guid = item.Guid ?? DeterministicGuid(item.EntityGuid, item.Scope, tenantGuid),
             EntityGuid = item.EntityGuid,
             Scope = item.Scope,
             LastSyncedAt = item.LastSyncedAt,
@@ -203,6 +208,17 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         }
 
         return converted;
+    }
+
+    /// <summary>
+    /// Stable, idempotent Guid derived from the sync-knowledge natural key (EntityGuid, Scope,
+    /// Tenant), so the base store (which keys document identity off Guid) upserts on re-sync.
+    /// </summary>
+    internal static Guid DeterministicGuid(Guid entityGuid, string scope, Guid tenantGuid)
+    {
+        var key = $"{entityGuid:N}|{scope}|{tenantGuid:N}";
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        return new Guid(md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key)));
     }
 
     /// <summary>
