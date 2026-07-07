@@ -246,6 +246,7 @@
     <Project Path="../../Framework.Tests/Birko.Communication.REST.Server.Tests/Birko.Communication.REST.Server.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.SOAP.Tests/Birko.Communication.SOAP.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.SSE.Tests/Birko.Communication.SSE.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Configuration.Tests/Birko.Configuration.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Hardware.Tests/Birko.Communication.Hardware.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests/Birko.Data.SQL.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Caching.Tests/Birko.Data.SQL.Caching.Tests.csproj" />
