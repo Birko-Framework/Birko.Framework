@@ -66,10 +66,9 @@ namespace Birko.Data.Stores
             {
                 bucketTicks = TimeIntervalParser.Parse(query.TimeBucketInterval).Ticks;
                 timeProp = typeof(T).GetProperty(query.TimeColumn, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-                if (timeProp != null && bucketTicks > 0)
-                {
-                    list = ApplyTimeBucket(list, timeProp, bucketTicks).ToList();
-                }
+                // Do NOT mutate the source entities here (CR-H097): the list holds the caller's own
+                // instances (e.g. an InMemory store's live values). The bucket time is computed
+                // on-the-fly at group/result time from the untouched property below.
             }
 
             // Group by composite key
@@ -82,7 +81,7 @@ namespace Birko.Data.Stores
                 }
                 if (timeProp != null && bucketTicks > 0)
                 {
-                    key.Add(timeProp.GetValue(item));
+                    key.Add(BucketTimeOf(item, timeProp, bucketTicks));
                 }
                 return string.Join("|", key.Select(k => k?.ToString() ?? ""));
             });
@@ -101,7 +100,7 @@ namespace Birko.Data.Stores
 
                 if (timeProp != null && bucketTicks > 0)
                 {
-                    row["bucket_time"] = timeProp.GetValue(first);
+                    row["bucket_time"] = BucketTimeOf(first, timeProp, bucketTicks);
                 }
 
                 // Aggregate functions
@@ -162,18 +161,18 @@ namespace Birko.Data.Stores
             return results;
         }
 
-        private static IEnumerable<T> ApplyTimeBucket<T>(IEnumerable<T> items, PropertyInfo timeProp, long bucketTicks) where T : Models.AbstractModel
+        /// <summary>
+        /// Computes the time-bucket for an item's time column WITHOUT mutating the item (CR-H097).
+        /// Returns the truncated bucket value for a DateTime, otherwise the raw property value.
+        /// </summary>
+        private static object? BucketTimeOf(object item, PropertyInfo timeProp, long bucketTicks)
         {
-            foreach (var item in items)
+            var ts = timeProp.GetValue(item);
+            if (ts is DateTime dt)
             {
-                var ts = timeProp.GetValue(item);
-                if (ts is DateTime dt)
-                {
-                    var bucketed = AggregateMath.TruncateToBucket(dt, bucketTicks);
-                    timeProp.SetValue(item, bucketed);
-                }
-                yield return item;
+                return AggregateMath.TruncateToBucket(dt, bucketTicks);
             }
+            return ts;
         }
     }
 }
