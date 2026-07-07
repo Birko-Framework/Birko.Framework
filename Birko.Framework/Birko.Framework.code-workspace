@@ -909,6 +909,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Sync.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Sync.CosmosDB.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.CosmosDB.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Tests"
 		},
