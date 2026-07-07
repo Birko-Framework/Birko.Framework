@@ -59,18 +59,30 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// <summary>
         /// Adds a compression policy to a hypertable.
         /// </summary>
-        protected virtual void AddCompressionPolicy(IMigrationContext context, string tableName, string compressAfterInterval)
+        protected virtual void AddCompressionPolicy(IMigrationContext context, string tableName, string compressAfterInterval, string orderByColumn = "time", string? segmentByColumn = null)
         {
             var (connection, transaction) = GetSqlConnection(context);
-            var sql = $@"
+            ExecuteScript(connection, transaction, BuildCompressionPolicySql(tableName, compressAfterInterval, orderByColumn, segmentByColumn));
+        }
+
+        /// <summary>
+        /// Builds the compression-policy DDL. Don't hardcode the order/segment columns
+        /// (CR-H070: 'time'/'device_id' fail on any table without a literal device_id column and are
+        /// wrong for most schemas). orderby defaults to the conventional 'time'; segmentby is opt-in
+        /// and omitted when not supplied.
+        /// </summary>
+        internal static string BuildCompressionPolicySql(string tableName, string compressAfterInterval, string orderByColumn = "time", string? segmentByColumn = null)
+        {
+            var segmentBySql = string.IsNullOrEmpty(segmentByColumn)
+                ? ""
+                : $",\n                    timescaledb.compress_segmentby = '{segmentByColumn}'";
+            return $@"
                 ALTER TABLE {tableName} SET (
                     timescaledb.compress,
-                    timescaledb.compress_orderby = 'time',
-                    timescaledb.compress_segmentby = 'device_id'
+                    timescaledb.compress_orderby = '{orderByColumn}'{segmentBySql}
                 );
                 SELECT add_compression_policy('{tableName}', INTERVAL '{compressAfterInterval}');
             ";
-            ExecuteScript(connection, transaction, sql);
         }
 
         /// <summary>
@@ -109,18 +121,26 @@ namespace Birko.Data.Migrations.TimescaleDB
         protected virtual void CreateContinuousAggregate(IMigrationContext context, string viewName, string sourceTable, string timeBucket, string selectClause, string groupByClause = "")
         {
             var (connection, transaction) = GetSqlConnection(context);
+            ExecuteScript(connection, transaction, BuildContinuousAggregateSql(viewName, sourceTable, timeBucket, selectClause, groupByClause));
+        }
+
+        /// <summary>
+        /// Builds the continuous-aggregate DDL. Reuses the guarded groupBySql for the GROUP BY too:
+        /// an empty groupByClause previously emitted "GROUP BY bucket, " with a dangling comma
+        /// (invalid SQL) (CR-H071).
+        /// </summary>
+        internal static string BuildContinuousAggregateSql(string viewName, string sourceTable, string timeBucket, string selectClause, string groupByClause = "")
+        {
             var groupBySql = string.IsNullOrEmpty(groupByClause) ? "" : $", {groupByClause}";
-            var sql = $@"
+            return $@"
                 CREATE MATERIALIZED VIEW {viewName}
                 WITH (timescaledb.continuous) AS
                 SELECT
-                    time_bucket('{timeBucket}', time) AS bucket
-                    {groupBySql},
+                    time_bucket('{timeBucket}', time) AS bucket{groupBySql},
                     {selectClause}
                 FROM {sourceTable}
-                GROUP BY bucket, {groupByClause};
+                GROUP BY bucket{groupBySql};
             ";
-            ExecuteScript(connection, transaction, sql);
         }
 
         /// <summary>
