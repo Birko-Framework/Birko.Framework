@@ -346,7 +346,10 @@ public abstract class SyncProviderBase<T, TKnowledge>
     protected DateTime? GetUpdatedAt(T entity)
     {
         var prop = typeof(T).GetProperty("UpdatedAt");
-        if (prop != null && prop.PropertyType == typeof(DateTime))
+        // Match both DateTime and DateTime? (CR-H098): the guard previously only matched non-nullable
+        // DateTime, so any model with a nullable UpdatedAt returned null here — silently degrading
+        // NewestWins to LocalWins. The `value as DateTime?` cast already handles both underlying types.
+        if (prop != null && (prop.PropertyType == typeof(DateTime) || Nullable.GetUnderlyingType(prop.PropertyType) == typeof(DateTime)))
         {
             var value = prop.GetValue(entity);
             return value as DateTime?;
