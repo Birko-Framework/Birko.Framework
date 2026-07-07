@@ -865,6 +865,10 @@
 			"path": "../../Framework.Tests/Birko.Data.RavenDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.RavenDB.Views.Tests",
+			"path": "../../Framework.Tests/Birko.Data.RavenDB.Views.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.Tests"
 		},

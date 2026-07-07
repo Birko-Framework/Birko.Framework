@@ -229,6 +229,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.MongoDB.Views.Tests/Birko.Data.MongoDB.Views.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Random.Tests/Birko.Random.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.RavenDB.Tests/Birko.Data.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.RavenDB.Views.Tests/Birko.Data.RavenDB.Views.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.CosmosDB.Tests/Birko.Data.CosmosDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.TimescaleDB.Tests/Birko.Data.TimescaleDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
