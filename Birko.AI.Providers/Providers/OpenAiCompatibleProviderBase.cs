@@ -54,6 +54,18 @@ namespace Birko.AI.Providers
             }
         }
 
+        /// <summary>
+        /// The chat-completions endpoint URL. Robust to the two BaseUrl conventions in use:
+        /// derived providers that pass a bare host (Vllm/Sglang) get /v1/chat/completions
+        /// appended, while providers that already pass the full endpoint path
+        /// (Mistral/DeepSeek/Groq/OpenRouter/LmStudio) are used as-is — avoiding the doubled
+        /// ".../chat/completions/v1/chat/completions" path that produced a 404 (CR-H004).
+        /// </summary>
+        protected string ChatCompletionsUrl =>
+            BaseUrl.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase)
+                ? BaseUrl
+                : $"{BaseUrl}/v1/chat/completions";
+
         public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
         {
             if (!IsConfigured()) return NotConfigured();
@@ -62,7 +74,7 @@ namespace Birko.AI.Providers
             {
                 var payload = BuildPayload(messages, tools, systemPrompt);
                 var json = JsonSerializer.Serialize(payload);
-                var url = $"{BaseUrl}/v1/chat/completions";
+                var url = ChatCompletionsUrl;
 
                 // Use retry logic for transient failures
                 var (response, responseJson) = await SendWithRetryAsync(
@@ -200,7 +212,7 @@ namespace Birko.AI.Providers
             {
                 var payload = BuildStreamingPayload(messages, tools, systemPrompt);
                 var json = JsonSerializer.Serialize(payload);
-                var url = $"{BaseUrl}/v1/chat/completions";
+                var url = ChatCompletionsUrl;
 
                 var response = await SendStreamingWithRetryAsync(
                     HttpClient,

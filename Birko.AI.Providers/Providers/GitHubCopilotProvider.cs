@@ -14,6 +14,11 @@ namespace Birko.AI.Providers
         private readonly IOAuthClient _oauthClient;
         private OAuthToken? _currentToken;
 
+        // The GitHub Copilot chat-completions endpoint requires these editor headers on every
+        // request (both streaming and non-streaming) or it rejects the call — CR-H005.
+        private const string EditorVersion = "vscode/1.96.0";
+        private const string EditorPluginVersion = "copilot-chat/0.23.2";
+
         public override string Name => "GitHub Copilot";
 
         /// <summary>
@@ -46,21 +51,11 @@ namespace Birko.AI.Providers
 
             var json = JsonSerializer.Serialize(payload);
 
-            HttpRequestMessage CreateRequest()
-            {
-                var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl);
-                request.Headers.Add("Authorization", $"Bearer {_currentToken!.AccessToken}");
-                request.Headers.Add("Editor-Version", "vscode/1.96.0");
-                request.Headers.Add("Editor-Plugin-Version", "copilot-chat/0.23.2");
-                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                return request;
-            }
-
             try
             {
                 var (response, responseJson) = await SendWithRetryAsync(
                     _httpClient,
-                    CreateRequest,
+                    () => CreateRequest(json),
                     Name);
 
                 if (response == null || responseJson == null)
@@ -72,7 +67,7 @@ namespace Birko.AI.Providers
                     _currentToken = await _oauthClient.RefreshTokenAsync();
                     (response, responseJson) = await SendWithRetryAsync(
                         _httpClient,
-                        CreateRequest,
+                        () => CreateRequest(json),
                         Name);
                 }
 
@@ -92,6 +87,21 @@ namespace Birko.AI.Providers
                 SendMessage("error", errorMsg);
                 return LlmResponse.Error(errorMsg);
             }
+        }
+
+        /// <summary>
+        /// Builds a Copilot chat-completions request with the Authorization and required
+        /// Editor-Version / Editor-Plugin-Version headers. Shared by the streaming and
+        /// non-streaming paths so neither can drift (CR-H005).
+        /// </summary>
+        private HttpRequestMessage CreateRequest(string json)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _currentToken!.AccessToken);
+            request.Headers.Add("Editor-Version", EditorVersion);
+            request.Headers.Add("Editor-Plugin-Version", EditorPluginVersion);
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+            return request;
         }
 
         private async Task<bool> EnsureAuthenticatedAsync()
@@ -140,14 +150,18 @@ namespace Birko.AI.Providers
 
                 var response = await SendStreamingWithRetryAsync(
                     _httpClient,
-                    () =>
-                    {
-                        var request = new HttpRequestMessage(HttpMethod.Post, _baseUrl);
-                        request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _currentToken!.AccessToken);
-                        return request;
-                    },
+                    () => CreateRequest(json),
                     Name);
+
+                // Handle 401 — refresh token and retry once (parity with the non-streaming path).
+                if (response is { StatusCode: System.Net.HttpStatusCode.Unauthorized })
+                {
+                    _currentToken = await _oauthClient.RefreshTokenAsync();
+                    response = await SendStreamingWithRetryAsync(
+                        _httpClient,
+                        () => CreateRequest(json),
+                        Name);
+                }
 
                 if (response == null)
                 {
