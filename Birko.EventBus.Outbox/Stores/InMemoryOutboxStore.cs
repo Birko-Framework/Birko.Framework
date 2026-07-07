@@ -14,6 +14,18 @@ namespace Birko.EventBus.Outbox.Stores
     public class InMemoryOutboxStore : IOutboxStore
     {
         private readonly ConcurrentDictionary<Guid, OutboxEntry> _entries = new();
+        private readonly object _claimLock = new();
+        private readonly TimeSpan _staleClaimTimeout;
+
+        /// <summary>
+        /// Creates the store. <paramref name="staleClaimTimeout"/> is how long an entry may stay in
+        /// <see cref="OutboxStatus.Publishing"/> before a subsequent <see cref="GetPendingAsync"/>
+        /// reclaims it (recovery from a crashed processor). Defaults to 5 minutes.
+        /// </summary>
+        public InMemoryOutboxStore(TimeSpan? staleClaimTimeout = null)
+        {
+            _staleClaimTimeout = staleClaimTimeout ?? TimeSpan.FromMinutes(5);
+        }
 
         public Task SaveAsync(OutboxEntry entry, CancellationToken cancellationToken = default)
         {
@@ -23,13 +35,36 @@ namespace Birko.EventBus.Outbox.Stores
 
         public Task<IReadOnlyList<OutboxEntry>> GetPendingAsync(int batchSize, CancellationToken cancellationToken = default)
         {
-            var pending = _entries.Values
-                .Where(e => e.Status == OutboxStatus.Pending)
-                .OrderBy(e => e.CreatedAt)
-                .Take(batchSize)
-                .ToList();
+            // Atomically CLAIM the batch: flip Pending -> Publishing under a lock so two concurrent
+            // processors never return (and then publish) the same entries — the duplicate-publish gap
+            // OutboxStatus.Publishing was meant to close but never did (CR-H116). Stale claims (a
+            // processor that crashed mid-publish) are reclaimed after _staleClaimTimeout.
+            lock (_claimLock)
+            {
+                var now = DateTime.UtcNow;
 
-            return Task.FromResult<IReadOnlyList<OutboxEntry>>(pending);
+                foreach (var stale in _entries.Values.Where(e =>
+                    e.Status == OutboxStatus.Publishing &&
+                    (e.ClaimedAt == null || now - e.ClaimedAt.Value >= _staleClaimTimeout)))
+                {
+                    stale.Status = OutboxStatus.Pending;
+                    stale.ClaimedAt = null;
+                }
+
+                var claimed = _entries.Values
+                    .Where(e => e.Status == OutboxStatus.Pending)
+                    .OrderBy(e => e.CreatedAt)
+                    .Take(batchSize)
+                    .ToList();
+
+                foreach (var entry in claimed)
+                {
+                    entry.Status = OutboxStatus.Publishing;
+                    entry.ClaimedAt = now;
+                }
+
+                return Task.FromResult<IReadOnlyList<OutboxEntry>>(claimed);
+            }
         }
 
         public Task MarkPublishedAsync(Guid entryId, CancellationToken cancellationToken = default)
@@ -38,6 +73,7 @@ namespace Birko.EventBus.Outbox.Stores
             {
                 entry.Status = OutboxStatus.Published;
                 entry.PublishedAt = DateTime.UtcNow;
+                entry.ClaimedAt = null;
             }
 
             return Task.CompletedTask;
@@ -49,6 +85,7 @@ namespace Birko.EventBus.Outbox.Stores
             {
                 entry.Attempts++;
                 entry.LastError = error;
+                entry.ClaimedAt = null;
                 // Honor the configured cap instead of a hardcoded 5 (CR-H115).
                 entry.Status = entry.Attempts >= maxAttempts ? OutboxStatus.Failed : OutboxStatus.Pending;
             }

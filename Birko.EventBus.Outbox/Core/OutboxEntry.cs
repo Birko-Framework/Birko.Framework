@@ -64,6 +64,13 @@ namespace Birko.EventBus.Outbox
         public DateTime? PublishedAt { get; set; }
 
         /// <summary>
+        /// When a processor claimed this entry for publishing (UTC), i.e. transitioned it to
+        /// <see cref="OutboxStatus.Publishing"/>. Used to detect and reclaim stale claims left behind
+        /// by a crashed processor. Null when not currently claimed (CR-H116).
+        /// </summary>
+        public DateTime? ClaimedAt { get; set; }
+
+        /// <summary>
         /// Number of publish attempts made.
         /// </summary>
         public int Attempts { get; set; }
