@@ -1808,7 +1808,7 @@ A consumer copying the README usage block (sets `TablePrefix = "mymodel"`, passe
 - **Title:** DbType.DateTime / DbType.Time map to SQL DATE (truncates time component)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MSSql\Database/Connector/MSSqlConnector.cs:127-130`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — `MSSqlConnector.ConvertType` now maps `DbType.Date` → `DATE`, `DbType.Time` → `TIME`, and `DbType.DateTime`/`DbType.DateTime2` → `DATETIME2` (SQL Server's full-precision type), so DateTime columns no longer truncate time-of-day. New `Birko.Data.SQL.MSSql.Tests` (offline `ConvertType` mapping tests) pins all four; registered in the solution + workspace.
 - **Detail:** ConvertType maps DbType.Time, DbType.Date AND DbType.DateTime all to "DATE". A DateTime field therefore gets a DATE column, which silently discards the time-of-day on write, and a Time field also becomes DATE. The sibling MySQLConnector correctly maps DbType.DateTime/DateTime2 to DATETIME and DbType.Time to TIME. This is a data-loss correctness bug for any timestamped entity (ITimestamped models, audit fields).
 - **Fix:** Map DbType.Date -> DATE, DbType.Time -> TIME, DbType.DateTime -> DATETIME2 (SQL Server's full-precision type). Keep DbType.DateTime2 -> DATETIME2.
 - **Verify reasoning:** Confirmed by reading the actual code. MSSqlConnector.ConvertType (MSSqlConnector.cs:127-130) maps DbType.Time, DbType.Date, AND DbType.DateTime all to "DATE". SQL Server's DATE type stores only year/month/day with no time component, so a DateTime column created via this mapping silently truncates time-of-day to midnight, and a Time field also becomes a DATE column (wrong type entirely).
