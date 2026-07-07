@@ -90,12 +90,21 @@ public static class RavenViewTranslator
                     parts.Add($"{agg.ViewProperty} = 1");
                     break;
                 case AggregateFunction.Sum:
-                case AggregateFunction.Avg:
                 case AggregateFunction.Min:
                 case AggregateFunction.Max:
                     if (agg.SourceProperty != null)
                     {
                         parts.Add($"{agg.ViewProperty} = {sourceAlias}.{agg.SourceProperty}");
+                    }
+                    break;
+                case AggregateFunction.Avg:
+                    if (agg.SourceProperty != null)
+                    {
+                        // Re-reduce-safe average (CR-H078): carry a running _Sum alongside the raw
+                        // ViewProperty so the reduce can recompute Sum/Count each pass instead of
+                        // re-summing already-averaged partials.
+                        parts.Add($"{agg.ViewProperty} = {sourceAlias}.{agg.SourceProperty}");
+                        parts.Add($"{agg.ViewProperty}_Sum = {sourceAlias}.{agg.SourceProperty}");
                     }
                     break;
             }
@@ -198,9 +207,12 @@ public static class RavenViewTranslator
                     selectParts.Add($"{agg.ViewProperty} = g.Sum(x => x.{agg.ViewProperty})");
                     break;
                 case AggregateFunction.Avg:
-                    // Weighted average: Sum / Count
-                    selectParts.Add($"{agg.ViewProperty} = g.Sum(x => x.{agg.ViewProperty}) / g.Sum(x => x.{agg.ViewProperty}_Count)");
+                    // Re-reduce-safe average (CR-H078): sum the running _Sum and _Count separately
+                    // (both stable under RavenDB's incremental re-reduce) and recompute the ratio
+                    // each pass. Summing the already-averaged ViewProperty would double-average.
+                    selectParts.Add($"{agg.ViewProperty}_Sum = g.Sum(x => x.{agg.ViewProperty}_Sum)");
                     selectParts.Add($"{agg.ViewProperty}_Count = g.Sum(x => x.{agg.ViewProperty}_Count)");
+                    selectParts.Add($"{agg.ViewProperty} = g.Sum(x => x.{agg.ViewProperty}_Sum) / g.Sum(x => x.{agg.ViewProperty}_Count)");
                     break;
                 case AggregateFunction.Min:
                     selectParts.Add($"{agg.ViewProperty} = g.Min(x => x.{agg.ViewProperty})");
