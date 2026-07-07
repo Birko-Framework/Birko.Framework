@@ -199,7 +199,10 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
             result.Deleted = progress.DeletedItems;
             result.Skipped = progress.SkippedItems;
             result.Conflicts = progress.Conflicts;
-            result.Success = result.Errors.Count == 0 || options.CancellationToken.IsCancellationRequested;
+            // Success is driven by errors only. The previous `|| IsCancellationRequested` flipped a
+            // run that recorded per-item errors to Success=true whenever it was cancelled, hiding the
+            // failures (CR-H099). Cancellation is reported separately via the result's own fields.
+            result.Success = result.Errors.Count == 0;
             result.EndTime = DateTime.UtcNow;
             result.Duration = result.EndTime - result.StartTime;
 
