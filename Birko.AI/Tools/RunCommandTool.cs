@@ -18,7 +18,7 @@ namespace Birko.AI.Tools
             required = new[] { "command" }
         };
 
-        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
+        public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
         {
             try
             {
@@ -45,25 +45,36 @@ namespace Birko.AI.Tools
 
                 using var proc = Process.Start(psi);
                 if (proc == null)
-                    return Task.FromResult("Error: Failed to start process");
+                    return "Error: Failed to start process";
 
-                if (!proc.WaitForExit(timeoutSeconds * 1000))
+                // Start draining both pipes BEFORE waiting for exit. Reading synchronously after
+                // WaitForExit deadlocks when a child fills the OS pipe buffer for either stream
+                // (the child blocks on write, never exits, WaitForExit hits the timeout).
+                var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+                var stderrTask = proc.StandardError.ReadToEndAsync();
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                try
+                {
+                    await proc.WaitForExitAsync(cts.Token);
+                }
+                catch (OperationCanceledException)
                 {
                     try { proc.Kill(true); } catch { }
-                    return Task.FromResult("Error: Process timed out");
+                    return "Error: Process timed out";
                 }
 
-                var stdout = proc.StandardOutput.ReadToEnd();
-                var stderr = proc.StandardError.ReadToEnd();
+                var stdout = await stdoutTask;
+                var stderr = await stderrTask;
 
                 if (!string.IsNullOrEmpty(stderr))
-                    return Task.FromResult(stdout.Length > 0 ? stdout + "\n" + stderr : stderr);
+                    return stdout.Length > 0 ? stdout + "\n" + stderr : stderr;
 
-                return Task.FromResult(stdout);
+                return stdout;
             }
             catch (Exception ex)
             {
-                return Task.FromResult($"Error running command: {ex.Message}");
+                return $"Error running command: {ex.Message}";
             }
         }
     }
