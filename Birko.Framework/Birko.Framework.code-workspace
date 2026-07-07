@@ -757,6 +757,10 @@
 			"path": "../../Framework.Tests/Birko.BackgroundJobs.XML.Tests"
 		},
 		{
+			"name": "Tests / Birko.Caching.Redis.Tests",
+			"path": "../../Framework.Tests/Birko.Caching.Redis.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
