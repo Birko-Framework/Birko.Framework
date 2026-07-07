@@ -175,6 +175,20 @@ namespace Birko.Communication.SOAP
             request.Content = new StringContent(xml, Encoding.UTF8, "text/xml");
             request.Headers.Add("SOAPAction", action);
 
+            // Apply credentials (the call parameter overrides the instance property). The HttpClient's
+            // handler is already built in the constructor, so credentials are applied per-request as a
+            // Basic Authorization header instead — previously they were dropped entirely (CR-H033).
+            var creds = credentials ?? Credentials;
+            if (creds != null)
+            {
+                var nc = creds.GetCredential(new Uri(URI), "Basic");
+                if (nc != null && !string.IsNullOrEmpty(nc.UserName))
+                {
+                    var token = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{nc.UserName}:{nc.Password}"));
+                    request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", token);
+                }
+            }
+
             return request;
         }
 
