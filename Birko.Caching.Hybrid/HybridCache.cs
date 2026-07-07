@@ -15,8 +15,20 @@ public sealed class HybridCache : ICache
     private readonly ICache _l1;
     private readonly ICache _l2;
     private readonly HybridCacheOptions _options;
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly Dictionary<string, KeyLock> _locks = new();
+    private readonly object _locksGate = new();
     private bool _disposed;
+
+    /// <summary>
+    /// A per-key stampede lock with a reference count so it can be removed once no caller holds
+    /// or awaits it — otherwise <see cref="_locks"/> would grow unbounded, one entry per distinct
+    /// key, for the process lifetime (CR-H013).
+    /// </summary>
+    private sealed class KeyLock
+    {
+        public readonly SemaphoreSlim Semaphore = new(1, 1);
+        public int RefCount;
+    }
 
     /// <summary>
     /// Creates a hybrid cache with the given L1 (memory) and L2 (distributed) caches.
@@ -152,11 +164,25 @@ public sealed class HybridCache : ICache
             // L2 unavailable, proceed to factory
         }
 
-        // Per-key lock to prevent cache stampede
-        var keyLock = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await keyLock.WaitAsync(ct);
+        // Per-key lock to prevent cache stampede. Reference-counted so the entry is removed once
+        // the last caller releases it (CR-H013: the map used to grow one lock per key forever).
+        KeyLock keyLock;
+        lock (_locksGate)
+        {
+            if (!_locks.TryGetValue(key, out keyLock!))
+            {
+                keyLock = new KeyLock();
+                _locks[key] = keyLock;
+            }
+            keyLock.RefCount++;
+        }
+
+        var acquired = false;
         try
         {
+            await keyLock.Semaphore.WaitAsync(ct);
+            acquired = true;
+
             // Double-check L1 after acquiring lock
             l1Result = await _l1.GetAsync<T>(key, ct);
             if (l1Result.HasValue)
@@ -168,7 +194,17 @@ public sealed class HybridCache : ICache
         }
         finally
         {
-            keyLock.Release();
+            if (acquired)
+                keyLock.Semaphore.Release();
+
+            lock (_locksGate)
+            {
+                if (--keyLock.RefCount == 0)
+                {
+                    _locks.Remove(key);
+                    keyLock.Semaphore.Dispose();
+                }
+            }
         }
     }
 
@@ -242,9 +278,12 @@ public sealed class HybridCache : ICache
         if (_disposed) return;
         _disposed = true;
 
-        foreach (var kvp in _locks)
-            kvp.Value.Dispose();
-        _locks.Clear();
+        lock (_locksGate)
+        {
+            foreach (var kvp in _locks)
+                kvp.Value.Semaphore.Dispose();
+            _locks.Clear();
+        }
 
         // Hybrid cache does NOT dispose L1/L2 — caller owns their lifetime
     }
