@@ -59,6 +59,13 @@ namespace Birko.BackgroundJobs.SQL.Models
         public string? MetadataJson { get; set; }
 
         /// <summary>
+        /// Internal claim marker written during an atomic dequeue so concurrent workers can tell
+        /// which one won the row (CR-H011). Not part of the public JobDescriptor contract.
+        /// </summary>
+        [Birko.Data.SQL.Attributes.NamedField("ClaimToken")]
+        public Guid? ClaimToken { get; set; }
+
+        /// <summary>
         /// Converts to a core JobDescriptor.
         /// </summary>
         public JobDescriptor ToDescriptor()

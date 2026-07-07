@@ -57,50 +57,78 @@ namespace Birko.BackgroundJobs.SQL
             return id;
         }
 
+        /// <summary>
+        /// Maximum number of candidate rows to skip when losing an atomic-claim race to a
+        /// concurrent worker before giving up for this poll.
+        /// </summary>
+        private const int MaxClaimAttempts = 32;
+
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            var now = DateTime.UtcNow;
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
-
-            // Find the next eligible job
-            IEnumerable<JobDescriptorModel> candidates;
-
-            if (queueName != null)
-            {
-                candidates = await _store.ReadAsync(
-                    filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
-                              && (j.QueueName == null || j.QueueName == queueName),
-                    orderBy: OrderBy<JobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                    limit: 1,
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
-            }
-            else
-            {
-                candidates = await _store.ReadAsync(
-                    filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
-                    orderBy: OrderBy<JobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                    limit: 1,
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
-            }
-
-            var candidate = candidates.FirstOrDefault();
-            if (candidate == null)
-            {
-                return null;
-            }
-
-            // Mark as processing
             var processingStatus = (int)JobStatus.Processing;
-            candidate.Status = processingStatus;
-            candidate.AttemptCount++;
-            candidate.LastAttemptAt = DateTime.UtcNow;
 
-            await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+            for (int attempt = 0; attempt < MaxClaimAttempts; attempt++)
+            {
+                var now = DateTime.UtcNow;
 
-            return candidate.ToDescriptor();
+                // Find the next eligible job.
+                IEnumerable<JobDescriptorModel> candidates;
+                if (queueName != null)
+                {
+                    candidates = await _store.ReadAsync(
+                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                                  && (j.QueueName == null || j.QueueName == queueName),
+                        orderBy: OrderBy<JobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                        limit: 1,
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+                else
+                {
+                    candidates = await _store.ReadAsync(
+                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                        orderBy: OrderBy<JobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                        limit: 1,
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+
+                var candidate = candidates.FirstOrDefault();
+                if (candidate == null)
+                {
+                    return null;
+                }
+
+                // Atomically claim the row: a single native UPDATE ... SET Status=Processing,
+                // ClaimToken=<token> WHERE Guid=<id> AND Status=<eligible status>. Only one
+                // concurrent worker's WHERE can match (the DB serializes the row write), so the
+                // read-then-write gap that let two workers claim the same job is closed (CR-H011).
+                var claimId = candidate.Guid;
+                var originalStatus = candidate.Status;
+                var claimToken = Guid.NewGuid();
+
+                await _store.UpdateAsync(
+                    filter: j => j.Guid == claimId && j.Status == originalStatus,
+                    updates: new PropertyUpdate<JobDescriptorModel>()
+                        .Set(j => j.Status, processingStatus)
+                        .Set(j => j.ClaimToken, claimToken)
+                        .Set(j => j.AttemptCount, candidate.AttemptCount + 1)
+                        .Set(j => j.LastAttemptAt, now),
+                    ct: cancellationToken
+                ).ConfigureAwait(false);
+
+                // Confirm we won the claim (the API exposes no rows-affected count, so verify via
+                // the token). If another worker won, skip this row and try the next candidate.
+                var claimed = await _store.ReadAsync(j => j.Guid == claimId, cancellationToken).ConfigureAwait(false);
+                if (claimed != null && claimed.ClaimToken == claimToken)
+                {
+                    return claimed.ToDescriptor();
+                }
+            }
+
+            return null;
         }
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
