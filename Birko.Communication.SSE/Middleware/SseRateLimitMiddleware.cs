@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -9,7 +10,7 @@ namespace Birko.Communication.SSE.Middleware
     /// <summary>
     /// Rate limiting middleware for SSE connections
     /// </summary>
-    public class SseRateLimitMiddleware : ISseMiddleware
+    public class SseRateLimitMiddleware : ISseMiddleware, IDisposable
     {
         private readonly ILogger<SseRateLimitMiddleware> _logger;
         private readonly Dictionary<string, List<DateTime>> _connectionHistory = new();
@@ -77,33 +78,14 @@ namespace Birko.Communication.SSE.Middleware
 
             return await next(context);
         }
-    }
 
-    /// <summary>
-    /// Simple semaphore implementation for .NET Standard compatibility
-    /// </summary>
-    internal class SemaphoreSlim
-    {
-        private readonly System.Threading.SemaphoreSlim _semaphore;
-
-        public SemaphoreSlim(int initialCount, int maxCount)
+        /// <summary>
+        /// Disposes the internal lock semaphore (CR-H034: it was never disposed, leaking the handle).
+        /// </summary>
+        public void Dispose()
         {
-            _semaphore = new System.Threading.SemaphoreSlim(initialCount, maxCount);
-        }
-
-        public Task WaitAsync()
-        {
-            return _semaphore.WaitAsync();
-        }
-
-        public Task WaitAsync(System.Threading.CancellationToken cancellationToken)
-        {
-            return _semaphore.WaitAsync(cancellationToken);
-        }
-
-        public void Release()
-        {
-            _semaphore.Release();
+            _lock.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }
