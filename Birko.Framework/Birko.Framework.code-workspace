@@ -769,6 +769,10 @@
 			"path": "../../Framework.Tests/Birko.Communication.Network.Tests"
 		},
 		{
+			"name": "Tests / Birko.Communication.REST.Server.Tests",
+			"path": "../../Framework.Tests/Birko.Communication.REST.Server.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
