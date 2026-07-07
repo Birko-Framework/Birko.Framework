@@ -13,10 +13,12 @@ namespace Birko.Data.Sync.ElasticSearch.Models;
 public class ElasticSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
     /// <summary>
-    /// Elasticsearch document identifier.
-    /// Format: {EntityGuid}_{Scope}
+    /// Deterministic application-level key (format: {EntityGuid}_{Scope}). NOT the Elasticsearch
+    /// document id — the base store keys documents off <see cref="AbstractModel.Guid"/>. Mapped to a
+    /// non-reserved "docKey" field: the previous [Text(Name = "_id")] made AutoMap emit a mapping for
+    /// the reserved `_id` metadata field, which Elasticsearch rejects, so index creation threw (CR-H101).
     /// </summary>
-    [Text(Name = "_id")]
+    [Keyword(Name = "docKey")]
     public string Id { get; set; } = string.Empty;
 
     /// <summary>
