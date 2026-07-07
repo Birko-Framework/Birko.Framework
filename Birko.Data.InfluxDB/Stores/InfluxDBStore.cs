@@ -13,7 +13,7 @@ namespace Birko.Data.InfluxDB.Stores
     /// Synchronous InfluxDB data store for CRUD and bulk operations.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
-    public class InfluxDBStore<T> : Data.Stores.AbstractBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAggregatableStore<T>
+    public class InfluxDBStore<T> : Data.Stores.AbstractBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAggregatableStore<T>, System.IDisposable
         where T : Models.AbstractModel
     {
         /// <summary>
@@ -45,7 +45,21 @@ namespace Birko.Data.InfluxDB.Stores
         public virtual void SetSettings(Settings settings)
         {
             _settings = settings;
+            // Dispose any previous client before replacing it (CR-H049: repeated SetSettings leaked
+            // the prior connection's HttpClient/sockets).
+            Client?.Dispose();
             Client = new InfluxDB.InfluxDBClient(settings);
+        }
+
+        /// <summary>
+        /// Disposes the owned InfluxDB client (an IDisposable holding an HttpClient) — the store
+        /// owned it but never released it (CR-H049).
+        /// </summary>
+        public void Dispose()
+        {
+            Client?.Dispose();
+            Client = null;
+            System.GC.SuppressFinalize(this);
         }
 
         /// <summary>
