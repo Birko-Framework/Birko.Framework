@@ -58,7 +58,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     var eventType = Type.GetType(entry.EventType);
                     if (eventType == null)
                     {
-                        await _store.MarkFailedAsync(entry.Id, $"Cannot resolve type: {entry.EventType}", cancellationToken).ConfigureAwait(false);
+                        await _store.MarkFailedAsync(entry.Id, $"Cannot resolve type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                         processed++;
                         continue;
                     }
@@ -66,7 +66,7 @@ namespace Birko.EventBus.Outbox.Publishing
                     var @event = _serializer.Deserialize(entry.Payload, eventType) as IEvent;
                     if (@event == null)
                     {
-                        await _store.MarkFailedAsync(entry.Id, $"Cannot deserialize payload for type: {entry.EventType}", cancellationToken).ConfigureAwait(false);
+                        await _store.MarkFailedAsync(entry.Id, $"Cannot deserialize payload for type: {entry.EventType}", _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                         processed++;
                         continue;
                     }
@@ -78,7 +78,7 @@ namespace Birko.EventBus.Outbox.Publishing
                 }
                 catch (Exception ex)
                 {
-                    await _store.MarkFailedAsync(entry.Id, ex.Message, cancellationToken).ConfigureAwait(false);
+                    await _store.MarkFailedAsync(entry.Id, ex.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
             }

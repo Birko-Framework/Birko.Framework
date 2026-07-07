@@ -30,9 +30,13 @@ namespace Birko.EventBus.Outbox
         Task MarkPublishedAsync(Guid entryId, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Marks an entry as failed, incrementing attempts and recording the error.
+        /// Marks an entry as failed, incrementing attempts and recording the error. Once the entry's
+        /// attempt count reaches <paramref name="maxAttempts"/> the store must transition it to
+        /// <c>Failed</c> (stop retrying); otherwise it stays <c>Pending</c> for another attempt. The
+        /// cap is passed in (from <c>OutboxOptions.MaxAttempts</c>) rather than hardcoded per store
+        /// (CR-H115).
         /// </summary>
-        Task MarkFailedAsync(Guid entryId, string error, CancellationToken cancellationToken = default);
+        Task MarkFailedAsync(Guid entryId, string error, int maxAttempts, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Deletes entries older than the given cutoff date that are Published or Failed.

@@ -43,13 +43,14 @@ namespace Birko.EventBus.Outbox.Stores
             return Task.CompletedTask;
         }
 
-        public Task MarkFailedAsync(Guid entryId, string error, CancellationToken cancellationToken = default)
+        public Task MarkFailedAsync(Guid entryId, string error, int maxAttempts, CancellationToken cancellationToken = default)
         {
             if (_entries.TryGetValue(entryId, out var entry))
             {
                 entry.Attempts++;
                 entry.LastError = error;
-                entry.Status = entry.Attempts >= 5 ? OutboxStatus.Failed : OutboxStatus.Pending;
+                // Honor the configured cap instead of a hardcoded 5 (CR-H115).
+                entry.Status = entry.Attempts >= maxAttempts ? OutboxStatus.Failed : OutboxStatus.Pending;
             }
 
             return Task.CompletedTask;
