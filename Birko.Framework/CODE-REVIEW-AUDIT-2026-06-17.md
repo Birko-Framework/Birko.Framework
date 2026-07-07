@@ -1074,7 +1074,7 @@ Minor caveat on severity: SemaphoreSlim only allocates an undisposed OS handle l
 - **Title:** RemoveReadData with size < 0 throws ArgumentOutOfRangeException
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.WebSocket\Ports/WebSocketPort.cs:171-182`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — RemoveReadData reads+removes atomically under one lock, removing exactly what Read returned (whole buffer for size<0); HasReadData(size<0) returns Count>0. Buffer + concurrent append/drain tests added.
 - **Detail:** Read(int size) explicitly supports size < 0 (returns the whole buffer at line 59-62). RemoveReadData calls Read(size) then, if HasReadData(size) is true (Count >= -1 is always true for negative size), executes ReadData.RemoveRange(0, size) with a negative count, which throws ArgumentOutOfRangeException. So the 'read everything' path (size < 0) works for Read but crashes for RemoveReadData. Also the check/read/remove sequence is not atomic: Read locks, then HasReadData reads Count without a lock, then RemoveRange locks separately — another thread (the ReadWorker AddRange) can change Count between the read and the remove, so a different number of bytes is removed than returned.
 - **Fix:** Handle size < 0 by removing ReadData.Count (mirror Read). Perform the read+count-check+remove inside a single lock(ReadData) block so the returned bytes and the removed bytes are the same range.
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Communication.WebSocket\Ports\WebSocketPort.cs and the base class C:\Source\Birko\Framework\Birko.Communication\Ports\AbstractPort.cs (ReadData is a List<byte>).
