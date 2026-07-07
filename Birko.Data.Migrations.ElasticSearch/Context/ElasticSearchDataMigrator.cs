@@ -20,13 +20,9 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
         {
             if (updates == null || updates.Count == 0) return;
 
-            var painlessSet = string.Join("; ", updates.Select(kvp =>
-            {
-                var valueStr = kvp.Value is string s ? $"'{s}'" : kvp.Value?.ToString() ?? "null";
-                return $"ctx._source.{kvp.Key} = {valueStr}";
-            }));
+            var painlessSet = BuildPainlessSource(updates, out var scriptParams);
 
-            _client.UpdateByQuery<dynamic>(descriptor =>
+            var response = _client.UpdateByQuery<dynamic>(descriptor =>
             {
                 descriptor.Index(collection);
 
@@ -42,15 +38,18 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                 descriptor.Script(s => s
                     .Source(painlessSet)
                     .Lang("painless")
+                    .Params(scriptParams)
                 );
 
                 return descriptor;
             });
+
+            EnsureValid(response, $"UpdateByQuery on index '{collection}'");
         }
 
         public void DeleteDocuments(string collection, string filterJson)
         {
-            _client.DeleteByQuery<dynamic>(descriptor =>
+            var response = _client.DeleteByQuery<dynamic>(descriptor =>
             {
                 descriptor.Index(collection);
 
@@ -65,6 +64,8 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
                 return descriptor;
             });
+
+            EnsureValid(response, $"DeleteByQuery on index '{collection}'");
         }
 
         public long CountDocuments(string collection, string? filterJson = null)
@@ -86,13 +87,14 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
         {
-            _client.ReindexOnServer(r => r
+            var reindexResponse = _client.ReindexOnServer(r => r
                 .Source(s => s.Index(sourceCollection))
                 .Destination(d => d.Index(targetCollection))
                 .WaitForCompletion(true)
             );
+            EnsureValid(reindexResponse, $"ReindexOnServer '{sourceCollection}' -> '{targetCollection}'");
 
-            _client.Indices.Refresh(targetCollection);
+            EnsureValid(_client.Indices.Refresh(targetCollection), $"Refresh index '{targetCollection}'");
         }
 
         public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)
@@ -115,8 +117,31 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
             if (hasDocuments)
             {
-                _client.Bulk(bulkDescriptor);
-                _client.Indices.Refresh(collection);
+                var bulkResponse = _client.Bulk(bulkDescriptor);
+                EnsureValid(bulkResponse, $"Bulk insert into '{collection}'");
+                if (bulkResponse.Errors)
+                {
+                    var firstError = bulkResponse.ItemsWithErrors.FirstOrDefault()?.Error?.Reason;
+                    throw new InvalidOperationException(
+                        $"Bulk insert into '{collection}' had item-level errors: {firstError}. {bulkResponse.DebugInformation}");
+                }
+
+                EnsureValid(_client.Indices.Refresh(collection), $"Refresh index '{collection}'");
+            }
+        }
+
+        /// <summary>
+        /// Throws when an ElasticSearch migration response is invalid — otherwise a failed data step
+        /// (mapping/version conflict, reindex error, partial bulk failure) would be silently swallowed
+        /// and the migration recorded as applied (CR-H059). Mirrors ElasticSearchMigrationStore.
+        /// </summary>
+        private static void EnsureValid(IResponse response, string operation)
+        {
+            if (response == null || !response.IsValid)
+            {
+                throw new InvalidOperationException(
+                    $"ElasticSearch migration step failed: {operation}. {response?.DebugInformation}",
+                    response?.OriginalException);
             }
         }
 
@@ -191,6 +216,26 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
             }
 
             return new QueryContainer(new BoolQuery { Must = mustClauses });
+        }
+
+        /// <summary>
+        /// Builds a Painless update script that assigns each value from a script param
+        /// (<c>ctx._source.field = params.pN</c>) rather than interpolating the value into the source.
+        /// Hand-formatting broke on quotes/backslashes and produced invalid literals for bool /
+        /// DateTime / decimal — letting Nest serialize the params fixes it (CR-H058).
+        /// </summary>
+        internal static string BuildPainlessSource(IDictionary<string, object> updates, out Dictionary<string, object> scriptParams)
+        {
+            scriptParams = new Dictionary<string, object>();
+            var keys = updates.Keys.ToList();
+            var sourceParts = new List<string>(keys.Count);
+            for (var i = 0; i < keys.Count; i++)
+            {
+                var paramName = $"p{i}";
+                scriptParams[paramName] = updates[keys[i]];
+                sourceParts.Add($"ctx._source.{keys[i]} = params.{paramName}");
+            }
+            return string.Join("; ", sourceParts);
         }
 
         private static object? ExtractValue(JsonElement element)
