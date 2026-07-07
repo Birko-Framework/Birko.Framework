@@ -386,7 +386,7 @@ namespace Birko.Communication.REST
             response.OutputStream.Close();
         }
 
-        private static string EscapeJson(string text)
+        internal static string EscapeJson(string text)
         {
             return text
                 .Replace("\\", "\\\\")
@@ -580,7 +580,7 @@ namespace Birko.Communication.REST
             return new RestResponse
             {
                 StatusCode = HttpStatusCode.BadRequest,
-                Content = $"{{\"error\":\"{message}\"}}",
+                Content = $"{{\"error\":\"{RestServer.EscapeJson(message)}\"}}",
                 ContentType = "application/json"
             };
         }
@@ -593,7 +593,7 @@ namespace Birko.Communication.REST
             return new RestResponse
             {
                 StatusCode = HttpStatusCode.Unauthorized,
-                Content = $"{{\"error\":\"{message}\"}}",
+                Content = $"{{\"error\":\"{RestServer.EscapeJson(message)}\"}}",
                 ContentType = "application/json"
             };
         }
@@ -606,7 +606,7 @@ namespace Birko.Communication.REST
             return new RestResponse
             {
                 StatusCode = HttpStatusCode.Forbidden,
-                Content = $"{{\"error\":\"{message}\"}}",
+                Content = $"{{\"error\":\"{RestServer.EscapeJson(message)}\"}}",
                 ContentType = "application/json"
             };
         }
@@ -619,7 +619,7 @@ namespace Birko.Communication.REST
             return new RestResponse
             {
                 StatusCode = HttpStatusCode.NotFound,
-                Content = $"{{\"error\":\"{message}\"}}",
+                Content = $"{{\"error\":\"{RestServer.EscapeJson(message)}\"}}",
                 ContentType = "application/json"
             };
         }
@@ -632,7 +632,7 @@ namespace Birko.Communication.REST
             return new RestResponse
             {
                 StatusCode = HttpStatusCode.InternalServerError,
-                Content = $"{{\"error\":\"{message}\"}}",
+                Content = $"{{\"error\":\"{RestServer.EscapeJson(message)}\"}}",
                 ContentType = "application/json"
             };
         }
