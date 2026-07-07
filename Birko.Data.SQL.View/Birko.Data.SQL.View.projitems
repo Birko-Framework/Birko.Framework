@@ -34,6 +34,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnectorBase_View.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_CreateView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_SelectView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_SelectViewCount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MaterializedViewType.cs" />
   </ItemGroup>
 </Project>
