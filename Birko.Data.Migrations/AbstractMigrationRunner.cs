@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace Birko.Data.Migrations
 {
@@ -90,10 +91,13 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously initializes the migration runner and store.
         /// </summary>
-        public virtual System.Threading.Tasks.Task InitializeAsync()
+        public virtual async Task InitializeAsync()
         {
-            Initialize();
-            return System.Threading.Tasks.Task.CompletedTask;
+            if (_isInitialized) return;
+
+            // Use the store's real async init instead of blocking on the sync path (CR-H054).
+            await Store.InitializeAsync().ConfigureAwait(false);
+            _isInitialized = true;
         }
 
         /// <summary>
@@ -123,9 +127,25 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously migrates up to the specified version.
         /// </summary>
-        public virtual System.Threading.Tasks.Task<MigrationResult> MigrateAsync(long? targetVersion = null)
+        public virtual async Task<MigrationResult> MigrateAsync(long? targetVersion = null)
         {
-            return System.Threading.Tasks.Task.FromResult(Migrate(targetVersion));
+            EnsureInitialized();
+
+            // Await the store's async version query + async execution instead of blocking (CR-H054).
+            var current = await Store.GetCurrentVersionAsync().ConfigureAwait(false);
+            var target = targetVersion ?? LatestVersion;
+
+            if (target == current)
+            {
+                return MigrationResult.Successful(current, current, MigrationDirection.Up, Array.Empty<ExecutedMigration>());
+            }
+
+            if (target < current)
+            {
+                return MigrationResult.Failed(current, MigrationDirection.Up, $"Target version {target} is less than current version {current}. Use Rollback for downgrades.");
+            }
+
+            return await ExecuteMigrationsAsync(current, target, MigrationDirection.Up).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -153,9 +173,23 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously rolls back to the specified version.
         /// </summary>
-        public virtual System.Threading.Tasks.Task<MigrationResult> RollbackAsync(long targetVersion)
+        public virtual async Task<MigrationResult> RollbackAsync(long targetVersion)
         {
-            return System.Threading.Tasks.Task.FromResult(Rollback(targetVersion));
+            EnsureInitialized();
+
+            var current = await Store.GetCurrentVersionAsync().ConfigureAwait(false);
+
+            if (targetVersion == current)
+            {
+                return MigrationResult.Successful(current, current, MigrationDirection.Down, Array.Empty<ExecutedMigration>());
+            }
+
+            if (targetVersion > current)
+            {
+                return MigrationResult.Failed(current, MigrationDirection.Down, $"Target version {targetVersion} is greater than current version {current}. Use Migrate for upgrades.");
+            }
+
+            return await ExecuteMigrationsAsync(current, targetVersion, MigrationDirection.Down).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -183,6 +217,16 @@ namespace Birko.Data.Migrations
         /// Derived classes should override this to handle transactions.
         /// </summary>
         protected abstract MigrationResult ExecuteMigrations(long fromVersion, long toVersion, MigrationDirection direction);
+
+        /// <summary>
+        /// Async execution hook used by MigrateAsync/RollbackAsync. The default delegates to the
+        /// synchronous <see cref="ExecuteMigrations"/>; providers that perform network/DB I/O should
+        /// override this to await their real async path rather than block a thread (CR-H054).
+        /// </summary>
+        protected virtual Task<MigrationResult> ExecuteMigrationsAsync(long fromVersion, long toVersion, MigrationDirection direction)
+        {
+            return Task.FromResult(ExecuteMigrations(fromVersion, toVersion, direction));
+        }
 
         /// <summary>
         /// Gets the migrations to execute for a version range.
