@@ -40,8 +40,10 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
     {
         if (Container == null) return new Dictionary<Guid, ISyncKnowledgeItem>();
 
+        // Scope by tenant as well (CR-H100): previously tenantId was ignored, so a query returned —
+        // and Delete/SetLastSyncTime affected — every tenant's items in the scope.
         var queryable = Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>(allowSynchronousQueryExecution: true)
-            .Where(x => x.Scope == scope);
+            .Where(x => x.Scope == scope && x.TenantId == tenantId);
 
         var items = queryable.ToList();
         return items.ToDictionary(x => x.EntityGuid, x => (ISyncKnowledgeItem)x);
@@ -65,6 +67,7 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
     /// </summary>
     public void UpdateKnowledge(
         IEnumerable<ISyncKnowledgeItem> items,
+        Guid? tenantId = null,
         System.Threading.CancellationToken ct = default)
     {
         if (Container == null) return;
@@ -72,7 +75,7 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
         var tasks = new List<System.Threading.Tasks.Task>();
         foreach (var item in items)
         {
-            var cosmosItem = ConvertToCosmosItem(item);
+            var cosmosItem = ConvertToCosmosItem(item, tenantId);
             tasks.Add(Container.UpsertItemAsync(cosmosItem, new PartitionKey(cosmosItem.Guid!.Value.ToString()), cancellationToken: ct));
         }
 
@@ -84,9 +87,10 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
     /// </summary>
     public void UpdateKnowledgeItem(
         ISyncKnowledgeItem item,
+        Guid? tenantId = null,
         System.Threading.CancellationToken ct = default)
     {
-        UpdateKnowledge(new[] { item }, ct);
+        UpdateKnowledge(new[] { item }, tenantId, ct);
     }
 
     /// <summary>
@@ -152,10 +156,16 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
         System.Threading.Tasks.Task.WhenAll(tasks).GetAwaiter().GetResult();
     }
 
-    private static CosmosSyncKnowledgeItem ConvertToCosmosItem(ISyncKnowledgeItem item)
+    internal static CosmosSyncKnowledgeItem ConvertToCosmosItem(ISyncKnowledgeItem item, Guid? tenantId)
     {
         if (item is CosmosSyncKnowledgeItem cosmosItem)
         {
+            // Stamp the tenant so this row is scoped to it on subsequent reads (CR-H100); an explicit
+            // tenantId wins, otherwise keep whatever the item already carried.
+            if (tenantId.HasValue)
+            {
+                cosmosItem.TenantId = tenantId;
+            }
             return cosmosItem;
         }
 
@@ -163,6 +173,7 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
         {
             Guid = item.Guid ?? Guid.NewGuid(),
             EntityGuid = item.EntityGuid,
+            TenantId = tenantId,
             Scope = item.Scope,
             LastSyncedAt = item.LastSyncedAt,
             LocalVersion = item.LocalVersion,

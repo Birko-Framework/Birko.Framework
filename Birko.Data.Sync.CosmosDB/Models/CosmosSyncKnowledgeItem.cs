@@ -20,6 +20,13 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     /// </summary>
     public Guid EntityGuid { get; set; }
 
+    /// <summary>
+    /// Optional tenant this knowledge belongs to. Null means tenant-agnostic. Used to scope
+    /// read/delete/last-sync operations so one tenant's sync knowledge is never returned, deleted, or
+    /// overwritten by another (CR-H100).
+    /// </summary>
+    public Guid? TenantId { get; set; }
+
     private string _scope = string.Empty;
 
     /// <summary>
