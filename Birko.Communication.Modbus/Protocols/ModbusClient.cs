@@ -209,7 +209,12 @@ namespace Birko.Communication.Modbus.Protocols
                 elapsed += PollIntervalMs;
             }
 
-            if (!_port.HasReadData(5)) // absolute minimum for any response
+            // If the full expected frame never arrived, only proceed when the buffer holds a
+            // COMPLETE Modbus error response (which is legitimately shorter than
+            // expectedMinResponse). Otherwise the bytes are a truncated normal frame and parsing
+            // them yields a spurious CRC mismatch (RTU) or mis-framing (TCP) — treat as a timeout
+            // (CR-H025).
+            if (!_port.HasReadData(expectedMinResponse) && !IsCompleteErrorResponse())
                 throw new TimeoutException($"Modbus response timeout ({ResponseTimeoutMs}ms) from unit {unitId}");
 
             var responseData = _port.RemoveReadData(_port.GetData().Length);
@@ -217,6 +222,24 @@ namespace Birko.Communication.Modbus.Protocols
             return _transport == ModbusTransport.Tcp
                 ? ModbusFrame.ParseTcpResponse(responseData)
                 : ModbusFrame.ParseRtuResponse(responseData);
+        }
+
+        /// <summary>
+        /// True when the buffered bytes are a complete Modbus exception response — the function-code
+        /// byte has its high bit set and the full (short) error frame is present. Used to accept a
+        /// response shorter than the expected normal frame without parsing a truncated frame.
+        /// </summary>
+        private bool IsCompleteErrorResponse()
+        {
+            var data = _port.GetData();
+            // RTU error: unit(1)+func(1)+exc(1)+CRC(2)=5, func at index 1.
+            // TCP error: MBAP(7)+func(1)+exc(1)=9, func at index 7.
+            int funcIndex = _transport == ModbusTransport.Tcp ? 7 : 1;
+            int errorFrameLen = _transport == ModbusTransport.Tcp ? 9 : 5;
+
+            if (data.Length < errorFrameLen)
+                return false;
+            return (data[funcIndex] & 0x80) != 0;
         }
 
         public void Dispose()
