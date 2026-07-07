@@ -15,6 +15,7 @@ namespace Birko.BackgroundJobs.CosmosDB;
 public class CosmosDBJobQueue : IJobQueue
 {
     private readonly AsyncCosmosDBStore<CosmosJobDescriptorModel> _store;
+    private readonly RetryPolicy _retryPolicy;
 
     /// <summary>
     /// Gets the underlying store for transaction context access.
@@ -24,18 +25,20 @@ public class CosmosDBJobQueue : IJobQueue
     /// <summary>
     /// Creates a new Cosmos DB job queue with settings.
     /// </summary>
-    public CosmosDBJobQueue(Birko.Data.CosmosDB.Stores.Settings settings)
+    public CosmosDBJobQueue(Birko.Data.CosmosDB.Stores.Settings settings, RetryPolicy? retryPolicy = null)
     {
         _store = new AsyncCosmosDBStore<CosmosJobDescriptorModel>();
         _store.SetSettings(settings);
+        _retryPolicy = retryPolicy ?? RetryPolicy.Default;
     }
 
     /// <summary>
     /// Creates a new Cosmos DB job queue with an existing store.
     /// </summary>
-    public CosmosDBJobQueue(AsyncCosmosDBStore<CosmosJobDescriptorModel> store)
+    public CosmosDBJobQueue(AsyncCosmosDBStore<CosmosJobDescriptorModel> store, RetryPolicy? retryPolicy = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _retryPolicy = retryPolicy ?? RetryPolicy.Default;
     }
 
     /// <inheritdoc />
@@ -90,14 +93,17 @@ public class CosmosDBJobQueue : IJobQueue
         if (model == null) return;
 
         model.LastError = error;
-        if (model.AttemptCount >= model.MaxRetries)
+        if (model.AttemptCount < model.MaxRetries)
         {
-            model.Status = (int)JobStatus.Failed;
-            model.CompletedAt = DateTime.UtcNow;
+            // Retries remain — re-enqueue with backoff (mirrors MongoDBJobQueue).
+            model.Status = (int)JobStatus.Scheduled;
+            model.ScheduledAt = DateTime.UtcNow.Add(_retryPolicy.GetDelay(model.AttemptCount));
         }
         else
         {
-            model.Status = (int)JobStatus.Pending;
+            // Retries exhausted — terminal Dead status (CR-H008), not the retryable Failed.
+            model.Status = (int)JobStatus.Dead;
+            model.CompletedAt = DateTime.UtcNow;
         }
 
         await _store.UpdateAsync(model, ct: ct).ConfigureAwait(false);
@@ -141,11 +147,12 @@ public class CosmosDBJobQueue : IJobQueue
     {
         var cutoff = DateTime.UtcNow - olderThan;
         var completedStatus = (int)JobStatus.Completed;
-        var failedStatus = (int)JobStatus.Failed;
+        var deadStatus = (int)JobStatus.Dead;
         var cancelledStatus = (int)JobStatus.Cancelled;
 
+        // Purge terminal jobs only: Completed | Dead | Cancelled (CR-H009). Failed is retryable.
         var results = await _store.ReadAsync(
-            filter: j => (j.Status == completedStatus || j.Status == failedStatus || j.Status == cancelledStatus)
+            filter: j => (j.Status == completedStatus || j.Status == deadStatus || j.Status == cancelledStatus)
                 && j.CompletedAt != null && j.CompletedAt < cutoff,
             ct: ct
         ).ConfigureAwait(false);
