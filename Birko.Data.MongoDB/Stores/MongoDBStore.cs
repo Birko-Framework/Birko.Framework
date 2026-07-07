@@ -382,14 +382,7 @@ namespace Birko.Data.MongoDB.Stores
                 _ => ChangeStreams.ChangeStreamOperationType.Invalidate
             };
 
-            if (change.DocumentKey != null && change.DocumentKey.Contains("_id"))
-            {
-                var idValue = change.DocumentKey["_id"];
-                if (idValue.IsGuid)
-                {
-                    evt.DocumentKey = idValue.AsGuid;
-                }
-            }
+            evt.DocumentKey = ChangeStreams.ChangeStreamDocumentKeyResolver.Resolve(change.DocumentKey, change.FullDocument);
 
             return evt;
         }

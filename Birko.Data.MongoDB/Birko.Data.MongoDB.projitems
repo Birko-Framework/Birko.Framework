@@ -22,6 +22,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncMongoDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\MongoDbUnitOfWork.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IndexManagement\MongoDBIndexManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ChangeStreams\ChangeStreamDocumentKeyResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ChangeStreams\ChangeStreamEvent.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ChangeStreams\ChangeStreamOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Aggregation\AggregationPipelineBuilder.cs" />
