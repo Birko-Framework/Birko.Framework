@@ -96,11 +96,18 @@ namespace Birko.Data.Migrations.RavenDB.Context
             foreach (var doc in documents)
             {
                 if (doc == null || doc.Count == 0) continue;
-                bulkInsert.Store(doc);
+                // Force the requested collection via @collection metadata — storing a raw dictionary
+                // otherwise lands documents in a generic collection derived from the CLR type, not
+                // the caller's `collection`, leaving them unqueryable under that name (CR-H065).
+                var metadata = new Raven.Client.Json.MetadataAsDictionary
+                {
+                    [Raven.Client.Constants.Documents.Metadata.Collection] = collection
+                };
+                bulkInsert.Store(doc, metadata);
             }
         }
 
-        private static string ParseFilterToRql(string? filterJson)
+        internal static string ParseFilterToRql(string? filterJson)
         {
             if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
                 return string.Empty;
@@ -184,7 +191,7 @@ namespace Birko.Data.Migrations.RavenDB.Context
             }
         }
 
-        private static object? ExtractValue(JsonElement element)
+        internal static object? ExtractValue(JsonElement element)
         {
             return element.ValueKind switch
             {

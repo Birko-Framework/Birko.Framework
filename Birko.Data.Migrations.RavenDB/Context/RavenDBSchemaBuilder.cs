@@ -38,13 +38,12 @@ namespace Birko.Data.Migrations.RavenDB.Context
 
         public bool CollectionExists(string name)
         {
-            // RavenDB collections exist implicitly; check if there are any documents
-            using var session = _store.OpenSession();
-            var count = session.Query<dynamic>()
-                .Statistics(out var stats)
-                .Take(1)
-                .ToList();
-            return true;
+            // Actually check whether the named collection holds any documents (CR-H064: this used to
+            // ignore `name` and unconditionally return true, breaking any "create only if missing"
+            // caller). Collection statistics report per-collection document counts.
+            var stats = _store.Maintenance.Send(
+                new Raven.Client.Documents.Operations.GetCollectionStatisticsOperation());
+            return stats.Collections.TryGetValue(name, out var count) && count > 0;
         }
 
         public IIndexBuilder CreateIndex(string collectionName, string indexName)
