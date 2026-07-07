@@ -85,7 +85,8 @@ namespace Birko.Data.Migrations.InfluxDB.Context
             // InfluxDB copy requires reading from source and writing to target.
             // Use Flux to query source, then write to target.
             var queryApi = _client.GetQueryApi();
-            var writeApi = _client.GetWriteApi();
+            // Synchronous WriteApiAsync (no leaked background batching worker) — see CR-H060.
+            var writeApi = _client.GetWriteApiAsync();
 
             var flux = $"from(bucket: \"{sourceCollection}\")"
                 + " |> range(start: -100y)"
@@ -93,6 +94,7 @@ namespace Birko.Data.Migrations.InfluxDB.Context
 
             var tables = queryApi.QueryAsync(flux, _organization).GetAwaiter().GetResult();
 
+            var points = new List<PointData>();
             foreach (var table in tables)
             {
                 foreach (var record in table.Records)
@@ -113,22 +115,27 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                             point = point.Field(key, Convert.ToDouble(entry.Value));
                     }
 
-                    writeApi.WritePoint(point, targetCollection, _organization);
+                    points.Add(point);
                 }
             }
 
-            writeApi.Flush();
+            if (points.Count > 0)
+            {
+                writeApi.WritePointsAsync(points, targetCollection, _organization).GetAwaiter().GetResult();
+            }
         }
 
         public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)
         {
             if (documents == null) return;
 
-            var writeApi = _client.GetWriteApi();
+            // Synchronous WriteApiAsync (no leaked background batching worker) — see CR-H060.
+            var writeApi = _client.GetWriteApiAsync();
             var docList = documents.Where(d => d != null && d.Count > 0).ToList();
 
             if (docList.Count == 0) return;
 
+            var points = new List<PointData>();
             foreach (var doc in docList)
             {
                 var measurement = doc.TryGetValue("_measurement", out var m) ? m?.ToString() ?? "migration_data" : "migration_data";
@@ -145,13 +152,13 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                         point = point.Field(kvp.Key, Convert.ToDouble(kvp.Value ?? 0));
                 }
 
-                writeApi.WritePoint(point, collection, _organization);
+                points.Add(point);
             }
 
-            writeApi.Flush();
+            writeApi.WritePointsAsync(points, collection, _organization).GetAwaiter().GetResult();
         }
 
-        private static string ConvertFilterToFluxPredicate(string filterJson)
+        internal static string ConvertFilterToFluxPredicate(string filterJson)
         {
             // Simple conversion — return as-is for basic predicates
             return filterJson;

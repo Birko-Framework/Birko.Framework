@@ -118,15 +118,18 @@ namespace Birko.Data.Migrations.InfluxDB
                 Initialize();
             }
 
-            var writeApi = _client.GetWriteApi();
+            // Use the synchronous WriteApiAsync (writes immediately, no background worker) instead of
+            // the batching GetWriteApi() — the latter is IDisposable, owns a background thread, was
+            // never disposed (leak) and its async Flush() didn't guarantee commit before a later read
+            // (CR-H060). Mirrors AsyncInfluxDBStore.
+            var writeApi = _client.GetWriteApiAsync();
             var point = PointData.Measurement(MigrationMeasurement)
                 .Tag("name", migration.Name)
                 .Field("version", migration.Version)
                 .Field("description", migration.Description ?? "")
                 .Timestamp(migration.CreatedAt, WritePrecision.Ms);
 
-            writeApi.WritePoint(point, MigrationsBucketName, _organization);
-            writeApi.Flush();
+            writeApi.WritePointAsync(point, MigrationsBucketName, _organization).GetAwaiter().GetResult();
         }
 
         /// <summary>
