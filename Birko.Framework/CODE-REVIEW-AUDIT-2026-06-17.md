@@ -1957,7 +1957,7 @@ This is a genuine correctness bug: interface/base-typed consumers and GetInfoAsy
 - **Title:** NewestWins ignores nullable UpdatedAt, silently degrading to local-wins
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync\Internal/SyncProviderBase.cs:348`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — `GetUpdatedAt` now matches both `DateTime` and `DateTime?` (`Nullable.GetUnderlyingType(...) == typeof(DateTime)`); the existing `value as DateTime?` cast already handled both. `NewestWins` no longer silently degrades to `LocalWins` for models with a nullable timestamp. New `NewestWinsNullableTimestampTests` (probe subclass exposing the protected method) cover nullable-set/unset and the non-nullable path.
 - **Detail:** GetUpdatedAt only reads the property when prop.PropertyType == typeof(DateTime). Any entity whose UpdatedAt is DateTime? (the common case for nullable timestamps) is not matched, so GetUpdatedAt returns null, GetNewest returns the hard-coded "local" default (line 179), and GetNewestConflictResolution returns UseLocal (line 221). The NewestWins policy therefore silently behaves as LocalWins for any model with a nullable timestamp. The bug is masked by the test model, which uses non-nullable DateTime (TestSyncModel.cs:9).
 - **Fix:** Match both DateTime and DateTime? (e.g. Nullable.GetUnderlyingType(prop.PropertyType) == typeof(DateTime) || prop.PropertyType == typeof(DateTime)), and read the value accordingly.
 - **Verify reasoning:** Confirmed by reading the actual code in C:\Source\Birko\Framework\Birko.Data.Sync\Internal\SyncProviderBase.cs.
