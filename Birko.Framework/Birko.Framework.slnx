@@ -252,6 +252,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.Migrations.Tests/Birko.Data.Migrations.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Migrations.CosmosDB.Tests/Birko.Data.Migrations.CosmosDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Migrations.ElasticSearch.Tests/Birko.Data.Migrations.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Migrations.InfluxDB.Tests/Birko.Data.Migrations.InfluxDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Hardware.Tests/Birko.Communication.Hardware.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests/Birko.Data.SQL.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Caching.Tests/Birko.Data.SQL.Caching.Tests.csproj" />
