@@ -125,10 +125,14 @@ namespace Birko.Data.SQL.Connectors
                 case DbType.Boolean:
                     return "BIT";
                 case DbType.Time:
+                    return "TIME";
                 case DbType.Date:
-                case DbType.DateTime:
                     return "DATE";
+                case DbType.DateTime:
                 case DbType.DateTime2:
+                    // DbType.DateTime previously mapped to DATE, silently truncating time-of-day on
+                    // every DateTime column. Map to DATETIME2 (SQL Server's full-precision type) so
+                    // timestamped/audit fields keep their time component (CR-H086).
                     return "DATETIME2";
                 case DbType.DateTimeOffset:
                     return "DateTimeOffset";
