@@ -1280,7 +1280,7 @@ Every concrete detail in the finding (file, line range, both fall-back paths, th
 - **Title:** Wrapped InfluxDBClient (IDisposable) is never disposed — resource leak
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB\Stores/AsyncInfluxDBStore.cs:51 and Stores/InfluxDBStore.cs:48`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — both stores implement IDisposable (dispose the owned client) and SetSettings disposes any existing client before replacing it. Tests assert IDisposable, dispose-clears-client, and double-SetSettings does not throw.
 - **Detail:** SetSettings constructs a new Birko.Data.InfluxDB.InfluxDBClient (which wraps InfluxDB.Client.InfluxDBClient holding an HttpClient and implements IDisposable) and assigns it to the Client property. Neither store implements IDisposable, so the underlying client/HttpClient is never disposed. Worse, calling SetSettings twice silently overwrites the previous Client without disposing it, leaking the first connection's HttpClient/sockets each time. The InfluxDbUnitOfWork is careful about disposal but the stores that own the client are not.
 - **Fix:** Make both stores implement IDisposable/IAsyncDisposable and dispose Client in Dispose/DestroyAsync; in SetSettings, dispose any existing Client before assigning a new one (Client?.Dispose() first).
 - **Verify reasoning:** Verified by reading the actual code. Both stores construct a disposable client in SetSettings and never dispose it, and neither the stores nor their base classes implement IDisposable.
