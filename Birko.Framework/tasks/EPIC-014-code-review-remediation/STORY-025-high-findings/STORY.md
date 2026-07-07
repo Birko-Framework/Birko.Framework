@@ -1,7 +1,7 @@
 ---
 id: STORY-025
 parent: EPIC-014
-status: planned
+status: in-progress
 created: 2026-06-18
 source: CODE-REVIEW-AUDIT-2026-06-17.md
 severity: high
