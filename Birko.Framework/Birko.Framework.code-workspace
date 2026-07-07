@@ -865,6 +865,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Repositories.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Tagging.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Tagging.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.RavenDB.Tests",
 			"path": "../../Framework.Tests/Birko.Data.RavenDB.Tests"
 		},
