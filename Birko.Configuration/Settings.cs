@@ -153,9 +153,12 @@ namespace Birko.Configuration
 
         public override void LoadFrom(Settings data)
         {
+            // Always copy the base Location/Name; only copy Password when the source actually has one
+            // (CR-H037: the old type-guard dropped Location/Name for a plain Settings argument).
+            base.LoadFrom(data);
             if (data is PasswordSettings passwordData)
             {
-                LoadFrom(passwordData);
+                Password = passwordData.Password;
             }
         }
 
@@ -244,9 +247,15 @@ namespace Birko.Configuration
 
         public override void LoadFrom(Settings data)
         {
+            // base resolves to PasswordSettings.LoadFrom(Settings), copying Location/Name (+Password
+            // when present); only add the remote fields when the source is a RemoteSettings
+            // (CR-H038: the old type-guard dropped all base fields for a non-RemoteSettings argument).
+            base.LoadFrom(data);
             if (data is RemoteSettings remoteData)
             {
-                LoadFrom(remoteData);
+                UserName = remoteData.UserName;
+                Port = remoteData.Port;
+                UseSecure = remoteData.UseSecure;
             }
         }
 
