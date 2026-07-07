@@ -752,7 +752,7 @@ This is a genuine, high-severity documentation defect: 100% of the documented AP
 - **Title:** RemoveReadData(-1) throws ArgumentOutOfRangeException
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:462-473`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — RemoveReadData now removes exactly what Read returned (whole buffer for size<0), and HasReadData(size<0) returns Count>0; new Birko.Communication.Bluetooth.Tests covers the drain-all/empty/partial/boundary cases offline.
 - **Detail:** Read(int) documents size=-1 as 'read all available', and Read(-1) works. But RemoveReadData(-1) calls Read(-1) (returns all data), then HasReadData(-1) returns true (ReadData.Count >= -1 is always true), then executes ReadData.RemoveRange(0, -1), which throws ArgumentOutOfRangeException. So the documented 'drain all' path is broken for the remove variant, and HasReadData(-1) is also semantically wrong (always true even on an empty buffer).
 - **Fix:** Handle size < 0 in RemoveReadData by removing ReadData.Count instead of size, and special-case size < 0 in HasReadData (e.g. return ReadData.Count > 0 or always treat negative as 'all available').
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports\BluetoothLE.cs.
@@ -774,7 +774,7 @@ The asymmetry between Read (handles size < 0) and RemoveReadData/HasReadData (do
 - **Title:** Class owns IDisposable WinRT device but implements only a finalizer, not IDisposable
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:14,574-580`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — implements IDisposable (Dispose→Close, SuppressFinalize); the finalizer now runs Dispose(false) which releases only the unmanaged Linux socket fd and never Thread.Join / disposes the managed WinRT device.
 - **Detail:** On Windows _device (BluetoothLEDevice) is IDisposable and is only released via CleanupWindows() called from Close() or the finalizer. The class has no IDisposable implementation, so deterministic cleanup depends on callers explicitly calling Close(). Relying on the finalizer (~BluetoothLE) to call Close() is unreliable and dangerous: the finalizer calls Close(), which does Thread.Join(1000), acquires locks (Clear -> ReadData), and disposes WinRT objects from the finalizer thread. This can deadlock or touch already-finalized objects. Resource-holding ports should implement IDisposable.
 - **Fix:** Implement IDisposable (Dispose calls Close), keep the finalizer minimal or remove it, and have Dispose/Close guard against being run on the finalizer thread (avoid Thread.Join / managed-object disposal from the finalizer).
 - **Verify reasoning:** Confirmed by reading the actual code at C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports\BluetoothLE.cs and its base types.
@@ -791,7 +791,7 @@ This is a real, actionable, high-severity design defect. The proper fix is to im
 - **Title:** Cancellation deadlocks Windows discovery (continuation gated on the cancellation token never completes the TCS)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLEDevices.cs:163-179,236-251`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — the timeout ContinueWith is no longer bound to cancellationToken (always stops the watcher + completes), and a cancellationToken.Register now stops the watcher and TrySetCanceled's the awaited task, so cancellation unblocks the await instead of hanging. (WinRT discovery is #if WINDOWS; fix verified by reasoning.)
 - **Detail:** In both Windows discovery methods, EnumerationCompleted schedules Task.Delay(timeout).ContinueWith(t => { watcher.Stop(); completionSource.TrySetResult(true); }, cancellationToken). The continuation is itself bound to cancellationToken, so when the token is cancelled the continuation is cancelled and never runs — watcher.Stop() is never called and completionSource never completes, so 'await completionSource.Task' hangs forever. Cancellation should complete (cancel) the awaited task, not silently drop the only code path that completes it.
 - **Fix:** Do not pass cancellationToken to ContinueWith (let it always stop/complete), and register cancellationToken to call watcher.Stop()/completionSource.TrySetCanceled() directly so cancellation actually unblocks the await.
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports\BluetoothLEDevices.cs. Both Windows discovery methods (DiscoverDevicesWindowsAsync, lines 163-179; DiscoverDevicesWithServiceWindowsAsync, lines 236-251) use the exact pattern the finding describes:
