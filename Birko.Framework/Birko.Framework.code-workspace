@@ -809,6 +809,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Migrations.InfluxDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Migrations.TimescaleDB.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Migrations.TimescaleDB.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
