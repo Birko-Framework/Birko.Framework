@@ -94,7 +94,10 @@ namespace Birko.AI.Orchestration.Services
                     Visit(step, dependencies, visited, visiting, sorted);
             }
 
-            sorted.Reverse();
+            // Post-order DFS over a depends-on graph (edges point from a step to the steps it
+            // depends on) already yields a valid dependencies-first execution order — a step's
+            // dependencies are appended before the step itself. No reversal (CR-H003: the old
+            // sorted.Reverse() inverted this into an invalid dependents-first order).
             return sorted;
         }
 
