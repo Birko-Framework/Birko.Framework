@@ -486,7 +486,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
                         progress.ProcessedItems++;
 
                         // Update knowledge
-                        knowledgeUpdates.Add(CreateKnowledgeItem(guid, localItem, remoteItem, options));
+                        knowledgeUpdates.Add(CreateKnowledgeItem(guid, localItem, remoteItem, hasKnowledge, options));
                     }
                     catch (Exception ex)
                     {
@@ -746,7 +746,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// <summary>
     /// Apply conflict resolution
     /// </summary>
-    private async Task ApplyConflictResolutionAsync(
+    internal async Task ApplyConflictResolutionAsync(
         ConflictResolution resolution,
         Guid guid,
         T? localItem,
@@ -754,44 +754,43 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         SyncFilterOptions<T> filterOptions,
         SyncProgress progress)
     {
-        try
+        // No catch here (CR-H106): a failed conflict-resolution write must propagate to the caller's
+        // per-item try/catch (which records a SyncError and increments progress.Errors), exactly like
+        // the sibling Create/Update/Delete branches. The previous swallowing catch — with the false
+        // "Error already handled in calling method" comment — silently lost the write and left
+        // result.Success = true.
+        switch (resolution)
         {
-            switch (resolution)
-            {
-                case ConflictResolution.UseLocal when localItem != null:
-                    if (filterOptions.CanSaveToRemote?.Invoke(localItem) != false)
-                    {
-                        await _remoteStore.UpdateAsync(localItem);
-                        progress.UpdatedItems++;
-                    }
-                    break;
+            case ConflictResolution.UseLocal when localItem != null:
+                if (filterOptions.CanSaveToRemote?.Invoke(localItem) != false)
+                {
+                    await _remoteStore.UpdateAsync(localItem);
+                    progress.UpdatedItems++;
+                }
+                break;
 
-                case ConflictResolution.UseRemote when remoteItem != null:
-                    if (filterOptions.CanSaveToLocal?.Invoke(remoteItem) != false)
-                    {
-                        await _localStore.UpdateAsync(remoteItem);
-                        progress.UpdatedItems++;
-                    }
-                    break;
+            case ConflictResolution.UseRemote when remoteItem != null:
+                if (filterOptions.CanSaveToLocal?.Invoke(remoteItem) != false)
+                {
+                    await _localStore.UpdateAsync(remoteItem);
+                    progress.UpdatedItems++;
+                }
+                break;
 
-                case ConflictResolution.Skip:
-                    progress.SkippedItems++;
-                    break;
-            }
-        }
-        catch (Exception)
-        {
-            // Error already handled in calling method
+            case ConflictResolution.Skip:
+                progress.SkippedItems++;
+                break;
         }
     }
 
     /// <summary>
     /// Create sync knowledge item
     /// </summary>
-    private ISyncKnowledgeItem CreateKnowledgeItem(
+    internal ISyncKnowledgeItem CreateKnowledgeItem(
         Guid guid,
         T? localItem,
         T? remoteItem,
+        bool hasKnowledge,
         SyncOptions options)
     {
         var tenantGuid = GetTenantGuid(options) ?? (_tenantContext.HasTenant ? _tenantContext.CurrentTenantGuid : Guid.Empty);
@@ -804,8 +803,13 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             LastSyncedAt = DateTime.UtcNow,
             LocalVersion = GetVersionHash(localItem),
             RemoteVersion = GetVersionHash(remoteItem),
-            IsLocalDeleted = localItem == null,
-            IsRemoteDeleted = remoteItem == null
+            // Only record a side as deleted with POSITIVE evidence: the entity was previously known
+            // (synced before) AND is now absent on that side. Inferring deletion from mere absence in
+            // a single (possibly fetch-filtered) fetch flagged never-before-synced or predicate-
+            // excluded items as deleted, which later drove spurious conflicts / erroneous deletes
+            // (CR-H105). A first-seen item absent on one side is a one-sided create, not a deletion.
+            IsLocalDeleted = hasKnowledge && localItem == null,
+            IsRemoteDeleted = hasKnowledge && remoteItem == null
         };
     }
 
