@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -15,7 +17,9 @@ namespace Birko.Communication.REST
     /// </summary>
     public class RestClient : IDisposable
     {
-        private static readonly Dictionary<string, RestClient> _clients = new Dictionary<string, RestClient>();
+        // Process-wide shared cache reached concurrently from many threads — must be thread-safe
+        // (CR-H031: a plain Dictionary mutated without locking can corrupt / throw).
+        private static readonly ConcurrentDictionary<string, RestClient> _clients = new();
 
         private readonly HttpClient _httpClient;
         private bool _disposed;
@@ -66,11 +70,7 @@ namespace Birko.Communication.REST
         /// <returns>A cached or new RestClient instance</returns>
         public static RestClient GetClient(string baseUri)
         {
-            if (!_clients.ContainsKey(baseUri))
-            {
-                _clients.Add(baseUri, new RestClient(baseUri));
-            }
-            return _clients[baseUri];
+            return _clients.GetOrAdd(baseUri, uri => new RestClient(uri));
         }
 
         /// <summary>
@@ -320,11 +320,13 @@ namespace Birko.Communication.REST
         /// </summary>
         public static void ClearCache()
         {
-            foreach (var client in _clients.Values)
+            // Snapshot then clear so a concurrent GetClient can't observe half-disposed state.
+            var clients = _clients.Values.ToArray();
+            _clients.Clear();
+            foreach (var client in clients)
             {
                 client.Dispose();
             }
-            _clients.Clear();
         }
 
         /// <summary>
@@ -334,10 +336,10 @@ namespace Birko.Communication.REST
         /// <returns>True if the client was removed; otherwise, false</returns>
         public static bool RemoveClient(string baseUri)
         {
-            if (_clients.TryGetValue(baseUri, out var client))
+            if (_clients.TryRemove(baseUri, out var client))
             {
                 client.Dispose();
-                return _clients.Remove(baseUri);
+                return true;
             }
             return false;
         }
