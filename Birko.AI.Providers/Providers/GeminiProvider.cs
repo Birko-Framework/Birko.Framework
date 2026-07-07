@@ -292,7 +292,8 @@ namespace Birko.AI.Providers
                     llmResponse.Usage = new TokenUsage
                     {
                         PromptTokens = usageMeta.TryGetProperty("promptTokenCount", out var ptc) ? ptc.GetInt32() : 0,
-                        CompletionTokens = usageMeta.TryGetProperty("candidatesTokenCount", out var ctc) ? ctc.GetInt32() : 0
+                        CompletionTokens = usageMeta.TryGetProperty("candidatesTokenCount", out var ctc) ? ctc.GetInt32() : 0,
+                        Model = result.TryGetProperty("modelVersion", out var mdl) ? mdl.GetString() : null
                     };
                 }
 

@@ -166,7 +166,8 @@ namespace Birko.AI.Providers
                     llmResponse.Usage = new TokenUsage
                     {
                         PromptTokens = usage.TryGetProperty("input_tokens", out var it) ? it.GetInt32() : 0,
-                        CompletionTokens = usage.TryGetProperty("output_tokens", out var ot) ? ot.GetInt32() : 0
+                        CompletionTokens = usage.TryGetProperty("output_tokens", out var ot) ? ot.GetInt32() : 0,
+                        Model = result.TryGetProperty("model", out var mdl) ? mdl.GetString() : null
                     };
                 }
 
