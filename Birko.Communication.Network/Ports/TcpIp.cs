@@ -43,14 +43,15 @@ namespace Birko.Communication.Network.Ports
 
         public override byte[] Read(int size)
         {
-            // Reading is primarily handled by the background thread populating ReadData
-            if (HasReadData(size))
+            // Lock ReadData: the background ReadWorker mutates it under the same lock, and List<byte>
+            // is not thread-safe (concurrent AddRange during GetRange can tear/throw) — CR-H026.
+            lock (ReadData)
             {
                 if (size < 0)
                 {
-                    return ReadData.GetRange(0, ReadData.Count).ToArray();
+                    return ReadData.ToArray();
                 }
-                else
+                if (ReadData.Count >= size)
                 {
                     return ReadData.GetRange(0, size).ToArray();
                 }
@@ -140,17 +141,27 @@ namespace Birko.Communication.Network.Ports
 
         public override bool HasReadData(int size)
         {
-            return (ReadData.Count >= size);
+            lock (ReadData)
+            {
+                if (size < 0)
+                    return ReadData.Count > 0; // "all available" — true only when there is data (CR-H027)
+                return ReadData.Count >= size;
+            }
         }
 
         public override byte[] RemoveReadData(int size)
         {
-            byte[] result = Read(size);
-            if (HasReadData(size))
+            // Read + RemoveRange atomically under the lock, removing exactly what was read (whole
+            // buffer for size < 0) so RemoveRange(0, -1) can't throw (CR-H026 / CR-H027).
+            lock (ReadData)
             {
-                ReadData.RemoveRange(0, size);
+                byte[] result = Read(size);
+                if (result.Length > 0)
+                {
+                    ReadData.RemoveRange(0, result.Length);
+                }
+                return result;
             }
-            return result;
         }
     }
 }
