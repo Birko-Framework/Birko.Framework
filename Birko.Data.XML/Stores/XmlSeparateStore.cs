@@ -143,7 +143,10 @@ namespace Birko.Data.XML.Stores
 
             AddFile(data.Guid.Value, filePath);
 
-            using FileStream fileStream = File.OpenWrite(filePath);
+            // Use File.Create (truncating): File.OpenWrite opens at offset 0 WITHOUT truncating, so a
+            // shorter payload over a stale/longer {Name}-{Guid}.xml (crash re-create / reused Guid)
+            // left trailing bytes → malformed XML silently skipped on load (CR-H111).
+            using FileStream fileStream = File.Create(filePath);
             WriteToStream(fileStream, data);
 
             return data.Guid.Value;

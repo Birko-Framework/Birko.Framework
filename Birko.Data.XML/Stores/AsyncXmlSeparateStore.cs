@@ -156,7 +156,9 @@ namespace Birko.Data.XML.Stores
 
             await Task.Run(() =>
             {
-                using FileStream fileStream = File.OpenWrite(filePath);
+                // File.Create truncates; File.OpenWrite would leave trailing bytes of a stale/longer
+                // file, corrupting the XML (CR-H111).
+                using FileStream fileStream = File.Create(filePath);
                 WriteToStream(fileStream, data);
             }, ct);
 
