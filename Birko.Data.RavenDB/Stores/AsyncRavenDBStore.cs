@@ -163,6 +163,10 @@ public class AsyncRavenDBStore<T>
     /// <inheritdoc />
     public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
     {
+        // Run the lazy-init + cancellation gate the base public wrappers provide before the
+        // load-by-id fast path, so a Read as the first operation still creates the database and an
+        // already-cancelled token is observed (CR-H077).
+        await EnsureInitializedAsync(ct);
         if (_documentStore == null || guid == Guid.Empty)
         {
             return null;

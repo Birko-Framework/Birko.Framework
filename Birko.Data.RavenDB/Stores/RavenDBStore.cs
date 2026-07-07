@@ -156,6 +156,9 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override T? Read(Guid guid)
     {
+        // Run the lazy-init gate the base public wrappers provide before the load-by-id fast path,
+        // so a Read as the first operation still creates the database (CR-H077).
+        EnsureInitialized();
         if (_documentStore == null || guid == Guid.Empty) return null;
 
         if (TransactionContext != null)
@@ -170,6 +173,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     public override IEnumerable<T> Read()
     {
+        EnsureInitialized();
         if (_documentStore == null) return Enumerable.Empty<T>();
 
         if (TransactionContext != null)
