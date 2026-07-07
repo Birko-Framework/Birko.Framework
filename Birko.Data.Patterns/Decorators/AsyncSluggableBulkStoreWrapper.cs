@@ -35,14 +35,22 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
         await _innerStore.CreateAsync(data, storeDelegate, ct);
     }
 
-    public Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
+    public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        // Resolve each item's slug individually — batch tracking not needed for updates
-        // since each item already has a Guid that excludes itself from uniqueness check
-        return Task.WhenAll(data.Select(async item =>
+        // Resolve slugs sequentially against the shared inner store. Firing ResolveSlugAsync
+        // concurrently (Task.WhenAll) issued overlapping ReadAsync calls on one store instance,
+        // which connection-stateful backends (SQL connectors, file-based JSON/XML) cannot serve
+        // safely; it also skipped per-batch uniqueness tracking so two updated rows could receive
+        // the same slug, and the ContinueWith/Unwrap ran the inner update even if resolution
+        // faulted (CR-H075). Materialize once so a lazy source isn't enumerated twice.
+        var items = data as IReadOnlyList<T> ?? data.ToList();
+        var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
         {
-            await ResolveSlugAsync(item, item.Guid, ct: ct);
-        })).ContinueWith(_ => _innerStore.UpdateAsync(data, storeDelegate, ct), ct).Unwrap();
+            await ResolveSlugAsync(item, item.Guid, batchSlugs, ct);
+            batchSlugs.Add(item.Slug!);
+        }
+        await _innerStore.UpdateAsync(items, storeDelegate, ct);
     }
 
     public Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken ct = default)
