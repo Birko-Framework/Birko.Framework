@@ -180,6 +180,10 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
     {
+        // This overrides the public wrapper to keep Cosmos's efficient point-read, so it must run
+        // the lazy-init gate itself (CR-H042: a connectionString-constructed store read before an
+        // explicit InitAsync had _container == null and returned null instead of auto-initializing).
+        await EnsureInitializedAsync(ct).ConfigureAwait(false);
         if (_container == null || guid == Guid.Empty) return null;
 
         try

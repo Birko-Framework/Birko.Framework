@@ -164,6 +164,10 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     public override T? Read(Guid guid)
     {
+        // Overrides the public wrapper to keep Cosmos's point-read, so it must run the lazy-init
+        // gate itself (CR-H043: a connectionString-constructed store queried before InitCore had
+        // _container == null and returned null instead of auto-initializing).
+        EnsureInitialized();
         if (_container == null || guid == Guid.Empty) return null;
 
         try
@@ -181,6 +185,7 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     public override IEnumerable<T> Read()
     {
+        EnsureInitialized(); // parameterless Read() also bypassed lazy-init (CR-H043)
         if (_container == null) return Enumerable.Empty<T>();
 
         var query = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
