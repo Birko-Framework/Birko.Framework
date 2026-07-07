@@ -1977,7 +1977,7 @@ Minor caveat: the cited TestSyncModel.cs is not present in this checkout (it liv
 - **Title:** result.Success can be true when there were errors but the token was cancelled
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync\SyncProvider.cs:180 / AsyncSyncProvider.cs:181`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — changed `result.Success = result.Errors.Count == 0 || IsCancellationRequested` to `result.Success = result.Errors.Count == 0` in both `SyncProvider` and `AsyncSyncProvider`, so a run that recorded per-item errors is never reported as successful just because it was cancelled. New `SyncSuccessOnCancellationTests` (a failing-create local store + cancel-on-batch-completed) asserts errors force `Success=false`.
 - **Detail:** result.Success = result.Errors.Count == 0 || options.CancellationToken.IsCancellationRequested. The OR means a sync that recorded per-item errors AND was then cancelled reports Success = true, hiding the failures. Cancellation should not flip a failed result to successful. (Separately, treating a cancelled sync as Success at all is questionable, but the error case is the clear bug.)
 - **Fix:** Compute success from errors only (result.Success = result.Errors.Count == 0), or track cancellation as a distinct outcome rather than folding it into Success with an OR.
 - **Verify reasoning:** Confirmed by reading both cited files. SyncProvider.cs:180 and AsyncSyncProvider.cs:181 both contain exactly: `result.Success = result.Errors.Count == 0 || options.CancellationToken.IsCancellationRequested;`. The OR operator means that when CancellationToken.IsCancellationRequested is true, Success is set to true regardless of how many errors are in result.Errors.
