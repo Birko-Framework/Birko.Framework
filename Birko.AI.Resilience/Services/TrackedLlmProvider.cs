@@ -141,7 +141,7 @@ namespace Birko.AI.Resilience.Services
                 {
                     await _costTracker.RecordUsageAsync(new UsageRecord(
                         Provider: Name,
-                        Model: "",
+                        Model: usage.Model ?? "",
                         PromptTokens: usage.PromptTokens,
                         CompletionTokens: usage.CompletionTokens,
                         ProjectId: ProjectId,
