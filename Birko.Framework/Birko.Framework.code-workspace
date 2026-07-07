@@ -889,6 +889,14 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.MSSql.View.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.MySQL.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.MySQL.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.SQL.PostgreSQL.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.PostgreSQL.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.SqLite.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.SqLite.Tests"
 		},
