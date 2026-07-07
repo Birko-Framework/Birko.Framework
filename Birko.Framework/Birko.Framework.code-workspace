@@ -797,6 +797,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Migrations.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Migrations.CosmosDB.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Migrations.CosmosDB.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
