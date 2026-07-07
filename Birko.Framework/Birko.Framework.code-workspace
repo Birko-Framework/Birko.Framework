@@ -777,6 +777,10 @@
 			"path": "../../Framework.Tests/Birko.Communication.SOAP.Tests"
 		},
 		{
+			"name": "Tests / Birko.Communication.SSE.Tests",
+			"path": "../../Framework.Tests/Birko.Communication.SSE.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
