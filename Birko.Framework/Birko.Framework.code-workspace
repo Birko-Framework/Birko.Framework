@@ -789,6 +789,10 @@
 			"path": "../../Framework.Tests/Birko.Data.CosmosDB.Views.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.ElasticSearch.Views.Tests",
+			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.Views.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
