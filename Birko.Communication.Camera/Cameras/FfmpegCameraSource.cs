@@ -69,7 +69,13 @@ namespace Birko.Communication.Camera.Cameras
                 process.Start();
 
                 using var ms = new MemoryStream();
+                // Drain stderr concurrently with stdout. ffmpeg is very verbose on stderr (banner,
+                // stream info, progress); if we only read stdout, ffmpeg blocks writing to a full
+                // stderr pipe while we block reading stdout — a classic redirected-process deadlock
+                // (CR-H019). Discard stderr to Stream.Null and await both before WaitForExit.
+                var stderrTask = process.StandardError.BaseStream.CopyToAsync(Stream.Null, ct);
                 await process.StandardOutput.BaseStream.CopyToAsync(ms, ct);
+                await stderrTask;
 
                 await process.WaitForExitAsync(ct);
 
