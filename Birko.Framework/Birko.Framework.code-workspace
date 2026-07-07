@@ -785,6 +785,10 @@
 			"path": "../../Framework.Tests/Birko.Configuration.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.CosmosDB.Views.Tests",
+			"path": "../../Framework.Tests/Birko.Data.CosmosDB.Views.Tests"
+		},
+		{
 			"name": "Tests / Birko.Communication.Hardware.Tests",
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
