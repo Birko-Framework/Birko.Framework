@@ -126,7 +126,27 @@ public class ZipProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IStre
             }
 
             var entry = archive.Entries[EntryIndex];
-            var extractedFile = Path.Combine(_extractPath, entry.FullName);
+
+            // Zip Slip hardening (CR-H076): entry.FullName is attacker-controlled and may contain
+            // "../" segments or a rooted/absolute path. Path.Combine with a rooted second argument
+            // discards _extractPath entirely, and ".." segments escape the directory when the file
+            // is opened. Flatten to just the file name so the write can only land in _extractPath,
+            // then verify containment as defense in depth.
+            var safeName = Path.GetFileName(entry.FullName);
+            if (string.IsNullOrEmpty(safeName))
+            {
+                throw new ProcessorException(
+                    $"ZIP entry '{entry.FullName}' has no extractable file name.");
+            }
+
+            var destDir = Path.GetFullPath(_extractPath);
+            var extractedFile = Path.GetFullPath(Path.Combine(destDir, safeName));
+            if (!extractedFile.StartsWith(destDir + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            {
+                throw new ProcessorException(
+                    $"ZIP entry '{entry.FullName}' resolves outside the extract directory.");
+            }
+
             entry.ExtractToFile(extractedFile, overwrite: true);
             return extractedFile;
         }
