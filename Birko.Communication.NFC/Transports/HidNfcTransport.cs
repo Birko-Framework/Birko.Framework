@@ -83,13 +83,18 @@ namespace Birko.Communication.NFC.Transports
                 throw new InvalidOperationException("Transport is not connected.");
             }
 
-            _readTcs = new TaskCompletionSource<string?>();
+            var tcs = new TaskCompletionSource<string?>();
+            _readTcs = tcs;
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(timeoutMs);
-            cts.Token.Register(() => _readTcs.TrySetResult(null));
+            // Register against the LOCAL tcs, not the _readTcs field: the field is nulled below (and
+            // reassigned by the next polling iteration), so a late timer callback would otherwise
+            // NRE on a null field or complete the WRONG read. Disposing the registration when the
+            // method returns also stops the timer from firing against a finished read (CR-H029).
+            using var registration = cts.Token.Register(() => tcs.TrySetResult(null));
 
-            var uid = await _readTcs.Task.ConfigureAwait(false);
+            var uid = await tcs.Task.ConfigureAwait(false);
             _readTcs = null;
 
             if (string.IsNullOrEmpty(uid))

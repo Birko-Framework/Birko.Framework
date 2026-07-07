@@ -13,10 +13,11 @@ namespace Birko.Communication.NFC.Ports
     /// NFC/RFID reader port — reads tag UIDs, NDEF data, and supports APDU passthrough.
     /// Wraps an <see cref="INfcTransport"/> backend and applies registered <see cref="INfcProtocol"/> parsers.
     /// </summary>
-    public class NfcReaderPort : AbstractPort
+    public class NfcReaderPort : AbstractPort, IDisposable
     {
         private readonly INfcTransport _transport;
         private readonly List<INfcProtocol> _protocols = new();
+        private bool _disposed;
 
         /// <summary>
         /// The NFC transport backend used for reading tags.
@@ -148,6 +149,22 @@ namespace Birko.Communication.NFC.Ports
             var result = ReadData.GetRange(0, size).ToArray();
             ReadData.RemoveRange(0, size);
             return result;
+        }
+
+        /// <summary>
+        /// Unsubscribes the transport events and disposes the owned transport (which holds a
+        /// SerialPort / HttpClient / CancellationTokenSource). Without this the port leaked those
+        /// handles and kept itself alive via the transport's event subscriptions (CR-H028).
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            _transport.TagDetected -= HandleTagDetected;
+            _transport.TagRemoved -= HandleTagRemoved;
+            _transport.Dispose();
+            GC.SuppressFinalize(this);
         }
 
         private void HandleTagDetected(object? sender, NfcTagData tag)
