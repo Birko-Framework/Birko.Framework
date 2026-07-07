@@ -237,6 +237,7 @@
     <Project Path="../../Framework.Tests/Birko.AI.Providers.Tests/Birko.AI.Providers.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.AI.Tests/Birko.AI.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.AI.Orchestration.Tests/Birko.AI.Orchestration.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Resilience.Tests/Birko.AI.Resilience.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Hardware.Tests/Birko.Communication.Hardware.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests/Birko.Data.SQL.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Caching.Tests/Birko.Data.SQL.Caching.Tests.csproj" />
