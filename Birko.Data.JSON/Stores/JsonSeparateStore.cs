@@ -53,11 +53,11 @@ namespace Birko.Data.JSON.Stores
         {
             _items?.Clear();
             _files.Clear();
-            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || !string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(Path) || !Directory.Exists(Path) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
-            var files = Directory.GetFiles(Path, _settings.Name).ToArray();
+            var files = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
             if (files.Any())
             {
                 foreach (var file in files)
@@ -96,7 +96,7 @@ namespace Birko.Data.JSON.Stores
                 return;
             }
 
-            var files = Directory.GetFiles(Path, _settings.Name).ToArray();
+            var files = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
             if (!files.Any())
             {
                 return;
@@ -127,7 +127,7 @@ namespace Birko.Data.JSON.Stores
                 Directory.CreateDirectory(Path);
             }
 
-            var removedFiles = Directory.GetFiles(Path, _settings.Name).ToDictionary(x => x);
+            var removedFiles = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToDictionary(x => x);
 
             foreach (var item in _items)
             {

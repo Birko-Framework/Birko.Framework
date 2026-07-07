@@ -54,11 +54,11 @@ namespace Birko.Data.JSON.Stores
         {
             _items?.Clear();
             _files.Clear();
-            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || !string.IsNullOrEmpty(_settings.Name))
+            if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings.Name))
             {
                 return;
             }
-            var files = Directory.GetFiles(PathDirectory, _settings.Name).ToArray();
+            var files = Directory.GetFiles(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
             if (files.Any())
             {
                 foreach (var file in files)
@@ -97,7 +97,7 @@ namespace Birko.Data.JSON.Stores
                 return;
             }
 
-            var files = Directory.GetFiles(PathDirectory, _settings.Name).ToArray();
+            var files = Directory.GetFiles(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
             if (!files.Any())
             {
                 return;
@@ -126,18 +126,26 @@ namespace Birko.Data.JSON.Stores
             {
                 Directory.CreateDirectory(PathDirectory);
             }
-            var removedFiles = Directory.GetFiles(PathDirectory, _settings.Name).ToDictionary(x => x);
+            var removedFiles = Directory.GetFiles(PathDirectory, JsonFileNaming.SearchPattern(_settings.Name)).ToDictionary(x => x);
 
             foreach (var item in _items)
             {
-                if (_files.ContainsKey(item.Key))
+                // A newly-created entity is in _items but not yet in _files, so its path must be
+                // computed and registered here. The old guard only wrote when the key was ALREADY
+                // in _files, so new items were never persisted (and the _files[item.Key] access
+                // below threw KeyNotFoundException) — the CR-C08 fix that landed in JsonSeparateStore
+                // but not this bulk variant, surfaced by the CR-H052 round-trip tests.
+                if (!_files.ContainsKey(item.Key))
                 {
                     var fileName = _settings.Name.Contains('*') ? _settings.Name.Replace("*", item.Key.ToString("D")) : $"{_settings.Name}-{item.Key:D}";
                     // Validate the combined path even though fileName is constructed internally
                     var path = PathValidator.CombineAndValidate(PathDirectory ?? throw new InvalidOperationException("PathDirectory cannot be null"), fileName);
-                    _files[item.Key] = path;
-                    File.Delete(_files[item.Key]);
-                    using FileStream fileStream = File.OpenWrite(_files[item.Key]);
+                    _files.Add(item.Key, path);
+                }
+
+                File.Delete(_files[item.Key]);
+                using (FileStream fileStream = File.OpenWrite(_files[item.Key]))
+                {
                     WriteToStream(fileStream, item.Value);
                 }
 

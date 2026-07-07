@@ -53,17 +53,11 @@ namespace Birko.Data.JSON.Stores
             base.SetSettings(settings);
         }
 
-        /// <summary>
-        /// Sets the store settings using the ISettings interface.
-        /// </summary>
-        /// <param name="settings">The settings to apply.</param>
-        public new virtual void SetSettings(ISettings settings)
-        {
-            if (settings is Settings settings1)
-            {
-                SetSettings(settings1);
-            }
-        }
+        // NOTE: no SetSettings(ISettings) override here. A `new virtual SetSettings(ISettings)` used
+        // to hide the SetSettings(Settings) override from member lookup, so its own
+        // `SetSettings(settings1)` re-dispatched to SetSettings(ISettings) — infinite recursion /
+        // StackOverflow on any SetSettings call. The inherited JsonStore.SetSettings(ISettings)
+        // already forwards to SetSettings(Settings), which virtually dispatches to the override above.
 
         #endregion
 
@@ -77,7 +71,7 @@ namespace Birko.Data.JSON.Stores
                 _items ??= new();
                 return;
             }
-            var files = Directory.GetFiles(Path, _settings.Name).ToArray();
+            var files = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToArray();
             if (files.Any())
             {
                 _items = new();
@@ -106,7 +100,7 @@ namespace Birko.Data.JSON.Stores
                 return;
             }
 
-            var removedFiles = Directory.GetFiles(Path, _settings.Name).ToDictionary(x => x);
+            var removedFiles = Directory.GetFiles(Path, JsonFileNaming.SearchPattern(_settings.Name)).ToDictionary(x => x);
 
             int batch = 1;
             List<T> batchFiles = new();

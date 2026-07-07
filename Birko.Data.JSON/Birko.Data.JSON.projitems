@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonBatchStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonSeparateBulkStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonSeparateStore.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonFileNaming.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\JsonStore.cs" />
   </ItemGroup>
 </Project>
