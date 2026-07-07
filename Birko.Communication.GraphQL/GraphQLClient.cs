@@ -228,23 +228,45 @@ public class GraphQLClient : IGraphQLClient
             var initBytes = Encoding.UTF8.GetBytes(initMsg);
             await webSocket.SendAsync(new ArraySegment<byte>(initBytes), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
 
-            // Wait for connection_ack
-            var buffer = new byte[8192];
-            var ackResult = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), ct).ConfigureAwait(false);
-            var ackJson = Encoding.UTF8.GetString(buffer, 0, ackResult.Count);
-            using var ackDoc = JsonDocument.Parse(ackJson);
-            var ackType = ackDoc.RootElement.TryGetProperty("type", out var at) ? at.GetString() : null;
+            // Wait for connection_ack, tolerating ping / keep-alive frames that a server may send
+            // first, and accumulating fragmented/large frames until complete (CR-H021).
+            string? ackType = null;
+            while (true)
+            {
+                var ackMsg = await WebSocketMessageReader.ReceiveTextAsync(webSocket, ct).ConfigureAwait(false);
+                if (ackMsg.Type == WebSocketMessageType.Close || ackMsg.Text == null)
+                {
+                    webSocket.Dispose();
+                    throw new GraphQLException("WebSocket closed before connection_ack");
+                }
+
+                using var ackDoc = JsonDocument.Parse(ackMsg.Text);
+                ackType = ackDoc.RootElement.TryGetProperty("type", out var at) ? at.GetString() : null;
+
+                if (ackType == "ping")
+                {
+                    var pong = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "pong" }));
+                    await webSocket.SendAsync(new ArraySegment<byte>(pong), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
+                    continue;
+                }
+                if (ackType == "ka") // legacy keep-alive
+                    continue;
+
+                break;
+            }
+
             if (ackType != "connection_ack")
             {
                 webSocket.Dispose();
                 throw new GraphQLException($"Expected connection_ack, received: {ackType}");
             }
 
-            // Start subscription
+            // Start subscription. The negotiated subprotocol is graphql-transport-ws, whose
+            // client->server start message type is "subscribe" (not the legacy "start") — CR-H020.
             var subscriptionId = $"sub_{Interlocked.Increment(ref _subscriptionCounter)}";
             var startPayload = new
             {
-                type = "start",
+                type = "subscribe",
                 id = subscriptionId,
                 payload = new
                 {

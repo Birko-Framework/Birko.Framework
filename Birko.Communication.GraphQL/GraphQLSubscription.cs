@@ -56,9 +56,10 @@ internal class GraphQLSubscription<T> : IGraphQLSubscription<T>, IObservable<T>
     {
         if (_completed) return;
 
+        // graphql-transport-ws terminates a subscription with "complete" (not the legacy "stop") — CR-H020.
         var stopMsg = JsonSerializer.Serialize(new
         {
-            type = "stop",
+            type = "complete",
             id = _subscriptionId
         }, _jsonOptions);
 
@@ -92,24 +93,22 @@ internal class GraphQLSubscription<T> : IGraphQLSubscription<T>, IObservable<T>
     /// </summary>
     internal async Task StartReceivingAsync()
     {
-        var buffer = new byte[8192];
-
         try
         {
             while (!_cts.IsCancellationRequested && _webSocket.State == WebSocketState.Open)
             {
-                var result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token).ConfigureAwait(false);
+                // Accumulate fragmented/large frames until complete before parsing (CR-H021).
+                var message = await WebSocketMessageReader.ReceiveTextAsync(_webSocket, _cts.Token).ConfigureAwait(false);
 
-                if (result.MessageType == WebSocketMessageType.Close)
+                if (message.Type == WebSocketMessageType.Close)
                 {
                     Complete();
                     return;
                 }
 
-                if (result.MessageType != WebSocketMessageType.Text) continue;
+                if (message.Text == null) continue;
 
-                var json = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                using var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(message.Text);
                 var root = doc.RootElement;
 
                 var type = root.TryGetProperty("type", out var typeEl) ? typeEl.GetString() : null;
