@@ -584,7 +584,7 @@ One sub-claim is imprecise but does not change the verdict: the finding says the
 - **Title:** AgentOptions.Clone() drops the OnLlmResponseReceived callback
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\AgentOptions.cs:77-94`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done
 - **Detail:** Clone() copies every field except OnLlmResponseReceived (Action?, declared at line 75). A caller cloning an options instance to tweak a value for a sub-agent silently loses the response callback, so the post-response hook never fires on the clone. This is a correctness bug because Clone() reads as a full copy.
 - **Fix:** Add OnLlmResponseReceived = OnLlmResponseReceived to the object initializer in Clone().
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.AI.Contracts\AgentOptions.cs. OnLlmResponseReceived is declared as `public Action? OnLlmResponseReceived { get; set; }` at line 75. Clone() (lines 77-94) populates an object initializer with 12 fields (Interactive, MaxIterations, MaxIterationsPerStep, Verbose, WorkingDirectory, PromptTimeout, DefaultPromptResponse, ModelDepth, AllowedExternalPaths, EnableStreaming, StreamingFallbackToSync, CheckpointInterval) but omits OnLlmResponseReceived. Since reference types not assigned in an initializer default to null, the cloned instance's callback is null.
