@@ -921,6 +921,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Sync.MongoDb.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Sync.Tenant.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.Tenant.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Tests"
 		},
