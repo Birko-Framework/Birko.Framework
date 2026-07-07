@@ -849,6 +849,10 @@
 			"path": "../../Framework.Tests/Birko.Data.MongoDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.MongoDB.Views.Tests",
+			"path": "../../Framework.Tests/Birko.Data.MongoDB.Views.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Processors.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Processors.Tests"
 		},
