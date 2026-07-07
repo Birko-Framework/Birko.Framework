@@ -1004,7 +1004,7 @@ Severity high is appropriate: the entire 401-retry feature is broken against any
 - **Title:** Static client cache uses a non-thread-safe Dictionary
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST\RestClient.cs:18,67-74,321-343`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — _clients is now a ConcurrentDictionary; GetClient uses GetOrAdd, RemoveClient TryRemove, ClearCache snapshots-then-clears. 16-thread concurrent-access regression test added.
 - **Detail:** _clients is a plain Dictionary<string,RestClient> mutated by GetClient (Add), ClearCache (Clear) and RemoveClient (Remove) with no locking. GetClient is the canonical entry point for a shared, process-wide client cache, so concurrent calls from multiple threads can corrupt the dictionary's internal state (torn reads/writes, lost entries, or InvalidOperationException). Sibling caches in the framework use ConcurrentDictionary for exactly this reason (GrpcChannelPool, GraphQLClient's static GetClient cache).
 - **Fix:** Change _clients to a ConcurrentDictionary<string, RestClient> and use GetOrAdd in GetClient (which also removes the double ContainsKey/indexer lookup). Use TryRemove in RemoveClient and snapshot Values in ClearCache.
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Communication.REST\RestClient.cs. The cited lines match exactly:
