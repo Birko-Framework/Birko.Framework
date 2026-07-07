@@ -163,17 +163,29 @@ namespace Birko.Communication.Bluetooth.Ports
                 watcher.EnumerationCompleted += (sender, args) =>
                 {
                     // Start timeout after enumeration completes
+                    // Do NOT bind this continuation to cancellationToken: if the token is cancelled
+                    // the continuation would be cancelled too and watcher.Stop()/TrySetResult would
+                    // never run, hanging the await forever (CR-H018). Cancellation is handled by the
+                    // registration below, which stops the watcher and cancels the awaited task.
                     Task.Delay(timeout).ContinueWith(t =>
                     {
                         watcher.Stop();
                         completionSource.TrySetResult(true);
-                    }, cancellationToken);
+                    });
                 };
 
                 watcher.Stopped += (sender, args) =>
                 {
                     completionSource.TrySetResult(true);
                 };
+
+                // Cancellation must unblock the await: stop the watcher and cancel the task
+                // (CR-H018). The Stopped handler also runs, but TrySetCanceled makes the await throw.
+                using var ctr = cancellationToken.Register(() =>
+                {
+                    try { watcher.Stop(); } catch { }
+                    completionSource.TrySetCanceled(cancellationToken);
+                });
 
                 watcher.Start();
                 await completionSource.Task;
@@ -235,17 +247,29 @@ namespace Birko.Communication.Bluetooth.Ports
 
                 watcher.EnumerationCompleted += (sender, args) =>
                 {
+                    // Do NOT bind this continuation to cancellationToken: if the token is cancelled
+                    // the continuation would be cancelled too and watcher.Stop()/TrySetResult would
+                    // never run, hanging the await forever (CR-H018). Cancellation is handled by the
+                    // registration below, which stops the watcher and cancels the awaited task.
                     Task.Delay(timeout).ContinueWith(t =>
                     {
                         watcher.Stop();
                         completionSource.TrySetResult(true);
-                    }, cancellationToken);
+                    });
                 };
 
                 watcher.Stopped += (sender, args) =>
                 {
                     completionSource.TrySetResult(true);
                 };
+
+                // Cancellation must unblock the await: stop the watcher and cancel the task
+                // (CR-H018). The Stopped handler also runs, but TrySetCanceled makes the await throw.
+                using var ctr = cancellationToken.Register(() =>
+                {
+                    try { watcher.Stop(); } catch { }
+                    completionSource.TrySetCanceled(cancellationToken);
+                });
 
                 watcher.Start();
                 await completionSource.Task;

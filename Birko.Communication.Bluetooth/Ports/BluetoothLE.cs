@@ -8,8 +8,10 @@ namespace Birko.Communication.Bluetooth.Ports
     /// <summary>
     /// Bluetooth LE port implementation with platform-specific support for Windows and Linux
     /// </summary>
-    public class BluetoothLE : AbstractPort
+    public class BluetoothLE : AbstractPort, IDisposable
     {
+        private bool _disposed;
+
 #if WINDOWS
         private Windows.Devices.Bluetooth.BluetoothLEDevice _device;
         private Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic _characteristic;
@@ -451,22 +453,29 @@ namespace Birko.Communication.Bluetooth.Ports
         /// <returns>True if enough data is available</returns>
         public override bool HasReadData(int size)
         {
+            // size < 0 means "all available" — true only when the buffer actually has data
+            // (CR-H016: ReadData.Count >= -1 was always true, even on an empty buffer).
+            if (size < 0)
+                return ReadData.Count > 0;
             return (ReadData.Count >= size);
         }
 
         /// <summary>
         /// Removes data from the read buffer
         /// </summary>
-        /// <param name="size">Number of bytes to remove</param>
+        /// <param name="size">Number of bytes to remove (-1 for all available)</param>
         /// <returns>The removed data</returns>
         public override byte[] RemoveReadData(int size)
         {
+            // Remove exactly what Read returned — for size < 0 that is the whole buffer, avoiding
+            // the ArgumentOutOfRangeException that RemoveRange(0, -1) used to throw (CR-H016).
             byte[] result = Read(size);
-            if (HasReadData(size))
+            if (result.Length > 0)
             {
                 lock (ReadData)
                 {
-                    ReadData.RemoveRange(0, size);
+                    int toRemove = Math.Min(result.Length, ReadData.Count);
+                    ReadData.RemoveRange(0, toRemove);
                 }
             }
             return result;
@@ -569,14 +578,49 @@ namespace Birko.Communication.Bluetooth.Ports
         }
 
         /// <summary>
-        /// Finalizer to ensure cleanup
+        /// Deterministically closes the port and releases the platform device (CR-H017).
+        /// Prefer this (or a <c>using</c>) over relying on the finalizer.
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <param name="disposing">
+        /// True on the deterministic <see cref="Dispose()"/> path (safe to join the read thread,
+        /// take locks, and dispose the managed WinRT device); false on the finalizer thread, where
+        /// only unmanaged handles may be released — never <see cref="Thread.Join(int)"/> or managed
+        /// object disposal (they may already be finalized and could deadlock).
+        /// </param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            if (disposing)
+            {
+                if (IsOpen())
+                {
+                    Close();
+                }
+            }
+            else
+            {
+#if LINUX
+                // Finalizer backstop: release only the raw socket fd (unmanaged).
+                CloseLinux();
+#endif
+            }
+        }
+
+        /// <summary>
+        /// Finalizer backstop — releases unmanaged handles only. Deterministic cleanup should go
+        /// through <see cref="Dispose()"/> / <see cref="Close"/> (CR-H017).
         /// </summary>
         ~BluetoothLE()
         {
-            if (IsOpen())
-            {
-                Close();
-            }
+            Dispose(false);
         }
     }
 }
