@@ -961,6 +961,10 @@
 			"path": "../../Framework.Tests/Birko.EventBus.MessageQueue.Tests"
 		},
 		{
+			"name": "Tests / Birko.EventBus.Outbox.Tests",
+			"path": "../../Framework.Tests/Birko.EventBus.Outbox.Tests"
+		},
+		{
 			"name": "Tests / Birko.Health.Azure.Tests",
 			"path": "../../Framework.Tests/Birko.Health.Azure.Tests"
 		},
