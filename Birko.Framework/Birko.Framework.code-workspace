@@ -913,6 +913,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Sync.CosmosDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Sync.ElasticSearch.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.ElasticSearch.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Tests"
 		},
