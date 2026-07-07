@@ -32,6 +32,12 @@ namespace Birko.Data.Migrations.SQL
         private readonly SqlMigrationSettings _settings;
 
         /// <summary>
+        /// The SQL connector, exposed so provider-specific subclasses can thread it into their own
+        /// migration context (e.g. TimescaleDB) for correct dialect SQL generation (CR-H069).
+        /// </summary>
+        protected AbstractConnector Connector => _connector;
+
+        /// <summary>
         /// Initializes a new instance of the SqlMigrationRunner class.
         /// </summary>
         /// <param name="connector">SQL connector from the store. Use <c>store.Connector</c> to pass it.</param>
