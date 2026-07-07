@@ -1,14 +1,15 @@
 # Birko.Communication
 
-Base communication interfaces and abstract classes for the Birko Framework communication layer.
+Base port abstraction for the Birko Framework communication layer — a byte-buffer
+`IPort` interface plus an `AbstractPort` base that manages a read buffer and process-data
+notifications. Transport-specific projects (Network, Hardware, Bluetooth, …) implement `IPort`.
 
 ## Features
 
-- Synchronous and asynchronous communication interfaces
-- Stream-based communication support
-- Event-driven architecture (Connected, Disconnected, DataReceived, ErrorOccurred)
-- Abstract base classes with connection management and error handling
-- Cancellation token support for async operations
+- Byte-oriented port interface (`Write` / `Read` / `Open` / `Close`)
+- Buffered reads with `HasReadData` / `RemoveReadData` / `GetData` / `Clear`
+- Process-data notification via `ProcessDataDelegate` (`SubscribeProcessData` / `UnSubscribeProcessData`)
+- `AbstractPort` base implementing the buffer bookkeeping; concrete ports override the four transport members
 
 ## Installation
 
@@ -23,47 +24,51 @@ dotnet add package Birko.Communication
 ## Usage
 
 ```csharp
-using Birko.Communication;
+using Birko.Communication.Ports;
 
-public class MyCommunicator : AbstractCommunicator, ICommunicator
+public class MyPort : AbstractPort
 {
-    public override void Connect()
-    {
-        // Implementation
-        OnConnected();
-    }
+    public override void Open() { /* open the transport */ }
+    public override void Close() { /* close the transport */ }
+    public override bool IsOpen() => /* transport state */;
 
-    public override void Disconnect()
-    {
-        // Implementation
-        OnDisconnected();
-    }
+    public override void Write(byte[] data) { /* send bytes */ }
 
-    public override void Send(byte[] data)
-    {
-        // Send implementation
-    }
+    // Read up to `size` bytes (size < 0 = read all buffered data).
+    public override byte[] Read(int size) { /* ... */ return Array.Empty<byte>(); }
 
-    public override byte[] Receive()
+    public override bool HasReadData(int size) => ReadData.Count >= size;
+
+    public override byte[] RemoveReadData(int size)
     {
-        // Receive implementation
-        return new byte[0];
+        var data = Read(size);
+        ReadData.RemoveRange(0, data.Length);
+        return data;
     }
 }
 ```
 
 ## API Reference
 
-### Interfaces
+### `IPort`
 
-- **ICommunicator** - Base synchronous interface: `Connect()`, `Disconnect()`, `Send(byte[])`, `Receive()`, `IsConnected`
-- **IAsyncCommunicator** - Async interface: `ConnectAsync()`, `DisconnectAsync()`, `SendAsync(byte[])`, `ReceiveAsync()`
-- **IStreamCommunicator** - Stream-based: `GetStream()`, `ReadStream()`, `WriteStream()`
+- **Transport:** `Open()`, `Close()`, `IsOpen()`, `Write(byte[])`, `Read(int size)`
+- **Buffered reads:** `HasReadData(int size)`, `RemoveReadData(int size)`, `GetData()`, `Clear()`, `IsEmpty()`
+- **Notifications:** `SubscribeProcessData(ProcessDataDelegate)`, `UnSubscribeProcessData(ProcessDataDelegate)`
 
-### Abstract Classes
+### `AbstractPort : IPort`
 
-- **AbstractCommunicator** - Base for sync communicators with connection management and event handling
-- **AbstractAsyncCommunicator** - Base for async communicators with cancellation token support
+Base class holding the `ReadData` buffer and `PortSettings`. It implements `IsOpen`, `Clear`,
+`IsEmpty`, `GetData`, the subscribe/unsubscribe pair, and `InvokeProcessData`; concrete ports
+implement the abstract `Write`, `Read`, `Open`, `Close`, `HasReadData`, and `RemoveReadData`.
+
+### `PortSettings`
+
+`Name` + `GetID()`. Subclass for transport-specific configuration.
+
+### `ProcessDataDelegate`
+
+Parameterless delegate invoked (via `InvokeProcessData`) after the port has processed data.
 
 ## Related Projects
 

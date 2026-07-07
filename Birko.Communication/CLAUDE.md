@@ -1,61 +1,32 @@
 # Birko.Communication
 
 ## Overview
-Base communication interfaces and abstract classes for the Birko Framework communication layer.
-
-## Project Location
-`C:\Source\Birko.Communication\`
+Base **port** abstraction for the Birko Framework communication layer: the byte-buffer `IPort`
+interface and the `AbstractPort` base class. Transport-specific projects (Network, Hardware,
+Bluetooth, …) implement `IPort` on top of their wire protocol.
 
 ## Purpose
-- Define communication interfaces
-- Provide abstract base classes
-- Establish patterns for communication protocols
-- Support for various communication methods
+- Define the byte-oriented port interface (`IPort`)
+- Provide an `AbstractPort` base that manages the read buffer + process-data notifications
+- Establish a common shape for transport implementations
 
-## Interfaces
+## Public Surface (namespace `Birko.Communication.Ports`)
 
-### ICommunicator
-Base interface for all communicators:
-- `Connect()` - Establish connection
-- `Disconnect()` - Close connection
-- `Send(byte[] data)` - Send data
-- `Receive()` - Receive data
-- `IsConnected` - Connection status
+### `IPort`
+- **Transport:** `Open()`, `Close()`, `IsOpen()`, `Write(byte[] data)`, `Read(int size)` (`size < 0` = read all buffered)
+- **Buffered reads:** `HasReadData(int size)`, `RemoveReadData(int size)`, `GetData()`, `Clear()`, `IsEmpty()`
+- **Notifications:** `SubscribeProcessData(ProcessDataDelegate)`, `UnSubscribeProcessData(ProcessDataDelegate)`
 
-### IAsyncCommunicator
-Asynchronous communication:
-- `ConnectAsync()`
-- `DisconnectAsync()`
-- `SendAsync(byte[] data)`
-- `ReceiveAsync()`
+### `AbstractPort : IPort`
+Holds the `ReadData` (`List<byte>`) buffer and a `PortSettings`. Implements `IsOpen`, `Clear`,
+`IsEmpty`, `GetData`, the subscribe/unsubscribe pair, and `InvokeProcessData`. Concrete ports
+override the abstract `Write`, `Read`, `Open`, `Close`, `HasReadData`, and `RemoveReadData`.
 
-### IStreamCommunicator
-Stream-based communication:
-- `GetStream()` - Get communication stream
-- `ReadStream()` - Read from stream
-- `WriteStream()` - Write to stream
+### `PortSettings`
+`Name` property + `GetID()`. Subclass for transport-specific configuration.
 
-## Abstract Classes
-
-### AbstractCommunicator
-Base class for synchronous communicators:
-- Connection management
-- Event handling
-- Error handling
-
-### AbstractAsyncCommunicator
-Base class for asynchronous communicators:
-- Async connection management
-- Async event handling
-- Cancellation token support
-
-## Events
-
-### Common Events
-- `Connected` - Raised when connected
-- `Disconnected` - Raised when disconnected
-- `DataReceived` - Raised when data is received
-- `ErrorOccurred` - Raised when an error occurs
+### `ProcessDataDelegate`
+Parameterless delegate invoked via `InvokeProcessData()` after the port processes data.
 
 ## Dependencies
 - .NET 10.0
@@ -75,47 +46,34 @@ Different communication protocols have their own implementations:
 ## Implementation Example
 
 ```csharp
-using Birko.Communication;
+using Birko.Communication.Ports;
 
-public class MyCommunicator : AbstractCommunicator, ICommunicator
+public class MyPort : AbstractPort
 {
-    public override void Connect()
-    {
-        // Implementation
-        OnConnected();
-    }
+    public override void Open() { /* open the transport */ }
+    public override void Close() { /* close the transport */ }
+    public override bool IsOpen() => /* transport state */;
 
-    public override void Disconnect()
-    {
-        // Implementation
-        OnDisconnected();
-    }
+    public override void Write(byte[] data) { /* send bytes */ }
+    public override byte[] Read(int size) { /* read up to size (size < 0 = all) */ return Array.Empty<byte>(); }
 
-    public override void Send(byte[] data)
-    {
-        // Send implementation
-    }
+    public override bool HasReadData(int size) => ReadData.Count >= size;
 
-    public override byte[] Receive()
+    public override byte[] RemoveReadData(int size)
     {
-        // Receive implementation
-        return new byte[0];
-    }
-
-    protected virtual void OnConnected()
-    {
-        Connected?.Invoke(this, EventArgs.Empty);
+        var data = Read(size);
+        ReadData.RemoveRange(0, data.Length);
+        return data;
     }
 }
 ```
 
 ## Best Practices
 
-1. **Resource cleanup** - Always implement IDisposable
-2. **Thread safety** - Use locks for shared resources
-3. **Error handling** - Always handle communication errors
-4. **Timeouts** - Implement connection and operation timeouts
-5. **Reconnection** - Implement automatic reconnection logic
+1. **Resource cleanup** - Ports holding OS/device handles should implement `IDisposable` (dispose → `Close`)
+2. **Thread safety** - Guard the shared `ReadData` buffer when reading/writing from multiple threads
+3. **Error handling** - Surface transport errors from `Open`/`Read`/`Write`
+4. **Negative size = drain all** - Honour `size < 0` consistently across `Read`/`HasReadData`/`RemoveReadData`
 
 ## Maintenance
 
