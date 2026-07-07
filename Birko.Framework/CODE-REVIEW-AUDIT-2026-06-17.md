@@ -2049,7 +2049,7 @@ Verdict: the issue is genuine and actionable (a random GUID is the wrong default
 - **Title:** Knowledge item records IsRemoteDeleted/IsLocalDeleted=true for items merely absent from a directional fetch
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:489`
 - **Category:** bug · **Verification:** verified real (medium)
-- **Status:** open
+- **Status:** done — `CreateKnowledgeItem` now requires positive evidence to flag a side deleted: `IsLocalDeleted`/`IsRemoteDeleted` are only true when the entity was **previously known** (`hasKnowledge`, already threaded from the loop) AND is now absent on that side. A first-seen one-sided (or fetch-predicate-excluded) item is no longer persisted as "deleted", so it can't later drive a spurious conflict or erroneous delete. New tests cover first-seen-one-sided (not deleted) vs previously-known-now-absent (deleted).
 - **Detail:** CreateKnowledgeItem is called for every processed GUID (including Skip actions) and sets IsLocalDeleted = (localItem == null) and IsRemoteDeleted = (remoteItem == null) purely from presence in the fetched dictionaries. During a Download-only or Upload-only sync, or when a fetch predicate excludes an item, an entity that simply wasn't fetched from one side gets persisted as 'deleted' on that side. On the next bidirectional sync DetermineSyncAction reads knowledgeItem.IsRemoteDeleted/IsLocalDeleted and can escalate to a Delete or a false Conflict, causing real data loss / spurious conflicts.
 - **Fix:** Only mark a side as deleted when there is positive evidence of deletion (e.g. previously known via knowledge AND now absent in a full sync), not from absence in a single directional/filtered fetch. Consider not writing knowledge for Skip actions.
 - **Verify reasoning:** Confirmed by reading C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers\TenantSyncProvider.cs.
@@ -2064,7 +2064,7 @@ Net: the central claim (deletion inferred from mere fetch-absence, persisted, th
 - **Title:** ApplyConflictResolutionAsync swallows all exceptions with an incorrect comment
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:782`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — removed the swallowing `try/catch` in `ApplyConflictResolutionAsync`, so a failed conflict-resolution write now propagates to the caller's per-item `try/catch` (which records a `SyncError` and increments `progress.Errors`), exactly like the sibling Create/Update/Delete branches. No more silent data loss reported as success. New test asserts a throwing store during `UseRemote` propagates and doesn't bump `UpdatedItems`.
 - **Detail:** The catch block swallows every exception with the comment 'Error already handled in calling method'. It is not: the conflict branch in ExecuteSyncAsync calls ApplyConflictResolutionAsync and only its own catch covers exceptions, but those are caught here first and discarded. A failed conflict write (UpdateAsync to local/remote throwing) is silently lost — no SyncError is recorded, progress.UpdatedItems is not incremented, and result.Success stays true. Sync reports success while the conflict resolution did not persist.
 - **Fix:** Let the exception propagate to the caller's try/catch (remove the swallowing catch), or record a SyncError here so the failure is surfaced.
 - **Verify reasoning:** Confirmed by reading the actual code in C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers\TenantSyncProvider.cs.
