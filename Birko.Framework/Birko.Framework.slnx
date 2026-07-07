@@ -206,6 +206,7 @@
     <Project Path="../../Framework.Tests/Birko.Security.AzureKeyVault.Tests/Birko.Security.AzureKeyVault.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Security.OAuth.Server.Tests/Birko.Security.OAuth.Server.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Rules.Tests/Birko.Rules.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Patterns.Tests/Birko.Data.Patterns.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Processors.Tests/Birko.Data.Processors.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Tests/Birko.Health.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
