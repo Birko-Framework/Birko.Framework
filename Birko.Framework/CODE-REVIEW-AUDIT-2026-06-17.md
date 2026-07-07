@@ -876,7 +876,7 @@ Caveat (does not change correctness): the AbstractPort base class lives in the s
 - **Title:** RC5 encode/decode cannot round-trip (leading zero-duration entry)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.IR\Protocols/Rc5Protocol.cs:42-52,133-149,68-80`
 - **Category:** bug · **Verification:** verified real (high)
-- **Status:** open
+- **Status:** done — Decode now tolerates the leading 0µs mark Encode emits (RC5 S1=1 starts space-then-mark); added a Theory round-trip test asserting address/command/toggle survive.
 - **Detail:** The RC5 frame always starts with S1=1 (bit 13 is set: `frame = (1 << 13) | ...`). For a '1' bit, RC5 Manchester is space-then-mark, so the first half-bit emitted is a space (newLevel=false). In AddTransition, the `durations.Count == 0` branch handles a leading space by adding a zero-length mark first: `durations.Add(0)`. So Encode() always produces `Durations[0] == 0`. Decode() iterates durations computing `slots = Math.Round(duration / HalfBit)`; for the 0 entry slots = 0, which hits `if (slots < 1 || slots > 3) return null;`. Result: a freshly-encoded RC5 timing always decodes to null — the protocol cannot decode its own output. (NEC and Samsung both have passing round-trip tests; RC5 has none, so this is uncaught.)
 - **Fix:** Either strip a leading zero-duration mark before returning from Encode (real IR transmitters can't emit a 0µs mark anyway), or have Decode skip/tolerate a leading 0-duration entry. Add an Encode→Decode round-trip test (and a toggle/address/command preservation assertion) mirroring the NEC/Samsung tests.
 - **Verify reasoning:** Confirmed REAL and empirically reproduced by compiling/running the actual Rc5Protocol.cs (net10.0).
