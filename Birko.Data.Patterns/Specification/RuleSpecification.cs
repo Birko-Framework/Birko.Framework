@@ -36,9 +36,12 @@ public class RuleSpecification<T> : Specification<T> where T : class
     }
 
     /// <summary>
-    /// Override to use RuleEvaluator for in-memory evaluation (more accurate than compiled expression for complex types).
+    /// Overrides the base compiled-expression evaluation to use the RuleEvaluator for in-memory
+    /// evaluation (more accurate than the compiled expression for complex types). Must be an
+    /// override (not `new`) so callers holding an ISpecification&lt;T&gt;/Specification&lt;T&gt;
+    /// reference — including And/Or/Not combinators and collections — dispatch here (CR-H074).
     /// </summary>
-    public new bool IsSatisfiedBy(T entity)
+    public override bool IsSatisfiedBy(T entity)
     {
         var context = new ObjectRuleContext<T>(entity);
         var result = _evaluator.Evaluate(_rule, context);

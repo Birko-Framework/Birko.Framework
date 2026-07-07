@@ -18,7 +18,7 @@ public abstract class Specification<T> : ISpecification<T>
     public abstract Expression<Func<T, bool>> ToExpression();
 
     /// <inheritdoc />
-    public bool IsSatisfiedBy(T entity)
+    public virtual bool IsSatisfiedBy(T entity)
     {
         _compiledExpression ??= ToExpression().Compile();
         return _compiledExpression(entity);
