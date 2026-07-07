@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Birko.Data.Patterns.IndexManagement;
 using Birko.Data.Patterns.Schema;
 using Microsoft.Azure.Cosmos;
@@ -87,37 +88,47 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
 
     public void RenameField(string collectionName, string oldName, string newName)
     {
-        // Cosmos DB does not have a native rename. Use a query to update documents.
+        // Cosmos DB has no native rename, so copy each document's OLD value to the new field and
+        // remove the old field. The query reads the actual old value (and the partition-key field)
+        // so the value is preserved (CR-H056: it used to write a debug placeholder — data loss) and
+        // the point patch targets the correct partition, not the id (CR-H055).
         var container = _database.GetContainer(collectionName);
+        var pkPath = container.ReadContainerAsync().GetAwaiter().GetResult().Resource.PartitionKeyPath ?? "/id";
+        var pkProperty = pkPath.TrimStart('/').Split('/')[0];
+        if (string.IsNullOrEmpty(pkProperty)) pkProperty = "id";
 
-        // For bulk rename, use a query-based approach
-        var query = $"SELECT c.id FROM c";
-        var iterator = container.GetItemQueryIterator<dynamic>(new QueryDefinition(query));
+        var projection = new List<string> { "c.id", $"c[\"{oldName}\"] AS oldValue" };
+        if (pkProperty != "id") projection.Add($"c.{pkProperty}");
+        var query = $"SELECT {string.Join(", ", projection)} FROM c WHERE IS_DEFINED(c[\"{oldName}\"])";
+        var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
 
         while (iterator.HasMoreResults)
         {
             var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
             foreach (var item in response)
             {
-                string? id = item.id?.ToString();
-                if (id != null)
+                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+                if (id == null) continue;
+
+                var oldValue = item.TryGetProperty("oldValue", out var v) ? v : default;
+                var pk = pkProperty == "id"
+                    ? new PartitionKey(id)
+                    : CosmosDBDataMigrator.BuildPartitionKey(item, pkProperty);
+                try
                 {
-                    try
-                    {
-                        container.PatchItemAsync<dynamic>(
-                            id,
-                            new PartitionKey(id),
-                            new[]
-                            {
-                                PatchOperation.Set($"/{newName}", $"[RESTRICT SCHEMA] renamed from {oldName}"),
-                                PatchOperation.Remove($"/{oldName}")
-                            }
-                        ).GetAwaiter().GetResult();
-                    }
-                    catch
-                    {
-                        // Skip documents that don't have the old field
-                    }
+                    container.PatchItemAsync<dynamic>(
+                        id,
+                        pk,
+                        new[]
+                        {
+                            PatchOperation.Set($"/{newName}", oldValue),
+                            PatchOperation.Remove($"/{oldName}")
+                        }
+                    ).GetAwaiter().GetResult();
+                }
+                catch
+                {
+                    // Skip documents that don't have the old field / fail to patch.
                 }
             }
         }

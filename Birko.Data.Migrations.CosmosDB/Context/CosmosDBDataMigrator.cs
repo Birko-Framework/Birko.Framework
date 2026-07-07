@@ -11,9 +11,59 @@ public class CosmosDBDataMigrator : IDataMigrator
 {
     private readonly Database _database;
 
+    // Caches each container's top-level partition-key property name so point operations use the
+    // real partition key rather than assuming it is /id (CR-H055).
+    private readonly Dictionary<string, string> _partitionKeyProperties = new();
+
     public CosmosDBDataMigrator(Database database)
     {
         _database = database ?? throw new ArgumentNullException(nameof(database));
+    }
+
+    /// <summary>
+    /// Returns the top-level partition-key property name for a container (e.g. "/tenantId" -&gt;
+    /// "tenantId"), read from the container definition and cached. Only yields "id" when the
+    /// container's partition key path actually is /id.
+    /// </summary>
+    private string GetPartitionKeyProperty(Container container, string collection)
+    {
+        if (_partitionKeyProperties.TryGetValue(collection, out var cached))
+        {
+            return cached;
+        }
+
+        var path = container.ReadContainerAsync().GetAwaiter().GetResult().Resource.PartitionKeyPath ?? "/id";
+        var property = path.TrimStart('/').Split('/')[0];
+        if (string.IsNullOrEmpty(property)) property = "id";
+        _partitionKeyProperties[collection] = property;
+        return property;
+    }
+
+    /// <summary>
+    /// Builds a typed PartitionKey from a document's partition-key field (CR-H055). Uses
+    /// System.Text.Json to match the CosmosDB store's serializer convention (CosmosGuidIdSerializer),
+    /// not Newtonsoft.
+    /// </summary>
+    internal static PartitionKey BuildPartitionKey(JsonElement item, string property)
+    {
+        if (!item.TryGetProperty(property, out var el))
+        {
+            return PartitionKey.Null;
+        }
+        return el.ValueKind switch
+        {
+            JsonValueKind.String => new PartitionKey(el.GetString()),
+            JsonValueKind.Number => new PartitionKey(el.GetDouble()),
+            JsonValueKind.True => new PartitionKey(true),
+            JsonValueKind.False => new PartitionKey(false),
+            _ => PartitionKey.Null
+        };
+    }
+
+    private PartitionKey ResolvePartitionKey(Container container, string collection, string id, JsonElement item)
+    {
+        var pkProperty = GetPartitionKeyProperty(container, collection);
+        return pkProperty == "id" ? new PartitionKey(id) : BuildPartitionKey(item, pkProperty);
     }
 
     public void UpdateDocuments(string collection, string filterJson, IDictionary<string, object> updates)
@@ -25,22 +75,24 @@ public class CosmosDBDataMigrator : IDataMigrator
             PatchOperation.Set($"/{kvp.Key}", kvp.Value)
         ).ToArray();
 
+        var pkProperty = GetPartitionKeyProperty(container, collection);
+        var projection = pkProperty == "id" ? "c.id" : $"c.id, c.{pkProperty}";
         var whereClause = ParseFilterToSql(filterJson);
         var query = string.IsNullOrEmpty(whereClause)
-            ? "SELECT c.id FROM c"
-            : $"SELECT c.id FROM c WHERE {whereClause}";
+            ? $"SELECT {projection} FROM c"
+            : $"SELECT {projection} FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<dynamic>(new QueryDefinition(query));
+        var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
 
         while (iterator.HasMoreResults)
         {
             var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
             foreach (var item in response)
             {
-                string? id = item.id?.ToString();
+                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
                 if (id != null)
                 {
-                    container.PatchItemAsync<dynamic>(id, new PartitionKey(id), patchOperations)
+                    container.PatchItemAsync<dynamic>(id, ResolvePartitionKey(container, collection, id, item), patchOperations)
                         .GetAwaiter().GetResult();
                 }
             }
@@ -50,22 +102,24 @@ public class CosmosDBDataMigrator : IDataMigrator
     public void DeleteDocuments(string collection, string filterJson)
     {
         var container = _database.GetContainer(collection);
+        var pkProperty = GetPartitionKeyProperty(container, collection);
+        var projection = pkProperty == "id" ? "c.id" : $"c.id, c.{pkProperty}";
         var whereClause = ParseFilterToSql(filterJson);
         var query = string.IsNullOrEmpty(whereClause)
-            ? "SELECT c.id FROM c"
-            : $"SELECT c.id FROM c WHERE {whereClause}";
+            ? $"SELECT {projection} FROM c"
+            : $"SELECT {projection} FROM c WHERE {whereClause}";
 
-        var iterator = container.GetItemQueryIterator<dynamic>(new QueryDefinition(query));
+        var iterator = container.GetItemQueryIterator<JsonElement>(new QueryDefinition(query));
 
         while (iterator.HasMoreResults)
         {
             var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
             foreach (var item in response)
             {
-                string? id = item.id?.ToString();
+                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
                 if (id != null)
                 {
-                    container.DeleteItemAsync<dynamic>(id, new PartitionKey(id))
+                    container.DeleteItemAsync<dynamic>(id, ResolvePartitionKey(container, collection, id, item))
                         .GetAwaiter().GetResult();
                 }
             }
@@ -90,17 +144,17 @@ public class CosmosDBDataMigrator : IDataMigrator
         var sourceContainer = _database.GetContainer(sourceCollection);
         var targetContainer = _database.GetContainer(targetCollection);
 
-        var iterator = sourceContainer.GetItemQueryIterator<dynamic>(new QueryDefinition("SELECT * FROM c"));
+        var iterator = sourceContainer.GetItemQueryIterator<JsonElement>(new QueryDefinition("SELECT * FROM c"));
 
         while (iterator.HasMoreResults)
         {
             var response = iterator.ReadNextAsync().GetAwaiter().GetResult();
             foreach (var item in response)
             {
-                string? id = item.id?.ToString();
+                string? id = item.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
                 if (id != null)
                 {
-                    targetContainer.UpsertItemAsync(item, new PartitionKey(id))
+                    targetContainer.UpsertItemAsync(item, ResolvePartitionKey(targetContainer, targetCollection, id, item))
                         .GetAwaiter().GetResult();
                 }
             }
@@ -112,12 +166,30 @@ public class CosmosDBDataMigrator : IDataMigrator
         if (documents == null) return;
 
         var container = _database.GetContainer(collection);
+        var pkProperty = GetPartitionKeyProperty(container, collection);
         var tasks = documents
             .Where(d => d != null && d.Count > 0)
             .Select(doc =>
             {
                 var id = doc.TryGetValue("id", out var idVal) ? idVal?.ToString() : Guid.NewGuid().ToString();
-                return container.CreateItemAsync(doc, new PartitionKey(id));
+                // Use the container's real partition key, not the id (CR-H055). Falls back to id when
+                // the PK path is /id or the document omits the partition-key field.
+                PartitionKey pk;
+                if (pkProperty != "id" && doc.TryGetValue(pkProperty, out var pkVal) && pkVal != null)
+                {
+                    pk = pkVal switch
+                    {
+                        bool b => new PartitionKey(b),
+                        string s => new PartitionKey(s),
+                        _ when pkVal is IConvertible => new PartitionKey(Convert.ToDouble(pkVal)),
+                        _ => new PartitionKey(pkVal.ToString())
+                    };
+                }
+                else
+                {
+                    pk = new PartitionKey(id);
+                }
+                return container.CreateItemAsync(doc, pk);
             }).ToArray();
 
         if (tasks.Length > 0)
@@ -126,7 +198,7 @@ public class CosmosDBDataMigrator : IDataMigrator
         }
     }
 
-    private static string ParseFilterToSql(string? filterJson)
+    internal static string ParseFilterToSql(string? filterJson)
     {
         if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
             return string.Empty;
@@ -165,7 +237,7 @@ public class CosmosDBDataMigrator : IDataMigrator
         return string.Join(" AND ", conditions);
     }
 
-    private static string FormatSqlValue(object? value)
+    internal static string FormatSqlValue(object? value)
     {
         if (value == null) return "null";
         if (value is string s) return $"'{s.Replace("'", "''")}'";
@@ -174,7 +246,7 @@ public class CosmosDBDataMigrator : IDataMigrator
         return value.ToString() ?? "null";
     }
 
-    private static object? ExtractValue(JsonElement element)
+    internal static object? ExtractValue(JsonElement element)
     {
         return element.ValueKind switch
         {
