@@ -146,6 +146,10 @@ namespace Birko.Data.SQL.Connectors
                 case DbType.UInt64:
                     return "BIGINT";
                 case DbType.Single:
+                    // A C# float grouped with SByte/Byte generated a TINYINT (0-255) column,
+                    // truncating the value and dropping negatives/fractions. REAL is SQL Server's
+                    // 4-byte single-precision float (CR-H087).
+                    return "REAL";
                 case DbType.SByte:
                 case DbType.Byte:
                     return "TINYINT";
