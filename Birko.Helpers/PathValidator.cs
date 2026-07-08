@@ -46,8 +46,10 @@ namespace Birko.Helpers
             // Normalize the combined path
             var normalizedCombinedPath = Path.GetFullPath(combinedPath);
 
-            // Check if the combined path starts with the base path (prevents directory traversal)
-            if (!normalizedCombinedPath.StartsWith(normalizedBasePath, StringComparison.OrdinalIgnoreCase))
+            // Check if the combined path is contained within the base path (prevents directory traversal).
+            // Uses boundary-aware containment so a sibling-prefixed path like 'C:\data-evil\x'
+            // is not wrongly accepted as 'inside' base 'C:\data' (raw StartsWith would).
+            if (!PathHelper.IsUnderDirectory(normalizedCombinedPath, normalizedBasePath))
             {
                 throw new ArgumentException(
                     $"Path traversal detected. The combined path '{combinedPath}' attempts to access directories outside the base path '{basePath}'.",
@@ -97,8 +99,9 @@ namespace Birko.Helpers
             // Normalize the combined path
             var normalizedCombinedPath = Path.GetFullPath(combinedPath);
 
-            // Verify the combined path is within the base path
-            if (!normalizedCombinedPath.StartsWith(normalizedBasePath, StringComparison.OrdinalIgnoreCase))
+            // Verify the combined path is within the base path (boundary-aware containment,
+            // so a sibling-prefixed base can't be spoofed — see PathHelper.IsUnderDirectory).
+            if (!PathHelper.IsUnderDirectory(normalizedCombinedPath, normalizedBasePath))
             {
                 throw new ArgumentException(
                     $"Path traversal detected. The path '{userPath}' attempts to access directories outside the base path.",
@@ -181,7 +184,9 @@ namespace Birko.Helpers
             var combinedPath = Path.Combine(normalizedBasePath, sanitizedUserPath);
             var normalizedCombinedPath = Path.GetFullPath(combinedPath);
 
-            if (!normalizedCombinedPath.StartsWith(normalizedBasePath, StringComparison.OrdinalIgnoreCase))
+            // Boundary-aware containment (see PathHelper.IsUnderDirectory) — a raw StartsWith
+            // would wrongly accept a sibling-prefixed base such as 'C:\data-evil' under 'C:\data'.
+            if (!PathHelper.IsUnderDirectory(normalizedCombinedPath, normalizedBasePath))
             {
                 throw new ArgumentException(
                     $"Path traversal detected. The path '{userPath}' attempts to access directories outside the base path.",
