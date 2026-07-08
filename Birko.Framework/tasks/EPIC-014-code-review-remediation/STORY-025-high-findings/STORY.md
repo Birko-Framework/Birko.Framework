@@ -1,7 +1,7 @@
 ---
 id: STORY-025
 parent: EPIC-014
-status: in-progress
+status: done
 created: 2026-06-18
 source: CODE-REVIEW-AUDIT-2026-06-17.md
 severity: high
@@ -13,9 +13,9 @@ finding-ids: CR-H001 … CR-H147
 
 ## Progress
 
-**146 / 147 closed** (CR-H001 … CR-H146, contiguous) as of 2026-07-08. Remaining open: **CR-H147** (1).
-Per-finding status is tracked in the audit doc (each finding's `Status` flips to `done` as it lands); this line is
-just a rollup pulse — see [`CODE-REVIEW-AUDIT-2026-06-17.md`](../../../CODE-REVIEW-AUDIT-2026-06-17.md) for detail.
+**147 / 147 closed** (CR-H001 … CR-H147) as of 2026-07-08 — **STORY COMPLETE**. Every high finding is fixed
+with a regression test (or, for already-remediated/gap findings, closed with the appropriate coverage). Per-finding
+detail is in [`CODE-REVIEW-AUDIT-2026-06-17.md`](../../../CODE-REVIEW-AUDIT-2026-06-17.md).
 
 ## User story
 
