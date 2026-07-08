@@ -120,6 +120,40 @@ public class VaultSecretProviderTests
         result.Value.Should().Be("my-secret-value");
         result.Version.Should().Be("3");
         result.Metadata.Should().ContainKey("env").WhoseValue.Should().Be("prod");
+        result.CreatedAt.Should().NotBeNull();
+        // CR-H140: KV2 version metadata exposes only created_time, so UpdatedAt must NOT be a
+        // copy of CreatedAt — it is null when no genuine update timestamp is present.
+        result.UpdatedAt.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetSecretWithMetadataAsync_Kv2_UpdatedTimePopulatesUpdatedAt()
+    {
+        var vaultResponse = JsonSerializer.Serialize(new
+        {
+            data = new
+            {
+                data = new { value = "v" },
+                metadata = new
+                {
+                    version = 2,
+                    created_time = "2026-03-15T10:00:00Z",
+                    updated_time = "2026-04-20T08:30:00Z"
+                }
+            }
+        });
+
+        var handler = new FakeHttpHandler(HttpStatusCode.OK, vaultResponse);
+        var httpClient = new HttpClient(handler);
+        var settings = new VaultSettings { Address = "http://localhost:8200", Token = "test", KvVersion = 2 };
+        using var provider = new VaultSecretProvider(settings, httpClient);
+
+        var result = await provider.GetSecretWithMetadataAsync("myapp/db");
+
+        result.Should().NotBeNull();
+        result!.CreatedAt.Should().NotBeNull();
+        result.UpdatedAt.Should().NotBeNull();
+        result.UpdatedAt.Should().NotBe(result.CreatedAt, "UpdatedAt must reflect updated_time, not created_time");
     }
 
     [Fact]
