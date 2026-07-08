@@ -51,21 +51,25 @@ namespace Birko.Models.Contracts
         public const string Separator = "/";
 
         /// <summary>
-        /// Computes Path and Depth for a node given its parent.
-        /// The node's Guid must be set before calling.
+        /// Computes Path and Depth for a node given its id and parent.
+        /// The <paramref name="id"/> (the node's own identity) must be non-null.
         /// If the node implements INamedHierarchical, NamePath is also computed.
         /// </summary>
-        public static void ComputePath<T>(T node, T? parent) where T : Data.Models.AbstractModel, IHierarchical
+        /// <remarks>
+        /// The id is passed in rather than read off an <c>AbstractModel</c> base so this helper stays
+        /// inside the project's zero-dependency contract — it must not reference Birko.Data.Core.
+        /// </remarks>
+        public static void ComputePath<T>(T node, Guid? id, T? parent) where T : class, IHierarchical
         {
-            var id = node.Guid ?? throw new InvalidOperationException("Node Guid must be set before computing path.");
+            var nodeId = id ?? throw new InvalidOperationException("Node id must be set before computing path.");
             if (parent is not null)
             {
-                node.Path = $"{parent.Path}{Separator}{id}";
+                node.Path = $"{parent.Path}{Separator}{nodeId}";
                 node.Depth = parent.Depth + 1;
             }
             else
             {
-                node.Path = $"{Separator}{id}";
+                node.Path = $"{Separator}{nodeId}";
                 node.Depth = 0;
             }
 
