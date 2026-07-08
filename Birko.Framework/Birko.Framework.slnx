@@ -198,6 +198,7 @@
     <Project Path="../../Framework.Tests/Birko.Structures.Tests/Birko.Structures.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.Tests/Birko.BackgroundJobs.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.MessageQueue.Tests/Birko.MessageQueue.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.MessageQueue.InMemory.Tests/Birko.MessageQueue.InMemory.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.MessageQueue.Redis.Tests/Birko.MessageQueue.Redis.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.EventBus.MessageQueue.Tests/Birko.EventBus.MessageQueue.Tests.csproj" />

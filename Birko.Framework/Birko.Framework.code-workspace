@@ -985,6 +985,10 @@
 			"path": "../../Framework.Tests/Birko.Localization.Tests"
 		},
 		{
+			"name": "Tests / Birko.MessageQueue.InMemory.Tests",
+			"path": "../../Framework.Tests/Birko.MessageQueue.InMemory.Tests"
+		},
+		{
 			"name": "Tests / Birko.MessageQueue.Redis.Tests",
 			"path": "../../Framework.Tests/Birko.MessageQueue.Redis.Tests"
 		},
