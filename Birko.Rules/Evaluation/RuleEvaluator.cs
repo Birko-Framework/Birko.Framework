@@ -68,20 +68,34 @@ public class RuleEvaluator : IRuleEvaluator
         if (group.Rules.Count == 0)
             return RuleResult.NoMatch(group);
 
+        // Skip disabled children so a disabled child neither fails an AND group nor is otherwise
+        // treated as a non-match — mirroring RuleExpressionConverter.BuildGroupExpression, which
+        // drops disabled children from the AndAlso/OrElse combination (the two paths must agree).
+        var evaluatedAny = false;
+
         if (group.Logic == LogicOperator.And)
         {
             foreach (var child in group.Rules)
             {
+                if (!child.IsEnabled)
+                    continue;
+
+                evaluatedAny = true;
                 var result = Evaluate(child, context);
                 if (!result.IsMatch)
                     return RuleResult.NoMatch(group);
             }
-            return RuleResult.Match(group);
+            // An empty or all-disabled group carries no effective constraint; treated as NoMatch,
+            // consistent with the empty-group rule above.
+            return evaluatedAny ? RuleResult.Match(group) : RuleResult.NoMatch(group);
         }
         else // Or
         {
             foreach (var child in group.Rules)
             {
+                if (!child.IsEnabled)
+                    continue;
+
                 var result = Evaluate(child, context);
                 if (result.IsMatch)
                     return RuleResult.Match(group, result.ActualValue);

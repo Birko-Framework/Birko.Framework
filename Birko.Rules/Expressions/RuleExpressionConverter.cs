@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -177,31 +178,29 @@ public static class RuleExpressionConverter
 
     // ── Property resolution (supports nested: "Address.City") ──
 
-    private static readonly Dictionary<(Type, string), PropertyInfo?> PropertyCache = [];
+    // ConcurrentDictionary: RuleExpressionConverter is a static class whose ToExpression entry points
+    // can be called concurrently; a plain Dictionary read+written here without synchronization is a
+    // documented corruption hazard. Mirrors ObjectRuleContext.PropertyCache.
+    private static readonly ConcurrentDictionary<(Type, string), PropertyInfo?> PropertyCache = new();
 
     private static PropertyInfo? ResolveProperty(Type type, string field)
     {
-        var key = (type, field);
-        if (PropertyCache.TryGetValue(key, out var cached))
-            return cached;
-
-        var parts = field.Split('.');
-        PropertyInfo? prop = null;
-        var currentType = type;
-
-        foreach (var part in parts)
+        return PropertyCache.GetOrAdd((type, field), static key =>
         {
-            prop = currentType.GetProperty(part, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-            if (prop is null)
-            {
-                PropertyCache[key] = null;
-                return null;
-            }
-            currentType = prop.PropertyType;
-        }
+            var parts = key.Item2.Split('.');
+            PropertyInfo? prop = null;
+            var currentType = key.Item1;
 
-        PropertyCache[key] = prop;
-        return prop;
+            foreach (var part in parts)
+            {
+                prop = currentType.GetProperty(part, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (prop is null)
+                    return null;
+                currentType = prop.PropertyType;
+            }
+
+            return prop;
+        });
     }
 
     private static MemberExpression BuildMemberAccess(ParameterExpression param, string field)
