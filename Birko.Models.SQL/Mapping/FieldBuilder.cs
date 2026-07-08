@@ -49,24 +49,32 @@ namespace Birko.Models.SQL.Mapping
             return this;
         }
 
+        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
+        /// (declare precision via the model's SQL field attributes). Readable via GetPropertyMaps.</summary>
         public FieldBuilder<T> HasPrecision(int precision)
         {
             _field.Precision = precision;
             return this;
         }
 
+        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
+        /// (declare scale via the model's SQL field attributes). Readable via GetPropertyMaps.</summary>
         public FieldBuilder<T> HasScale(int scale)
         {
             _field.Scale = scale;
             return this;
         }
 
+        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
+        /// (declare max length via the model's SQL field attributes). Readable via GetPropertyMaps.</summary>
         public FieldBuilder<T> HasMaxLength(int maxLength)
         {
             _field.MaxLength = maxLength;
             return this;
         }
 
+        /// <summary>Mapping metadata only — NOT applied by <c>ModelMapRegistry.ApplyToDatabase()</c>
+        /// (define indexes via migrations / the model's SQL attributes). Readable via GetPropertyMaps.</summary>
         public FieldBuilder<T> HasIndex(string indexName, int order = 0, bool descending = false)
         {
             _field.IndexName = indexName;

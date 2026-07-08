@@ -8,7 +8,7 @@ Fluent SQL mapping framework for Birko domain models. Framework only — canonic
 - Expression-based property configuration (type-safe)
 - `ModelMapRegistry` with assembly scanning for auto-discovery
 - Supports: table name, column name, unique, primary, precision, scale, max length, index, ignore
-- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches field metadata onto the SQL layer
+- Bridges to `Birko.Data.SQL` via `ApplyToDatabase()` — registers table names + patches the column name and primary/unique/required/auto-increment flags onto the SQL layer (`HasMaxLength`/`HasPrecision`/`HasScale`/`HasIndex` are mapping metadata only, not applied — see CLAUDE.md)
 
 ## Installation
 

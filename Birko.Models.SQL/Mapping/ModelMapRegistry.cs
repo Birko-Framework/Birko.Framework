@@ -75,6 +75,19 @@ namespace Birko.Models.SQL.Mapping
             return propsProp?.GetValue(map) as IReadOnlyList<FieldDescriptor> ?? Array.Empty<FieldDescriptor>();
         }
 
+        /// <summary>
+        /// Patches table names and the applicable field flags onto the loaded SQL schema.
+        /// Applied: table name, <c>HasColumnName</c> (→ column name), and the
+        /// <c>IsPrimaryKey</c>/<c>IsUnique</c>/<c>IsRequired</c>/<c>IsAutoIncrement</c> flags.
+        /// <para>
+        /// <b>Not applied</b> — <c>HasMaxLength</c>, <c>HasPrecision</c>, <c>HasScale</c> and
+        /// <c>HasIndex</c> are mapping metadata only. The concrete SQL field type (length/precision/
+        /// scale) is fixed at construction from the model's SQL field attributes when the table is
+        /// loaded, and <see cref="Birko.Data.SQL.Fields.AbstractField"/> has no length/precision/index
+        /// members to assign afterwards. Declare those on the model (SQL field attributes) instead;
+        /// the fluent options remain readable via <see cref="GetPropertyMaps"/> for other consumers.
+        /// </para>
+        /// </summary>
         public void ApplyToDatabase()
         {
             Birko.Data.SQL.DataBase.RegisterTableNames(GetTableNames());
@@ -92,10 +105,17 @@ namespace Birko.Models.SQL.Mapping
                     var sqlField = table.GetFieldByPropertyName(field.Name);
                     if (sqlField == null) continue;
 
+                    // HasColumnName overrides the physical column name — previously dropped silently
+                    // even though AbstractField.Name is settable, so the mapping appeared to work.
+                    if (!string.IsNullOrEmpty(field.ColumnName)) sqlField.Name = field.ColumnName;
+
                     if (field.IsPrimary) sqlField.IsPrimary = true;
                     if (field.IsUnique) sqlField.IsUnique = true;
                     if (field.IsRequired) sqlField.IsNotNull = true;
                     if (field.IsAutoIncrement) sqlField.IsAutoincrement = true;
+
+                    // MaxLength / Precision / Scale / index are intentionally not applied here — see
+                    // the method doc. They cannot be assigned onto an already-loaded AbstractField.
                 }
             }
         }

@@ -25,7 +25,7 @@ Mapping/
 
 ## Dependencies
 - **Birko.Data.Patterns** — `FieldDescriptor` (shared type for both mapping and migrations)
-- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and field metadata with the SQL layer
+- **Birko.Data.SQL** — `ApplyToDatabase()` registers table names and applies the column name + primary/unique/required/auto-increment flags to the SQL layer. `HasMaxLength`/`HasPrecision`/`HasScale`/`HasIndex` are mapping metadata only (not applied — declare them via the model's SQL field attributes / migrations); they stay readable through `GetPropertyMaps()`
 
 ## Sibling Projects (canonical mappings)
 | Sibling | Contains |
