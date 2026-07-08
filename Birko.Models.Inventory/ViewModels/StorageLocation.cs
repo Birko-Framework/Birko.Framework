@@ -22,6 +22,7 @@ namespace Birko.Models.Inventory.ViewModels
 
         public Guid? ParentGuid { get; set; }
         public string Path { get; set; } = null!;
+        public int Depth { get; set; }
         public Guid TenantGuid { get; set; }
 
         private void StorageLocation_PropertyChanged(object? sender, PropertyChangedEventArgs e)

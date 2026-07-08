@@ -30,6 +30,9 @@ namespace Birko.Models.Inventory
             SortOrder = data.SortOrder;
             ParentGuid = data.ParentGuid;
             Path = data.Path;
+            // Depth is the coupled half of the materialized-path scheme (Path/Depth are set together
+            // by HierarchyHelper.ComputePath); round-trip it too, or Path stays but Depth zeroes out.
+            Depth = data.Depth;
             TenantGuid = data.TenantGuid;
         }
     }
