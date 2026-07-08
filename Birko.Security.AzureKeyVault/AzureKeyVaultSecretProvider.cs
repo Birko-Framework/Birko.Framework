@@ -45,7 +45,13 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
 
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
-        _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+        // Only configure the timeout on a client we own. Mutating a caller-owned (shared) HttpClient
+        // is a surprising side effect and throws InvalidOperationException if it already issued a
+        // request — so respect the caller's configuration for injected clients.
+        if (_ownsHttpClient)
+        {
+            _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+        }
         _serializer = serializer ?? new SystemJsonSerializer();
     }
 
