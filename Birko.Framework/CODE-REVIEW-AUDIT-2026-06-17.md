@@ -2439,8 +2439,8 @@ This is a genuine high-severity data-loss bug. Fix: read the nested data.Address
 ### CR-H130 · 🟠 high · Birko.Models.Pricing
 - **Title:** No test project exists for Birko.Models.Pricing
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Pricing (whole project)`
-- **Category:** test-gap · **Verification:** verified real (high)
-- **Status:** open
+- **Category:** test-gap · **Verification:** verified real (high) — audit note: treat as medium (layer-wide model-only-projects-lack-tests pattern, not a Pricing regression)
+- **Status:** done — added `Birko.Models.Pricing.Tests` (registered in `.slnx` + `.code-workspace`), 7 tests: model CopyTo/LoadFrom round-trips (Tax, Currency, PriceGroup) and the ViewModel PropertyChanged fan-out — Currency raises `CurrencyObjectProperty` for each of Code/Name/Symbol/IsLeftSymbol but not `IsDefault`; Tax raises `TaxObjectProperty` only for Name/ShortCut (the conditional fan-out the finding flagged as the only non-trivial logic).
 - **Detail:** There is no Birko.Models.Pricing.Tests sibling directory (only Birko.Models.Pricing and Birko.Models.Pricing.SQL exist under C:\Source). The framework convention (CLAUDE.md Testing section) requires every public functionality to have corresponding tests. None of the 7 models' CopyTo/LoadFrom round-trip behavior, nor the ViewModel PropertyChanged-fan-out wiring (e.g. Currency_PropertyChanged raising CurrencyObjectProperty for Code/Name/Symbol/IsLeftSymbol; Tax raising TaxObjectProperty for Name/ShortCut), is covered.
 - **Fix:** Add a Birko.Models.Pricing.Tests xUnit + FluentAssertions project. Cover CopyTo/LoadFrom for Tax, Currency, CurrencyRate, PriceGroup, and the dependent-property RaisePropertyChanged behavior in the view models.
 - **Verify reasoning:** Verified by reading the filesystem and source. The factual core of the finding is accurate:
