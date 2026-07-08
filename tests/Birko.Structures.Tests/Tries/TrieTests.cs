@@ -72,4 +72,57 @@ public class CompressedTrieTests
         trie.StartsWith("hel").Should().BeTrue();
         trie.StartsWith("xyz").Should().BeFalse();
     }
+
+    [Fact]
+    public void GetWordsWithPrefix_MidEdgePrefix_ReturnsFullWords()
+    {
+        // CR-H142: "ap" lands partway through the "apple" edge; the result must be the full word,
+        // not the truncated query prefix.
+        var trie = new CompressedTrie();
+        trie.Insert("apple");
+
+        trie.GetWordsWithPrefix("ap").Should().BeEquivalentTo(new[] { "apple" });
+    }
+
+    [Fact]
+    public void GetWordsWithPrefix_MidEdgePrefix_MultipleWords()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("apple");
+        trie.Insert("applet");
+        trie.Insert("application");
+        trie.Insert("banana");
+
+        trie.GetWordsWithPrefix("ap").Should().BeEquivalentTo(new[] { "apple", "applet", "application" });
+    }
+
+    [Fact]
+    public void GetWordsWithPrefix_NodeBoundaryPrefix_StillWorks()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("app");
+        trie.Insert("apple");
+
+        trie.GetWordsWithPrefix("app").Should().BeEquivalentTo(new[] { "app", "apple" });
+    }
+
+    [Fact]
+    public void GetAllWords_ReturnsEveryInsertedWord()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("test");
+        trie.Insert("testing");
+        trie.Insert("team");
+
+        trie.GetAllWords().Should().BeEquivalentTo(new[] { "test", "testing", "team" });
+    }
+
+    [Fact]
+    public void GetWordsWithPrefix_NoMatch_ReturnsEmpty()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("apple");
+
+        trie.GetWordsWithPrefix("xyz").Should().BeEmpty();
+    }
 }
