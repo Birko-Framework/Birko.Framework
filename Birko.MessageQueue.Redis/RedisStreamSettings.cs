@@ -45,6 +45,14 @@ namespace Birko.MessageQueue.Redis
         public bool AutoCreateConsumerGroup { get; set; } = true;
 
         /// <summary>
+        /// Minimum idle time (ms) before an unacknowledged pending entry becomes eligible
+        /// for reclaim/redelivery via XAUTOCLAIM. This also throttles retries of a
+        /// permanently-failing message (it cannot be re-processed more often than this).
+        /// Set to 0 to disable pending-entry reclaim entirely. Default is 30 seconds.
+        /// </summary>
+        public long PendingRetryMilliseconds { get; set; } = 30_000;
+
+        /// <summary>
         /// Gets or sets the stream key prefix for destinations.
         /// Default is "birko:mq:stream".
         /// </summary>

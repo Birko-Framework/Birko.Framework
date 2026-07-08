@@ -15,7 +15,7 @@ namespace Birko.MessageQueue.Redis
     /// </summary>
     public class RedisConsumer : IMessageConsumer
     {
-        private readonly RedisConnectionManager _connectionManager;
+        private readonly Func<IDatabase> _databaseFactory;
         private readonly IMessageSerializer _serializer;
         private readonly RedisStreamSettings _settings;
         private readonly ConcurrentDictionary<Guid, SubscriptionState> _subscriptions = new();
@@ -24,7 +24,20 @@ namespace Birko.MessageQueue.Redis
 
         internal RedisConsumer(RedisConnectionManager connectionManager, IMessageSerializer serializer, RedisStreamSettings settings)
         {
-            _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+            if (connectionManager == null) throw new ArgumentNullException(nameof(connectionManager));
+            _databaseFactory = connectionManager.GetDatabase;
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        }
+
+        /// <summary>
+        /// Test seam: constructs the consumer over a supplied <see cref="IDatabase"/> factory
+        /// instead of a live connection, so the poll / reclaim / ack paths can be exercised
+        /// against a mocked database.
+        /// </summary>
+        internal RedisConsumer(Func<IDatabase> databaseFactory, IMessageSerializer serializer, RedisStreamSettings settings)
+        {
+            _databaseFactory = databaseFactory ?? throw new ArgumentNullException(nameof(databaseFactory));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
@@ -87,19 +100,32 @@ namespace Birko.MessageQueue.Redis
 
             if (_pendingAck.TryRemove(messageId, out var pending) && pending.ConsumerGroup != null)
             {
-                var db = _connectionManager.GetDatabase();
+                var db = _databaseFactory();
                 await db.StreamAcknowledgeAsync(pending.StreamKey, pending.ConsumerGroup, pending.StreamEntryId).ConfigureAwait(false);
             }
         }
 
-        public Task RejectAsync(Guid messageId, bool requeue = false, CancellationToken cancellationToken = default)
+        public async Task RejectAsync(Guid messageId, bool requeue = false, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            // Remove from pending; the message will be re-delivered by Redis
-            // to another consumer in the group (via XCLAIM or pending entry list)
-            _pendingAck.TryRemove(messageId, out _);
-            return Task.CompletedTask;
+            if (!_pendingAck.TryRemove(messageId, out var pending) || pending.ConsumerGroup == null)
+            {
+                return;
+            }
+
+            if (requeue)
+            {
+                // Leave the entry unacknowledged in the Pending Entries List; the reclaim pass
+                // (XAUTOCLAIM, gated by PendingRetryMilliseconds) re-delivers it. Dropping only the
+                // local tracker — as the old code did unconditionally — was a silent no-op.
+                return;
+            }
+
+            // No requeue: acknowledge the entry so it leaves the PEL and is not re-delivered.
+            // (There is no dead-letter stream, so this discards the message.)
+            var db = _databaseFactory();
+            await db.StreamAcknowledgeAsync(pending.StreamKey, pending.ConsumerGroup, pending.StreamEntryId).ConfigureAwait(false);
         }
 
         internal void RemoveSubscription(Guid subscriptionId)
@@ -113,7 +139,7 @@ namespace Birko.MessageQueue.Redis
 
         private async Task PollLoopAsync(Guid subscriptionId, SubscriptionState state)
         {
-            var db = _connectionManager.GetDatabase();
+            var db = _databaseFactory();
             var ct = state.Cts.Token;
 
             // Create consumer group if configured
@@ -170,66 +196,21 @@ namespace Birko.MessageQueue.Redis
                                 break;
                             }
 
-                            var message = ParseStreamEntry(entry);
-                            if (message == null)
-                            {
-                                continue;
-                            }
-
-                            // Check TTL
-                            var ttlField = entry.Values.FirstOrDefault(v => v.Name == "ttl_ms");
-                            if (ttlField.Value.HasValue && long.TryParse(ttlField.Value.ToString(), out var ttlMs))
-                            {
-                                var elapsed = DateTimeOffset.UtcNow - message.CreatedAt;
-                                if (elapsed.TotalMilliseconds > ttlMs)
-                                {
-                                    // Message expired, auto-ack and skip
-                                    if (useConsumerGroup)
-                                    {
-                                        await db.StreamAcknowledgeAsync(state.StreamKey, state.ConsumerGroup!, entry.Id).ConfigureAwait(false);
-                                    }
-                                    continue;
-                                }
-                            }
-
-                            if (state.Options.AckMode == MessageAckMode.ManualAck && useConsumerGroup)
-                            {
-                                _pendingAck.TryAdd(message.Id, new PendingMessage
-                                {
-                                    StreamKey = state.StreamKey,
-                                    ConsumerGroup = state.ConsumerGroup,
-                                    StreamEntryId = entry.Id
-                                });
-                            }
-
-                            try
-                            {
-                                await state.Handler(message, ct).ConfigureAwait(false);
-
-                                // Auto-ack on success
-                                if (state.Options.AckMode == MessageAckMode.AutoAck && useConsumerGroup)
-                                {
-                                    await db.StreamAcknowledgeAsync(state.StreamKey, state.ConsumerGroup!, entry.Id).ConfigureAwait(false);
-                                }
-                            }
-                            catch
-                            {
-                                if (state.Options.AckMode == MessageAckMode.ManualAck)
-                                {
-                                    _pendingAck.TryRemove(message.Id, out _);
-                                }
-                                // Message stays in pending entries list for consumer group re-delivery
-                            }
-
-                            if (!useConsumerGroup)
-                            {
-                                state.LastReadId = entry.Id;
-                            }
+                            await ProcessEntryAsync(db, state, entry, useConsumerGroup, ct).ConfigureAwait(false);
                         }
                     }
                     else
                     {
-                        // No messages available, wait before next poll
+                        // No new messages. Reclaim idle pending entries so messages that failed
+                        // under ManualAck or were RejectAsync(requeue:true)'d are actually
+                        // re-delivered during the subscription lifetime (XAUTOCLAIM over the PEL),
+                        // rather than sitting unacked until a fresh FromBeginning subscription.
+                        if (useConsumerGroup && _settings.PendingRetryMilliseconds > 0)
+                        {
+                            await ReclaimPendingEntriesAsync(db, state, ct).ConfigureAwait(false);
+                        }
+
+                        // Wait before next poll
                         await Task.Delay(_settings.BlockMilliseconds ?? 1000, ct).ConfigureAwait(false);
                     }
                 }
@@ -249,6 +230,108 @@ namespace Birko.MessageQueue.Redis
                         break;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Processes a single stream entry: TTL check, optional manual-ack tracking, handler
+        /// invocation and auto-ack. On handler failure the entry is left unacked in the Pending
+        /// Entries List so it can be reclaimed/redelivered. Shared by the live poll and the
+        /// pending-entry reclaim path so both behave identically.
+        /// </summary>
+        private async Task ProcessEntryAsync(IDatabase db, SubscriptionState state, StreamEntry entry, bool useConsumerGroup, CancellationToken ct)
+        {
+            var message = ParseStreamEntry(entry);
+            if (message == null)
+            {
+                return;
+            }
+
+            // Check TTL
+            var ttlField = entry.Values.FirstOrDefault(v => v.Name == "ttl_ms");
+            if (ttlField.Value.HasValue && long.TryParse(ttlField.Value.ToString(), out var ttlMs))
+            {
+                var elapsed = DateTimeOffset.UtcNow - message.CreatedAt;
+                if (elapsed.TotalMilliseconds > ttlMs)
+                {
+                    // Message expired, auto-ack and skip
+                    if (useConsumerGroup)
+                    {
+                        await db.StreamAcknowledgeAsync(state.StreamKey, state.ConsumerGroup!, entry.Id).ConfigureAwait(false);
+                    }
+                    return;
+                }
+            }
+
+            if (state.Options.AckMode == MessageAckMode.ManualAck && useConsumerGroup)
+            {
+                _pendingAck[message.Id] = new PendingMessage
+                {
+                    StreamKey = state.StreamKey,
+                    ConsumerGroup = state.ConsumerGroup,
+                    StreamEntryId = entry.Id
+                };
+            }
+
+            try
+            {
+                await state.Handler(message, ct).ConfigureAwait(false);
+
+                // Auto-ack on success
+                if (state.Options.AckMode == MessageAckMode.AutoAck && useConsumerGroup)
+                {
+                    await db.StreamAcknowledgeAsync(state.StreamKey, state.ConsumerGroup!, entry.Id).ConfigureAwait(false);
+                }
+            }
+            catch
+            {
+                if (state.Options.AckMode == MessageAckMode.ManualAck)
+                {
+                    _pendingAck.TryRemove(message.Id, out _);
+                }
+                // Entry stays in the Pending Entries List; the reclaim pass will redeliver it.
+            }
+
+            if (!useConsumerGroup)
+            {
+                state.LastReadId = entry.Id;
+            }
+        }
+
+        /// <summary>
+        /// Reclaims pending (delivered-but-unacknowledged) entries that have been idle at least
+        /// <see cref="RedisStreamSettings.PendingRetryMilliseconds"/> via XAUTOCLAIM and re-processes
+        /// them. This is what actually re-delivers failed / requeued messages (and messages orphaned
+        /// by a crashed consumer) during the lifetime of the subscription.
+        /// </summary>
+        private async Task ReclaimPendingEntriesAsync(IDatabase db, SubscriptionState state, CancellationToken ct)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var result = await db.StreamAutoClaimAsync(
+                state.StreamKey,
+                state.ConsumerGroup!,
+                state.ConsumerName,
+                _settings.PendingRetryMilliseconds,
+                "0-0",
+                count: _settings.ReadCount).ConfigureAwait(false);
+
+            if (result.IsNull || result.ClaimedEntries == null || result.ClaimedEntries.Length == 0)
+            {
+                return;
+            }
+
+            foreach (var entry in result.ClaimedEntries)
+            {
+                if (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                await ProcessEntryAsync(db, state, entry, useConsumerGroup: true, ct).ConfigureAwait(false);
             }
         }
 
@@ -277,25 +360,7 @@ namespace Birko.MessageQueue.Redis
                         break;
                     }
 
-                    var message = ParseStreamEntry(entry);
-                    if (message == null)
-                    {
-                        continue;
-                    }
-
-                    try
-                    {
-                        await state.Handler(message, ct).ConfigureAwait(false);
-
-                        if (state.Options.AckMode == MessageAckMode.AutoAck)
-                        {
-                            await db.StreamAcknowledgeAsync(state.StreamKey, state.ConsumerGroup!, entry.Id).ConfigureAwait(false);
-                        }
-                    }
-                    catch
-                    {
-                        // Leave unacked for re-delivery
-                    }
+                    await ProcessEntryAsync(db, state, entry, useConsumerGroup: true, ct).ConfigureAwait(false);
                 }
 
                 startId = entries[entries.Length - 1].Id;
