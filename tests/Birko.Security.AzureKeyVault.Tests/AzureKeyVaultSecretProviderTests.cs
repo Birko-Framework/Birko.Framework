@@ -163,6 +163,33 @@ public class AzureKeyVaultSecretProviderTests
         result.Should().Contain("key2");
     }
 
+    [Fact]
+    public void Constructor_InjectedHttpClient_TimeoutNotMutated()
+    {
+        // CR-H137: the provider must not mutate a caller-owned HttpClient's Timeout.
+        var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var settings = new AzureKeyVaultSettings { VaultUri = "https://test.vault.azure.net/", TimeoutSeconds = 30 };
+
+        using var provider = new AzureKeyVaultSecretProvider(settings, httpClient);
+
+        httpClient.Timeout.Should().Be(TimeSpan.FromSeconds(5), "an injected HttpClient's timeout must be left untouched");
+    }
+
+    [Fact]
+    public void Constructor_AlreadyUsedInjectedHttpClient_DoesNotThrow()
+    {
+        // Setting Timeout on an HttpClient that has issued a request throws InvalidOperationException;
+        // the provider must not do that to an injected client.
+        var handler = new SequentialHttpHandler((HttpStatusCode.OK, "{}"));
+        var httpClient = new HttpClient(handler);
+        _ = httpClient.GetAsync("https://test.vault.azure.net/").GetAwaiter().GetResult(); // mark as started
+        var settings = new AzureKeyVaultSettings { VaultUri = "https://test.vault.azure.net/" };
+
+        var act = () => new AzureKeyVaultSecretProvider(settings, httpClient);
+
+        act.Should().NotThrow();
+    }
+
     #region Test Helpers
 
     private class FakeHttpHandler : HttpMessageHandler
