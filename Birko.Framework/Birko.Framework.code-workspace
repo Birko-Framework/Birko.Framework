@@ -1065,6 +1065,10 @@
 			"path": "../../Framework.Tests/Birko.Security.BCrypt.Tests"
 		},
 		{
+			"name": "Tests / Birko.Security.Jwt.Tests",
+			"path": "../../Framework.Tests/Birko.Security.Jwt.Tests"
+		},
+		{
 			"name": "Tests / Birko.Security.NFC.Tests",
 			"path": "../../Framework.Tests/Birko.Security.NFC.Tests"
 		},
