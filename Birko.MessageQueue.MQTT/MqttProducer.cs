@@ -14,6 +14,12 @@ namespace Birko.MessageQueue.Mqtt
     /// </summary>
     public class MqttProducer : IMessageProducer
     {
+        /// <summary>MQTT5 user-property name carrying <see cref="QueueMessage.PayloadType"/>.</summary>
+        internal const string PayloadTypeProperty = "payload_type";
+
+        /// <summary>MQTT5 user-property name carrying the serialized <see cref="MessageHeaders"/>.</summary>
+        internal const string HeadersProperty = "headers";
+
         private readonly IMqttClient _client;
         private readonly IMessageSerializer _serializer;
         private readonly MqttSettings _options;
@@ -35,14 +41,27 @@ namespace Birko.MessageQueue.Mqtt
                 throw new ArgumentException($"Invalid MQTT publish topic: '{destination}'. Wildcards are not allowed in publish topics.", nameof(destination));
             }
 
-            var mqttMessage = new MqttApplicationMessageBuilder()
+            var builder = new MqttApplicationMessageBuilder()
                 .WithTopic(destination)
                 .WithPayload(message.Body)
                 .WithQualityOfServiceLevel(ToMqttQos(_options.DefaultQualityOfService))
-                .WithRetainFlag(false)
-                .Build();
+                .WithRetainFlag(false);
 
-            await _client.PublishAsync(mqttMessage, cancellationToken).ConfigureAwait(false);
+            // Carry QueueMessage metadata as MQTT5 user properties so a typed publish/subscribe
+            // round-trip preserves PayloadType + Headers (parity with the Redis / InMemory backends).
+            // NOTE: user properties are an MQTT5 feature — on an MQTT 3.1.1 connection the broker
+            // ignores them and the metadata is (as before) not carried on the wire.
+            if (!string.IsNullOrEmpty(message.PayloadType))
+            {
+                builder.WithUserProperty(PayloadTypeProperty, message.PayloadType);
+            }
+
+            if (message.Headers != null)
+            {
+                builder.WithUserProperty(HeadersProperty, _serializer.Serialize(message.Headers));
+            }
+
+            await _client.PublishAsync(builder.Build(), cancellationToken).ConfigureAwait(false);
         }
 
         public async Task SendAsync<T>(string destination, T payload, MessageHeaders? headers = null, CancellationToken cancellationToken = default) where T : class

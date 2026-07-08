@@ -112,6 +112,33 @@ namespace Birko.MessageQueue.Mqtt
                 CreatedAt = _clock.OffsetUtcNow
             };
 
+            // Reconstruct metadata the producer attached as MQTT5 user properties
+            // (PayloadType + Headers). Absent on MQTT 3.1.1 or non-Birko publishers → defaults kept.
+            var userProperties = args.ApplicationMessage.UserProperties;
+            if (userProperties != null)
+            {
+                foreach (var property in userProperties)
+                {
+                    if (string.IsNullOrEmpty(property.Value))
+                    {
+                        continue;
+                    }
+
+                    if (string.Equals(property.Name, MqttProducer.PayloadTypeProperty, StringComparison.Ordinal))
+                    {
+                        message.PayloadType = property.Value;
+                    }
+                    else if (string.Equals(property.Name, MqttProducer.HeadersProperty, StringComparison.Ordinal))
+                    {
+                        var parsed = _serializer.Deserialize<MessageHeaders>(property.Value);
+                        if (parsed != null)
+                        {
+                            message.Headers = parsed;
+                        }
+                    }
+                }
+            }
+
             // Try exact match first, then wildcard matches
             foreach (var (filter, handler) in _handlers)
             {
