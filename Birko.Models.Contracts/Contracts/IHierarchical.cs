@@ -80,6 +80,33 @@ namespace Birko.Models.Contracts
         }
 
         /// <summary>
+        /// Derives <see cref="IHierarchical.ParentGuid"/> and <see cref="IHierarchical.Depth"/> from the
+        /// node's already-materialized <see cref="IHierarchical.Path"/> ("/root/parent/self"). Use this to
+        /// restore hierarchy position after a Path-only round-trip (e.g. a ViewModel that carries Path but
+        /// not ParentGuid/Depth), keeping Path the single source of truth. Depends only on
+        /// <see cref="IHierarchical"/> (no persistence base type), so it stays inside the zero-dep contract.
+        /// </summary>
+        public static void DeriveParentAndDepthFromPath(IHierarchical node)
+        {
+            if (node is null)
+            {
+                return;
+            }
+
+            var segments = (node.Path ?? string.Empty)
+                .Split(Separator, StringSplitOptions.RemoveEmptyEntries);
+
+            // "/self" → depth 0; each additional ancestor segment adds one level.
+            node.Depth = segments.Length > 0 ? segments.Length - 1 : 0;
+
+            // The parent is the segment immediately before self (second-to-last), if any.
+            // Guid.TryParse accepts the D/B/N/P formats used across the codebase.
+            node.ParentGuid = segments.Length >= 2 && Guid.TryParse(segments[segments.Length - 2], out var parentId)
+                ? parentId
+                : (Guid?)null;
+        }
+
+        /// <summary>
         /// Rewrites Path (and optionally NamePath) for all descendants after an ancestor's path changed.
         /// Call after updating the ancestor entity.
         /// </summary>
