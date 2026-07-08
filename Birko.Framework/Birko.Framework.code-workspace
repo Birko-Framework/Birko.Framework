@@ -1017,6 +1017,10 @@
 			"path": "../../Framework.Tests/Birko.Models.Contracts.Tests"
 		},
 		{
+			"name": "Tests / Birko.Models.Customers.Tests",
+			"path": "../../Framework.Tests/Birko.Models.Customers.Tests"
+		},
+		{
 			"name": "Tests / Birko.Models.Tests",
 			"path": "../../Framework.Tests/Birko.Models.Tests"
 		},
