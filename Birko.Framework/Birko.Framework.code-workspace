@@ -1009,6 +1009,10 @@
 			"path": "../../Framework.Tests/Birko.Messaging.Tests"
 		},
 		{
+			"name": "Tests / Birko.Models.Category.Tests",
+			"path": "../../Framework.Tests/Birko.Models.Category.Tests"
+		},
+		{
 			"name": "Tests / Birko.Models.Tests",
 			"path": "../../Framework.Tests/Birko.Models.Tests"
 		},
