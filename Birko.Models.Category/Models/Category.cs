@@ -28,6 +28,11 @@ namespace Birko.Models.Category
             Slug = data.Slug;
             Path = data.Path;
             Description = data.Description;
+
+            // The ViewModel carries only Path, so restore ParentGuid/Depth from it — otherwise a
+            // Category edited through the ViewModel layer would lose its parent link and depth on
+            // save, leaving the materialized Path inconsistent with ParentGuid/Depth.
+            Birko.Models.Contracts.HierarchyHelper.DeriveParentAndDepthFromPath(this);
         }
     }
 }
