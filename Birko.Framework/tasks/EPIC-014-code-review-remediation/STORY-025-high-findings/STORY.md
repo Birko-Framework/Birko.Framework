@@ -11,6 +11,12 @@ finding-ids: CR-H001 … CR-H147
 
 # High findings
 
+## Progress
+
+**121 / 147 closed** (CR-H001 … CR-H121, contiguous) as of 2026-07-08. Remaining open: **CR-H122 … CR-H147** (26).
+Per-finding status is tracked in the audit doc (each finding's `Status` flips to `done` as it lands); this line is
+just a rollup pulse — see [`CODE-REVIEW-AUDIT-2026-06-17.md`](../../../CODE-REVIEW-AUDIT-2026-06-17.md) for detail.
+
 ## User story
 
 As a maintainer, I want every **high**-severity code-review finding fixed (or explicitly waived)
