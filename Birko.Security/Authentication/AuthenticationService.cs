@@ -10,13 +10,14 @@ namespace Birko.Security.Authentication
     /// Protocol-agnostic authentication service with token and IP binding support.
     /// Thread-safe and caches expanded environment variables for performance.
     /// </summary>
-    public class AuthenticationService
+    public class AuthenticationService : IDisposable
     {
         private readonly AuthenticationConfiguration _config;
         private readonly ILogger<AuthenticationService>? _logger;
         private readonly HashSet<string> _expandedTokens;
         private readonly List<CachedTokenBinding> _expandedBindings;
         private readonly ReaderWriterLockSlim _lock;
+        private bool _disposed;
 
         /// <summary>
         /// Cached token binding with pre-expanded values
@@ -249,11 +250,21 @@ namespace Birko.Security.Authentication
         }
 
         /// <summary>
-        /// Disposes the authentication service
+        /// Disposes the authentication service, releasing the ReaderWriterLockSlim's kernel handles.
+        /// Implementing IDisposable makes this reachable by DI containers and `using` statements —
+        /// previously the method existed but the class did not implement the interface, so it was
+        /// never called and the lock leaked for the lifetime of every discarded instance.
         /// </summary>
         public void Dispose()
         {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
             _lock?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }
