@@ -232,6 +232,49 @@ public class SnowflakeGeneratorTests
         act1.Should().Throw<ArgumentOutOfRangeException>();
         act2.Should().Throw<ArgumentOutOfRangeException>();
     }
+
+    [Fact]
+    public void WaitNextMillisecond_ReturnsEpochRelativeTimestamp()
+    {
+        // Regression for CR-H133: WaitNextMillisecond must return an epoch-relative timestamp
+        // (like Next()), not raw absolute Unix ms — otherwise sequence exhaustion overflows
+        // the 41-bit timestamp field and corrupts every subsequent ID.
+        long epoch = new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var gen = new SnowflakeGenerator(1, epoch);
+
+        var method = typeof(SnowflakeGenerator).GetMethod("WaitNextMillisecond",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        long result = (long)method.Invoke(gen, new object[] { 0L })!;
+
+        long expected = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - epoch;
+        // Epoch-relative, far below absolute Unix ms (~1.7e12, what the pre-fix code returned).
+        result.Should().BeLessThan(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        Math.Abs(result - expected).Should().BeLessThan(2000);
+    }
+
+    [Fact]
+    public void Next_ManyIdsAcrossSequenceRollover_StayValid()
+    {
+        // >4096 IDs in a tight loop forces at least one per-millisecond sequence rollover (the
+        // WaitNextMillisecond path). Pre-fix, that path returned absolute ms and the decoded
+        // timestamp became absurd / IDs non-monotonic.
+        var gen = new SnowflakeGenerator(7);
+        var before = DateTimeOffset.UtcNow;
+        var ids = new HashSet<long>();
+        long prev = 0;
+
+        for (int i = 0; i < 20000; i++)
+        {
+            long id = gen.Next();
+            id.Should().BeGreaterThan(prev);
+            ids.Add(id).Should().BeTrue();
+            prev = id;
+        }
+
+        var after = DateTimeOffset.UtcNow;
+        gen.ExtractTimestamp(prev).Should().BeOnOrAfter(before.AddSeconds(-1));
+        gen.ExtractTimestamp(prev).Should().BeOnOrBefore(after.AddSeconds(2));
+    }
 }
 
 public class TokenGeneratorTests
