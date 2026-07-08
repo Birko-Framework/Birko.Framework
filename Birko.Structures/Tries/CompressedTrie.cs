@@ -65,10 +65,12 @@ public class CompressedTrie
             return results;
         }
 
-        var (node, remaining) = FindNodeForPrefix(_root, prefix);
+        var (node, matchedPath) = FindNodeForPrefix(_root, prefix);
         if (node == null) return results;
 
-        CollectWords(node, prefix[..^remaining.Length] + (remaining.Length > 0 ? "" : ""), results);
+        // Seed with the FULL label path to the node (which may extend past the query prefix when it
+        // ended mid-edge, e.g. "ap" landing on the "apple" edge) so emitted words are complete.
+        CollectWords(node, matchedPath, results);
         return results;
     }
 
@@ -227,21 +229,32 @@ public class CompressedTrie
         }
     }
 
-    private static (RadixNode? Node, string Remaining) FindNodeForPrefix(RadixNode node, string prefix)
+    // Locates the node whose subtree holds every word with the given prefix, and returns the full
+    // label path from the root to that node. That path starts with the query prefix but may extend
+    // past it when the prefix ends partway through an edge label (so callers reconstruct whole words).
+    private static (RadixNode? Node, string MatchedPath) FindNodeForPrefix(RadixNode node, string prefix)
+        => FindNodeForPrefix(node, prefix, string.Empty);
+
+    private static (RadixNode? Node, string MatchedPath) FindNodeForPrefix(RadixNode node, string prefix, string accumulated)
     {
-        if (prefix.Length == 0) return (node, string.Empty);
+        if (prefix.Length == 0) return (node, accumulated);
 
         var firstChar = prefix[0];
-        if (!node.Children.TryGetValue(firstChar, out var entry)) return (null, prefix);
+        if (!node.Children.TryGetValue(firstChar, out var entry)) return (null, string.Empty);
 
         var label = entry.Label;
         var child = entry.Node;
         int commonLen = CommonPrefixLength(label, prefix);
 
-        if (commonLen == prefix.Length) return (child, string.Empty);
-        if (commonLen < label.Length) return (commonLen == prefix.Length ? (child, string.Empty) : (null, prefix));
+        // Prefix consumed within (or exactly at the end of) this edge: the node's full path is the
+        // accumulated labels plus this ENTIRE edge label, not just the matched portion.
+        if (commonLen == prefix.Length) return (child, accumulated + label);
 
-        return FindNodeForPrefix(child, prefix[commonLen..]);
+        // Prefix diverges partway through the edge label -> no match.
+        if (commonLen < label.Length) return (null, string.Empty);
+
+        // Whole edge label matched, prefix continues -> descend, accumulating this label.
+        return FindNodeForPrefix(child, prefix[commonLen..], accumulated + label);
     }
 
     private static void CollectWords(RadixNode node, string prefix, List<string> results)
