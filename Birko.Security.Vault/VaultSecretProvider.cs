@@ -243,7 +243,11 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
             CreatedAt = metadata.ValueKind != JsonValueKind.Undefined && metadata.TryGetProperty("created_time", out var ct)
                 ? ParseVaultTime(ct.GetString())
                 : null,
-            UpdatedAt = metadata.ValueKind != JsonValueKind.Undefined && metadata.TryGetProperty("created_time", out var ut)
+            // KV v2 version metadata exposes only "created_time"; there is no distinct update
+            // timestamp, so do NOT copy created_time here (that made UpdatedAt always equal
+            // CreatedAt). Use a real update field if one is ever present, otherwise leave it null.
+            UpdatedAt = metadata.ValueKind != JsonValueKind.Undefined
+                && (metadata.TryGetProperty("updated_time", out var ut) || metadata.TryGetProperty("mtime", out ut))
                 ? ParseVaultTime(ut.GetString())
                 : null,
             Metadata = ExtractCustomMetadata(metadata)
