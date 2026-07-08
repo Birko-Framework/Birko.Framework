@@ -26,6 +26,7 @@ namespace Birko.Models.Customers
     public class Customer
         : BaseCustomer
         , Birko.Data.Models.ILoadable<ViewModels.Customer>
+        , ICopyable<Customer>
     {
         public string? Email { get; set; }
         public string? Phone { get; set; }
@@ -38,6 +39,28 @@ namespace Birko.Models.Customers
         /// <summary>VAT identification number (DIČ / IČ DPH).</summary>
         public string? VatId { get; set; }
         public CustomerStatus Status { get; set; } = CustomerStatus.Active;
+
+        // Without this override, CopyTo runs the inherited BaseCustomer.CopyTo, which allocates a
+        // plain BaseCustomer (wrong runtime type) and copies only Name/Code — silently dropping every
+        // Customer-specific field. Mirrors the Address / InvoiceAddress override pattern.
+        public virtual Customer CopyTo(Customer clone)
+        {
+            if (clone == null)
+            {
+                clone = new Customer();
+            }
+            clone = (Customer)base.CopyTo((BaseCustomer)clone);
+            clone.Email = Email;
+            clone.Phone = Phone;
+            clone.Website = Website;
+            clone.PriceGroupGuid = PriceGroupGuid;
+            clone.PartnerType = PartnerType;
+            clone.LegalType = LegalType;
+            clone.TaxId = TaxId;
+            clone.VatId = VatId;
+            clone.Status = Status;
+            return clone;
+        }
 
         public virtual void LoadFrom(ViewModels.Customer data)
         {
