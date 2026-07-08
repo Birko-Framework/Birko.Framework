@@ -71,17 +71,42 @@ public sealed class LocalFileStorage : IFileStorage
         long size;
         string etag;
 
-        using (var fileStream = new FileStream(resolvedPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
+        // Write to a sibling temp file and atomically move it into place only after a complete
+        // write. If the body throws mid-stream (size-limit, cancellation, IO error) the partial
+        // temp file is deleted and any existing good file at resolvedPath is left untouched —
+        // rather than truncating it up front (FileMode.Create) and leaving an orphaned remnant.
+        var tempPath = resolvedPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
         {
-            if (effectiveOptions.MaxFileSize.HasValue && !content.CanSeek)
+            using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true))
             {
-                size = await CopyWithLimitAsync(content, fileStream, effectiveOptions.MaxFileSize.Value, path, ct).ConfigureAwait(false);
+                if (effectiveOptions.MaxFileSize.HasValue && !content.CanSeek)
+                {
+                    size = await CopyWithLimitAsync(content, fileStream, effectiveOptions.MaxFileSize.Value, path, ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
+                    size = fileStream.Length;
+                }
             }
-            else
+
+            File.Move(tempPath, resolvedPath, overwrite: effectiveOptions.OverwriteExisting);
+        }
+        catch
+        {
+            try
             {
-                await content.CopyToAsync(fileStream, ct).ConfigureAwait(false);
-                size = fileStream.Length;
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
             }
+            catch
+            {
+                // Best-effort cleanup of the partial temp file; don't mask the original failure.
+            }
+            throw;
         }
 
         etag = await ComputeETagAsync(resolvedPath, ct).ConfigureAwait(false);
