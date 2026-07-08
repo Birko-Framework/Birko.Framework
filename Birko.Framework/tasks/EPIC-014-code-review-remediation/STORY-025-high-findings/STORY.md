@@ -13,7 +13,7 @@ finding-ids: CR-H001 … CR-H147
 
 ## Progress
 
-**139 / 147 closed** (CR-H001 … CR-H139, contiguous) as of 2026-07-08. Remaining open: **CR-H140 … CR-H147** (8).
+**140 / 147 closed** (CR-H001 … CR-H140, contiguous) as of 2026-07-08. Remaining open: **CR-H141 … CR-H147** (7).
 Per-finding status is tracked in the audit doc (each finding's `Status` flips to `done` as it lands); this line is
 just a rollup pulse — see [`CODE-REVIEW-AUDIT-2026-06-17.md`](../../../CODE-REVIEW-AUDIT-2026-06-17.md) for detail.
 
