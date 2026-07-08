@@ -104,13 +104,17 @@ public sealed class SnowflakeGenerator
         return (int)(id & MaxSequence);
     }
 
-    private static long WaitNextMillisecond(long lastTimestamp)
+    // Returns an EPOCH-RELATIVE timestamp, consistent with Next() (which works in
+    // `UtcNow - _epoch`). Returning raw absolute Unix ms here made the `<= lastTimestamp`
+    // comparison always false on the first iteration (absolute ≫ relative), so the loop
+    // returned ~1.7e12 which overflowed the 41-bit timestamp field and corrupted the ID.
+    private long WaitNextMillisecond(long lastTimestamp)
     {
         long timestamp;
         do
         {
             Thread.SpinWait(10);
-            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _epoch;
         } while (timestamp <= lastTimestamp);
 
         return timestamp;
