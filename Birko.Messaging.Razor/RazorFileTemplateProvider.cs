@@ -98,9 +98,18 @@ public class RazorFileTemplateProvider
 
         var fullPath = Path.GetFullPath(Path.Combine(_basePath, fileName));
 
-        // Prevent directory traversal
-        var normalizedBase = Path.GetFullPath(_basePath);
-        if (!fullPath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase))
+        // Prevent directory traversal with a separator-boundary check. A bare prefix StartsWith
+        // (as before) admits a sibling directory whose name merely starts with the base name —
+        // e.g. base "C:\tpl" would wrongly accept "C:\tpl-evil\secret.cshtml". Comparing against
+        // base + separator (plus exact-equality) closes that escape.
+        var normalizedBase = Path.GetFullPath(_basePath)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedFull = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var isContained =
+            string.Equals(normalizedFull, normalizedBase, StringComparison.OrdinalIgnoreCase)
+            || normalizedFull.StartsWith(normalizedBase + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || normalizedFull.StartsWith(normalizedBase + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        if (!isContained)
         {
             throw new TemplateRenderException(templateName, "Template path escapes the base directory.");
         }

@@ -29,8 +29,17 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
     {
         options ??= new RazorTemplateOptions();
 
-        var builder = new RazorLightEngineBuilder()
-            .UseMemoryCachingProvider();
+        var builder = new RazorLightEngineBuilder();
+
+        // Install the compiled-template cache only when caching is enabled. RazorLight has no
+        // caching provider unless one is registered (EngineHandler.IsCachingEnabled == cache != null),
+        // so omitting it genuinely disables caching. The previous code called this unconditionally
+        // and then AGAIN in the !EnableCaching branch — an inverted/dead condition that made
+        // EnableCaching=false a no-op (caching could never be turned off).
+        if (options.EnableCaching)
+        {
+            builder.UseMemoryCachingProvider();
+        }
 
         if (!string.IsNullOrWhiteSpace(options.TemplateBasePath))
         {
@@ -40,11 +49,6 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
         else
         {
             builder.UseEmbeddedResourcesProject(typeof(RazorTemplateEngine));
-        }
-
-        if (!options.EnableCaching)
-        {
-            builder.UseMemoryCachingProvider();
         }
 
         foreach (var ns in options.DefaultNamespaces)
