@@ -11,10 +11,11 @@ namespace Birko.MessageQueue.InMemory
     /// Manages in-memory channels for destinations (queues/topics).
     /// Each destination has a bounded channel and a list of subscriber callbacks.
     /// </summary>
-    internal class InMemoryChannel
+    internal class InMemoryChannel : IDisposable
     {
         private readonly ConcurrentDictionary<string, DestinationState> _destinations = new();
         private readonly int _capacity;
+        private bool _disposed;
 
         public InMemoryChannel(int capacity = 1000)
         {
@@ -92,8 +93,13 @@ namespace Birko.MessageQueue.InMemory
                 // Stop dispatching if no more subscribers
                 if (state.Subscribers.IsEmpty)
                 {
-                    state.DispatchCts?.Cancel();
+                    var cts = state.DispatchCts;
                     state.DispatchCts = null;
+                    if (cts != null)
+                    {
+                        cts.Cancel();
+                        cts.Dispose();
+                    }
                 }
             }
         }
@@ -133,6 +139,37 @@ namespace Birko.MessageQueue.InMemory
                     // Expected when dispatching is stopped
                 }
             }, ct);
+        }
+
+        /// <summary>
+        /// Tears down every destination: cancels and disposes its dispatch loop's
+        /// <see cref="CancellationTokenSource"/> and completes its channel writer, so no
+        /// dispatch tasks or CTS handles leak when the owning queue is disposed.
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            foreach (var state in _destinations.Values)
+            {
+                var cts = state.DispatchCts;
+                state.DispatchCts = null;
+                if (cts != null)
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+
+                state.Channel.Writer.TryComplete();
+                state.Subscribers.Clear();
+            }
+
+            _destinations.Clear();
         }
 
         internal class DestinationState

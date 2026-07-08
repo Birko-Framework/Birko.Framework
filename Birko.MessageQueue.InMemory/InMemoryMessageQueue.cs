@@ -55,6 +55,9 @@ namespace Birko.MessageQueue.InMemory
             IsConnected = false;
             Producer.Dispose();
             Consumer.Dispose();
+            // Tear down the shared channel: cancel/dispose dispatch loops and complete
+            // writers so subscriptions left open at queue disposal don't leak tasks/CTS handles.
+            _channel.Dispose();
         }
     }
 }
