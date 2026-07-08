@@ -1049,6 +1049,10 @@
 			"path": "../../Framework.Tests/Birko.Rules.Tests"
 		},
 		{
+			"name": "Tests / Birko.Security.Tests",
+			"path": "../../Framework.Tests/Birko.Security.Tests"
+		},
+		{
 			"name": "Tests / Birko.Security.AspNetCore.Tests",
 			"path": "../../Framework.Tests/Birko.Security.AspNetCore.Tests"
 		},
