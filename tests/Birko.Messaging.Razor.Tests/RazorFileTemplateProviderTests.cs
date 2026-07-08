@@ -78,6 +78,19 @@ public class RazorFileTemplateProviderTests : IDisposable
     }
 
     [Fact]
+    public async Task GetTemplateAsync_SiblingPrefixDirectory_ThrowsTemplateRenderException()
+    {
+        // CR-H123: a sibling directory whose name merely starts with the base dir name
+        // ("<base>-evil") must NOT be accepted by the containment guard.
+        var siblingName = Path.GetFileName(_tempDir) + "-evil";
+
+        var act = () => _provider.GetTemplateAsync($"../{siblingName}/secret");
+
+        await act.Should().ThrowAsync<TemplateRenderException>()
+            .WithMessage("*escapes*");
+    }
+
+    [Fact]
     public async Task GetTemplateAsync_EmptyName_ThrowsArgumentException()
     {
         var act = () => _provider.GetTemplateAsync("");
