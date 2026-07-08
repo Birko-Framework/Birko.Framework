@@ -186,4 +186,65 @@ public class PathValidatorTests
 
         act.Should().Throw<ArgumentException>();
     }
+
+    // ── ValidatePath — sibling-prefix traversal (CR-H117) ────
+
+    [Fact]
+    public void ValidatePath_SiblingPrefixedPath_Throws()
+    {
+        // Regression for CR-H117: a raw StartsWith check wrongly accepts a sibling directory
+        // whose name merely begins with the base directory name (e.g. base "…\data" vs "…\data-evil").
+        var baseDir = Path.Combine(Path.GetTempPath(), "birko-h117-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var siblingPath = baseDir + "-evil" + Path.DirectorySeparatorChar + "secret.txt";
+
+            var act = () => PathValidator.ValidatePath(baseDir, "secret.txt", siblingPath);
+
+            act.Should().Throw<ArgumentException>()
+                .WithMessage("*traversal*")
+                .WithParameterName("combinedPath");
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ValidatePath_GenuineChildPath_ReturnsNormalized()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "birko-h117-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var childPath = Path.Combine(baseDir, "sub", "file.txt");
+
+            var result = PathValidator.ValidatePath(baseDir, "sub/file.txt", childPath);
+
+            result.Should().Be(Path.GetFullPath(childPath));
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ValidatePath_ExactBasePath_ReturnsNormalized()
+    {
+        var baseDir = Path.Combine(Path.GetTempPath(), "birko-h117-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(baseDir);
+        try
+        {
+            var result = PathValidator.ValidatePath(baseDir, "x", baseDir);
+
+            result.Should().Be(Path.GetFullPath(baseDir));
+        }
+        finally
+        {
+            Directory.Delete(baseDir, recursive: true);
+        }
+    }
 }
