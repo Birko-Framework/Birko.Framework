@@ -52,13 +52,42 @@ namespace Birko.Data.Migrations.MongoDB.Context
         {
             var source = _database.GetCollection<BsonDocument>(sourceCollection);
 
-            // Use $merge for server-side copy
-            var pipeline = new[]
-            {
-                new BsonDocument("$merge", new BsonDocument("into", targetCollection))
-            };
+            // CR-M112: honor transformJson (a stage or array of stages) instead of silently ignoring it.
+            var pipeline = BuildCopyPipeline(targetCollection, transformJson);
             if (_session != null) source.Aggregate<BsonDocument>(_session, pipeline).ToList();
             else source.Aggregate<BsonDocument>(pipeline).ToList();
+        }
+
+        /// <summary>
+        /// Builds the copy aggregation pipeline: any caller-supplied transform stage(s) followed by the
+        /// server-side <c>$merge</c> into the target collection (CR-M112 — the transform used to be
+        /// dropped). <paramref name="transformJson"/> may be a single stage object or a JSON array of
+        /// stages; null/empty/<c>{}</c> means a straight copy.
+        /// </summary>
+        internal static BsonDocument[] BuildCopyPipeline(string targetCollection, string? transformJson)
+        {
+            var stages = new List<BsonDocument>();
+
+            if (!string.IsNullOrWhiteSpace(transformJson) && transformJson!.Trim() != "{}")
+            {
+                var trimmed = transformJson.Trim();
+                if (trimmed.StartsWith("["))
+                {
+                    // Wrap so BsonDocument.Parse (object-only) can read a top-level array of stages.
+                    var wrapped = BsonDocument.Parse($"{{\"stages\":{trimmed}}}");
+                    foreach (var stage in wrapped["stages"].AsBsonArray)
+                    {
+                        stages.Add(stage.AsBsonDocument);
+                    }
+                }
+                else
+                {
+                    stages.Add(BsonDocument.Parse(trimmed));
+                }
+            }
+
+            stages.Add(new BsonDocument("$merge", new BsonDocument("into", targetCollection)));
+            return stages.ToArray();
         }
 
         public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)
@@ -78,7 +107,7 @@ namespace Birko.Data.Migrations.MongoDB.Context
             }
         }
 
-        private static FilterDefinition<BsonDocument> ParseFilter(string? filterJson)
+        internal static FilterDefinition<BsonDocument> ParseFilter(string? filterJson)
         {
             if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
                 return Builders<BsonDocument>.Filter.Empty;
