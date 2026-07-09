@@ -37,4 +37,29 @@ public class RavenDBDataMigratorTests
         Action act = () => new RavenDBDataMigrator(null!);
         act.Should().Throw<ArgumentNullException>();
     }
+
+    // CR-H066: cover the pure ParseFilterToRql helper (no live server needed).
+    [Fact]
+    public void ParseFilterToRql_Empty_ReturnsEmpty()
+    {
+        RavenDBDataMigrator.ParseFilterToRql(null).Should().BeEmpty();
+        RavenDBDataMigrator.ParseFilterToRql("{}").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ParseFilterToRql_Equality_And_Operators()
+    {
+        RavenDBDataMigrator.ParseFilterToRql("{\"status\":\"active\"}").Should().Be("status = 'active'");
+        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$gt\":18}}").Should().Be("age > 18");
+        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$gte\":18}}").Should().Be("age >= 18");
+        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$lt\":65}}").Should().Be("age < 65");
+        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$lte\":65}}").Should().Be("age <= 65");
+        RavenDBDataMigrator.ParseFilterToRql("{\"state\":{\"$ne\":\"x\"}}").Should().Be("state != 'x'");
+    }
+
+    [Fact]
+    public void ParseFilterToRql_MultipleConditions_JoinedWithAnd()
+    {
+        RavenDBDataMigrator.ParseFilterToRql("{\"a\":1,\"b\":\"x\"}").Should().Be("a = 1 AND b = 'x'");
+    }
 }
