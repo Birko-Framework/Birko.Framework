@@ -72,10 +72,14 @@ namespace Birko.Data.Migrations.ElasticSearch
                 return new HashSet<long>();
             }
 
+            // CR-M105: sort Descending and raise the window so a truncated result keeps the NEWEST
+            // versions — GetCurrentVersion() derives from Max(), so the old Ascending+Size(1000) dropped
+            // exactly the highest versions past 1000 and under-reported the current version. 10000 is the
+            // default index.max_result_window; a deployment with more applied migrations needs scroll.
             var searchResponse = _client.Search<MigrationDocument>(s => s
                 .Index(indexName)
-                .Size(1000)
-                .Sort(sort => sort.Ascending(f => f.Version))
+                .Size(10000)
+                .Sort(sort => sort.Descending(f => f.Version))
             );
 
             if (!searchResponse.IsValid)
@@ -111,7 +115,10 @@ namespace Birko.Data.Migrations.ElasticSearch
                 AppliedAt = DateTime.UtcNow
             };
 
-            var response = _client.Index(document, i => i.Index(indexName).Id(docId));
+            // CR-M106: refresh so the just-recorded version is immediately visible to a following
+            // GetAppliedVersions()/GetCurrentVersion() search (ES is near-real-time, ~1s by default) —
+            // otherwise a second Migrate()/GetPendingMigrations() in the same process could re-run it.
+            var response = _client.Index(document, i => i.Index(indexName).Id(docId).Refresh(Elasticsearch.Net.Refresh.True));
             if (!response.IsValid)
             {
                 throw new InvalidOperationException($"Failed to record migration {migration.Version}: {response.DebugInformation}", response.OriginalException);
@@ -135,7 +142,7 @@ namespace Birko.Data.Migrations.ElasticSearch
             var indexName = GetMigrationsIndex();
             var docId = migration.Version.ToString();
 
-            var response = _client.Delete<MigrationDocument>(docId, d => d.Index(indexName));
+            var response = _client.Delete<MigrationDocument>(docId, d => d.Index(indexName).Refresh(Elasticsearch.Net.Refresh.True));
             // Ignore 404 errors (migration already removed)
             if (!response.IsValid && response.ServerError?.Status != 404)
             {
