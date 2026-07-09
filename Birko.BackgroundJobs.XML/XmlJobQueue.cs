@@ -22,6 +22,11 @@ namespace Birko.BackgroundJobs.XML
         private readonly RetryPolicy _retryPolicy;
         private readonly IDateTimeProvider _clock;
 
+        // Serializes the read-claim-update in DequeueAsync so two worker tasks in the same process
+        // cannot claim the same job (CR-M029) — mirrors the reference InMemoryJobQueue. The file
+        // store has no compare-and-swap, so cross-process concurrency remains unsupported by design.
+        private readonly SemaphoreSlim _dequeueLock = new(1, 1);
+
         /// <summary>
         /// Creates a new XML job queue.
         /// </summary>
@@ -57,45 +62,53 @@ namespace Birko.BackgroundJobs.XML
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            var now = _clock.UtcNow;
-            var pendingStatus = (int)JobStatus.Pending;
-            var scheduledStatus = (int)JobStatus.Scheduled;
-
-            IEnumerable<XmlJobDescriptorModel> candidates;
-
-            if (queueName != null)
+            await _dequeueLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                candidates = await _store.ReadAsync(
-                    filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
-                              && (j.QueueName == null || j.QueueName == queueName),
-                    orderBy: OrderBy<XmlJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                    limit: 1,
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
+                var now = _clock.UtcNow;
+                var pendingStatus = (int)JobStatus.Pending;
+                var scheduledStatus = (int)JobStatus.Scheduled;
+
+                IEnumerable<XmlJobDescriptorModel> candidates;
+
+                if (queueName != null)
+                {
+                    candidates = await _store.ReadAsync(
+                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                                  && (j.QueueName == null || j.QueueName == queueName),
+                        orderBy: OrderBy<XmlJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                        limit: 1,
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+                else
+                {
+                    candidates = await _store.ReadAsync(
+                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                        orderBy: OrderBy<XmlJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                        limit: 1,
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+
+                var candidate = candidates.FirstOrDefault();
+                if (candidate == null)
+                {
+                    return null;
+                }
+
+                candidate.Status = (int)JobStatus.Processing;
+                candidate.AttemptCount++;
+                candidate.LastAttemptAt = _clock.UtcNow;
+
+                await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+
+                return candidate.ToDescriptor();
             }
-            else
+            finally
             {
-                candidates = await _store.ReadAsync(
-                    filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
-                    orderBy: OrderBy<XmlJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                    limit: 1,
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
+                _dequeueLock.Release();
             }
-
-            var candidate = candidates.FirstOrDefault();
-            if (candidate == null)
-            {
-                return null;
-            }
-
-            candidate.Status = (int)JobStatus.Processing;
-            candidate.AttemptCount++;
-            candidate.LastAttemptAt = _clock.UtcNow;
-
-            await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
-
-            return candidate.ToDescriptor();
         }
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)

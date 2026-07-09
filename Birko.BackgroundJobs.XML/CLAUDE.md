@@ -25,6 +25,12 @@ XML file-based job queue for Birko.BackgroundJobs. Uses `AsyncXmlStore` from Bir
 - Birko.Time.Abstractions (IDateTimeProvider)
 - System.Xml.Serialization
 
+## Concurrency
+`DequeueAsync` serializes its read-claim-update with a `SemaphoreSlim` (CR-M029) so multiple worker
+tasks **in the same process** cannot claim the same job. The file store rewrites the whole file per
+save and has no compare-and-swap, so **cross-process** concurrency remains unsupported by design; use
+a database backend for multi-process workers.
+
 ## Maintenance
 - Keep in sync with `IJobQueue` interface changes in Birko.BackgroundJobs
 - Settings type is `Birko.Configuration.Settings` (via Birko.Data.Stores), basic Location + Name
