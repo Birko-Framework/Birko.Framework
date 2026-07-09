@@ -47,22 +47,39 @@ namespace Birko.Data.CosmosDB.Aggregation
 
             foreach (var (fieldName, alias) in groupByFieldList)
             {
-                selectParts.Add($"c.{fieldName} AS {alias}");
+                selectParts.Add($"{FieldRef(fieldName)} AS {alias}");
             }
 
             foreach (var (function, sourceProperty, alias) in aggregates)
             {
-                var fieldExpr = function == AggregateFunction.Count ? null : $"c.{sourceProperty}";
+                var fieldExpr = function == AggregateFunction.Count ? null : FieldRef(sourceProperty);
                 selectParts.Add($"{BuildFunctionSql(function, fieldExpr)} AS {alias}");
             }
 
             var selectFromSql = $"SELECT {string.Join(", ", selectParts)} FROM c";
 
             string? groupBySql = groupByFieldList.Count > 0
-                ? $" GROUP BY {string.Join(", ", groupByFieldList.Select(g => $"c.{g.FieldName}"))}"
+                ? $" GROUP BY {string.Join(", ", groupByFieldList.Select(g => FieldRef(g.FieldName)))}"
                 : null;
 
             return (selectFromSql, groupBySql);
+        }
+
+        /// <summary>
+        /// Emits a bracket-quoted Cosmos DB property accessor (<c>c["Field"]</c>) instead of the
+        /// dotted form (<c>c.Field</c>). Bracket quoting handles field names that would be invalid or
+        /// injectable as a dotted identifier (whitespace, reserved words, embedded quotes), and keeps
+        /// SELECT/GROUP BY identifiers consistent (CR-M084). A null/empty field falls back to <c>c</c>.
+        /// </summary>
+        internal static string FieldRef(string? fieldName)
+        {
+            if (string.IsNullOrEmpty(fieldName))
+            {
+                return "c";
+            }
+            // Cosmos string accessors follow JSON string escaping (backslash), same as string literals.
+            var escaped = fieldName.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            return $"c[\"{escaped}\"]";
         }
 
         /// <summary>

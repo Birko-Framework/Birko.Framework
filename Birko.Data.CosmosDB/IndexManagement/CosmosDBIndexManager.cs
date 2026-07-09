@@ -37,8 +37,7 @@ public class CosmosDBIndexManager : IIndexManager
         var containerProperties = await container.ReadContainerAsync(cancellationToken: ct).ConfigureAwait(false);
         var policy = containerProperties.Resource.IndexingPolicy;
 
-        return policy.IncludedPaths.Any(p => p.Path == indexName)
-            || policy.CompositeIndexes.Any(ci => ci.Any(e => e.Path == indexName));
+        return PolicyContainsIndex(policy, indexName);
     }
 
     /// <inheritdoc />
@@ -58,12 +57,7 @@ public class CosmosDBIndexManager : IIndexManager
 
             if (definition.Fields.Count == 1)
             {
-                var field = definition.Fields[0];
-                var path = field.Name.StartsWith("/") ? field.Name : $"/{field.Name}";
-                if (!path.EndsWith("/?"))
-                {
-                    path += "/?";
-                }
+                var path = NormalizeIncludedPath(definition.Fields[0].Name);
 
                 if (!policy.IncludedPaths.Any(p => p.Path == path))
                 {
@@ -75,7 +69,7 @@ public class CosmosDBIndexManager : IIndexManager
                 var compositeIndex = new System.Collections.ObjectModel.Collection<CompositePath>();
                 foreach (var field in definition.Fields)
                 {
-                    var path = field.Name.StartsWith("/") ? field.Name : $"/{field.Name}";
+                    var path = NormalizeFieldPath(field.Name);
                     compositeIndex.Add(new CompositePath
                     {
                         Path = path,
@@ -111,16 +105,7 @@ public class CosmosDBIndexManager : IIndexManager
             var properties = containerResponse.Resource;
             var policy = properties.IndexingPolicy;
 
-            var toRemove = policy.IncludedPaths.FirstOrDefault(p => p.Path == indexName);
-            if (toRemove != null)
-            {
-                policy.IncludedPaths.Remove(toRemove);
-            }
-
-            if (!string.IsNullOrWhiteSpace(indexName))
-            {
-                policy.ExcludedPaths.Add(new ExcludedPath { Path = indexName });
-            }
+            RemoveIncludedIndex(policy, indexName);
 
             await container.ReplaceContainerAsync(properties, cancellationToken: ct).ConfigureAwait(false);
         }
@@ -182,8 +167,75 @@ public class CosmosDBIndexManager : IIndexManager
         if (string.IsNullOrWhiteSpace(indexName)) throw new ArgumentException("Index name is required.", nameof(indexName));
 
         var all = await ListAsync(scope, ct).ConfigureAwait(false);
-        return all.FirstOrDefault(i => i.Name == indexName);
+        return all.FirstOrDefault(i =>
+            i.Name == indexName
+            || i.Name == NormalizeIncludedPath(indexName)
+            || i.Name == NormalizeFieldPath(indexName));
     }
+
+    #region Path normalization / policy matching (shared by Create/Exists/Drop/GetInfo — CR-M085)
+
+    /// <summary>
+    /// Normalizes a single-field included-path index name to the stored Cosmos form, e.g.
+    /// <c>Foo</c> or <c>/Foo</c> → <c>/Foo/?</c>. This is the form <see cref="CreateAsync"/> persists.
+    /// </summary>
+    internal static string NormalizeIncludedPath(string name)
+    {
+        var path = name.StartsWith("/") ? name : $"/{name}";
+        if (!path.EndsWith("/?"))
+        {
+            path += "/?";
+        }
+        return path;
+    }
+
+    /// <summary>
+    /// Normalizes a composite-index field name to the stored Cosmos form, e.g. <c>Foo</c> → <c>/Foo</c>.
+    /// </summary>
+    internal static string NormalizeFieldPath(string name)
+        => name.StartsWith("/") ? name : $"/{name}";
+
+    /// <summary>
+    /// True when a stored single-field included path corresponds to the requested index name,
+    /// accepting either the raw name or its normalized <c>/name/?</c> form.
+    /// </summary>
+    internal static bool IncludedPathMatches(string storedPath, string indexName)
+        => storedPath == indexName || storedPath == NormalizeIncludedPath(indexName);
+
+    /// <summary>
+    /// True when a stored composite field path corresponds to the requested index name,
+    /// accepting either the raw name or its normalized <c>/name</c> form.
+    /// </summary>
+    internal static bool FieldPathMatches(string storedPath, string indexName)
+        => storedPath == indexName || storedPath == NormalizeFieldPath(indexName);
+
+    /// <summary>
+    /// True when the policy contains an index matching <paramref name="indexName"/> as either a
+    /// single-field included path or a composite-index element.
+    /// </summary>
+    internal static bool PolicyContainsIndex(IndexingPolicy policy, string indexName)
+        => policy.IncludedPaths.Any(p => IncludedPathMatches(p.Path, indexName))
+        || policy.CompositeIndexes.Any(ci => ci.Any(e => FieldPathMatches(e.Path, indexName)));
+
+    /// <summary>
+    /// Removes the single-field included path matching <paramref name="indexName"/> and mirrors the
+    /// removed path into <see cref="IndexingPolicy.ExcludedPaths"/>. Returns the removed path, or null
+    /// if nothing matched — in which case nothing is excluded (CR-M085: the old code unconditionally
+    /// pushed the raw, un-normalized name into ExcludedPaths even when nothing was removed).
+    /// </summary>
+    internal static string? RemoveIncludedIndex(IndexingPolicy policy, string indexName)
+    {
+        var toRemove = policy.IncludedPaths.FirstOrDefault(p => IncludedPathMatches(p.Path, indexName));
+        if (toRemove == null)
+        {
+            return null;
+        }
+        policy.IncludedPaths.Remove(toRemove);
+        policy.ExcludedPaths.Add(new ExcludedPath { Path = toRemove.Path });
+        return toRemove.Path;
+    }
+
+    #endregion
 
     #region Cosmos DB-specific extensions
 
