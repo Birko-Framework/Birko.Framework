@@ -21,8 +21,13 @@ namespace Birko.Communication.Hardware.Ports
 
     public class Serial : AbstractPort, IDisposable
     {
-        private readonly SerialPort port = null!;
+        private readonly SerialPort port;
         private bool _disposed;
+
+        // ReadData is touched by both the DataReceived threadpool thread (ReadSerial appends) and
+        // caller threads (Read/RemoveReadData/Clear). List<byte> is not thread-safe, so every access
+        // is guarded by this single lock (CR-M049) — previously only ReadSerial locked (on `port`).
+        private readonly object _readLock = new();
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Serial"/> class.
@@ -30,12 +35,14 @@ namespace Birko.Communication.Hardware.Ports
         /// <param name="settings">The settings.</param>
         public Serial(SerialSettings settings) : base(settings)
         {
-            if (settings != null)
-            {
-                port = new SerialPort(settings.Name, settings.BaudRate ,settings.Parity, settings.DataBits, settings.StopBits);
-                port.RtsEnable = true;
-                port.DtrEnable = true;
-            }
+            // Guard so `port` is always non-null; without this a null settings left every method
+            // dereferencing a null port with an NRE (CR-M048).
+            if (settings == null)
+                throw new ArgumentNullException(nameof(settings));
+
+            port = new SerialPort(settings.Name, settings.BaudRate, settings.Parity, settings.DataBits, settings.StopBits);
+            port.RtsEnable = true;
+            port.DtrEnable = true;
         }
 
         public override void Write(byte[] data)
@@ -48,20 +55,14 @@ namespace Birko.Communication.Hardware.Ports
         public override byte[] Read(int size)
         {
             ReadSerial();
-            if (HasReadData(size))
+            lock (_readLock)
             {
                 if (size < 0)
                 {
-                    return ReadData.GetRange(0, ReadData.Count).ToArray();
+                    return ReadData.Count > 0 ? ReadData.GetRange(0, ReadData.Count).ToArray() : new byte[0];
                 }
-                else
-                {
-                    return ReadData.GetRange(0, size).ToArray();
-                }
-            }
-            else
-            {
-                return new byte[0];
+
+                return ReadData.Count >= size ? ReadData.GetRange(0, size).ToArray() : new byte[0];
             }
         }
 
@@ -90,7 +91,10 @@ namespace Birko.Communication.Hardware.Ports
 
         public override void Clear()
         {
-            base.Clear();
+            lock (_readLock)
+            {
+                base.Clear();
+            }
             if (port.IsOpen)
             {
                 byte[] buffer = new byte[port.BytesToRead];
@@ -145,30 +149,43 @@ namespace Birko.Communication.Hardware.Ports
         /// </summary>
         protected void ReadSerial()
         {
-            lock (port)
+            // Serialize both the port read and the ReadData append under one lock so concurrent
+            // DataReceived-thread and caller-thread reads don't race the port or corrupt the buffer.
+            lock (_readLock)
             {
-                if (port.BytesToRead > 0)
+                if (port.IsOpen && port.BytesToRead > 0)
                 {
                     byte[] buffer = new byte[port.BytesToRead];
-                    port.Read(buffer, 0, buffer.Length);
-                    ReadData.AddRange(buffer);
+                    int read = port.Read(buffer, 0, buffer.Length);
+                    for (int i = 0; i < read; i++)
+                        ReadData.Add(buffer[i]);
                 }
             }
         }
 
         public override bool HasReadData(int size)
         {
-            return (ReadData.Count >= size);
+            lock (_readLock)
+            {
+                if (size < 0) return ReadData.Count > 0;
+                return ReadData.Count >= size;
+            }
         }
 
         public override byte[] RemoveReadData(int size)
         {
-            byte[] result = Read(size);
-            if (HasReadData(size))
+            ReadSerial();
+            // Atomic copy-and-remove under the buffer lock — the removed range matches what is
+            // returned, and RemoveRange(0, -1) can no longer throw for size < 0 (CR-M049).
+            lock (_readLock)
             {
-                ReadData.RemoveRange(0, size);
+                int count = size < 0 ? ReadData.Count : Math.Min(size, ReadData.Count);
+                if (count <= 0) return new byte[0];
+
+                byte[] result = ReadData.GetRange(0, count).ToArray();
+                ReadData.RemoveRange(0, count);
+                return result;
             }
-            return result;
         }
     }
 }
