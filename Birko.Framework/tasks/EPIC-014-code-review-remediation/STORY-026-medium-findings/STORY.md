@@ -13,8 +13,19 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**87 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**91 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 13 — ElasticSearch cluster CR-M088 … CR-M092 (4 closed, 1 deferred)
+
+Birko.Data.ElasticSearch (+ .ViewModel, .Views).
+
+- **M088** `EnumerableExtensions.MultiMatch/MoreLikeThis` were broken (Compile()-a-parameter-expression) but are query-DSL markers parsed by name → kept as markers with throw-only bodies + doc.
+- **M090** ES.ViewModel `ElasticSearchRepository.Count/ClearCache` used `(Store as ElasticSearchStore<T>)` (null for a wrapped store → Count 0 / ClearCache no-op) → route through the unwrapping `ElasticSearchStore` property; fixed in the reference (non-ViewModel) repo too. New Birko.Data.ElasticSearch.ViewModel.Tests proves the unwrap mechanism.
+- **M091** ES.Views store vs manager resolved the index name by different rules → shared `ElasticSearchViewIndexResolver` (Persistent+Name → name, else PrimarySource.Name); both delegate to it.
+- **M092** (test-gap) ES.Views.Tests already existed; augmented with resolver tests.
+- **M089** (ES store CRUD/scroll/bulk/aggregation test-gap) — **deferred, left open**: needs a mocked/Testcontainers ElasticClient tier, out of scope for pure-logic batches.
+- New test project registered in .slnx + .code-workspace. Suites green: ES.Tests 78, ES.Views.Tests 7, ES.ViewModel.Tests 3.
 
 ### Batch 12 — CosmosDB cluster CR-M084 … CR-M087 (4 closed)
 

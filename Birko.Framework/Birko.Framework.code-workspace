@@ -1241,6 +1241,10 @@
 			"path": "../../Framework.Tests/Birko.Data.Composition.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.ElasticSearch.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.ViewModel.Tests"
+		},
+		{
 			"path": "."
 		}
 	]
