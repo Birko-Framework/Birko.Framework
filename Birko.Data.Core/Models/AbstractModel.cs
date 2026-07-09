@@ -10,11 +10,12 @@ namespace Birko.Data.Models
 
         public virtual AbstractModel CopyTo(AbstractModel? clone = null)
         {
-            if (clone != null)
+            if (clone == null)
             {
-                clone.Guid = Guid;
+                return this;
             }
-            return clone!;
+            clone.Guid = Guid;
+            return clone;
         }
 
         public virtual void LoadFrom(IGuidEntity data)

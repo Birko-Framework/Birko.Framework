@@ -12,14 +12,15 @@ namespace Birko.Data.Models
 
         public AbstractLogModel CopyTo(AbstractLogModel? clone = null)
         {
-            base.CopyTo(clone);
-            if (clone != null)
+            if (clone == null)
             {
-                clone.CreatedAt = CreatedAt;
-                clone.UpdatedAt = UpdatedAt;
-                clone.PrevUpdatedAt = PrevUpdatedAt;
+                return this;
             }
-            return clone!;
+            base.CopyTo(clone);
+            clone.CreatedAt = CreatedAt;
+            clone.UpdatedAt = UpdatedAt;
+            clone.PrevUpdatedAt = PrevUpdatedAt;
+            return clone;
         }
 
         public void LoadFrom(ILogEntity data)
