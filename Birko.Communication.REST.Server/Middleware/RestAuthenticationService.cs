@@ -7,7 +7,7 @@ namespace Birko.Communication.REST.Middleware
     /// <summary>
     /// REST-specific authentication adapter that extracts tokens from REST requests
     /// </summary>
-    public class RestAuthenticationService
+    public class RestAuthenticationService : IDisposable
     {
         private readonly AuthenticationService _authService;
         private readonly RestAuthenticationConfiguration _config;
