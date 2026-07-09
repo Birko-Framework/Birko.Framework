@@ -46,30 +46,64 @@ namespace Birko.BackgroundJobs.SQL
                 return true;
             }
 
-            _lockConnection = _connector.CreateConnection(_settings);
-            await _lockConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            var dialect = Dialect;
+            if (dialect == SqlDialect.Other)
+            {
+                // No portable cross-connection advisory lock (e.g. SQLite). Report failure so callers
+                // fall back deliberately, instead of the previous behaviour of returning true for a
+                // lock that was never taken (CR-M027).
+                return false;
+            }
 
-            var lockKey = GetLockKey(lockName);
-
-            using var cmd = _lockConnection.CreateCommand();
-            cmd.CommandTimeout = (int)timeout.TotalSeconds + 1;
-            cmd.CommandText = $"SELECT pg_try_advisory_lock({lockKey})";
-
+            // CreateConnection/OpenAsync are inside the try so any failure routes through
+            // ReleaseConnectionAsync and nulls _lockConnection instead of leaking it (CR-M026).
             try
             {
-                var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-                IsLocked = result is bool b && b;
+                _lockConnection = _connector.CreateConnection(_settings);
+                await _lockConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+
+                using var cmd = _lockConnection.CreateCommand();
+                cmd.CommandTimeout = (int)timeout.TotalSeconds + 1;
+
+                switch (dialect)
+                {
+                    case SqlDialect.PostgreSql:
+                        cmd.CommandText = $"SELECT pg_try_advisory_lock({GetLockKey(lockName)})";
+                        var pg = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        IsLocked = pg is bool b && b;
+                        break;
+
+                    case SqlDialect.MSSql:
+                        // sp_getapplock returns its status via the RETURN value (>= 0 == granted).
+                        cmd.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = @res, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = @to; SELECT @r;";
+                        AddParam(cmd, "@res", lockName);
+                        AddParam(cmd, "@to", (int)timeout.TotalMilliseconds);
+                        var ms = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        IsLocked = ms != null && ms != DBNull.Value && Convert.ToInt32(ms) >= 0;
+                        break;
+
+                    case SqlDialect.MySql:
+                        // GET_LOCK returns 1 on success, 0 on timeout, NULL on error.
+                        cmd.CommandText = "SELECT GET_LOCK(@res, @to)";
+                        AddParam(cmd, "@res", lockName);
+                        AddParam(cmd, "@to", (int)timeout.TotalSeconds);
+                        var my = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                        IsLocked = my != null && my != DBNull.Value && Convert.ToInt64(my) == 1;
+                        break;
+                }
+
                 if (!IsLocked)
                 {
                     await ReleaseConnectionAsync().ConfigureAwait(false);
                 }
                 return IsLocked;
             }
-            catch (DbException)
+            catch
             {
-                // Not PostgreSQL — rely on transaction-level locking in dequeue
+                // Never leak the connection or report a lock that was not taken.
+                IsLocked = false;
                 await ReleaseConnectionAsync().ConfigureAwait(false);
-                return true;
+                throw;
             }
         }
 
@@ -83,13 +117,31 @@ namespace Birko.BackgroundJobs.SQL
                 return;
             }
 
-            var lockKey = GetLockKey(lockName);
-
             try
             {
                 using var cmd = _lockConnection.CreateCommand();
-                cmd.CommandText = $"SELECT pg_advisory_unlock({lockKey})";
-                await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                switch (Dialect)
+                {
+                    case SqlDialect.PostgreSql:
+                        cmd.CommandText = $"SELECT pg_advisory_unlock({GetLockKey(lockName)})";
+                        break;
+                    case SqlDialect.MSSql:
+                        cmd.CommandText = "EXEC sp_releaseapplock @Resource = @res, @LockOwner = 'Session'";
+                        AddParam(cmd, "@res", lockName);
+                        break;
+                    case SqlDialect.MySql:
+                        cmd.CommandText = "SELECT RELEASE_LOCK(@res)";
+                        AddParam(cmd, "@res", lockName);
+                        break;
+                    default:
+                        cmd.CommandText = string.Empty;
+                        break;
+                }
+
+                if (!string.IsNullOrEmpty(cmd.CommandText))
+                {
+                    await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
             catch (DbException)
             {
@@ -98,6 +150,34 @@ namespace Birko.BackgroundJobs.SQL
 
             IsLocked = false;
             await ReleaseConnectionAsync().ConfigureAwait(false);
+        }
+
+        private enum SqlDialect { PostgreSql, MSSql, MySql, Other }
+
+        /// <summary>
+        /// Which advisory-lock dialect to use, derived from the connector type name.
+        /// </summary>
+        private static SqlDialect Dialect
+        {
+            get
+            {
+                var name = typeof(DB).Name;
+                if (name.Contains("PostgreSQL", StringComparison.OrdinalIgnoreCase) || name.Contains("Postgres", StringComparison.OrdinalIgnoreCase))
+                    return SqlDialect.PostgreSql;
+                if (name.Contains("MSSql", StringComparison.OrdinalIgnoreCase) || name.Contains("SqlServer", StringComparison.OrdinalIgnoreCase))
+                    return SqlDialect.MSSql;
+                if (name.Contains("MySQL", StringComparison.OrdinalIgnoreCase))
+                    return SqlDialect.MySql;
+                return SqlDialect.Other;
+            }
+        }
+
+        private static void AddParam(DbCommand cmd, string name, object value)
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = name;
+            p.Value = value;
+            cmd.Parameters.Add(p);
         }
 
         private static long GetLockKey(string lockName)
