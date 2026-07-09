@@ -31,11 +31,27 @@ namespace Birko.Communication.SSE
         public int? Retry { get; set; }
 
         /// <summary>
+        /// Gets or sets an SSE comment. Serialized as `: {comment}` lines (which clients ignore) —
+        /// NOT smuggled through <see cref="Data"/>, which would emit a `data: : ...` field instead of
+        /// a real comment and corrupt the stream / defeat keep-alive (CR-M072).
+        /// </summary>
+        public string? Comment { get; set; }
+
+        /// <summary>
         /// Returns the SSE formatted string representation of this event
         /// </summary>
         public override string ToString()
         {
             var sb = new StringBuilder();
+
+            if (!string.IsNullOrEmpty(Comment))
+            {
+                // A colon-prefixed line with no field name is an SSE comment.
+                foreach (var line in Comment.Split('\n'))
+                {
+                    sb.AppendLine($": {line.TrimEnd('\r')}");
+                }
+            }
 
             if (!string.IsNullOrEmpty(Id))
             {
@@ -106,7 +122,7 @@ namespace Birko.Communication.SSE
         {
             return new SseEvent
             {
-                Data = $": {comment}"
+                Comment = comment
             };
         }
     }

@@ -50,26 +50,33 @@ namespace Birko.Communication.SSE.Middleware
             {
                 var now = DateTime.UtcNow;
 
-                // Clean old entries
-                if (_connectionHistory.ContainsKey(clientKey))
+                // Prune every client's history and DROP keys that have fully aged out. The old code
+                // only pruned the current key's list and never removed empty keys, so a server facing
+                // many distinct client IPs grew this dictionary without bound (a slow leak / DoS in the
+                // very component meant to mitigate abuse) — CR-M067.
+                foreach (var key in _connectionHistory.Keys.ToList())
                 {
-                    _connectionHistory[clientKey] = _connectionHistory[clientKey]
-                        .Where(t => now - t < _window)
-                        .ToList();
+                    var pruned = _connectionHistory[key].Where(t => now - t < _window).ToList();
+                    if (pruned.Count == 0)
+                        _connectionHistory.Remove(key);
+                    else
+                        _connectionHistory[key] = pruned;
                 }
-                else
+
+                if (!_connectionHistory.TryGetValue(clientKey, out var history))
                 {
-                    _connectionHistory[clientKey] = new List<DateTime>();
+                    history = new List<DateTime>();
+                    _connectionHistory[clientKey] = history;
                 }
 
                 // Check rate limit
-                if (_connectionHistory[clientKey].Count >= _maxConnectionsPerMinute)
+                if (history.Count >= _maxConnectionsPerMinute)
                 {
                     _logger.LogWarning("Rate limit exceeded for {ClientKey}", clientKey);
                     return SseResponse.Denied(429, "Too many connection attempts");
                 }
 
-                _connectionHistory[clientKey].Add(now);
+                history.Add(now);
             }
             finally
             {

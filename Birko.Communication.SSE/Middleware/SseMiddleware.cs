@@ -55,6 +55,12 @@ namespace Birko.Communication.SSE.Middleware
         public int StatusCode { get; set; } = 200;
 
         /// <summary>
+        /// Gets or sets the human-readable reason for a denied connection. Carried so the host can
+        /// emit it in the response body/status — previously Denied() dropped its reason (CR-M068).
+        /// </summary>
+        public string? Reason { get; set; }
+
+        /// <summary>
         /// Gets or sets the content type
         /// </summary>
         public string? ContentType { get; set; } = "text/event-stream";
@@ -84,7 +90,8 @@ namespace Birko.Communication.SSE.Middleware
             return new SseResponse
             {
                 AllowConnection = false,
-                StatusCode = statusCode
+                StatusCode = statusCode,
+                Reason = reason
             };
         }
     }

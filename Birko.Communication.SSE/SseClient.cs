@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
+using System.IO;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,6 +15,8 @@ namespace Birko.Communication.SSE
         private CancellationTokenSource? _cts;
         private Task? _receiveTask;
         private readonly Dictionary<string, string> _headers;
+        private readonly HttpClient _httpClient;
+        private readonly bool _ownsHttpClient;
         private SseEvent _currentEvent = new();
 
         /// <summary>
@@ -74,10 +77,14 @@ namespace Birko.Communication.SSE
         /// <summary>
         /// Initializes a new instance of the SseClient class
         /// </summary>
-        public SseClient(string serverUrl, Dictionary<string, string>? headers = null)
+        public SseClient(string serverUrl, Dictionary<string, string>? headers = null, HttpClient? httpClient = null)
         {
             ServerUrl = serverUrl ?? throw new ArgumentNullException(nameof(serverUrl));
             _headers = headers ?? new Dictionary<string, string>();
+            // SSE holds the connection open indefinitely, so an owned client must not time out.
+            // A caller-supplied client (e.g. a test with a mock handler) is used as-is.
+            _httpClient = httpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+            _ownsHttpClient = httpClient == null;
         }
 
         /// <summary>
@@ -93,13 +100,38 @@ namespace Birko.Communication.SSE
         /// </summary>
         public virtual async Task ConnectAsync(CancellationToken cancellationToken = default)
         {
+            // Tear down any prior session first so a repeat call cannot orphan the previous
+            // CancellationTokenSource and receive task (CR-M070).
+            if (_cts != null)
+            {
+                await DisconnectAsync().ConfigureAwait(false);
+            }
+
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            // Actually open the stream so ConnectAsync completing means "connected" and failures
+            // surface to the caller (CR-M071).
+            var response = await OpenStreamAsync(_cts.Token).ConfigureAwait(false);
             IsConnected = true;
             OnConnected?.Invoke(this, EventArgs.Empty);
 
-            _receiveTask = Task.Run(() => ReceiveLoop(_cts.Token));
+            _receiveTask = Task.Run(() => ReceiveLoop(response, _cts.Token));
+        }
 
-            await Task.CompletedTask;
+        private async Task<HttpResponseMessage> OpenStreamAsync(CancellationToken cancellationToken)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, ServerUrl);
+            request.Headers.TryAddWithoutValidation("Accept", "text/event-stream");
+            foreach (var header in _headers)
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            if (LastEventId != null)
+                request.Headers.TryAddWithoutValidation("Last-Event-ID", LastEventId);
+
+            var response = await _httpClient
+                .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            return response;
         }
 
         /// <summary>
@@ -130,28 +162,56 @@ namespace Birko.Communication.SSE
             _headers["Last-Event-ID"] = eventId;
         }
 
-        private async Task ReceiveLoop(CancellationToken cancellationToken)
+        private async Task ReceiveLoop(HttpResponseMessage initialResponse, CancellationToken cancellationToken)
         {
+            var response = initialResponse;
             try
             {
-                while (!cancellationToken.IsCancellationRequested && IsConnected)
+                while (!cancellationToken.IsCancellationRequested)
                 {
-                    await Task.Delay(100, cancellationToken);
+                    try
+                    {
+                        using (response)
+                        using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+                        using (var reader = new StreamReader(stream))
+                        {
+                            string? line;
+                            while (!cancellationToken.IsCancellationRequested
+                                && (line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
+                            {
+                                ProcessEventLine(line);
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        OnError?.Invoke(this, ex);
+                    }
+
+                    // Stream ended (or errored). Reconnect if configured — re-opening with the
+                    // Last-Event-ID header so the server can resume (CR-M071).
+                    if (!AutoReconnect || cancellationToken.IsCancellationRequested)
+                        break;
+
+                    await Task.Delay(ReconnectDelay, cancellationToken).ConfigureAwait(false);
+                    response = await OpenStreamAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException)
             {
-                // Normal cancellation
+                // Normal cancellation / disconnect.
             }
             catch (Exception ex)
             {
                 OnError?.Invoke(this, ex);
-
-                if (AutoReconnect && !cancellationToken.IsCancellationRequested)
-                {
-                    await Task.Delay(ReconnectDelay, cancellationToken);
-                    // In a real implementation, would attempt reconnection here
-                }
+            }
+            finally
+            {
+                IsConnected = false;
             }
         }
 
@@ -202,6 +262,10 @@ namespace Birko.Communication.SSE
         public void Dispose()
         {
             DisconnectAsync().GetAwaiter().GetResult();
+            if (_ownsHttpClient)
+            {
+                _httpClient.Dispose();
+            }
         }
     }
 }

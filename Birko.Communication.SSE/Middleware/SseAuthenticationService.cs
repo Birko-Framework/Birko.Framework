@@ -159,11 +159,15 @@ namespace Birko.Communication.SSE.Middleware
         /// </summary>
         private string? ExtractTokenFromQueryString(string queryString)
         {
-            var pairs = queryString.Split('&');
+            // TrimStart('?') so a raw query passed with its leading '?' doesn't turn the first key
+            // into "?token" and miss the match; split each pair with a limit of 2 so a value that
+            // itself contains '=' (e.g. base64 JWT '=' padding) is preserved rather than rejected
+            // — both previously caused spurious 401s (CR-M069).
+            var pairs = queryString.TrimStart('?').Split('&');
             foreach (var pair in pairs)
             {
-                var parts = pair.Split('=');
-                if (parts.Length == 2 &&
+                var parts = pair.Split('=', 2);
+                if (parts.Length >= 2 &&
                     string.Equals(parts[0], _config.QueryTokenName, StringComparison.OrdinalIgnoreCase))
                 {
                     return Uri.UnescapeDataString(parts[1]);
