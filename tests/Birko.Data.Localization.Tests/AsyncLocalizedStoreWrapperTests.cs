@@ -43,6 +43,27 @@ public class AsyncLocalizedStoreWrapperTests
     }
 
     [Fact]
+    public async Task ReadAsync_DefaultCulture_IgnoresStrayDefaultCultureTranslation()
+    {
+        // CR-H053: the bulk wrapper's ApplyTranslationsAsync lacked the IsNonDefaultCulture guard,
+        // so a translation row whose Culture equals the default culture would overwrite the base
+        // field on a default-culture read. It must be ignored.
+        var product = new TestLocalizableModel { Name = "Widget", Description = "A widget", Code = "W001" };
+        var guid = await _wrapper.CreateAsync(product);
+
+        await _translationStore.CreateAsync(new EntityTranslationModel
+        {
+            EntityGuid = guid, EntityType = "TestLocalizableModel",
+            FieldName = "Name", Culture = "en", Value = "SHOULD-NOT-APPLY"
+        });
+
+        // Still on the default culture ("en").
+        var result = await _wrapper.ReadAsync(guid);
+
+        result!.Name.Should().Be("Widget", "default-culture reads must not apply translations");
+    }
+
+    [Fact]
     public async Task ReadAsync_NonDefaultCulture_AppliesTranslations()
     {
         var product = new TestLocalizableModel { Name = "Widget", Description = "A widget", Code = "W001" };

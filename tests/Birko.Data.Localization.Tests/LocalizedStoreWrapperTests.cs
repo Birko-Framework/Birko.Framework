@@ -44,6 +44,26 @@ public class LocalizedStoreWrapperTests
     }
 
     [Fact]
+    public void Read_DefaultCulture_IgnoresStrayDefaultCultureTranslation()
+    {
+        // CR-H053: the bulk wrapper's ApplyTranslations lacked the IsNonDefaultCulture guard, so a
+        // translation row whose Culture equals the default culture would overwrite the base field
+        // on a default-culture read. It must be ignored.
+        var product = new TestLocalizableModel { Name = "Widget", Description = "A widget", Code = "W001" };
+        var guid = _wrapper.Create(product);
+
+        _translationStore.Create(new EntityTranslationModel
+        {
+            EntityGuid = guid, EntityType = "TestLocalizableModel",
+            FieldName = "Name", Culture = "en", Value = "SHOULD-NOT-APPLY"
+        });
+
+        var result = _wrapper.Read(guid);
+
+        result!.Name.Should().Be("Widget", "default-culture reads must not apply translations");
+    }
+
+    [Fact]
     public void Read_NonDefaultCulture_AppliesTranslations()
     {
         // Create entity in default language
