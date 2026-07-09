@@ -128,4 +128,33 @@ public class GrpcAuthenticationInterceptorTests
 
         act.Should().Throw<ArgumentNullException>();
     }
+
+    [Fact]
+    public void ReusedCallOptions_DoesNotAccumulateDuplicateHeaders_OrMutateCaller()
+    {
+        // CR-M047: WithAuth used to mutate the caller-supplied Metadata in place and Add() (not
+        // replace) the auth header, so reusing a CallOptions across calls accumulated duplicate
+        // 'authorization' entries. It must operate on a copy.
+        var interceptor = new GrpcAuthenticationInterceptor(() => "tok");
+        var callerHeaders = new Metadata();
+        var context = new ClientInterceptorContext<string, string>(
+            UnaryMethod, null, new CallOptions(headers: callerHeaders));
+
+        Metadata? captured = null;
+        AsyncUnaryCall<string> Continuation(string req, ClientInterceptorContext<string, string> ctx)
+        {
+            captured = ctx.Options.Headers;
+            return FakeCall("ok");
+        }
+
+        interceptor.AsyncUnaryCall("req", context, Continuation);
+        var first = captured;
+        interceptor.AsyncUnaryCall("req", context, Continuation);
+        var second = captured;
+
+        callerHeaders.GetAll("authorization").Should().BeEmpty("the caller's Metadata must not be mutated");
+        first!.GetAll("authorization").Should().HaveCount(1);
+        second!.GetAll("authorization").Should().HaveCount(1, "each call injects exactly one header, no accumulation");
+        first.Should().NotBeSameAs(callerHeaders);
+    }
 }
