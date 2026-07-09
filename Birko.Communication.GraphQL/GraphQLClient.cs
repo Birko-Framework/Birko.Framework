@@ -24,7 +24,6 @@ public class GraphQLClient : IGraphQLClient
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly SystemJsonSerializer _serializer = new();
-    private readonly SemaphoreSlim _requestLock = new(1, 1);
 
     // Subscription state
     private readonly SemaphoreSlim _subscriptionLock = new(1, 1);
@@ -155,54 +154,50 @@ public class GraphQLClient : IGraphQLClient
     /// <inheritdoc />
     public async Task<GraphQLResponse<T>> ExecuteAsync<T>(GraphQLRequest request, CancellationToken ct = default)
     {
-        await _requestLock.WaitAsync(ct).ConfigureAwait(false);
-        try
+        // No request serialization: HttpClient is thread-safe for concurrent sends and this client
+        // holds no per-request mutable state. The old SemaphoreSlim(1,1) funneled every caller
+        // sharing the process-wide cached client (per endpoint) into strictly sequential requests —
+        // a throughput bottleneck with no correctness benefit (CR-M045).
+        OnRequest?.Invoke(this, new GraphQLRequestEventArgs
         {
-            OnRequest?.Invoke(this, new GraphQLRequestEventArgs
+            Query = request.Query,
+            OperationName = request.OperationName
+        });
+
+        var json = request.Serialize(_serializer);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _settings.Endpoint) { Content = content };
+
+        foreach (var header in _settings.ExtraHeaders)
+            httpRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
+
+        using var response = await _httpClient.SendAsync(httpRequest, ct).ConfigureAwait(false);
+        var responseBody = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+        var result = GraphQLResponse<T>.Deserialize(responseBody, _serializer);
+
+        if (result.HasErrors)
+        {
+            OnError?.Invoke(this, new GraphQLErrorEventArgs
             {
-                Query = request.Query,
-                OperationName = request.OperationName
-            });
-
-            var json = request.Serialize(_serializer);
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, _settings.Endpoint) { Content = content };
-
-            foreach (var header in _settings.ExtraHeaders)
-                httpRequest.Headers.TryAddWithoutValidation(header.Key, header.Value);
-
-            using var response = await _httpClient.SendAsync(httpRequest, ct).ConfigureAwait(false);
-            var responseBody = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-
-            var result = GraphQLResponse<T>.Deserialize(responseBody, _serializer);
-
-            if (result.HasErrors)
-            {
-                OnError?.Invoke(this, new GraphQLErrorEventArgs
-                {
-                    Errors = result.Errors!,
-                    StatusCode = (int)response.StatusCode
-                });
-
-                throw new GraphQLException(
-                    result.Errors![0].Message,
-                    result.Errors,
-                    (int)response.StatusCode);
-            }
-
-            OnResponse?.Invoke(this, new GraphQLResponseEventArgs
-            {
-                Query = request.Query,
+                Errors = result.Errors!,
                 StatusCode = (int)response.StatusCode
             });
 
-            return result;
+            throw new GraphQLException(
+                result.Errors![0].Message,
+                result.Errors,
+                (int)response.StatusCode);
         }
-        finally
+
+        OnResponse?.Invoke(this, new GraphQLResponseEventArgs
         {
-            _requestLock.Release();
-        }
+            Query = request.Query,
+            StatusCode = (int)response.StatusCode
+        });
+
+        return result;
     }
 
     /// <inheritdoc />
@@ -307,7 +302,6 @@ public class GraphQLClient : IGraphQLClient
     {
         if (_ownsHttpClient)
             _httpClient.Dispose();
-        _requestLock.Dispose();
         _subscriptionLock.Dispose();
     }
 

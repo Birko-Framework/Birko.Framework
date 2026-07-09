@@ -108,81 +108,8 @@ internal class GraphQLSubscription<T> : IGraphQLSubscription<T>, IObservable<T>
 
                 if (message.Text == null) continue;
 
-                using var doc = JsonDocument.Parse(message.Text);
-                var root = doc.RootElement;
-
-                var type = root.TryGetProperty("type", out var typeEl) ? typeEl.GetString() : null;
-                var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
-
-                if (id != _subscriptionId && type != "complete" && type != "connection_error") continue;
-
-                switch (type)
-                {
-                    case "data" or "next":
-                        if (root.TryGetProperty("payload", out var payload)
-                            && payload.TryGetProperty("data", out var dataEl))
-                        {
-                            var data = dataEl.Deserialize<T>(_jsonOptions);
-                            if (data is not null)
-                            {
-                                await _lock.WaitAsync(_cts.Token).ConfigureAwait(false);
-                                try
-                                {
-                                    foreach (var observer in _observers)
-                                        observer.OnNext(data);
-                                }
-                                finally
-                                {
-                                    _lock.Release();
-                                }
-                            }
-                        }
-
-                        if (root.TryGetProperty("payload", out var errPayload)
-                            && errPayload.TryGetProperty("errors", out var errorsEl))
-                        {
-                            var errors = errorsEl.Deserialize<List<GraphQLError>>(_jsonOptions);
-                            if (errors is not null)
-                            {
-                                await _lock.WaitAsync(_cts.Token).ConfigureAwait(false);
-                                try
-                                {
-                                    var ex = new GraphQLException("Subscription error", errors);
-                                    foreach (var observer in _observers)
-                                        observer.OnError(ex);
-                                }
-                                finally
-                                {
-                                    _lock.Release();
-                                }
-                            }
-                        }
-
-                        break;
-
-                    case "complete":
-                        Complete();
-                        return;
-
-                    case "error":
-                        var gqlErrors = root.TryGetProperty("payload", out var errPayload2)
-                            ? errPayload2.Deserialize<List<GraphQLError>>(_jsonOptions)
-                            : null;
-                        var error = new GraphQLException("Subscription error", gqlErrors ?? []);
-                        await _lock.WaitAsync(_cts.Token).ConfigureAwait(false);
-                        try
-                        {
-                            foreach (var observer in _observers)
-                                observer.OnError(error);
-                        }
-                        finally
-                        {
-                            _lock.Release();
-                        }
-
-                        Complete();
-                        return;
-                }
+                if (await HandleMessageAsync(message.Text).ConfigureAwait(false))
+                    return;
             }
         }
         catch (OperationCanceledException)
@@ -197,6 +124,95 @@ internal class GraphQLSubscription<T> : IGraphQLSubscription<T>, IObservable<T>
         {
             Complete();
         }
+    }
+
+    /// <summary>
+    /// Parses one graphql-transport-ws frame and dispatches it to the observers: <c>data</c>/<c>next</c>
+    /// → <see cref="IObserver{T}.OnNext"/> (and OnError for a payload-errors frame), <c>complete</c> →
+    /// completion, <c>error</c> → OnError + completion. Frames whose <c>id</c> is not this subscription
+    /// (except <c>complete</c>/<c>connection_error</c>) are ignored. Returns <c>true</c> when the
+    /// subscription is terminated and the receive loop should stop. Extracted from the receive loop so
+    /// this dispatch + id-filtering is unit-testable without a live WebSocket (CR-M046).
+    /// </summary>
+    internal async Task<bool> HandleMessageAsync(string messageText)
+    {
+        using var doc = JsonDocument.Parse(messageText);
+        var root = doc.RootElement;
+
+        var type = root.TryGetProperty("type", out var typeEl) ? typeEl.GetString() : null;
+        var id = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+
+        if (id != _subscriptionId && type != "complete" && type != "connection_error") return false;
+
+        switch (type)
+        {
+            case "data" or "next":
+                if (root.TryGetProperty("payload", out var payload)
+                    && payload.TryGetProperty("data", out var dataEl))
+                {
+                    var data = dataEl.Deserialize<T>(_jsonOptions);
+                    if (data is not null)
+                    {
+                        await _lock.WaitAsync(_cts.Token).ConfigureAwait(false);
+                        try
+                        {
+                            foreach (var observer in _observers)
+                                observer.OnNext(data);
+                        }
+                        finally
+                        {
+                            _lock.Release();
+                        }
+                    }
+                }
+
+                if (root.TryGetProperty("payload", out var errPayload)
+                    && errPayload.TryGetProperty("errors", out var errorsEl))
+                {
+                    var errors = errorsEl.Deserialize<List<GraphQLError>>(_jsonOptions);
+                    if (errors is not null)
+                    {
+                        await _lock.WaitAsync(_cts.Token).ConfigureAwait(false);
+                        try
+                        {
+                            var ex = new GraphQLException("Subscription error", errors);
+                            foreach (var observer in _observers)
+                                observer.OnError(ex);
+                        }
+                        finally
+                        {
+                            _lock.Release();
+                        }
+                    }
+                }
+
+                return false;
+
+            case "complete":
+                Complete();
+                return true;
+
+            case "error":
+                var gqlErrors = root.TryGetProperty("payload", out var errPayload2)
+                    ? errPayload2.Deserialize<List<GraphQLError>>(_jsonOptions)
+                    : null;
+                var error = new GraphQLException("Subscription error", gqlErrors ?? []);
+                await _lock.WaitAsync(_cts.Token).ConfigureAwait(false);
+                try
+                {
+                    foreach (var observer in _observers)
+                        observer.OnError(error);
+                }
+                finally
+                {
+                    _lock.Release();
+                }
+
+                Complete();
+                return true;
+        }
+
+        return false;
     }
 
     private void Complete()
