@@ -2,6 +2,7 @@ using Birko.Caching;
 using Birko.Caching.Memory;
 using FluentAssertions;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -196,6 +197,46 @@ public class MemoryCacheTests
 
         called.Should().BeFalse();
         value.Should().Be("existing");
+    }
+
+    [Fact]
+    public async Task GetOrSetAsync_ConcurrentSameKey_CallsFactoryOnce()
+    {
+        // Regression for CR-M030: a lock evicted between GetOrAdd and WaitAsync let two callers run
+        // the factory concurrently. The per-key lock is now ref-counted (never timer-evicted), so a
+        // stampede on one key runs the factory exactly once.
+        using var cache = new MemoryCache(cleanupInterval: TimeSpan.FromMilliseconds(1));
+        var factoryCalls = 0;
+
+        var tasks = Enumerable.Range(0, 32).Select(_ => cache.GetOrSetAsync("hot", async ct =>
+        {
+            Interlocked.Increment(ref factoryCalls);
+            await Task.Delay(20, ct);
+            return "value";
+        }));
+        var results = await Task.WhenAll(tasks);
+
+        results.Should().OnlyContain(v => v == "value");
+        factoryCalls.Should().Be(1, "the per-key lock must serialize the stampede");
+    }
+
+    [Fact]
+    public async Task GetOrSetAsync_ReleasesPerKeyLocks()
+    {
+        using var cache = new MemoryCache();
+
+        for (var i = 0; i < 200; i++)
+            await cache.GetOrSetAsync($"key-{i}", ct => Task.FromResult(i));
+
+        LockCount(cache).Should().Be(0, "uncontended per-key locks must be retired by their last releaser");
+    }
+
+    private static int LockCount(MemoryCache cache)
+    {
+        var field = typeof(MemoryCache).GetField("_locks",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var dict = (System.Collections.ICollection)field.GetValue(cache)!;
+        return dict.Count;
     }
 
     #endregion
