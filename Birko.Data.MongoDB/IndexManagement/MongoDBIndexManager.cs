@@ -218,7 +218,7 @@ namespace Birko.Data.MongoDB.IndexManagement
 
         #region Helpers
 
-        private static void ValidateScope(string? scope)
+        internal static void ValidateScope(string? scope)
         {
             if (string.IsNullOrWhiteSpace(scope))
                 throw new ArgumentException("Collection name (scope) is required for MongoDB index management.", nameof(scope));

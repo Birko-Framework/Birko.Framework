@@ -85,16 +85,9 @@ namespace Birko.Data.MongoDB.Stores
             }
         }
 
-        /// <inheritdoc />
-        public override async Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
-        {
-            if (Collection == null)
-            {
-                return null;
-            }
-
-            return await Collection.Find(new ModelByGuid<T>(guid).Filter()).FirstOrDefaultAsync(ct);
-        }
+        // CR-M118: no public ReadAsync(Guid) override. It bypassed EnsureInitializedAsync (which also
+        // observes the CancellationToken) and was redundant — the base ReadAsync(Guid) routes through
+        // ReadAsync(filter) → ReadCoreAsync with correct init/cancellation behavior.
 
         /// <inheritdoc />
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
@@ -209,6 +202,10 @@ namespace Birko.Data.MongoDB.Stores
             }
             else
             {
+                // CR-M119: the native-upsert fast path must still honor the init/cancellation contract
+                // (the create branch gets it via CreateAsync; this branch previously did not).
+                await EnsureInitializedAsync(ct);
+
                 var filter = new ModelByGuid<T>(data.Guid.Value).Filter();
                 if (TransactionContext != null)
                     await Collection.ReplaceOneAsync(TransactionContext, filter, data, new ReplaceOptions { IsUpsert = true }, ct);

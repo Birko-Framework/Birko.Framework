@@ -96,21 +96,10 @@ namespace Birko.Data.MongoDB.Stores
             Client.DropCollection<T>(collectionName);
         }
 
-        /// <inheritdoc />
-        public override T? Read(Guid guid)
-        {
-            if (Collection == null) return null;
-
-            return Collection.Find(new ModelByGuid<T>(guid).Filter()).FirstOrDefault();
-        }
-
-        /// <inheritdoc />
-        public override IEnumerable<T> Read()
-        {
-            if (Collection == null) return Enumerable.Empty<T>();
-
-            return Collection.Find(FilterDefinition<T>.Empty).ToList();
-        }
+        // CR-M117: no public Read(Guid) / Read() overrides. They bypassed the base wrappers'
+        // EnsureInitialized gate (going straight to Collection.Find) and were redundant — the base
+        // Read(Guid) routes through the single-result ReadCore(filter) and the parameterless Read()
+        // through the bulk ReadCore below, both of which run lazy-init first.
 
         /// <inheritdoc />
         protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
