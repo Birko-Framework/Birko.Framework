@@ -177,9 +177,12 @@ namespace Birko.Data.JSON.Stores
             bool save = false;
             foreach (var item in data.Where(x => x != null))
             {
-                item.Guid = Guid.NewGuid();
+                // CR-M098: preserve a caller-supplied Guid (was overwritten) and upsert via the indexer
+                // (was _items.Add, which throws ArgumentException on a duplicate key) — matches the
+                // single-item CreateCore's Guid handling and the async bulk path's indexer store.
+                item.Guid ??= Guid.NewGuid();
                 storeDelegate?.Invoke(item);
-                _items.Add(item.Guid.Value, item);
+                _items[item.Guid.Value] = item;
                 save = true;
             }
             if (save)
