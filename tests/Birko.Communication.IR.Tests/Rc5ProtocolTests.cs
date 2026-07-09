@@ -64,6 +64,29 @@ public class Rc5ProtocolTests
         }
     }
 
+    // ── Round-trip (CR-H024) ──
+
+    [Theory]
+    [InlineData(0x05u, 0x0Cu, 0)]
+    [InlineData(0x00u, 0x00u, 0)]
+    [InlineData(0x1Fu, 0x3Fu, 1)] // max 5-bit address, 6-bit command, toggle set
+    [InlineData(0x0Au, 0x14u, 1)]
+    public void Encode_Then_Decode_RoundTrip(uint address, uint command, int toggle)
+    {
+        // Regression for CR-H024: Encode emitted a leading 0µs mark, so its own output decoded to
+        // null. Decode now tolerates it and the address/command/toggle survive a round-trip.
+        var original = new IrCommand { Address = address, Command = command, Toggle = toggle };
+
+        var timing = _protocol.Encode(original);
+        var decoded = _protocol.Decode(timing);
+
+        decoded.Should().NotBeNull("a freshly-encoded RC5 frame must decode");
+        decoded!.Address.Should().Be(address);
+        decoded.Command.Should().Be(command);
+        decoded.Toggle.Should().Be(toggle);
+        decoded.BitCount.Should().Be(14);
+    }
+
     [Fact]
     public void Decode_NullTiming_ReturnsNull()
     {
