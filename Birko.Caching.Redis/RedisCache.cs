@@ -49,6 +49,7 @@ public sealed class RedisCache : ICache
 
     public async Task<CacheResult<T>> GetAsync<T>(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
         var value = await db.StringGetAsync(fullKey);
@@ -64,6 +65,7 @@ public sealed class RedisCache : ICache
 
     public async Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
         var opts = options ?? new CacheEntryOptions { AbsoluteExpiration = _defaultExpiration };
@@ -91,6 +93,7 @@ public sealed class RedisCache : ICache
 
     public async Task RemoveAsync(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var fullKey = GetFullKey(key);
         await db.KeyDeleteAsync([fullKey, GetMetaKey(fullKey)]);
@@ -98,12 +101,14 @@ public sealed class RedisCache : ICache
 
     public async Task<bool> ExistsAsync(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         return await db.KeyExistsAsync(GetFullKey(key));
     }
 
     public async Task<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var result = await GetAsync<T>(key, ct);
         if (result.HasValue)
             return result.Value!;
@@ -145,18 +150,21 @@ public sealed class RedisCache : ICache
 
     public async Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var db = _connectionManager.GetDatabase();
         var server = _connectionManager.GetServer();
         var fullPrefix = GetFullKey(prefix);
 
         await foreach (var key in server.KeysAsync(pattern: $"{fullPrefix}*", database: _settings.Database))
         {
+            ct.ThrowIfCancellationRequested();
             await db.KeyDeleteAsync(key);
         }
     }
 
     public async Task ClearAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_settings.KeyPrefix is not null)
         {
             await RemoveByPrefixAsync("", ct);
