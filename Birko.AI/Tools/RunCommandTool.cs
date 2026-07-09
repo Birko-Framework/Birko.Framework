@@ -18,7 +18,7 @@ namespace Birko.AI.Tools
             required = new[] { "command" }
         };
 
-        public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
+        public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -53,7 +53,8 @@ namespace Birko.AI.Tools
                 var stdoutTask = proc.StandardOutput.ReadToEndAsync();
                 var stderrTask = proc.StandardError.ReadToEndAsync();
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
                 try
                 {
                     await proc.WaitForExitAsync(cts.Token);

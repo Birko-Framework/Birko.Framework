@@ -18,7 +18,7 @@ namespace Birko.AI.Tools
             required = new[] { "file_path", "old_text", "new_text" }
         };
 
-        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
+        public override Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input, CancellationToken cancellationToken = default)
         {
             try
             {

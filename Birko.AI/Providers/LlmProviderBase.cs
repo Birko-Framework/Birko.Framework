@@ -1,6 +1,7 @@
 using Birko.AI.Models;
 using Birko.AI.Tools;
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace Birko.AI.Providers
@@ -21,9 +22,9 @@ namespace Birko.AI.Providers
             AddJitter = true
         };
 
-        public abstract Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt);
+        public abstract Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default);
 
-        public virtual Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public virtual Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(new LlmStreamingResponse
             {
@@ -46,27 +47,30 @@ namespace Birko.AI.Providers
         protected async Task<(HttpResponseMessage? Response, string? ResponseBody)> SendWithRetryAsync(
             HttpClient httpClient,
             Func<HttpRequestMessage> requestFactory,
-            string providerName)
+            string providerName,
+            CancellationToken cancellationToken = default)
         {
             var policy = RetryPolicy;
             var attempt = 0;
             Exception? lastException = null;
-            HttpResponseMessage? lastResponse = null;
-            string? lastResponseBody = null;
 
             while (attempt <= policy.MaxRetries)
             {
                 try
                 {
                     using var request = requestFactory();
-                    var response = await httpClient.SendAsync(request);
-                    var responseBody = await response.Content.ReadAsStringAsync();
+                    // The body is fully buffered into responseBody below, so callers never need the
+                    // live response (they only read StatusCode/IsSuccessStatusCode, which remain
+                    // readable after Dispose). Dispose on every path to avoid leaking the response
+                    // handle (CR-M010).
+                    var response = await httpClient.SendAsync(request, cancellationToken);
+                    var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
                     if (response.IsSuccessStatusCode)
+                    {
+                        response.Dispose();
                         return (response, responseBody);
-
-                    lastResponse = response;
-                    lastResponseBody = responseBody;
+                    }
 
                     if (!IsRetryableStatusCode(response.StatusCode))
                     {
@@ -75,6 +79,7 @@ namespace Birko.AI.Providers
                             ? $"{providerName} API Error ({response.StatusCode}): {errorDetail}"
                             : $"{providerName} API Error: {response.StatusCode}";
                         SendMessage("error", errorMsg);
+                        response.Dispose();
                         return (response, responseBody);
                     }
 
@@ -85,15 +90,18 @@ namespace Birko.AI.Providers
                             ? $"{providerName} API Error after {attempt + 1} attempts ({response.StatusCode}): {errorDetail}"
                             : $"{providerName} API Error after {attempt + 1} attempts: {response.StatusCode}";
                         SendMessage("error", errorMsg);
+                        response.Dispose();
                         return (response, responseBody);
                     }
 
+                    // Read Retry-After (needs the live headers) before disposing.
                     var retryAfter = GetRetryAfterDelay(response);
                     var delay = retryAfter ?? policy.GetDelay(attempt + 1);
 
                     SendMessage("warning", $"{providerName}: {response.StatusCode}, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
 
-                    await Task.Delay(delay);
+                    response.Dispose();
+                    await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
                 catch (HttpRequestException ex)
@@ -108,7 +116,7 @@ namespace Birko.AI.Providers
                     var delay = policy.GetDelay(attempt + 1);
                     SendMessage("warning", $"{providerName}: Network error, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1}): {ex.Message}");
 
-                    await Task.Delay(delay);
+                    await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
                 catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
@@ -123,7 +131,7 @@ namespace Birko.AI.Providers
                     var delay = policy.GetDelay(attempt + 1);
                     SendMessage("warning", $"{providerName}: Timeout, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
 
-                    await Task.Delay(delay);
+                    await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
             }
@@ -131,7 +139,7 @@ namespace Birko.AI.Providers
             if (lastException != null)
                 throw lastException;
 
-            return (lastResponse, lastResponseBody);
+            return (null, null);
         }
 
         private static bool IsRetryableStatusCode(HttpStatusCode statusCode)
@@ -452,7 +460,8 @@ namespace Birko.AI.Providers
         protected async Task<HttpResponseMessage?> SendStreamingWithRetryAsync(
             HttpClient httpClient,
             Func<HttpRequestMessage> requestFactory,
-            string providerName)
+            string providerName,
+            CancellationToken cancellationToken = default)
         {
             var policy = RetryPolicy;
             var attempt = 0;
@@ -462,12 +471,12 @@ namespace Birko.AI.Providers
                 try
                 {
                     var request = requestFactory();
-                    var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                    var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
 
                     if (response.IsSuccessStatusCode)
                         return response;
 
-                    var responseBody = await response.Content.ReadAsStringAsync();
+                    var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
                     if (!IsRetryableStatusCode(response.StatusCode))
                     {
@@ -489,7 +498,7 @@ namespace Birko.AI.Providers
                     SendMessage("warning", $"{providerName}: {response.StatusCode}, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
 
                     response.Dispose();
-                    await Task.Delay(delay);
+                    await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
                 catch (HttpRequestException ex)
@@ -503,7 +512,7 @@ namespace Birko.AI.Providers
                     var delay = policy.GetDelay(attempt + 1);
                     SendMessage("warning", $"{providerName}: Network error, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1}): {ex.Message}");
 
-                    await Task.Delay(delay);
+                    await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
                 catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
@@ -517,7 +526,7 @@ namespace Birko.AI.Providers
                     var delay = policy.GetDelay(attempt + 1);
                     SendMessage("warning", $"{providerName}: Timeout, retrying in {delay.TotalMilliseconds:F0}ms (attempt {attempt + 1}/{policy.MaxRetries + 1})");
 
-                    await Task.Delay(delay);
+                    await Task.Delay(delay, cancellationToken);
                     attempt++;
                 }
             }
@@ -528,13 +537,13 @@ namespace Birko.AI.Providers
         /// <summary>
         /// Parses SSE (Server-Sent Events) stream format.
         /// </summary>
-        protected static async IAsyncEnumerable<string> ParseSseStream(Stream stream)
+        protected static async IAsyncEnumerable<string> ParseSseStream(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             using var reader = new StreamReader(stream);
             var buffer = new System.Text.StringBuilder();
 
             string? line;
-            while ((line = await reader.ReadLineAsync()) != null)
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
                 if (string.IsNullOrEmpty(line))
                 {
@@ -569,9 +578,9 @@ namespace Birko.AI.Providers
         /// <summary>
         /// Parses OpenAI-style streaming response chunks.
         /// </summary>
-        protected static async IAsyncEnumerable<string> ParseOpenAiStreamChunks(IAsyncEnumerable<string> sseChunks)
+        protected static async IAsyncEnumerable<string> ParseOpenAiStreamChunks(IAsyncEnumerable<string> sseChunks, [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            await foreach (var chunk in sseChunks)
+            await foreach (var chunk in sseChunks.WithCancellation(cancellationToken))
             {
                 if (string.IsNullOrWhiteSpace(chunk))
                     continue;
@@ -599,14 +608,15 @@ namespace Birko.AI.Providers
         /// </summary>
         protected static async IAsyncEnumerable<string> ParseOpenAiStreamChunksWithToolCapture(
             IAsyncEnumerable<string> sseChunks,
-            LlmStreamingResponse streamingResponse)
+            LlmStreamingResponse streamingResponse,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var textBuilder = new System.Text.StringBuilder();
             var toolCalls = new Dictionary<int, (string? Id, string? Name, System.Text.StringBuilder Arguments)>();
             string? finishReason = null;
             TokenUsage? tokenUsage = null;
 
-            await foreach (var chunk in sseChunks)
+            await foreach (var chunk in sseChunks.WithCancellation(cancellationToken))
             {
                 if (string.IsNullOrWhiteSpace(chunk))
                     continue;

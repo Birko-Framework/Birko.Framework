@@ -146,46 +146,48 @@ Reasoning approach: Balanced
             };
         }
 
-        public async Task<List<Message>> RunAsync(string task, int? maxIterations = null)
+        public async Task<List<Message>> RunAsync(string task, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             var conversation = new List<Message>
             {
                 new() { Role = "user", Content = task }
             };
-            return await RunWithHistoryAsync(conversation, maxIterations);
+            return await RunWithHistoryAsync(conversation, maxIterations, cancellationToken);
         }
 
-        public async Task<List<Message>> ContinueAsync(List<Message> conversationHistory, string newUserMessage, int? maxIterations = null)
+        public async Task<List<Message>> ContinueAsync(List<Message> conversationHistory, string newUserMessage, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             var conversation = new List<Message>(conversationHistory);
             conversation.Add(new Message { Role = "user", Content = newUserMessage });
-            return await RunWithHistoryAsync(conversation, maxIterations);
+            return await RunWithHistoryAsync(conversation, maxIterations, cancellationToken);
         }
 
-        private async Task<List<Message>> RunWithHistoryAsync(List<Message> conversation, int? maxIterations = null)
+        private async Task<List<Message>> RunWithHistoryAsync(List<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             if (_options.EnableStreaming)
             {
                 try
                 {
-                    return await RunWithHistoryStreamingAsync(conversation, maxIterations);
+                    return await RunWithHistoryStreamingAsync(conversation, maxIterations, cancellationToken);
                 }
-                catch (Exception ex) when (_options.StreamingFallbackToSync)
+                catch (Exception ex) when (ex is not OperationCanceledException && _options.StreamingFallbackToSync)
                 {
                     SendMessage("warning", $"Streaming failed: {ex.Message}. Falling back to synchronous mode.");
                 }
             }
 
-            return await RunWithHistorySyncAsync(conversation, maxIterations);
+            return await RunWithHistorySyncAsync(conversation, maxIterations, cancellationToken);
         }
 
-        private async Task<List<Message>> RunWithHistoryStreamingAsync(List<Message> conversation, int? maxIterations = null)
+        private async Task<List<Message>> RunWithHistoryStreamingAsync(List<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             var maxIter = maxIterations ?? _options.MaxIterations;
             var iteration = 1;
 
             while (iteration <= maxIter)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (_options.Verbose)
                     SendMessage("info", $"ITERATION {iteration}{(iteration == 1 ? " (streaming)" : "")}");
 
@@ -193,7 +195,10 @@ Reasoning approach: Balanced
 
                 if (iteration == 1)
                 {
-                    var streamingResponse = await _llmProvider.SendMessageStreamingAsync(conversation, _tools, SystemPrompt);
+                    // await using disposes the streaming response — and its underlying HTTP
+                    // connection (LlmStreamingResponse.Resource) — even if enumeration is abandoned
+                    // early by an exception or cancellation (CR-M003).
+                    await using var streamingResponse = await _llmProvider.SendMessageStreamingAsync(conversation, _tools, SystemPrompt, cancellationToken);
                     _options.OnLlmResponseReceived?.Invoke();
 
                     if (!string.IsNullOrEmpty(streamingResponse.Error))
@@ -205,7 +210,7 @@ Reasoning approach: Balanced
                     var fullText = new System.Text.StringBuilder();
                     var stream = await streamingResponse.GetStreamAsync();
 
-                    await foreach (var chunk in stream)
+                    await foreach (var chunk in stream.WithCancellation(cancellationToken))
                     {
                         fullText.Append(chunk);
                         SendMessage("assistant_stream", chunk);
@@ -222,7 +227,7 @@ Reasoning approach: Balanced
                 }
                 else
                 {
-                    response = await _llmProvider.SendMessageAsync(conversation, _tools, SystemPrompt);
+                    response = await _llmProvider.SendMessageAsync(conversation, _tools, SystemPrompt, cancellationToken);
                     _options.OnLlmResponseReceived?.Invoke();
                 }
 
@@ -231,7 +236,7 @@ Reasoning approach: Balanced
 
                 conversation.Add(new Message { Role = "assistant", Content = response.Content });
 
-                var result = HandleResponse(response, conversation, iteration, maxIter);
+                var result = await HandleResponse(response, conversation, iteration, maxIter, cancellationToken);
                 if (result.HasValue)
                     return result.Value.Done ? conversation : conversation;
 
@@ -244,16 +249,18 @@ Reasoning approach: Balanced
             return conversation;
         }
 
-        private async Task<List<Message>> RunWithHistorySyncAsync(List<Message> conversation, int? maxIterations = null)
+        private async Task<List<Message>> RunWithHistorySyncAsync(List<Message> conversation, int? maxIterations = null, CancellationToken cancellationToken = default)
         {
             var maxIter = maxIterations ?? _options.MaxIterations;
 
             for (int iteration = 1; iteration <= maxIter; iteration++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (_options.Verbose)
                     SendMessage("info", $"ITERATION {iteration}");
 
-                var response = await _llmProvider.SendMessageAsync(conversation, _tools, SystemPrompt);
+                var response = await _llmProvider.SendMessageAsync(conversation, _tools, SystemPrompt, cancellationToken);
                 _options.OnLlmResponseReceived?.Invoke();
 
                 if (_options.Verbose)
@@ -261,7 +268,7 @@ Reasoning approach: Balanced
 
                 conversation.Add(new Message { Role = "assistant", Content = response.Content });
 
-                var result = HandleResponse(response, conversation, iteration, maxIter);
+                var result = await HandleResponse(response, conversation, iteration, maxIter, cancellationToken);
                 if (result.HasValue)
                     return conversation;
             }
@@ -272,12 +279,12 @@ Reasoning approach: Balanced
             return conversation;
         }
 
-        private (bool Done, bool Continue)? HandleResponse(LlmResponse response, List<Message> conversation, int iteration, int maxIter)
+        private async Task<(bool Done, bool Continue)?> HandleResponse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, CancellationToken cancellationToken = default)
         {
             switch (response.StopReason)
             {
                 case "tool_use":
-                    return HandleToolUse(response, conversation, iteration, maxIter).GetAwaiter().GetResult();
+                    return await HandleToolUse(response, conversation, iteration, maxIter, cancellationToken);
 
                 case "end_turn":
                     foreach (var block in (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "text"))
@@ -302,19 +309,21 @@ Reasoning approach: Balanced
             }
         }
 
-        private async Task<(bool Done, bool Continue)?> HandleToolUse(LlmResponse response, List<Message> conversation, int iteration, int maxIter)
+        private async Task<(bool Done, bool Continue)?> HandleToolUse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, CancellationToken cancellationToken = default)
         {
             var toolResults = new List<object>();
             var hasErrors = false;
 
             foreach (var block in (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "tool_use"))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var toolCallMsg = $"Tool: {block.Name}\nInput: {JsonSerializer.Serialize(block.Input)}";
                 SendMessage("tool_call", toolCallMsg);
 
                 var tool = _tools.FirstOrDefault(t => t.Name == block.Name);
                 var result = tool != null
-                    ? await tool.ExecuteAsync(_options.WorkingDirectory, block.Input ?? [])
+                    ? await tool.ExecuteAsync(_options.WorkingDirectory, block.Input ?? [], cancellationToken)
                     : $"Error: Unknown tool '{block.Name}'";
 
                 if (result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))

@@ -17,7 +17,7 @@ namespace Birko.AI.Tools
 
         public Func<string, string, Task<string>>? PromptCallback { get; set; }
 
-        public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input)
+        public override async Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -50,7 +50,7 @@ namespace Birko.AI.Tools
 
                     var timeout = Options?.PromptTimeout ?? 300;
                     var promptTask = PromptCallback(question ?? "", context ?? "");
-                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeout));
+                    var timeoutTask = Task.Delay(TimeSpan.FromSeconds(timeout), cancellationToken);
 
                     var completedTask = await Task.WhenAny(promptTask, timeoutTask);
 
