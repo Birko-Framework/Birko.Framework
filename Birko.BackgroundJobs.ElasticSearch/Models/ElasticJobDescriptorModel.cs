@@ -36,6 +36,9 @@ public class ElasticJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [Number(NumberType.Integer, Name = "attemptCount")]
     public int AttemptCount { get; set; }
 
+    [Keyword(Name = "claimToken")]
+    public Guid? ClaimToken { get; set; }
+
     [Date(Name = "enqueuedAt")]
     public DateTime EnqueuedAt { get; set; } = DateTime.UtcNow;
 

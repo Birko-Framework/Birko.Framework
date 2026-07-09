@@ -16,6 +16,8 @@ namespace Birko.BackgroundJobs.ElasticSearch
     /// </summary>
     public class ElasticSearchJobQueue : IJobQueue
     {
+        private const int MaxClaimAttempts = 32;
+
         private readonly AsyncElasticSearchStore<ElasticJobDescriptorModel> _store;
         private readonly RetryPolicy _retryPolicy;
 
@@ -52,45 +54,67 @@ namespace Birko.BackgroundJobs.ElasticSearch
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
-            var now = DateTime.UtcNow;
             var pendingStatus = (int)JobStatus.Pending;
             var scheduledStatus = (int)JobStatus.Scheduled;
+            var processingStatus = (int)JobStatus.Processing;
 
-            IEnumerable<ElasticJobDescriptorModel> candidates;
-
-            if (queueName != null)
+            for (int attempt = 0; attempt < MaxClaimAttempts; attempt++)
             {
-                candidates = await _store.ReadAsync(
-                    filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
-                              && (j.QueueName == null || j.QueueName == queueName),
-                    orderBy: OrderBy<ElasticJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                    limit: 1,
+                var now = DateTime.UtcNow;
+
+                IEnumerable<ElasticJobDescriptorModel> candidates;
+                if (queueName != null)
+                {
+                    candidates = await _store.ReadAsync(
+                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                                  && (j.QueueName == null || j.QueueName == queueName),
+                        orderBy: OrderBy<ElasticJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                        limit: 1,
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+                else
+                {
+                    candidates = await _store.ReadAsync(
+                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                        orderBy: OrderBy<ElasticJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
+                        limit: 1,
+                        ct: cancellationToken
+                    ).ConfigureAwait(false);
+                }
+
+                var candidate = candidates.FirstOrDefault();
+                if (candidate == null)
+                {
+                    return null;
+                }
+
+                // Conditional claim guarded on the still-eligible status + re-read verify via ClaimToken.
+                // NOTE: Elasticsearch's ~1s index refresh means the re-read can be briefly stale, so this
+                // narrows but does not fully eliminate the double-dispatch window — job handlers should be
+                // idempotent (documented in the project CLAUDE.md).
+                var claimId = candidate.Guid;
+                var originalStatus = candidate.Status;
+                var claimToken = Guid.NewGuid();
+
+                await _store.UpdateAsync(
+                    filter: j => j.Guid == claimId && j.Status == originalStatus,
+                    updates: new PropertyUpdate<ElasticJobDescriptorModel>()
+                        .Set(j => j.Status, processingStatus)
+                        .Set(j => j.ClaimToken, claimToken)
+                        .Set(j => j.AttemptCount, candidate.AttemptCount + 1)
+                        .Set(j => j.LastAttemptAt, now),
                     ct: cancellationToken
                 ).ConfigureAwait(false);
-            }
-            else
-            {
-                candidates = await _store.ReadAsync(
-                    filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
-                    orderBy: OrderBy<ElasticJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
-                    limit: 1,
-                    ct: cancellationToken
-                ).ConfigureAwait(false);
+
+                var claimed = await _store.ReadAsync(j => j.Guid == claimId, cancellationToken).ConfigureAwait(false);
+                if (claimed != null && claimed.ClaimToken == claimToken)
+                {
+                    return claimed.ToDescriptor();
+                }
             }
 
-            var candidate = candidates.FirstOrDefault();
-            if (candidate == null)
-            {
-                return null;
-            }
-
-            candidate.Status = (int)JobStatus.Processing;
-            candidate.AttemptCount++;
-            candidate.LastAttemptAt = DateTime.UtcNow;
-
-            await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
-
-            return candidate.ToDescriptor();
+            return null;
         }
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
