@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Caching;
@@ -176,6 +177,43 @@ public class HybridCacheTests : IDisposable
     }
 
     [Fact]
+    public async Task GetOrSetAsync_DoesNotLeakPerKeyLocks()
+    {
+        // Regression for CR-H013: the per-key stampede locks were never removed, growing the map
+        // one SemaphoreSlim per distinct key forever. After the calls complete, the lock map must
+        // be empty (every ref-counted lock released back to zero).
+        for (var i = 0; i < 500; i++)
+            await _sut.GetOrSetAsync<int>($"key-{i}", _ => Task.FromResult(i));
+
+        LockCount(_sut).Should().Be(0, "uncontended per-key locks must be pruned, not accumulated");
+    }
+
+    [Fact]
+    public async Task GetOrSetAsync_ConcurrentSameKey_PrunesLockAndCallsFactoryOnce()
+    {
+        var factoryCalls = 0;
+        var tasks = Enumerable.Range(0, 20).Select(_ => _sut.GetOrSetAsync<int>("hot", _ =>
+        {
+            Interlocked.Increment(ref factoryCalls);
+            return Task.FromResult(7);
+        }));
+
+        var results = await Task.WhenAll(tasks);
+
+        results.Should().OnlyContain(v => v == 7);
+        factoryCalls.Should().Be(1, "the per-key lock must serialize the stampede");
+        LockCount(_sut).Should().Be(0, "the shared lock is removed once all waiters release it");
+    }
+
+    private static int LockCount(HybridCache cache)
+    {
+        var field = typeof(HybridCache).GetField("_locks",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        var dict = (System.Collections.ICollection)field.GetValue(cache)!;
+        return dict.Count;
+    }
+
+    [Fact]
     public async Task RemoveByPrefixAsync_RemovesFromBothTiers()
     {
         await _sut.SetAsync("user:1", "a");
@@ -264,6 +302,146 @@ public class HybridCacheFallbackTests : IDisposable
         var act = () => sut.SetAsync("key", "value");
 
         await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task WriteThrough_L2FailsFallbackDisabled_StillObservesL1_AndThrows()
+    {
+        // Regression for CR-M031: the write-through branch used to leave l1Task unawaited when L2
+        // faulted with fallback disabled — an orphaned fire-and-forget write. L1 must be written
+        // (and observed) even though the L2 failure propagates.
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2,
+            new HybridCacheOptions { WriteThrough = true, FallbackToL1OnL2Failure = false });
+
+        var act = () => sut.SetAsync("key", "value");
+        await act.Should().ThrowAsync<InvalidOperationException>();
+
+        // The L1 write must have completed despite the L2 failure.
+        var l1 = await _l1.GetAsync<string>("key");
+        l1.HasValue.Should().BeTrue("the L1 write must be observed, not orphaned");
+        l1.Value.Should().Be("value");
+    }
+
+    [Fact]
+    public async Task RemoveAsync_DoesNotThrow_WhenL2Fails()
+    {
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2, new HybridCacheOptions { FallbackToL1OnL2Failure = true });
+        await _l1.SetAsync("key", "v");
+
+        var act = () => sut.RemoveAsync("key");
+        await act.Should().NotThrowAsync();
+        (await _l1.ExistsAsync("key")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ExistsAsync_ReturnsFalse_WhenL2FailsAndL1Miss()
+    {
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2, new HybridCacheOptions { FallbackToL1OnL2Failure = true });
+
+        (await sut.ExistsAsync("missing")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RemoveByPrefixAsync_DoesNotThrow_WhenL2Fails()
+    {
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2, new HybridCacheOptions { FallbackToL1OnL2Failure = true });
+        await _l1.SetAsync("user:1", "a");
+
+        var act = () => sut.RemoveByPrefixAsync("user:");
+        await act.Should().NotThrowAsync();
+        (await _l1.ExistsAsync("user:1")).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ClearAsync_DoesNotThrow_WhenL2Fails()
+    {
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2, new HybridCacheOptions { FallbackToL1OnL2Failure = true });
+        await _l1.SetAsync("a", 1);
+
+        var act = () => sut.ClearAsync();
+        await act.Should().NotThrowAsync();
+        (await _l1.ExistsAsync("a")).Should().BeFalse();
+    }
+}
+
+public class HybridCacheWriteThroughFalseTests : IDisposable
+{
+    private readonly MemoryCache _l1 = new();
+    private readonly MemoryCache _l2 = new();
+
+    public void Dispose() { _l1.Dispose(); _l2.Dispose(); }
+
+    [Fact]
+    public async Task WriteThroughFalse_WritesBothTiers()
+    {
+        using var sut = new HybridCache(_l1, _l2, new HybridCacheOptions { WriteThrough = false });
+
+        await sut.SetAsync("key", "value");
+
+        (await _l1.GetAsync<string>("key")).Value.Should().Be("value");
+        (await _l2.GetAsync<string>("key")).Value.Should().Be("value");
+    }
+
+    [Fact]
+    public async Task WriteThroughFalse_L2FailsFallbackDisabled_Throws()
+    {
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2,
+            new HybridCacheOptions { WriteThrough = false, FallbackToL1OnL2Failure = false });
+
+        var act = () => sut.SetAsync("key", "value");
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task WriteThroughFalse_L2FailsFallbackEnabled_StillWritesL1()
+    {
+        var failingL2 = new FailingCache();
+        using var sut = new HybridCache(_l1, failingL2,
+            new HybridCacheOptions { WriteThrough = false, FallbackToL1OnL2Failure = true });
+
+        await sut.SetAsync("key", "value");
+
+        (await _l1.GetAsync<string>("key")).Value.Should().Be("value");
+    }
+}
+
+public class HybridCacheL1CappingTests
+{
+    private static CacheEntryOptions InvokeGetL1Options(HybridCache cache, CacheEntryOptions? requested)
+    {
+        var method = typeof(HybridCache).GetMethod("GetL1Options",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        return (CacheEntryOptions)method.Invoke(cache, new object?[] { requested })!;
+    }
+
+    [Fact]
+    public void GetL1Options_CapsAbsoluteExpirationToL1Max()
+    {
+        using var l1 = new MemoryCache();
+        using var l2 = new MemoryCache();
+        using var sut = new HybridCache(l1, l2, new HybridCacheOptions { L1MaxExpiration = TimeSpan.FromMinutes(2) });
+
+        var capped = InvokeGetL1Options(sut, CacheEntryOptions.Absolute(TimeSpan.FromHours(1)));
+
+        capped.AbsoluteExpiration.Should().Be(TimeSpan.FromMinutes(2), "an L1 TTL above the cap must be reduced");
+    }
+
+    [Fact]
+    public void GetL1Options_KeepsRequestedExpiration_WhenBelowCap()
+    {
+        using var l1 = new MemoryCache();
+        using var l2 = new MemoryCache();
+        using var sut = new HybridCache(l1, l2, new HybridCacheOptions { L1MaxExpiration = TimeSpan.FromMinutes(10) });
+
+        var kept = InvokeGetL1Options(sut, CacheEntryOptions.Absolute(TimeSpan.FromMinutes(1)));
+
+        kept.AbsoluteExpiration.Should().Be(TimeSpan.FromMinutes(1));
     }
 }
 
