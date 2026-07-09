@@ -61,7 +61,16 @@ public class GrpcAuthenticationInterceptor : Interceptor
         where TRequest : class
         where TResponse : class
     {
-        var headers = context.Options.Headers ?? new Metadata();
+        // Operate on a COPY of the inbound headers, never the caller's Metadata instance. CallOptions
+        // /Metadata can be reused across calls, and _mutate Add()s (does not replace) the auth header,
+        // so mutating the original accumulates duplicate authorization/x-tenant entries on every reuse
+        // (CR-M047).
+        var headers = new Metadata();
+        if (context.Options.Headers != null)
+        {
+            foreach (var entry in context.Options.Headers)
+                headers.Add(entry);
+        }
         _mutate(headers);
         var options = context.Options.WithHeaders(headers);
         return new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, options);
