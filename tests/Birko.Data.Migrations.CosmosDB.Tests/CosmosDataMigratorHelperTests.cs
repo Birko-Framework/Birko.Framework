@@ -25,18 +25,28 @@ public class CosmosDataMigratorHelperTests
     [Fact]
     public void ParseFilterToSql_Equality_And_Operators()
     {
-        CosmosDBDataMigrator.ParseFilterToSql("{\"status\":\"active\"}").Should().Be("c.status = 'active'");
-        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$gt\":18}}").Should().Be("c.age > 18");
-        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$gte\":18}}").Should().Be("c.age >= 18");
-        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$lt\":65}}").Should().Be("c.age < 65");
-        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$lte\":65}}").Should().Be("c.age <= 65");
-        CosmosDBDataMigrator.ParseFilterToSql("{\"state\":{\"$ne\":\"x\"}}").Should().Be("c.state != 'x'");
+        // CR-M104: identifiers are bracket-quoted (c["field"]) rather than dotted (c.field).
+        CosmosDBDataMigrator.ParseFilterToSql("{\"status\":\"active\"}").Should().Be("c[\"status\"] = 'active'");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$gt\":18}}").Should().Be("c[\"age\"] > 18");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$gte\":18}}").Should().Be("c[\"age\"] >= 18");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$lt\":65}}").Should().Be("c[\"age\"] < 65");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"age\":{\"$lte\":65}}").Should().Be("c[\"age\"] <= 65");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"state\":{\"$ne\":\"x\"}}").Should().Be("c[\"state\"] != 'x'");
     }
 
     [Fact]
     public void ParseFilterToSql_EscapesSingleQuotes()
     {
-        CosmosDBDataMigrator.ParseFilterToSql("{\"name\":\"O'Brien\"}").Should().Be("c.name = 'O''Brien'");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"name\":\"O'Brien\"}").Should().Be("c[\"name\"] = 'O''Brien'");
+    }
+
+    [Fact]
+    public void ParseFilterToSql_bracket_quotes_field_names_with_special_chars()
+    {
+        // CR-M104: a field name with whitespace or an embedded quote can no longer produce malformed
+        // or injectable SQL — it is bracket-quoted and the embedded quote is escaped.
+        CosmosDBDataMigrator.ParseFilterToSql("{\"first name\":\"x\"}").Should().Be("c[\"first name\"] = 'x'");
+        CosmosDBDataMigrator.ParseFilterToSql("{\"a\\\"b\":1}").Should().Be("c[\"a\\\"b\"] = 1");
     }
 
     [Theory]
