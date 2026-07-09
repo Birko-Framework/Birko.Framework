@@ -53,9 +53,13 @@ namespace Birko
             }
             else
             {
-                delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(BackoffMultiplier, attemptNumber - 1));
-                if (delay > MaxDelay)
-                    delay = MaxDelay;
+                // Compute the scaled delay in double and saturate at MaxDelay before casting to ticks.
+                // A direct (long)Math.Pow(...) cast overflows to long.MinValue (a large negative) at high
+                // attempt numbers, producing a negative TimeSpan that the > MaxDelay clamp would not catch.
+                var scaled = BaseDelay.Ticks * Math.Pow(BackoffMultiplier, attemptNumber - 1);
+                delay = (double.IsNaN(scaled) || scaled >= MaxDelay.Ticks)
+                    ? MaxDelay
+                    : TimeSpan.FromTicks((long)scaled);
             }
 
             if (!AddJitter)
