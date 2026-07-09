@@ -432,7 +432,7 @@ internal static class CosmosFilterTranslator
 
     private static string Map(string name, Func<string, string>? mapMember) => mapMember?.Invoke(name) ?? name;
 
-    private static string TranslateValue(Expression expression)
+    internal static string TranslateValue(Expression expression)
     {
         object? value;
 
@@ -448,14 +448,22 @@ internal static class CosmosFilterTranslator
             value = compiled.DynamicInvoke();
         }
 
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
         return value switch
         {
             null => "null",
             string s => $"'{s.Replace("'", "\\'")}'",
             bool b => b ? "true" : "false",
-            decimal d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            // Enums default to numeric serialization (System.Text.Json); emit the numeric value, not
+            // the unquoted member name which would be invalid SQL (CR-M086).
+            Enum e => Convert.ToInt64(e, invariant).ToString(invariant),
+            // Quote temporal values as ISO-8601 (matches System.Text.Json's default DateTime format);
+            // the raw ToString() fallback emitted a culture-dependent, unquoted, invalid literal (CR-M086).
+            DateTime dt => $"'{dt.ToString("o", invariant)}'",
+            DateTimeOffset dto => $"'{dto.ToString("o", invariant)}'",
+            decimal d => d.ToString(invariant),
+            double d => d.ToString(invariant),
+            float f => f.ToString(invariant),
             Guid g => $"'{g}'",
             _ => value.ToString()!
         };
