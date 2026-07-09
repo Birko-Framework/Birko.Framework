@@ -13,8 +13,15 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**107 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**110 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 18 — Migrations MongoDB + SQL CR-M112/M113/M115 (3 closed)
+
+- **M112** Mongo `CopyData` ignored `transformJson` → extracted `BuildCopyPipeline` that prepends the transform stage(s) (single or array) before `$merge`. Offline-tested.
+- **M113** Mongo migrations test-gap → augmented with `BuildCopyPipeline` + `ParseFilter` pure tests (store/live up-down stay integration-tier).
+- **M115** SQL migrations test-gap → store/runner/schema already covered by SQLite tests (since the audit); added `ParseFilterToWhere` coverage ($gt/$gte/$lt/$lte/$ne mapping, quoted identifiers + @pN parameterization, injection-safety).
+- Suites green: Migrations.MongoDB.Tests 7, Migrations.SQL.Tests 24. M114 (RavenDB RQL) + M116 (TimescaleDB test-gap) are the next batch.
 
 ### Batch 17 — Migrations.InfluxDB CR-M110/M111 (2 closed; M108/M109 deferred)
 

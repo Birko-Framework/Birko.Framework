@@ -3566,7 +3566,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CopyData silently ignores its transformJson parameter
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.MongoDB\Context\MongoDataMigrator.cs:44-55`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CopyData now honors transformJson via an extracted `BuildCopyPipeline(target, transformJson)` that prepends the caller's transform stage(s) — a single `{...}` stage or a `[...]` array of stages — before the `$merge`, instead of dropping it. Offline tests (Birko.Data.Migrations.MongoDB.Tests) assert no-transform → just `$merge`, single stage prepended, and an array prepended in order.
 - **Detail:** CopyData(source, target, transformJson) accepts a transformJson argument but never references it — the pipeline is hard-coded to a single $merge stage. A migration author passing a transform (e.g. a $project/$addFields stage) gets a straight copy with no transform applied and no error, which can produce silently wrong data in the target collection. transformJson is also not validated.
 - **Fix:** If transformJson is provided, parse it (BsonDocument.Parse) and insert the corresponding aggregation stage(s) before the $merge stage; otherwise document and assert that transforms are unsupported (throw NotSupportedException when transformJson is non-empty) rather than silently dropping it.
 
@@ -3574,7 +3574,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for Birko.Data.Migrations.MongoDB
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.MongoDB\Birko.Data.Migrations.MongoDB`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.Migrations.MongoDB.Tests exists (created since the audit) with MongoMigrationContextTests; augmented with MongoDataMigratorHelperTests covering the data migrator's pure logic — BuildCopyPipeline (the CR-M112 transform-honoring pipeline) and ParseFilter's empty/JSON/invalid handling. The store record-keeping and live up/down (which need Mongo2Go / a containerized replica set for the transaction path) remain an integration-tier concern.
 - **Detail:** There is no Birko.Data.Migrations.MongoDB.Tests sibling directory. None of the public surface is covered: MongoMigrationStore (Initialize/index creation, GetAppliedVersions, RecordMigration upsert, RemoveMigration, GetCurrentVersion), MongoDataMigrator (filter parsing, Update/Delete/Count/CopyData/BulkInsert with null/empty guards), MongoSchemaBuilder (CreateCollection/CreateIndex/RenameField), and MongoMigrationRunner ExecuteMigrations up/down + failure rollback. The transaction-not-joined bug, the never-called Build(), and the out-of-range catch would all surface under tests (Mongo2Go / an in-memory ServerCallContext-style harness or a containerized replica set for the transaction path).
 - **Fix:** Add a Birko.Data.Migrations.MongoDB.Tests xUnit + FluentAssertions project covering store record-keeping, the data migrator guards/filter parsing, schema/index creation (this would have caught the Build() no-op), and runner up/down + failure paths.
 
@@ -3590,7 +3590,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for SqlMigrationStore, SqlMigrationRunner, SqlSchemaBuilder, or SqlDataMigrator
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.SQL\Birko.Data.Migrations.SQL.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.Migrations.SQL.Tests already covers the store/runner/schema-builder via SQLite (SqliteMigrationRunnerTests, SqlSchemaBuilderTests, CreateTablesMigrationTests — created since the audit); the remaining gap, SqlDataMigrator.ParseFilterToWhere, is now covered by SqlDataMigratorParseFilterTests: the $gt/$gte/$lt/$lte/$ne operator mapping, quoted identifiers + @pN parameterization, multi-condition AND, and that values stay bound parameters (injection-safe).
 - **Detail:** The only compilable test files cover SqlMigrationSettings (defaults/setters) and MigrationResult. The core runtime types — SqlMigrationStore (table create, GetAppliedVersions, record/remove, transactions), SqlMigrationRunner (up/down execution, rollback, failedMigration selection), SqlSchemaBuilder (would have caught the dead-Build bug), and SqlDataMigrator (filter-JSON-to-WHERE parsing, $gt/$gte/$lt/$lte/$ne mapping, CountDocuments, BulkInsert) — have zero coverage. An in-memory SQLite store would exercise all of these and surface the schema-builder no-op.
 - **Fix:** Add integration tests against SQLite (in-memory) covering store init + record/remove round-trip, a full up/down migration through SqlSchemaBuilder.CreateCollection, and SqlDataMigrator.ParseFilterToWhere operator mapping.
 
