@@ -122,6 +122,31 @@ namespace Birko.Communication.Modbus.Tests
         }
 
         [Fact]
+        public void ReadHoldingRegisters_Tcp_MismatchedTransactionId_Throws()
+        {
+            // CR-M052: the MBAP transaction id correlates request/response. A stale/out-of-order
+            // frame (txId != the request's) must be rejected, not accepted as this request's answer.
+            var port = new MockPort();
+            port.ResponseData = new byte[]
+            {
+                0x00, 0x63, // Transaction ID = 99 (the fresh client's first request uses txId 0)
+                0x00, 0x00, // Protocol ID
+                0x00, 0x07, // Length
+                0x01,       // Unit ID
+                0x03,       // Function
+                0x04,       // Byte count
+                0x00, 0x64,
+                0x00, 0xC8
+            };
+
+            using var client = new ModbusClient(port, ModbusTransport.Tcp);
+
+            var act = () => client.ReadHoldingRegisters(unitId: 1, startAddress: 0, quantity: 2);
+
+            act.Should().Throw<System.IO.IOException>().WithMessage("*transaction id mismatch*");
+        }
+
+        [Fact]
         public void ReadInputRegisters_Tcp_SendsCorrectFunctionCode()
         {
             var port = new MockPort();
@@ -325,6 +350,50 @@ namespace Birko.Communication.Modbus.Tests
                 .WithMessage("*timeout*");
         }
 
+        [Fact]
+        public void ReadHoldingRegisters_TruncatedNormalFrame_ThrowsTimeout()
+        {
+            // CR-H025: a normal (non-error) response arrives with >=5 but fewer than the expected
+            // bytes before the deadline. The old code parsed the truncated frame; it must now be
+            // treated as a timeout, not mis-framed.
+            var port = new MockPort();
+            port.ResponseData = new byte[]
+            {
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+                0x01, 0x03, 0x04 // func 0x03 (not an error), but the 4 register bytes never arrived
+            };
+
+            using var client = new ModbusClient(port, ModbusTransport.Tcp);
+            client.ResponseTimeoutMs = 50;
+            client.PollIntervalMs = 10;
+
+            var act = () => client.ReadHoldingRegisters(unitId: 1, startAddress: 0, quantity: 2);
+
+            act.Should().Throw<TimeoutException>().WithMessage("*timeout*");
+        }
+
+        [Fact]
+        public void ReadHoldingRegisters_ShortErrorResponse_IsParsedNotTimedOut()
+        {
+            // CR-H025: a complete Modbus exception response is legitimately shorter than the
+            // expected normal frame — it must be parsed (surfaced as ModbusException), not timed out.
+            var port = new MockPort();
+            port.ResponseData = new byte[]
+            {
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+                0x01, 0x83, 0x02 // func 0x03|0x80 = error, exception code 0x02 (illegal data address)
+            };
+
+            using var client = new ModbusClient(port, ModbusTransport.Tcp);
+            client.ResponseTimeoutMs = 50;
+            client.PollIntervalMs = 10;
+
+            var act = () => client.ReadHoldingRegisters(unitId: 1, startAddress: 0, quantity: 2);
+
+            // Surfaced as a ModbusException (the error frame was parsed), NOT a TimeoutException.
+            act.Should().Throw<ModbusException>();
+        }
+
         // ── Auto-connect ──
 
         [Fact]
@@ -368,19 +437,22 @@ namespace Birko.Communication.Modbus.Tests
         public void ReadHoldingRegisters_Tcp_IncrementsTransactionId()
         {
             var port = new MockPort();
-            var responseTemplate = new byte[]
+
+            // The response must echo the request's transaction id or the client now rejects it as
+            // stale (CR-M052). The first request uses txId 0 (fresh client), the second txId 1.
+            static byte[] Response(ushort txId) => new byte[]
             {
-                0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+                (byte)(txId >> 8), (byte)(txId & 0xFF), 0x00, 0x00, 0x00, 0x05,
                 0x01, 0x03, 0x02, 0x00, 0x01
             };
 
             using var client = new ModbusClient(port, ModbusTransport.Tcp);
 
-            port.ResponseData = (byte[])responseTemplate.Clone();
+            port.ResponseData = Response(0);
             client.ReadHoldingRegisters(1, 0, 1);
             var firstTxId = (ushort)((port.WrittenData[0][0] << 8) | port.WrittenData[0][1]);
 
-            port.ResponseData = (byte[])responseTemplate.Clone();
+            port.ResponseData = Response((ushort)(firstTxId + 1));
             client.ReadHoldingRegisters(1, 0, 1);
             var secondTxId = (ushort)((port.WrittenData[1][0] << 8) | port.WrittenData[1][1]);
 
