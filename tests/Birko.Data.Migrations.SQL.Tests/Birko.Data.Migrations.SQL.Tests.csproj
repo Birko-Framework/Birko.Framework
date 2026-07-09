@@ -20,13 +20,6 @@
     </PackageReference>
   </ItemGroup>
 
-  <!-- SqlMigrationSplitTests.cs targets a `SqlMigration` base class (with SplitSqlStatements /
-       UpSql / DownSql) that is not yet implemented in Birko.Data.Migrations.SQL. Excluded from
-       the build until that production type exists; delete this Remove to re-enable the test. -->
-  <ItemGroup>
-    <Compile Remove="SqlMigrationSplitTests.cs" />
-  </ItemGroup>
-
   <Import Project="..\..\Framework\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Contracts\Birko.Contracts.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Configuration\Birko.Configuration.projitems" Label="Shared" />
