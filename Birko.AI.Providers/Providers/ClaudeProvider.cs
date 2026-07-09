@@ -24,7 +24,7 @@ namespace Birko.AI.Providers
             _httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
         }
 
-        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured()) return NotConfigured();
 
@@ -42,7 +42,8 @@ namespace Birko.AI.Providers
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
-                    Name);
+                    Name,
+                    cancellationToken);
 
                 if (response == null || responseJson == null)
                 {
@@ -181,7 +182,7 @@ namespace Birko.AI.Providers
             }
         }
 
-        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured())
             {
@@ -214,7 +215,8 @@ namespace Birko.AI.Providers
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
-                    Name);
+                    Name,
+                    cancellationToken);
 
                 if (response == null)
                 {
@@ -232,11 +234,12 @@ namespace Birko.AI.Providers
                     IsComplete = false,
                     GetStreamAsync = null! // Will be set below
                 };
+                streamingResponse.Resource = response;
 
                 streamingResponse.GetStreamAsync = async () =>
                 {
                     var stream = await response.Content.ReadAsStreamAsync();
-                    return ParseClaudeStreamChunksWithToolCapture(ParseSseStream(stream), streamingResponse);
+                    return ParseClaudeStreamChunksWithToolCapture(ParseSseStream(stream, cancellationToken), streamingResponse, cancellationToken);
                 };
 
                 return streamingResponse;
@@ -329,7 +332,8 @@ namespace Birko.AI.Providers
         /// </summary>
         private static async IAsyncEnumerable<string> ParseClaudeStreamChunksWithToolCapture(
             IAsyncEnumerable<string> sseChunks,
-            LlmStreamingResponse streamingResponse)
+            LlmStreamingResponse streamingResponse,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var contentBlocks = new List<ContentBlock>();
             var currentToolUseBlock = (ContentBlock?)null;
@@ -338,7 +342,7 @@ namespace Birko.AI.Providers
             string? stopReason = null;
             TokenUsage? tokenUsage = null;
 
-            await foreach (var chunk in sseChunks)
+            await foreach (var chunk in sseChunks.WithCancellation(cancellationToken))
             {
                 if (string.IsNullOrWhiteSpace(chunk))
                     continue;

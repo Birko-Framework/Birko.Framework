@@ -22,7 +22,7 @@ namespace Birko.AI.Providers
             _baseUrl = baseUrl;
         }
 
-        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured()) return NotConfigured();
 
@@ -41,7 +41,8 @@ namespace Birko.AI.Providers
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
-                    Name);
+                    Name,
+                    cancellationToken);
 
                 if (response == null || responseJson == null)
                 {
@@ -307,7 +308,7 @@ namespace Birko.AI.Providers
             }
         }
 
-        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured())
             {
@@ -333,7 +334,8 @@ namespace Birko.AI.Providers
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
-                    Name);
+                    Name,
+                    cancellationToken);
 
                 if (response == null)
                 {
@@ -351,11 +353,12 @@ namespace Birko.AI.Providers
                     IsComplete = false,
                     GetStreamAsync = null! // Will be set below
                 };
+                streamingResponse.Resource = response;
 
                 streamingResponse.GetStreamAsync = async () =>
                 {
                     var stream = await response.Content.ReadAsStreamAsync();
-                    return ParseGeminiStreamChunksWithToolCapture(ParseSseStream(stream), streamingResponse);
+                    return ParseGeminiStreamChunksWithToolCapture(ParseSseStream(stream, cancellationToken), streamingResponse, cancellationToken);
                 };
 
                 return streamingResponse;
@@ -418,14 +421,15 @@ namespace Birko.AI.Providers
         /// </summary>
         private static async IAsyncEnumerable<string> ParseGeminiStreamChunksWithToolCapture(
             IAsyncEnumerable<string> sseChunks,
-            LlmStreamingResponse streamingResponse)
+            LlmStreamingResponse streamingResponse,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var textBuilder = new System.Text.StringBuilder();
             var toolCalls = new List<ContentBlock>();
             string? finishReason = null;
             TokenUsage? tokenUsage = null;
 
-            await foreach (var chunk in sseChunks)
+            await foreach (var chunk in sseChunks.WithCancellation(cancellationToken))
             {
                 if (string.IsNullOrWhiteSpace(chunk))
                     continue;

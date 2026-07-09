@@ -66,7 +66,7 @@ namespace Birko.AI.Providers
                 ? BaseUrl
                 : $"{BaseUrl}/v1/chat/completions";
 
-        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured()) return NotConfigured();
 
@@ -85,7 +85,8 @@ namespace Birko.AI.Providers
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
-                    ProviderName);
+                    ProviderName,
+                    cancellationToken);
 
                 if (response == null || responseJson == null)
                 {
@@ -196,7 +197,7 @@ namespace Birko.AI.Providers
             return llmResponse;
         }
 
-        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured())
             {
@@ -222,7 +223,8 @@ namespace Birko.AI.Providers
                         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                         return request;
                     },
-                    ProviderName);
+                    ProviderName,
+                    cancellationToken);
 
                 if (response == null)
                 {
@@ -240,12 +242,13 @@ namespace Birko.AI.Providers
                     IsComplete = false,
                     GetStreamAsync = null! // Will be set below
                 };
+                streamingResponse.Resource = response;
 
                 streamingResponse.GetStreamAsync = async () =>
                 {
                     var stream = await response.Content.ReadAsStreamAsync();
-                    var sseStream = ParseSseStream(stream);
-                    return ParseOpenAiStreamChunksWithToolCapture(sseStream, streamingResponse);
+                    var sseStream = ParseSseStream(stream, cancellationToken);
+                    return ParseOpenAiStreamChunksWithToolCapture(sseStream, streamingResponse, cancellationToken);
                 };
 
                 return streamingResponse;

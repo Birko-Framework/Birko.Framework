@@ -36,7 +36,7 @@ namespace Birko.AI.Providers
             _httpClient = new HttpClient();
         }
 
-        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!await EnsureAuthenticatedAsync())
                 return NotConfigured();
@@ -56,7 +56,8 @@ namespace Birko.AI.Providers
                 var (response, responseJson) = await SendWithRetryAsync(
                     _httpClient,
                     () => CreateRequest(json),
-                    Name);
+                    Name,
+                    cancellationToken);
 
                 if (response == null || responseJson == null)
                     return LlmResponse.Error("GitHub Copilot: No response received");
@@ -68,7 +69,8 @@ namespace Birko.AI.Providers
                     (response, responseJson) = await SendWithRetryAsync(
                         _httpClient,
                         () => CreateRequest(json),
-                        Name);
+                        Name,
+                        cancellationToken);
                 }
 
                 if (response == null || responseJson == null || !response.IsSuccessStatusCode)
@@ -114,7 +116,7 @@ namespace Birko.AI.Providers
 
         protected override bool IsConfigured() => !string.IsNullOrWhiteSpace(_model);
 
-        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public override async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
             if (!IsConfigured())
             {
@@ -151,7 +153,8 @@ namespace Birko.AI.Providers
                 var response = await SendStreamingWithRetryAsync(
                     _httpClient,
                     () => CreateRequest(json),
-                    Name);
+                    Name,
+                    cancellationToken);
 
                 // Handle 401 — refresh token and retry once (parity with the non-streaming path).
                 if (response is { StatusCode: System.Net.HttpStatusCode.Unauthorized })
@@ -160,7 +163,8 @@ namespace Birko.AI.Providers
                     response = await SendStreamingWithRetryAsync(
                         _httpClient,
                         () => CreateRequest(json),
-                        Name);
+                        Name,
+                        cancellationToken);
                 }
 
                 if (response == null)
@@ -178,12 +182,13 @@ namespace Birko.AI.Providers
                     IsComplete = false,
                     GetStreamAsync = null!
                 };
+                streamingResponse.Resource = response;
 
                 streamingResponse.GetStreamAsync = async () =>
                 {
                     var stream = await response.Content.ReadAsStreamAsync();
-                    var sseStream = ParseSseStream(stream);
-                    return ParseOpenAiStreamChunksWithToolCapture(sseStream, streamingResponse);
+                    var sseStream = ParseSseStream(stream, cancellationToken);
+                    return ParseOpenAiStreamChunksWithToolCapture(sseStream, streamingResponse, cancellationToken);
                 };
 
                 return streamingResponse;
