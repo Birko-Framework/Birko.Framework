@@ -36,7 +36,10 @@ namespace Birko.Communication.Network.Ports
             if (_client == null)
                 Open();
 
-            if (_client != null)
+            // Guard _remoteEndPoint too: UdpClient.Send's endpoint parameter is non-nullable, so the
+            // previous _client-only guard was a CS8604 nullable warning and a latent NRE if the port
+            // was somehow open without a resolved endpoint (CR-M054).
+            if (_client != null && _remoteEndPoint != null)
             {
                 _client.Send(data, data.Length, _remoteEndPoint);
             }
