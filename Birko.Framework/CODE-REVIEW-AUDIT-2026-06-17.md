@@ -3414,7 +3414,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** README documents an API that does not exist in the project
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.EventSourcing\README.md:28-63`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — README rewritten to the real wrapper/extension API (IEvent/DomainEvent, IEventStore/IAsyncEventStore, IEventSourced/EventSourcedAggregate, the four `*EventSourcingStoreWrapper` types with `Replay`/`ReplayAsync` + `GetHistory`/`GetHistoryAsync`, and `.WithEventSourcing(...)`), matching CLAUDE.md. The fictional `EventStore<T>`/`EventSourcedRepository<T>`/`CreatedEvent<T>`/`EventStream`/`EventSnapshot`/`GetAtTime` surface is gone; the accurate filter-based bulk section is kept.
 - **Detail:** The README usage/API sections describe EventStore<T>/AsyncEventStore<T>, EventSourcedRepository<T>, CreatedEvent<T>/UpdatedEvent<T>/DeletedEvent<T>, EventStream, EventSnapshot, and repo.GetAtTime(...). None of these types exist in the source — the actual public surface is IEvent/DomainEvent, IEventStore/IAsyncEventStore, IEventSourced/EventSourcedAggregate, the four wrappers, and the WithEventSourcing extensions. CLAUDE.md itself even notes 'Snapshot store — not modeled here despite earlier docs mentioning it.' A consumer following the README cannot compile a single line. Note the framework convention requires README/docs to track the code.
 - **Fix:** Rewrite README usage/API sections to match the wrapper/extension-based API documented in CLAUDE.md (the CLAUDE.md Usage block is accurate and can be reused).
 
@@ -3454,7 +3454,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk CreateCore overwrites caller-supplied Guid and uses Add (duplicate-key throw)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON\Stores\AbstractJsonStore.cs:180`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the sync bulk CreateCore now uses `item.Guid ??= Guid.NewGuid()` (preserves a caller-supplied Guid) and the upsert indexer `_items[item.Guid.Value] = item` (was `_items.Add`, which threw ArgumentException on a duplicate key) — matching the single-item and async-bulk semantics. Regression tests (Birko.Data.JSON.Tests): bulk-create preserves supplied Guids, assigns when absent, and re-creating a duplicate Guid upserts without throwing.
 - **Detail:** The sync bulk CreateCore unconditionally does `item.Guid = Guid.NewGuid()` (line 180), discarding any caller-assigned Guid, whereas the single-item CreateCore (line 75) correctly uses `data.Guid ??= Guid.NewGuid()` and the async bulk version (AbstractAsyncJsonStore.cs:241) uses `if (!item.Guid.HasValue)`. The behavior is inconsistent across the three. Additionally line 182 uses `_items.Add(...)` which throws ArgumentException on a duplicate key, while the async bulk path uses the indexer `_items[...] =` (upsert). Re-creating or replaying items can crash the sync bulk store.
 - **Fix:** Use `item.Guid ??= Guid.NewGuid();` and `_items[item.Guid.Value] = item;` to match the single-item and async bulk semantics.
 
@@ -3462,7 +3462,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetNonLocalizedOrderBy is dead, incomplete code (empty loop body, always returns null)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Expressions/LocalizedOrderByHelper.cs:35-72`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — deleted `GetNonLocalizedOrderBy<T>` entirely (its for-loop body was all comments and it always returned null in the mixed case). Confirmed no caller references it — the wrappers use `ReferencesLocalizedField` + a full in-memory sort (`ApplyInMemoryOrderBy`). A partial-pushdown optimization, if ever wanted, should be tracked as its own task rather than left as a stub.
 - **Detail:** GetNonLocalizedOrderBy<T> has a for-loop (lines 58-68) whose entire body is comments explaining why it can't be implemented, and it unconditionally returns null in the mixed-fields case (line 71). The method is never called by any wrapper (they use ReferencesLocalizedField + a full in-memory sort instead). It is pure dead/abandoned code that misleadingly looks like a working splitter.
 - **Fix:** Delete GetNonLocalizedOrderBy entirely (and its commented-out loop), since the wrappers already handle the mixed case via full in-memory sort. If a partial-pushdown optimization is desired later, track it as a task rather than leaving a stub.
 
@@ -3470,7 +3470,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Create/Update/Delete(IEnumerable<T>) enumerate the source sequence twice
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Decorators/LocalizedBulkStoreWrapper.cs:138-160,179-186 and Decorators/AsyncLocalizedBulkStoreWrapper.cs:145-167,188-195`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — all six overloads (Create/Update/Delete on the sync `LocalizedBulkStoreWrapper` and the async `AsyncLocalizedBulkStoreWrapper`) now materialize the source once at method entry (`var items = data as IList<T> ?? data.ToList();`) and use `items` for both the inner-store call and the translation loop, so a lazy/one-shot IEnumerable is no longer enumerated twice. Regression tests (Birko.Data.Localization.Tests) drive a counting enumerable through sync Create and async CreateAsync and assert a single enumeration.
 - **Detail:** These overloads pass `data` to the inner store and then iterate `data` again in a foreach to persist/delete translations. If the caller passes a lazy, one-shot, or side-effecting IEnumerable (a common pattern), the second enumeration either re-executes the query, yields nothing, or throws. The materialized inner-store result is also not reused.
 - **Fix:** Materialize once at method entry: `var items = data as IList<T> ?? data.ToList();` then use `items` for both the inner-store call and the translation loop.
 

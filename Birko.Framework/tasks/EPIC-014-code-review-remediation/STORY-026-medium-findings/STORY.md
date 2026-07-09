@@ -13,8 +13,18 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**91 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**95 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 14 — EventSourcing docs + JSON + Localization CR-M093/M098/M099/M100 (4 closed)
+
+Low-friction scattered fixes, all offline-verified (existing test projects).
+
+- **M093** EventSourcing README documented a fictional API (`EventStore<T>`, `EventSourcedRepository<T>`, `CreatedEvent<T>`, `EventStream`/`EventSnapshot`, `GetAtTime`) → rewritten to the real wrapper/extension surface (matches CLAUDE.md).
+- **M098** JSON sync bulk `CreateCore` overwrote caller Guids (`item.Guid = Guid.NewGuid()`) and used `_items.Add` (throws on dup) → `??=` + upsert indexer, matching the single-item / async-bulk paths.
+- **M099** Localization `LocalizedOrderByHelper.GetNonLocalizedOrderBy` was dead code (comment-only loop, always returned null; no callers) → deleted.
+- **M100** Localization sync+async bulk `Create/Update/Delete(IEnumerable<T>)` enumerated the source twice → materialize once at entry.
+- Suites green: JSON.Tests 14, Localization.Tests 70.
 
 ### Batch 13 — ElasticSearch cluster CR-M088 … CR-M092 (4 closed, 1 deferred)
 
