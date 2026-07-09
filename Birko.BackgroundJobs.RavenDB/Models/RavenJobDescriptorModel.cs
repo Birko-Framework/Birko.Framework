@@ -27,6 +27,8 @@ public class RavenJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
 
     public int AttemptCount { get; set; }
 
+    public Guid? ClaimToken { get; set; }
+
     public DateTime EnqueuedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? ScheduledAt { get; set; }
