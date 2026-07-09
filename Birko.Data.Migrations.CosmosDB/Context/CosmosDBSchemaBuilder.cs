@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Text.Json;
 using Birko.Data.Patterns.IndexManagement;
 using Birko.Data.Patterns.Schema;
@@ -126,9 +127,13 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
                         }
                     ).GetAwaiter().GetResult();
                 }
-                catch
+                catch (CosmosException ex) when (
+                    ex.StatusCode == HttpStatusCode.BadRequest || ex.StatusCode == HttpStatusCode.NotFound)
                 {
-                    // Skip documents that don't have the old field / fail to patch.
+                    // CR-M103: only swallow the "field/document absent" cases (removing a missing path
+                    // yields BadRequest; a missing document yields NotFound) so the rename stays
+                    // idempotent. Throttling (429), auth (401/403) and service errors (503) now
+                    // propagate instead of silently corrupting a subset of documents.
                 }
             }
         }

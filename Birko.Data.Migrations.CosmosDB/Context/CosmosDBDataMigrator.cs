@@ -208,7 +208,10 @@ public class CosmosDBDataMigrator : IDataMigrator
 
         foreach (var property in doc.RootElement.EnumerateObject())
         {
-            var fieldName = $"c.{property.Name}";
+            // CR-M104: bracket-quote the identifier (values were already escaped, identifiers were not),
+            // so a field name with whitespace/special chars can't produce malformed/injectable SQL.
+            var escaped = property.Name.Replace("\\", "\\\\").Replace("\"", "\\\"");
+            var fieldName = $"c[\"{escaped}\"]";
 
             if (property.Value.ValueKind == JsonValueKind.Object)
             {
