@@ -105,6 +105,44 @@ public class EventSourcingStoreWrapperTests
         }
     }
 
+    // CR-H048 — version sequencing across create/update/delete
+    [Fact]
+    public void CreateUpdateDelete_RecordsMonotonicVersionsAndEventTypes()
+    {
+        var eventStore = new InMemoryEventStore();
+        var inner = new InMemoryStore<TestModel>();
+        var wrapper = new EventSourcingStoreWrapper<InMemoryStore<TestModel>, TestModel>(inner, eventStore);
+
+        var model = new TestModel { Name = "v1" };
+        var guid = wrapper.Create(model);
+        model.Name = "v2"; wrapper.Update(model);
+        model.Name = "v3"; wrapper.Update(model);
+        wrapper.Delete(model);
+
+        var history = wrapper.GetHistory(guid).ToList();
+
+        history.Select(e => e.EventType).Should().Equal("Created", "Updated", "Updated", "Deleted");
+        history.Select(e => e.Version).Should().Equal(1, 2, 3, 4);
+        history.Should().OnlyContain(e => e.AggregateId == guid);
+    }
+
+    // CR-H048 — Replay reconstructs the aggregate to its latest version
+    [Fact]
+    public void Replay_ReconstructsLatestVersion()
+    {
+        var eventStore = new InMemoryEventStore();
+        var inner = new InMemoryStore<TestModel>();
+        var wrapper = new EventSourcingStoreWrapper<InMemoryStore<TestModel>, TestModel>(inner, eventStore);
+
+        var model = new TestModel { Name = "a" };
+        var guid = wrapper.Create(model);
+        model.Name = "b"; wrapper.Update(model);
+
+        var replayed = wrapper.Replay(guid);
+
+        replayed.Version.Should().Be(2, "Replay applies every event, ending at the latest version");
+    }
+
     // CR-C06 — bulk Create (async)
     [Fact]
     public async Task BulkCreateAsync_RecordsEventsUnderEachPersistedGuid()
