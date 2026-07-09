@@ -92,7 +92,10 @@ namespace Birko.Configuration
         /// <param name="data">The settings to load from.</param>
         public void LoadFrom(ISettings data)
         {
-            LoadFrom((Settings)data);
+            if (data is Settings settings)
+            {
+                LoadFrom(settings);
+            }
         }
 
         #endregion
