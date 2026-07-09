@@ -84,6 +84,31 @@ public class AggregateMapperExpandTests
         ops[0].NavigationProperty.Should().Be("Lines");
     }
 
+    [Fact]
+    public void Expand_NewLineWithNullGuid_GeneratesInsert()
+    {
+        // Regression for CR-H041: a brand-new child has Guid == null. DiffByKey excludes null-key
+        // items, so it was silently dropped and no Insert was emitted. It must now be inserted.
+        var currentProvider = new InMemoryRelatedDataProvider();
+        currentProvider.SetDirectRelated(OrderGuid, "Lines", Array.Empty<OrderLine>());
+        currentProvider.SetDirectRelated(OrderGuid, "Customer", Array.Empty<Customer>());
+
+        var aggregate = new FlattenResult<Order>(CreateOrder());
+        aggregate.NestedCollections["Lines"] = new OrderLine[]
+        {
+            new() { Guid = null, OrderGuid = OrderGuid, Quantity = 5 } // not yet persisted
+        };
+        aggregate.NestedSingles["Customer"] = null;
+
+        var ops = _mapper.Expand(aggregate, currentProvider).ToList();
+
+        ops.Should().ContainSingle();
+        ops[0].Type.Should().Be(SyncOperationType.Insert);
+        ops[0].EntityType.Should().Be(typeof(OrderLine));
+        ops[0].NavigationProperty.Should().Be("Lines");
+        ((OrderLine)ops[0].Entity).Quantity.Should().Be(5);
+    }
+
     // --- Expand: collection removals ---
 
     [Fact]
