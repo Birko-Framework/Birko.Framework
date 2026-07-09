@@ -81,14 +81,8 @@ namespace Birko.Data.InfluxDB.Repositories
             }
         }
 
-        /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
-        {
-            await base.DestroyAsync(ct);
-            if (InfluxDBStore != null)
-            {
-                await DropAsync(ct);
-            }
-        }
+        // CR-M096: no DestroyAsync override. The base AbstractAsyncBulkViewModelRepository.DestroyAsync
+        // already destroys the (same, unwrapped) store; the removed override also called DropAsync,
+        // dropping the InfluxDB bucket twice per Destroy. Callers wanting an explicit drop use DropAsync.
     }
 }

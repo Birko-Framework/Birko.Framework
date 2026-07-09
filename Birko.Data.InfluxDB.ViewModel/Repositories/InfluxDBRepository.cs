@@ -75,11 +75,8 @@ namespace Birko.Data.InfluxDB.Repositories
             InfluxDBStore?.Destroy();
         }
 
-        /// <inheritdoc />
-        public override void Destroy()
-        {
-            base.Destroy();
-            Drop();
-        }
+        // CR-M096: no Destroy override. The base AbstractViewModelRepository.Destroy already destroys
+        // the (same) store; the removed override also called Drop, dropping the bucket twice per
+        // Destroy. Callers wanting an explicit drop use Drop().
     }
 }
