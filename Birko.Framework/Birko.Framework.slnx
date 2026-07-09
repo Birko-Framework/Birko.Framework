@@ -262,10 +262,15 @@
     <Project Path="../../Framework.Tests/Birko.Data.Sync.RavenDB.Tests/Birko.Data.Sync.RavenDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.AI.Providers.Tests/Birko.AI.Providers.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.AI.Tests/Birko.AI.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.AI.Agents.Tests/Birko.AI.Agents.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.AI.Orchestration.Tests/Birko.AI.Orchestration.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.AI.Resilience.Tests/Birko.AI.Resilience.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.CosmosDB.Tests/Birko.BackgroundJobs.CosmosDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.XML.Tests/Birko.BackgroundJobs.XML.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.JSON.Tests/Birko.BackgroundJobs.JSON.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.MongoDB.Tests/Birko.BackgroundJobs.MongoDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.ElasticSearch.Tests/Birko.BackgroundJobs.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.BackgroundJobs.RavenDB.Tests/Birko.BackgroundJobs.RavenDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Caching.Redis.Tests/Birko.Caching.Redis.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Bluetooth.Tests/Birko.Communication.Bluetooth.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Network.Tests/Birko.Communication.Network.Tests.csproj" />

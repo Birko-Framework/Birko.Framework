@@ -741,6 +741,10 @@
 			"path": "../../Framework.Tests/Birko.AI.Tests"
 		},
 		{
+			"name": "Tests / Birko.AI.Agents.Tests",
+			"path": "../../Framework.Tests/Birko.AI.Agents.Tests"
+		},
+		{
 			"name": "Tests / Birko.AI.Orchestration.Tests",
 			"path": "../../Framework.Tests/Birko.AI.Orchestration.Tests"
 		},
@@ -755,6 +759,22 @@
 		{
 			"name": "Tests / Birko.BackgroundJobs.XML.Tests",
 			"path": "../../Framework.Tests/Birko.BackgroundJobs.XML.Tests"
+		},
+		{
+			"name": "Tests / Birko.BackgroundJobs.JSON.Tests",
+			"path": "../../Framework.Tests/Birko.BackgroundJobs.JSON.Tests"
+		},
+		{
+			"name": "Tests / Birko.BackgroundJobs.MongoDB.Tests",
+			"path": "../../Framework.Tests/Birko.BackgroundJobs.MongoDB.Tests"
+		},
+		{
+			"name": "Tests / Birko.BackgroundJobs.ElasticSearch.Tests",
+			"path": "../../Framework.Tests/Birko.BackgroundJobs.ElasticSearch.Tests"
+		},
+		{
+			"name": "Tests / Birko.BackgroundJobs.RavenDB.Tests",
+			"path": "../../Framework.Tests/Birko.BackgroundJobs.RavenDB.Tests"
 		},
 		{
 			"name": "Tests / Birko.Caching.Redis.Tests",

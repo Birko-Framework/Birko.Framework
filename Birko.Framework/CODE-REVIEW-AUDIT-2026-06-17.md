@@ -2678,7 +2678,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Synchronous-over-async blocking in HandleResponse (.GetAwaiter().GetResult())
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Agents/Agent.cs:280`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — HandleResponse is now async (Task<(bool,bool)?>) and awaits HandleToolUse; the GetAwaiter().GetResult() sync-over-async bridge is gone.
 - **Detail:** HandleResponse is a synchronous method that runs inside async RunWithHistory*Async, and it calls HandleToolUse(...).GetAwaiter().GetResult() to block on an async tool-execution path. Sync-over-async on the awaiting thread risks thread-pool starvation/deadlock (and forfeits async benefits) when tools do real I/O. The entire HandleResponse/HandleToolUse chain is already called from async contexts and could be awaited directly.
 - **Fix:** Make HandleResponse async (Task<(bool,bool)?>) and await it from RunWithHistoryStreamingAsync/RunWithHistorySyncAsync, then await HandleToolUse directly instead of GetAwaiter().GetResult().
 
@@ -2686,7 +2686,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Streaming path never observes a CancellationToken; no token threaded through agent run
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Agents/Agent.cs:149-273`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CancellationToken threaded through RunAsync/ContinueAsync -> run loop -> provider calls, retry Task.Delay, SSE readers and Tool.ExecuteAsync.
 - **Detail:** None of RunAsync/ContinueAsync/RunWithHistory*Async accept or propagate a CancellationToken, and the provider SendMessageAsync/SendMessageStreamingAsync signatures (ILlmProvider) take none either. A long agent loop with network calls and Task.Delay retry backoff cannot be cancelled. Framework convention is that async methods observe a CancellationToken.
 - **Fix:** Thread a CancellationToken through RunAsync/ContinueAsync down to provider calls and Task.Delay; add token params to the ILlmProvider methods (contract change, but the retry/delay loops in LlmProviderBase especially should honor it).
 
@@ -2694,7 +2694,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Streaming response stream is never disposed; underlying HTTP response may leak
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Agents/Agent.cs:206-212`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — LlmStreamingResponse is now IDisposable/IAsyncDisposable (holds the streaming HttpResponseMessage as Resource); Agent enumerates it under await using so an abandoned stream is disposed.
 - **Detail:** In RunWithHistoryStreamingAsync the IAsyncEnumerable<string> from streamingResponse.GetStreamAsync() is enumerated to completion but there is no disposal of the streaming response / underlying HttpResponseMessage or network Stream. ParseSseStream wraps the stream in a StreamReader with 'using' only when the iterator runs to completion; if the await foreach is abandoned early (exception mid-loop), the SSE stream/StreamReader and the SendStreamingWithRetryAsync HttpResponseMessage are not disposed. LlmStreamingResponse exposes no Dispose hook to release the HTTP response.
 - **Fix:** Make LlmStreamingResponse (or the returned stream) IDisposable/IAsyncDisposable and dispose it in a finally around the await-foreach; ensure the HttpResponseMessage from SendStreamingWithRetryAsync is owned and disposed once the stream is consumed.
 
@@ -2702,7 +2702,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for Birko.AI core (Agent loop, AgentFactory, LlmProviderBase, Tools)
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Birko.AI (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.AI.Tests exists (created since the audit) and was expanded with AgentOptions round-trip + LlmStreamingResponse disposal regression tests.
 - **Detail:** There is no Birko.AI.Tests sibling. Substantial public/protected logic is untested: the Agent run/continue/streaming-fallback loop and HandleResponse stop-reason dispatch; AgentFactory register/alias/resolve/create error paths; LlmProviderBase retry policy (retryable status codes, Retry-After parsing, network/timeout retry, ExtractErrorFromResponseBody), the OpenAI-style message/tool/response builders and SSE/stream-chunk parsers; and all 9 Tools (path-safety guards, edit_file occurrence counting, write_file check_exists, run_command timeout). Framework convention requires xUnit+FluentAssertions tests for new public functionality.
 - **Fix:** Add Birko.AI.Tests covering at minimum: AgentFactory (register/alias/resolve/duplicate/unknown), LlmProviderBase retry + parsing helpers, EditFileTool (not-found, multi-occurrence, success), and the streaming-fallback branch in RunWithHistoryAsync.
 
@@ -2710,7 +2710,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling — all logic in OrchestratorAgent and AgentRegistration is untested
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Agents (no Birko.AI.Agents.Tests sibling exists)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — created Birko.AI.Agents.Tests (18 tests): IsCodingAgent, AgentFactory registration/aliases, depth-guidance bands, and the async run loop (tool execution + cancellation).
 - **Detail:** There is no Birko.AI.Agents.Tests project. The framework convention (CLAUDE.md Testing section) requires every new public functionality to have corresponding xUnit + FluentAssertions tests. The non-trivial, branch-heavy public surface here has zero coverage: OrchestratorAgent.ExtractTextFromContent (8+ type-dispatch branches incl. reflection over anonymous objects and the collection ToString guard), OrchestratorAgent.ExtractJson + ExtractBalancedJson (brace/bracket balancing, string-escape handling, markdown-fence extraction, Error: detection, empty-input throw), AgentRegistration.IsCodingAgent, AgentRegistration.Create (the Z.AI useCodingEndpoint injection branch), and the depth-guidance switch boundaries (<=3 / _ / >=7) on the six agents that override GetDepthGuidance.
 - **Fix:** Add a Birko.AI.Agents.Tests project covering ExtractTextFromContent across each content shape (string, ContentBlock, IEnumerable<ContentBlock>, JsonElement array/string, IEnumerable<object> with anonymous objects, and a generic-collection input that must return empty not a type name), ExtractJson/ExtractBalancedJson happy + malformed/unbalanced + fenced + Error-prefixed cases, IsCodingAgent membership, and the Z.AI endpoint-injection path in Create.
 
@@ -2718,7 +2718,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AgentOptions.Merge() does not merge OnLlmResponseReceived
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\AgentOptions.cs:96-115`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — not reproducible: Merge already copies OnLlmResponseReceived (AgentOptions.cs:116-117) and Clone does too; covered by existing AgentOptionsTests.
 - **Detail:** Merge(other) copies all scalar/list fields but never assigns OnLlmResponseReceived from other. If a base options object carries the callback and a partial override is merged in, the callback is preserved by accident; but an override that intends to set/replace the callback cannot, and the field is invisible to the merge contract. Same omitted field as Clone(), so the two methods are inconsistent with the field set.
 - **Fix:** Decide the merge semantics (e.g. if (other.OnLlmResponseReceived != null) OnLlmResponseReceived = other.OnLlmResponseReceived;) and add it, matching the DefaultPromptResponse null-guard pattern already used.
 
@@ -2726,7 +2726,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ToDictionary/FromDictionary round-trip silently loses several fields
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\AgentOptions.cs:117-158`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — ToDictionary/FromDictionary now round-trip AllowedExternalPaths, EnableStreaming, StreamingFallbackToSync and CheckpointInterval; regression test added.
 - **Detail:** ToDictionary() omits AllowedExternalPaths, EnableStreaming, StreamingFallbackToSync, and CheckpointInterval; FromDictionary() likewise never reads them (and never reads them even if present). So serializing an AgentOptions via ToDictionary and rebuilding via FromDictionary silently resets those four fields to defaults — a lossy round-trip. Clone()/Merge() handle them, so the dictionary path is asymmetric with the rest of the class.
 - **Fix:** Either serialize/parse all persisted fields symmetrically in both methods, or document that the dictionary form is intentionally a scalar-config subset.
 
@@ -2734,7 +2734,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ILlmProvider async methods take no CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\Providers/ILlmProvider.cs:10-11`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CancellationToken added to ILlmProvider.SendMessageAsync/SendMessageStreamingAsync and threaded through LlmProviderBase, all providers, TrackedLlmProvider and Tool.ExecuteAsync.
 - **Detail:** SendMessageAsync and SendMessageStreamingAsync are long-running network calls (the most cancellation-sensitive surface in the framework) yet accept no CancellationToken, violating the framework convention that async methods observe cancellation. Adding it later is a breaking change to every provider implementation, so the contract is the right place to fix it.
 - **Fix:** Add CancellationToken cancellationToken = default to both signatures (and thread it through ILlmProvider implementations and Tool.ExecuteAsync, which is also tokenless).
 
@@ -2742,7 +2742,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for the logic-bearing analyzer and dispatcher
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Orchestration (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.AI.Orchestration.Tests exists (StepDependencyAnalyzerTests), created since the audit.
 - **Detail:** There is no Birko.AI.Orchestration.Tests project anywhere under C:\Source. The framework convention (CLAUDE.md Testing section) requires every new public functionality to have xUnit + FluentAssertions tests. StepDependencyAnalyzer carries real branching logic — AnalyzeParallelGroups (grouping + deadlock-break fallback), HasDependency (4 conflict cases), and SuggestOptimalOrder (topological sort + cycle handling) — all untested, which is precisely why the inverted-sort bug above went unnoticed. DirectTaskDispatcher's null-callback warning path and callback-invocation path are also untested.
 - **Fix:** Add Birko.AI.Orchestration.Tests covering: parallel-group separation of conflicting vs independent steps, the deadlock fallback (mutually-conflicting steps), all four HasDependency cases, SuggestOptimalOrder ordering (creator-before-modifier) and cycle tolerance, and DirectTaskDispatcher with/without a callback.
 
@@ -2750,7 +2750,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** HttpResponseMessage from SendWithRetryAsync is never disposed
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Providers\LlmProviderBase.cs:62`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — SendWithRetryAsync disposes the buffered HttpResponseMessage on every return path (StatusCode stays readable); regression test asserts disposal.
 - **Detail:** SendWithRetryAsync does `var response = await httpClient.SendAsync(request);` (not `using`) and returns the live HttpResponseMessage to every caller. None of the 16 providers dispose the returned response in their SendMessageAsync methods (e.g. ClaudeProvider, OpenAiProvider, GeminiProvider, OllamaProvider, AzureOpenAiProvider, ZAiProvider, OpenAiCompatibleProviderBase all just read `response.IsSuccessStatusCode` then discard it). Each non-streaming call leaks an HttpResponseMessage (and its underlying connection handle). With a shared static-lifetime HttpClient per provider and high call volume this accumulates undisposed handles.
 - **Fix:** Since the response body is already fully buffered into the returned string, callers don't need the live response. Either dispose the response inside SendWithRetryAsync before returning (returning only StatusCode + body), or wrap returned responses in `using` at every call site. The streaming helper already disposes on its failure paths — mirror that discipline here.
 
@@ -2758,7 +2758,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Rate limiter is purely advisory — TrackedLlmProvider waits then proceeds without re-checking
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Resilience\Services\TrackedLlmProvider.cs:45`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — TrackedLlmProvider re-checks CanMakeRequest in a bounded loop (WaitForRateLimitSlotAsync) and returns an error when the limit cannot be satisfied instead of proceeding blind.
 - **Detail:** When CanMakeRequest returns false, SendMessageAsync (and the streaming variant) computes GetRetryAfter, delays once (the retry-after, or a flat 1000ms when null), and then unconditionally calls _inner.SendMessageAsync. It never re-checks CanMakeRequest after the delay, so the request is sent regardless of whether the window has actually cleared. This means the rate limiter never truly prevents a call — it only inserts a fixed pause. For token-per-minute / per-day rejections GetRetryAfter always returns null (see separate finding), so the wait is a fixed 1s that does nothing to clear a daily-token overflow.
 - **Fix:** Loop: after delaying, re-check CanMakeRequest (with a max-attempts / max-wait cap) before proceeding, or return an error response when the limit cannot be satisfied.
 
@@ -2766,7 +2766,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetRetryAfter only considers RequestsPerMinute, ignoring token and daily limits
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Resilience\Services\ProviderRateLimiter.cs:116`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — GetRetryAfter now computes backoff for token-per-minute and daily windows and returns the max active blocking window; regression test added.
 - **Detail:** GetRetryAfter checks only limit.RequestsPerMinute and the minute window's RequestCount. If a request is blocked by TokensPerMinute, RequestsPerDay, or TokensPerDay, GetRetryAfter returns null. The caller (TrackedLlmProvider) then falls back to a flat 1s wait, which for a daily overflow is meaningless. The returned retry-after can therefore be null even though CanMakeRequest just returned false.
 - **Fix:** Compute retry-after for the token-per-minute case (also one minute) and the daily cases (time until day window rolls over) and return the max of the active blocking windows.
 
@@ -2774,7 +2774,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Fire-and-forget circuit-breaker persistence can write stale state out of order
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Resilience\Services\ProviderCircuitBreaker.cs:192`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — circuit-breaker persistence is serialized per provider via an ordered task chain, with an awaitable FlushPersistenceAsync; a stale snapshot can no longer overwrite a newer one.
 - **Detail:** PersistState launches an unawaited Task.Run that snapshots circuit state and calls _store.SaveAsync. Under concurrent RecordFailure/RecordSuccess for the same provider, two background tasks race with no ordering guarantee — a SaveAsync carrying older state can complete after one carrying newer state, leaving the store with stale persisted state (e.g. Open written after the recovering Closed). Exceptions are caught and only logged, so persistence failures are silent. There is also no way for a caller to await that a state change was durably stored.
 - **Fix:** Serialize persistence per provider (e.g. a per-provider lock/queue or a single-flight last-write-wins guarded by UpdatedAt), or make persistence synchronous/awaitable so ordering is preserved.
 
@@ -2782,7 +2782,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for Birko.AI.Resilience
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Resilience`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.AI.Resilience.Tests exists; expanded with rate-limiter (M012), tracked-provider re-check (M011) and circuit-breaker ordering (M013) tests.
 - **Detail:** There is no Birko.AI.Resilience.Tests sibling directory at all. None of the public surface is covered: ProviderRateLimiter sliding-window logic and limit enforcement, ProviderCircuitBreaker state transitions (Closed->Open->HalfOpen->Open/Closed) and persistence load, CostTrackingService.CalculateCost / FindPricing wildcard fallback / CheckBudgetAsync thresholds, and TrackedLlmProvider decoration (rate-limit wait, budget block, usage recording, streaming wrap). The framework convention requires xUnit + FluentAssertions tests for new public functionality.
 - **Fix:** Add Birko.AI.Resilience.Tests covering circuit-breaker transitions, rate-limit window rollover, cost calculation (exact vs wildcard pricing), and budget threshold/warning boundaries.
 
@@ -2790,7 +2790,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for the CosmosDB backend
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.CosmosDB\Birko.BackgroundJobs.CosmosDB (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.BackgroundJobs.CosmosDB.Tests exists (created since the audit): FailAsync retry-vs-dead boundary + PurgeAsync terminal-only, over an in-memory Cosmos store double.
 - **Detail:** There is no Birko.BackgroundJobs.CosmosDB.Tests project, and the shared Birko.BackgroundJobs.Tests covers only Core/Processing/Serialization, not this backend (SQL has its own .Tests sibling for comparison). The enqueue/dequeue/complete/fail/cancel/purge state machine — exactly where the FailAsync/PurgeAsync status bugs live — is untested, so the divergence from IJobQueue went uncaught.
 - **Fix:** Add a Birko.BackgroundJobs.CosmosDB.Tests sibling (xUnit + FluentAssertions) exercising the full lifecycle, ideally reusing a shared queue-conformance test suite so all backends assert the same Dead/Failed/backoff semantics.
 
@@ -2798,7 +2798,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync claims jobs non-atomically (read-then-update race)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.ElasticSearch\ElasticSearchJobQueue.cs:63-91`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — DequeueAsync now claims via a conditional native update guarded on the eligible status + ClaimToken re-read verify; ES refresh-window residual documented in CLAUDE.md (handlers must be idempotent). Birko.BackgroundJobs.ElasticSearch.Tests added.
 - **Detail:** DequeueAsync reads the top candidate (limit 1) and then issues a separate UpdateAsync to set Status=Processing. There is no optimistic concurrency / compare-and-swap, so two workers polling concurrently can both read the same Pending job before either update lands and both proceed to process it. This pattern is shared with the SQL/Mongo backends, but Elasticsearch is materially worse here: by default the index refreshes only ~once per second, so even a serialized claim by worker A is not visible to worker B's search for up to the refresh interval, widening the double-dequeue window considerably. AttemptCount++ also races (lost update). At minimum this should be documented as at-least-once with possible duplicate dispatch; ideally the claim should use a versioned/optimistic update and re-read on conflict.
 - **Fix:** Use Elasticsearch optimistic concurrency (seq_no/primary_term or a version field) on the claim update and treat a version conflict as 'lost the race' -> retry the dequeue loop. Failing that, document the duplicate-dispatch risk in CLAUDE.md and rely on idempotent job handlers.
 
@@ -2806,7 +2806,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for the ElasticSearch job-queue backend
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.ElasticSearch\Birko.BackgroundJobs.ElasticSearch (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — created Birko.BackgroundJobs.ElasticSearch.Tests (6 tests: lifecycle, FailAsync boundary, PurgeAsync, atomic-claim distinctness) over an in-memory ES store double.
 - **Detail:** There is no Birko.BackgroundJobs.ElasticSearch.Tests sibling, while Birko.BackgroundJobs.SQL has Birko.BackgroundJobs.SQL.Tests. None of the IJobQueue surface (Enqueue/Dequeue ordering by priority+enqueuedAt, scheduled-job visibility gating on ScheduledAt<=now, Fail retry-vs-dead transition at AttemptCount>=MaxRetries, Cancel only-when-pending/scheduled, Purge cutoff filtering, metadata round-trip via MetadataJson) is covered. Framework convention requires tests for new public functionality. The dequeue race and the priority/scheduling filter logic in particular are untested behavior.
 - **Fix:** Add Birko.BackgroundJobs.ElasticSearch.Tests (xUnit + FluentAssertions). Most logic can be exercised against an in-memory store fake or a Testcontainers ES instance mirroring the SQL test suite.
 
@@ -2814,7 +2814,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync read-modify-write has no concurrency guard (unlike the reference InMemoryJobQueue)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.JSON\JsonJobQueue.cs:85-95`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — DequeueAsync read-claim-update serialized with a SemaphoreSlim (mirrors InMemoryJobQueue); regression concurrency test in the new Birko.BackgroundJobs.JSON.Tests. Cross-process still unsupported by design (documented).
 - **Detail:** DequeueAsync reads a single candidate, sets it to Processing/AttemptCount++/LastAttemptAt, then UpdateAsync — with no lock. The reference IJobQueue implementation (Birko.BackgroundJobs/Processing/InMemoryJobQueue.cs:37-63) wraps the same read-claim-update sequence in a SemaphoreSlim precisely to prevent two concurrent dequeues from claiming the same job. Here two concurrent DequeueAsync calls can both read the same Pending job and both mark it Processing, double-dispatching it. The class doc says 'single-process deployments', but even a single process with >1 worker thread (the normal BackgroundJobProcessor case) hits this. The underlying AsyncJsonStore is also not internally synchronized for compound read-then-write.
 - **Fix:** Hold a SemaphoreSlim (or other async lock) around the candidate-read + status-update in DequeueAsync, mirroring InMemoryJobQueue. The same applies to the read-modify-write in CompleteAsync/FailAsync/CancelAsync if multiple writers can target the same job.
 
@@ -2822,7 +2822,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for the JSON job-queue backend
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.JSON\Birko.BackgroundJobs.JSON (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — created Birko.BackgroundJobs.JSON.Tests (6 tests incl. the concurrency guard, FailAsync boundary, PurgeAsync) over a temp-dir JSON store.
 - **Detail:** There is no Birko.BackgroundJobs.JSON.Tests project, and Birko.BackgroundJobs.Tests contains no JsonJobQueue/JsonJobDescriptorModel coverage (only InMemoryJobQueue is exercised). The full IJobQueue surface for the JSON backend — Enqueue/Dequeue ordering by Priority then EnqueuedAt, scheduled-job eligibility (ScheduledAt <= now), queue-name filtering, Fail retry-vs-dead transition, Cancel only-pending/scheduled, Purge cutoff, and the model round-trip incl. Metadata JSON and Status int<->enum casts — is untested. The framework convention (CLAUDE.md Testing) requires xUnit+FluentAssertions tests for new public functionality. The MaxRetries-fallback and concurrency issues above would likely have been caught by a port of the InMemoryJobQueue test suite.
 - **Fix:** Add Birko.BackgroundJobs.JSON.Tests mirroring the InMemoryJobQueueTests cases (using a temp-dir Settings + TestDateTimeProvider), plus JsonJobDescriptorModel FromDescriptor/ToDescriptor round-trip tests.
 
@@ -2830,7 +2830,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync is a non-atomic read-then-update (job double-pickup under concurrency)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.MongoDB\MongoDBJobQueue.cs:53-94`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — DequeueAsync now claims via a conditional native update (Mongo $set is per-document atomic) + ClaimToken re-read verify; Birko.BackgroundJobs.MongoDB.Tests added.
 - **Detail:** DequeueAsync reads the top candidate (limit:1) and then, in a separate UpdateAsync, flips it to Processing. Two workers (or two threads) can read the same Pending/Scheduled job before either writes Processing, so the same job is dequeued and executed twice. The README/CLAUDE for these backends advertise 'distributed processing', which this pattern does not safely support. The SQL backend has the identical non-atomic shape (and ships a separate SqlJobLockProvider to compensate), so this is a shared design limitation rather than a regression — but MongoDB has a clean native atomic primitive that the SQL store lacks.
 - **Fix:** Use a single atomic FindOneAndUpdate (find the highest-priority eligible job and set Status=Processing/AttemptCount++/LastAttemptAt in one round trip, returning the post-image). The underlying AsyncMongoDBStore does not expose FindOneAndUpdate today, so either add it there or drop to MongoDBJobQueue.Store.Client to issue it directly. As a weaker stopgap, an UpdateAsync(filter, PropertyUpdate) guarded on Status still pending would at least make the claim conditional.
 
@@ -2838,7 +2838,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync read-then-update is not atomic (lost-update / double-dispatch race)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.RavenDB\RavenDBJobQueue.cs:81-91`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — DequeueAsync now claims via a conditional update guarded on the eligible status + ClaimToken re-read verify (resolves a single winner even under RavenDB last-write-wins); Birko.BackgroundJobs.RavenDB.Tests added.
 - **Detail:** DequeueAsync reads a single Pending/Scheduled candidate, then in a separate round-trip sets it to Processing and increments AttemptCount via UpdateAsync. There is no optimistic-concurrency guard (no change-vector / ETag check) between the read and the update. Two concurrent workers (or two processes) polling the same queue can both read the same job, both mark it Processing, and both dispatch it. The reference InMemoryJobQueue avoids this with a SemaphoreSlim, but that is in-process only; for a persistent multi-worker backend a DB-level concurrency check is the real protection. RavenDB supports optimistic concurrency on the session, so this is fixable here unlike some other backends.
 - **Fix:** Use RavenDB optimistic concurrency on the claim update (set UseOptimisticConcurrency / pass the change vector) and treat a concurrency-conflict on the claim as 'job already taken' -> re-loop to the next candidate, so only one worker can transition a given job to Processing.
 
@@ -2846,7 +2846,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests project for the RavenDB backend
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.RavenDB\Birko.BackgroundJobs.RavenDB (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — created Birko.BackgroundJobs.RavenDB.Tests (6 tests: lifecycle, FailAsync boundary, PurgeAsync, atomic-claim distinctness) over an in-memory RavenDB store double.
 - **Detail:** There is no Birko.BackgroundJobs.RavenDB.Tests sibling, and Birko.BackgroundJobs.Tests contains no RavenDB-specific tests. A sibling Birko.BackgroundJobs.SQL.Tests exists, so per-backend test projects are the established framework convention. All public IJobQueue behavior (enqueue, dequeue ordering by Priority then EnqueuedAt, scheduled-time gating, queue-name filtering, complete/fail retry-vs-dead transition, cancel, purge cutoff) is currently untested for this backend.
 - **Fix:** Add Birko.BackgroundJobs.RavenDB.Tests (xUnit + FluentAssertions). RavenDB integration tests can run against RavenDB.TestDriver / an embedded server, matching how other live-store backends are tested; cover at minimum the dequeue ordering, the FailAsync retry-then-dead boundary, and PurgeAsync cutoff.
 
@@ -2854,7 +2854,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetByStatusAsync truncates before ordering — returns an arbitrary subset, not the newest N
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.Redis\RedisJobQueue.cs:266,281`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — GetByStatusAsync now materializes all members, orders by EnqueuedAt desc, THEN takes limit (was Take-before-order on an unordered set).
 - **Detail:** Redis sets are unordered. The code does members.Take(limit) (line 266) on the unordered SetMembers result, then OrderByDescending(EnqueuedAt) (line 281) on that truncated subset. So with more than `limit` jobs in a status, it returns an arbitrary `limit` jobs sorted among themselves, not the globally-newest `limit`. The InMemoryJobQueue reference (InMemoryJobQueue.cs:121-126) orders by EnqueuedAt descending FIRST, then Take(limit), yielding the true newest N. The Redis backend silently diverges from the documented/reference contract.
 - **Fix:** Fetch and deserialize all members for the status (or use a sorted set keyed by EnqueuedAt), then OrderByDescending(EnqueuedAt).Take(limit). If unbounded fetch is a concern, maintain a per-status sorted set instead of a plain set.
 
@@ -2862,7 +2862,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CancellationToken is accepted but never observed in any async method
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.Redis\RedisJobQueue.cs:76,96,144,167,207,244,258,284`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — every IJobQueue method (and RedisJobLockProvider) now calls ThrowIfCancellationRequested at entry, plus inside the GetByStatusAsync/PurgeAsync loops.
 - **Detail:** Every IJobQueue method takes a CancellationToken but none is passed to any Redis call or checked (e.g. db.HashSetAsync/ScriptEvaluateAsync calls drop it). The framework convention is that async methods observe the CancellationToken. The loops in GetByStatusAsync (266) and PurgeAsync (295) issue many sequential awaits and would never short-circuit on cancellation. RedisJobLockProvider has the same issue (TryAcquireAsync/ReleaseAsync ignore the token).
 - **Fix:** StackExchange.Redis does not take a CancellationToken, so at minimum call cancellationToken.ThrowIfCancellationRequested() at method entry and inside the GetByStatusAsync/PurgeAsync loops so callers passing a cancelled token get the expected OperationCanceledException.
 
@@ -2870,7 +2870,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dequeue read-modify-write of the job hash is not atomic with the sorted-set removal
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.Redis\RedisJobQueue.cs:120-141`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the dequeue claim (ZREM + hash flip to Processing, AttemptCount++, LastAttemptAt, status-set move) is now performed entirely inside the Lua DequeueScript, closing the orphan/double-dispatch window.
 - **Detail:** The Lua DequeueScript atomically removes the job id from the queue sorted set, but the subsequent HashGetAll (121), status mutation, and HashSet (138) happen as separate round-trips outside any transaction. If the process crashes between the ZREM and the HashSet that marks Processing, the job is gone from the queue but its hash still says Pending — it becomes orphaned (never re-queued, never visible to DequeueAsync). The README advertises 'Jobs survive process restarts' and 'no two workers grab the same job'; the at-least-once guarantee is weaker than implied because there is no visibility-timeout / requeue of stuck Processing jobs.
 - **Fix:** Either move the status flip into the Lua script (read hash + set Status=Processing + bump AttemptCount atomically), or add a reclaim path that re-queues Processing jobs whose LastAttemptAt exceeds a visibility timeout. At minimum document the orphan window.
 
@@ -2878,7 +2878,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SqlJobLockProvider leaks the lock connection if OpenAsync throws
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.SQL\SqlJobLockProvider.cs:49-50`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CreateConnection/OpenAsync moved inside the try so any failure routes through ReleaseConnectionAsync and nulls the connection instead of leaking it.
 - **Detail:** TryAcquireAsync assigns _lockConnection = _connector.CreateConnection(...) and then awaits _lockConnection.OpenAsync(ct). If OpenAsync throws (DB unreachable, auth failure, cancellation), the exception propagates with _lockConnection holding an undisposed DbConnection. The field is left non-null, so a subsequent TryAcquireAsync call overwrites it (since IsLocked is still false), permanently orphaning the first connection. Only the ExecuteScalarAsync failure path (the try/catch at lines 58-73) calls ReleaseConnectionAsync; the OpenAsync failure is outside that try.
 - **Fix:** Move the CreateConnection/OpenAsync into the try block (or a dedicated try/finally) so any failure routes through ReleaseConnectionAsync and nulls _lockConnection before rethrowing.
 
@@ -2886,7 +2886,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** TryAcquireAsync returns true on non-PostgreSQL backends without holding any lock
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.SQL\SqlJobLockProvider.cs:68-73`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — provider-appropriate locking (Postgres pg_try_advisory_lock, MSSql sp_getapplock, MySQL GET_LOCK); unsupported backends (SQLite) now return false instead of falsely reporting success. Regression test asserts SQLite returns false.
 - **Detail:** The lock uses pg_try_advisory_lock, which only exists on PostgreSQL. On MSSql/MySQL/SQLite the ExecuteScalarAsync throws DbException and the catch returns true ('Not PostgreSQL — rely on transaction-level locking in dequeue'). But DequeueAsync does NOT do transaction-level locking (see the dequeue race finding), and IsLocked stays false so ReleaseAsync is a no-op. The caller is told it holds an exclusive lock and proceeds, while in reality no mutual exclusion exists — the worst kind of silent failure for a distributed lock. The class is generic over <DB> (PostgreSqlConnector, MSSqlConnector, MySQL, SQLite per the doc) so non-Postgres is an expected, not exotic, configuration.
 - **Fix:** Either return false (lock not acquirable) on non-Postgres so callers fall back deliberately, or implement provider-appropriate locking (sp_getapplock for MSSql, GET_LOCK for MySQL) keyed off the connector type. At minimum, do not report success for a lock that was never taken.
 
@@ -2894,7 +2894,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for SqlJobQueue or SqlJobLockProvider
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.BackgroundJobs.SQL.Tests\Models\JobDescriptorModelTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — SqlJobQueueClaimTests (atomic claim/concurrency) already existed; added SqlJobLockAndLifecycleTests for SqlJobLockProvider (non-Postgres false, release/dispose safety) and the SqlJobQueue FailAsync retry-vs-dead boundary.
 - **Detail:** The only test file covers JobDescriptorModel mapping (FromDescriptor/ToDescriptor/metadata/status casting). The two primary public surfaces — SqlJobQueue<DB> (Enqueue/Dequeue/Complete/Fail/Cancel/Get/GetByStatus/Purge, including the retry-vs-dead branch in FailAsync and the eligibility filter in DequeueAsync) and SqlJobLockProvider<DB> (acquire/release/dispose, the non-Postgres fallback) — have no tests. These could be exercised against the InMemory or SQLite store per the framework's testing convention; the dequeue race and the lock fallback behavior in particular are untested correctness-critical paths.
 - **Fix:** Add SqlJobQueue tests (lifecycle, FailAsync reschedule-then-dead boundary at AttemptCount==MaxRetries, DequeueAsync queue-name and scheduled-eligibility filtering, PurgeAsync cutoff) and SqlJobLockProvider tests (idempotent re-acquire, release/dispose, non-Postgres path), e.g. over a SQLite connector.
 
@@ -2902,7 +2902,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync read-modify-write is not atomic (lost/duplicated jobs under concurrency)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.XML\XmlJobQueue.cs:58-99`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — DequeueAsync read-claim-update serialized with a SemaphoreSlim; single-worker/cross-process constraint documented in CLAUDE.md.
 - **Detail:** DequeueAsync reads the top candidate (limit:1), then separately mutates Status->Processing and calls UpdateAsync. There is no compare-and-swap, so two concurrent DequeueAsync calls (or two worker processes sharing the file) can select and 'claim' the same job, and the file store rewrites the whole file on each save, so interleaved updates can also clobber each other. The class doc scopes this to 'single-process deployments,' which makes it acceptable by design, but a single process with multiple worker tasks polling the same queue still races. This is inherent to the file-store backend (the JSON sibling has the identical pattern) and cannot be fully fixed without a native conditional update.
 - **Fix:** Document the single-worker constraint explicitly in the XML README/CLAUDE.md (not just 'single-process'), or guard DequeueAsync with a SemaphoreSlim so concurrent dequeues within the process serialize the claim step.
 
@@ -2910,7 +2910,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Per-key lock eviction races with GetOrSetAsync, weakening stampede protection
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching\Memory\MemoryCache.cs:78-94,119-124`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — per-key stampede locks are now reference-counted and retired by their last releaser (timer no longer evicts locks), so a lock cannot be recycled between GetOrAdd and WaitAsync. Regression tests: concurrent-same-key factory-once + lock-map drains to zero.
 - **Detail:** GetOrSetAsync does _locks.GetOrAdd(key, ...) (line 78) and then awaits WaitAsync (line 79). Meanwhile EvictExpired (lines 119-124) removes any lock whose entry is absent and whose CurrentCount == 1. A thread that has just obtained the semaphore from GetOrAdd but has not yet entered WaitAsync (CurrentCount is still 1, and on a cache miss there is no entry) can have its semaphore removed by the timer. A second concurrent caller for the same key then GetOrAdds a brand-new semaphore, so two threads enter the critical section simultaneously and both invoke the factory. This defeats the stated 'Per-key lock to prevent cache stampede' guarantee. Data correctness is preserved (last writer wins) but the factory can run multiple times concurrently, which is exactly what the lock exists to prevent.
 - **Fix:** Only remove a lock while holding it, or track in-flight waiters (e.g. a refcount incremented before WaitAsync) and skip eviction when any waiter is pending. Simpler: never evict locks in the timer, or guard the GetOrAdd+WaitAsync+removal under a consistent scheme so a lock cannot be removed between GetOrAdd and WaitAsync.
 
@@ -2918,7 +2918,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Write-through SetAsync orphans l1Task when L2 faults and fallback is disabled
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching.Hybrid\HybridCache.cs:69`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the write-through SetAsync now always awaits the L1 write in a finally (L2 call inside the try to catch sync throws too), so L1 is observed even when L2 faults with fallback disabled. Regression test asserts L1 is written and the L2 error still propagates.
 - **Detail:** In the WriteThrough branch, l1Task is started, then l2Task = _l2.SetAsync(...) and await Task.WhenAll(l1Task, l2Task). The only catch is 'catch when (_options.FallbackToL1OnL2Failure)'. When FallbackToL1OnL2Failure is false and L2 faults, Task.WhenAll throws and propagates, leaving l1Task never awaited. The L1 write still runs as fire-and-forget, and if it faults its exception is unobserved; callers also cannot rely on L1 being durably written before the exception surfaces. This asymmetry (WriteThrough=false path explicitly handles the no-fallback case at line 89-96, WriteThrough=true does not) is likely unintended.
 - **Fix:** Await l1Task in a finally (or catch the WhenAll failure, await l1Task to observe it, then rethrow when fallback is disabled) so the L1 write is always observed regardless of the fallback flag.
 
@@ -2926,7 +2926,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Missing tests for L1 TTL capping, WriteThrough=false, and L2-failure fallback on most operations
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Caching.Hybrid.Tests\HybridCacheTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Caching.Hybrid.Tests expanded: L1MaxExpiration capping (GetL1Options), WriteThrough=false happy path + no-fallback rethrow, and L2-failure fallback for Remove/Exists/RemoveByPrefix/Clear (34 tests).
 - **Detail:** Public behavior with no coverage: (1) GetL1Options / L1MaxExpiration capping is never asserted; (2) the WriteThrough=false branch (HybridCache.cs:84-98), including its distinct no-fallback rethrow at line 89, is untested; (3) FailingCache fallback is only exercised for GetAsync, SetAsync, and GetOrSetAsync — RemoveAsync, ExistsAsync, RemoveByPrefixAsync, and ClearAsync L2-failure fallback paths (lines 102-203) are untested; (4) the lock-leak/cleanup behavior and CancellationToken propagation through GetOrSetAsync's WaitAsync are untested.
 - **Fix:** Add tests for L1MaxExpiration capping, the WriteThrough=false durability ordering and its no-fallback rethrow, and fallback-on-L2-failure for Remove/Exists/RemoveByPrefix/Clear.
 
@@ -2934,7 +2934,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused KeyTimeToLiveAsync round-trip (dead code + needless Redis call)
 - **Path:** `C:/Source/Birko/Framework/Birko.Caching.Redis/RedisCache.cs:197`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — not reproducible: the dead KeyTimeToLiveAsync round-trip is already gone; RefreshSlidingExpirationAsync computes the TTL via ComputeRefreshedTtl against the stored absolute deadline (fixed with CR-H014).
 - **Detail:** var ttl = await db.KeyTimeToLiveAsync(fullKey); — 'ttl' is assigned but never read. This is dead code and also a wasted network round-trip on the hot path (every cache hit on a sliding+absolute entry). It looks like a leftover from an intended remaining-TTL computation (the same computation the absolute-cap bug above needs).
 - **Fix:** Either remove the line, or wire it into the absolute-cap logic so it is actually used (the two findings share a fix).
 
@@ -2942,7 +2942,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CancellationToken ignored by every Redis-calling method
 - **Path:** `C:/Source/Birko/Framework/Birko.Caching.Redis/RedisCache.cs:50-164`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — every Redis-calling method (Get/Set/Remove/Exists/RemoveByPrefix/Clear/GetOrSet) now calls ThrowIfCancellationRequested at entry, plus inside the RemoveByPrefix KeysAsync loop. Offline regression tests (lazy connection) assert a pre-cancelled token throws before touching Redis.
 - **Detail:** The framework convention requires async methods to observe the CancellationToken. GetAsync, SetAsync, RemoveAsync, ExistsAsync, RemoveByPrefixAsync, and ClearAsync all accept 'ct' but never inspect it (only GetOrSetAsync uses it, via Task.Delay/factory). StackExchange.Redis APIs do not accept a CancellationToken, but the methods can still honor cancellation by calling ct.ThrowIfCancellationRequested() at the top (and inside the RemoveByPrefixAsync KeysAsync loop, which can enumerate a large keyspace).
 - **Fix:** Add ct.ThrowIfCancellationRequested() at the start of each public method, and check it inside the RemoveByPrefixAsync 'await foreach' loop body.
 
@@ -2950,7 +2950,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for RedisCache
 - **Path:** `C:/Source/Birko/Framework/Birko.Caching.Redis (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Caching.Redis.Tests exists (created since the audit): sliding+absolute cap via the pure ComputeRefreshedTtl helper, expanded here with the cancellation tests.
 - **Detail:** There is no Birko.Caching.Redis.Tests project, and RedisCache is not referenced by Birko.Caching.Tests or Birko.Caching.Hybrid.Tests. The framework convention requires every new public functionality to have corresponding xUnit + FluentAssertions tests. The sliding+absolute cap bug above would have been caught by a sliding-expiration test. Redis-dependent behavior typically needs an integration test (Testcontainers/embedded Redis) or an IDatabase abstraction to unit-test the expiry/meta logic; note as a gap rather than deep-diving.
 - **Fix:** Add Birko.Caching.Redis.Tests covering Get/Set/Remove/Exists, GetOrSet stampede behavior, RemoveByPrefix/Clear key-prefix handling, and especially the sliding+absolute expiration interaction.
 
@@ -2958,7 +2958,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Read() checks HasReadData outside the lock (TOCTOU)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:400-417`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Read() now performs the availability check and GetRange under a single lock(ReadData), so the count cannot change between them. Regression tests (partial/all/over-size/empty) added to Birko.Communication.Bluetooth.Tests.
 - **Detail:** Read() evaluates HasReadData(size) (reads ReadData.Count) before entering lock(ReadData). With the Linux background ReadWorker appending under the lock, the count can change between the unlocked check and the locked GetRange. For a positive size this is benign because the buffer only grows on the worker thread, but if any caller path removes between the check and the lock, GetRange(0, size) can throw. The count check belongs inside the lock.
 - **Fix:** Move the HasReadData/count check inside the lock(ReadData) region so the check and GetRange are atomic.
 
@@ -2966,7 +2966,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CancellationTokenSource not disposed in Linux discovery
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLEDevices.cs:314-360`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the timeout CancellationTokenSource, the linked CTS, and the bluetoothctl Process are all wrapped in using in the Linux discovery path. Compile-verified with DefineConstants=LINUX.
 - **Detail:** var cts = new CancellationTokenSource(timeout); is created but never disposed. Only linkedCts is wrapped in a using. A CancellationTokenSource created with a timeout starts a timer and is an IDisposable; leaking it leaks the timer registration. The launched Process is also not wrapped in a using/disposed (only Kill on cancellation), leaking the Process handle.
 - **Fix:** Wrap cts in using (and dispose the Process), e.g. using (var cts = new CancellationTokenSource(timeout)) using (var process = new Process { ... }).
 
@@ -2974,7 +2974,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Auto-reconnect re-enters Open() from the read thread, stacking background threads
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:478-505,549-569`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (core) — a _reconnecting guard stops Open() from resetting _reconnectAttempts during a reconnect, so MaxReconnectAttempts now actually bounds the retry chain (was effectively infinite). Residual: reconnect still runs on the dying read thread and Open() spawns a fresh read thread — a dedicated supervisor is the cleaner design, documented inline; the bounded-attempts guard keeps the chain finite.
 - **Detail:** ReadWorker, on exit, calls HandleReconnect() which (on the same read thread) sleeps then calls Open(). Open() (OpenWindows/OpenLinux) creates and starts a brand-new _readThread while the current ReadWorker invocation is still on the stack inside HandleReconnect. The old thread reference in _readThread is overwritten, so a subsequent Close() can only Join the newest thread; the reconnect chain can stack threads and the _reconnectAttempts reset inside Open() (sets _reconnectAttempts = 0 on success) fights the increment in HandleReconnect.
 - **Fix:** Drive reconnect from a dedicated supervisor rather than from inside the dying read thread, or have Open() not spawn a new read thread when invoked from the reconnect path; ensure the previous thread has fully exited before starting a new one.
 
@@ -2982,7 +2982,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Sync-over-async in Open(): Task.Wait result ignored, exceptions deferred
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:59-85`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — OpenWindows now checks connectTask.Wait(timeout) and throws TimeoutException on false instead of proceeding on a stale _isOpen. (WINDOWS-gated; code-review verified — the WinRT branch is not compiled off a Windows TFM.)
 - **Detail:** OpenWindows calls connectTask.Wait(settings.ConnectionTimeout) and ignores the bool return (whether it actually completed within the timeout), relying solely on _isOpen. If the connect task is still running when the timeout elapses, execution proceeds, _isOpen is checked, and the still-running task's eventual exception becomes unobserved. This is blocking sync-over-async on a UI-affinity-prone WinRT path and can deadlock in apps with a synchronization context.
 - **Fix:** Check the Wait(timeout) return value and treat false as a timeout failure; consider providing an async Open path, and observe/await the connect task so exceptions are not dropped.
 
@@ -2990,7 +2990,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** README documents an API that does not exist in the code
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\README.md / CLAUDE.md`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CLAUDE.md rewritten to the real API (Bluetooth/BluetoothSettings VCP, BluetoothLE/BluetoothLESettings port, static BluetoothLEDevices.DiscoverDevicesAsync, DiscoveredDevice) — the fictional BluetoothCommunicator/BLEServer/BLEService/BLEScanner types are gone. README examples corrected (static DiscoverDevicesAsync, SubscribeProcessData/RemoveReadData instead of a nonexistent OnDataReceived event).
 - **Detail:** README.md and CLAUDE.md describe BluetoothCommunicator, BluetoothServer, BLECommunicator, BLEServer, BLEService, BLECharacteristic, BluetoothDeviceFinder, BLEScanner with ConnectAsync/GetServiceAsync/WriteAsync examples. None of these types exist. The actual public surface is Bluetooth/BluetoothSettings (VCP Serial wrapper), BluetoothLE/BluetoothLESettings (AbstractPort), BluetoothLEDevices.DiscoverDevicesAsync, and DiscoveredDevice. The framework convention (CLAUDE.md maintenance rules) requires README/CLAUDE.md to reflect the real public API.
 - **Fix:** Rewrite README.md and CLAUDE.md Components/usage sections to document the actual types and methods (Bluetooth VCP, BluetoothLE port, BluetoothLEDevices.DiscoverDevicesAsync).
 
@@ -2998,7 +2998,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Multiple placeholder/no-op platform paths shipped as functional
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLEDevices.cs:289-294,370-382,419-427; Ports/BluetoothLE.cs:508-519`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the dead RSSI-parsing branch in ParseBluetoothctlOutput was removed, and Linux service-filtered discovery now throws NotSupportedException instead of silently returning all devices. The Windows placeholders (DeviceAdvertisesService always-true, empty ReadWindowsWorker) are WINDOWS-gated and left documented-as-placeholder to avoid shipping unverifiable behavior changes.
 - **Detail:** Several methods are stubs that silently return success or do nothing: DeviceAdvertisesService always returns true; DiscoverDevicesWithServiceLinuxAsync ignores serviceUuid and returns all devices; ParseBluetoothctlOutput parses RSSI lines into a comment that updates nothing; ReadWindowsWorker is an empty body (Windows never reads data). These give callers the impression of working filtering/reads that don't function.
 - **Fix:** Either implement these paths or make them throw NotSupportedException/NotImplementedException so callers don't silently get wrong results; remove the dead RSSI-parsing branch.
 
@@ -3006,7 +3006,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for any public functionality
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Birko.Communication.Bluetooth (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.Bluetooth.Tests exists; augmented with Read() semantics (partial/all/over-size/empty) and GetID formatting for BluetoothLESettings/BluetoothSettings. 12 tests, all platform-agnostic (no hardware).
 - **Detail:** There is no Birko.Communication.Bluetooth.Tests directory. The framework convention requires xUnit + FluentAssertions tests for every new public functionality. Platform-independent, testable surface exists and is currently untested: BluetoothSettings.GetID / BluetoothLESettings.GetID formatting, the Read/HasReadData/RemoveReadData buffer logic (including the -1 bug above), ParseBluetoothAddress format validation/byte ordering, and ParseBluetoothctlOutput parsing.
 - **Fix:** Add a .Tests project covering GetID formatting, the read-buffer semantics (size, -1, over-read), ParseBluetoothAddress, and bluetoothctl output parsing; these need no real hardware.
 
@@ -3014,7 +3014,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Process not killed when capture is cancelled or fails
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Camera\Cameras/FfmpegCameraSource.cs:65-93`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CaptureFrameAsync now kills the ffmpeg process tree in a finally when it survives a cancellation/failure (Process.Dispose does not terminate the child), so a cancelled/failed capture no longer leaks an orphaned ffmpeg holding the camera. No-op on the success path (already exited).
 - **Detail:** The ffmpeg Process is wrapped in `using` so Dispose() is called, but Process.Dispose() does NOT terminate a still-running child process. On cancellation (CopyToAsync/WaitForExitAsync throw OperationCanceledException, caught at line 85) or any other exception, the method returns null while the ffmpeg process may still be running, leaking an orphaned OS process (and holding the camera device open). The catch blocks should kill the process before returning.
 - **Fix:** In the catch blocks (or a finally), call `if (!process.HasExited) process.Kill(entireProcessTree: true);` before returning so a cancelled/failed capture does not leave an orphaned ffmpeg holding the camera.
 
@@ -3022,7 +3022,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Device path and arguments are interpolated unescaped into the ffmpeg command line
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Camera\Cameras/FfmpegCameraSource.cs:48-57`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — arguments are now added via ProcessStartInfo.ArgumentList (extracted to BuildArguments) instead of a single interpolated string, and the Windows/macOS default device paths dropped their shell-style quotes. Regression tests assert a space-containing device is one unquoted token and a malicious value cannot inject extra args.
 - **Detail:** DevicePath, InputFormat, and resolution are string-interpolated directly into the single `Arguments` string with no escaping. The Windows default device path is `video="Integrated Camera"` (already contains quotes), and user-supplied DevicePath values containing spaces/quotes will not be parsed as intended by the Process argument tokenizer. Beyond correctness, an attacker-influenced DevicePath is an argument-injection vector. Prefer ProcessStartInfo.ArgumentList (available on net10.0) which handles per-argument quoting, instead of building a single Arguments string by interpolation.
 - **Fix:** Switch to psi.ArgumentList.Add(...) for each token so device names with spaces/quotes are passed correctly and injection is avoided.
 
@@ -3030,7 +3030,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** _requestLock serializes every query/mutation through a shared cached client
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.GraphQL\GraphQLClient.cs:27,158-205`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — removed the SemaphoreSlim(1,1) _requestLock from ExecuteAsync (HttpClient is thread-safe; no per-request mutable state). Regression test drives two concurrent requests on a shared client through a gating handler and asserts both are in flight simultaneously.
 - **Detail:** ExecuteAsync wraps the entire HTTP round-trip (send + read body) in a SemaphoreSlim(1,1) _requestLock, so only one request per GraphQLClient instance can be in flight at a time. Because GetClient (line 71) returns a process-wide singleton per endpoint, all callers sharing that endpoint are funneled into strictly sequential requests — a significant throughput bottleneck. HttpClient is designed for concurrent use and there is no per-request mutable state on the client that needs guarding here.
 - **Fix:** Remove _requestLock from the request path (HttpClient is thread-safe for concurrent sends). If some serialization is intended, scope it much more narrowly or document why.
 
@@ -3038,7 +3038,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests exercise the WebSocket subscription receive/decode path
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.GraphQL.Tests/GraphQLSubscriptionTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the per-frame dispatch was extracted from StartReceivingAsync into internal HandleMessageAsync(string) and unit-tested: next→OnNext, wrong-id filtered, complete→OnCompleted+stop, error→OnError+stop, and next-with-payload-errors→OnError. Frame reassembly (incl. >8KB) was already covered by WebSocketMessageReaderTests.
 - **Detail:** Subscription tests only cover IObservable plumbing (Subscribe/Dispose/Unsubscribe idempotency) against a never-connected ClientWebSocket. The actual message handling — StartReceivingAsync parsing data/next/complete/error frames, dispatching OnNext/OnError/OnCompleted, the id-filtering at GraphQLSubscription.cs:118, and the start/stop wire format — is untested, which is exactly where the protocol-mismatch and frame-buffering bugs above live. A fake WebSocket (or an in-process echo server) feeding crafted frames would catch these. SubscribeAsync's connection_init/ack handshake is likewise only tested for the disabled-subscriptions guard.
 - **Fix:** Add tests that drive StartReceivingAsync with a stub transport delivering data/next/complete/error and a fragmented (>8KB) frame, asserting observer callbacks and the emitted start message type.
 
@@ -3046,7 +3046,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** WithAuth mutates and re-adds headers into a reused Metadata instance
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.gRPC\GrpcAuthenticationInterceptor.cs:64-67`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — WithAuth now copies the inbound headers into a NEW Metadata instead of mutating the caller-supplied one, so reusing a CallOptions no longer accumulates duplicate authorization/x-tenant entries. Regression test: reuse → one auth header each call, caller Metadata untouched.
 - **Detail:** When context.Options.Headers is non-null, WithAuth reuses that exact Metadata instance and calls _mutate(headers), which Add()s the auth header (and any extraMetadata) into it. CallOptions/Metadata can legitimately be reused across multiple calls by a caller. Since the interceptor mutates the caller's Metadata in place and Metadata.Add appends (it does not replace), repeated calls through the same CallOptions accumulate duplicate 'authorization' (and x-tenant, etc.) entries. The interceptor should operate on a copy of the inbound headers rather than mutating the caller-supplied collection.
 - **Fix:** In WithAuth, build a new Metadata seeded from context.Options.Headers (copy existing entries) instead of mutating the original, then call _mutate on the copy. This keeps each call's header injection idempotent regardless of CallOptions reuse.
 
@@ -3054,7 +3054,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Latent NullReferenceException when Serial is constructed with null settings
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\Ports/Serial.cs:24,30-38`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Serial constructor guard-throws ArgumentNullException on null settings so `port` is always non-null (was a latent NRE in every method via the null! field). Regression test asserts the throw.
 - **Detail:** Field is declared 'private readonly SerialPort port = null!;' and the constructor only assigns port when settings != null (line 32). When settings is null, port stays null and every method (Write line 42 'port.IsOpen', Open, Clear, ReadSerial, Close) dereferences it and throws NRE. The 'null!' suppresses the compiler warning but converts a compile-time signal into a runtime crash, contrary to the framework's no-nullable-warnings/proper-null-checks convention.
 - **Fix:** Guard-clause the constructor: 'if (settings == null) throw new ArgumentNullException(nameof(settings));' (early return per the guard-clause convention), so port is always non-null and the null! is justified.
 
@@ -3062,7 +3062,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ReadData buffer accessed from DataReceived thread without synchronization
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\Ports/Serial.cs:54,58,121-132,144`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — every ReadData access (Read/HasReadData/RemoveReadData/Clear/ReadSerial) is now serialized on a dedicated _readLock (was only ReadSerial, on the SerialPort instance); RemoveReadData copies-and-removes atomically (also fixing the -1 RemoveRange crash). Covered by the new Hardware.Tests buffer tests.
 - **Detail:** DataReceivedHandler runs on a SerialPort threadpool thread and calls ReadSerial(), which appends to ReadData under 'lock (port)'. But the caller-facing Read()/RemoveReadData() read and mutate ReadData (GetRange, RemoveRange) WITHOUT taking that lock. List<byte> is not thread-safe, so concurrent append (handler) and read/remove (caller) can corrupt the list or throw. The lock scope is also inconsistent (only ReadSerial is protected).
 - **Fix:** Protect every ReadData access with the same lock object (or use a dedicated lock field rather than locking the SerialPort instance), covering Read, RemoveReadData, and Clear.
 
@@ -3070,7 +3070,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for any public functionality
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\Birko.Communication.Hardware (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — created Birko.Communication.Hardware.Tests (23 tests): GetID for SerialSettings/InfraportSettings/LPTSettings, the Serial read-buffer logic (size/-1/over-size/empty), and the null-settings guard. All hardware-free (port never opened).
 - **Detail:** There is no Birko.Communication.Hardware.Tests project. The framework convention requires every new public functionality to have xUnit + FluentAssertions tests covering success/failure and edge cases. Untested public surface includes SerialSettings/LPTSettings/InfraportSettings.GetID() (pure, easily testable), Serial.Read/HasReadData/RemoveReadData buffer logic, and the LPT RemoveReadData bug above (a test would have caught it).
 - **Fix:** Add a .Tests sibling. At minimum, unit-test the GetID() formatting and the ReadData buffer math (Read/HasReadData/RemoveReadData) which need no real hardware; abstract the inpout32/SerialPort dependencies behind seams to make I/O paths testable.
 
@@ -3078,7 +3078,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gaps: RC5 round-trip, RawProtocol, SamsungAcProfile, InfraredPort, transports
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.IR\Birko.Communication.IR.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.IR.Tests augmented (+50 tests): SamsungAcProfile (codebook, 16/30 temp clamp, checksum, unknown-name null, frame layout), InfraredPort (Send*Async delegation, Write %4 ArgumentException, HandleReceivedTiming protocol-match vs raw-fallback, lifecycle), HttpIrTransport (signed-duration mapping, StartReceiveAsync NotSupportedException, ownsHttpClient disposal), SerialIrTransport.ProcessReceivedLine. RC5 round-trip + RawProtocol were already covered.
 - **Detail:** Only the four protocols' encode + (NEC/Samsung) decode have tests. No tests exist for: RC5 round-trip (which would have caught the leading-zero bug above); RawProtocol (Encode throwing NotSupportedException, Decode hashing, null/empty handling); SamsungAcProfile (command registry, temp clamping at 16/30 bounds, checksum byte, GetTiming/GetCommand null for unknown names, frame byte layout); InfraredPort (SendCommandAsync/SendRawAsync delegation, HandleReceivedTiming protocol-match vs raw-fallback, Write packed-int parsing and the %4 ArgumentException, Open/Close lifecycle); HttpIrTransport (signed-duration mapping, NotSupportedException on StartReceiveAsync, ownsHttpClient disposal); SerialIrTransport (ProcessReceivedLine parsing).
 - **Fix:** Add at minimum an RC5 round-trip test and SamsungAcProfile codebook/checksum tests; cover InfraredPort.Write parsing and HandleReceivedTiming fallback.
 
@@ -3086,7 +3086,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** TCP response transaction ID is parsed but never validated against the request
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Modbus\Protocols/ModbusClient.cs:165-174, Protocols/ModbusFrame.cs:28`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the MBAP transaction id is threaded into WaitAndParseResponse for TCP and validated against the response; a mismatch throws IOException instead of accepting a stale/out-of-order frame. Regression test crafts a wrong-txId response and asserts the throw.
 - **Detail:** SendReadRequest/SendWriteRequest generate a per-request txId and ParseTcpResponse extracts the response transaction ID, but nothing compares the two. A stale or out-of-order response (e.g. left over after a prior timeout, despite the _port.Clear() before each request) would be accepted as the answer to the current request. The MBAP transaction ID exists precisely to correlate request/response; discarding it removes the protocol's safety check.
 - **Fix:** Pass the sent txId into WaitAndParseResponse for TCP and throw (or keep reading) when response.TransactionId != txId.
 
@@ -3094,7 +3094,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** TOCTOU between Read and RemoveRange in RemoveReadData can remove more bytes than were returned
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Network\Ports/TcpIp.cs:146-154 (same in Ports/Udp.cs:136-144)`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — not reproducible: RemoveReadData in both TcpIp and Udp already performs the copy-and-remove atomically inside a single lock(ReadData), removing exactly result.Length (fixed with CR-H026/H027).
 - **Detail:** RemoveReadData calls Read(size) to copy out bytes, re-checks HasReadData(size), then RemoveRange(0, size) — three separate unsynchronized operations over a buffer the worker thread is concurrently appending to. Even ignoring the append race, the returned `result` and the removed range are computed at different instants; combined with the missing lock this is a classic time-of-check/time-of-use hazard. Should be a single atomic copy-and-remove.
 - **Fix:** Inside one `lock (ReadData)`: compute count = size < 0 ? ReadData.Count : Math.Min(size, ReadData.Count); take GetRange(0, count).ToArray(); RemoveRange(0, count); return.
 
@@ -3102,7 +3102,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Udp.Write passes possibly-null _remoteEndPoint (CS8604 nullable warning)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Network\Ports/Udp.cs:34-43`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Udp.Write now guards _remoteEndPoint alongside _client before calling UdpClient.Send, removing the CS8604 nullable warning and the latent NRE.
 - **Detail:** Write guards only on `_client` (line 36/39), then calls `_client.Send(data, data.Length, _remoteEndPoint)` where _remoteEndPoint is `IPEndPoint?` (line 26). UdpClient.Send's endpoint parameter is non-nullable, so this is a CS8604 dereference-of-possibly-null warning, which the framework's 'No nullable warnings' convention forbids. _remoteEndPoint is only assigned in Open(); if a derived/edge path leaves _client non-null but _remoteEndPoint null the send also fails at runtime.
 - **Fix:** Guard `_remoteEndPoint` alongside `_client` (or after Open()) before calling Send, e.g. `if (_client != null && _remoteEndPoint != null) _client.Send(...);`.
 
@@ -3110,7 +3110,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project — entire public surface (TcpIp, Udp, settings, read/write/buffer logic) is untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Network\Birko.Communication.Network (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — created Birko.Communication.Network.Tests (25 tests): TcpIp/Udp GetID formatting and the read-buffer edges (Read/HasReadData/RemoveReadData incl. size 0 / > Count / -1 / empty). Buffer-only, no real sockets.
 - **Detail:** There is no Birko.Communication.Network.Tests directory under C:\Source (sibling test projects exist for Modbus, NFC, IR, WebSocket, gRPC, etc.). The framework convention requires xUnit + FluentAssertions tests for every public functionality. None of TcpIp/Udp Write/Read/Open/Close/RemoveReadData/HasReadData, the GetID formatting, or the negative-size / empty-buffer edge cases are covered — the RemoveReadData(-1) crash and the buffer races above would be caught by even basic loopback tests.
 - **Fix:** Add a Birko.Communication.Network.Tests project: loopback TcpListener/UdpClient round-trip tests for Write/Read, RemoveReadData boundary tests (size 0, size > Count, size < 0), HasReadData edges, GetID format, and a concurrency stress test hammering Read while the worker appends.
 
@@ -3118,7 +3118,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Polling loops swallow all exceptions / fire-and-forget Task.Run with no error surface
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Transports/SerialNfcTransport.cs:110`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — added an INfcTransport.PollingError event; SerialNfcTransport/HttpNfcTransport/HidNfcTransport now wrap the poll loop in try/catch (surfacing non-cancellation faults via PollingError and stopping), track the poll Task, and StopPollingAsync awaits it. Http keeps HttpRequestException transient but surfaces JsonException/other faults. Regression tests drive a malformed-body and a thrown fault and assert PollingError fires.
 - **Detail:** StartPollingAsync launches `_ = Task.Run(async () => { while(...) { ReadTagAsync(...); Task.Delay(...); } })` with no try/catch around the body. SerialNfcTransport.ReadTagAsync calls _port.Read/_port.Write which throw on serial errors (port unplugged, TimeoutException from the 2000ms ReadTimeout inside Task.Run, InvalidOperationException if the port closes mid-poll). Any such throw faults the detached task silently: polling stops with no event, no log, and IsConnected may still read true. HttpNfcTransport only catches HttpRequestException, so a JSON deserialization error (JsonException) or non-success status from EnsureSuccessStatusCode likewise kills the loop silently. The detached task is also not awaited or tracked, so StopPollingAsync cancels the token but cannot observe completion.
 - **Fix:** Wrap the loop body in try/catch, surface failures via an event or by re-checking cancellation, and store the polling Task so StopPollingAsync can await its completion.
 
@@ -3126,7 +3126,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for NfcReaderPort, SerialNfcTransport, or HttpNfcTransport
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Birko.Communication.NFC.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.NFC.Tests augmented (+ files): NfcReaderPort (lifecycle, event forwarding, ReadData population, protocol pipeline, APDU passthrough, dispose-unsubscribe), SerialNfcTransport.ParseResponse/DetectTagType (PN532 frames via reflection), HttpNfcTransport (status/tag/apdu/204/ownsClient) against a mocked handler.
 - **Detail:** The .Tests sibling covers NdefRecord, NfcTagData, Iso14443AProtocol, NdefProtocol, NfcReaderSettings, and HidNfcTransport, but has no coverage for NfcReaderPort (protocol application pipeline, event forwarding, ReadData population, Open/Close lifecycle), SerialNfcTransport (ParseResponse PN532 frame parsing, DetectTagType, dispose), or HttpNfcTransport (status/tag/apdu endpoints, NoContent handling, ownsClient disposal). ParseResponse in particular has nontrivial offset arithmetic that is currently untested.
 - **Fix:** Add unit tests for NfcReaderPort (using HidNfcTransport or a fake INfcTransport as the test double) and for SerialNfcTransport.ParseResponse / DetectTagType (pure, table-testable) and HttpNfcTransport against a mocked HttpMessageHandler.
 
@@ -3134,7 +3134,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gaps: device-code token polling, real refresh-token path, cache concurrency
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.OAuth.Tests\OAuthClientTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.OAuth.Tests augmented (+8): PollDeviceTokenAsync (pending->success, slow_down bump, expired_token, timeout), the real refresh_token grant path + GetTokenAsync refresh-then-fallback, ExchangeCodeAsync confidential-client (client_secret, no code_verifier), and a 401-retry test with a handler that inspects the genuinely re-sent (cloned) request.
 - **Detail:** Public behavior with no test coverage: (1) PollDeviceTokenAsync success, authorization_pending->success, slow_down interval bump, and expired_token/timeout paths are entirely untested (only RequestDeviceAuthorizationAsync is covered). (2) RefreshTokenAsync is only tested for the ClientCredentials branch (RefreshTokenAsync_ClientCredentials_RequestsNewToken); the primary path where a cached token carries a real refresh_token and is exchanged is not exercised, nor is the refresh-then-fallback logic in GetTokenAsync (lines 62-74). (3) ExchangeCodeAsync confidential-client branch that sends client_secret (no codeVerifier) is not asserted. (4) The 401-retry test passes only due to a handler that bypasses the real send pipeline, so it does not actually validate the retry against a handler that rejects a re-sent request.
 - **Fix:** Add tests driving PollDeviceTokenAsync via a sequenced fake handler (pending -> 200), assert the refresh_token grant_type body on the real refresh path, and add a delegating-handler test using a handler that throws on a re-sent HttpRequestMessage to catch the resend bug.
 
@@ -3142,7 +3142,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Credentials property is settable but never applied to the HttpClient
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST\RestClient.cs:31`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Credentials is now backed by the RestClient's own HttpClientHandler (get/set route through handler.Credentials), so it actually authenticates requests instead of silently doing nothing. Regression test asserts the value reaches the handler.
 - **Detail:** ICredentials? Credentials has a public getter/setter but is read nowhere in the file. The HttpClient is constructed with the default handler (line 86-89) and credentials are never wired into an HttpClientHandler.Credentials nor into request headers. Setting Credentials therefore has no effect — authentication via this property silently does nothing, which is a correctness trap for callers (and contradicts the documented 'Authentication support' purpose).
 - **Fix:** Either construct the HttpClient over an HttpClientHandler whose Credentials are set from this property, or remove the property and document header-based auth via DefaultHeaders only.
 
@@ -3150,7 +3150,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Sync wrappers block on async via GetAwaiter().GetResult()
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST\RestClient.cs:99-104,127-132,156-161,184-189,212-217`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — documented: the sync Get/Post/Put/Delete/Patch overloads are convenience shims (ConfigureAwait(false), no deadlock) and a class-level <remarks> now points callers to the *Async overloads (the only ones with a CancellationToken). Public API kept for compatibility.
 - **Detail:** Get/Post/Put/Delete/Patch all call SendRequestAsync(...).GetAwaiter().GetResult(), i.e. sync-over-async. SendRequestAsync uses ConfigureAwait(false) throughout which avoids the classic UI/ASP.NET-context deadlock, but blocking a thread on network I/O is still discouraged and the sync overloads also cannot observe a CancellationToken (none is accepted). At minimum this is a known anti-pattern worth flagging; the async overloads should be preferred.
 - **Fix:** Consider dropping the sync overloads, or document that they are convenience shims and route all real work through the async path. The sync overloads also lack a CancellationToken parameter.
 
@@ -3158,7 +3158,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CLAUDE.md describes an API that does not exist
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST\CLAUDE.md`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — CLAUDE.md rewritten to the real RestClient surface (single class, raw-string returns, int-ms Timeout, DefaultHeaders, handler-backed Credentials, sync + async verbs, OnRequest/OnResponse) — the fictional AsyncRestClient/RestRequest/RestResponse/GetData<T>/RestException/retry/cache API is gone. README already matched the real API (no fiction).
 - **Detail:** The project CLAUDE.md documents AsyncRestClient, SetBearerToken/SetBasicAuth/AddDefaultHeader, RestRequest/RestResponse/RestSettings models, response objects with GetData<T>()/IsSuccess/StatusCode, RestException, MaxRetries/RetryDelay, EnableCache, object-based query params, and a Timeout of type TimeSpan. None of these exist in RestClient.cs — the real surface is a single RestClient returning raw strings, with int-millisecond Timeout and a Dictionary<string,string> DefaultHeaders. The doc would actively mislead an agent or developer. This also diverges from the framework convention (gRPC/GraphQL siblings expose a RemoteSettings-derived settings class — here there is none and BaseURI is a raw trimmed string).
 - **Fix:** Rewrite CLAUDE.md (and README usage examples) to match the actual RestClient API, or, if the documented richer API is the intended target, file it as planned work rather than documented fact. Consider introducing a RestSettings : RemoteSettings to match the documented gRPC/GraphQL settings convention.
 
@@ -3166,7 +3166,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RestAuthenticationService has a Dispose() method but does not implement IDisposable
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST.Server\Middleware/RestAuthenticationService.cs:10,101`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — RestAuthenticationService now declares : IDisposable (it already had a Dispose() disposing the AuthenticationService/ReaderWriterLockSlim), so using/generic-dispose call it. Regression test asserts assignability to IDisposable.
 - **Detail:** The class declares 'public void Dispose()' (which disposes the inner AuthenticationService, owner of a ReaderWriterLockSlim) but the class signature is 'public class RestAuthenticationService' with no ': IDisposable'. Consumers cannot use 'using', generic dispose patterns won't recognize it, and the lock is likely never released, leaking the ReaderWriterLockSlim per service instance.
 - **Fix:** Declare 'public class RestAuthenticationService : IDisposable'.
 
@@ -3174,7 +3174,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests exist for the REST.Server project
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST.Server\Birko.Communication.REST.Server (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.REST.Server.Tests exists (RestResponseErrorTests covers the error-factory JSON escaping) and was extended with the IDisposable regression. (Deeper route-matching/middleware-order/token-precedence coverage remains an optional follow-up.)
 - **Detail:** There is no Birko.Communication.REST.Server.Tests directory; the existing Birko.Communication.REST.Tests contains only RestClientTests.cs (client side). RestServer route registration/matching (including {param} extraction and the exact-vs-pattern path), the middleware pipeline ordering (reverse-execution), query/header/body parsing, RestResponse factories, and the RestAuthenticationService token extraction (Bearer/API-key/query precedence) plus middleware all ship untested. Per the framework convention, every new public functionality must have corresponding tests.
 - **Fix:** Add Birko.Communication.REST.Server.Tests (xUnit + FluentAssertions) covering route matching, middleware order, request parsing edge cases (=-in-value query, missing body), the error-factory JSON escaping, and token extraction precedence.
 
@@ -3182,7 +3182,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Static client cache uses non-thread-safe Dictionary with check-then-act
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\SoapClient.cs:18, 57-64`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the static SoapClient cache is now a ConcurrentDictionary with GetOrAdd (was Dictionary with check-then-act); RemoveClient/ClearCache use TryRemove. Concurrency regression test hammers GetClient from 64 tasks → single instance, no throw.
 - **Detail:** GetClient does ContainsKey then Add on a plain Dictionary<string, SoapClient> with no locking. Concurrent callers can both pass the ContainsKey check and one Add throws ArgumentException (duplicate key), or two clients get constructed and one leaks its HttpClient. RemoveClient/ClearCache mutate the same dictionary without synchronization. The sibling GraphQLClient/RestClient caches in this framework are the reference for this 'GetClient' pattern; this one should be equally safe.
 - **Fix:** Use ConcurrentDictionary<string, SoapClient> with GetOrAdd (mirroring GrpcChannelPool), or guard all three methods with a lock.
 
@@ -3190,7 +3190,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SoapServer.Dispose does sync-over-async on StopAsync (deadlock risk)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\SoapServer.cs:258-261`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — extracted a synchronous Stop() core (Cancel/Stop/Close/Dispose are all sync); Dispose calls Stop() directly instead of blocking on StopAsync().GetAwaiter().GetResult(); StopAsync is now a thin wrapper (removed the noise await Task.CompletedTask). Regression test: Stop/Dispose/StopAsync on an unstarted server don't throw or hang.
 - **Detail:** Dispose calls StopAsync().GetAwaiter().GetResult(). StopAsync itself is fake-async (it does synchronous work then awaits Task.CompletedTask at line 93), so today it happens to complete synchronously, but the sync-over-async pattern is fragile: if StopAsync ever gains real async work, blocking on it from Dispose can deadlock in contexts with a synchronization context. StopAsync's trailing 'await Task.CompletedTask' is also pure noise.
 - **Fix:** Make Stop synchronous (Cancel/Stop/Close/Dispose are all sync APIs) and have Dispose call the synchronous core directly; keep an async StopAsync wrapper if needed for the public surface, but do not block on it in Dispose.
 
@@ -3198,7 +3198,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project exists
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\Birko.Communication.SOAP (no Birko.Communication.SOAP.Tests directory)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.SOAP.Tests exists (SoapClientCredentialsTests) and was extended with the GetClient concurrency + RemoveClient/ClearCache safety + SoapServer Stop/Dispose/StopAsync tests.
 - **Detail:** Per CLAUDE.md every new public functionality must have xUnit + FluentAssertions tests, and sibling communication projects (GraphQL: 49 tests, gRPC: 32 tests, OAuth.Server: 43 tests) all ship a .Tests project. SoapClient (request building, caching, dispose), SoapServer (routing, fault generation, start/stop), SoapService (ExtractSoapAction, envelope/fault builders), and SoapAuthenticationService (token extraction from envelope/query, fault) are entirely untested. The credentials bug above would have been caught by even a single round-trip test.
 - **Fix:** Add Birko.Communication.SOAP.Tests covering at minimum: credential application, GetClient caching/eviction, GetServicePath routing, ExtractSoapAction, ExtractTokenFromSoapEnvelope/QueryString, and fault-envelope shape.
 
@@ -3206,7 +3206,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Rate-limit middleware never evicts empty client keys — unbounded dictionary growth
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\Middleware/SseRateLimitMiddleware.cs:53-71`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — SseRateLimitMiddleware now prunes every client's history AND removes fully-aged-out keys each request, so _connectionHistory can no longer grow without bound as distinct client IPs come and go. Regression test ages a client out and asserts its key is evicted.
 - **Detail:** _connectionHistory accumulates one List<DateTime> entry per distinct RemoteEndPoint forever. The 'clean old entries' step prunes timestamps within an existing key's list but never removes a key whose list has become empty. A server facing many distinct client IPs (the normal case) grows this dictionary without bound — a slow memory leak / DoS vector for the exact component meant to mitigate abuse.
 - **Fix:** After the Where(...).ToList() filter, if the resulting list is empty remove the key; or periodically sweep keys with empty lists.
 
@@ -3214,7 +3214,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SseResponse.Denied silently discards the reason argument
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\Middleware/SseMiddleware.cs:82-89`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — added SseResponse.Reason and Denied() now assigns it, so denial responses carry the diagnostic text (Origin not allowed / Too many connection attempts / auth error) instead of dropping it. Test asserts Reason round-trips.
 - **Detail:** Denied(int statusCode, string? reason) accepts a reason parameter but never stores it on the returned SseResponse (there is no reason/body field). Every caller passes a meaningful message — SseAuthenticationMiddleware.cs:40 forwards result.ErrorMessage, SseCorsMiddleware.cs:56 passes 'Origin not allowed', SseRateLimitMiddleware.cs:68 passes 'Too many connection attempts' — and all of them are dropped on the floor, so denial responses carry only a status code with no diagnostic text.
 - **Fix:** Add a `public string? Reason { get; set; }` (or ReasonPhrase) to SseResponse and assign it in Denied(); have the host emit it in the response body/status.
 
@@ -3222,7 +3222,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Query-string token extraction breaks on leading '?' and value-embedded '='
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\Middleware/SseAuthenticationService.cs:160-173`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — ExtractTokenFromQueryString now TrimStart('?')s the query and splits each pair with Split('=', 2), so a raw query with a leading ? and a token value containing = (e.g. base64 padding) are handled instead of causing spurious 401s. Regression test covers both.
 - **Detail:** ExtractTokenFromQueryString splits on '&' then on '='. Two problems: (1) if queryString includes the leading '?' (common when callers pass the raw query), the first pair key becomes '?token' and never matches QueryTokenName, so the token is missed; (2) parts.Length == 2 rejects any value containing an '=' (e.g. base64 JWTs ending in '=' padding, or '=' inside the token), so valid tokens fail auth. Both cause spurious 401s.
 - **Fix:** TrimStart('?') the query string first, and split each pair with `pair.Split('=', 2)` (limit 2) then check parts.Length >= 2, joining/taking the remainder as the value before UnescapeDataString.
 
@@ -3230,7 +3230,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SseClient.ConnectAsync leaks the previous CTS and receive task on repeated calls
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\SseClient.cs:94-103`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — ConnectAsync tears down any prior session (via DisconnectAsync) before creating a new CTS/receive task, so repeated calls no longer orphan the previous CancellationTokenSource and ReceiveLoop. Covered by a bounded double-connect test.
 - **Detail:** ConnectAsync unconditionally overwrites _cts (and _receiveTask) without cancelling/disposing any prior instance. Calling ConnectAsync twice (or reconnect logic) abandons the first CancellationTokenSource — undisposed IDisposable — and orphans the first ReceiveLoop task, which keeps running. There is no guard against an already-connected state.
 - **Fix:** Early-return (or throw) if IsConnected/_cts != null, or call DisconnectAsync() first to tear down the prior session before creating a new CTS.
 
@@ -3238,7 +3238,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Client receive pipeline is an unimplemented stub — ProcessEventLine and event callbacks are never reached
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\SseClient.cs:133-156`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — SseClient now performs real HTTP SSE streaming: ConnectAsync opens a GET with ResponseHeadersRead (injectable HttpClient), ReceiveLoop reads lines and feeds ProcessEventLine (so OnMessage/OnEvent/LastEventId/retry actually fire), with AutoReconnect re-opening via Last-Event-ID. Test streams events through a mock handler and asserts the callbacks; a 404 makes ConnectAsync throw.
 - **Detail:** ReceiveLoop does no network I/O — it just `await Task.Delay(100)` in a loop until cancelled. Consequently ProcessEventLine (SseClient.cs:161) is never invoked by the client, so _currentEvent, OnMessage, OnEvent, LastEventId-from-stream, and the retry/reconnect handling are all dead in practice. ConnectAsync also reports IsConnected=true and fires OnConnected without ever opening a connection, so the client's public contract (connect, receive events, auto-reconnect) is not actually fulfilled. This reads as scaffolding rather than a working client.
 - **Fix:** Implement the HTTP streaming read (HttpClient with ResponseHeadersRead, read lines, feed ProcessEventLine) or clearly mark the type abstract/partial so consumers must supply the transport, mirroring how SseClientConnection.OnSendAsync is a documented override point on the server side.
 
@@ -3246,7 +3246,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SseEvent.CreateComment produces a malformed comment line
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\SseEvent.cs:105-111`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — comments are represented by a distinct SseEvent.Comment property serialized as ": {comment}" lines; CreateComment sets Comment (not Data), so ToString emits a real SSE comment instead of "data: : comment". The existing test was corrected to assert the fixed output.
 - **Detail:** CreateComment sets Data = ": comment". ToString() then emits each Data line prefixed with 'data: ', producing `data: : comment` — a data field, not an SSE comment. A real SSE comment line must literally start with ':' with no 'data:' prefix. The current output is a normal (mis-prefixed) data event, defeating the documented keep-alive purpose and corrupting the event stream.
 - **Fix:** Represent comments distinctly (e.g. a Comment property serialized as `: {comment}` lines) rather than smuggling them through Data, or special-case Data values beginning with ':' in ToString().
 
@@ -3254,7 +3254,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Synchronous .Wait() on WebSocket async I/O (sync-over-async)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.WebSocket\Ports/WebSocketPort.cs:44,85,114,136`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — WebSocketPort Write/Open/Close/ReadWorker now block via ConfigureAwait(false).GetAwaiter().GetResult() instead of .Wait()/.Result, so the original WebSocketException propagates (not an AggregateException) and no captured SynchronizationContext is required.
 - **Detail:** Write/Open/Close/ReadWorker block on async WebSocket operations via .Wait()/.Result (SendAsync().Wait(), ConnectAsync().Wait(), CloseAsync().Wait(), ReceiveAsync().Wait()). This is the sync-over-async anti-pattern the framework conventions warn against; .Wait() wraps any exception in AggregateException (so the try/catch + rethrow at line 46-49 rethrows AggregateException, not the underlying WebSocketException), and on a captured SynchronizationContext it can deadlock. The AbstractPort contract is synchronous so some blocking is unavoidable, but ConfigureAwait(false) + GetAwaiter().GetResult() should be used to avoid AggregateException wrapping and reduce deadlock risk.
 - **Fix:** Replace .Wait()/.Result with .ConfigureAwait(false).GetAwaiter().GetResult() so the original exception type propagates and the captured context is not required.
 
@@ -3262,7 +3262,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** WebSocketAuthenticationService.Dispose never invoked (does not implement IDisposable)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.WebSocket\Services/WebSocketAuthenticationService.cs:13,73`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — WebSocketAuthenticationService now declares : IDisposable (it already had a Dispose() disposing the inner AuthenticationService/ReaderWriterLockSlim), so the DI container actually disposes it. Regression test asserts IDisposable + idempotent Dispose.
 - **Detail:** The class constructs and owns an AuthenticationService (an IDisposable-ish resource it disposes in its own Dispose()), but the class itself does not implement IDisposable. When registered in the DI container (the documented usage — it is resolved via context.RequestServices.GetService in the middleware), the container will never call Dispose() because the type does not implement IDisposable, leaking the inner AuthenticationService for the container's lifetime.
 - **Fix:** Declare 'class WebSocketAuthenticationService : IDisposable' so the DI container disposes it (and the wrapped AuthenticationService) at end of scope/app lifetime.
 
@@ -3270,7 +3270,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test coverage limited to WebSocketSettings only
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.WebSocket.Tests/WebSocketSettingsTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Communication.WebSocket.Tests expanded to 33 (was settings+buffer only): WebSocketServer start/stop/restart lifecycle + IsListening + idempotent Stop + BroadcastAsync guards (real loopback HttpListener on an OS-assigned free port), and WebSocketAuthenticationService ValidateToken/ExtractTokenFromQuery reject-vs-allow + the middleware decision. Buffer cases were already covered.
 - **Detail:** The only tests cover WebSocketSettings.GetID/property setters. There are no tests for WebSocketServer (Start/Stop/Broadcast lifecycle, restart after stop, IsListening after stop), WebSocketPort (Read/RemoveReadData buffering incl. the size<0 path, HasReadData boundaries), the middleware auth path (ValidateToken rejection -> 401), or the endpoint mapping extensions. The negative-size RemoveReadData crash and the listener-restart bug above would both be caught by even minimal coverage.
 - **Fix:** Add tests for WebSocketPort buffer operations (especially RemoveReadData with size<0 and size==Count), a WebSocketServer start/stop/restart round-trip, and the auth middleware reject path.
 
