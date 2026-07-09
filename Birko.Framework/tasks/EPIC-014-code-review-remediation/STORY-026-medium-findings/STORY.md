@@ -13,8 +13,16 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**105 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**107 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 17 — Migrations.InfluxDB CR-M110/M111 (2 closed; M108/M109 deferred)
+
+- **M110** CopyData/BulkInsert coerced every non-string field via `Convert.ToDouble` (corrupting bool/int/long, throwing on DateTime/byte[]) and dropped `_time` → new `ApplyValue` helper branches on runtime type (string→tag, bool/int/double→matching Field, else string field, no throw); `_time` preserved. Offline tests via ToLineProtocol.
+- **M111** `ConvertFilterToFluxPredicate` returned JSON verbatim as a Flux delete predicate → rejects JSON with NotSupportedException (Flux predicate still passes through); `RemoveMigration` escapes `migration.Name` (new `EscapeFluxString`). Offline tests.
+- **M108 deferred** — the sync `IDataMigrator` interface + async-only SDK means the sync-over-async can't be removed without adding async members to the shared migration interfaces (the CR-M101 async/CancellationToken work); do it there.
+- **M109 deferred** — the Flux `count()` semantics fix needs a live InfluxDB to validate against multi-field measurements; do it with the M108 async rework.
+- Suite green: Migrations.InfluxDB.Tests 17.
 
 ### Batch 16 — Migrations cluster CR-M102 … CR-M107 (6 closed; M101 deferred)
 
