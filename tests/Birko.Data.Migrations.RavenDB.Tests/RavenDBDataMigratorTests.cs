@@ -38,28 +38,56 @@ public class RavenDBDataMigratorTests
         act.Should().Throw<ArgumentNullException>();
     }
 
-    // CR-H066: cover the pure ParseFilterToRql helper (no live server needed).
+    // CR-H066 / CR-M114: cover the pure ParseFilterToRql helper (no live server needed). Values are
+    // now bound $pN query parameters instead of interpolated literals.
     [Fact]
     public void ParseFilterToRql_Empty_ReturnsEmpty()
     {
-        RavenDBDataMigrator.ParseFilterToRql(null).Should().BeEmpty();
-        RavenDBDataMigrator.ParseFilterToRql("{}").Should().BeEmpty();
+        RavenDBDataMigrator.ParseFilterToRql(null).Rql.Should().BeEmpty();
+        RavenDBDataMigrator.ParseFilterToRql(null).Parameters.Should().BeEmpty();
+        RavenDBDataMigrator.ParseFilterToRql("{}").Rql.Should().BeEmpty();
     }
 
     [Fact]
-    public void ParseFilterToRql_Equality_And_Operators()
+    public void ParseFilterToRql_Equality_uses_a_bound_parameter()
     {
-        RavenDBDataMigrator.ParseFilterToRql("{\"status\":\"active\"}").Should().Be("status = 'active'");
-        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$gt\":18}}").Should().Be("age > 18");
-        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$gte\":18}}").Should().Be("age >= 18");
-        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$lt\":65}}").Should().Be("age < 65");
-        RavenDBDataMigrator.ParseFilterToRql("{\"age\":{\"$lte\":65}}").Should().Be("age <= 65");
-        RavenDBDataMigrator.ParseFilterToRql("{\"state\":{\"$ne\":\"x\"}}").Should().Be("state != 'x'");
+        var (rql, parameters) = RavenDBDataMigrator.ParseFilterToRql("{\"status\":\"active\"}");
+
+        rql.Should().Be("status = $p0");
+        parameters["p0"].Should().Be("active");
+    }
+
+    [Theory]
+    [InlineData("$gt", ">")]
+    [InlineData("$gte", ">=")]
+    [InlineData("$lt", "<")]
+    [InlineData("$lte", "<=")]
+    [InlineData("$ne", "!=")]
+    public void ParseFilterToRql_operators_map_with_bound_values(string mongoOp, string rqlOp)
+    {
+        var (rql, parameters) = RavenDBDataMigrator.ParseFilterToRql($"{{\"age\":{{\"{mongoOp}\":18}}}}");
+
+        rql.Should().Be($"age {rqlOp} $p0");
+        parameters["p0"].Should().Be(18L);
     }
 
     [Fact]
     public void ParseFilterToRql_MultipleConditions_JoinedWithAnd()
     {
-        RavenDBDataMigrator.ParseFilterToRql("{\"a\":1,\"b\":\"x\"}").Should().Be("a = 1 AND b = 'x'");
+        var (rql, parameters) = RavenDBDataMigrator.ParseFilterToRql("{\"a\":1,\"b\":\"x\"}");
+
+        rql.Should().Be("a = $p0 AND b = $p1");
+        parameters["p0"].Should().Be(1L);
+        parameters["p1"].Should().Be("x");
+    }
+
+    [Fact]
+    public void ParseFilterToRql_value_with_a_quote_stays_a_bound_parameter()
+    {
+        // CR-M114: a value containing a single quote no longer breaks the RQL literal — it is a param.
+        var (rql, parameters) = RavenDBDataMigrator.ParseFilterToRql("{\"name\":\"O'Brien\"}");
+
+        rql.Should().Be("name = $p0");
+        parameters["p0"].Should().Be("O'Brien");
     }
 }
