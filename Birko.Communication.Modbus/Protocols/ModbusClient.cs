@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using Birko.Communication.Ports;
 
@@ -160,10 +161,11 @@ namespace Birko.Communication.Modbus.Protocols
                 _port.Clear();
 
                 byte[] request;
+                ushort? txId = null;
                 if (_transport == ModbusTransport.Tcp)
                 {
-                    var txId = _transactionId++;
-                    request = ModbusFrame.BuildTcpRequest(txId, unitId, function, startAddress, quantity);
+                    txId = _transactionId++;
+                    request = ModbusFrame.BuildTcpRequest(txId.Value, unitId, function, startAddress, quantity);
                 }
                 else
                 {
@@ -171,7 +173,7 @@ namespace Birko.Communication.Modbus.Protocols
                 }
 
                 _port.Write(request);
-                return WaitAndParseResponse(unitId, expectedMinResponse);
+                return WaitAndParseResponse(unitId, expectedMinResponse, txId);
             }
         }
 
@@ -183,10 +185,11 @@ namespace Birko.Communication.Modbus.Protocols
                 _port.Clear();
 
                 byte[] request;
+                ushort? txId = null;
                 if (_transport == ModbusTransport.Tcp)
                 {
-                    var txId = _transactionId++;
-                    request = ModbusFrame.BuildTcpWriteRequest(txId, unitId, pdu);
+                    txId = _transactionId++;
+                    request = ModbusFrame.BuildTcpWriteRequest(txId.Value, unitId, pdu);
                     expectedMinResponse = 7 + 5; // MBAP(7) + func(1) + addr(2) + value(2)
                 }
                 else
@@ -196,11 +199,11 @@ namespace Birko.Communication.Modbus.Protocols
                 }
 
                 _port.Write(request);
-                return WaitAndParseResponse(unitId, expectedMinResponse);
+                return WaitAndParseResponse(unitId, expectedMinResponse, txId);
             }
         }
 
-        private ModbusResponse WaitAndParseResponse(byte unitId, int expectedMinResponse)
+        private ModbusResponse WaitAndParseResponse(byte unitId, int expectedMinResponse, ushort? expectedTransactionId = null)
         {
             var elapsed = 0;
             while (!_port.HasReadData(expectedMinResponse) && elapsed < ResponseTimeoutMs)
@@ -219,9 +222,20 @@ namespace Birko.Communication.Modbus.Protocols
 
             var responseData = _port.RemoveReadData(_port.GetData().Length);
 
-            return _transport == ModbusTransport.Tcp
-                ? ModbusFrame.ParseTcpResponse(responseData)
-                : ModbusFrame.ParseRtuResponse(responseData);
+            if (_transport != ModbusTransport.Tcp)
+                return ModbusFrame.ParseRtuResponse(responseData);
+
+            var tcpResponse = ModbusFrame.ParseTcpResponse(responseData);
+
+            // Correlate the MBAP transaction id: a stale/out-of-order frame (e.g. a late reply left
+            // over after a prior timeout) must not be accepted as this request's response (CR-M052).
+            if (expectedTransactionId.HasValue && tcpResponse.TransactionId != expectedTransactionId.Value)
+            {
+                throw new IOException(
+                    $"Modbus TCP transaction id mismatch from unit {unitId}: expected {expectedTransactionId.Value}, got {tcpResponse.TransactionId} (stale/out-of-order response).");
+            }
+
+            return tcpResponse;
         }
 
         /// <summary>
