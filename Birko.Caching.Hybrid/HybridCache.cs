@@ -77,16 +77,20 @@ public sealed class HybridCache : ICache
 
         if (_options.WriteThrough)
         {
-            // Write both tiers in parallel
+            // Write both tiers in parallel, but always await the L1 write so it is never orphaned as
+            // unobserved fire-and-forget when L2 faults with fallback disabled (CR-M031). The L2 call
+            // is inside the try so a synchronous throw (not just a faulted task) is handled too.
             var l1Task = _l1.SetAsync(key, value, l1Options, ct);
-            Task l2Task;
 
             try
             {
-                l2Task = _l2.SetAsync(key, value, options, ct);
-                await Task.WhenAll(l1Task, l2Task);
+                await _l2.SetAsync(key, value, options, ct);
             }
             catch when (_options.FallbackToL1OnL2Failure)
+            {
+                // Fallback enabled: tolerate the L2 failure (L1 still observed in finally).
+            }
+            finally
             {
                 await l1Task;
             }
