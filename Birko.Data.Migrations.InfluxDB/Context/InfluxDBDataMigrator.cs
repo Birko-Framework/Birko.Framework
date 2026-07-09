@@ -102,17 +102,22 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                     var point = PointData.Measurement(record.GetMeasurement())
                         .Tag("_original_bucket", sourceCollection);
 
-                    // Copy all fields from the record
+                    // Copy all fields from the record, preserving each value's runtime type (CR-M110:
+                    // the old blanket Convert.ToDouble collapsed bool/int/long to double and threw on
+                    // DateTime/byte[]).
                     foreach (var entry in record.Values)
                     {
                         var key = entry.Key;
                         if (key == "_measurement" || key == "_time" || key == "_start" || key == "_stop")
                             continue;
 
-                        if (entry.Value is string strVal)
-                            point = point.Tag(key, strVal);
-                        else if (entry.Value != null)
-                            point = point.Field(key, Convert.ToDouble(entry.Value));
+                        point = ApplyValue(point, key, entry.Value);
+                    }
+
+                    // Preserve the original timestamp instead of re-stamping to write time (CR-M110).
+                    if (record.GetTimeInDateTime() is DateTime originalTime)
+                    {
+                        point = point.Timestamp(originalTime, WritePrecision.Ns);
                     }
 
                     points.Add(point);
@@ -146,10 +151,14 @@ namespace Birko.Data.Migrations.InfluxDB.Context
                     if (kvp.Key.StartsWith("_") || kvp.Key == "time")
                         continue;
 
-                    if (kvp.Value is string s)
-                        point = point.Tag(kvp.Key, s);
-                    else
-                        point = point.Field(kvp.Key, Convert.ToDouble(kvp.Value ?? 0));
+                    // CR-M110: preserve the value's runtime type instead of coercing everything to double.
+                    point = ApplyValue(point, kvp.Key, kvp.Value);
+                }
+
+                // Preserve an explicit timestamp if the document carries one (CR-M110).
+                if ((doc.TryGetValue("_time", out var tv) || doc.TryGetValue("time", out tv)) && tv is DateTime docTime)
+                {
+                    point = point.Timestamp(docTime, WritePrecision.Ns);
                 }
 
                 points.Add(point);
@@ -158,9 +167,56 @@ namespace Birko.Data.Migrations.InfluxDB.Context
             writeApi.WritePointsAsync(points, collection, _organization).GetAwaiter().GetResult();
         }
 
+        /// <summary>
+        /// Writes a value onto a point, preserving its runtime type: strings become tags; bool / integer
+        /// / floating-point map to their matching Field overload; null is skipped; anything else (e.g.
+        /// DateTime, byte[]) is written as its string representation rather than throwing (CR-M110).
+        /// </summary>
+        internal static PointData ApplyValue(PointData point, string key, object? value)
+        {
+            switch (value)
+            {
+                case null:
+                    return point;
+                case string s:
+                    return point.Tag(key, s);
+                case bool b:
+                    return point.Field(key, b);
+                case sbyte or byte or short or ushort or int or uint or long:
+                    return point.Field(key, Convert.ToInt64(value));
+                case ulong ul:
+                    return point.Field(key, (long)ul);
+                case float or double or decimal:
+                    return point.Field(key, Convert.ToDouble(value));
+                default:
+                    return point.Field(key, value.ToString() ?? string.Empty);
+            }
+        }
+
         internal static string ConvertFilterToFluxPredicate(string filterJson)
         {
-            // Simple conversion — return as-is for basic predicates
+            if (string.IsNullOrWhiteSpace(filterJson))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = filterJson.Trim();
+            if (trimmed == "{}")
+            {
+                return string.Empty;
+            }
+
+            // CR-M111: a JSON object filter cannot be used as an InfluxDB delete predicate (which is a
+            // boolean Flux expression like `_measurement="m" AND tag="v"`). The old code returned it
+            // verbatim, so a JSON filter silently matched nothing / everything. Reject it clearly; a
+            // caller that already has a Flux predicate string can still pass it through.
+            if (trimmed.StartsWith("{"))
+            {
+                throw new NotSupportedException(
+                    "InfluxDB delete does not support JSON filters. Pass a Flux delete predicate string " +
+                    "(e.g. '_measurement=\"m\" AND tag=\"v\"'), or an empty filter to delete the whole range.");
+            }
+
             return filterJson;
         }
     }

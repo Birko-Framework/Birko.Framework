@@ -152,7 +152,9 @@ namespace Birko.Data.Migrations.InfluxDB
             }
 
             var deleteApi = _client.GetDeleteApi();
-            var fluxPredicate = $"_measurement=\"{MigrationMeasurement}\" AND name=\"{migration.Name}\"";
+            // CR-M111: escape the interpolated name so a value containing a quote/backslash can't break
+            // (or alter) the delete predicate.
+            var fluxPredicate = $"_measurement=\"{MigrationMeasurement}\" AND name=\"{EscapeFluxString(migration.Name)}\"";
 
             var start = migration.CreatedAt.AddMinutes(-1);
             var stop = DateTime.UtcNow;
@@ -192,5 +194,12 @@ namespace Birko.Data.Migrations.InfluxDB
         {
             return Task.FromResult(GetCurrentVersion());
         }
+
+        /// <summary>
+        /// Escapes a value for safe interpolation into a double-quoted Flux string literal (CR-M111):
+        /// backslashes and embedded double quotes are backslash-escaped.
+        /// </summary>
+        internal static string EscapeFluxString(string? value)
+            => (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 }
