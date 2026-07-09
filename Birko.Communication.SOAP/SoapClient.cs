@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -15,7 +16,9 @@ namespace Birko.Communication.SOAP
     /// </summary>
     public class SoapClient : IDisposable
     {
-        private static readonly Dictionary<string, SoapClient> _clients = new Dictionary<string, SoapClient>();
+        // Process-wide shared cache reached concurrently — a plain Dictionary with check-then-act
+        // GetClient could double-construct (leaking an HttpClient) or throw on a duplicate Add (CR-M064).
+        private static readonly ConcurrentDictionary<string, SoapClient> _clients = new();
 
         private readonly HttpClient _httpClient;
         private bool _disposed;
@@ -56,11 +59,7 @@ namespace Birko.Communication.SOAP
         /// <returns>A cached or new SoapClient instance</returns>
         public static SoapClient GetClient(string uri)
         {
-            if (!_clients.ContainsKey(uri))
-            {
-                _clients.Add(uri, new SoapClient(uri));
-            }
-            return _clients[uri];
+            return _clients.GetOrAdd(uri, u => new SoapClient(u));
         }
 
         /// <summary>
@@ -197,11 +196,11 @@ namespace Birko.Communication.SOAP
         /// </summary>
         public static void ClearCache()
         {
-            foreach (var client in _clients.Values)
+            foreach (var kvp in _clients.ToArray())
             {
-                client.Dispose();
+                if (_clients.TryRemove(kvp.Key, out var client))
+                    client.Dispose();
             }
-            _clients.Clear();
         }
 
         /// <summary>
@@ -211,10 +210,10 @@ namespace Birko.Communication.SOAP
         /// <returns>True if the client was removed; otherwise, false</returns>
         public static bool RemoveClient(string uri)
         {
-            if (_clients.TryGetValue(uri, out var client))
+            if (_clients.TryRemove(uri, out var client))
             {
                 client.Dispose();
-                return _clients.Remove(uri);
+                return true;
             }
             return false;
         }

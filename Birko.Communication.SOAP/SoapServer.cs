@@ -76,9 +76,11 @@ namespace Birko.Communication.SOAP
         }
 
         /// <summary>
-        /// Stops the SOAP server
+        /// Stops the SOAP server. All the work here (Cancel/Stop/Close/Dispose) is synchronous, so
+        /// this is the real implementation; Dispose calls it directly rather than blocking on the
+        /// async wrapper (CR-M065).
         /// </summary>
-        public async Task StopAsync()
+        public void Stop()
         {
             if (_listener == null || !_listener.IsListening)
                 return;
@@ -89,8 +91,15 @@ namespace Birko.Communication.SOAP
 
             _cts?.Dispose();
             _cts = null;
+        }
 
-            await Task.CompletedTask.ConfigureAwait(false);
+        /// <summary>
+        /// Stops the SOAP server (async-compatible wrapper over <see cref="Stop"/>).
+        /// </summary>
+        public Task StopAsync()
+        {
+            Stop();
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -257,7 +266,7 @@ namespace Birko.Communication.SOAP
 
         public void Dispose()
         {
-            StopAsync().GetAwaiter().GetResult();
+            Stop();
         }
     }
 
