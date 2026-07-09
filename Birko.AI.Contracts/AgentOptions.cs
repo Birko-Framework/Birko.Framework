@@ -137,6 +137,16 @@ namespace Birko.AI
                 options.DefaultPromptResponse = defaultPromptResponse;
             if (config.TryGetValue("modelDepth", out var modelDepth))
                 options.ModelDepth = int.Parse(modelDepth);
+            if (config.TryGetValue("allowedExternalPaths", out var allowedExternalPaths))
+                options.AllowedExternalPaths = allowedExternalPaths.Length == 0
+                    ? new List<string>()
+                    : new List<string>(allowedExternalPaths.Split('\n'));
+            if (config.TryGetValue("enableStreaming", out var enableStreaming))
+                options.EnableStreaming = bool.Parse(enableStreaming);
+            if (config.TryGetValue("streamingFallbackToSync", out var streamingFallbackToSync))
+                options.StreamingFallbackToSync = bool.Parse(streamingFallbackToSync);
+            if (config.TryGetValue("checkpointInterval", out var checkpointInterval))
+                options.CheckpointInterval = int.Parse(checkpointInterval);
 
             return options;
         }
@@ -151,7 +161,11 @@ namespace Birko.AI
                 ["verbose"] = Verbose.ToString(),
                 ["workingDirectory"] = WorkingDirectory,
                 ["promptTimeout"] = PromptTimeout.ToString(),
-                ["modelDepth"] = ModelDepth.ToString()
+                ["modelDepth"] = ModelDepth.ToString(),
+                ["allowedExternalPaths"] = string.Join('\n', AllowedExternalPaths),
+                ["enableStreaming"] = EnableStreaming.ToString(),
+                ["streamingFallbackToSync"] = StreamingFallbackToSync.ToString(),
+                ["checkpointInterval"] = CheckpointInterval.ToString()
             };
 
             if (DefaultPromptResponse != null)

@@ -12,7 +12,7 @@ namespace Birko.AI.Tools
         /// <summary>
         /// Tool execution entry point. Performs I/O, database, or network operations as needed.
         /// </summary>
-        public abstract Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input);
+        public abstract Task<string> ExecuteAsync(string workingDirectory, Dictionary<string, object> input, CancellationToken cancellationToken = default);
 
         protected void SendMessage(string type, string content)
         {
