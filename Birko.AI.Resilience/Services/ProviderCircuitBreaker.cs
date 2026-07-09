@@ -32,6 +32,11 @@ namespace Birko.AI.Resilience.Services
         private readonly ICircuitBreakerStore? _store;
         private readonly ILogger? _logger;
 
+        // Per-provider persistence serialization: each provider's SaveAsync calls run one after
+        // another in submission order, so a stale snapshot can never overwrite a newer one (CR-M013).
+        private readonly object _persistLock = new();
+        private readonly Dictionary<string, Task> _persistTails = new();
+
         public ProviderCircuitBreaker(
             int failureThreshold = 3,
             TimeSpan? openDuration = null,
@@ -193,30 +198,53 @@ namespace Birko.AI.Resilience.Services
         {
             if (_store == null) return;
 
-            _ = Task.Run(async () =>
+            // Snapshot synchronously (stamping UpdatedAt now) so the persisted order matches the
+            // order in which state actually changed — not the order background tasks happen to run.
+            CircuitBreakerState state;
+            lock (circuit)
             {
-                try
+                state = new CircuitBreakerState
                 {
-                    CircuitBreakerState state;
-                    lock (circuit)
+                    Provider = provider,
+                    State = (int)circuit.State,
+                    ConsecutiveFailures = circuit.ConsecutiveFailures,
+                    OpenedAt = circuit.OpenedAt,
+                    LastFailureAt = circuit.LastFailureAt,
+                    UpdatedAt = DateTime.UtcNow
+                };
+            }
+
+            // Chain this save after the provider's previous save so writes never race/reorder.
+            lock (_persistLock)
+            {
+                var previous = _persistTails.TryGetValue(provider, out var tail) ? tail : Task.CompletedTask;
+                var next = previous.ContinueWith(async _ =>
+                {
+                    try
                     {
-                        state = new CircuitBreakerState
-                        {
-                            Provider = provider,
-                            State = (int)circuit.State,
-                            ConsecutiveFailures = circuit.ConsecutiveFailures,
-                            OpenedAt = circuit.OpenedAt,
-                            LastFailureAt = circuit.LastFailureAt,
-                            UpdatedAt = DateTime.UtcNow
-                        };
+                        await _store.SaveAsync(state);
                     }
-                    await _store.SaveAsync(state);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "Failed to persist circuit breaker state for {Provider}", provider);
-                }
-            });
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed to persist circuit breaker state for {Provider}", provider);
+                    }
+                }, TaskScheduler.Default).Unwrap();
+                _persistTails[provider] = next;
+            }
+        }
+
+        /// <summary>
+        /// Awaits all in-flight persistence writes. Call before shutdown (or in tests) to ensure the
+        /// store has durably received the latest circuit state.
+        /// </summary>
+        public Task FlushPersistenceAsync()
+        {
+            Task[] tails;
+            lock (_persistLock)
+            {
+                tails = _persistTails.Values.ToArray();
+            }
+            return Task.WhenAll(tails);
         }
     }
 }

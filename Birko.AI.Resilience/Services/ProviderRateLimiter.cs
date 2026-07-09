@@ -121,19 +121,47 @@ namespace Birko.AI.Resilience.Services
             if (!_limits.TryGetValue(key, out var limit)) return null;
 
             var now = DateTime.UtcNow;
+            TimeSpan? retryAfter = null;
 
-            if (limit.RequestsPerMinute > 0 && _minuteWindows.TryGetValue(key, out var minuteWindow))
+            // A blocking per-minute window (requests OR tokens) clears at the top of the next minute.
+            if ((limit.RequestsPerMinute > 0 || limit.TokensPerMinute > 0)
+                && _minuteWindows.TryGetValue(key, out var minuteWindow))
             {
                 lock (minuteWindow)
                 {
                     minuteWindow.Slide(now, TimeSpan.FromMinutes(1));
-                    if (minuteWindow.RequestCount >= limit.RequestsPerMinute)
-                        return minuteWindow.WindowStart.AddMinutes(1) - now;
+                    var minuteBlocked =
+                        (limit.RequestsPerMinute > 0 && minuteWindow.RequestCount >= limit.RequestsPerMinute) ||
+                        (limit.TokensPerMinute > 0 && minuteWindow.TokenCount >= limit.TokensPerMinute);
+                    if (minuteBlocked)
+                        retryAfter = Max(retryAfter, minuteWindow.WindowStart.AddMinutes(1) - now);
                 }
             }
 
-            return null;
+            // A blocking daily window (requests OR tokens) clears when the day window rolls over.
+            if ((limit.RequestsPerDay > 0 || limit.TokensPerDay > 0)
+                && _dayWindows.TryGetValue(key, out var dayWindow))
+            {
+                lock (dayWindow)
+                {
+                    dayWindow.Slide(now, TimeSpan.FromDays(1));
+                    var dayBlocked =
+                        (limit.RequestsPerDay > 0 && dayWindow.RequestCount >= limit.RequestsPerDay) ||
+                        (limit.TokensPerDay > 0 && dayWindow.TokenCount >= limit.TokensPerDay);
+                    if (dayBlocked)
+                        retryAfter = Max(retryAfter, dayWindow.WindowStart.AddDays(1) - now);
+                }
+            }
+
+            // Never hand back a negative/zero span (the window may have just slid).
+            if (retryAfter.HasValue && retryAfter.Value <= TimeSpan.Zero)
+                return null;
+
+            return retryAfter;
         }
+
+        private static TimeSpan? Max(TimeSpan? current, TimeSpan candidate)
+            => !current.HasValue || candidate > current.Value ? candidate : current;
 
         public Dictionary<string, RateLimitStatus> GetAllStatuses()
         {

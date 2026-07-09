@@ -40,20 +40,55 @@ namespace Birko.AI.Resilience.Services
             _logger = logger;
         }
 
-        public async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        /// <summary>
+        /// Maximum number of times to re-check the rate-limit window before giving up. Default: 10.
+        /// </summary>
+        public int MaxRateLimitWaitAttempts { get; set; } = 10;
+
+        /// <summary>
+        /// Cap on any single rate-limit wait, so a long day-window rollover can't block for hours.
+        /// Default: 60 seconds.
+        /// </summary>
+        public TimeSpan MaxSingleRateLimitWait { get; set; } = TimeSpan.FromSeconds(60);
+
+        /// <summary>
+        /// Waits for a rate-limit slot to actually open, re-checking after each delay rather than
+        /// waiting once and proceeding blind (CR-M011). Returns <c>true</c> if a request may proceed,
+        /// <c>false</c> if the limit still could not be satisfied within the attempt cap.
+        /// </summary>
+        private async Task<bool> WaitForRateLimitSlotAsync(string context, CancellationToken cancellationToken)
         {
-            if (_rateLimiter != null && !_rateLimiter.CanMakeRequest(Name))
+            if (_rateLimiter == null)
+                return true;
+
+            for (var attempt = 0; attempt < MaxRateLimitWaitAttempts; attempt++)
             {
+                if (_rateLimiter.CanMakeRequest(Name))
+                    return true;
+
                 var retryAfter = _rateLimiter.GetRetryAfter(Name);
-                if (retryAfter.HasValue && retryAfter.Value.TotalSeconds > 0)
-                {
-                    _logger?.LogWarning("Rate limited for {Provider}, waiting {Seconds:F1}s", Name, retryAfter.Value.TotalSeconds);
-                    await Task.Delay(retryAfter.Value);
-                }
-                else
-                {
-                    await Task.Delay(1000);
-                }
+                var delay = retryAfter.HasValue && retryAfter.Value > TimeSpan.Zero
+                    ? retryAfter.Value
+                    : TimeSpan.FromSeconds(1);
+                if (delay > MaxSingleRateLimitWait)
+                    delay = MaxSingleRateLimitWait;
+
+                _logger?.LogWarning("Rate limited for {Provider} ({Context}), waiting {Seconds:F1}s (attempt {Attempt}/{Max})",
+                    Name, context, delay.TotalSeconds, attempt + 1, MaxRateLimitWaitAttempts);
+                await Task.Delay(delay, cancellationToken);
+            }
+
+            // Final re-check after exhausting the attempt cap.
+            return _rateLimiter.CanMakeRequest(Name);
+        }
+
+        public async Task<LlmResponse> SendMessageAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
+        {
+            if (!await WaitForRateLimitSlotAsync("sync", cancellationToken))
+            {
+                var limitMsg = $"Rate limit for {Name} could not be satisfied after waiting.";
+                _logger?.LogWarning(limitMsg);
+                return LlmResponse.Error(limitMsg);
             }
 
             if (_costTracker != null)
@@ -67,25 +102,23 @@ namespace Birko.AI.Resilience.Services
                 }
             }
 
-            var response = await _inner.SendMessageAsync(messages, tools, systemPrompt);
+            var response = await _inner.SendMessageAsync(messages, tools, systemPrompt, cancellationToken);
             await RecordUsageFromResponse(response.Usage);
             return response;
         }
 
-        public async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt)
+        public async Task<LlmStreamingResponse> SendMessageStreamingAsync(List<Message> messages, List<Tool> tools, string systemPrompt, CancellationToken cancellationToken = default)
         {
-            if (_rateLimiter != null && !_rateLimiter.CanMakeRequest(Name))
+            if (!await WaitForRateLimitSlotAsync("streaming", cancellationToken))
             {
-                var retryAfter = _rateLimiter.GetRetryAfter(Name);
-                if (retryAfter.HasValue && retryAfter.Value.TotalSeconds > 0)
+                var limitMsg = $"Rate limit for {Name} could not be satisfied after waiting.";
+                _logger?.LogWarning(limitMsg);
+                return new LlmStreamingResponse
                 {
-                    _logger?.LogWarning("Rate limited for {Provider} (streaming), waiting {Seconds:F1}s", Name, retryAfter.Value.TotalSeconds);
-                    await Task.Delay(retryAfter.Value);
-                }
-                else
-                {
-                    await Task.Delay(1000);
-                }
+                    GetStreamAsync = () => Task.FromResult<IAsyncEnumerable<string>>(EmptyStream()),
+                    Error = limitMsg,
+                    FinalResponse = LlmResponse.Error(limitMsg)
+                };
             }
 
             if (_costTracker != null)
@@ -103,13 +136,14 @@ namespace Birko.AI.Resilience.Services
                 }
             }
 
-            var streamingResponse = await _inner.SendMessageStreamingAsync(messages, tools, systemPrompt);
+            var streamingResponse = await _inner.SendMessageStreamingAsync(messages, tools, systemPrompt, cancellationToken);
 
+            // Preserve the inner response's disposable Resource by re-wrapping only the stream delegate.
             var originalGetStream = streamingResponse.GetStreamAsync;
             streamingResponse.GetStreamAsync = async () =>
             {
                 var stream = await originalGetStream();
-                return WrapStreamForUsageTracking(stream, streamingResponse);
+                return WrapStreamForUsageTracking(stream, streamingResponse, cancellationToken);
             };
 
             return streamingResponse;
@@ -117,9 +151,10 @@ namespace Birko.AI.Resilience.Services
 
         private async IAsyncEnumerable<string> WrapStreamForUsageTracking(
             IAsyncEnumerable<string> innerStream,
-            LlmStreamingResponse streamingResponse)
+            LlmStreamingResponse streamingResponse,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            await foreach (var chunk in innerStream)
+            await foreach (var chunk in innerStream.WithCancellation(cancellationToken))
             {
                 yield return chunk;
             }
