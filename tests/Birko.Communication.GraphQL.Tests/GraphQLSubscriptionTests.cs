@@ -79,6 +79,85 @@ public class GraphQLSubscriptionTests
         obs1.Should().BeSameAs(obs2);
     }
 
+    // --- Message dispatch (CR-M046): HandleMessageAsync parses next/complete/error frames and the
+    //     id-filter, dispatching to observers — exercised without a live WebSocket. ---
+
+    private static (GraphQLSubscription<string> sub, TestObserver<string> obs, CancellationTokenSource cts) NewSub(string id = "sub_1")
+    {
+        var cts = new CancellationTokenSource();
+        var ws = new System.Net.WebSockets.ClientWebSocket();
+        var sub = new GraphQLSubscription<string>(ws, id, cts);
+        var obs = new TestObserver<string>();
+        sub.AsObservable().Subscribe(obs);
+        return (sub, obs, cts);
+    }
+
+    [Fact]
+    public async Task HandleMessage_NextFrame_DispatchesOnNext()
+    {
+        var (sub, obs, cts) = NewSub();
+        using (cts)
+        {
+            var stop = await sub.HandleMessageAsync("""{"type":"next","id":"sub_1","payload":{"data":"hello"}}""");
+
+            stop.Should().BeFalse("a data frame does not terminate the subscription");
+            obs.ReceivedValues.Should().Equal("hello");
+        }
+    }
+
+    [Fact]
+    public async Task HandleMessage_WrongId_IsIgnored()
+    {
+        var (sub, obs, cts) = NewSub("sub_1");
+        using (cts)
+        {
+            var stop = await sub.HandleMessageAsync("""{"type":"next","id":"other","payload":{"data":"nope"}}""");
+
+            stop.Should().BeFalse();
+            obs.ReceivedValues.Should().BeEmpty("frames for another subscription id are filtered out");
+        }
+    }
+
+    [Fact]
+    public async Task HandleMessage_CompleteFrame_CompletesAndStops()
+    {
+        var (sub, obs, cts) = NewSub();
+        using (cts)
+        {
+            var stop = await sub.HandleMessageAsync("""{"type":"complete","id":"sub_1"}""");
+
+            stop.Should().BeTrue("complete terminates the receive loop");
+            obs.Completed.Should().BeTrue();
+        }
+    }
+
+    [Fact]
+    public async Task HandleMessage_ErrorFrame_DispatchesOnErrorAndStops()
+    {
+        var (sub, obs, cts) = NewSub();
+        using (cts)
+        {
+            var stop = await sub.HandleMessageAsync("""{"type":"error","id":"sub_1","payload":[{"message":"boom"}]}""");
+
+            stop.Should().BeTrue();
+            obs.Error.Should().BeOfType<GraphQLException>();
+            ((GraphQLException)obs.Error!).Errors.Should().ContainSingle(e => e.Message == "boom");
+        }
+    }
+
+    [Fact]
+    public async Task HandleMessage_NextFrameWithPayloadErrors_DispatchesOnError()
+    {
+        var (sub, obs, cts) = NewSub();
+        using (cts)
+        {
+            var stop = await sub.HandleMessageAsync("""{"type":"next","id":"sub_1","payload":{"errors":[{"message":"bad field"}]}}""");
+
+            stop.Should().BeFalse();
+            obs.Error.Should().BeOfType<GraphQLException>();
+        }
+    }
+
     private class TestObserver<T> : IObserver<T>
     {
         public List<T> ReceivedValues { get; } = [];
