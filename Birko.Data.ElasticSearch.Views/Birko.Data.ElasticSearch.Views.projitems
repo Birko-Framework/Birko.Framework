@@ -11,5 +11,6 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchViewStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchViewManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ElasticSearchViewIndexResolver.cs" />
   </ItemGroup>
 </Project>

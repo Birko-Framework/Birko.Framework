@@ -346,17 +346,7 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
 
     #region Helpers
 
-    private string ResolveIndexName()
-    {
-        // For Persistent mode, use the view name as the index (transform destination).
-        // For OnTheFly/Auto, use the primary source type name as the index.
-        if (_definition.QueryMode == ViewQueryMode.Persistent && !string.IsNullOrEmpty(_definition.Name))
-        {
-            return _definition.Name!.ToLowerInvariant();
-        }
-
-        return _definition.PrimarySource.Name.ToLowerInvariant();
-    }
+    private string ResolveIndexName() => ElasticSearchViewIndexResolver.Resolve(_definition);
 
     private string[] ResolveSourceFields()
     {

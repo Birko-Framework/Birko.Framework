@@ -147,12 +147,5 @@ public class ElasticSearchViewManager : IViewManager
     }
 
     private static string ResolveIndexName(ViewDefinition definition)
-    {
-        if (!string.IsNullOrEmpty(definition.Name))
-        {
-            return definition.Name!.ToLowerInvariant();
-        }
-
-        return definition.PrimarySource.Name.ToLowerInvariant();
-    }
+        => ElasticSearchViewIndexResolver.Resolve(definition);
 }
