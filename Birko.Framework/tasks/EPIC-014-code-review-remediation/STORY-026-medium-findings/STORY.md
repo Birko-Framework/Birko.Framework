@@ -13,8 +13,21 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**99 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**105 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 16 — Migrations cluster CR-M102 … CR-M107 (6 closed; M101 deferred)
+
+Birko.Data.Migrations (core) + .Migrations.CosmosDB + .Migrations.ElasticSearch. All test projects already existed.
+
+- **M102** core runner test-gap → Migrations.Tests augmented (RegisterMigrations dedup/sort, Migrate/Rollback guards, GetPending/Applied, EnsureInitialized, GetMigrationsToExecute Up/Down range incl. the Down boundary).
+- **M103** CosmosDB `RenameField` bare `catch {}` → catches only CosmosException BadRequest/NotFound; rethrows throttling/auth/service errors.
+- **M104** CosmosDB `ParseFilterToSql` interpolated raw `c.{name}` → bracket-quoted `c["{name}"]` (escaped); tests updated + injection case.
+- **M105** ES `GetAppliedVersions` `Size(1000)` + Ascending truncated the newest → Descending + Size(10000) (GetCurrentVersion/Max no longer under-reports).
+- **M106** ES Record/Remove didn't refresh → `.Refresh(Refresh.True)` so applied-version reads are immediately consistent.
+- **M107** ES test-gap → already covered by PainlessSourceTests (pure Painless builder); store round-trip is integration-tier.
+- **M101 deferred** — adding CancellationToken to InitializeAsync/MigrateAsync/RollbackAsync + IMigrationStore ripples across ~7 backend implementers; its own batch.
+- Suites green: Migrations.Tests 14, Migrations.CosmosDB.Tests 11, Migrations.ElasticSearch.Tests 2.
 
 ### Batch 15 — InfluxDB cluster CR-M094 … CR-M097 (4 closed)
 

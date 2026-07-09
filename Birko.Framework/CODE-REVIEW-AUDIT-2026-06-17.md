@@ -3486,7 +3486,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No dedicated tests project for the core migration abstractions
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations\Birko.Data.Migrations (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.Migrations.Tests exists (created since the audit) with AsyncMigrationRunnerTests (CR-H054 async path); augmented with MigrationRunnerLogicTests covering the provider-agnostic rules the finding named: RegisterMigrations duplicate-version rejection + sort, Migrate target==current no-op / target<current failure, Rollback symmetric guards, GetPending/AppliedMigrations partitioning, EnsureInitialized (Migrate-before-Initialize throws), and GetMigrationsToExecute Up/Down range selection incl. the Down boundary (m.Version <= from && m.Version > to). All via a fake IMigrationStore + a concrete AbstractMigrationRunner subclass.
 - **Detail:** Only a Birko.Data.Migrations.SQL.Tests sibling exists; there is no Birko.Data.Migrations.Tests. The provider-agnostic logic in AbstractMigrationRunner has no direct coverage: RegisterMigrations duplicate-version rejection (l.56-59) and sorting (l.65), the Migrate target==current short-circuit / target<current guard (l.110-118), the Rollback symmetric guards (l.140-148), GetMigrationsToExecute Up/Down range selection and ordering (l.190-200), and EnsureInitialized throwing when not initialized (l.202-208). These are pure, easily unit-testable rules with off-by-one risk in the Down boundary (m.Version <= fromVersion && m.Version > toVersion).
 - **Fix:** Add a Birko.Data.Migrations.Tests xUnit + FluentAssertions project covering RegisterMigrations dedup/sort, the version-range selection for both directions (especially the Down boundary), and the Migrate/Rollback guard paths, using a fake IMigrationStore and a concrete AbstractMigrationRunner test subclass.
 
@@ -3494,7 +3494,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RenameField swallows all exceptions with a bare catch
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.CosmosDB\Context/CosmosDBSchemaBuilder.cs:117`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the bare `catch { }` in RenameField now catches only `CosmosException` with `BadRequest`/`NotFound` (the "field/document absent" cases that keep the rename idempotent); throttling (429), auth (401/403) and service errors (503) propagate instead of being silently swallowed. Code-review verified (Cosmos patch path needs a live account to exercise end-to-end).
 - **Detail:** The `catch { }` around PatchItemAsync (line 117) is intended to skip documents lacking the old field, but it swallows every exception — throttling (429/RequestRateTooLarge), auth failures, transient network errors — so a partial/failed rename reports success. Combined with the placeholder bug above, a rename can silently corrupt a subset of documents.
 - **Fix:** Catch only CosmosException with the specific status code(s) that indicate the field is absent (the Remove of a missing path yields BadRequest), and rethrow everything else. At minimum log skipped documents.
 
@@ -3502,7 +3502,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ParseFilterToSql builds SQL by string interpolation of field names
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.CosmosDB\Context/CosmosDBDataMigrator.cs:139`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — ParseFilterToSql now emits bracket-quoted identifiers `c["{name}"]` (embedded quotes/backslashes escaped) instead of the raw dotted `c.{name}`, so a field name with whitespace/special chars can't produce malformed or injectable SQL (values were already escaped; identifiers now are too). Tests (Birko.Data.Migrations.CosmosDB.Tests) updated to the bracket-quoted output + a special-char/embedded-quote case.
 - **Detail:** Field names from the filter JSON are interpolated directly into the SQL text as `c.{property.Name}` (line 139) with no validation or quoting. Values are escaped (FormatSqlValue doubles single quotes), but field names are not — a property name containing whitespace or SQL syntax produces malformed/injectable queries. Since filterJson is typically migration-author-supplied this is low real-world risk, but the asymmetry (values escaped, identifiers not) is a latent correctness hole; identifiers with special chars should use bracket quoting c["name"].
 - **Fix:** Emit `c["{property.Name}"]` (with the name escaped for embedded quotes) instead of `c.{property.Name}` so arbitrary field names are handled safely and uniformly.
 
@@ -3510,7 +3510,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetAppliedVersions caps the search at 1000 documents
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.ElasticSearch\ElasticSearchMigrationStore.cs:75-86`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — GetAppliedVersions now sorts **Descending** and raises the window to 10000 (the default index.max_result_window), so a truncated result keeps the newest versions and GetCurrentVersion() (which takes Max()) can no longer under-report by dropping the highest versions past 1000. A deployment exceeding 10k applied migrations would need scroll (documented inline). Code-review verified (needs a live ES to exercise).
 - **Detail:** GetAppliedVersions issues a single Search with `.Size(1000)`. Past 1000 applied migrations the result set is silently truncated. Because GetCurrentVersion() derives the current version from versions.Max() over this truncated set, and the sort is Ascending, the highest applied versions are exactly the ones dropped — GetCurrentVersion would under-report and the runner would re-execute already-applied migrations.
 - **Fix:** Either fetch only the max via an aggregation / single descending Size(1) query for GetCurrentVersion, or page/scroll for the full set. At minimum sort Descending so a truncated window keeps the newest versions.
 
@@ -3518,7 +3518,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RecordMigration does not refresh the migrations index
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.ElasticSearch\ElasticSearchMigrationStore.cs:114-119`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — RecordMigration's Index and RemoveMigration's Delete now pass `.Refresh(Elasticsearch.Net.Refresh.True)`, so an applied-version read immediately after (a second Migrate()/GetPendingMigrations() in the same process) sees the just-recorded/removed version and won't re-execute the migration. (The async variants delegate to the sync ones, so both are covered.) Code-review verified (needs a live ES).
 - **Detail:** RecordMigration indexes the migration doc without a refresh. ES is near-real-time (default 1s refresh_interval), so a GetCurrentVersion()/GetAppliedVersions() search performed immediately after — e.g. a second Migrate() call in the same process, or GetPendingMigrations() right after running — may not see the just-recorded version and could re-execute the migration. DataMigrator.BulkInsert/CopyData explicitly call Indices.Refresh for exactly this reason, but the state store does not.
 - **Fix:** Add `.Refresh(Elasticsearch.Net.Refresh.True)` to the Index call (and to RemoveMigration's Delete), so applied-version reads are immediately consistent.
 
@@ -3526,7 +3526,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project exists
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.ElasticSearch\Birko.Data.Migrations.ElasticSearch.Tests (missing)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.Migrations.ElasticSearch.Tests exists (created since the audit) with PainlessSourceTests covering the pure Painless-source builder (the field-transform script generation — the bug-prone logic the finding calls out). The migration store's version-tracking and the GetAppliedVersions/Record/Remove paths need a live/Testcontainers ES (their pure surfaces are minimal — GetMigrationsIndex is private), so that round-trip stays an integration-tier concern; the offline-testable logic is covered.
 - **Detail:** Per the framework testing convention every new public functionality must have tests in Birko.{ProjectName}.Tests, and other backends ship a test suite. There is no Birko.Data.Migrations.ElasticSearch.Tests directory, so the migration store (version tracking, record/remove, GetCurrentVersion), the ParseFilter Mongo-style operator translation, and the runner's up/down + failure path are entirely untested. ParseFilter and the Painless builder in particular are pure logic that is easy to unit test and is where the bugs above live.
 - **Fix:** Add a .Tests sibling (xUnit + FluentAssertions). ParseFilter, ExtractValue, and GetMigrationsIndex naming are testable without a live ES; use a Testcontainers/integration tier for store round-trips.
 
