@@ -13,8 +13,16 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**112 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**116 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 20 — Birko.Data.MongoDB store CR-M117 … M120 (4 closed)
+
+- **M117** `MongoDBStore` public `Read(Guid)`/`Read()` overrides bypassed lazy-init (straight `Collection.Find`) and were redundant → deleted; base routes through `ReadCore` with EnsureInitialized.
+- **M118** `AsyncMongoDBStore.ReadAsync(Guid)` override bypassed init + the cancellation gate → deleted; base routes through `ReadCoreAsync`.
+- **M119** `SaveAsync` upsert branch skipped `EnsureInitializedAsync` → added it before the native `ReplaceOneAsync`.
+- **M120** store test-gap → augmented with Settings.GetConnectionString variants + GetId + IndexManager.ValidateScope (made internal); change-stream mapping already covered.
+- Suite green: Birko.Data.MongoDB.Tests 42.
 
 ### Batch 19 — Migrations RavenDB + TimescaleDB CR-M114/M116 (2 closed; Migrations cluster done bar the async findings)
 

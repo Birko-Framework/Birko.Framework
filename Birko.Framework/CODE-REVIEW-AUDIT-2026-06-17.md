@@ -3606,7 +3606,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Public Read(Guid)/Read() overrides bypass lazy-init
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB\Stores/MongoDBStore.cs:100-113`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — deleted both public `Read(Guid)` and `Read()` overrides on MongoDBStore. The base wrappers run EnsureInitialized and route through the existing `ReadCore(filter)` (single) and bulk `ReadCore(...)` overrides, so lazy-init now runs on the by-Guid and read-all paths and the redundant Collection.Find overrides are gone. Verified by the Mongo test build (the store compiles + suite green).
 - **Detail:** MongoDBStore overrides the public Read(Guid) and parameterless Read() instead of only the *Core methods. The base AbstractStore handles lazy-init in the public wrappers and delegates to ReadCore; these overrides go straight to Collection.Find without calling EnsureInitialized, so InitCore() is never invoked before these two paths. The framework convention (CLAUDE.md) is explicit: concrete stores override protected *Core methods, NOT public CRUD. The overrides are also redundant — base Read(Guid) already routes through ReadCore(filter), and the base parameterless Read() routes through the bulk ReadCore.
 - **Fix:** Delete both overrides and rely on the base wrappers + the existing ReadCore overloads (the single-result ReadCore already handles the Guid filter via the base).
 
@@ -3614,7 +3614,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async ReadAsync(Guid) override bypasses lazy-init and cancellation gate
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB\Stores/AsyncMongoDBStore.cs:88-97`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — deleted the public `ReadAsync(Guid)` override; the base `ReadAsync(Guid)` → `ReadAsync(filter)` → `ReadCoreAsync` path runs `EnsureInitializedAsync` (which observes the CancellationToken), so an already-cancelled token is honored and InitCoreAsync runs before a by-Guid read.
 - **Detail:** AsyncMongoDBStore overrides public ReadAsync(Guid) to call Collection.Find(...).FirstOrDefaultAsync directly. The base ReadAsync(Guid) delegates to ReadAsync(filter), which calls EnsureInitializedAsync(ct) — that gate also now performs ct.ThrowIfCancellationRequested() per the 2026-06-15 cancellation change. This override skips both init and the cancellation observation, so an already-cancelled token is not honored on this path and InitCoreAsync never runs before a by-Guid read. It is also redundant (base routes through ReadCoreAsync).
 - **Fix:** Remove the override; the base ReadAsync(Guid) -> ReadAsync(filter) -> ReadCoreAsync path already covers it with correct init/cancellation behavior.
 
@@ -3622,7 +3622,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SaveAsync/Save override's upsert path bypasses lazy-init
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB\Stores/AsyncMongoDBStore.cs:198-219`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the SaveAsync upsert branch now calls `await EnsureInitializedAsync(ct)` before the native `ReplaceOneAsync(IsUpsert: true)`, so the fast path honors the init/cancellation contract like the create branch (which already re-inits via CreateAsync).
 - **Detail:** The SaveAsync override implements a native upsert via ReplaceOneAsync(IsUpsert: true) directly on Collection without calling EnsureInitializedAsync first (the create branch is fine because it calls public CreateAsync which re-inits, but the update/upsert branch is not gated). If a caller's first interaction with the store is Save on an entity that already has a Guid, InitCoreAsync never runs and cancellation is not observed. (InitCoreAsync is currently a no-op for MongoDB, so impact is low today, but it breaks the contract for subclasses that add real init.)
 - **Fix:** Call await EnsureInitializedAsync(ct) at the top of the override (or expose a protected hook), so the native-upsert fast path still honors the init/cancellation contract.
 
@@ -3630,7 +3630,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for stores, settings, repositories, index manager, or unit of work
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB\Birko.Data.MongoDB.Tests (only ChangeStreamOptionsTests.cs + AggregationPipelineBuilderTests.cs)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.MongoDB.Tests augmented with MongoSettingsAndIndexTests: Settings.GetConnectionString variants (minimal defaults incl. authSource/retry, credentials + database, replicaSet + tls, and username-without-password omitting creds), GetId composition, and MongoDBIndexManager.ValidateScope (made internal). Change-stream mapping is already covered by ChangeStreamDocumentKeyResolverTests; the store CRUD/bulk and MongoDbUnitOfWork live paths remain an integration-tier concern (need a live MongoDB / replica set).
 - **Detail:** The .Tests sibling covers only ChangeStreamOptions and AggregationPipelineBuilder. There are no tests for MongoDBStore/AsyncMongoDBStore CRUD/bulk/filter-update/aggregation, Settings.GetConnectionString (credential/authSource/replicaSet/tls/retry assembly + GetId + LoadFrom), MongoDBIndexManager (Create/Drop idempotency/List/GetInfo/ValidateScope), MongoDbUnitOfWork (begin/commit/rollback/double-begin/disposed guards), the change-stream document mapping (which hides the DocumentKey bug above), or the repositories' store-type validation. GetConnectionString and the index manager are pure/mostly-pure logic that can be unit-tested without a live MongoDB; the change-stream mapping can be tested by constructing ChangeStreamDocument fixtures.
 - **Fix:** Add unit tests at least for Settings.GetConnectionString variants, MongoDbUnitOfWork state machine, MongoDBIndexManager.ValidateScope/ParseIndexDocument, and MapChangeStreamDocument (asserting DocumentKey populates for a String-represented Guid).
 
