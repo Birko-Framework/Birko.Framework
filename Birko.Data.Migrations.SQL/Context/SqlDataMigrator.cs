@@ -126,7 +126,7 @@ namespace Birko.Data.Migrations.SQL.Context
             command.Parameters.Add(param);
         }
 
-        private static string ParseFilterToWhere(string filterJson, ref int paramIndex, List<(string Name, object? Value)> parameters)
+        internal static string ParseFilterToWhere(string filterJson, ref int paramIndex, List<(string Name, object? Value)> parameters)
         {
             if (string.IsNullOrWhiteSpace(filterJson) || filterJson.Trim() == "{}")
                 return string.Empty;
