@@ -25,17 +25,37 @@ namespace Birko.BackgroundJobs.Redis
 
         private string KeyPrefix => _settings.KeyPrefix ?? "birko:jobs";
 
-        // Lua script for atomic dequeue: finds best candidate in sorted set, removes it, and returns the job ID.
-        // This prevents two workers from grabbing the same job.
+        // Lua script for atomic dequeue: finds the best eligible candidate, removes it from the queue,
+        // and — in the SAME atomic script — flips the job hash to Processing (bump AttemptCount, stamp
+        // LastAttemptAt) and moves its status-set membership. Doing the whole claim in one script closes
+        // the orphan/double-dispatch window that existed when the ZREM was atomic but the hash mutation
+        // ran as separate round-trips (CR-M025).
+        // KEYS[1] = queue sorted-set key. ARGV: [1] key prefix, [2] now threshold, [3] LastAttemptAt
+        // ticks, [4] Processing status int. Returns the job id, or nil.
         private const string DequeueScript = @"
-            local key = KEYS[1]
-            local now = tonumber(ARGV[1])
-            local members = redis.call('ZRANGEBYSCORE', key, '-inf', now, 'LIMIT', 0, 1)
+            local queueKey = KEYS[1]
+            local prefix = ARGV[1]
+            local now = tonumber(ARGV[2])
+            local nowTicks = ARGV[3]
+            local processing = ARGV[4]
+            local members = redis.call('ZRANGEBYSCORE', queueKey, '-inf', now, 'LIMIT', 0, 1)
             if #members == 0 then
                 return nil
             end
-            redis.call('ZREM', key, members[1])
-            return members[1]
+            local id = members[1]
+            redis.call('ZREM', queueKey, id)
+            local jobKey = prefix .. ':job:' .. id
+            if redis.call('EXISTS', jobKey) == 0 then
+                return nil
+            end
+            local oldStatus = redis.call('HGET', jobKey, 'Status')
+            if oldStatus then
+                redis.call('SREM', prefix .. ':status:' .. oldStatus, id)
+            end
+            local attempt = tonumber(redis.call('HGET', jobKey, 'AttemptCount') or '0') + 1
+            redis.call('HSET', jobKey, 'Status', processing, 'AttemptCount', attempt, 'LastAttemptAt', nowTicks)
+            redis.call('SADD', prefix .. ':status:' .. processing, id)
+            return id
         ";
 
         /// <summary>
@@ -75,6 +95,8 @@ namespace Birko.BackgroundJobs.Redis
 
         public async Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var jobKey = GetJobKey(descriptor.Id);
 
@@ -95,6 +117,8 @@ namespace Birko.BackgroundJobs.Redis
 
         public async Task<JobDescriptor?> DequeueAsync(string? queueName = null, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var queueKey = GetQueueKey(queueName);
             // Encode the threshold on the SAME scale as the stored score's time component (CR-C02):
@@ -102,11 +126,11 @@ namespace Birko.BackgroundJobs.Redis
             // ~4 orders of magnitude larger than any score and every future job dequeued immediately.
             var now = GetDequeueThreshold(DateTime.UtcNow);
 
-            // Atomic dequeue using Lua script
+            // Atomic dequeue + claim (ZREM + hash flip to Processing) in a single Lua script (CR-M025).
             var result = await db.ScriptEvaluateAsync(
                 DequeueScript,
                 new RedisKey[] { queueKey },
-                new RedisValue[] { now }
+                new RedisValue[] { KeyPrefix, now, DateTime.UtcNow.Ticks, (int)JobStatus.Processing }
             ).ConfigureAwait(false);
 
             if (result.IsNull)
@@ -120,6 +144,7 @@ namespace Birko.BackgroundJobs.Redis
                 return null;
             }
 
+            // The script already flipped the hash to Processing; just read the current state back.
             var jobKey = GetJobKey(jobId);
             var fields = await db.HashGetAllAsync(jobKey).ConfigureAwait(false);
             if (fields.Length == 0)
@@ -127,25 +152,13 @@ namespace Birko.BackgroundJobs.Redis
                 return null;
             }
 
-            var descriptor = DeserializeDescriptor(fields);
-
-            // Remove from old status set
-            await db.SetRemoveAsync(GetStatusKey(descriptor.Status), jobIdStr).ConfigureAwait(false);
-
-            // Mark as processing
-            descriptor.Status = JobStatus.Processing;
-            descriptor.AttemptCount++;
-            descriptor.LastAttemptAt = DateTime.UtcNow;
-
-            // Update in Redis
-            await db.HashSetAsync(jobKey, SerializeDescriptor(descriptor)).ConfigureAwait(false);
-            await db.SetAddAsync(GetStatusKey(JobStatus.Processing), jobIdStr).ConfigureAwait(false);
-
-            return descriptor;
+            return DeserializeDescriptor(fields);
         }
 
         public async Task CompleteAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var jobKey = GetJobKey(jobId);
             var jobIdStr = jobId.ToString();
@@ -169,6 +182,8 @@ namespace Birko.BackgroundJobs.Redis
 
         public async Task FailAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var jobKey = GetJobKey(jobId);
             var jobIdStr = jobId.ToString();
@@ -209,6 +224,8 @@ namespace Birko.BackgroundJobs.Redis
 
         public async Task<bool> CancelAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var jobKey = GetJobKey(jobId);
             var jobIdStr = jobId.ToString();
@@ -246,6 +263,8 @@ namespace Birko.BackgroundJobs.Redis
 
         public async Task<JobDescriptor?> GetAsync(Guid jobId, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var jobKey = GetJobKey(jobId);
 
@@ -260,14 +279,20 @@ namespace Birko.BackgroundJobs.Redis
 
         public async Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var statusKey = GetStatusKey(status);
 
             var members = await db.SetMembersAsync(statusKey).ConfigureAwait(false);
             var result = new List<JobDescriptor>();
 
-            foreach (var member in members.Take(limit))
+            // Redis sets are unordered, so materialize ALL members first, then order by EnqueuedAt and
+            // take the newest `limit` — truncating before ordering returned an arbitrary subset (CR-M023).
+            foreach (var member in members)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (!Guid.TryParse(member.ToString(), out var jobId))
                 {
                     continue;
@@ -281,11 +306,13 @@ namespace Birko.BackgroundJobs.Redis
                 }
             }
 
-            return result.OrderByDescending(j => j.EnqueuedAt).ToList();
+            return result.OrderByDescending(j => j.EnqueuedAt).Take(limit).ToList();
         }
 
         public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var db = _connectionManager.GetDatabase();
             var cutoff = DateTime.UtcNow.Subtract(olderThan);
             var count = 0;
@@ -297,6 +324,8 @@ namespace Birko.BackgroundJobs.Redis
 
                 foreach (var member in members)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     if (!Guid.TryParse(member.ToString(), out var jobId))
                     {
                         continue;

@@ -53,6 +53,8 @@ namespace Birko.BackgroundJobs.Redis
         /// </summary>
         public async Task<bool> TryAcquireAsync(string lockName, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (IsLocked)
             {
                 return true;
@@ -78,6 +80,8 @@ namespace Birko.BackgroundJobs.Redis
         /// </summary>
         public async Task ReleaseAsync(string lockName, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!IsLocked || _lockKey == null || _lockToken == null)
             {
                 return;
