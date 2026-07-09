@@ -34,6 +34,22 @@ public class HidNfcTransportTests
     }
 
     [Fact]
+    public async Task ReadTagAsync_RepeatedTimeouts_ReturnNullWithoutRacingTheTcs()
+    {
+        // CR-H029: the timeout callback captured the _readTcs field (nulled after each await and
+        // reassigned by the next iteration), so a stale timer could NRE or complete the wrong read.
+        // Loop short-timeout reads (the polling pattern) — each must return null cleanly, no throw.
+        using var transport = new HidNfcTransport();
+        await transport.ConnectAsync();
+
+        for (var i = 0; i < 50; i++)
+        {
+            var tag = await transport.ReadTagAsync(timeoutMs: 5);
+            tag.Should().BeNull();
+        }
+    }
+
+    [Fact]
     public async Task ReadTagAsync_NotConnected_Throws()
     {
         using var transport = new HidNfcTransport();
