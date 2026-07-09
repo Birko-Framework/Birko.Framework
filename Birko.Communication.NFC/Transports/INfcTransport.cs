@@ -63,5 +63,12 @@ namespace Birko.Communication.NFC.Transports
         /// Raised when a previously detected tag is removed from the reader field.
         /// </summary>
         event EventHandler? TagRemoved;
+
+        /// <summary>
+        /// Raised when the background polling loop faults (e.g. the reader is unplugged or a frame
+        /// fails to parse). Without this, a faulted poll task used to die silently — polling stopped
+        /// with no tag events and <see cref="IsConnected"/> possibly still true (CR-M056).
+        /// </summary>
+        event EventHandler<Exception>? PollingError;
     }
 }

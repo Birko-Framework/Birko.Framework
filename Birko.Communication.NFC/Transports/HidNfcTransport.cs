@@ -17,6 +17,7 @@ namespace Birko.Communication.NFC.Transports
     public class HidNfcTransport : INfcTransport
     {
         private CancellationTokenSource? _pollCts;
+        private Task? _pollTask;
         private bool _disposed;
         private string? _lastUid;
         private readonly StringBuilder _buffer = new();
@@ -28,6 +29,7 @@ namespace Birko.Communication.NFC.Transports
 
         public event EventHandler<NfcTagData>? TagDetected;
         public event EventHandler? TagRemoved;
+        public event EventHandler<Exception>? PollingError;
 
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
@@ -111,23 +113,36 @@ namespace Birko.Communication.NFC.Transports
             _pollCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var token = _pollCts.Token;
 
-            _ = Task.Run(async () =>
+            // Tracked + fault-surfacing so a reader fault doesn't silently kill the poll task (CR-M056).
+            _pollTask = Task.Run(async () =>
             {
                 while (!token.IsCancellationRequested)
                 {
-                    var tag = await ReadTagAsync(intervalMs, token).ConfigureAwait(false);
-                    if (tag != null)
+                    try
                     {
-                        if (_lastUid != tag.Uid)
+                        var tag = await ReadTagAsync(intervalMs, token).ConfigureAwait(false);
+                        if (tag != null)
                         {
-                            _lastUid = tag.Uid;
-                            TagDetected?.Invoke(this, tag);
+                            if (_lastUid != tag.Uid)
+                            {
+                                _lastUid = tag.Uid;
+                                TagDetected?.Invoke(this, tag);
+                            }
+                        }
+                        else if (_lastUid != null)
+                        {
+                            _lastUid = null;
+                            TagRemoved?.Invoke(this, EventArgs.Empty);
                         }
                     }
-                    else if (_lastUid != null)
+                    catch (OperationCanceledException)
                     {
-                        _lastUid = null;
-                        TagRemoved?.Invoke(this, EventArgs.Empty);
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        PollingError?.Invoke(this, ex);
+                        break;
                     }
                 }
             }, token);
@@ -135,12 +150,20 @@ namespace Birko.Communication.NFC.Transports
             await Task.CompletedTask;
         }
 
-        public Task StopPollingAsync(CancellationToken cancellationToken = default)
+        public async Task StopPollingAsync(CancellationToken cancellationToken = default)
         {
             _pollCts?.Cancel();
+
+            var task = _pollTask;
+            if (task != null)
+            {
+                try { await task.ConfigureAwait(false); }
+                catch (OperationCanceledException) { }
+            }
+
+            _pollTask = null;
             _pollCts = null;
             _lastUid = null;
-            return Task.CompletedTask;
         }
 
         /// <summary>

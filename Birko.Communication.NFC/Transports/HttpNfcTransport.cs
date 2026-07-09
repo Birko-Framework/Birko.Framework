@@ -22,6 +22,7 @@ namespace Birko.Communication.NFC.Transports
         private readonly string _baseUrl;
         private readonly bool _ownsClient;
         private CancellationTokenSource? _pollCts;
+        private Task? _pollTask;
         private bool _disposed;
         private string? _lastUid;
 
@@ -30,6 +31,7 @@ namespace Birko.Communication.NFC.Transports
 
         public event EventHandler<NfcTagData>? TagDetected;
         public event EventHandler? TagRemoved;
+        public event EventHandler<Exception>? PollingError;
 
         /// <summary>
         /// Creates an HTTP NFC transport.
@@ -99,7 +101,10 @@ namespace Birko.Communication.NFC.Transports
             _pollCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var token = _pollCts.Token;
 
-            _ = Task.Run(async () =>
+            // Tracked (so StopPollingAsync can await it). A transient HttpRequestException keeps
+            // polling; any other fault (e.g. JsonException, a non-success EnsureSuccessStatusCode)
+            // surfaces via PollingError and stops the loop instead of silently faulting (CR-M056).
+            _pollTask = Task.Run(async () =>
             {
                 while (!token.IsCancellationRequested)
                 {
@@ -120,24 +125,48 @@ namespace Birko.Communication.NFC.Transports
                             TagRemoved?.Invoke(this, EventArgs.Empty);
                         }
                     }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                     catch (HttpRequestException)
                     {
                         // Reader temporarily unreachable — continue polling
                     }
+                    catch (Exception ex)
+                    {
+                        PollingError?.Invoke(this, ex);
+                        break;
+                    }
 
-                    await Task.Delay(intervalMs, token).ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(intervalMs, token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
                 }
             }, token);
 
             await Task.CompletedTask;
         }
 
-        public Task StopPollingAsync(CancellationToken cancellationToken = default)
+        public async Task StopPollingAsync(CancellationToken cancellationToken = default)
         {
             _pollCts?.Cancel();
+
+            var task = _pollTask;
+            if (task != null)
+            {
+                try { await task.ConfigureAwait(false); }
+                catch (OperationCanceledException) { }
+            }
+
+            _pollTask = null;
             _pollCts = null;
             _lastUid = null;
-            return Task.CompletedTask;
         }
 
         public async Task<byte[]?> TransceiveAsync(byte[] apdu, CancellationToken cancellationToken = default)
