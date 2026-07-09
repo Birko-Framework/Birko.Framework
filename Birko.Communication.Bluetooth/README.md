@@ -44,10 +44,13 @@ var settings = new BluetoothSettings
 };
 
 var bt = new Bluetooth(settings);
-bt.OnDataReceived += (sender, data) =>
+
+// AbstractPort delivers data via a subscription callback; pull bytes with Read/RemoveReadData.
+bt.SubscribeProcessData(() =>
 {
+    var data = bt.RemoveReadData(-1); // -1 = all available
     Console.WriteLine($"Received: {Encoding.UTF8.GetString(data)}");
-};
+});
 
 bt.Open();
 bt.Write(Encoding.UTF8.GetBytes("Hello"));
@@ -69,12 +72,13 @@ var settings = new BluetoothLESettings
 };
 
 var ble = new BluetoothLE(settings);
-ble.OnDataReceived += (sender, data) =>
+ble.SubscribeProcessData(() =>
 {
+    var data = ble.RemoveReadData(-1);
     // Handle BLE characteristic data
-};
+});
 
-ble.Open();
+ble.Open(); // throws PlatformNotSupportedException off Windows/Linux
 ```
 
 ### BLE Device Discovery
@@ -82,8 +86,8 @@ ble.Open();
 ```csharp
 using Birko.Communication.Bluetooth.Ports;
 
-var devices = new BluetoothLEDevices();
-var found = await devices.ScanAsync(TimeSpan.FromSeconds(5));
+// BluetoothLEDevices is a static class.
+var found = await BluetoothLEDevices.DiscoverDevicesAsync(TimeSpan.FromSeconds(5));
 
 foreach (var device in found)
 {
@@ -101,7 +105,7 @@ foreach (var device in found)
 | `BluetoothSettings` | Settings for Classic Bluetooth (extends `SerialSettings`) |
 | `BluetoothLE` | BLE port extending `AbstractPort` with Windows/Linux support |
 | `BluetoothLESettings` | BLE settings (DeviceAddress, ServiceUuid, CharacteristicUuid, ConnectionTimeout) |
-| `BluetoothLEDevices` | BLE device scanner and discovery |
+| `BluetoothLEDevices` | **Static** BLE discovery: `DiscoverDevicesAsync` / `DiscoverDevicesWithServiceAsync` |
 | `DiscoveredDevice` | Represents a discovered BLE device (Name, Address, Rssi) |
 
 ### Namespace

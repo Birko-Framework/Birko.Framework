@@ -23,6 +23,10 @@ namespace Birko.Communication.Bluetooth.Ports
         private Thread? _readThread = null;
         private bool _stopThread;
         private int _reconnectAttempts = 0;
+        // True while HandleReconnect is driving an Open() so the success path does not reset
+        // _reconnectAttempts and fight the increment — otherwise MaxReconnectAttempts never binds
+        // and reconnect loops forever (CR-M038).
+        private volatile bool _reconnecting = false;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="BluetoothLE"/> class
@@ -62,9 +66,14 @@ namespace Birko.Communication.Bluetooth.Ports
         {
             try
             {
-                // Connect to the device
+                // Connect to the device. Honor the Wait(timeout) return: false means the connect task
+                // did not complete in time — treat it as a timeout failure instead of proceeding on a
+                // stale _isOpen and dropping the still-running task's eventual exception (CR-M039).
                 var connectTask = ConnectWindowsAsync(settings);
-                connectTask.Wait(settings.ConnectionTimeout);
+                if (!connectTask.Wait(settings.ConnectionTimeout))
+                {
+                    throw new TimeoutException($"Timed out connecting to Bluetooth LE device {settings.DeviceAddress} after {settings.ConnectionTimeout}ms");
+                }
 
                 if (!_isOpen)
                 {
@@ -77,7 +86,8 @@ namespace Birko.Communication.Bluetooth.Ports
                 _readThread.IsBackground = true;
                 _readThread.Start();
 
-                _reconnectAttempts = 0;
+                if (!_reconnecting)
+                    _reconnectAttempts = 0;
             }
             catch (Exception ex)
             {
@@ -256,7 +266,8 @@ namespace Birko.Communication.Bluetooth.Ports
                 _readThread.IsBackground = true;
                 _readThread.Start();
 
-                _reconnectAttempts = 0;
+                if (!_reconnecting)
+                    _reconnectAttempts = 0;
             }
             catch (Exception ex)
             {
@@ -401,21 +412,21 @@ namespace Birko.Communication.Bluetooth.Ports
         /// <returns>Byte array containing the data</returns>
         public override byte[] Read(int size)
         {
-            if (HasReadData(size))
+            // Check availability and copy under the same lock so the count cannot change between the
+            // check and GetRange (CR-M036) — the background ReadWorker appends under this lock.
+            lock (ReadData)
             {
-                lock (ReadData)
+                if (size < 0)
                 {
-                    if (size < 0)
-                    {
-                        return ReadData.GetRange(0, ReadData.Count).ToArray();
-                    }
-                    else
-                    {
-                        return ReadData.GetRange(0, size).ToArray();
-                    }
+                    return ReadData.Count > 0
+                        ? ReadData.GetRange(0, ReadData.Count).ToArray()
+                        : new byte[0];
                 }
+
+                return ReadData.Count >= size
+                    ? ReadData.GetRange(0, size).ToArray()
+                    : new byte[0];
             }
-            return new byte[0];
         }
 
         /// <summary>
@@ -567,12 +578,26 @@ namespace Birko.Communication.Bluetooth.Ports
                 try
                 {
                     Thread.Sleep(1000 * _reconnectAttempts); // Exponential backoff
-                    Open();
+                    // Mark the reconnect in progress so Open() does not reset _reconnectAttempts — the
+                    // counter must keep climbing so MaxReconnectAttempts actually bounds the retries
+                    // (CR-M038). NOTE: reconnect currently runs on the dying read thread and Open()
+                    // spawns a fresh read thread; a dedicated supervisor would be cleaner, but the
+                    // bounded-attempts guard keeps the chain finite.
+                    _reconnecting = true;
+                    try
+                    {
+                        Open();
+                    }
+                    finally
+                    {
+                        _reconnecting = false;
+                    }
                 }
                 catch
                 {
                     // Reconnect failed, will retry if attempts remain
                     _isOpen = false;
+                    _reconnecting = false;
                 }
             }
         }

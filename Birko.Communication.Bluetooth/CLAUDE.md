@@ -3,79 +3,77 @@
 ## Overview
 Bluetooth communication implementation for Birko.Communication.
 
-## Project Location
-`C:\Source\Birko.Communication.Bluetooth\`
-
 ## Purpose
-- Classic Bluetooth communication
-- Bluetooth Low Energy (BLE)
-- Device discovery and pairing
-- Bluetooth protocol implementation
+- Classic Bluetooth communication over a Virtual COM Port (SPP)
+- Bluetooth Low Energy (BLE) client port with Windows and Linux backends
+- BLE device discovery
 
 ## Components
+All types live in namespace `Birko.Communication.Bluetooth.Ports`. There is **no** server/peripheral
+API and no `*Communicator`/`BLEScanner`/`BLEServer`/`BLEService`/`BLECharacteristic` type — this is a
+client/port library only.
 
-### Classic Bluetooth
-- `BluetoothCommunicator` - Classic Bluetooth
-- `BluetoothServer` - Bluetooth server
+### Classic Bluetooth (Virtual COM Port)
+- `Bluetooth : Serial` — SPP wrapper; behaves like a serial port.
+- `BluetoothSettings : SerialSettings` — `Name`, `BaudRate`, `Parity`, `DataBits`, `StopBits`.
 
 ### BLE
-- `BLECommunicator` - BLE client
-- `BLEServer` - BLE peripheral
-- `BLEService` - BLE service definition
-- `BLECharacteristic` - BLE characteristic
+- `BluetoothLE : AbstractPort, IDisposable` — a BLE client **port** (`Open`/`Close`/`Write`/`Read`/
+  `HasReadData`/`RemoveReadData`), platform-gated (`#if WINDOWS` WinRT / `#if LINUX` L2CAP socket;
+  throws `PlatformNotSupportedException` elsewhere). Optional `AutoReconnect`.
+- `BluetoothLESettings : PortSettings` — `DeviceAddress`, `ServiceUuid`, `CharacteristicUuid`,
+  `ConnectionTimeout`, `AutoReconnect`, `MaxReconnectAttempts`.
 
 ### Discovery
-- `BluetoothDeviceFinder` - Device discovery
-- `BLEScanner` - BLE scanning
+- `BluetoothLEDevices` — **static** class: `DiscoverDevicesAsync(timeout, ct)` and
+  `DiscoverDevicesWithServiceAsync(serviceUuid, timeout, ct)`. (Service-filtered discovery is not
+  implemented on the Linux bluetoothctl backend and throws `NotSupportedException` there — CR-M041.)
+- `DiscoveredDevice` — `Name`, `Address`, `Rssi`.
 
-## Classic Bluetooth
+## Classic Bluetooth (VCP)
 
 ```csharp
-using Birko.Communication.Bluetooth;
+using Birko.Communication.Bluetooth.Ports;
 
-var communicator = new BluetoothCommunicator(deviceAddress);
-communicator.Connect();
-communicator.Send(data);
+var bt = new Bluetooth(new BluetoothSettings { Name = "COM5", BaudRate = 9600 });
+bt.Open();
+bt.Write(System.Text.Encoding.UTF8.GetBytes("Hello"));
+var reply = bt.Read(-1); // -1 = all available
+bt.Close();
 ```
 
-## BLE Client
+## BLE client
 
 ```csharp
-var scanner = new BLEScanner();
-var devices = await scanner.ScanAsync(TimeSpan.FromSeconds(5));
+using Birko.Communication.Bluetooth.Ports;
 
-var device = devices.First(d => d.Name == "MyDevice");
-var client = new BLECommunicator(device);
+var ble = new BluetoothLE(new BluetoothLESettings
+{
+    Name = "BLE-Sensor",
+    DeviceAddress = "AA:BB:CC:DD:EE:FF",
+    ConnectionTimeout = 10000,
+    AutoReconnect = true
+});
 
-await client.ConnectAsync();
-var service = await client.GetServiceAsync(serviceUuid);
-var characteristic = await service.GetCharacteristicAsync(characteristicUuid);
+// AbstractPort delivers data via a subscription callback; pull bytes with Read/RemoveReadData.
+ble.SubscribeProcessData(() =>
+{
+    var data = ble.RemoveReadData(-1);
+    // handle data
+});
 
-await characteristic.WriteAsync(data);
+ble.Open();   // throws PlatformNotSupportedException off Windows/Linux
+// ...
+ble.Close();
+ble.Dispose();
 ```
 
-## BLE Server (Peripheral)
+## BLE discovery
 
 ```csharp
-var server = new BLEServer();
-var service = new BLEService(serviceUuid);
-
-var characteristic = new BLECharacteristic(characteristicUuid)
-{
-    CanRead = true,
-    CanWrite = true,
-    CanNotify = true
-};
-
-characteristic.OnWrite = (data) =>
-{
-    // Handle write
-};
-
-service.AddCharacteristic(characteristic);
-server.AddService(service);
-
-await server.StartAsync();
+var devices = await BluetoothLEDevices.DiscoverDevicesAsync(TimeSpan.FromSeconds(5));
+foreach (var d in devices)
+    Console.WriteLine($"{d.Name} ({d.Address}) RSSI: {d.Rssi}");
 ```
 
 ## Dependencies

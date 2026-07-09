@@ -335,24 +335,24 @@ namespace Birko.Communication.Bluetooth.Ports
                 // This is a simplified approach - a production implementation might use BlueZ D-Bus API
 
                 var tcs = new TaskCompletionSource<bool>();
-                var cts = new System.Threading.CancellationTokenSource(timeout);
 
+                // cts owns a timer (timeout ctor) and the process owns an OS handle — both are
+                // IDisposable and were previously leaked; dispose all three deterministically (CR-M037).
+                using (var cts = new System.Threading.CancellationTokenSource(timeout))
                 using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token))
+                using (var process = new System.Diagnostics.Process
                 {
-                    // Start bluetoothctl scan
-                    var process = new System.Diagnostics.Process
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
                     {
-                        StartInfo = new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = "bluetoothctl",
-                            Arguments = "scan on",
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false,
-                            CreateNoWindow = true
-                        }
-                    };
-
+                        FileName = "bluetoothctl",
+                        Arguments = "scan on",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true
+                    }
+                })
+                {
                     var outputBuilder = new System.Text.StringBuilder();
                     process.OutputDataReceived += (sender, e) =>
                     {
@@ -391,18 +391,18 @@ namespace Birko.Communication.Bluetooth.Ports
             return devices;
         }
 
-        private static async Task<List<DiscoveredDevice>> DiscoverDevicesWithServiceLinuxAsync(
+        private static Task<List<DiscoveredDevice>> DiscoverDevicesWithServiceLinuxAsync(
             Guid serviceUuid,
             TimeSpan timeout,
             CancellationToken cancellationToken)
         {
-            // For service-specific discovery on Linux, additional filtering would be needed
-            // This implementation returns all devices and filters by service at a higher level
-            var allDevices = await DiscoverDevicesLinuxAsync(timeout, cancellationToken);
-
-            // Filter devices that advertise the service (placeholder logic)
-            // In a real implementation, you would check advertisement data
-            return allDevices; // Return all devices for now
+            // Service-UUID filtering is not implemented for the bluetoothctl-based Linux path — the
+            // previous stub silently ignored serviceUuid and returned ALL devices, giving callers the
+            // false impression of a working filter (CR-M041). Fail loudly instead so callers use the
+            // unfiltered DiscoverDevicesAsync and filter themselves, or supply a BlueZ D-Bus impl.
+            throw new NotSupportedException(
+                "Service-UUID-filtered discovery is not implemented on the Linux bluetoothctl backend. " +
+                "Use DiscoverDevicesAsync() and filter the results, or provide a BlueZ D-Bus implementation.");
         }
 
         private static List<DiscoveredDevice> ParseBluetoothctlOutput(string output)
@@ -440,15 +440,10 @@ namespace Birko.Communication.Bluetooth.Ports
                         }
                     }
                 }
-                else if (line.Contains("RSSI:") && devices.Count > 0)
-                {
-                    // Try to parse RSSI if available
-                    var rssiParts = line.Split(new[] { "RSSI:" }, StringSplitOptions.None);
-                    if (rssiParts.Length > 1 && int.TryParse(rssiParts[1].Trim(), out var rssi))
-                    {
-                        // Update last device's RSSI (simplified)
-                    }
-                }
+                // NOTE: bluetoothctl RSSI lines are intentionally not parsed here — associating an
+                // "RSSI: -45" line with a specific device requires stateful correlation this simple
+                // line scanner does not do. The dead branch that parsed RSSI into nothing was removed
+                // (CR-M041); discovered devices report Rssi = -127 (unknown) until real RSSI wiring.
             }
 
             return new List<DiscoveredDevice>(devices.Values);
