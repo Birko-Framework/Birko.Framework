@@ -49,18 +49,20 @@ namespace Birko.Communication.Camera.Cameras
             var device = _settings.DevicePath ?? GetDefaultDevicePath();
             var resolution = $"{_settings.Width}x{_settings.Height}";
 
-            // ffmpeg -f <format> -i <device> -frames:v 1 -q:v 2 -f mjpeg pipe:1
-            var args = $"-f {inputFormat} -video_size {resolution} -i {device} -frames:v 1 -q:v {_settings.JpegQuality} -f mjpeg pipe:1";
-
             var psi = new ProcessStartInfo
             {
                 FileName = _settings.FfmpegPath ?? "ffmpeg",
-                Arguments = args,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+
+            // Pass each token via ArgumentList so ProcessStartInfo handles per-argument quoting. A
+            // DevicePath with spaces/quotes (e.g. dshow `video=Integrated Camera`) is then delivered
+            // as one argument and cannot be mis-tokenized or used for argument injection (CR-M044).
+            foreach (var arg in BuildArguments(_settings, inputFormat, device, resolution))
+                psi.ArgumentList.Add(arg);
 
             using var process = new Process { StartInfo = psi };
 
@@ -97,6 +99,40 @@ namespace Birko.Communication.Camera.Cameras
                 // ffmpeg not found or device not accessible
                 return null;
             }
+            finally
+            {
+                // Process.Dispose() does NOT terminate a still-running child, so a cancelled or failed
+                // capture would leave an orphaned ffmpeg holding the camera device open (CR-M043).
+                // Kill the tree if it survived; on the success path it has already exited (no-op).
+                try
+                {
+                    if (!process.HasExited)
+                        process.Kill(entireProcessTree: true);
+                }
+                catch
+                {
+                    // Never started, already exited, or racing exit — nothing to clean up.
+                }
+            }
+        }
+
+        /// <summary>
+        /// Builds the ffmpeg argument token list (one element per argument, for
+        /// <see cref="ProcessStartInfo.ArgumentList"/>). Extracted for testability (CR-M044).
+        /// </summary>
+        internal static System.Collections.Generic.List<string> BuildArguments(
+            FfmpegCameraSettings settings, string inputFormat, string device, string resolution)
+        {
+            return new System.Collections.Generic.List<string>
+            {
+                "-f", inputFormat,
+                "-video_size", resolution,
+                "-i", device,
+                "-frames:v", "1",
+                "-q:v", settings.JpegQuality.ToString(),
+                "-f", "mjpeg",
+                "pipe:1"
+            };
         }
 
         private static string GetDefaultInputFormat()
@@ -109,9 +145,11 @@ namespace Birko.Communication.Camera.Cameras
 
         private static string GetDefaultDevicePath()
         {
+            // No shell-style quoting here — ArgumentList quotes each token, so the raw value
+            // (spaces and all) is what ffmpeg receives (CR-M044).
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return "/dev/video0";
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return "video=\"Integrated Camera\"";
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return "\"0\"";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return "video=Integrated Camera";
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return "0";
             return "/dev/video0";
         }
 
@@ -130,10 +168,11 @@ namespace Birko.Communication.Camera.Cameras
         public string Name { get; set; } = "USB Camera";
 
         /// <summary>
-        /// Device path. Platform-specific:
+        /// Device path. Platform-specific — supply the RAW value; do NOT add shell quoting, the
+        /// process launcher quotes each argument (CR-M044):
         ///   Linux: /dev/video0, /dev/video1
-        ///   Windows: video="Camera Name" (from `ffmpeg -list_devices true -f dshow -i dummy`)
-        ///   macOS: "0" (device index)
+        ///   Windows: video=Camera Name (from `ffmpeg -list_devices true -f dshow -i dummy`)
+        ///   macOS: 0 (device index)
         /// Null = auto-detect default.
         /// </summary>
         public string? DevicePath { get; set; }
