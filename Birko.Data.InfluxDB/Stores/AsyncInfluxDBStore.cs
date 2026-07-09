@@ -293,9 +293,11 @@ namespace Birko.Data.InfluxDB.Stores
             }
             else
             {
-                var point = ModelToPoint(data);
-                var writeApi = Client.GetWriteApiAsync();
-                await writeApi.WritePointAsync(point, _settings.Bucket, _settings.Organization, ct);
+                // CR-M094: route through UpdateAsync (like the create branch uses CreateAsync) so the
+                // update observes EnsureInitializedAsync + ExecuteWithRetryAsync. The old inline
+                // WritePointAsync skipped both — a Save-update on a not-yet-initialized store could
+                // target a missing bucket and lost the transient-failure retry every other path has.
+                await UpdateAsync(data, processDelegate, ct);
             }
 
             return data.Guid ?? Guid.Empty;
@@ -903,7 +905,7 @@ namespace Birko.Data.InfluxDB.Stores
             }
         }
 
-        private static string FormatFluxInterval(string interval)
+        internal static string FormatFluxInterval(string interval)
         {
             if (TimeSpan.TryParse(interval, out var ts))
             {
