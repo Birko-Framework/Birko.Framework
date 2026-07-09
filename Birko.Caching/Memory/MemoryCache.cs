@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,9 +14,21 @@ namespace Birko.Caching.Memory;
 public sealed class MemoryCache : ICache
 {
     private readonly ConcurrentDictionary<string, MemoryCacheEntry> _entries = new();
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly ConcurrentDictionary<string, KeyLock> _locks = new();
     private readonly Timer _cleanupTimer;
     private bool _disposed;
+
+    /// <summary>
+    /// Reference-counted per-key lock. A lock is only removed by its last releaser (Refs back to 0)
+    /// under its own monitor, and a caller that observes a Removed lock retries with a fresh one —
+    /// so a lock can never be recycled from under a caller between acquisition and use (CR-M030).
+    /// </summary>
+    private sealed class KeyLock
+    {
+        public readonly SemaphoreSlim Semaphore = new(1, 1);
+        public int Refs;
+        public bool Removed;
+    }
 
     /// <param name="cleanupInterval">Interval between expired entry evictions. Default: 60 seconds.</param>
     public MemoryCache(TimeSpan? cleanupInterval = null)
@@ -74,9 +87,10 @@ public sealed class MemoryCache : ICache
         if (result.HasValue)
             return result.Value!;
 
-        // Per-key lock to prevent cache stampede
-        var keyLock = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await keyLock.WaitAsync(ct);
+        // Per-key lock to prevent cache stampede. Acquire a live (non-removed) KeyLock, retrying if
+        // we happened to grab one that a concurrent last-releaser is retiring.
+        var keyLock = AcquireKeyLock(key);
+        await keyLock.Semaphore.WaitAsync(ct);
         try
         {
             // Double-check after acquiring lock
@@ -90,7 +104,39 @@ public sealed class MemoryCache : ICache
         }
         finally
         {
-            keyLock.Release();
+            keyLock.Semaphore.Release();
+            ReleaseKeyLock(key, keyLock);
+        }
+    }
+
+    private KeyLock AcquireKeyLock(string key)
+    {
+        while (true)
+        {
+            var keyLock = _locks.GetOrAdd(key, _ => new KeyLock());
+            lock (keyLock)
+            {
+                if (!keyLock.Removed)
+                {
+                    keyLock.Refs++;
+                    return keyLock;
+                }
+            }
+            // The instance we got is being retired; loop to get/create a fresh one.
+        }
+    }
+
+    private void ReleaseKeyLock(string key, KeyLock keyLock)
+    {
+        lock (keyLock)
+        {
+            keyLock.Refs--;
+            if (keyLock.Refs == 0)
+            {
+                keyLock.Removed = true;
+                _locks.TryRemove(new KeyValuePair<string, KeyLock>(key, keyLock));
+                keyLock.Semaphore.Dispose();
+            }
         }
     }
 
@@ -116,12 +162,10 @@ public sealed class MemoryCache : ICache
                 _entries.TryRemove(kvp.Key, out _);
         }
 
-        // Clean up unused locks
-        foreach (var kvp in _locks)
-        {
-            if (!_entries.ContainsKey(kvp.Key) && kvp.Value.CurrentCount == 1)
-                _locks.TryRemove(kvp.Key, out _);
-        }
+        // Note: per-key locks are NOT evicted here. Removing a lock the timer merely observes as
+        // idle raced with GetOrSetAsync (a caller between GetOrAdd and WaitAsync), letting two
+        // callers run the factory concurrently (CR-M030). Locks are now refcounted and retired by
+        // their last releaser instead (see ReleaseKeyLock).
     }
 
     public void Dispose()
@@ -131,7 +175,9 @@ public sealed class MemoryCache : ICache
         _cleanupTimer.Dispose();
 
         foreach (var kvp in _locks)
-            kvp.Value.Dispose();
+        {
+            try { kvp.Value.Semaphore.Dispose(); } catch (ObjectDisposedException) { }
+        }
         _locks.Clear();
         _entries.Clear();
     }
