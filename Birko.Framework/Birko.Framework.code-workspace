@@ -1229,6 +1229,18 @@
 			"path": "../../Framework.Tests/Birko.Xaml.Core.Tests"
 		},
 		{
+			"name": "Tests / Birko.Contracts.Tests",
+			"path": "../../Framework.Tests/Birko.Contracts.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Core.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Core.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Composition.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Composition.Tests"
+		},
+		{
 			"path": "."
 		}
 	]

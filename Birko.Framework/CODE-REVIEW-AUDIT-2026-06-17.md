@@ -3278,7 +3278,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Settings.LoadFrom(ISettings) hard-casts to Settings, throwing for foreign ISettings implementations
 - **Path:** `C:\Source\Birko\Framework\Birko.Configuration\Settings.cs:95`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — LoadFrom(ISettings) now uses a type-guard (`if (data is Settings s) LoadFrom(s);`), so a foreign ISettings implementation is a safe no-op instead of throwing InvalidCastException (and null no longer NREs). Regression tests in the new-ish Birko.Configuration.Tests cover foreign-impl, Settings-instance, and null.
 - **Detail:** `public void LoadFrom(ISettings data) => LoadFrom((Settings)data);` performs an unchecked cast. The ISettings interface does not require implementers to derive from Settings, so any custom ISettings implementation passed here throws InvalidCastException at runtime rather than being handled gracefully. It also does not null-check before the cast.
 - **Fix:** Use a pattern match with a guard clause: `public void LoadFrom(ISettings data) { if (data is Settings s) LoadFrom(s); }` — consistent with the type-guarded style used elsewhere in the file.
 
@@ -3286,7 +3286,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for Birko.Configuration
 - **Path:** `C:\Source\Birko\Framework\Birko.Configuration`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Configuration.Tests exists (created since the audit) with SettingsLoadFromTests (LoadFrom across type levels, CR-H037/H038); augmented with SettingsTests covering GetId at each level (Settings/Password/Remote) and LoadFrom(ISettings) foreign/Settings/null. Registered in .slnx + .code-workspace.
 - **Detail:** There is no Birko.Configuration.Tests sibling directory. The entire settings hierarchy — GetId() composition across levels, and especially the LoadFrom override behavior (which has the two high-severity bugs above) — has zero coverage. A single test loading a PasswordSettings from a plain Settings would have caught the silent-drop bug. Per framework convention, every public functionality must have tests in a .Tests sibling.
 - **Fix:** Add Birko.Configuration.Tests (xUnit + FluentAssertions) covering: GetId() at each level, LoadFrom with same-type, less-derived, and more-derived arguments, and LoadFrom(ISettings) with a non-Settings implementation.
 
@@ -3294,7 +3294,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RetryPolicy.GetDelay can overflow to a negative TimeSpan for large attemptNumber/multiplier
 - **Path:** `C:\Source\Birko\Framework\Birko.Contracts\Retry/RetryPolicy.cs:56-58`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — GetDelay now computes the scaled delay in double and saturates at MaxDelay before casting (`scaled >= MaxDelay.Ticks || double.IsNaN(scaled) ? MaxDelay : FromTicks((long)scaled)`), so high attempt numbers can no longer overflow to a negative TimeSpan. Regression test (new Birko.Contracts.Tests) asserts GetDelay(53/100/1000/int.MaxValue) is >= 0 and == MaxDelay.
 - **Detail:** delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(BackoffMultiplier, attemptNumber - 1)). For a moderately high attemptNumber (e.g. with default BaseDelay=5s and BackoffMultiplier=2.0, around attempt 53+), Math.Pow exceeds long.MaxValue and the cast to long becomes long.MinValue (a large negative), or the subsequent multiply overflows in an unchecked context, producing a negative ticks value. The clamp 'if (delay > MaxDelay) delay = MaxDelay' only catches the upper bound — a negative delay is less than MaxDelay and passes through unclamped, so a retry-aware caller (BackgroundJobs, MessageQueue) gets a negative TimeSpan, which Task.Delay rejects with ArgumentOutOfRangeException. Because the saturation is meant to cap at MaxDelay anyway, the safe form is to compute in double and compare against MaxDelay before converting: e.g. compute factor=Math.Pow(...); if BaseDelay.Ticks*factor exceeds MaxDelay.Ticks (or is non-finite) return MaxDelay.
 - **Fix:** Compute the scaled delay in double and saturate at MaxDelay before casting to ticks: var scaled = BaseDelay.Ticks * Math.Pow(BackoffMultiplier, attemptNumber - 1); delay = (double.IsNaN(scaled) || scaled >= MaxDelay.Ticks) ? MaxDelay : TimeSpan.FromTicks((long)scaled);
 
@@ -3302,7 +3302,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for RetryPolicy.GetDelay logic
 - **Path:** `C:\Source\Birko\Framework\Birko.Contracts\Birko.Contracts (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — New Birko.Contracts.Tests (10 tests) covers RetryPolicy: fixed-delay mode, exponential growth, MaxDelay saturation, the high-attempt overflow boundary (CR-M078), the +-25% jitter window, and Default/None. Registered in .slnx + .code-workspace.
 - **Detail:** Convention requires every new public functionality to have tests in Birko.{ProjectName}.Tests. RetryPolicy.GetDelay is the only non-trivial logic in the project (exponential vs fixed delay, MaxDelay clamping, jitter range +-25%, the overflow edge case above) and has no corresponding test sibling. The interfaces are pure contracts and need no tests, but GetDelay's branches and boundaries are untested.
 - **Fix:** Add a Birko.Contracts.Tests xUnit + FluentAssertions project covering: fixed-delay mode (UseExponentialBackoff=false), exponential growth, MaxDelay saturation at high attempt numbers (which would surface the negative-delay overflow), and jitter staying within [0.75x, 1.25x].
 
@@ -3310,7 +3310,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test covers dispatching the same request type with two different TResult arguments
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.CQRS.Tests/MediatorTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Already resolved: Birko.CQRS.Tests (created since the audit, alongside the CR-H039 handler-cache fix) has MediatorTests.SendAsync_CovariantDispatch_DoesNotPoisonHandlerCache, which dispatches an IQuery<string?> as SendAsync<object?> then re-dispatches as SendAsync<string?> and asserts correct resolution (no InvalidCastException / cache poisoning).
 - **Detail:** All mediator tests dispatch each request type with a single, matching TResult. There is no test that exercises covariant dispatch (e.g. SendAsync<object> of an IQuery<string>) or repeated dispatch of one request type with differing TResult — which is exactly the scenario the handler-cache bug breaks. A regression test here would have caught the high-severity issue.
 - **Fix:** Add a test that sends the same request type via two different TResult type arguments (and one via IRequest<object> covariance) and asserts correct resolution rather than InvalidCastException.
 
@@ -3318,7 +3318,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for StoreWrapperBuilder.Build<T>
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Composition\StoreWrapperBuilder.cs:26`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — New Birko.Data.Composition.Tests (8 tests) exercises Build<T> over the InMemory raw store: plain model → raw store returned; Default/SoftDelete/Audit markers trigger their wrappers; Audit and EventSourcing branches are skipped when their gating context (auditContext / eventStore) is null; Default→SoftDelete→raw chain ordering walked via IStoreWrapper.GetInnerStore; and the EventSourcing branch constructs (pinning the positional null-serializer ctor arity). Registered in .slnx + .code-workspace.
 - **Detail:** Build<T> is the project's entire public surface and contains non-trivial logic: 8 conditional decorator branches, context-gating (a wrapper is applied only when both the interface is implemented AND the relevant context/eventStore is non-null), a specific outermost-to-innermost ordering, and reflection-based generic construction via MakeGenericType + Activator.CreateInstance. None of this is exercised by any test — there is no Birko.Data.Composition.Tests sibling, and no test anywhere in the workspace references StoreWrapperBuilder. A constructor-signature drift or argument-order change in any of the seven wrappers (EventSourcing's optional serializer arg is passed as null positionally, for example) would only surface as a runtime MissingMethodException/TargetParameterCountException, never at compile time. This violates the framework convention that every new public functionality must have corresponding tests.
 - **Fix:** Add a Birko.Data.Composition.Tests project (xUnit + FluentAssertions) using the Birko.Data.InMemory store as the raw store. Cover: (a) a plain AbstractModel gets no wrappers (returns the raw store); (b) each interface marker triggers its wrapper and is skipped when the gating context is null (auditContext/tenantContext/eventStore); (c) chain ordering for an entity implementing several markers, asserting the outermost type and walking IStoreWrapper<T>.GetInnerStoreAs to verify nesting order; (d) the EventSourcing branch actually constructs (guards the positional null serializer arg). These tests also pin every wrapper's constructor arity so downstream signature drift fails the build.
 
@@ -3326,7 +3326,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CopyTo returns null when called with no argument despite non-null contract
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Core\Models/AbstractModel.cs:11-18`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Both AbstractModel.CopyTo and AbstractLogModel.CopyTo now guard-clause `if (clone == null) return this;` and return the (non-null) clone otherwise, honoring the non-null ICopyable<T> contract — `model.CopyTo()` no longer returns null / NREs. Regression tests in the new Birko.Data.Core.Tests cover both the with-target and no-arg paths for both types.
 - **Detail:** AbstractModel.CopyTo(AbstractModel? clone = null) returns `clone!`. When called as `model.CopyTo()` (the default), clone is null and the method returns null at runtime while the signature and the ICopyable<T> contract (`T CopyTo(T clone)`, non-nullable) promise a non-null result. The `!` operator suppresses the CS8603 warning but masks a genuine null return: a caller doing `model.CopyTo().Guid` gets a NullReferenceException. The same pattern repeats in AbstractLogModel.CopyTo (AbstractLogModel.cs:13-23, also `return clone!`).
 - **Fix:** Either drop the default-null parameter (force callers to supply the clone, matching the ICopyable<T> contract), or guard-clause it: `if (clone == null) return this; /* or new instance */`. Do not paper over a real null return with `!`.
 
@@ -3334,7 +3334,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for Birko.Data.Core
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Core\Birko.Data.Core (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — New Birko.Data.Core.Tests (17 tests): ExpressionParameterReplacer AndAlso/OrElse (combine + null-left short-circuit + single-parameter/no-Invocation shape), ModelByGuid/ModelsByGuid filters (incl. ModelsByGuid null-Guids → null Filter and empty set), CopyTo null-handling on AbstractModel/AbstractLogModel (CR-M082), and ViewModel.RaisePropertyChanged (CallerMemberName, explicit name, no-subscriber). Registered in .slnx + .code-workspace.
 - **Detail:** There is no Birko.Data.Core.Tests sibling on disk. Untested public logic includes ExpressionParameterReplacer.AndAlso/OrElse (non-trivial expression-tree rewriting with a null-left short-circuit), the ModelByGuid/ModelsByGuid filters (ModelsByGuid returns null Filter() when Guids is null), and the CopyTo/LoadFrom round-trips on AbstractModel/AbstractLogModel and the ViewModel/RaisePropertyChanged surface. The framework convention requires tests for every new public functionality.
 - **Fix:** Add a Birko.Data.Core.Tests (xUnit + FluentAssertions) project covering ExpressionParameterReplacer (incl. null-left), the two filters, CopyTo null-handling, and PropertyChanged raising.
 

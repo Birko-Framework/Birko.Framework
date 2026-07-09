@@ -312,6 +312,9 @@
     <Project Path="../../Framework.Tests/Birko.DesignTokens.Tests/Birko.DesignTokens.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Xaml.Avalonia.Tests/Birko.Xaml.Avalonia.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Xaml.Core.Tests/Birko.Xaml.Core.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Contracts.Tests/Birko.Contracts.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Core.Tests/Birko.Data.Core.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.Composition.Tests/Birko.Data.Composition.Tests.csproj" />
   </Folder>
   <Folder Name="/Xaml/">
     <Project Path="../Birko.DesignTokens/Birko.DesignTokens.csproj" />

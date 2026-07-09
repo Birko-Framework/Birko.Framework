@@ -13,11 +13,31 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**75 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**83 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
 
 **The entire Communication cluster (CR-M036 … CR-M075, 40 findings across Bluetooth, Camera, GraphQL,
 gRPC, Hardware, IR, Modbus, Network, NFC, OAuth, REST, REST.Server, SOAP, SSE, WebSocket) is closed.**
+
+### Batch 11 — Core foundation CR-M076 … CR-M083 (8 closed)
+
+Configuration, Contracts, CQRS, Data.Composition, Data.Core.
+
+- **3 confirmed bugs fixed:** **M076** `Settings.LoadFrom(ISettings)` hard-cast → type-guard (foreign
+  ISettings no longer throws InvalidCastException); **M078** `RetryPolicy.GetDelay` `(long)Math.Pow`
+  overflow to a negative TimeSpan at high attempts → compute in double + saturate at MaxDelay before
+  cast; **M082** `AbstractModel.CopyTo()` / `AbstractLogModel.CopyTo()` returned `clone!` (null) with no
+  arg → guard-clause `return this` (honors non-null ICopyable<T>).
+- **Already resolved (verify-first):** **M077** Birko.Configuration.Tests and **M080** Birko.CQRS.Tests
+  existed (created since the audit); M080's covariant-dispatch regression was already present. Configuration.Tests
+  augmented with GetId + LoadFrom(ISettings) tests.
+- **New test projects (3):** **Birko.Contracts.Tests** (10 — M079: RetryPolicy incl. the M078 overflow
+  boundary + jitter window), **Birko.Data.Core.Tests** (17 — M083: ExpressionParameterReplacer, filters,
+  CopyTo null-handling, ViewModel PropertyChanged), **Birko.Data.Composition.Tests** (8 — M081:
+  StoreWrapperBuilder.Build<T> branch/gating/ordering + EventSourcing ctor arity, over the InMemory store).
+  Registered in .slnx + .code-workspace.
+- Suites green: Contracts 10, Configuration 11, Data.Core 17, Composition 8 (CQRS unchanged). The Data.*
+  storage-backend medium findings (CR-M084 …) remain.
 
 ### Batch 10 — WebSocket CR-M073 … CR-M075 (3 closed; completes Communication)
 
