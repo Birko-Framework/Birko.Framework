@@ -13,8 +13,18 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**83 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**87 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 12 — CosmosDB cluster CR-M084 … CR-M087 (4 closed)
+
+Birko.Data.CosmosDB + Birko.Data.CosmosDB.Views. All bugs verified via pure-logic unit tests (no live emulator).
+
+- **M084** `CosmosAggregationHelper` emitted dotted `c.Field` identifiers by raw interpolation → bracket-quoted via a `FieldRef` helper (`c["Field"]`, embedded quotes/backslashes escaped) in SELECT/aggregate/GROUP BY.
+- **M085** `CosmosDBIndexManager` stored single-field indexes as `/name/?` but Exists/Drop/GetInfo compared against the raw name (never matched) and Drop pushed the raw name into ExcludedPaths unconditionally → extracted `NormalizeIncludedPath`/`NormalizeFieldPath`/`IncludedPathMatches`/`FieldPathMatches`/`PolicyContainsIndex`/`RemoveIncludedIndex`; Create/Exists/Drop/GetInfo now agree, and Drop only excludes the path it actually removed.
+- **M086** `CosmosFilterTranslator.TranslateValue` fell back to raw `ToString()` for DateTime (culture-dependent, unquoted, invalid) and enums (unquoted member name) → DateTime/DateTimeOffset now ISO-8601 quoted, enums emit numeric value.
+- **M087** (test-gap) Birko.Data.CosmosDB.Views.Tests already existed; augmented with TranslateValue coverage (doubles as M086's tests).
+- Suites green: CosmosDB.Tests 43 (+11), CosmosDB.Views.Tests 7 (+5). Remaining Data.* backend medium findings (CR-M088 …) still to triage.
 
 **The entire Communication cluster (CR-M036 … CR-M075, 40 findings across Bluetooth, Camera, GraphQL,
 gRPC, Hardware, IR, Modbus, Network, NFC, OAuth, REST, REST.Server, SOAP, SSE, WebSocket) is closed.**
