@@ -13,14 +13,21 @@ using System.Threading.Tasks;
 namespace Birko.Communication.REST
 {
     /// <summary>
-    /// REST client for consuming RESTful APIs
+    /// REST client for consuming RESTful APIs.
     /// </summary>
+    /// <remarks>
+    /// The synchronous overloads (Get/Post/Put/Delete/Patch) are convenience shims that block on the
+    /// async methods via <c>ConfigureAwait(false)</c>. Prefer the <c>*Async</c> overloads — they are
+    /// the only ones that accept a <see cref="CancellationToken"/> and do not block a thread on
+    /// network I/O (CR-M060).
+    /// </remarks>
     public class RestClient : IDisposable
     {
         // Process-wide shared cache reached concurrently from many threads — must be thread-safe
         // (CR-H031: a plain Dictionary mutated without locking can corrupt / throw).
         private static readonly ConcurrentDictionary<string, RestClient> _clients = new();
 
+        private readonly HttpClientHandler _handler;
         private readonly HttpClient _httpClient;
         private bool _disposed;
 
@@ -30,9 +37,15 @@ namespace Birko.Communication.REST
         public string BaseURI { get; private set; }
 
         /// <summary>
-        /// Gets or sets the default credentials for authentication
+        /// Gets or sets the default credentials for authentication. Applied to the underlying
+        /// HttpClientHandler so it actually authenticates requests (CR-M059). Set it before the first
+        /// request — HttpClientHandler rejects credential changes once a request has been sent.
         /// </summary>
-        public ICredentials? Credentials { get; set; }
+        public ICredentials? Credentials
+        {
+            get => _handler.Credentials;
+            set => _handler.Credentials = value;
+        }
 
         /// <summary>
         /// Gets or sets the timeout for requests in milliseconds
@@ -83,7 +96,10 @@ namespace Birko.Communication.REST
                 throw new ArgumentNullException(nameof(baseUri));
 
             BaseURI = baseUri.TrimEnd('/');
-            _httpClient = new HttpClient
+            // Own an HttpClientHandler so the Credentials property can actually flow to requests
+            // (CR-M059). HttpClient owns the handler (disposeHandler defaults true), so Dispose covers it.
+            _handler = new HttpClientHandler();
+            _httpClient = new HttpClient(_handler)
             {
                 Timeout = TimeSpan.FromMilliseconds(100000) // 100 seconds default
             };

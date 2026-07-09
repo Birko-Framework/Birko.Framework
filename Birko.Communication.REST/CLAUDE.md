@@ -3,144 +3,77 @@
 ## Overview
 REST API client implementation for Birko.Communication. Server-side functionality is in Birko.Communication.REST.Server.
 
-## Project Location
-`C:\Source\Birko.Communication.REST\`
-
 ## Purpose
-- HTTP/HTTPS communication
-- REST API client
-- JSON serialization
-- Authentication support
+- HTTP/HTTPS REST client over `HttpClient`
+- Raw request/response as strings — the caller serializes/deserializes (there is no built-in JSON model layer)
 
 ## Components
-
-### Client
-- `RestClient` - REST API client
-- `AsyncRestClient` - Async REST API client
-
-### Middleware
-- Authentication middleware
-- Logging middleware
-- Retry middleware
-
-### Models
-- `RestRequest` - Request configuration
-- `RestResponse` - Response data
-- `RestSettings` - Client settings
+One class: **`RestClient : IDisposable`** (namespace `Birko.Communication.REST`). There is **no**
+`AsyncRestClient`, no `RestRequest`/`RestResponse`/`RestSettings` model types, no `RestException`, no
+built-in retry/cache middleware — the surface is deliberately thin.
+- `static RestClient GetClient(string baseUri)` — process-wide cached instance per base URI (thread-safe `ConcurrentDictionary`).
+- `RestClient(string baseUri)` — direct construction.
+- Properties: `BaseURI` (trimmed), `ICredentials? Credentials` (applied to the underlying `HttpClientHandler`; set before the first request), `int Timeout` (**milliseconds**, not `TimeSpan`), `string DefaultContentType` (default `application/json`), `Dictionary<string,string> DefaultHeaders`.
+- Events: `OnRequest` / `OnResponse`.
+- Verbs: sync `Get/Post/Put/Delete/Patch` → `string`; async `GetAsync/PostAsync/PutAsync/DeleteAsync/PatchAsync` → `Task<string>` (accept a `CancellationToken`). `HttpMethod` is the library's own enum.
 
 ## Basic Usage
 
 ```csharp
 using Birko.Communication.REST;
 
-var client = new RestClient("https://api.example.com");
+using var client = new RestClient("https://api.example.com"); // or RestClient.GetClient(...)
 
-// GET request
-var response = await client.GetAsync("/users");
-var users = response.GetData<List<User>>();
+// Returns the raw response body as a string — deserialize it yourself.
+string usersJson = await client.GetAsync("/users");
+var users = System.Text.Json.JsonSerializer.Deserialize<List<User>>(usersJson);
 
-// POST request
-var newUser = new User { Name = "John", Email = "john@example.com" };
-var postResponse = await client.PostAsync("/users", newUser);
-var created = postResponse.GetData<User>();
-
-// PUT request
-await client.PutAsync("/users/1", newUser);
-
-// DELETE request
+string created = await client.PostAsync("/users", body: newUserJson);
+await client.PutAsync("/users/1", body: updatedJson);
 await client.DeleteAsync("/users/1");
 ```
 
+> The synchronous overloads (`Get`/`Post`/…) are convenience shims that block on the async methods;
+> prefer the `*Async` overloads (only they take a `CancellationToken`).
+
 ## Authentication
 
-### Bearer Token
+Header-based auth via `DefaultHeaders` (there are no `SetBearerToken`/`SetBasicAuth` helpers):
+
 ```csharp
-client.SetBearerToken("your-token-here");
+client.DefaultHeaders["Authorization"] = "Bearer your-token";
+client.DefaultHeaders["X-API-Key"] = "your-api-key";
 ```
 
-### Basic Auth
+Or Windows/NTLM/basic credentials via the handler-backed property (set before the first request):
+
 ```csharp
-client.SetBasicAuth("username", "password");
+client.Credentials = new System.Net.NetworkCredential("user", "pass");
 ```
 
-### API Key
+## Query parameters & headers
+
+Query string is passed as a raw string; per-request headers as a `Dictionary<string,string>`:
+
 ```csharp
-client.AddDefaultHeader("X-API-Key", "your-api-key");
+string body = await client.GetAsync("/users", queryString: "page=1&limit=10", headers: null);
 ```
 
-## Custom Headers
+## Timeout
 
 ```csharp
-client.AddDefaultHeader("User-Agent", "MyApp/1.0");
-client.AddDefaultHeader("Accept", "application/json");
-```
-
-## Query Parameters
-
-```csharp
-var response = await client.GetAsync("/users", new
-{
-    page = 1,
-    limit = 10,
-    search = "john"
-});
-```
-
-## Error Handling
-
-```csharp
-try
-{
-    var response = await client.GetAsync("/users/999");
-    if (!response.IsSuccess)
-    {
-        Console.WriteLine($"Error: {response.StatusCode} - {response.Message}");
-    }
-}
-catch (RestException ex)
-{
-    Console.WriteLine($"REST Exception: {ex.Message}");
-}
+client.Timeout = 30000; // milliseconds
 ```
 
 ## Dependencies
 - Birko.Communication
 - System.Net.Http
-- System.Text.Json (or Newtonsoft.Json)
-
-## Features
-
-### Automatic Retries
-```csharp
-client.MaxRetries = 3;
-client.RetryDelay = TimeSpan.FromSeconds(1);
-```
-
-### Timeout Configuration
-```csharp
-client.Timeout = TimeSpan.FromSeconds(30);
-```
-
-### Response Caching
-```csharp
-client.EnableCache(TimeSpan.FromMinutes(5));
-```
-
-## Use Cases
-- Consuming REST APIs
-- Third-party integrations
-- Microservices communication
-- Mobile app backends
-- Webhook handlers
 
 ## Best Practices
-
-1. **Timeouts** - Always set appropriate timeouts
-2. **Retry logic** - Implement retry for transient failures
-3. **Error handling** - Handle HTTP errors gracefully
-4. **Cancellation tokens** - Use cancellation tokens for async operations
-5. **Dispose** - Always dispose the client
-6. **HTTPS** - Use HTTPS in production
+1. Prefer the `*Async` overloads and pass a `CancellationToken`.
+2. Set `Credentials` (or the `Authorization` default header) before the first request.
+3. Dispose the client (or reuse the cached `GetClient` instance) — do not new-up per request.
+4. Use HTTPS in production.
 
 ## Maintenance
 
