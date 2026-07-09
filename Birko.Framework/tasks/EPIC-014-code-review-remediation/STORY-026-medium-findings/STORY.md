@@ -13,8 +13,16 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**110 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**112 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 19 — Migrations RavenDB + TimescaleDB CR-M114/M116 (2 closed; Migrations cluster done bar the async findings)
+
+- **M114** RavenDB `ParseFilterToRql`/`UpdateDocuments` interpolated values as `'{s}'` (injection/escaping) → parameterized via `$pN`/`$uN` `IndexQuery.QueryParameters`; `ParseFilterToRql` now returns `(rql, parameters)`. Offline tests updated for the parameterized output + a quote-value case.
+- **M116** TimescaleDB test-gap → already covered by since-the-audit TimescaleDBMigrationSqlTests (BuildCompressionPolicySql/BuildContinuousAggregateSql DDL, CR-H070/H071).
+- Suites green: Migrations.RavenDB.Tests 11, Migrations.TimescaleDB.Tests 4.
+
+**Migrations cluster (CR-M101 … M116) status:** M102–M107, M110–M116 done; **M101 / M108 / M109 remain deferred** as the InfluxDB/interface async batch (CancellationToken + async through IMigrationRunner/IMigrationStore/IDataMigrator + the InfluxDB sync-over-async & Flux-count).
 
 ### Batch 18 — Migrations MongoDB + SQL CR-M112/M113/M115 (3 closed)
 

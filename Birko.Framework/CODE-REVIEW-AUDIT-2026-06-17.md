@@ -3582,7 +3582,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RQL built via string interpolation of filter/update values (injection + escaping)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.RavenDB\Context/RavenDBDataMigrator.cs:24-35,127-135`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — `ParseFilterToRql` now returns `(rql, parameters)` with `$pN` query-parameter placeholders instead of interpolated `'{s}'` literals, and `UpdateDocuments`/`DeleteDocuments` populate `IndexQuery.QueryParameters` (patch values use `$uN`), so a value containing a quote/backslash is a bound parameter rather than breaking/altering the RQL. Offline tests (Birko.Data.Migrations.RavenDB.Tests) assert the `$pN` placeholders, operator mapping, and that a quote-containing value stays a parameter. (Field names / the RenameField schema-builder interpolation are author-supplied identifiers and left as-is, per the finding's "at least in UpdateDocuments/ParseFilterToRql".)
 - **Detail:** UpdateDocuments and ParseFilterToRql wrap string values as $"'{s}'" with no escaping of embedded single quotes/backslashes, and inject field names and the patch script directly into the RQL. A value containing a quote breaks the query or alters it; field names are unvalidated. RenameField (RavenDBSchemaBuilder.cs:70-78) has the same raw-interpolation pattern for collection/field names. While migration inputs are usually trusted, broken escaping causes runtime RavenException on legitimate data containing quotes.
 - **Fix:** Use parameterized RQL (IndexQuery.QueryParameters with $p0 placeholders) for values instead of inline literals, at least in UpdateDocuments/ParseFilterToRql.
 
@@ -3598,7 +3598,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for the package
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.TimescaleDB\Birko.Data.Migrations.TimescaleDB.Tests (absent)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.Migrations.TimescaleDB.Tests exists (created since the audit) with TimescaleDBMigrationSqlTests asserting the generated DDL of `BuildCompressionPolicySql` (opt-in segmentby, custom orderby — CR-H070) and `BuildContinuousAggregateSql` (no dangling GROUP BY comma, empty vs populated group-by — CR-H071), all offline. The two SQL-generation bugs the finding worried about are fixed and covered; the live hypertable/policy execution stays an integration-tier concern.
 - **Detail:** There is no Birko.Data.Migrations.TimescaleDB.Tests sibling. The framework convention requires xUnit + FluentAssertions tests for new public functionality. None of the public/protected helpers (CreateHypertable, CreateHypertableWithSpace, AddCompressionPolicy, AddRetentionPolicy, CreateContinuousAggregate, IsHypertable, GetChunkInterval, the runner's context override) have coverage. Tests asserting the generated SQL text would have caught the two SQL-generation bugs above (hardcoded columns, trailing comma) without needing a live TimescaleDB instance.
 - **Fix:** Add a .Tests project that verifies generated SQL strings via a captured DbCommand/in-memory connection, plus a test that the runner builds a TimescaleDBMigrationContext carrying the connector.
 
