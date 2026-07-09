@@ -36,17 +36,13 @@ namespace Birko.Communication.WebSocket.Ports
 
             if (_socket != null && _socket.State == WebSocketState.Open)
             {
-                 // WebSocket WriteAsync requires a task, we will wait for it synchronously to match the API
-                 // or fire and forget if blocking is an issue, but standard Write implies blocking/completion.
-                 try
-                 {
-                    var segment = new ArraySegment<byte>(data);
-                    _socket.SendAsync(segment, WebSocketMessageType.Binary, true, CancellationToken.None).Wait();
-                 }
-                 catch (Exception)
-                 {
-                     throw;
-                 }
+                // AbstractPort.Write is synchronous, so we block — but via ConfigureAwait(false) +
+                // GetAwaiter().GetResult() so the original WebSocketException propagates (not an
+                // AggregateException from .Wait()) and no captured SynchronizationContext is required
+                // (CR-M073).
+                var segment = new ArraySegment<byte>(data);
+                _socket.SendAsync(segment, WebSocketMessageType.Binary, true, CancellationToken.None)
+                    .ConfigureAwait(false).GetAwaiter().GetResult();
             }
         }
 
@@ -82,7 +78,7 @@ namespace Birko.Communication.WebSocket.Ports
                     _cts = new CancellationTokenSource();
 
                     var uri = new Uri(settings.Uri);
-                    _socket.ConnectAsync(uri, _cts.Token).Wait();
+                    _socket.ConnectAsync(uri, _cts.Token).ConfigureAwait(false).GetAwaiter().GetResult();
 
                     _isOpen = true;
                     _stopThread = false;
@@ -111,7 +107,8 @@ namespace Birko.Communication.WebSocket.Ports
                     {
                          try
                          {
-                            _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None).Wait();
+                            _socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None)
+                                .ConfigureAwait(false).GetAwaiter().GetResult();
                          }
                          catch {}
                     }
@@ -131,11 +128,8 @@ namespace Birko.Communication.WebSocket.Ports
                 try
                 {
                     var segment = new ArraySegment<byte>(buffer);
-                    // ReceiveAsync
-                    var resultTask = _socket!.ReceiveAsync(segment, _cts!.Token);
-                    resultTask.Wait();
-
-                    var result = resultTask.Result;
+                    var result = _socket!.ReceiveAsync(segment, _cts!.Token)
+                        .ConfigureAwait(false).GetAwaiter().GetResult();
 
                     if (result.MessageType == WebSocketMessageType.Close)
                     {

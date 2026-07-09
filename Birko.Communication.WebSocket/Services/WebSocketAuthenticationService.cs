@@ -10,7 +10,7 @@ namespace Birko.Communication.WebSocket.Services
     /// <summary>
     /// WebSocket-specific authentication adapter for ASP.NET Core
     /// </summary>
-    public class WebSocketAuthenticationService
+    public class WebSocketAuthenticationService : IDisposable
     {
         private readonly AuthenticationService _authService;
         private readonly ILogger<WebSocketAuthenticationService> _logger;
