@@ -22,33 +22,48 @@ namespace Birko.Data.Migrations.RavenDB.Context
         {
             if (updates == null || updates.Count == 0) return;
 
-            var patchScript = string.Join("; ", updates.Select(kvp =>
+            // CR-M114: parameterize the patch values ($uN) instead of interpolating them.
+            var parameters = new Dictionary<string, object?>();
+            var patchParts = new List<string>();
+            var uIndex = 0;
+            foreach (var kvp in updates)
             {
-                var valueStr = kvp.Value is string s ? $"'{s}'" : kvp.Value?.ToString() ?? "null";
-                return $"this.{kvp.Key} = {valueStr}";
-            }));
+                var paramName = $"u{uIndex++}";
+                patchParts.Add($"this.{kvp.Key} = ${paramName}");
+                parameters[paramName] = kvp.Value;
+            }
+            var patchScript = string.Join("; ", patchParts);
 
             var query = $"FROM '{collection}'";
-            var whereClause = ParseFilterToRql(filterJson);
+            var (whereClause, whereParams) = ParseFilterToRql(filterJson);
             if (!string.IsNullOrEmpty(whereClause))
+            {
                 query += $" WHERE {whereClause}";
+                foreach (var kv in whereParams) parameters[kv.Key] = kv.Value;
+            }
 
             query += $" UPDATE {{ {patchScript}; }}";
 
-            var operation = _store.Operations.Send(new PatchByQueryOperation(
-                new Raven.Client.Documents.Queries.IndexQuery { Query = query }));
+            var indexQuery = new Raven.Client.Documents.Queries.IndexQuery { Query = query, QueryParameters = new() };
+            foreach (var kv in parameters) indexQuery.QueryParameters[kv.Key] = kv.Value;
+
+            var operation = _store.Operations.Send(new PatchByQueryOperation(indexQuery));
             operation.WaitForCompletion();
         }
 
         public void DeleteDocuments(string collection, string filterJson)
         {
             var query = $"FROM '{collection}'";
-            var whereClause = ParseFilterToRql(filterJson);
+            var (whereClause, whereParams) = ParseFilterToRql(filterJson);
+            var indexQuery = new Raven.Client.Documents.Queries.IndexQuery { Query = query, QueryParameters = new() };
             if (!string.IsNullOrEmpty(whereClause))
+            {
                 query += $" WHERE {whereClause}";
+                foreach (var kv in whereParams) indexQuery.QueryParameters[kv.Key] = kv.Value;
+            }
+            indexQuery.Query = query;
 
-            var operation = _store.Operations.Send(new DeleteByQueryOperation(
-                new Raven.Client.Documents.Queries.IndexQuery { Query = query }));
+            var operation = _store.Operations.Send(new DeleteByQueryOperation(indexQuery));
             operation.WaitForCompletion();
         }
 
@@ -107,13 +122,21 @@ namespace Birko.Data.Migrations.RavenDB.Context
             }
         }
 
-        internal static string ParseFilterToRql(string? filterJson)
+        /// <summary>
+        /// Translates a Mongo-style JSON filter into an RQL WHERE clause using <c>$pN</c> query
+        /// parameters for the values (CR-M114: values used to be interpolated as `'{s}'` with no
+        /// escaping, so a value containing a quote/backslash broke or altered the query). The returned
+        /// parameters are keyed without the leading <c>$</c> (RavenDB QueryParameters convention).
+        /// </summary>
+        internal static (string Rql, IReadOnlyDictionary<string, object?> Parameters) ParseFilterToRql(string? filterJson)
         {
+            var parameters = new Dictionary<string, object?>();
             if (string.IsNullOrWhiteSpace(filterJson) || filterJson!.Trim() == "{}")
-                return string.Empty;
+                return (string.Empty, parameters);
 
             using var doc = JsonDocument.Parse(filterJson);
             var conditions = new List<string>();
+            var index = 0;
 
             foreach (var property in doc.RootElement.EnumerateObject())
             {
@@ -123,7 +146,6 @@ namespace Birko.Data.Migrations.RavenDB.Context
                 {
                     foreach (var op in property.Value.EnumerateObject())
                     {
-                        var value = ExtractValue(op.Value);
                         var rqlOp = op.Name switch
                         {
                             "$gt" => ">",
@@ -133,19 +155,20 @@ namespace Birko.Data.Migrations.RavenDB.Context
                             "$ne" => "!=",
                             _ => "="
                         };
-                        var valueLiteral = value is string s ? $"'{s}'" : value?.ToString() ?? "null";
-                        conditions.Add($"{fieldName} {rqlOp} {valueLiteral}");
+                        var paramName = $"p{index++}";
+                        conditions.Add($"{fieldName} {rqlOp} ${paramName}");
+                        parameters[paramName] = ExtractValue(op.Value);
                     }
                 }
                 else
                 {
-                    var value = ExtractValue(property.Value);
-                    var valueLiteral = value is string s2 ? $"'{s2}'" : value?.ToString() ?? "null";
-                    conditions.Add($"{fieldName} = {valueLiteral}");
+                    var paramName = $"p{index++}";
+                    conditions.Add($"{fieldName} = ${paramName}");
+                    parameters[paramName] = ExtractValue(property.Value);
                 }
             }
 
-            return string.Join(" AND ", conditions);
+            return (string.Join(" AND ", conditions), parameters);
         }
 
         private static void ApplyFilterToQuery(IDocumentQuery<dynamic> query, string filterJson)
