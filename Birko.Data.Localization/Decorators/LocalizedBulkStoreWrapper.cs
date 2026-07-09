@@ -137,8 +137,11 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        _innerStore.Create(data, storeDelegate);
-        foreach (var entity in data)
+        // CR-M100: materialize once — a lazy/one-shot IEnumerable would otherwise be enumerated
+        // twice (once by the inner store, once here), re-running or exhausting the source.
+        var items = data as IList<T> ?? data.ToList();
+        _innerStore.Create(items, storeDelegate);
+        foreach (var entity in items)
         {
             SaveTranslations(entity);
         }
@@ -152,8 +155,9 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        _innerStore.Update(data, storeDelegate);
-        foreach (var entity in data)
+        var items = data as IList<T> ?? data.ToList();
+        _innerStore.Update(items, storeDelegate);
+        foreach (var entity in items)
         {
             SaveTranslations(entity);
         }
@@ -178,8 +182,9 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
 
     public void Delete(IEnumerable<T> data)
     {
-        _innerStore.Delete(data);
-        foreach (var entity in data)
+        var items = data as IList<T> ?? data.ToList();
+        _innerStore.Delete(items);
+        foreach (var entity in items)
         {
             DeleteTranslations(entity);
         }

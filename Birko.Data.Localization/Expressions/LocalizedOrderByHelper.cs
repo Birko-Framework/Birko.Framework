@@ -29,49 +29,6 @@ public static class LocalizedOrderByHelper
     }
 
     /// <summary>
-    /// Splits an OrderBy into localized and non-localized parts.
-    /// Returns the non-localized OrderBy to pass to the inner store (null if all fields are localized).
-    /// </summary>
-    public static OrderBy<T>? GetNonLocalizedOrderBy<T>(OrderBy<T>? orderBy, IReadOnlyList<string> localizableFields)
-    {
-        if (orderBy == null)
-        {
-            return null;
-        }
-
-        var fieldSet = new HashSet<string>(localizableFields);
-        var nonLocalized = orderBy.Fields.Where(f => !fieldSet.Contains(f.PropertyName)).ToList();
-
-        if (nonLocalized.Count == 0)
-        {
-            return null;
-        }
-
-        if (nonLocalized.Count == orderBy.Fields.Count)
-        {
-            return orderBy; // no localized fields, pass through
-        }
-
-        // Rebuild OrderBy with only non-localized fields
-        var first = nonLocalized[0];
-        var result = OrderBy<T>.ByName(first.PropertyName, first.Descending);
-        for (int i = 1; i < nonLocalized.Count; i++)
-        {
-            // Use reflection-less approach: ThenBy is expression-based, but we have string names
-            // We need to add fields via ByName pattern — but ByName creates new OrderBy.
-            // Since there's no ThenByName, we'll build a fresh one.
-            // Actually, the Fields list is readonly, and constructors are private.
-            // We need to chain: first ByName, then no way to add more via string.
-            // Workaround: create one ByName per field — but the API expects single OrderBy.
-            // The cleanest approach: just let the inner store ignore ordering,
-            // and do full in-memory sort when any localized field is in the OrderBy.
-        }
-
-        // If we can't cleanly split, just return null and do full in-memory sort
-        return null;
-    }
-
-    /// <summary>
     /// Applies in-memory ordering to a list of entities based on the full OrderBy,
     /// after translations have been applied to the entities.
     /// </summary>

@@ -144,8 +144,11 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
     public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        await _innerStore.CreateAsync(data, storeDelegate, ct);
-        foreach (var entity in data)
+        // CR-M100: materialize once — a lazy/one-shot IEnumerable would otherwise be enumerated
+        // twice (once by the inner store, once here), re-running or exhausting the source.
+        var items = data as IList<T> ?? data.ToList();
+        await _innerStore.CreateAsync(items, storeDelegate, ct);
+        foreach (var entity in items)
         {
             await SaveTranslationsAsync(entity, ct);
         }
@@ -159,8 +162,9 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
-        await _innerStore.UpdateAsync(data, storeDelegate, ct);
-        foreach (var entity in data)
+        var items = data as IList<T> ?? data.ToList();
+        await _innerStore.UpdateAsync(items, storeDelegate, ct);
+        foreach (var entity in items)
         {
             await SaveTranslationsAsync(entity, ct);
         }
@@ -187,8 +191,9 @@ public class AsyncLocalizedBulkStoreWrapper<TStore, T> : IAsyncBulkStore<T>, ISt
 
     public async Task DeleteAsync(IEnumerable<T> data, CancellationToken ct = default)
     {
-        await _innerStore.DeleteAsync(data, ct);
-        foreach (var entity in data)
+        var items = data as IList<T> ?? data.ToList();
+        await _innerStore.DeleteAsync(items, ct);
+        foreach (var entity in items)
         {
             await DeleteTranslationsAsync(entity, ct);
         }
