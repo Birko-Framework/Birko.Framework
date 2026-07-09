@@ -54,6 +54,9 @@ public class MongoJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [BsonElement("metadataJson")]
     public string? MetadataJson { get; set; }
 
+    [BsonElement("claimToken")]
+    public Guid? ClaimToken { get; set; }
+
     [BsonIgnore]
     public string CollectionName => "BackgroundJobs";
 

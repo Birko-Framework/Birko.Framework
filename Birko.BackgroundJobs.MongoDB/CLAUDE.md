@@ -23,6 +23,12 @@ MongoDB-based persistent job queue for Birko.BackgroundJobs. Uses `AsyncMongoDBS
 - Birko.Data.MongoDB (AsyncMongoDBStore, Settings)
 - MongoDB.Driver / MongoDB.Bson
 
+## Concurrency
+`DequeueAsync` claims a job with a conditional update guarded on the still-eligible status plus a
+`ClaimToken` re-read verification (CR-M020). MongoDB applies the `$set` per document atomically, so
+only one racing worker's filter matches after the first flips the status; the losers move on to the
+next candidate. Job handlers should still be idempotent as defence in depth.
+
 ## Maintenance
 - Keep in sync with IJobQueue interface changes in Birko.BackgroundJobs
 - Settings type is `Birko.Data.MongoDB.Stores.Settings`
