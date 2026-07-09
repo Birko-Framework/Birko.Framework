@@ -1245,6 +1245,10 @@
 			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.ViewModel.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.InfluxDB.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.InfluxDB.ViewModel.Tests"
+		},
+		{
 			"path": "."
 		}
 	]

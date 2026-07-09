@@ -316,6 +316,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.Core.Tests/Birko.Data.Core.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Composition.Tests/Birko.Data.Composition.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.ViewModel.Tests/Birko.Data.ElasticSearch.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.InfluxDB.ViewModel.Tests/Birko.Data.InfluxDB.ViewModel.Tests.csproj" />
   </Folder>
   <Folder Name="/Xaml/">
     <Project Path="../Birko.DesignTokens/Birko.DesignTokens.csproj" />

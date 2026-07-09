@@ -13,8 +13,18 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**95 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**99 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 15 — InfluxDB cluster CR-M094 … CR-M097 (4 closed)
+
+Birko.Data.InfluxDB + .InfluxDB.ViewModel.
+
+- **M094** `AsyncInfluxDBStore.SaveAsync` update branch wrote the point directly (no `EnsureInitializedAsync`, no `ExecuteWithRetryAsync`) unlike every other CRUD path → route it through `UpdateAsync`.
+- **M095** thin store tests → InfluxDB.Tests 9 → 25 (IsTransientException, FormatFluxInterval [made internal], ModelToPoint via subclass, InfluxDbUnitOfWork state machine). MapRecordToModel/live CRUD left to an integration tier.
+- **M096** the `Destroy`/`DestroyAsync` overrides on both InfluxDB repos called base (destroys the store) AND `Drop`/`DropAsync` (same store) → dropped the bucket twice. Removed the overrides; kept `Drop`/`DropAsync` as distinct API.
+- **M097** (test-gap) new **Birko.Data.InfluxDB.ViewModel.Tests** (5): ctor type-guard, IsHealthy-without-client, + the M096 structural regression. Registered in .slnx + .code-workspace.
+- Suites green: InfluxDB.Tests 25, InfluxDB.ViewModel.Tests 5.
 
 ### Batch 14 — EventSourcing docs + JSON + Localization CR-M093/M098/M099/M100 (4 closed)
 
