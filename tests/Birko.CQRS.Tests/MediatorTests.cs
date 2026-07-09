@@ -104,6 +104,28 @@ public class MediatorTests
     }
 
     [Fact]
+    public async Task SendAsync_CovariantDispatch_DoesNotPoisonHandlerCache()
+    {
+        // Regression for CR-H039: the handler cache was keyed on request type only, ignoring
+        // TResult. IRequest<out TResult> is covariant, so an IQuery<string?> can be dispatched as
+        // SendAsync<object?>. That used to cache a wrapper<GetItemQuery, object?>; a later correct
+        // SendAsync<string?> then reused it and threw InvalidCastException. The cache is now keyed
+        // on (requestType, resultType).
+        using var provider = BuildProvider(s =>
+            s.AddQueryHandler<GetItemQuery, string?, GetItemHandler>());
+        var mediator = provider.GetRequiredService<IMediator>();
+        var query = new GetItemQuery(Guid.NewGuid());
+
+        // Covariant dispatch with a different TResult (no handler registered for object?).
+        var covariant = async () => await mediator.SendAsync<object?>(query);
+        await covariant.Should().ThrowAsync<InvalidOperationException>("no IRequestHandler<GetItemQuery, object?> is registered");
+
+        // The correct dispatch must still succeed — the covariant call must not have poisoned the cache.
+        var result = await mediator.SendAsync<string?>(query);
+        result.Should().Be($"Item-{query.Id}");
+    }
+
+    [Fact]
     public async Task SendAsync_Query_ReturnsNull()
     {
         using var provider = BuildProvider(s =>
