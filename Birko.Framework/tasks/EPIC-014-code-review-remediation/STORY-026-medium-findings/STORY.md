@@ -13,8 +13,15 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**119 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**122 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 22 — Birko.Data.Patterns CR-M124/M125/M126 (3 closed)
+
+- **M124** Sluggable bulk wrappers' foreach-then-pass double-enumerated `data` → materialize once (async CreateAsync + sync Create/Update; UpdateAsync-async was already fixed under CR-H075; SoftDelete/Audit/Timestamp use the safe lazy-Select pattern).
+- **M125** versioned wrapper skipped the version check on a null read (silent lost-update) → treat a missing row as a conflict (ConcurrentUpdateException) + doc the best-effort read-check-write contract. Sync + async.
+- **M126** Patterns test-gap → Patterns.Tests (already existed) augmented with the M124 enumeration regression, VersionedStoreWrapperTests (M125), and PagedResult boundary math.
+- Suite green: Birko.Data.Patterns.Tests 22.
 
 ### Batch 21 — MongoDB.ViewModel + MongoDB.Views CR-M121/M122/M123 (3 closed)
 

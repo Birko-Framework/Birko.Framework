@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Birko.Data.Patterns (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-second STORY-026 batch: **CR-M124 / M125 / M126** in Birko.Data.Patterns (3 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Bulk-wrapper double-enumeration (M124)** — the Sluggable bulk wrappers resolved slugs in a `foreach` over `data` and then passed the **same** `data` to the inner store, enumerating a lazy/one-shot source twice (the second pass persists unmutated objects). Fixed `AsyncSluggableBulkStoreWrapper.CreateAsync` and the sync `SluggableBulkStoreWrapper.Create`/`Update` to materialize once (`data as IReadOnlyList<T> ?? data.ToList()`); the async `UpdateAsync` was already fixed under CR-H075, and the SoftDelete/Audit/Timestamp bulk wrappers use a lazy `Select` projection applied on the inner store's single enumeration (safe) so were left as-is.
+- **Versioned wrapper silent lost-update (M125)** — `UpdateAsync`/`Update` only ran the version check `if (existing != null …)`, so a null read (row not found / not yet visible) skipped the check and wrote with `data.Version++` — a lost-update. A missing row is now a conflict (`ConcurrentUpdateException`), and both wrappers carry a doc comment that this is best-effort read-check-write (NOT atomic — true locking needs the inner store's version predicate).
+- **Test-gap (M126)** — Birko.Data.Patterns.Tests existed (Sluggable CR-H075 + RuleSpecification); augmented with the M124 counting-enumerable regression, `VersionedStoreWrapperTests` (create/increment/stale/missing-row, sync + async over the InMemory store), and `PagedResultTests` (TotalPages ceiling + HasNext/PreviousPage boundaries).
+- Suite green: Birko.Data.Patterns.Tests 22. STORY-026 now **122/275**.
+
 ### Code-review remediation — medium findings, MongoDB.ViewModel + MongoDB.Views (EPIC-014 / STORY-026) (2026-07-09)
 Twenty-first STORY-026 batch: **CR-M121 / M122 / M123** across Birko.Data.MongoDB.ViewModel + .MongoDB.Views (3 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **ViewModel test-gap (M121)** — new **`Birko.Data.MongoDB.ViewModel.Tests`**: constructor store-type validation (accepts a plain `AsyncMongoDBStore` or a wrapper; a foreign store → `ArgumentException`) and the unwrapping `MongoDBStore` getter (a fake `IAsyncStore`+`IStoreWrapper` around an `AsyncMongoDBStore` unwraps via the property where the direct cast is null). Offline; registered in `.slnx` + `.code-workspace`.
