@@ -157,7 +157,9 @@ namespace Birko.Data.SQL.Connectors
                     return "XML";
                 case DbType.Object:
                 case DbType.Binary:
-                    return "BINARY";
+                    // BINARY with no length defaults to BINARY(1) in SQL Server, truncating any
+                    // blob/serialized object to a single byte. Use VARBINARY(MAX) (CR-M137).
+                    return "VARBINARY(MAX)";
                 case DbType.Guid:
                     return "UNIQUEIDENTIFIER";
                 case DbType.String:
