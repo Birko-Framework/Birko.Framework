@@ -13,8 +13,15 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**134 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**136 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 29 — Birko.Data.Sync CR-M155/M156 (2 closed; offline bugs)
+
+- **M155** Preview/PreviewAsync's bare catch masked OperationCanceledException as a fake conflict → added `catch (OperationCanceledException) { throw; }` before the broad catch in both. Offline test (store read throws OCE → Preview rethrows).
+- **M156** the bidirectional both-exist branch had a dead `if (winner == "conflict")` (GetWinner never returns "conflict") → removed the unreachable block (behavior-preserving; real conflict detection noted as a tracked feature). Offline test (both-exist → Update, 0 conflicts).
+- Suite green: Birko.Data.Sync.Tests 29.
+- **Note:** the remaining SQL-cluster findings (M136, M138–M146, M149–M154) are deferred as infra-heavy — new test projects (M141/M143/M152/M154), live-DB fixes (M136/M138/M139/M144/M146/M149), refactors (M140/M151), and M153 (SQL.Views GroupBy needs real GROUP BY metadata on the View model + connector changes — not a contained fix). The clean offline SQL bugs (M137/M142/M147/M148) are done.
 
 ### Batch 28 — Birko.Data.SQL.View CR-M147/M148 (2 closed; offline logic bugs)
 
