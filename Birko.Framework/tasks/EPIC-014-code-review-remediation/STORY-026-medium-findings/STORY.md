@@ -13,8 +13,15 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**116 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**119 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+
+### Batch 21 — MongoDB.ViewModel + MongoDB.Views CR-M121/M122/M123 (3 closed)
+
+- **M121** MongoDB.ViewModel repos had no test project → new **Birko.Data.MongoDB.ViewModel.Tests** (ctor store-type validation + unwrapping MongoDBStore getter via a fake wrapper). Registered in .slnx + .code-workspace.
+- **M122** MongoDB.Views Auto-mode fallback was dead (`catch (MongoCommandException)` never fires — a missing view returns an empty cursor) → explicit `ViewExistsAsync` check (ListCollectionNamesAsync name filter); Auto falls through to on-the-fly when the view is absent, Persistent still queries it. Code-review verified.
+- **M123** MongoDB.Views `.projitems`/`.shproj` had a non-hex SharedGUID (`…mgoview0001`) → replaced with a real GUID in both.
+- Suites green: MongoDB.Views.Tests 6, MongoDB.ViewModel.Tests 4.
 
 ### Batch 20 — Birko.Data.MongoDB store CR-M117 … M120 (4 closed)
 

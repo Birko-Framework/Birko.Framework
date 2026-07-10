@@ -3638,7 +3638,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for the repositories
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB.ViewModel\Birko.Data.MongoDB.ViewModel (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — new Birko.Data.MongoDB.ViewModel.Tests project covering the constructor store-type validation (accepts a plain AsyncMongoDBStore + a wrapper; rejects a foreign store with ArgumentException) and the unwrapping `MongoDBStore` getter (a fake IAsyncStore+IStoreWrapper around an AsyncMongoDBStore unwraps via the property where the direct cast is null) — offline, no live MongoDB. Registered in .slnx + .code-workspace.
 - **Detail:** There is no Birko.Data.MongoDB.ViewModel.Tests sibling. Public surface with no coverage: both constructors' store-type validation (the ArgumentException path when passing a non-MongoDB store), MongoDBStore unwrap getter, SetSettings, IsHealthy, Drop/DropAsync, CreateIndexAsync, and the Destroy/DestroyAsync overrides. CLAUDE.md itself mandates xUnit+FluentAssertions tests for every new public functionality.
 - **Fix:** Add a Tests sibling covering at least the constructor validation (success + ArgumentException) and the unwrap getter using the InMemory store or a MongoDB test double; these are pure logic and need no live MongoDB.
 
@@ -3646,7 +3646,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Auto-mode fallback to on-the-fly likely never triggers
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB.Views\MongoViewStore.cs:125-136`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — ExecutePipelineAsync now decides explicitly whether to use the persistent view via a new `ViewExistsAsync` (a `ListCollectionNamesAsync` name-filter check, mirroring MongoViewManager.ExistsAsync) instead of relying on a `catch (MongoCommandException)` that never fired (aggregating a missing view returns an empty cursor, not an exception). For Auto mode a missing view now correctly falls through to on-the-fly; Persistent still queries the view unconditionally. Code-review verified (the existence/aggregation paths need a live MongoDB). The dead catch was removed.
 - **Detail:** Auto mode catches MongoCommandException to fall back to the source collection when the persistent view is missing. But running an aggregation against a non-existent MongoDB collection/view does not throw — it returns an empty cursor. So when the view has not been created, Auto mode silently returns empty results instead of falling back to on-the-fly. The intended resilience of Auto mode is effectively dead.
 - **Fix:** Detect view existence explicitly before choosing the path (reuse MongoViewManager.ExistsAsync, or list collection names filtered by the view name) and route to on-the-fly when it is absent, rather than relying on a catch that won't fire.
 
@@ -3654,7 +3654,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Invalid SharedGUID in .projitems
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB.Views\Birko.Data.MongoDB.Views.projitems:6`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — replaced the malformed `a1b2c3d4-e5f6-4a7b-8c9d-mgoview0001` with a real GUID (`7253bb3a-2715-4cf1-8374-d38d425d1b61`) in both the `.projitems` (SharedGUID) and the `.shproj` (ProjectGuid) so they stay consistent; confirmed no other file referenced the old value.
 - **Detail:** SharedGUID is `a1b2c3d4-e5f6-4a7b-8c9d-mgoview0001`. The final segment `mgoview0001` is not valid hexadecimal (contains g, o, v, i, w), so this is not a legal GUID. Shared-project tooling (VS / MSBuild) expects a real GUID; a malformed one can break project references or the IDE's shared-project handling, and the new-birko-subproject convention requires proper hex GUIDs.
 - **Fix:** Replace with a real GUID, e.g. generated via [guid]::NewGuid(), and ensure it matches the GUID referenced from the .shproj and any importing projects.
 

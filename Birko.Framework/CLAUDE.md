@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, MongoDB.ViewModel + MongoDB.Views (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-first STORY-026 batch: **CR-M121 / M122 / M123** across Birko.Data.MongoDB.ViewModel + .MongoDB.Views (3 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **ViewModel test-gap (M121)** — new **`Birko.Data.MongoDB.ViewModel.Tests`**: constructor store-type validation (accepts a plain `AsyncMongoDBStore` or a wrapper; a foreign store → `ArgumentException`) and the unwrapping `MongoDBStore` getter (a fake `IAsyncStore`+`IStoreWrapper` around an `AsyncMongoDBStore` unwraps via the property where the direct cast is null). Offline; registered in `.slnx` + `.code-workspace`.
+- **Dead Auto-mode fallback (M122)** — `MongoViewStore.ExecutePipelineAsync`'s `catch (MongoCommandException) when (Auto)` never fired: aggregating a **non-existent** MongoDB view returns an empty cursor, not an exception, so Auto mode silently returned empty instead of falling back. Replaced with an explicit `ViewExistsAsync` (a `ListCollectionNamesAsync` name-filter check, mirroring `MongoViewManager.ExistsAsync`) — Auto falls through to on-the-fly when the view is absent; Persistent still queries it unconditionally. The dead catch is gone. Code-review verified (live-Mongo path).
+- **Invalid SharedGUID (M123)** — the `.projitems` SharedGUID and `.shproj` ProjectGuid were `a1b2c3d4-e5f6-4a7b-8c9d-mgoview0001` (the final segment isn't hex, so not a legal GUID — shared-project tooling can choke). Replaced with a real GUID in both files; verified nothing else referenced the old value.
+- Suites green: MongoDB.Views.Tests 6, MongoDB.ViewModel.Tests 4. STORY-026 now **119/275**.
+
 ### Code-review remediation — medium findings, Birko.Data.MongoDB store (EPIC-014 / STORY-026) (2026-07-09)
 Twentieth STORY-026 batch: **CR-M117 … M120** across the Birko.Data.MongoDB store (4 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Read overrides bypassed lazy-init (M117/M118)** — `MongoDBStore` overrode the public `Read(Guid)` + parameterless `Read()`, and `AsyncMongoDBStore` overrode `ReadAsync(Guid)`, going straight to `Collection.Find` — skipping the base wrappers' `EnsureInitialized`/`EnsureInitializedAsync` gate (which also observes the `CancellationToken`), against the "override `*Core`, not public CRUD" convention. All three were also redundant (the base routes through the existing `ReadCore`/`ReadCoreAsync` single + bulk overrides). Deleted them.

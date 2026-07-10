@@ -1249,6 +1249,10 @@
 			"path": "../../Framework.Tests/Birko.Data.InfluxDB.ViewModel.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.MongoDB.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.MongoDB.ViewModel.Tests"
+		},
+		{
 			"path": "."
 		}
 	]
