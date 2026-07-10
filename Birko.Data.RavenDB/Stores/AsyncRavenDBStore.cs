@@ -414,11 +414,14 @@ public class AsyncRavenDBStore<T>
             return;
         }
 
-        using var bulkInsert = _documentStore.BulkInsert();
+        // CR-M130: pass the token at creation so a long bulk insert can be cancelled (the ct was
+        // accepted but never observed).
+        using var bulkInsert = _documentStore.BulkInsert(token: ct);
 
         foreach (var item in data)
         {
             if (item == null) continue;
+            ct.ThrowIfCancellationRequested();
 
             item.Guid = Guid.NewGuid();
             storeDelegate?.Invoke(item);
