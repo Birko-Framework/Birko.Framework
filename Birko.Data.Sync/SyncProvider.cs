@@ -81,6 +81,11 @@ public class SyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKnowledg
 
             return preview;
         }
+        catch (OperationCanceledException)
+        {
+            // CR-M155: don't mask cancellation as a "conflict" — let it propagate.
+            throw;
+        }
         catch
         {
             preview.Conflicts++; // Mark as failed

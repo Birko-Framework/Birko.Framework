@@ -80,23 +80,14 @@ public abstract class SyncProviderBase<T, TKnowledge>
             return (SyncAction.Skip, null, null, null);
         }
 
-        // Bidirectional - check for conflicts
+        // Bidirectional - both exist: apply the conflict-resolution policy to pick the winner.
+        // CR-M156: removed a dead `if (winner == "conflict")` branch — GetWinner only ever returns
+        // "local" or "remote" (never "conflict"), so it was unreachable. Genuine both-diverged conflict
+        // detection would require comparing local/remote versions to the last-synced knowledge version;
+        // that is a tracked feature, not a bug fix, so this branch just applies the policy winner.
         if (localExists && remoteExists)
         {
-            // Both exist - could be conflict or just update needed
-            // For now, use conflict resolution policy to determine winner
             var winner = GetWinner(localItem!, remoteItem!, options.ConflictPolicy);
-            if (winner == "conflict")
-            {
-                var conflict = new ConflictInfo
-                {
-                    Guid = guid,
-                    LocalItem = localItem,
-                    RemoteItem = remoteItem,
-                    Reason = "Both local and remote have been modified"
-                };
-                return (SyncAction.Conflict, null, null, conflict);
-            }
             return (SyncAction.Update, winner, null, null);
         }
 
