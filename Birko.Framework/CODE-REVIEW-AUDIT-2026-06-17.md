@@ -3846,7 +3846,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** View constructor discards the explicit name argument when tables are present
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View\SQL/Tables/View.cs:20-29`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — inverted the guard to `if (string.IsNullOrEmpty(name) && Tables != null && Tables.Any())` so a table-name-derived name is only used when the caller supplied none; an explicit `new View(tables, joins, "OrderSummary")` keeps "OrderSummary". Offline tests (Birko.Data.SQL.Tests, which compiles the SQL.View projitems): explicit name kept (with and without tables), derived name when null.
 - **Detail:** The constructor sets `Name = name`, then immediately overwrites it with `string.Join(string.Empty, Tables.Select(...))` whenever `name` is non-empty and tables exist. So a caller passing an explicit view name like `new View(tables, joins, "OrderSummary")` silently gets the concatenated table-name string instead of "OrderSummary". The intent was almost certainly to derive a name only when none was supplied (i.e. `if (string.IsNullOrEmpty(name) && Tables.Any())`).
 - **Fix:** Invert the guard: only derive from table names when `name` is null/empty. `if (string.IsNullOrEmpty(name) && Tables != null && Tables.Any()) { Name = string.Join(...); }`.
 
@@ -3854,7 +3854,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetViewField returns null! and the caller immediately dereferences it
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View\SQL/DataBase_View.cs:59-76`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — GetViewField now extracts the property from either a plain `MemberExpression` body or a `UnaryExpression.Operand` (the old unconditional `(UnaryExpression)` cast threw `InvalidCastException` for a plain-member body like `x => x.Name` on a reference type), and throws a descriptive `ArgumentException`/`InvalidOperationException` instead of returning `null!` (which NRE'd at the immediate-deref callers). Offline test asserts a plain-member lambda throws `InvalidOperationException` (descriptive), not `InvalidCastException`/NRE.
 - **Detail:** GetViewField<T,P> returns `null!` when the property has no ViewFieldAttribute or the table cannot be loaded. Its callers in AbstractConnector_SelectView.cs:22 and :69 do `DataBase.GetViewField(x.Key).GetSelectName(true)` with no null check, so an order-by expression that doesn't map to a view field throws NullReferenceException instead of a meaningful error. Additionally line 61 casts `expr.Body` directly to UnaryExpression and line 62 casts `.Operand` to MemberExpression — a lambda whose body is a plain MemberExpression (no boxing conversion, e.g. `x => x.Name` on a reference type) will throw InvalidCastException.
 - **Fix:** Handle both MemberExpression and UnaryExpression(Operand) bodies, and either throw a descriptive exception or have callers skip null order fields.
 

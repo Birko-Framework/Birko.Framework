@@ -13,8 +13,14 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**132 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**134 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 28 — Birko.Data.SQL.View CR-M147/M148 (2 closed; offline logic bugs)
+
+- **M147** View ctor overwrote an explicit `name` with the concatenated table names (inverted guard) → derive from tables only when `name` is null/empty.
+- **M148** `GetViewField` cast the lambda body to `UnaryExpression` unconditionally (InvalidCastException for a plain MemberExpression) and returned `null!` (NRE at callers) → handle both body shapes + throw descriptively.
+- Both fixed in Birko.Data.SQL.View and tested in the existing Birko.Data.SQL.Tests (which compiles the SQL.View projitems — no new project). Suite green: SQL.Tests 284.
 
 ### Batch 27 — SQL providers CR-M137/M142 (2 closed; offline type-mapping bugs)
 

@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Birko.Data.SQL.View ctor + GetViewField (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-eighth STORY-026 batch: **CR-M147 / M148** in Birko.Data.SQL.View (2 clean offline logic bugs). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **View ctor discarded the explicit name (M147)** — the guard was inverted: `if (!string.IsNullOrEmpty(name) && Tables.Any())` overwrote `Name` with the concatenated table names whenever a name **was** supplied, so `new View(tables, joins, "OrderSummary")` silently became "OrdersCustomers". Inverted to `string.IsNullOrEmpty(name)` — derive from tables only when none was given.
+- **GetViewField null!/cast (M148)** — `(UnaryExpression)expr.Body` threw `InvalidCastException` for a plain `MemberExpression` body (`x => x.Name` on a reference type, no boxing), and the method returned `null!` (an opaque NRE at the immediate-deref callers) when no `[ViewField]` mapping was found. Now extracts the property from either body shape and throws a descriptive `ArgumentException`/`InvalidOperationException`.
+- Both are in Birko.Data.SQL.View but tested in the existing **Birko.Data.SQL.Tests** (which compiles the `Birko.Data.SQL.View` projitems), so no new test project. Suite green: SQL.Tests 284. STORY-026 now **134/275**.
+
 ### Code-review remediation — medium findings, SQL providers MSSql + PostgreSQL type mapping (EPIC-014 / STORY-026) (2026-07-09)
 Twenty-seventh STORY-026 batch: **CR-M137 / M142** (2 clean offline type-mapping bugs). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **MSSql blob truncation (M137)** — `MSSqlConnector.ConvertType` mapped `DbType.Object`/`Binary` to bare `BINARY`, which SQL Server defaults to `BINARY(1)` — every `byte[]`/serialized column created 1 byte wide, silently truncating blobs. Now `VARBINARY(MAX)`. Offline test in the (since-the-audit) Birko.Data.SQL.MSSql.Tests.
