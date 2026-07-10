@@ -22,20 +22,24 @@ public class SluggableBulkStoreWrapper<TStore, T> : SluggableStoreWrapper<TStore
 
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
+        // CR-M124: materialize once so the slug-mutated items are the ones persisted (a lazy source
+        // enumerated twice would resolve slugs on discarded objects and persist unmutated ones).
+        var items = data as IReadOnlyList<T> ?? data.ToList();
         var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in data)
+        foreach (var item in items)
         {
             ResolveSlug(item, excludeId: null, batchSlugs);
             batchSlugs.Add(item.Slug!);
         }
-        _innerStore.Create(data, storeDelegate);
+        _innerStore.Create(items, storeDelegate);
     }
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        foreach (var item in data)
+        var items = data as IReadOnlyList<T> ?? data.ToList();
+        foreach (var item in items)
             ResolveSlug(item, item.Guid);
-        _innerStore.Update(data, storeDelegate);
+        _innerStore.Update(items, storeDelegate);
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)

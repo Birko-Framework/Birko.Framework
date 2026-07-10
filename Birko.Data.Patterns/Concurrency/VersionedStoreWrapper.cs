@@ -36,10 +36,13 @@ public class VersionedStoreWrapper<T> : IStore<T>, IStoreWrapper
         return _inner.Create(data, storeDelegate);
     }
 
+    // Best-effort optimistic concurrency: read-check-write at the wrapper level, NOT atomic. True
+    // locking requires the inner store to enforce the version in its update predicate.
     public void Update(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var existing = _inner.Read(data.Guid ?? Guid.Empty);
-        if (existing != null && existing.Version != data.Version)
+        // CR-M125: a missing row is a conflict, not a silent pass (which would lose-update via Version++).
+        if (existing == null || existing.Version != data.Version)
         {
             throw new ConcurrentUpdateException(typeof(T), data.Guid ?? Guid.Empty, data.Version);
         }

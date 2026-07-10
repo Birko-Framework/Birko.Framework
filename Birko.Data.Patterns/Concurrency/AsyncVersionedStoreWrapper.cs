@@ -38,10 +38,15 @@ public class AsyncVersionedStoreWrapper<T> : IAsyncStore<T>, IStoreWrapper
         return _inner.CreateAsync(data, processDelegate, ct);
     }
 
+    // NOTE: best-effort optimistic concurrency. This is a read-check-write at the wrapper level and is
+    // NOT atomic — it narrows, but does not close, the race. True optimistic locking requires the inner
+    // store to include the expected version in its update predicate (WHERE Version = @v / $match).
     public async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
         var existing = await _inner.ReadAsync(data.Guid ?? Guid.Empty, ct);
-        if (existing != null && existing.Version != data.Version)
+        // CR-M125: a missing row is a conflict (not a silent pass) — previously a null read skipped the
+        // version check entirely and the write proceeded with data.Version++, a lost-update window.
+        if (existing == null || existing.Version != data.Version)
         {
             throw new ConcurrentUpdateException(typeof(T), data.Guid ?? Guid.Empty, data.Version);
         }

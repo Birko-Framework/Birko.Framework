@@ -26,13 +26,16 @@ public class AsyncSluggableBulkStoreWrapper<TStore, T> : AsyncSluggableStoreWrap
 
     public async Task CreateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
     {
+        // CR-M124: materialize once — the slug is resolved/mutated in the foreach and the same items
+        // must be what's persisted; a lazy source enumerated twice would persist unmutated objects.
+        var items = data as IReadOnlyList<T> ?? data.ToList();
         var batchSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var item in data)
+        foreach (var item in items)
         {
             await ResolveSlugAsync(item, excludeId: null, batchSlugs, ct);
             batchSlugs.Add(item.Slug!);
         }
-        await _innerStore.CreateAsync(data, storeDelegate, ct);
+        await _innerStore.CreateAsync(items, storeDelegate, ct);
     }
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken ct = default)
