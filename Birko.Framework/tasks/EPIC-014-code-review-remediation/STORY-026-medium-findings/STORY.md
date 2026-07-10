@@ -13,8 +13,14 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**125 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**127 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 24 — Birko.Data.RavenDB CR-M130/M131 (2 closed)
+
+- **M130** async bulk insert ignored the CancellationToken → `_documentStore.BulkInsert(token: ct)` + a per-item `ThrowIfCancellationRequested`.
+- **M131** thin test coverage → RavenDB.Tests (IndexManager + LazyInit since the audit) augmented with Settings (GetId/LoadFrom/CreateDocumentStore) + RavenDbUnitOfWork state-machine tests. Store CRUD / facet aggregation / Commit stay integration-tier.
+- Suite green: Birko.Data.RavenDB.Tests 30. (RavenDB.ViewModel M132 + Repositories M133 — both need new test projects — are the next batch.)
 
 ### Batch 23 — Birko.Data.Processors CR-M127/M128/M129 (3 closed)
 

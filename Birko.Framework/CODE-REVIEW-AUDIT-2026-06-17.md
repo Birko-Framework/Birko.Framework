@@ -3710,7 +3710,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async bulk insert does not observe CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB\Stores/AsyncRavenDBStore.cs:413`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — `CreateCoreAsync(IEnumerable<T>)` now opens the bulk insert with `_documentStore.BulkInsert(token: ct)` so the operation observes cancellation, plus a `ct.ThrowIfCancellationRequested()` in the loop. Code-review verified (bulk insert needs a live RavenDB to exercise end-to-end).
 - **Detail:** CreateCoreAsync(IEnumerable<T>) opens the bulk insert with _documentStore.BulkInsert() and calls bulkInsert.StoreAsync(item) with no token. The ct parameter is accepted but never passed to the bulk-insert operation, so a long bulk insert cannot be cancelled. RavenDB exposes a token overload on BulkInsert(...).
 - **Fix:** Pass the token at creation: _documentStore.BulkInsert(token: ct) (or the appropriate overload) so the operation observes cancellation. Optionally call ct.ThrowIfCancellationRequested() in the loop.
 
@@ -3718,7 +3718,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test coverage is limited to IndexManager
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB\Birko.Data.RavenDB.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.RavenDB.Tests (which already had RavenDBIndexManagerTests + RavenDBStoreLazyInitTests since the audit) augmented with RavenDBSettingsAndUnitOfWorkTests: Settings GetId / LoadFrom round-trip + foreign-type fallback / CreateDocumentStore config, and the RavenDbUnitOfWork state machine (Begin activates, double-Begin → TransactionAlreadyActive, Commit/Rollback-without-active → NoActiveTransaction, post-Dispose → ObjectDisposed, ctor null-guard). Store CRUD, the facet-vs-LINQ aggregation execution, and Commit (SaveChanges) need an embedded/live RavenDB (integration-tier); MapFacetResults is offline-testable in principle but needs FacetResult/AggregateQuery fixtures, left for a focused aggregation-test follow-up.
 - **Detail:** The only test file is IndexManagement/RavenDBIndexManagerTests.cs. There are no tests covering the core surface: RavenDBStore / AsyncRavenDBStore CRUD, bulk operations, filter/ordering/paging in ReadCore, the native-facet-vs-LINQ-fallback aggregation branch (FacetAggregationHelper.BuildFacetBuilder / MapFacetResults), the Settings.CreateDocumentStore / LoadFrom chain, RavenDbUnitOfWork (Begin/Commit/Rollback/double-begin/dispose), and the repository wrappers (store-type guard exceptions, SetSettings, DestroyAsync). The lazy-init bypass bug above would likely have been caught by an init test.
 - **Fix:** Add xUnit + FluentAssertions tests for the stores (an in-memory/embedded RavenDB or mocked IDocumentStore), the aggregation helper mapping logic (pure, easily unit-testable), Settings.LoadFrom round-trips, and RavenDbUnitOfWork lifecycle.
 

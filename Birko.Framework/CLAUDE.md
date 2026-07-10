@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Birko.Data.RavenDB (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-fourth STORY-026 batch: **CR-M130 / M131** in Birko.Data.RavenDB (2 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Bulk-insert cancellation (M130)** — `AsyncRavenDBStore.CreateCoreAsync(IEnumerable<T>)` accepted a `ct` but opened `_documentStore.BulkInsert()` with no token and called `StoreAsync(item)` untokenized, so a long bulk insert couldn't be cancelled. Now `BulkInsert(token: ct)` + a per-item `ct.ThrowIfCancellationRequested()`. Code-review verified (live-Raven path).
+- **Test-gap (M131)** — Birko.Data.RavenDB.Tests (RavenDBIndexManagerTests + RavenDBStoreLazyInitTests, since the audit) augmented with `RavenDBSettingsAndUnitOfWorkTests`: Settings `GetId` / `LoadFrom` round-trip + foreign-type fallback / `CreateDocumentStore` config, and the `RavenDbUnitOfWork` state machine (Begin/double-Begin/Commit-Rollback-guards/post-Dispose, ctor null-guard) against an offline (lazy, uninitialized-connection) `DocumentStore`. Store CRUD, the facet-vs-LINQ aggregation execution, and Commit (SaveChanges) stay integration-tier; `MapFacetResults` is offline-testable in principle but needs FacetResult/AggregateQuery fixtures (deferred).
+- Suite green: Birko.Data.RavenDB.Tests 30. STORY-026 now **127/275**.
+
 ### Code-review remediation — medium findings, Birko.Data.Processors (EPIC-014 / STORY-026) (2026-07-09)
 Twenty-third STORY-026 batch: **CR-M127 / M128 / M129** in Birko.Data.Processors (3 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **ZIP nested entry (M127)** — already resolved: the CR-H076 Zip Slip hardening flattens `entry.FullName` to `Path.GetFileName(...)`, so a nested `export/data.csv` extracts as `data.csv` into the (pre-created) `_extractPath` — no missing subdirectory / `DirectoryNotFoundException`. The finding's premise (targeting `_extractPath/export/data.csv`) is stale. Added a regression test that a folder-nested entry extracts + processes without throwing.
