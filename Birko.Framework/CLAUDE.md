@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Birko.Data.Processors (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-third STORY-026 batch: **CR-M127 / M128 / M129** in Birko.Data.Processors (3 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **ZIP nested entry (M127)** — already resolved: the CR-H076 Zip Slip hardening flattens `entry.FullName` to `Path.GetFileName(...)`, so a nested `export/data.csv` extracts as `data.csv` into the (pre-created) `_extractPath` — no missing subdirectory / `DirectoryNotFoundException`. The finding's premise (targeting `_extractPath/export/data.csv`) is stale. Added a regression test that a folder-nested entry extracts + processes without throwing.
+- **CSV fake-async (M128)** — `CsvProcessor.ProcessStreamAsync` runs the synchronous `CsvParser.Parse()` (blocking `reader.Read()`) and awaits only the per-row callbacks + cancellation checks. Documented via a `<remarks>` (the finding's accepted "at minimum" fix) that it's a convenience wrapper for async callers, not genuinely non-blocking; a real async parse would be a separate IAsyncEnumerable rewrite.
+- **Xml async Value (M129)** — `XmlProcessor.ProcessStreamAsync` sets `XmlReaderSettings.Async = true` but read Text/CDATA via the synchronous `reader.Value` getter, which can throw `InvalidOperationException` on large/unbuffered values. New `ProcessNodeAsync` reads them via `await reader.GetValueAsync()`; Element/EndElement (which only touch `reader.Name`) delegate to the unchanged sync `ProcessNode`. The sync `ProcessStream` path is untouched.
+- Suite green: Birko.Data.Processors.Tests 36. STORY-026 now **125/275**.
+
 ### Code-review remediation — medium findings, Birko.Data.Patterns (EPIC-014 / STORY-026) (2026-07-09)
 Twenty-second STORY-026 batch: **CR-M124 / M125 / M126** in Birko.Data.Patterns (3 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Bulk-wrapper double-enumeration (M124)** — the Sluggable bulk wrappers resolved slugs in a `foreach` over `data` and then passed the **same** `data` to the inner store, enumerating a lazy/one-shot source twice (the second pass persists unmutated objects). Fixed `AsyncSluggableBulkStoreWrapper.CreateAsync` and the sync `SluggableBulkStoreWrapper.Create`/`Update` to materialize once (`data as IReadOnlyList<T> ?? data.ToList()`); the async `UpdateAsync` was already fixed under CR-H075, and the SoftDelete/Audit/Timestamp bulk wrappers use a lazy `Select` projection applied on the inner store's single enumeration (safe) so were left as-is.

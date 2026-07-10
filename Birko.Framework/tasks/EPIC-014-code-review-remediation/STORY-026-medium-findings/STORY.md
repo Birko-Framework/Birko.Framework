@@ -13,8 +13,15 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**122 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
-were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 were false positives.
+**125 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 23 — Birko.Data.Processors CR-M127/M128/M129 (3 closed)
+
+- **M127** ZIP nested-folder entry → already resolved by the CR-H076 Zip Slip flatten (`Path.GetFileName`), so a `folder/data.csv` entry extracts into `_extractPath` (existing) not a missing subdir. Added a regression test.
+- **M128** CSV `ProcessStreamAsync` is fake-async (runs the sync parser) → documented via `<remarks>` (the finding's accepted minimum) rather than a full IAsyncEnumerable rewrite.
+- **M129** XmlProcessor async path read Text/CDATA via the synchronous `reader.Value` (can throw under `Async=true`) → new `ProcessNodeAsync` uses `await reader.GetValueAsync()`; Element/EndElement delegate to the sync `ProcessNode`.
+- Suite green: Birko.Data.Processors.Tests 36.
 
 ### Batch 22 — Birko.Data.Patterns CR-M124/M125/M126 (3 closed)
 

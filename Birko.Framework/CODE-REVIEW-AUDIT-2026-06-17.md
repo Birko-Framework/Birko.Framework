@@ -3686,7 +3686,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ZIP entry with a directory component fails extraction (no dir created)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Processors\Transport/ZipProcessor.cs:71`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — already resolved by the CR-H076 Zip Slip hardening: `ExtractFirstEntry` flattens the entry to `Path.GetFileName(entry.FullName)`, so a nested entry (`export/data.csv`) extracts as `data.csv` directly into `_extractPath` (created up front) — no missing subdirectory, no DirectoryNotFoundException. Added a regression test (Birko.Data.Processors.Tests) that a `folder/data.csv` entry extracts and processes without throwing.
 - **Detail:** ProcessStream/ProcessStreamAsync only call Directory.CreateDirectory(_extractPath). If the selected entry's FullName includes a subfolder (e.g. 'export/data.csv'), ExtractToFile at line 130 targets _extractPath/export/data.csv, whose parent directory does not exist, so ExtractToFile throws DirectoryNotFoundException for an otherwise valid archive. Real-world ZIPs commonly nest the payload in a folder.
 - **Fix:** Create the parent of the resolved (and validated) destination before ExtractToFile: Directory.CreateDirectory(Path.GetDirectoryName(full)!); or flatten to Path.GetFileName(entry.FullName).
 
@@ -3694,7 +3694,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ProcessStreamAsync on CSV does blocking synchronous I/O (fake async)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Processors\Formats/CsvProcessor.cs:92`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — documented (the finding's accepted "at minimum" fix): CsvProcessor.ProcessStreamAsync now carries a `<remarks>` explaining CSV parsing is inherently row-synchronous — the overload runs the synchronous CsvParser and awaits only the per-row callbacks while observing the CancellationToken between rows, so it is a convenience wrapper for async callers, not genuinely non-blocking I/O (a real async parse path would be a separate IAsyncEnumerable rewrite). No longer presented as non-blocking.
 - **Detail:** ProcessStreamAsync iterates parser.Parse(), which is a synchronous IEnumerable that does blocking reader.Read() on the underlying stream. The method is declared async but performs sync-over-async blocking I/O on the calling thread (only the per-row callbacks and the cancellation check are async). For an HTTP/network-backed stream this blocks a thread per parse. The framework convention is that async methods do real async work. The cancellation token is observed between rows, so functionally it works, but it is not genuinely asynchronous.
 - **Fix:** Either document that CSV parsing is inherently synchronous, or add an async parse path (StreamReader.ReadLineAsync / IAsyncEnumerable) so the async overload doesn't block. At minimum avoid presenting it as non-blocking.
 
@@ -3702,7 +3702,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** XmlReader async mode reads node value via synchronous Value getter
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Processors\Formats/XmlProcessor.cs:100`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the async path now calls a new `ProcessNodeAsync` that reads Text/CDATA values via `await reader.GetValueAsync()` (safe under `Async = true`) instead of the synchronous `reader.Value` getter (which can throw `InvalidOperationException` on large/unbuffered values); Element/EndElement delegate to the sync `ProcessNode` (which only reads `reader.Name`). The sync `ProcessStream` path is unchanged. Existing XmlProcessor tests still pass.
 - **Detail:** ProcessStreamAsync sets XmlReaderSettings.Async = true and uses ReadAsync(), then calls the shared synchronous ProcessNode, which reads reader.Value for Text/CDATA nodes. With Async=true, the synchronous Value property can throw InvalidOperationException when the value isn't fully buffered (large text/CDATA), because the async reader expects GetValueAsync(). Tests only cover tiny inline values so this latent failure is not exercised.
 - **Fix:** In the async path, read the value with await reader.GetValueAsync() (split ProcessNode into sync/async variants, or pass the pre-fetched value in). For small values today it usually works, but it is not guaranteed under Async=true.
 
