@@ -84,6 +84,42 @@ public class ZipProcessorTests
         }
     }
 
+    // CR-M127: a nested entry (e.g. "export/data.csv") must still extract. The Zip Slip hardening
+    // flattens the entry to its file name, so it lands directly in _extractPath (whose parent exists)
+    // rather than a missing subdirectory that would throw DirectoryNotFoundException.
+    [Fact]
+    public async Task ProcessStreamAsync_NestedFolderEntry_Extracts()
+    {
+        var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = archive.CreateEntry("export/data.csv");
+            using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
+            writer.Write("Name\nCarol\n");
+        }
+        ms.Position = 0;
+
+        var extractPath = Path.Combine(Path.GetTempPath(), $"birko_test_{Guid.NewGuid():N}");
+        try
+        {
+            var csvProcessor = new TestCsvProcessor();
+            var zipProcessor = new ZipProcessor<TestCsvProcessor, TestItem>(csvProcessor, extractPath: extractPath);
+            var items = new List<string>();
+            zipProcessor.OnElementValue = (col, value) => { if (col == "0") csvProcessor.CurrentItem.Name = value; };
+            zipProcessor.OnItemProcessed = (item, _) => { items.Add(item.Name); return Task.CompletedTask; };
+
+            var act = () => zipProcessor.ProcessStreamAsync(ms);
+
+            await act.Should().NotThrowAsync();
+            items.Should().ContainSingle().Which.Should().Be("Carol");
+        }
+        finally
+        {
+            if (Directory.Exists(extractPath))
+                Directory.Delete(extractPath, true);
+        }
+    }
+
     [Fact]
     public async Task ProcessStreamAsync_EmptyZip_Throws()
     {
