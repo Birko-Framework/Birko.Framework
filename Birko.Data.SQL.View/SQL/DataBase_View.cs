@@ -61,9 +61,17 @@ namespace Birko.Data.SQL
 
         public static AbstractField GetViewField<T, P>(Expression<Func<T, P>> expr)
         {
-            var expression = (UnaryExpression)expr.Body;
-            PropertyInfo? propInfo = ((MemberExpression)expression.Operand).Member as PropertyInfo;
-            object[] fieldAttrs = propInfo!.GetCustomAttributes(typeof(ViewFieldAttribute), true);
+            // CR-M148: accept a plain MemberExpression body (e.g. x => x.Name on a reference type, no
+            // boxing conversion) as well as a UnaryExpression(Operand) — the unconditional
+            // (UnaryExpression) cast threw InvalidCastException for the former.
+            var member = expr.Body as MemberExpression
+                ?? (expr.Body as UnaryExpression)?.Operand as MemberExpression;
+            if (member?.Member is not PropertyInfo propInfo)
+            {
+                throw new ArgumentException($"Expression '{expr}' must reference a property.", nameof(expr));
+            }
+
+            object[] fieldAttrs = propInfo.GetCustomAttributes(typeof(ViewFieldAttribute), true);
             if (fieldAttrs != null && fieldAttrs.Any())
             {
                 foreach (ViewFieldAttribute fieldAttr in fieldAttrs)
@@ -75,7 +83,11 @@ namespace Birko.Data.SQL
                     }
                 }
             }
-            return null!;
+
+            // CR-M148: fail with a descriptive error rather than returning null! (callers dereference
+            // the result immediately, so null! surfaced as an opaque NullReferenceException).
+            throw new InvalidOperationException(
+                $"Property '{propInfo.Name}' has no [ViewField] mapping (or its source table could not be loaded).");
         }
 
         public static Tables.View LoadView(Type type)

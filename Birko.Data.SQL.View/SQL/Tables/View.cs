@@ -22,7 +22,9 @@ namespace Birko.Data.SQL.Tables
             Tables = tables!;
             Join = join;
             Name = name;
-            if (!string.IsNullOrEmpty(name) && Tables != null && Tables.Any())
+            // CR-M147: derive a name from the table names ONLY when the caller supplied none — the
+            // guard was inverted, so an explicit `name` was silently overwritten by the concatenation.
+            if (string.IsNullOrEmpty(name) && Tables != null && Tables.Any())
             {
                 Name = string.Join(string.Empty, Tables.Select(x => x.Name).Where(x => !string.IsNullOrEmpty(x)).Distinct());
             }
