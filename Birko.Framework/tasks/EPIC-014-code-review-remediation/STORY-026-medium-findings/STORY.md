@@ -13,8 +13,14 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**130 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**132 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 27 — SQL providers CR-M137/M142 (2 closed; offline type-mapping bugs)
+
+- **M137** MSSqlConnector mapped DbType.Object/Binary to bare `BINARY` (→ BINARY(1), truncating blobs to 1 byte) → `VARBINARY(MAX)`. Test in existing MSSql.Tests.
+- **M142** PostgreSQLConnector.FieldDefinition post-processed the composed definition with `String.Replace` to inject SERIAL → emit the SERIAL pseudo-type directly at type-emit time. Test in existing PostgreSQL.Tests.
+- Suites green: SQL.MSSql.Tests 17, SQL.PostgreSQL.Tests 14. Remaining SQL-cluster findings (M136, M138–M141, M143–M155: live-DB bugs, base-builder refactor, SQL.View ctor/nullable bugs, and new SQL.View/.MSSql.View/.PostgreSQL.View test projects) continue next.
 
 ### Batch 26 — Birko.Data.SQL CR-M134 (1 closed; M135 deferred)
 

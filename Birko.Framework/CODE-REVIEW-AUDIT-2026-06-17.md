@@ -3766,7 +3766,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DbType.Object/Binary map to fixed-length BINARY with no length (BINARY(1))
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MSSql\Database/Connector/MSSqlConnector.cs:150-152`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — DbType.Object/Binary now map to `VARBINARY(MAX)` instead of bare `BINARY` (which SQL Server defaults to BINARY(1), truncating any blob/serialized byte[] to a single byte). Offline test (Birko.Data.SQL.MSSql.Tests) asserts both map to VARBINARY(MAX).
 - **Detail:** DbType.Object and DbType.Binary return "BINARY" with no length specifier; SQL Server defaults BINARY to BINARY(1), truncating any blob/serialized object to a single byte. DbTypeToClrType maps these to byte[], so any byte[] column is created 1 byte wide.
 - **Fix:** Return VARBINARY(MAX) for DbType.Binary/Object.
 
@@ -3806,7 +3806,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FieldDefinition SERIAL substitution can corrupt VARCHAR(n)/NUMERIC columns whose length/precision contains the type token
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.PostgreSQL\Database\Connectors\PostgreSQLConnector.cs:179-206`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — FieldDefinition now chooses the SERIAL/BIGSERIAL/SMALLSERIAL pseudo-type at emit time (when `IsAutoincrement`) instead of `String.Replace`-ing the composed definition, eliminating the brittle whole-string surgery. Offline tests (Birko.Data.SQL.PostgreSQL.Tests): autoincrement int → `SERIAL` (not `INTEGER`), non-autoincrement int → `INTEGER` (not `SERIAL`).
 - **Detail:** Auto-increment handling does a textual String.Replace on the already-built field definition (e.g. sqlType.Replace("INTEGER", "SERIAL")). This only fires when field.Type is an integer type, so in practice the column type is INTEGER/BIGINT/SMALLINT and the replace is safe today. The fragility is that it operates on the whole definition string rather than the type token: if a future field name or any appended fragment ever contained the substring (or if the guard were loosened), Replace would mutate it. The robust form is to choose SERIAL vs INTEGER when emitting ConvertType, not to post-process the string. Low real-world risk given current guards, but it is brittle string surgery.
 - **Fix:** Emit SERIAL/BIGSERIAL/SMALLSERIAL directly when field.IsAutoincrement at the point ConvertType result is appended, instead of String.Replace on the composed definition.
 
