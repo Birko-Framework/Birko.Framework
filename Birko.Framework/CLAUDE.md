@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, RavenDB.ViewModel + Repositories (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-fifth STORY-026 batch: **CR-M132 / M133** (2 closed) — both test-gaps. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **RavenDB.ViewModel test-gap (M132)** — new **`Birko.Data.RavenDB.ViewModel.Tests`**: constructor store-type validation (plain `AsyncRavenDBStore` / wrapper accepted; foreign store → `ArgumentException`) + the unwrapping `RavenDBStore` getter (fake `IAsyncStore`+`IStoreWrapper` unwraps via the property where the direct cast is null). Offline; registered in `.slnx` + `.code-workspace`. Fourth in the ViewModel-repo family (ES/InfluxDB/Mongo/RavenDB), all sharing the ctor-guard + unwrap-getter pattern.
+- **Repositories test-gap (M133)** — Birko.Data.Repositories.Tests existed (AsyncBulkRepositoryDestroyTests CR-H080 + RepositoryLocatorConcurrencyTests); augmented with `AbstractRepositoryFallbackTests`: the null-store fallbacks (`Read`→null, `Create`/`Save`→`Guid.Empty`, `Count`→0, `CreateInstance`→`Activator.CreateInstance<T>()`, Update/Delete/Destroy no-op) and the `AbstractBulkRepository` type-mismatch guard (Read/Create without an `IBulkStore` → `InvalidOperationException`).
+- Suites green: RavenDB.ViewModel.Tests 4, Repositories.Tests 10. STORY-026 now **129/275**.
+
 ### Code-review remediation — medium findings, Birko.Data.RavenDB (EPIC-014 / STORY-026) (2026-07-09)
 Twenty-fourth STORY-026 batch: **CR-M130 / M131** in Birko.Data.RavenDB (2 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Bulk-insert cancellation (M130)** — `AsyncRavenDBStore.CreateCoreAsync(IEnumerable<T>)` accepted a `ct` but opened `_documentStore.BulkInsert()` with no token and called `StoreAsync(item)` untokenized, so a long bulk insert couldn't be cancelled. Now `BulkInsert(token: ct)` + a per-item `ct.ThrowIfCancellationRequested()`. Code-review verified (live-Raven path).

@@ -13,8 +13,14 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**127 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**129 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 25 — RavenDB.ViewModel + Repositories CR-M132/M133 (2 closed)
+
+- **M132** RavenDB.ViewModel repos had no test project → new **Birko.Data.RavenDB.ViewModel.Tests** (ctor store-type validation + unwrapping RavenDBStore getter via a fake wrapper). Registered in .slnx + .code-workspace.
+- **M133** Repositories test-gap → Repositories.Tests (already existed) augmented with AbstractRepositoryFallbackTests (null-store fallbacks + AbstractBulkRepository type-mismatch guard).
+- Suites green: RavenDB.ViewModel.Tests 4, Repositories.Tests 10.
 
 ### Batch 24 — Birko.Data.RavenDB CR-M130/M131 (2 closed)
 

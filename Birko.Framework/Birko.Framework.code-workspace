@@ -1253,6 +1253,10 @@
 			"path": "../../Framework.Tests/Birko.Data.MongoDB.ViewModel.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.RavenDB.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.RavenDB.ViewModel.Tests"
+		},
+		{
 			"path": "."
 		}
 	]
