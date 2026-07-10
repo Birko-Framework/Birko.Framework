@@ -123,21 +123,24 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         if (_definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent ||
             _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Auto)
         {
-            // Try querying the persistent view (MongoDB view is a virtual collection)
             var viewName = _definition.Name;
             if (!string.IsNullOrEmpty(viewName))
             {
-                try
+                // CR-M122: decide explicitly whether to use the persistent view. Aggregating against a
+                // non-existent MongoDB view/collection returns an EMPTY cursor rather than throwing, so
+                // the old `catch (MongoCommandException) when (Auto)` fallback never fired — Auto mode
+                // silently returned empty when the view was missing. For Auto, check existence first and
+                // only use the view if it actually exists; for Persistent, use it unconditionally.
+                var useView = _definition.QueryMode == Birko.Data.Views.ViewQueryMode.Persistent
+                    || await ViewExistsAsync(viewName, ct).ConfigureAwait(false);
+                if (useView)
                 {
                     var viewCollection = _database.GetCollection<BsonDocument>(viewName);
                     var viewPipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(stages);
                     var cursor = await viewCollection.AggregateAsync(viewPipeline, null, ct).ConfigureAwait(false);
                     return await cursor.ToListAsync(ct).ConfigureAwait(false);
                 }
-                catch (MongoCommandException) when (_definition.QueryMode == Birko.Data.Views.ViewQueryMode.Auto)
-                {
-                    // Fall through to on-the-fly
-                }
+                // Auto mode + missing view → fall through to on-the-fly.
             }
         }
 
@@ -151,6 +154,16 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         var pipeline = PipelineDefinition<BsonDocument, BsonDocument>.Create(onTheFlyStages);
         var result = await collection.AggregateAsync(pipeline, null, ct).ConfigureAwait(false);
         return await result.ToListAsync(ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ViewExistsAsync(string viewName, CancellationToken ct)
+    {
+        // Mirrors MongoViewManager.ExistsAsync: a MongoDB view is a virtual collection, so it shows up
+        // in the collection-name listing filtered by name.
+        var filter = new BsonDocument("name", viewName);
+        var collections = await _database.ListCollectionNamesAsync(
+            new ListCollectionNamesOptions { Filter = filter }, ct).ConfigureAwait(false);
+        return await collections.AnyAsync(ct).ConfigureAwait(false);
     }
 
     private static TView DeserializeView(BsonDocument doc)
