@@ -89,6 +89,14 @@ public class CsvProcessor<T> : AbstractProcessor<T>, IStreamProcessor where T : 
         InvokeProcessFinished();
     }
 
+    /// <remarks>
+    /// CR-M128: CSV parsing is inherently row-synchronous — this overload runs the synchronous
+    /// <see cref="CsvParser.Parse"/> reader and awaits only the per-row callbacks, observing the
+    /// <paramref name="cancellationToken"/> between rows. It is a convenience wrapper for async
+    /// callers, not genuinely non-blocking I/O; on a network-backed stream it blocks the calling
+    /// thread during reads. Prefer the sync <see cref="ProcessStream"/> when there is no async work
+    /// in the row callbacks.
+    /// </remarks>
     public virtual async Task ProcessStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         var parser = new CsvParser(stream, _delimiter, _enclosure, _encoding);

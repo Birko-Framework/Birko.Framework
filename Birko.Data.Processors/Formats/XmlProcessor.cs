@@ -76,10 +76,32 @@ public class XmlProcessor<T> : AbstractProcessor<T>, IStreamProcessor where T : 
         while (await reader.ReadAsync().ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            currentElement = ProcessNode(reader, currentElement);
+            currentElement = await ProcessNodeAsync(reader, currentElement).ConfigureAwait(false);
         }
 
         await InvokeProcessFinishedAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Async counterpart to <see cref="ProcessNode"/>. Under <c>XmlReaderSettings.Async = true</c> the
+    /// synchronous <c>reader.Value</c> getter can throw <see cref="InvalidOperationException"/> when a
+    /// large Text/CDATA value isn't fully buffered, so the value is read via <c>GetValueAsync()</c>
+    /// (CR-M129). Non-value nodes (Element/EndElement) delegate to the sync <see cref="ProcessNode"/>,
+    /// which only reads <c>reader.Name</c> (safe under async).
+    /// </summary>
+    protected virtual async Task<string?> ProcessNodeAsync(XmlReader reader, string? currentElement)
+    {
+        if (reader.NodeType == XmlNodeType.Text || reader.NodeType == XmlNodeType.CDATA)
+        {
+            var value = (await reader.GetValueAsync().ConfigureAwait(false))?.Trim();
+            if (!string.IsNullOrEmpty(value) && currentElement != null)
+            {
+                OnElementValue?.Invoke(currentElement, value);
+            }
+            return currentElement;
+        }
+
+        return ProcessNode(reader, currentElement);
     }
 
     /// <summary>
