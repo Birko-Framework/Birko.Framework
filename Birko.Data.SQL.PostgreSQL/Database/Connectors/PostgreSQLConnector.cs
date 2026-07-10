@@ -178,36 +178,28 @@ namespace Birko.Data.SQL.Connectors
             if (field != null)
             {
                 result.Append(field.Name);
-                result.AppendFormat(" {0}", ConvertType(field.Type, field));
 
-                // Handle auto-increment with SERIAL types
-                if (field.IsAutoincrement)
+                // CR-M142: emit the SERIAL type directly rather than String.Replace-ing the composed
+                // definition (brittle string surgery on the whole field text). Choose the auto-increment
+                // pseudo-type at emit time.
+                string sqlType;
+                if (field.IsAutoincrement && (field.Type == DbType.Int64 || field.Type == DbType.UInt64))
                 {
-                    if (field.Type == DbType.Int64 || field.Type == DbType.UInt64)
-                    {
-                        // Replace BIGINT with BIGSERIAL for auto-increment
-                        var sqlType = result.ToString();
-                        sqlType = sqlType.Replace("BIGINT", "BIGSERIAL");
-                        result.Clear();
-                        result.Append(sqlType);
-                    }
-                    else if (field.Type == DbType.Int32 || field.Type == DbType.UInt32)
-                    {
-                        // Replace INTEGER with SERIAL for auto-increment
-                        var sqlType = result.ToString();
-                        sqlType = sqlType.Replace("INTEGER", "SERIAL");
-                        result.Clear();
-                        result.Append(sqlType);
-                    }
-                    else if (field.Type == DbType.Int16 || field.Type == DbType.UInt16)
-                    {
-                        // Replace SMALLINT with SMALLSERIAL for auto-increment
-                        var sqlType = result.ToString();
-                        sqlType = sqlType.Replace("SMALLINT", "SMALLSERIAL");
-                        result.Clear();
-                        result.Append(sqlType);
-                    }
+                    sqlType = "BIGSERIAL";
                 }
+                else if (field.IsAutoincrement && (field.Type == DbType.Int32 || field.Type == DbType.UInt32))
+                {
+                    sqlType = "SERIAL";
+                }
+                else if (field.IsAutoincrement && (field.Type == DbType.Int16 || field.Type == DbType.UInt16))
+                {
+                    sqlType = "SMALLSERIAL";
+                }
+                else
+                {
+                    sqlType = ConvertType(field.Type, field);
+                }
+                result.AppendFormat(" {0}", sqlType);
 
                 if (field.IsPrimary)
                 {
