@@ -13,8 +13,13 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**129 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**130 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+### Batch 26 — Birko.Data.SQL CR-M134 (1 closed; M135 deferred)
+
+- **M134** the three connector reader paths (RunReaderCommand, external-transaction reader, async RunReaderCommandAsync) fell through to ExecuteReader after InitException handled a createCommand failure (which returns, not rethrows, when an OnException handler is set) → track a `faulted` flag + `yield break` before ExecuteReader. Code-review verified (SQL.Tests fakes only DbCommand, not a DbConnection).
+- **M135 deferred** — store CRUD / RunCommand / SqlUnitOfWork / isLock / CancellationToken need a real DbConnection (SQLite integration) or a substantial fake-ADO connection harness that isn't set up; out of scope for the pure-logic pass, left open.
 
 ### Batch 25 — RavenDB.ViewModel + Repositories CR-M132/M133 (2 closed)
 

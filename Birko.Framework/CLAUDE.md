@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Birko.Data.SQL connector (EPIC-014 / STORY-026) (2026-07-09)
+Twenty-sixth STORY-026 batch: **CR-M134** closed, **CR-M135** deferred. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **InitException fall-through (M134)** — the connector reader paths caught a `createCommand`/`OnExecute` failure, called `InitException` (which **returns** instead of rethrowing when an `OnException` handler is registered), then unconditionally ran `ExecuteReader` on the malformed/empty command — a second, more confusing error (or silently wrong results) for exactly the callers who set a handler expecting it to terminate the op. All three reader paths (`RunReaderCommand`, the external-transaction reader variant, and the async `RunReaderCommandAsync`) now track a `faulted` flag and `yield break` before `ExecuteReader`/`ExecuteReaderAsync`. Code-review verified — Birko.Data.SQL.Tests fakes only `DbCommand` (TestDbCommand/TestDbParameter), not a `DbConnection`, so the reader path can't be driven end-to-end offline.
+- **Deferred (M135)** — store CRUD (DataBaseStore/AsyncDataBaseStore/*BulkStore), RunCommand(Async), SqlUnitOfWork, and the isLock/CancellationToken behavior all run against a real `DbConnection`; with no fake-connection harness or wired SQLite provider in SQL.Tests, this needs a System.Data.SQLite integration tier — out of scope for the pure-logic pass, left open rather than falsely closed.
+- STORY-026 now **130/275**.
+
 ### Code-review remediation — medium findings, RavenDB.ViewModel + Repositories (EPIC-014 / STORY-026) (2026-07-09)
 Twenty-fifth STORY-026 batch: **CR-M132 / M133** (2 closed) — both test-gaps. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **RavenDB.ViewModel test-gap (M132)** — new **`Birko.Data.RavenDB.ViewModel.Tests`**: constructor store-type validation (plain `AsyncRavenDBStore` / wrapper accepted; foreign store → `ArgumentException`) + the unwrapping `RavenDBStore` getter (fake `IAsyncStore`+`IStoreWrapper` unwraps via the property where the direct cast is null). Offline; registered in `.slnx` + `.code-workspace`. Fourth in the ViewModel-repo family (ES/InfluxDB/Mongo/RavenDB), all sharing the ctor-guard + unwrap-getter pattern.
