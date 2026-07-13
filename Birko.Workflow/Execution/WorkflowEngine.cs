@@ -96,6 +96,11 @@ public sealed class WorkflowEngine : IWorkflowEngine
         }
         catch (Exception ex) when (ex is not WorkflowException)
         {
+            // CR-M267: CurrentState was advanced to ToState before the OnEntry actions ran, but the
+            // history record is only appended after they succeed. If an OnEntry action faults, roll
+            // CurrentState back to fromState so a faulted instance never reports a state its History
+            // doesn't contain (an observable inconsistency once the faulted instance is persisted).
+            mutableInstance.CurrentState = fromState;
             mutableInstance.Status = WorkflowStatus.Faulted;
             throw new WorkflowActionException(
                 definition.Name,
