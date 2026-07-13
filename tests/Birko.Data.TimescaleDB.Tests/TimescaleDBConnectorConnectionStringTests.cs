@@ -47,4 +47,22 @@ public class TimescaleDBConnectorConnectionStringTests
 
         builder.SslMode.Should().Be(SslMode.Require);
     }
+
+    [Fact]
+    public void Constructor_FromRemoteSettings_RoutesSettingsThroughTimescaleBuilder()
+    {
+        // CR-M176: the RemoteSettings ctor now chains to the typed ctor, so base _settings (exposed via
+        // Settings, used by CreateConnection / bulk ops) is a TimescaleDBSettings — not the raw
+        // RemoteSettings that never reached TimescaleDBSettings.GetConnectionString().
+        var remote = new Birko.Configuration.RemoteSettings("localhost", "metrics", "user", "pass", 5432, useSecure: true);
+        var connector = new TimescaleDBConnector(remote);
+
+        connector.Settings.Should().BeOfType<TimescaleDBSettings>();
+
+        using var conn = (NpgsqlConnection)connector.CreateConnection(connector.Settings);
+        var builder = new NpgsqlConnectionStringBuilder(conn.ConnectionString);
+        builder.Host.Should().Be("localhost");
+        builder.Database.Should().Be("metrics");
+        builder.SslMode.Should().Be(SslMode.Require);
+    }
 }
