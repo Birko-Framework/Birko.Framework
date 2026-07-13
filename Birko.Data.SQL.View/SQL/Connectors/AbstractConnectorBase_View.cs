@@ -33,14 +33,29 @@ namespace Birko.Data.SQL.Connectors
                 return true;
             }
 
-            // Auto mode: check cache, then database
+            // Auto mode: check cache, then database.
             var viewName = view.Name;
             if (string.IsNullOrEmpty(viewName))
             {
                 return false;
             }
 
-            return _viewExistsCache.GetOrAdd(viewName!, name => checkViewExists(name));
+            // CR-M149: only cache a definitive positive result. ViewExists swallows every exception and
+            // returns false, so a transient failure (connection blip, lock timeout) is indistinguishable
+            // from "view absent" — caching that false would poison Auto mode permanently (the view is
+            // never used again until ClearViewExistsCache) and also hide a view created after the first
+            // probe. A false is therefore re-checked on the next query; only a true is memoized.
+            if (_viewExistsCache.TryGetValue(viewName!, out var cached))
+            {
+                return cached;
+            }
+
+            var exists = checkViewExists(viewName!);
+            if (exists)
+            {
+                _viewExistsCache[viewName!] = true;
+            }
+            return exists;
         }
 
         /// <summary>
