@@ -53,6 +53,13 @@ public sealed class AzureKeyVaultHealthCheck : IHealthCheck
 
             return HealthCheckResult.Healthy($"Azure Key Vault OK ({sw.Elapsed.TotalMilliseconds:F0}ms).", data);
         }
+        catch (OperationCanceledException)
+        {
+            // CR-M191: let cancellation/timeout bubble so HealthCheckRunner's timeout handling applies
+            // (honoring the registration's TimeoutStatus, which may be Degraded) instead of masking it
+            // as a generic Unhealthy.
+            throw;
+        }
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy($"Azure Key Vault failed: {ex.Message}", ex);
