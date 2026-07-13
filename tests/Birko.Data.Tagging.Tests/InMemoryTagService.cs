@@ -19,6 +19,9 @@ public sealed class InMemoryTagService : TagServiceBase
 
     public int CreateTagCalls { get; private set; }
 
+    /// <summary>Counts calls to the single-entity link query (CR-M172 N+1 regression).</summary>
+    public int GetEntityTagLinksCalls { get; private set; }
+
     protected override Task<Tag> CreateTagInternalAsync(Tag tag, CancellationToken ct)
     {
         CreateTagCalls++;
@@ -49,8 +52,11 @@ public sealed class InMemoryTagService : TagServiceBase
     }
 
     protected override Task<IReadOnlyList<EntityTag>> GetEntityTagLinksAsync(string entityType, Guid entityId, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<EntityTag>>(
+    {
+        GetEntityTagLinksCalls++;
+        return Task.FromResult<IReadOnlyList<EntityTag>>(
             _links.Where(l => l.EntityType == entityType && l.EntityId == entityId).ToList());
+    }
 
     protected override Task CreateEntityTagAsync(EntityTag link, CancellationToken ct)
     {

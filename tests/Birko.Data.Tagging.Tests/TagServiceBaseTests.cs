@@ -99,6 +99,23 @@ public class TagServiceBaseTests
     }
 
     [Fact]
+    public async Task SetEntityTags_QueriesLinksOnce_NoNPlusOne()
+    {
+        var svc = new InMemoryTagService();
+        var a = await svc.CreateTagAsync("A");
+        var b = await svc.CreateTagAsync("B");
+        var c = await svc.CreateTagAsync("C");
+        var entity = Guid.NewGuid();
+
+        await svc.SetEntityTagsAsync("Doc", entity, new[] { a.Id, b.Id, c.Id });
+
+        // CR-M172: adding N tags must issue exactly ONE link query (the initial diff read), not
+        // one more per added tag (the old AttachTagAsync route re-queried links each iteration).
+        svc.GetEntityTagLinksCalls.Should().Be(1);
+        svc.LinkCount.Should().Be(3);
+    }
+
+    [Fact]
     public async Task AttachTagByName_CreatesWhenMissing_FindsWhenExisting()
     {
         var svc = new InMemoryTagService();
