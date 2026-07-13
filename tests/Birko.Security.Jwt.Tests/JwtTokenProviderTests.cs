@@ -36,6 +36,15 @@ public class JwtTokenProviderTests
     }
 
     [Fact]
+    public void GenerateToken_NullClaims_ThrowsArgumentNullException()
+    {
+        // CR-M238: fail fast like the ctor, not a bare NRE from the LINQ projection.
+        var provider = ProviderAt(DateTimeOffset.UtcNow);
+        provider.Invoking(p => p.GenerateToken(null!))
+            .Should().Throw<ArgumentNullException>().WithParameterName("claims");
+    }
+
+    [Fact]
     public void GenerateThenValidate_RoundTrips()
     {
         var now = DateTimeOffset.UtcNow;
