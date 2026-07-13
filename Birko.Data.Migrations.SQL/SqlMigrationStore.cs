@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Migrations.SQL.Settings;
 
@@ -70,15 +71,15 @@ namespace Birko.Data.Migrations.SQL
         /// <summary>
         /// Asynchronously initializes the migration store.
         /// </summary>
-        public async Task InitializeAsync()
+        public async Task InitializeAsync(CancellationToken cancellationToken = default)
         {
             using var connection = _connectionFactory();
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
 
-            var tableExists = await TableExistsAsync(connection);
+            var tableExists = await TableExistsAsync(connection, cancellationToken);
             if (!tableExists)
             {
-                await CreateMigrationsTableAsync(connection);
+                await CreateMigrationsTableAsync(connection, cancellationToken);
             }
         }
 
@@ -96,12 +97,12 @@ namespace Birko.Data.Migrations.SQL
         /// <summary>
         /// Asynchronously gets all applied migration versions.
         /// </summary>
-        public async Task<ISet<long>> GetAppliedVersionsAsync()
+        public async Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default)
         {
             using var connection = _connectionFactory();
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
 
-            return await GetAppliedVersionsAsync(connection);
+            return await GetAppliedVersionsAsync(connection, cancellationToken);
         }
 
         /// <summary>
@@ -128,20 +129,20 @@ namespace Birko.Data.Migrations.SQL
         /// <summary>
         /// Asynchronously records that a migration has been applied.
         /// </summary>
-        public async Task RecordMigrationAsync(Data.Migrations.IMigration migration)
+        public async Task RecordMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
         {
             using var connection = _connectionFactory();
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
 
-            using var transaction = await connection.BeginTransactionAsync();
+            using var transaction = await connection.BeginTransactionAsync(cancellationToken);
             try
             {
-                await RecordMigrationAsync(connection, transaction, migration);
-                await transaction.CommitAsync();
+                await RecordMigrationAsync(connection, transaction, migration, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
             catch
             {
-                await transaction.RollbackAsync();
+                await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
         }
@@ -170,20 +171,20 @@ namespace Birko.Data.Migrations.SQL
         /// <summary>
         /// Asynchronously removes a migration record.
         /// </summary>
-        public async Task RemoveMigrationAsync(Data.Migrations.IMigration migration)
+        public async Task RemoveMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
         {
             using var connection = _connectionFactory();
-            await connection.OpenAsync();
+            await connection.OpenAsync(cancellationToken);
 
-            using var transaction = await connection.BeginTransactionAsync();
+            using var transaction = await connection.BeginTransactionAsync(cancellationToken);
             try
             {
-                await RemoveMigrationAsync(connection, transaction, migration);
-                await transaction.CommitAsync();
+                await RemoveMigrationAsync(connection, transaction, migration, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
             }
             catch
             {
-                await transaction.RollbackAsync();
+                await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
         }
@@ -200,9 +201,9 @@ namespace Birko.Data.Migrations.SQL
         /// <summary>
         /// Asynchronously gets the current version of the database.
         /// </summary>
-        public async Task<long> GetCurrentVersionAsync()
+        public async Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default)
         {
-            var versions = await GetAppliedVersionsAsync();
+            var versions = await GetAppliedVersionsAsync(cancellationToken);
             return versions.Any() ? versions.Max() : 0;
         }
 
@@ -232,13 +233,13 @@ namespace Birko.Data.Migrations.SQL
             }
         }
 
-        private async Task<bool> TableExistsAsync(DbConnection connection)
+        private async Task<bool> TableExistsAsync(DbConnection connection, CancellationToken cancellationToken)
         {
             try
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = $"SELECT 1 FROM {_settings.FullTableName} WHERE 1 = 0";
-                await command.ExecuteNonQueryAsync();
+                await command.ExecuteNonQueryAsync(cancellationToken);
                 return true;
             }
             catch (DbException)
@@ -265,7 +266,7 @@ namespace Birko.Data.Migrations.SQL
             command.ExecuteNonQuery();
         }
 
-        private async Task CreateMigrationsTableAsync(DbConnection connection)
+        private async Task CreateMigrationsTableAsync(DbConnection connection, CancellationToken cancellationToken)
         {
             var fullTableName = _settings.FullTableName;
 
@@ -278,7 +279,7 @@ namespace Birko.Data.Migrations.SQL
                     {_quoteOpen}CreatedAt{_quoteClose} TIMESTAMP NOT NULL,
                     {_quoteOpen}AppliedAt{_quoteClose} TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );";
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         private ISet<long> GetAppliedVersions(DbConnection connection)
@@ -302,11 +303,11 @@ namespace Birko.Data.Migrations.SQL
             return result;
         }
 
-        private async Task<ISet<long>> GetAppliedVersionsAsync(DbConnection connection)
+        private async Task<ISet<long>> GetAppliedVersionsAsync(DbConnection connection, CancellationToken cancellationToken)
         {
             var result = new HashSet<long>();
 
-            if (!await TableExistsAsync(connection))
+            if (!await TableExistsAsync(connection, cancellationToken))
             {
                 return result;
             }
@@ -314,8 +315,8 @@ namespace Birko.Data.Migrations.SQL
             using var command = connection.CreateCommand();
             command.CommandText = $"SELECT {_quoteOpen}Version{_quoteClose} FROM {_settings.FullTableName}";
 
-            using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
+            using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
             {
                 result.Add(reader.GetInt64(0));
             }
@@ -344,7 +345,7 @@ namespace Birko.Data.Migrations.SQL
             command.ExecuteNonQuery();
         }
 
-        private async Task RecordMigrationAsync(DbConnection connection, DbTransaction transaction, Data.Migrations.IMigration migration)
+        private async Task RecordMigrationAsync(DbConnection connection, DbTransaction transaction, Data.Migrations.IMigration migration, CancellationToken cancellationToken)
         {
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
@@ -358,7 +359,7 @@ namespace Birko.Data.Migrations.SQL
             AddParameter(command, "@Description", migration.Description);
             AddParameter(command, "@CreatedAt", migration.CreatedAt);
 
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         // Removes a version row on a caller-supplied connection (and optional transaction); the
@@ -372,13 +373,13 @@ namespace Birko.Data.Migrations.SQL
             command.ExecuteNonQuery();
         }
 
-        private async Task RemoveMigrationAsync(DbConnection connection, DbTransaction transaction, Data.Migrations.IMigration migration)
+        private async Task RemoveMigrationAsync(DbConnection connection, DbTransaction transaction, Data.Migrations.IMigration migration, CancellationToken cancellationToken)
         {
             using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = $"DELETE FROM {_settings.FullTableName} WHERE {_quoteOpen}Version{_quoteClose} = @Version;";
             AddParameter(command, "@Version", migration.Version);
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
         private void AddParameter(DbCommand command, string name, object? value)
