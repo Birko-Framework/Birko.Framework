@@ -22,6 +22,7 @@ namespace Birko.MessageQueue.Mqtt
         private readonly ConcurrentDictionary<string, Func<QueueMessage, CancellationToken, Task>> _handlers = new();
         private bool _disposed;
         private bool _eventAttached;
+        private readonly object _eventAttachLock = new(); // CR-M203: guards the _eventAttached check-and-set
 
         internal MqttConsumer(IMqttClient client, IMessageSerializer serializer, MqttSettings options, IDateTimeProvider? clock = null)
         {
@@ -90,13 +91,25 @@ namespace Birko.MessageQueue.Mqtt
 
         private void EnsureEventAttached()
         {
+            // CR-M203: SubscribeAsync is async and can run concurrently from multiple threads; an
+            // unsynchronized check-then-set let two callers both subscribe OnMessageReceivedAsync,
+            // double-dispatching every received message (and Dispose only detaches once). Guard the
+            // check-and-set so the handler is attached exactly once.
             if (_eventAttached)
             {
                 return;
             }
 
-            _client.ApplicationMessageReceivedAsync += OnMessageReceivedAsync;
-            _eventAttached = true;
+            lock (_eventAttachLock)
+            {
+                if (_eventAttached)
+                {
+                    return;
+                }
+
+                _client.ApplicationMessageReceivedAsync += OnMessageReceivedAsync;
+                _eventAttached = true;
+            }
         }
 
         private async Task OnMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs args)
