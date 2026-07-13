@@ -54,7 +54,12 @@ public class BirkoOpenTelemetryOptions
 
     /// <summary>
     /// Enable ASP.NET Core instrumentation for HTTP request tracing and metrics.
-    /// Default: true.
+    /// Default: <c>false</c> (opt-in). CR-M254: this requires the OPTIONAL
+    /// <c>OpenTelemetry.Instrumentation.AspNetCore</c> package — defaulting it on made
+    /// <c>AddBirkoOpenTelemetry()</c> fail to compile for consumers that follow the docs and reference
+    /// only the core/OTLP/Console packages (and it is meaningless for console/worker apps). Set true in a
+    /// web app that references the AspNetCore instrumentation package. Matches the console-exporter toggles,
+    /// which also default false.
     /// </summary>
-    public bool EnableAspNetCoreInstrumentation { get; set; } = true;
+    public bool EnableAspNetCoreInstrumentation { get; set; } = false;
 }
