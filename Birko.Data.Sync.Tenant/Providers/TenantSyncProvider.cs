@@ -180,7 +180,11 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             return itemTenantGuid == tenantGuid;
         }
 
-        return true;
+        // CR-M169: the entity HAS a TenantGuid property but no matching value (null / not a Guid).
+        // Excluding it preserves tenant isolation — defaulting to allow let an unset-tenant entity sync
+        // into/out of every tenant's scope. The allow-all path above is reserved for entity TYPES that
+        // have no TenantGuid property at all.
+        return false;
     }
 
     /// <summary>
@@ -327,8 +331,11 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         }
         catch (Exception)
         {
-            preview.Conflicts++;
-            return preview;
+            // CR-M167: previously swallowed every failure (store read error, reflection, cancellation)
+            // as a spurious Conflicts++ on a partially-populated preview — so a thrown error was
+            // indistinguishable from a genuine conflict and the failure was otherwise invisible.
+            // Let it propagate so the caller sees the real error.
+            throw;
         }
     }
 
@@ -371,11 +378,12 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             var isInitialSync = !lastSyncTime.HasValue;
             result.IsInitialSync = isInitialSync;
 
-            // For initial sync, always download first
-            if (isInitialSync)
-            {
-                options.Direction = SyncDirection.Download;
-            }
+            // CR-M168: compute an effective direction locally instead of mutating the caller-supplied
+            // options object (ApplyTenantContext may return the same instance, so the mutation leaked
+            // out and persisted after the call). Initial sync always downloads first, and result.Direction
+            // must report what actually ran — not the pre-override value.
+            var effectiveDirection = isInitialSync ? SyncDirection.Download : options.Direction;
+            result.Direction = effectiveDirection;
 
             // Get items from both stores
             var localItems = await GetAllItemsAsync(_localStore, filterOptions.LocalFetchPredicate, options);
@@ -411,7 +419,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
                         switch (action.Action)
                         {
                             case SyncAction.Create:
-                                if (options.Direction is SyncDirection.Download && remoteItem != null)
+                                if (effectiveDirection is SyncDirection.Download && remoteItem != null)
                                 {
                                     if (filterOptions.CanSaveToLocal?.Invoke(remoteItem) != false)
                                     {
@@ -423,7 +431,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
                                         progress.SkippedItems++;
                                     }
                                 }
-                                else if (options.Direction is SyncDirection.Upload && localItem != null)
+                                else if (effectiveDirection is SyncDirection.Upload && localItem != null)
                                 {
                                     if (filterOptions.CanSaveToRemote?.Invoke(localItem) != false)
                                     {
