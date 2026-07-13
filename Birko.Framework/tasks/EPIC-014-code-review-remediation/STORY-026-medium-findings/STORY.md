@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**244 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**257 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 **Batch 58 (2026-07-13):** closed the last three offline-runnable findings — the view-SELECT-builder
@@ -24,6 +24,21 @@ migration `ViewSqlGenerator` now share one implementation (3 copies → 1). M157
 NewestWins-nullable/cancellation already covered), added delete-propagation (sync, 4) + full AsyncSyncProvider
 coverage (8, incl. a new async in-memory store double since Birko.Data.InMemory is sync-only). **Every finding
 runnable without Docker is now closed;** the remaining 31 open all need a live DB/broker (see the deferred pile).
+
+**Batch 59 (2026-07-13) — re-triage correction + offline sweep round 2:** the "all 31 need Docker"
+claim was wrong; many open findings had a real offline-doable component. Closed **13** across 5 clusters:
+Health (**M191** Azure OCE-swallow, **M192** Health.Data HttpClient dispose ×6, **M194** new
+Birko.Health.Redis.Tests), Messaging.Razor (**M211** CancellationToken, **M212** verify-first),
+SQL.View (**M146** SqLite.View ViewExistsAsync, **M149** Auto-mode cache only-cache-positive),
+MSSql (**M136** RemoteSettings conn-string unification, **M141** indexed-view API tests),
+TimescaleDB (**M176** RemoteSettings-ctor routing, **M177** hypertable-SQL/settings tests, **M178** new
+Birko.Data.TimescaleDB.ViewModel.Tests), and Sync (**M158** Cosmos ConvertToCosmosItem null-Guid NRE).
+New test projects: Birko.Health.Redis.Tests + Birko.Data.TimescaleDB.ViewModel.Tests (registered +
+git-initialized). **Reclassified M159/M164** (Cosmos/Raven sync-store *interface* refactors) into the
+Docker Sync-backend cluster — they touch live-only stores and changing the interface shape can't be
+verified without running the sync provider, so they belong with M160/M165, not the offline sweep.
+Remaining 18 open: the Docker/live-server pile (ES/Cosmos/Raven/InfluxDB CRUD, live MSSql/Postgres,
+InfluxDB genuine-async) + the bucket-B items whose fix is offline but full verification needs infra.
 
 **Correction (Batch 56):** the earlier "everything left needs Docker" was overstated — the
 view-SELECT cluster (M140/M151/M153) and most of the Sync cluster (M157/M162/M163/M166/M167/M168/

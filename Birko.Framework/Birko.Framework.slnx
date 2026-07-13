@@ -238,6 +238,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.ViewModel.Tests/Birko.Data.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Tests/Birko.Health.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Health.Redis.Tests/Birko.Health.Redis.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Caching.Hybrid.Tests/Birko.Caching.Hybrid.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />
@@ -261,6 +262,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.RavenDB.Views.Tests/Birko.Data.RavenDB.Views.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.CosmosDB.Tests/Birko.Data.CosmosDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.TimescaleDB.Tests/Birko.Data.TimescaleDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.TimescaleDB.ViewModel.Tests/Birko.Data.TimescaleDB.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.InfluxDB.Tests/Birko.Data.InfluxDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.JSON.Tests/Birko.Data.JSON.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.EventSourcing.Tests/Birko.Data.EventSourcing.Tests.csproj" />

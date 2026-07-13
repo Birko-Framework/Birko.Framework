@@ -981,6 +981,10 @@
 			"path": "../../Framework.Tests/Birko.Data.TimescaleDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.TimescaleDB.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.TimescaleDB.ViewModel.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Views.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Views.Tests"
 		},
@@ -1003,6 +1007,10 @@
 		{
 			"name": "Tests / Birko.Health.Azure.Tests",
 			"path": "../../Framework.Tests/Birko.Health.Azure.Tests"
+		},
+		{
+			"name": "Tests / Birko.Health.Redis.Tests",
+			"path": "../../Framework.Tests/Birko.Health.Redis.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Tests",
