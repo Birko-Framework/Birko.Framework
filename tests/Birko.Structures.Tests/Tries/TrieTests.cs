@@ -125,4 +125,61 @@ public class CompressedTrieTests
 
         trie.GetWordsWithPrefix("xyz").Should().BeEmpty();
     }
+
+    // CR-M251: Remove (incl. merge-on-remove) was the untested CompressedTrie path.
+    [Fact]
+    public void Remove_ExistingWord_ReturnsTrue_AndDropsIt_KeepsSiblings()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("apple");
+        trie.Insert("application");
+        trie.Insert("apply");
+
+        trie.Remove("apple").Should().BeTrue();
+        trie.Search("apple").Should().BeFalse();
+        trie.Search("application").Should().BeTrue("siblings sharing the prefix survive");
+        trie.Search("apply").Should().BeTrue();
+        trie.Count.Should().Be(2);
+    }
+
+    [Fact]
+    public void Remove_MissingWord_ReturnsFalse_NoCountChange()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("apple");
+
+        trie.Remove("apply").Should().BeFalse();
+        trie.Remove("app").Should().BeFalse();   // prefix of an existing word, not a word itself
+        trie.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void Remove_DownToEmpty_LeavesNoWords()
+    {
+        var trie = new CompressedTrie();
+        trie.Insert("apple");
+        trie.Insert("app");
+
+        trie.Remove("apple").Should().BeTrue();
+        trie.Remove("app").Should().BeTrue();
+
+        trie.Count.Should().Be(0);
+        trie.GetAllWords().Should().BeEmpty();
+        trie.Search("apple").Should().BeFalse();
+    }
+
+    [Fact]
+    public void Remove_WordThatMergesEdges_RemaindersStillFound()
+    {
+        // Removing a branch that leaves a single child should merge without corrupting the remaining word.
+        var trie = new CompressedTrie();
+        trie.Insert("test");
+        trie.Insert("testing");
+
+        trie.Remove("test").Should().BeTrue();
+
+        trie.Search("testing").Should().BeTrue("the remaining word survives the edge merge");
+        trie.Search("test").Should().BeFalse();
+        trie.GetWordsWithPrefix("test").Should().ContainSingle().Which.Should().Be("testing");
+    }
 }
