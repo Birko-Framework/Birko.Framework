@@ -4229,32 +4229,32 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M195 · 🟡 medium · Birko.Helpers
 - **Title:** SanitizePath strips traversal patterns in a single non-recursive pass
 - **Path:** `C:\Source\Birko\Framework\Birko.Helpers\PathValidator.cs:205`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.Helpers.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 35). The four traversal-token `Replace` calls now run inside a `do/while (path != previous)` loop, so overlapping/nested sequences that re-form a token after one pass (e.g. `....//` → `../` → ``) are collapsed to a fixpoint. Regression (`SanitizePathTests`) asserts no `../` / `..\` token survives a battery of nested inputs.
 - **Detail:** The chained string.Replace calls for '../', '..\\', './', '.\\' run once each, so overlapping/nested sequences survive. E.g. '..././' -> removing './' yields '../'; '....//' style inputs can also re-form a traversal token after a single removal pass. The only backstop is the GetFullPath+StartsWith containment check in the callers, which is itself flawed (see the sibling-prefix finding), so a crafted userPath could slip through CombineAndValidate / CombineAndValidateUnchecked.
 - **Fix:** Loop the replacements until the string stops changing, or prefer rejecting (ValidateUserPath-style) over stripping for security-sensitive callers. At minimum fix the containment check so SanitizePath is not the sole defense.
 
 ### CR-M196 · 🟡 medium · Birko.Helpers
 - **Title:** No tests for several public helper classes
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Helpers.Tests`
-- **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Category:** test-gap · **Verification:** offline unit test (Birko.Helpers.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 35). Added the finding's two "at minimum" targets to Birko.Helpers.Tests: `CsvParserAndPathHelperTests` covers CsvParser (simple rows, quoted field with embedded delimiter+newline, doubled-quote escaping, CRLF, trailing row without newline, custom delimiter) and `PathHelper.IsUnderDirectory` (containment, identical path, trailing separator, and the sibling-prefix case that must NOT match). SanitizePath is separately covered by `SanitizePathTests` (CR-M195). The remaining helper types (BatchHelper/StringHelper/ObjectHelper/HtmlHelper/DiffByKey) stay for a later coverage sweep.
 - **Detail:** Per the framework convention that every public functionality has tests, these public types have no test coverage in the .Tests sibling: CsvParser (RFC4180 state machine — highest risk, quoted/escaped/CRLF/EOF edges untested), BatchHelper (batching boundaries at exactly batchSize, cancellation, dictionary variant), StringHelper (SHA256/512, ToHexText upper/lower, RemoveMultipleSpaces), ObjectHelper (Compare null ordering, CompareHash), HtmlHelper (strip regexes), PathHelper (IsUnderDirectory sibling-prefix cases — the very behavior PathValidator should reuse), and DiffByKey (only the obsolete Diff is exercised). The current tests cover only ExpressionBuilder, PathValidator (partial), and the obsolete Diff.
 - **Fix:** Add xUnit + FluentAssertions tests at minimum for CsvParser (quoting/escaping/CRLF/trailing-row) and PathHelper.IsUnderDirectory, since both encode subtle correctness logic.
 
 ### CR-M197 · 🟡 medium · Birko.Localization
 - **Title:** InMemoryTranslationProvider.GetSupportedCultures can throw on an invalid culture name
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization\Translation/InMemoryTranslationProvider.cs:43-49`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.Localization.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 35). `InMemoryTranslationProvider.GetSupportedCultures` now wraps `CultureInfo.GetCultureInfo` in `try/catch (CultureNotFoundException) → null` + `.Where(c => c != null)`, matching the Json/Resx providers, so a translation added under a bogus culture name no longer throws. Regression asserts a provider with an invalid culture name returns the valid cultures without throwing.
 - **Detail:** GetSupportedCultures calls CultureInfo.GetCultureInfo(name) without a try/catch. The builder (AddTranslation) and the dictionary constructor accept arbitrary culture-name strings with no validation, so a caller that adds a translation under a bogus culture name (typo, custom tag) will get a CultureNotFoundException thrown from GetSupportedCultures. The sibling file-based providers explicitly guard this exact call: JsonTranslationProvider.cs:44-47 and ResxTranslationProvider.cs:48-51 both catch CultureNotFoundException and filter out the bad entry. InMemory is inconsistent and more fragile.
 - **Fix:** Wrap the GetCultureInfo call in the same try/catch CultureNotFoundException → null + Where(c => c != null) filter used by the JSON/Resx providers.
 
 ### CR-M198 · 🟡 medium · Birko.Localization.Data
 - **Title:** Sync-over-async blocking can deadlock under a synchronous context
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization.Data\DatabaseTranslationProvider.cs:57,114`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** documentation (design note)
+- **Status:** done — 2026-07-13 (STORY-026 batch 35). Documented on the three synchronous `ITranslationProvider` members (`GetTranslation`, `GetSupportedCultures`, `GetAll`) that they block on async store I/O (`.GetAwaiter().GetResult()`) and must be avoided on UI / single-threaded-sync-context threads, steering callers to the `*Async` overloads (GetSupportedCultures has no async counterpart, so the doc says cache it). The sync interface contract forces the blocking, so it can't be eliminated here; the doc is the finding's primary recommendation.
 - **Detail:** The synchronous ITranslationProvider members block on async store I/O via .GetAwaiter().GetResult(): GetCultureTranslations (line 114) and GetSupportedCultures via LoadAllAsync (line 57). If a caller invokes GetTranslation/GetAll/GetSupportedCultures on a thread with a single-threaded SynchronizationContext (legacy ASP.NET, WPF/WinForms UI thread) and the underlying store continuation needs that context, this deadlocks. Even without a deadlock it ties up a thread-pool thread for the duration of the store round-trip. The sync interface contract forces some form of this, so it cannot be fully eliminated here, but it is a real risk worth documenting.
 - **Fix:** Document on the sync members that they block on store I/O and should be avoided on UI / single-threaded-sync-context threads; prefer GetTranslationAsync/GetAllAsync. Optionally guard the blocking calls with ConfigureAwait(false) inside the async helpers (already effectively the case since no context capture is needed) and steer consumers to the async API.
 

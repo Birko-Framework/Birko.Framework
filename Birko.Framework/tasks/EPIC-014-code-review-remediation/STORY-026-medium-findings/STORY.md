@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**152 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**156 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,14 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 35 — Helpers + Localization CR-M195/M196/M197/M198 (4 closed; offline)
+
+- **M195** `PathValidator.SanitizePath` stripped `../` tokens in a single pass, so nested/overlapping sequences (e.g. `....//` → `../`) survived → loop the replacements to a fixpoint. Regression asserts no traversal token survives.
+- **M196** (test-gap) added the two highest-risk untested Helpers to Birko.Helpers.Tests: `CsvParser` (quoting/escaping/CRLF/trailing-row/custom-delimiter) + `PathHelper.IsUnderDirectory` (containment + sibling-prefix). Remaining helper types left for a later coverage sweep.
+- **M197** `InMemoryTranslationProvider.GetSupportedCultures` threw `CultureNotFoundException` on a bogus culture name → guard+filter like the Json/Resx providers. Regression asserts no throw + bad entry filtered.
+- **M198** (design/doc) Localization.Data `DatabaseTranslationProvider` sync members block on async store I/O → documented the deadlock risk on UI/single-threaded-sync-context threads + steer to the async API (GetSupportedCultures has no async counterpart → cache it).
+- Suites green: Birko.Helpers.Tests 88, Birko.Localization.Tests 140.
 
 ### Batch 34 — Birko.EventBus cluster CR-M184…M190 (7 closed; whole EventBus cluster done)
 

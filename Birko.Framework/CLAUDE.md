@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Helpers + Localization (EPIC-014 / STORY-026) (2026-07-13)
+Thirty-fifth STORY-026 batch: **CR-M195/M196** (Birko.Helpers) + **CR-M197/M198** (Birko.Localization / .Localization.Data) — offline. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **SanitizePath single-pass (M195)** — `PathValidator.SanitizePath` ran the four traversal-token `Replace`s once each, so overlapping/nested sequences re-formed a token after one pass (`....//` → `../`, `..././` → `../`). Now loops the replacements in a `do/while (path != previous)` until stable. Regression (`SanitizePathTests`) asserts no `../`/`..\` token survives a battery of nested inputs.
+- **Helpers test-gap (M196)** — added `CsvParserAndPathHelperTests` to Birko.Helpers.Tests for the two highest-risk untested helpers: `CsvParser` (simple/quoted-with-delimiter+newline/doubled-quote-escape/CRLF/trailing-row/custom-delimiter) and `PathHelper.IsUnderDirectory` (containment, identical, trailing separator, and the sibling-prefix that must not match). Other helper types deferred to a later coverage sweep.
+- **InMemory culture guard (M197)** — `InMemoryTranslationProvider.GetSupportedCultures` called `CultureInfo.GetCultureInfo` unguarded, so a translation added under a bogus culture name threw `CultureNotFoundException`. Now `try/catch → null` + `.Where(c => c != null)`, matching the Json/Resx providers.
+- **Sync-over-async doc (M198)** — documented on `DatabaseTranslationProvider`'s three sync members that they block on async store I/O and can deadlock on a single-threaded sync context; steer callers to the `*Async` overloads.
+- Suites green: Birko.Helpers.Tests 88, Birko.Localization.Tests 140. STORY-026 now **156/275**.
+
 ### Code-review remediation — medium findings, Birko.EventBus cluster (EPIC-014 / STORY-026) (2026-07-13)
 Thirty-fourth STORY-026 batch: **CR-M184 … M190** — the whole EventBus cluster (7 findings across Birko.EventBus, .EventSourcing, .MessageQueue, .Outbox), all offline-verified in the single `Birko.EventBus.Tests` project (compiles every EventBus projitems, so no new test projects). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Parallel Stop didn't stop (M184)** — `InProcessEventBus.DispatchParallelAsync` eagerly launched every handler, so `ErrorHandlingMode.Stop` never halted the rest on first failure. Now runs handlers under a linked `CancellationTokenSource` cancelled on the first failure — queued handlers (waiting on the semaphore) and token-observing ones abort — and the original handler exception (not a follow-on cancellation) is captured and rethrown via `ExceptionDispatchInfo`.
