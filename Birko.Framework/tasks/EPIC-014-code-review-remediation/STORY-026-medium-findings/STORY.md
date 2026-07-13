@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**202 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**206 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,15 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 47 — Workflow correctness CR-M267/M273/M274/M275 (4 closed; offline bugs)
+
+- **M267** WorkflowEngine advanced CurrentState before OnEntry actions ran; a faulting OnEntry left the instance at ToState with no history record → catch now restores CurrentState=fromState. Regression in Workflow.Tests.
+- **M273** RavenDB store's 3 single-result reads used `ReadAsync(filter, ct)` (bulk-overload shadowing footgun) → `ReadFirstAsync`. Code-review (no .Tests sibling).
+- **M274** SQL SaveAsync check-then-act upsert race (concurrent double-create → PK violation) → documented the per-instance serialization contract (native MERGE is provider-specific); also switched to ReadFirstAsync. Workflow.SQL.Tests 7 (compile-verified).
+- **M275** XML `HistoryXml` default was `"<ArrayOfTypeName />"` (matches no type → ToInstance throws) → `"<ArrayOfStateChangeRecord />"` + `IsNullOrWhiteSpace` guard in ToInstance. Code-review.
+- **Deferred (test-gaps, 5 new projects):** M268–M272 (Workflow.CosmosDB/ElasticSearch/JSON/MongoDB/RavenDB `.Tests` — model round-trip + upsert; the model logic is backend-independent but each needs a new project).
+- Suite green: Birko.Workflow.Tests 32.
 
 ### Batch 46 — Security test-gaps CR-M239/M241 (2 closed; augment existing projects)
 

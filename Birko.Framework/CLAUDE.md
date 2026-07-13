@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Workflow correctness (EPIC-014 / STORY-026) (2026-07-13)
+Forty-seventh STORY-026 batch: **CR-M267/M273/M274/M275** — Workflow engine + backend correctness (4 closed; the M268–M272 backend test-gaps deferred as 5 new projects). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Half-applied state on fault (M267)** — `WorkflowEngine` advanced `CurrentState` to the target before running the target's OnEntry actions, but the history record is only appended after they succeed. A faulting OnEntry left the instance reporting `CurrentState = ToState` with a History missing that transition. The catch now restores `CurrentState = fromState`. Regression in Birko.Workflow.Tests.
+- **Overload-shadowing footgun (M273)** — `RavenDBWorkflowInstanceStore`'s single-result reads used `ReadAsync(filter, ct)`, which the framework warns binds via the shadowed overload on a bulk store; switched the three to `ReadFirstAsync`.
+- **SQL upsert race (M274)** — documented that `SqlWorkflowInstanceStore.SaveAsync` is a best-effort read-then-write and callers must serialize saves per InstanceId (concurrent double-create hits the Guid PK); a native MERGE is provider-specific. Also switched its single read to `ReadFirstAsync`.
+- **XML history default (M275)** — `HistoryXml` defaulted to `"<ArrayOfTypeName />"`, which matches no real XmlSerializer root, so `ToInstance` threw on a non-overwritten value. Changed to `"<ArrayOfStateChangeRecord />"` and guarded `ToInstance` with `IsNullOrWhiteSpace`.
+- Suite green: Birko.Workflow.Tests 32 (M267); M273/M275 code-review-verified (no `.Tests` sibling for those backends); M274 compile-verified via Workflow.SQL.Tests 7. STORY-026 now **206/275**.
+
 ### Code-review remediation — medium findings, Security test-gaps NFC + Vault (EPIC-014 / STORY-026) (2026-07-13)
 Forty-sixth STORY-026 batch: **CR-M239/M241** — security test-gaps closed by augmenting existing `.Tests` projects. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **NFC token issuance (M239)** — `NfcAuthProvider.AuthenticateAsync`'s JWT branch (IssueTokens + ITokenProvider) was never exercised (the tests never passed a token provider). Added `NfcAuthProviderTokenTests` with a fake `ITokenProvider`: token issued on success with sub/nfc_uid/auth_method claims, email/name only when present on the mapping, and no token when IssueTokens=false or the provider is null.
