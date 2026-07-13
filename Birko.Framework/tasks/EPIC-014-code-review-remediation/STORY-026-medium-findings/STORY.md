@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**191 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**198 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,16 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 44 — Structures/Storage/Telemetry/Time CR-M246/247/250/252/253/254/255 (7 closed; offline)
+
+- **M246** LocalFileStorage Download/Delete/Exists/ListAsync ignored the ct → `ThrowIfCancellationRequested()` on entry + inside the ListAsync tree-walk. Tests in Storage.Tests.
+- **M247** ResolvePath sibling-prefix collision → containment check requires exact base OR trailing-separator boundary (defensive; ValidateUserPath already blocks traversal).
+- **M250** `Graph<T>.EdgeCount` non-virtual + DirectedGraph `new` → made virtual+override so a base reference returns the directed count. Test in Structures.Tests.
+- **M252/M253** Telemetry bulk wrappers didn't override ReadFirst/ReadFirstAsync (bypassed inner native single-row) → added overrides delegating to the inner store; new InstrumentedBulkStoreWrapperTests.
+- **M254** OpenTelemetry `EnableAspNetCoreInstrumentation` defaulted true (required the optional AspNetCore package / meaningless for console) → flipped to false (opt-in); existing Defaults test updated.
+- **M255** deleted 3 orphaned duplicate Time provider/interface files (not in the Compile set, byte-identical to Birko.Time.Abstractions).
+- Suites green: Structures 10 (graph), Storage 46, Telemetry 54, OpenTelemetry 11.
 
 ### Batch 43 — Redis + Security hardening CR-M231/232/233/234/235/238/240 (7 closed; offline)
 

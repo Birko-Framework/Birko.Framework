@@ -139,6 +139,16 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Structures/Storage/Telemetry/Time (EPIC-014 / STORY-026) (2026-07-13)
+Forty-fourth STORY-026 batch: **CR-M246/247/250/252/253/254/255** — a cross-project reliability/cleanup sweep (7 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Storage async ct (M246)** — `LocalFileStorage` Download/Delete/Exists/ListAsync accepted a `CancellationToken` but never observed it; added `ThrowIfCancellationRequested()` on entry (and inside the ListAsync `SearchOption.AllDirectories` tree-walk).
+- **Storage path guard (M247)** — `ResolvePath`'s `StartsWith(_basePath)` let a sibling whose name extends the base pass; now requires exact equality or a trailing-separator boundary. Defensive (ValidateUserPath already blocks `..`).
+- **DirectedGraph EdgeCount (M250)** — `Graph<T>.EdgeCount` was non-virtual and `DirectedGraph<T>` shadowed it with `new`, so a base `Graph<T>` reference got the undirected count/2. Made it `virtual`+`override`.
+- **Telemetry ReadFirst (M252/M253)** — the bulk wrappers didn't override `ReadFirst`/`ReadFirstAsync`, so the IBulkStore default routed through the wrapper's single Read and bypassed the inner store's native single-row optimization; added delegating overrides + `InstrumentedBulkStoreWrapperTests`.
+- **OpenTelemetry default (M254)** — `EnableAspNetCoreInstrumentation` defaulted true, forcing the OPTIONAL AspNetCore instrumentation package on every consumer (and meaningless-on for console/worker apps); flipped to opt-in `false`, consistent with the console-exporter toggles.
+- **Time dead files (M255)** — deleted three orphaned duplicate provider/interface files (not in the Compile set, byte-identical to the imported Birko.Time.Abstractions), removing the drift / duplicate-type risk.
+- Suites green: Structures 10, Storage 46, Telemetry 54, OpenTelemetry 11. STORY-026 now **198/275**.
+
 ### Code-review remediation — medium findings, Redis + Security hardening (EPIC-014 / STORY-026) (2026-07-13)
 Forty-third STORY-026 batch: **CR-M231/232/233/234/235/238/240** across Birko.Redis + the Birko.Security.* family (7 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Redis Lazy poisoned on first failure (M231)** — `RedisConnectionManager` built its `Lazy<ConnectionMultiplexer>` with the default `ExecutionAndPublication`, which caches the factory's exception, so a transient connect failure at startup permanently poisoned the singleton (every later access re-threw). Both ctors now use `LazyThreadSafetyMode.PublicationOnly` (does not cache exceptions → retried on next access). New **Birko.Redis.Tests** (M232, 10): GetConnectionString branch matrix, GetId, LoadFrom dispatch, manager null-guards / IsConnected-when-not-created / Dispose idempotency.

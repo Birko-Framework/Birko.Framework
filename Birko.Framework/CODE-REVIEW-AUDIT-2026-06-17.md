@@ -4638,7 +4638,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async methods ignore the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage\Local\LocalFileStorage.cs:109-223`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). Added `ct.ThrowIfCancellationRequested()` on entry to DownloadAsync/DeleteAsync/ExistsAsync/ListAsync, plus a per-item check inside the ListAsync tree-walk projection. Regression (Birko.Storage.Tests) asserts each throws OperationCanceledException on a pre-cancelled token.
 - **Detail:** DownloadAsync, DeleteAsync, ExistsAsync, and ListAsync accept a CancellationToken ct but never observe it — they execute synchronously and return Task.FromResult. The framework convention is that async methods observe the CancellationToken (the same convention that drove the 2026-06-15 EnsureInitializedAsync change). A caller passing an already-cancelled token expects OperationCanceledException; here it is silently ignored. ListAsync is the most material case because it can enumerate an entire directory tree (SearchOption.AllDirectories, line 197) with no cancellation check inside the loop.
 - **Fix:** Call ct.ThrowIfCancellationRequested() at the top of each method, and check it inside the ListAsync enumeration loop (or push the EnumerateFiles work onto a Task.Run that honors ct).
 
@@ -4646,7 +4646,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Path-traversal guard is vulnerable to base-path prefix collision
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage\Local\LocalFileStorage.cs:313`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). `ResolvePath`'s containment check now requires exact equality with `_basePath` OR a match up to a trailing `Path.DirectorySeparatorChar` (`resolved == _basePath || resolved.StartsWith(_basePath + sep)`), so a sibling whose name extends the base ("store" vs "store-secrets") no longer passes. Defensive hardening — reaching such a sibling through the public API is already blocked by `ValidateUserPath` (rejects `..`/rooted), so it's code-review-verified rather than driven end-to-end. The sibling PathValidator defect (Birko.Helpers) is tracked separately.
 - **Detail:** ResolvePath checks `resolved.StartsWith(_basePath, OrdinalIgnoreCase)`. _basePath comes from Path.GetFullPath (no trailing separator), so a sibling directory whose name extends the base (base 'C:\data\store' vs 'C:\data\store-secrets\x') would pass the containment check. ValidateUserPath rejects '..' and rooted paths, which makes reaching such a sibling from a relative key difficult in practice (hence not flagged higher), but the boundary check itself is incorrect. The same flawed pattern exists in Birko.Helpers/PathValidator (lines 50, 101, 184), so the framework's standard guard shares the defect.
 - **Fix:** Compare against `_basePath` with a trailing Path.DirectorySeparatorChar appended (and allow exact equality), e.g. ensure resolved == _basePath || resolved.StartsWith(_basePath + separator).
 
@@ -4670,7 +4670,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DirectedGraph.EdgeCount uses `new` to shadow the base property
 - **Path:** `C:\Source\Birko\Framework\Birko.Structures\Graphs\DirectedGraph.cs:16`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). Made `Graph<T>.EdgeCount` `public virtual` and changed `DirectedGraph<T>.EdgeCount` from `new` to `override`, so a base `Graph<T>` reference to a directed graph returns the correct directed count. Regression (Birko.Structures.Tests) asserts both the derived and base-typed references return 3 for a 3-edge directed graph.
 - **Detail:** EdgeCount is declared `public new int EdgeCount` rather than overriding. Graph<T>.EdgeCount is non-virtual and divides the neighbor total by 2 (undirected semantics). A caller holding a Graph<T> reference to a DirectedGraph<T> instance will invoke the base property and get half the true directed edge count. This is a silent wrong-result-via-base-reference hazard.
 - **Fix:** Make Graph<T>.EdgeCount `public virtual` and `override` it in DirectedGraph<T>, so the correct count is returned regardless of the static reference type.
 
@@ -4686,7 +4686,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk wrappers do not override ReadFirst/ReadFirstAsync — native single-row optimization is bypassed
 - **Path:** `C:\Source\Birko\Framework\Birko.Telemetry\InstrumentedBulkStoreWrapper.cs / AsyncInstrumentedBulkStoreWrapper.cs`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). Added `ReadFirst`/`ReadFirstAsync` overrides to `InstrumentedBulkStoreWrapper`/`AsyncInstrumentedBulkStoreWrapper` that delegate to `_innerStore.ReadFirst(filter)`/`ReadFirstAsync(filter, ct)` under StoreInstrumentation (operation "Read", isBulk: true), so the inner platform store's native single-row path is preserved instead of falling through to the IBulkStore default (which routed through the wrapper's single Read). Regression proves the inner ReadFirst is hit (not Read).
 - **Detail:** IBulkStore<T>.ReadFirst and IAsyncBulkStore<T>.ReadFirstAsync are default interface methods that do ((IReadStore<T>)this).Read(filter) / ((IAsyncReadStore<T>)this).ReadAsync(filter, ct) (Birko.Data.Stores/IBulkStore.cs:46, IAsyncBulkStore.cs:50). The wrappers never override them, so a caller invoking ReadFirst on the wrapper executes the default, which casts the WRAPPER to IReadStore<T> and calls the wrapper's single-result Read(filter)/ReadAsync(filter,ct) — which delegates to _innerStore.Read(filter). This silently bypasses any native ReadFirst override the inner platform store provides (the convention in CLAUDE.md explicitly says 'Override on a platform store for native single-row optimization'). For SQL/ES stores that issue a native single-row query in ReadFirst, the wrapped store instead runs the generic single Read path, a behavioral/perf regression that the wrapper introduces. Telemetry is still recorded (via the wrapper's Read), but the operation tag will be 'Read' not a bulk-aware single-row, and the inner optimization is lost.
 - **Fix:** Add explicit overrides of ReadFirst/ReadFirstAsync on the bulk wrappers that delegate to _innerStore.ReadFirst(filter)/ReadFirstAsync(filter, ct) wrapped in StoreInstrumentation.Execute/ExecuteAsync (operation 'Read', isBulk: true), mirroring the other bulk overloads.
 
@@ -4694,7 +4694,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk store wrappers have no tests
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Telemetry.Tests (no InstrumentedBulkStoreWrapperTests / AsyncInstrumentedBulkStoreWrapperTests)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). Added `InstrumentedBulkStoreWrapperTests` covering the bulk overload delegation (Read(filter), Create/Update×2/Delete×2 bulk) and the CR-M252 ReadFirst-reaches-inner-ReadFirst behavior, via a MockBulkStore recording its last operation. (The async wrapper mirrors the same overrides; the sync test locks the shared contract.)
 - **Detail:** Both InstrumentedBulkStoreWrapper<TStore,T> and AsyncInstrumentedBulkStoreWrapper<TStore,T> expose public bulk overloads (Read(), Read(filter,orderBy,limit,offset), bulk Create/Update/Delete, filter-based Update(filter,Action), Update(filter,PropertyUpdate), Delete(filter)) with zero test coverage. AsyncInstrumentedStoreWrapperTests covers only the non-bulk async wrapper. The CLAUDE.md test convention requires every new public functionality to have corresponding tests.
 - **Fix:** Add bulk wrapper test classes covering each bulk overload (delegation + metric emission) for both sync and async, plus the ReadFirst forwarding behavior once fixed.
 
@@ -4702,7 +4702,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ASP.NET Core instrumentation defaults ON but its package is documented as optional
 - **Path:** `C:\Source\Birko\Framework\Birko.Telemetry.OpenTelemetry\BirkoOpenTelemetryOptions.cs:59`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). Flipped `EnableAspNetCoreInstrumentation` default to `false` (opt-in) — the finding's primary recommendation, consistent with the console-exporter toggles — so `AddBirkoOpenTelemetry()` with defaults no longer requires the OPTIONAL `OpenTelemetry.Instrumentation.AspNetCore` package (and isn't meaningless-on for console/worker apps). Doc comment updated; the existing Defaults test updated to expect false.
 - **Detail:** EnableAspNetCoreInstrumentation defaults to true, so AddBirkoOpenTelemetry() with default options calls tracing.AddAspNetCoreInstrumentation() and metrics.AddAspNetCoreInstrumentation() (OpenTelemetryServiceExtensions.cs:49 and :77). Those extension methods live in the OpenTelemetry.Instrumentation.AspNetCore package, which both CLAUDE.md (line 25) and README list as OPTIONAL ('optional, for HTTP tracing'). A consumer that follows the docs and references only the core/OTLP/Console packages but calls AddBirkoOpenTelemetry() with defaults will fail to compile (missing AddAspNetCoreInstrumentation). Either the default should be false (opt-in), or the package must be documented as required whenever the default is left on. This also affects non-web consumers (console/worker apps) for whom AspNetCore instrumentation is meaningless yet on by default.
 - **Fix:** Default EnableAspNetCoreInstrumentation to false (opt-in, consistent with the console-exporter toggles which default false), or update CLAUDE.md/README to mark OpenTelemetry.Instrumentation.AspNetCore as required for the default configuration.
 
@@ -4710,7 +4710,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead duplicate provider/interface source files shadow Birko.Time.Abstractions
 - **Path:** `C:\Source\Birko\Framework\Birko.Time\Core\IDateTimeProvider.cs; C:\Source\Birko\Framework\Birko.Time\Providers\SystemDateTimeProvider.cs; C:\Source\Birko\Framework\Birko.Time\Providers\TestDateTimeProvider.cs`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 44). Deleted the three orphaned duplicates (Core/IDateTimeProvider.cs, Providers/SystemDateTimeProvider.cs, Providers/TestDateTimeProvider.cs) — confirmed they were NOT in the Birko.Time.projitems Compile set and byte-identical to the canonical copies supplied by the imported Birko.Time.Abstractions projitems. Removes the drift/duplicate-type risk.
 - **Detail:** These three files are byte-for-byte duplicates (same namespace Birko.Time, same types) of the files compiled by Birko.Time.Abstractions, which Birko.Time.projitems imports (line: <Import Project="...\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />). They are NOT listed in Birko.Time.projitems' <Compile> set, so today they are orphaned dead code that the build ignores. Two real risks: (1) they will silently drift from the canonical Abstractions copies since nothing compiles or tests them; (2) if anyone adds them to the Compile list (or a consumer imports both projitems), the project fails to build with duplicate-type errors (CS0101/ambiguous IDateTimeProvider). The CLAUDE.md dependency map states these three types live in Birko.Time.Abstractions, confirming Birko.Time should not carry its own copies.
 - **Fix:** Delete C:\Source\Birko\Framework\Birko.Time\Core\IDateTimeProvider.cs, C:\Source\Birko\Framework\Birko.Time\Providers\SystemDateTimeProvider.cs, and C:\Source\Birko\Framework\Birko.Time\Providers\TestDateTimeProvider.cs from disk; rely solely on the imported Abstractions projitems (which already supplies them).
 
