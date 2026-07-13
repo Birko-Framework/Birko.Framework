@@ -50,8 +50,20 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
         if (!int.TryParse(parts[1], out var iterations))
             return false;
 
-        var salt = Convert.FromBase64String(parts[2]);
-        var storedHash = Convert.FromBase64String(parts[3]);
+        // CR-M233: Verify must be total over arbitrary stored strings — a corrupted/truncated DB column
+        // with the right shape but non-base64 salt/hash segments must return false, not throw
+        // FormatException. (The segment-count / algorithm / iteration guards above already return false.)
+        byte[] salt;
+        byte[] storedHash;
+        try
+        {
+            salt = Convert.FromBase64String(parts[2]);
+            storedHash = Convert.FromBase64String(parts[3]);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
 
         var computedHash = Rfc2898DeriveBytes.Pbkdf2(
             password,
