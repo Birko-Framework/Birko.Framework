@@ -3894,7 +3894,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GroupBy clauses from ViewDefinition are silently dropped
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.Views\SqlViewTranslator.cs:162-188`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — SqlViewTranslator.Translate now rejects a GroupBy field that is not also Select()ed (the backend derives GROUP BY from the projected non-aggregate fields, so such a field was silently dropped → wrong aggregates). The reverse (selected non-agg field missing from GroupBy) is already rejected by ViewDefinitionBuilder.Build. Regression in Birko.Data.SQL.Views.Tests (SqlViewTranslatorTests): GroupBy-not-selected → NotSupportedException; well-formed grouped aggregate translates.
 - **Detail:** definition.GroupBy is read only inside CollectSourceTypes (to ensure the source table is loaded); it is never translated into any GROUP BY metadata on the resulting Tables.View. The connector (AbstractConnectorBase_View.BuildViewSelectSql:235-242 and CreateSelectCommand) instead auto-derives GROUP BY from all non-aggregate SELECTed fields. This happens to work only when every GroupByClause field is also present in definition.Fields. If a view groups by a field it does not also select (or selects a field it does not group by), the generated SQL groups by the wrong column set and the aggregate results are incorrect — with no error. The portable GroupBy contract is effectively ignored.
 - **Fix:** Either explicitly project the GroupBy fields into the view's non-aggregate field set (and validate that all non-aggregate selected fields are covered by GroupBy), or add real group-by metadata to Tables.View instead of inferring it from the select list.
 
@@ -4006,7 +4006,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ExecutePreviewAsync swallows all exceptions and misreports them as a conflict
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:328`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the broad catch no longer swallows failures as a spurious Conflicts++ on a partial preview — it rethrows, so store-read errors / cancellation propagate to the caller. Regression: a throwing-read store makes PreviewAsync throw (Birko.Data.Sync.Tenant.Tests).
 - **Detail:** The whole preview body is wrapped in catch(Exception){ preview.Conflicts++; return preview; }. Any failure (store read error, reflection error, cancellation) is silently swallowed and surfaced only as an incremented Conflicts counter on a partially-populated preview, with no error detail. The caller cannot distinguish a genuine conflict from a thrown exception, and the failure is invisible.
 - **Fix:** Either let preview exceptions propagate, or add a typed error/failure indication to SyncPreview rather than incrementing Conflicts.
 
@@ -4014,7 +4014,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ExecuteSyncAsync mutates the caller's SyncOptions.Direction and captures Direction before the mutation
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:377`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — introduced a local effectiveDirection (initial sync ⇒ Download) instead of mutating options.Direction (which leaked because ApplyTenantContext returns the same TenantSyncOptions instance), and set result.Direction from it. Regression: initial SyncAsync leaves the caller's Direction=Bidirectional and result.Direction=Download.
 - **Detail:** On initial sync, options.Direction is overwritten to SyncDirection.Download (line 377). When baseOptions was already a TenantSyncOptions, ApplyTenantContext returns the same instance (line 104), so this mutates the caller-supplied options object as a side effect that persists after the call. Separately, result.Direction was captured from options.Direction at line 347, before the override, so for an initial sync the result reports the original (e.g. Bidirectional) direction while the engine actually ran Download — the reported direction is wrong.
 - **Fix:** Use a local effectiveDirection variable instead of mutating options.Direction, and set result.Direction from that effective value.
 
@@ -4022,7 +4022,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** BelongsToTenant defaults to including items whose TenantGuid is null/unset — cross-tenant leak
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:177`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — BelongsToTenant now returns false when the entity HAS a TenantGuid property but no matching value (was true → an unset-tenant entity synced into/out of every tenant). The allow-all path is reserved for entity types with no TenantGuid property. Regression (reflection): matching→true, mismatched/unset→false, no-property type→true.
 - **Detail:** When _tenantGuidProperty exists but the item's value is not a Guid (null, or Guid.Empty by another path), BelongsToTenant returns true (line 183), so the item passes the CanSaveToLocal/CanSaveToRemote tenant filter for every tenant. An entity with an unset TenantGuid is therefore synced into/out of any tenant's scope, defeating tenant isolation.
 - **Fix:** Return false (exclude) when the entity has a TenantGuid property but no matching value, rather than defaulting to allow; reserve the allow-all path for entity types that have no TenantGuid property at all.
 
@@ -4030,7 +4030,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project for the tenant sync layer
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Birko.Data.Sync.Tenant`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.Sync.Tenant.Tests exists (created since the audit: TenantSyncKnowledgeAndConflictTests + TenantSyncVersionHashTests) and is now augmented with TenantSyncBugsTests covering CR-M167/M168/M169.
 - **Detail:** No Birko.Data.Sync.Tenant.Tests directory exists. The convention requires xUnit + FluentAssertions tests for new public functionality. Untested public surface includes TenantSyncProvider PreviewAsync/SyncAsync (tenant scoping, initial-sync Download forcing, conflict resolution, knowledge bookkeeping), ApplyTenantContext/ApplyTenantFiltering/BelongsToTenant, and TenantSyncQueue tenant-scoped queue keys and EnqueueAsync overloads. Several bugs above (tenant-leak default, knowledge IsDeleted flags, version hashing) would be caught by basic tests.
 - **Fix:** Add a Birko.Data.Sync.Tenant.Tests project covering tenant filtering, knowledge-item generation per direction, conflict resolution outcomes, and queue key scoping.
 

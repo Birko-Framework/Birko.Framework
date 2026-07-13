@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, view GroupBy + Tenant sync bugs (EPIC-014 / STORY-026) (2026-07-13)
+Fifty-sixth STORY-026 batch: **CR-M153/M167/M168/M169/M170** — re-triaged the "un-runnable" pile and found most is offline/SQLite-verifiable; closed a view bug + the three Tenant sync bugs + a (stale) test-gap. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **M153 (bug)** — `SqlViewTranslator` never emitted GROUP BY metadata; the connector derives GROUP BY from the SELECTed non-aggregate fields, so a GroupBy field that wasn't also selected was silently dropped → wrong aggregates. `Translate` now rejects that case (the reverse is already caught by `ViewDefinitionBuilder.Build`). Views.Tests 10 → 12.
+- **M167 (bug)** — `TenantSyncProvider.ExecutePreviewAsync` swallowed every failure as a spurious `Conflicts++` on a partial preview; now rethrows so real errors/cancellation surface.
+- **M168 (bug)** — initial sync mutated the caller's `SyncOptions.Direction` (leaked via the returned-same-instance `TenantSyncOptions`) and reported the pre-override direction; now a local `effectiveDirection` drives Create routing + `result.Direction`.
+- **M169 (bug, cross-tenant leak)** — `BelongsToTenant` returned `true` for an entity with a `TenantGuid` property but an unset/mismatched value → synced into/out of every tenant. Now returns `false`; allow-all is reserved for types with no `TenantGuid` property.
+- **M170** — `Birko.Data.Sync.Tenant.Tests` already existed; augmented with `TenantSyncBugsTests` (M167/M168/M169 regressions), suite → 12. STORY-026 now **238/275**. The earlier "everything left needs Docker" was overstated — remaining runnable: M140/M151 (view-SELECT refactor) + offline test-gaps M157/M162/M163/M166/M171; Docker-only: M160/M161/M165 + live MSSql/Postgres.
+
 ### Code-review remediation — medium findings, migration async-interface refactor (EPIC-014 / STORY-026) (2026-07-13)
 Fifty-fifth STORY-026 batch: **CR-M101** — threaded `CancellationToken cancellationToken = default` through the migration async surface. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Interfaces** — `IMigrationRunner` (InitializeAsync/MigrateAsync/RollbackAsync) + `IMigrationStore` (InitializeAsync/GetAppliedVersionsAsync/RecordMigrationAsync/RemoveMigrationAsync/GetCurrentVersionAsync).

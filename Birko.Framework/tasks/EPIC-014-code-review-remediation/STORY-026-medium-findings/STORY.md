@@ -13,8 +13,14 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**233 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**238 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+**Correction (Batch 56):** the earlier "everything left needs Docker" was overstated — the
+view-SELECT cluster (M140/M151/M153) and most of the Sync cluster (M157/M162/M163/M166/M167/M168/
+M169/M170/M171) are offline/SQLite-verifiable. Batch 56 closed **M153 + the three Tenant sync bugs
+M167/M168/M169 + M170**. Only Cosmos/ES/Raven store-CRUD (M160/M161/M165) + live MSSql/Postgres paths
+genuinely need Docker.
 
 **The async-interface refactor CR-M101 is CLOSED** (Batch 55): `CancellationToken` now threads through
 `IMigrationRunner` / `IMigrationStore` / `AbstractMigrationRunner` + all 6 backend stores. This is the
@@ -81,6 +87,28 @@ the audit), so M135/M145 became "extend" not "create".
   transaction wiring independent of provider dialect — the finding's "at minimum" approach), plus the
   non-`SqlMigrationContext` guard and null/empty-arg guards. git-initialized + registered in `.slnx` +
   `.code-workspace`.
+
+### Batch 56 — view GroupBy bug + Tenant sync bugs CR-M153/M167/M168/M169/M170 (5 closed)
+
+Re-triaged the "un-runnable" pile and found most of it IS offline-verifiable. Closed:
+- **M153 (bug)** — `SqlViewTranslator` read `definition.GroupBy` only to load source tables, never
+  emitting GROUP BY metadata; the connector re-derives GROUP BY from the SELECTed non-aggregate fields,
+  so grouping by a non-selected field was silently dropped → wrong aggregates. `Translate` now rejects a
+  GroupBy field that isn't also selected (the reverse is already caught by `ViewDefinitionBuilder.Build`).
+  `Birko.Data.SQL.Views.Tests` 10 → 12.
+- **M167 (bug)** — `TenantSyncProvider.ExecutePreviewAsync`'s broad catch swallowed every failure as a
+  spurious `Conflicts++` on a partial preview; now rethrows so real errors/cancellation propagate.
+- **M168 (bug)** — initial sync mutated the caller's `SyncOptions.Direction` (leaked because
+  `ApplyTenantContext` returns the same `TenantSyncOptions` instance) and reported the pre-override
+  direction. Now a local `effectiveDirection` drives the Create routing and `result.Direction`.
+- **M169 (bug)** — `BelongsToTenant` returned `true` for an entity that HAS a `TenantGuid` property but
+  an unset/mismatched value → cross-tenant leak. Now returns `false`; allow-all is reserved for types
+  with no `TenantGuid` property.
+- **M170** — `Birko.Data.Sync.Tenant.Tests` already existed (verify-first); augmented with
+  `TenantSyncBugsTests` (M167/M168/M169 regressions). Suite → 12.
+
+Remaining runnable set: M140/M151 (view-SELECT builder refactor) + offline test-gaps
+M157/M162/M163/M166/M171. Docker-only: M160/M161/M165 + live MSSql/Postgres paths.
 
 ### Batch 55 — async-interface refactor CR-M101 (1 closed)
 
