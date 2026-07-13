@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**145 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**152 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,18 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 34 — Birko.EventBus cluster CR-M184…M190 (7 closed; whole EventBus cluster done)
+
+All EventBus test coverage lives in one `Birko.EventBus.Tests` project (compiles every EventBus projitems), so no new projects.
+- **M184** parallel-dispatch Stop mode didn't halt other handlers (all tasks eagerly launched) → linked CTS cancelled on first failure; original exception rethrown via ExceptionDispatchInfo (not a follow-on OCE).
+- **M185** Continue/Stop catch blocks were empty, no logger → added `Action<IEvent,Exception>? OnHandlerError` on the options, invoked in both modes, sequential + parallel.
+- **M186** `DomainEventPublished` dropped the source event's OccurredAt/EventId (EventBase stamped now/new-Guid) → ctor now propagates both, restoring time-ordered + dedup-by-EventId replay.
+- **M187** (design) DistributedEventBus RetryPolicy/DeadLetterOptions never consumed → documented they're transport-delegated (CR-H114 fault-driven re-delivery) rather than wiring bus-level retry (conflicts with the model) or removing (breaking).
+- **M188** Dispose blocked on `UnsubscribeAsync().GetAwaiter().GetResult()` → implement IAsyncDisposable (await), sync Dispose uses `sub.Dispose()`.
+- **M189** OutboxProcessor reflection-publish surfaced the opaque TargetInvocationException message → unwrap at the Invoke site (`Task.FromException(inner)`) + `Unwrap` in the ProcessBatch catch, so LastError carries the real cause.
+- **M190** Outbox test-gap already covered by the existing Outbox/ tests; also fixed a **pre-existing compile break** — `InMemoryOutboxStoreTests` still called the old 2-arg `MarkFailedAsync` after the CR-H115 `maxAttempts` param landed (the whole EventBus.Tests project didn't build); updated to `maxAttempts: 5`.
+- Suite green: Birko.EventBus.Tests 84.
 
 ### Batch 33 — Birko.Data.XML CR-M182/M183 (2 closed; offline file-based bugs)
 

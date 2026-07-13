@@ -4141,56 +4141,56 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M184 · 🟡 medium · Birko.EventBus
 - **Title:** ErrorHandlingMode.Stop is not honored in parallel dispatch
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Local\InProcessEventBus.cs:148-169`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.EventBus.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). `DispatchParallelAsync` now runs handlers under a linked `CancellationTokenSource` cancelled on the first failure in Stop mode, so queued handlers waiting on the semaphore and any that observe the token abort instead of running to completion; the original handler exception (not a follow-on cancellation) is captured and rethrown via `ExceptionDispatchInfo`. Regression: a token-aware sibling handler does not complete when an earlier handler throws in parallel Stop mode, and the original `InvalidOperationException` surfaces.
 - **Detail:** InProcessEventBusOptions documents ErrorHandlingMode.Stop as 'Stop dispatching to remaining handlers on first failure'. DispatchSequentialAsync honors this (the catch filter only matches Continue, so a throw propagates and aborts the loop). But DispatchParallelAsync eagerly materializes ALL handler tasks via handlers.Select(async ...) before awaiting Task.WhenAll. Every handler is already launched (up to the semaphore limit) regardless of mode, so when one throws in Stop mode the remaining handlers are not stopped — they keep running to completion. The Stop contract only works for MaxConcurrency<=1.
 - **Fix:** Either document that Stop only applies to sequential dispatch, or implement real cancellation in parallel mode (e.g. a linked CancellationTokenSource cancelled on first failure, with handlers observing the token), so Stop actually halts pending/queued handlers.
 
 ### CR-M185 · 🟡 medium · Birko.EventBus
 - **Title:** Handler exceptions are silently swallowed; 'Log and continue' contract has no logger
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Local\InProcessEventBus.cs:141-144`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.EventBus.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). Added an optional `Action<IEvent, Exception>? OnHandlerError` to `InProcessEventBusOptions`, invoked in the Continue catch (before continuing) and the Stop catch (before propagating) in both sequential and parallel dispatch — a dependency-free logging/observability hook so a throwing handler no longer vanishes silently; the doc now states exceptions are dropped unless this is set. Regression: the callback fires with the event + exception in Continue and Stop, sequential and parallel.
 - **Detail:** InProcessEventBusOptions.ErrorHandlingMode.Continue is documented as 'Log and continue to the next handler. Default.' but the catch-when blocks in both DispatchSequentialAsync (line 141) and DispatchParallelAsync (line 158) have empty bodies — nothing is logged. There is no ILogger field on InProcessEventBus at all. In the default configuration a throwing handler vanishes with zero diagnostics, which is a serious operability problem for an event bus.
 - **Fix:** Inject an optional ILogger (or an error callback / IEventErrorHandler) and log the swallowed exception with the event type and EventId, or correct the doc to state exceptions are silently dropped.
 
 ### CR-M186 · 🟡 medium · Birko.EventBus.EventSourcing
 - **Title:** Original event timestamp (OccurredAt) and EventId are dropped during wrapping/replay
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.EventSourcing\DomainEventPublished.cs:48-56`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.EventBus.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). The `DomainEventPublished(DomainEvent)` ctor now also sets `OccurredAt = domainEvent.OccurredAt` and `EventId = domainEvent.EventId` (both settable from the derived record ctor), so the wrapper carries the historical event time and stable identity instead of EventBase's construction-time defaults — time-ordered and dedup-by-EventId replay now work. Regression asserts both are preserved through wrapping.
 - **Detail:** DomainEventPublished copies AggregateId, Version, EventType, EventData, Metadata, UserId from the source IEvent but NOT its OccurredAt or EventId. Because EventBase initializes `OccurredAt = DefaultClock.UtcNow` and `EventId = Guid.NewGuid()` at construction time, every wrapper gets the *current* time and a fresh id. For the EventReplayService paths (ReplayAggregateAsync/ReplayFromVersionAsync/ReplayAllFromAsync), this means projections/read models being rebuilt see the replay wall-clock time rather than the historical event time, and lose the original event identity — which defeats time-ordered or idempotent (dedup-by-EventId) projection rebuilding, the stated purpose of the replay service. The domain IEvent.OccurredAt and IEvent.EventId are available on the source but never used.
 - **Fix:** Propagate the source event's timestamp/identity, e.g. set `OccurredAt = domainEvent.OccurredAt` (and consider mapping EventId or carrying it in a dedicated property) in the constructor, or document explicitly that DomainEventPublished.OccurredAt is the publish time and add a separate DomainOccurredAt field for the original time.
 
 ### CR-M187 · 🟡 medium · Birko.EventBus.MessageQueue
 - **Title:** RetryPolicy and DeadLetterOptions are configured but never used
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.MessageQueue\DistributedEventBusOptions.cs:27-32`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** documentation (design note)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). Documented that retry and dead-lettering are **delegated to the underlying transport**, not applied by `DistributedEventBus`: the CR-H114 dispatch faults the delivery callback on handler failure and the transport re-delivers / DLQs per its own config (ConsumerOptions / provider). Added `<remarks>` on both `RetryPolicy` and `DeadLetterOptions` stating the bus does not consume them and that retry/DLQ must be configured at the transport. Chose documenting the delegation (a finding-sanctioned option) over wiring bus-level retry, which would conflict with the intended transport-driven model, and over removing the properties (breaking API change).
 - **Detail:** DistributedEventBusOptions exposes RetryPolicy (default RetryPolicy.Default) and DeadLetterOptions, but DistributedEventBus references neither (confirmed: no occurrences in DistributedEventBus.cs). Consumers configuring these get silent no-ops — the bus relies entirely on the underlying queue provider's behavior, which the swallowed-exception finding above further neutralizes. Either wire them into the subscribe/dispatch path or remove them so the surface does not promise behavior it doesn't deliver.
 - **Fix:** Wire RetryPolicy/DeadLetterOptions into the consumer dispatch loop (e.g. retry the handler per policy, route to DLQ topic on exhaustion), or drop the options if delegation to the queue provider is intended and document that.
 
 ### CR-M188 · 🟡 medium · Birko.EventBus.MessageQueue
 - **Title:** Synchronous blocking on async unsubscribe during Dispose
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.MessageQueue\DistributedEventBus.cs:232-235`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.EventBus.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). `DistributedEventBus` now implements `IAsyncDisposable`: `DisposeAsync` awaits each queue subscription's `UnsubscribeAsync`, and the synchronous `Dispose` calls `sub.Dispose()` (ISubscription : IDisposable) instead of blocking on the async method. Regression: implements IAsyncDisposable; both DisposeAsync and Dispose complete after a transport subscription and leave the bus disposed (subsequent PublishAsync → ObjectDisposedException).
 - **Detail:** Dispose() calls sub.UnsubscribeAsync().GetAwaiter().GetResult() for each queue subscription. This is sync-over-async and can deadlock if disposed on a thread with a synchronization context, and blocks the disposing thread on potentially network-bound unsubscribe calls. ISubscription is IDisposable, and the type also has no IAsyncDisposable path.
 - **Fix:** Implement IAsyncDisposable and await UnsubscribeAsync there; in synchronous Dispose, call sub.Dispose() (ISubscription : IDisposable) instead of blocking on the async method.
 
 ### CR-M189 · 🟡 medium · Birko.EventBus.Outbox
 - **Title:** Reflection-invoked publish masks the real exception message on failure
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.Outbox\Publishing/OutboxProcessor.cs:98-106 (PublishEventAsync) and :79-83 (catch)`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.EventBus.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). `PublishEventAsync` now catches the `TargetInvocationException` from `MethodInfo.Invoke` (a synchronous throw before the first await) and returns `Task.FromException(tie.InnerException)`, and the `ProcessBatch` catch runs the recorded exception through an `Unwrap` helper — so `MarkFailedAsync`/`LastError` carries the real cause, not the opaque "Exception has been thrown by the target of an invocation." Regression: a publisher that throws synchronously records "distinctive publish failure", not the wrapper text.
 - **Detail:** PublishEventAsync uses MethodInfo.Invoke to call the generic PublishAsync. When the awaited Task faults the real exception surfaces correctly, but if MakeGenericMethod/Invoke itself throws (e.g. argument binding) it raises TargetInvocationException whose Message is the generic 'Exception has been thrown by the target of an invocation.' The catch at :79 records ex.Message into MarkFailedAsync, so LastError can be that uninformative wrapper instead of the underlying cause, hampering diagnosis of poison messages.
 - **Fix:** Unwrap TargetInvocationException (use ex.InnerException?.Message ?? ex.Message, or rethrow the inner) before passing to MarkFailedAsync; consider recording ex.ToString() to capture the type.
 
 ### CR-M190 · 🟡 medium · Birko.EventBus.Outbox
 - **Title:** No test project for any public functionality
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.Outbox\Birko.EventBus.Outbox (no .Tests sibling)`
-- **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Category:** test-gap · **Verification:** offline unit test (Birko.EventBus.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 34). Outbox coverage exists in the single `Birko.EventBus.Tests` project (which compiles all EventBus projitems): `Outbox/OutboxEventBusTests`, `OutboxProcessorTests` (publish success/invalid-type/cleanup/end-to-end), and `InMemoryOutboxStoreTests` (status transitions incl. the max-attempts boundary). Also fixed a pre-existing compile break in this batch: `InMemoryOutboxStoreTests` still called the old 2-arg `MarkFailedAsync` after the CR-H115 `maxAttempts` param was added — updated to pass `maxAttempts: 5`, so the whole test project builds again. Added `OutboxProcessorErrorUnwrapTests` for CR-M189.
 - **Detail:** Framework convention requires xUnit + FluentAssertions tests for every new public functionality, but there is no Birko.EventBus.Outbox.Tests project. Untested public surface includes OutboxEventBus.PublishAsync (enrichment + serialization + save, disposed guard), OutboxProcessor.ProcessBatchAsync (type-resolution failure, deserialize-null failure, publish success/failure paths, cancellation mid-batch), CleanupAsync cutoff math, InMemoryOutboxStore status transitions (incl. the >=5 boundary), and the Decorate DI helper. The MaxAttempts and Publishing gaps above are exactly the kind of behavior tests would have caught.
 - **Fix:** Add Birko.EventBus.Outbox.Tests (xUnit + FluentAssertions) covering the processor success/failure/cancellation branches, the store transitions and cleanup boundary, and the decorator wiring.
 
