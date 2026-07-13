@@ -125,15 +125,27 @@ namespace Birko.Models.Contracts
             string? oldNamePath = null, string? newNamePath = null)
             where T : IHierarchical
         {
+            ArgumentNullException.ThrowIfNull(oldPath);
+            ArgumentNullException.ThrowIfNull(newPath);
+
             foreach (var desc in descendants)
             {
+                // CR-M215: a descendant whose Path was never materialized (null) — or that doesn't
+                // actually sit under oldPath — isn't ours to rewrite. Skip it rather than NRE /
+                // ArgumentOutOfRange mid-batch (which would leave the batch partially mutated).
+                if (desc?.Path is null || !desc.Path.StartsWith(oldPath, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 desc.Path = newPath + desc.Path.Substring(oldPath.Length);
                 desc.Depth = desc.Path.Count(c => c == '/') - 1;
 
                 if (oldNamePath is not null && newNamePath is not null && desc is INamedHierarchical named)
                 {
-                    var suffix = named.NamePath.Length > oldNamePath.Length
-                        ? named.NamePath.Substring(oldNamePath.Length).TrimStart('/')
+                    var namePath = named.NamePath ?? string.Empty;
+                    var suffix = namePath.Length > oldNamePath.Length
+                        ? namePath.Substring(oldNamePath.Length).TrimStart('/')
                         : string.Empty;
                     named.NamePath = string.IsNullOrEmpty(suffix)
                         ? newNamePath
