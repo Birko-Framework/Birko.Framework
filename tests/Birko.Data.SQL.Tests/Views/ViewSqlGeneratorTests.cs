@@ -1,4 +1,5 @@
 using Birko.Data.SQL.View.Migrations;
+using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Tests.TestResources.Views;
 using FluentAssertions;
 using System;
@@ -119,5 +120,23 @@ public class ViewSqlGeneratorTests
     public void DefaultQuoteChar_IsAnsiDoubleQuote()
     {
         ViewSqlGenerator.DefaultQuoteChar.Should().Be('"');
+    }
+
+    [Fact]
+    public void GenerateCreateViewSql_SelectBody_DelegatesToSharedBuilder()
+    {
+        // CR-M151: ViewSqlGenerator no longer duplicates the ~140-line view-SELECT builder; it calls
+        // the shared ViewSelectSqlBuilder. This asserts the generated statement equals exactly
+        // "CREATE OR REPLACE VIEW <name> AS <shared-builder-body>", so any future drift is caught.
+        var view = Birko.Data.SQL.DataBase.LoadView(typeof(CustomerOrderView));
+        view.Should().NotBeNull();
+
+        static string Quote(string id) => "\"" + id.Replace("\"", "\"\"") + "\"";
+        var expectedBody = ViewSelectSqlBuilder.BuildViewSelectSql(view!, Quote);
+        var name = ViewSqlGenerator.GetViewName(typeof(CustomerOrderView));
+
+        var sql = ViewSqlGenerator.GenerateCreateViewSql(typeof(CustomerOrderView));
+
+        sql.Should().Be("CREATE OR REPLACE VIEW " + Quote(name) + " AS " + expectedBody);
     }
 }
