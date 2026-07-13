@@ -27,6 +27,7 @@ namespace Birko.MessageQueue.Redis
         public async Task SendAsync(string destination, QueueMessage message, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M206: StackExchange.Redis has no per-call token; gate on entry
 
             if (string.IsNullOrEmpty(destination))
             {

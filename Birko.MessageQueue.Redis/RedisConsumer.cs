@@ -97,6 +97,7 @@ namespace Birko.MessageQueue.Redis
         public async Task AcknowledgeAsync(Guid messageId, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M206
 
             if (_pendingAck.TryRemove(messageId, out var pending) && pending.ConsumerGroup != null)
             {
@@ -108,6 +109,7 @@ namespace Birko.MessageQueue.Redis
         public async Task RejectAsync(Guid messageId, bool requeue = false, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M206
 
             if (!_pendingAck.TryRemove(messageId, out var pending) || pending.ConsumerGroup == null)
             {
