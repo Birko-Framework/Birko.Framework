@@ -109,14 +109,26 @@ public class TenantContext : ITenantContext
 }
 
 /// <summary>
-/// Singleton instance of TenantContext for application-wide use
+/// Process-wide singleton <see cref="ITenantContext"/> for <b>non-DI scenarios only</b> — console
+/// apps, background tools, tests, and code that has no access to a DI container.
 /// </summary>
+/// <remarks>
+/// CR-M175 footgun: in an ASP.NET (or any DI) app you must resolve <see cref="ITenantContext"/> from
+/// the container (e.g. via <c>AddTenantContextScoped</c>) so that <c>TenantMiddleware</c> and every
+/// store/repository observe the <i>same</i> per-request instance. If a store or repository is
+/// accidentally constructed without an <see cref="ITenantContext"/>, the wrapper/factory falls back to
+/// this static <see cref="Current"/> — a <i>different</i> instance whose tenant the middleware never set —
+/// silently producing non-tenant-mode (unfiltered, cross-tenant) access. Do <b>not</b> mix the two:
+/// in a DI app, always supply the scoped context and never read <see cref="Current"/>.
+/// </remarks>
 public static class Tenant
 {
     private static readonly ITenantContext _instance = new TenantContext();
 
     /// <summary>
-    /// Get the current tenant context instance
+    /// Gets the process-wide tenant context. See the <see cref="Tenant"/> remarks: use this only in
+    /// non-DI scenarios — in a DI app resolve a scoped <see cref="ITenantContext"/> instead, or
+    /// tenant filtering silently degrades to unfiltered access.
     /// </summary>
     public static ITenantContext Current => _instance;
 
