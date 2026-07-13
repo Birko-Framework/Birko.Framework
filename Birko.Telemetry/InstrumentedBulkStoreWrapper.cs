@@ -23,6 +23,12 @@ public class InstrumentedBulkStoreWrapper<TStore, T> : InstrumentedStoreWrapper<
     public IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         => StoreInstrumentation.Execute(_storeType, _entityType, "Read", true, () => _innerStore.Read(filter, orderBy, limit, offset));
 
+    // CR-M252: override ReadFirst so it delegates to the INNER store's ReadFirst (preserving any native
+    // single-row optimization) instead of the IBulkStore default, which would route through the wrapper's
+    // single-item Read and lose that optimization.
+    public T? ReadFirst(Expression<Func<T, bool>>? filter = null)
+        => StoreInstrumentation.Execute(_storeType, _entityType, "Read", true, () => _innerStore.ReadFirst(filter));
+
     public void Create(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         => StoreInstrumentation.Execute(_storeType, _entityType, "Create", true, () => _innerStore.Create(data, storeDelegate));
 
