@@ -16,7 +16,7 @@ namespace Birko.EventBus.MessageQueue
     /// Publishes events as serialized <see cref="EventEnvelope"/> messages to queue topics.
     /// Subscribes to topics and deserializes envelopes back into strongly-typed events for handler dispatch.
     /// </summary>
-    public class DistributedEventBus : IEventBus
+    public class DistributedEventBus : IEventBus, IAsyncDisposable
     {
         private readonly IMessageQueue _messageQueue;
         private readonly DistributedEventBusOptions _options;
@@ -240,9 +240,35 @@ namespace Birko.EventBus.MessageQueue
 
             _disposed = true;
 
+            // CR-M188: dispose synchronously via ISubscription.Dispose() (ISubscription : IDisposable)
+            // instead of blocking on the async UnsubscribeAsync — the old .GetAwaiter().GetResult()
+            // was sync-over-async on a potentially network-bound unsubscribe and could deadlock under a
+            // synchronization context. Prefer DisposeAsync for a graceful async unsubscribe.
             foreach (var sub in _queueSubscriptions)
             {
-                sub.UnsubscribeAsync().GetAwaiter().GetResult();
+                sub.Dispose();
+            }
+
+            _subscriptions.Clear();
+        }
+
+        /// <summary>
+        /// CR-M188: async disposal that awaits each queue subscription's UnsubscribeAsync — use this
+        /// (e.g. <c>await using</c>) rather than the synchronous <see cref="Dispose"/> when an ordered,
+        /// non-blocking unsubscribe is required.
+        /// </summary>
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+
+            foreach (var sub in _queueSubscriptions)
+            {
+                await sub.UnsubscribeAsync().ConfigureAwait(false);
             }
 
             _subscriptions.Clear();
