@@ -55,6 +55,7 @@ namespace Birko.Data.XML.Stores
         public override async Task DestroyAsync(CancellationToken ct = default)
         {
             _items?.Clear();
+            _loaded = false; // CR-M182: force a reload on the next access after destroy
             _files.Clear();
             if (string.IsNullOrEmpty(PathDirectory) || !Directory.Exists(PathDirectory) || string.IsNullOrEmpty(_settings?.Name))
             {

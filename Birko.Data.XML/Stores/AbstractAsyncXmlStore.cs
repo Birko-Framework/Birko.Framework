@@ -28,6 +28,14 @@ namespace Birko.Data.XML.Stores
         protected Dictionary<Guid, T> _items = new();
 
         /// <summary>
+        /// Whether the backing file(s) have been loaded into <see cref="_items"/>. CR-M182: tracked
+        /// explicitly rather than inferred from <c>_items.Count == 0</c>, so a store that legitimately
+        /// holds zero rows (empty file, or after all rows deleted) does not re-read the disk on every
+        /// read/count/aggregate call. Reset to false when the store is destroyed so a later re-init reloads.
+        /// </summary>
+        protected bool _loaded;
+
+        /// <summary>
         /// The XML serializer instance.
         /// </summary>
         protected ISerializer _serializer;
@@ -123,9 +131,10 @@ namespace Birko.Data.XML.Stores
         /// <param name="ct">Cancellation token.</param>
         protected virtual async Task EnsureDataLoadedAsync(CancellationToken ct)
         {
-            if (_items == null || _items.Count == 0)
+            if (!_loaded)
             {
                 await LoadDataAsync(ct);
+                _loaded = true;
             }
         }
 

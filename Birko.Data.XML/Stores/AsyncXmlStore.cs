@@ -114,6 +114,7 @@ namespace Birko.Data.XML.Stores
         public override async Task DestroyAsync(CancellationToken ct = default)
         {
             _items?.Clear();
+            _loaded = false; // CR-M182: force a reload on the next access after destroy
             var path = Path;
             if (!string.IsNullOrEmpty(path) && File.Exists(path))
             {
@@ -234,18 +235,33 @@ namespace Birko.Data.XML.Stores
                 return;
             }
 
-            // Delete and recreate file
-            await Task.Run(() => File.Delete(path), ct);
-
-            using var fileStream = new FileStream(
-                path,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                bufferSize: 4096,
-                useAsync: true);
-
-            await WriteToStreamAsync(fileStream, _items.Values.ToList(), ct);
+            // CR-M183: write to a temp file then atomically replace the target, so a failure
+            // mid-write can't destroy the existing data file (the old delete-then-recreate left a
+            // total-data-loss window). File.Delete before FileMode.Create was also redundant —
+            // FileMode.Create already truncates.
+            var tempPath = path + ".tmp";
+            try
+            {
+                using (var fileStream = new FileStream(
+                    tempPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    bufferSize: 4096,
+                    useAsync: true))
+                {
+                    await WriteToStreamAsync(fileStream, _items.Values.ToList(), ct);
+                }
+                File.Move(tempPath, path, overwrite: true);
+            }
+            catch
+            {
+                if (File.Exists(tempPath))
+                {
+                    try { File.Delete(tempPath); } catch { /* best-effort temp cleanup */ }
+                }
+                throw;
+            }
         }
 
         #endregion

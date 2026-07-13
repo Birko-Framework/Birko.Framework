@@ -222,9 +222,29 @@ namespace Birko.Data.XML.Stores
             {
                 return;
             }
-            File.Delete(Path);
-            using FileStream fileStream = File.OpenWrite(Path);
-            WriteToStream(fileStream, _items.Values.ToList());
+
+            // CR-M183: write to a temp file then atomically replace the target. The old
+            // File.Delete + OpenWrite deleted the existing file before writing, so a serialization
+            // failure (non-serializable property, cancellation, process kill) between the delete and
+            // a complete write left the data file gone or partial — total data loss. A temp-then-move
+            // keeps the previous file intact until the new one is fully written.
+            var tempPath = Path + ".tmp";
+            try
+            {
+                using (FileStream fileStream = File.Create(tempPath))
+                {
+                    WriteToStream(fileStream, _items.Values.ToList());
+                }
+                File.Move(tempPath, Path, overwrite: true);
+            }
+            catch
+            {
+                if (File.Exists(tempPath))
+                {
+                    try { File.Delete(tempPath); } catch { /* best-effort temp cleanup */ }
+                }
+                throw;
+            }
         }
 
         #endregion
