@@ -19,6 +19,22 @@ public class InMemoryTranslationProviderTests
     }
 
     [Fact]
+    public void GetSupportedCultures_WithInvalidCultureName_DoesNotThrow_AndFiltersIt()
+    {
+        // CR-M197: AddTranslation accepts arbitrary culture-name strings; a bogus name previously made
+        // GetSupportedCultures throw CultureNotFoundException. It must now guard and filter, like the
+        // Json/Resx providers.
+        var provider = InMemoryTranslationProvider.Create()
+            .AddTranslation("en", "greeting", "Hello")
+            .AddTranslation("not-a-real-culture-xyz", "greeting", "??")
+            .Build();
+
+        var cultures = provider.Invoking(p => p.GetSupportedCultures()).Should().NotThrow().Subject;
+        cultures.Should().Contain(c => c.Name == "en");
+        cultures.Should().NotContain(c => c.Name == "not-a-real-culture-xyz");
+    }
+
+    [Fact]
     public void GetTranslation_ReturnsNull_WhenNotFound()
     {
         var provider = InMemoryTranslationProvider.Create()
