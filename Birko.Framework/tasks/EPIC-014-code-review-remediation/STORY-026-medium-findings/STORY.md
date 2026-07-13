@@ -13,8 +13,12 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**215 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**226 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+**The entire TypeScript Birko.Web.* track (M256–M266) is now CLOSED** — see Batch 52 below. Every
+remaining open medium finding is in the infra-heavy deferred pile (SQLite/Docker/async-refactor)
+listed under "⏳ Deferred pile".
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
 > lowest risk), THEN tackle the deferred pile below as a dedicated integration-test effort. Deferring
@@ -40,6 +44,45 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 52 — TypeScript Birko.Web.* track CR-M256…M266 (11 closed; whole TS track)
+
+The web-frontend track: 8 real bugs + 3 test-gaps across `Birko.Web.Components` / `.Core` / `.Shell`
+(all in the separate `Birko\Web` bucket, not `Birko\Framework` — the audit paths are stale). No
+in-framework unit runner by design, so verification is via the **Birko.Web.Playground** headless
+build + `backport-smoke` harness (per the project's documented Web-verify convention): **45/45**
+smoke assertions pass (was 18 — 27 added), all 66 gallery components render, zero page errors.
+Framework edits typecheck clean via Symbio.UI (`tsc --noEmit`, exit 0).
+
+**8 bugs fixed:**
+- **M256** `b-data-table` row-action: the `select` handler called `menu.remove()` without unregistering
+  the document `click` listener → a dangling listener (retaining the removed menu) leaked on every
+  select. Hoisted a single `cleanup()` used by both the select and outside-click paths.
+- **M257** `b-command-palette` async search: `_runSearch` committed results unconditionally, so a slow
+  older query could overwrite a newer one. Added a `_searchSeq` token; stale responses are discarded.
+- **M258** `b-tree-menu` lazy load: a rejecting `onExpand` escaped `_loadChildren`'s try/finally as an
+  unhandled rejection and skipped the re-render. Added `catch` → emit `load-error` + `update()` in `finally`.
+- **M260** `SyncManager.dispose()` leaked the `window 'online'` listener (inline arrow, unremovable).
+  Retained `_onlineHandler`; `dispose()` now `removeEventListener`s it.
+- **M261** `I18n` persisted the locale but never restored it — write-only, so every reload reverted to
+  `defaultLocale`. The constructor now reads `storageKey` back (guarded for SSR).
+- **M262** `signal.ts` hardcoded the consumer-specific `'symbio_'` persistence prefix. Changed to a
+  framework-neutral `'birko_'` default + exported `setPersistPrefix()`. (No Symbio source uses `persist:`
+  signals, so no consumer breakage.)
+- **M264** `base-detail-page._save` left the Save button spinning on an API rejection → wrapped in
+  try/finally, matching `base-crud-page`.
+- **M265** `base-form-modal._save` + `open()` had the same loading-leak on rejection → try/finally around
+  both awaits (open() also toasts + closes on catch).
+
+**3 test-gaps (M259 Components / M263 Core / M266 Shell)** — the findings ask for a vitest unit runner,
+which conflicts with the repo's deliberate "no in-framework unit runner" decision. **User chose (2026-07-13)
+to extend the Playground backport-smoke harness** instead. Added assertions for the highest-risk pure
+functions each finding names: `unwrapList` / `apiErrorMessage` / `I18n` plural+fallback (Core);
+`BMarkdownEditor.renderMarkdown` (heading/HTML-escape/empty) + `b-pagination` page-number collapse
+(Components); `getVisibleOptions` / `hasPermission` wildcard + `resolveModuleFromHash` (Shell). Closed
+with that coverage; a full per-package unit runner remains a deliberate non-goal.
+
+Each of M258/M260/M261/M262 also got a dedicated regression assertion locking in the bug fix.
 
 ### Batch 51 — Workflow backend test-gaps CR-M268/269/270/271/272 (5 closed; 5 new projects)
 

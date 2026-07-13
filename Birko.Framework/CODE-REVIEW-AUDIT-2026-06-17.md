@@ -4718,7 +4718,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Leaked document click listener after row-action select in b-data-table
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\src/data/b-data-table.ts:548-555`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When opening a row-action dropdown, a `cleanup` listener is registered on `document` (line 555) that removes the temporary b-dropdown-menu and unregisters itself — but only when triggered by an outside click. The `select` handler (lines 548-551) calls `menu.remove()` without calling `document.removeEventListener('click', cleanup)`. So every row-action that ends by selecting an item (the common path) leaves a dangling document-level click listener whose closure retains the already-removed `menu`. These accumulate over the table's lifetime.
 - **Fix:** In the `select` handler also call `document.removeEventListener('click', cleanup)` (or hoist a single cleanup() used by both paths).
 
@@ -4726,7 +4726,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stale-response race in command palette async search
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\src/command/b-command-palette.ts:390-417`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _runSearch awaits all providers then writes `this._state.results = deduped` unconditionally. It is debounced (200ms) but not guarded against out-of-order completion: if a newer query's _runSearch resolves before an older slower one, the older response overwrites the newer results because the resolved query is never compared against the current `this._state.query`.
 - **Fix:** Capture a request token/sequence number (or compare `query === this._state.query`) before committing results in _runSearch, and discard stale responses.
 
@@ -4734,7 +4734,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unhandled rejection / no re-render when lazy onExpand fails in b-tree-menu
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\src/nav/b-tree-menu.ts:668-686, 302-318`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _loadChildren uses try/finally (no catch); if config.onExpand rejects, the rejection propagates out of `await this._loadChildren(...)` in toggle() (line 312), which is an async method called from event handlers — producing an unhandled promise rejection. The finally clears _loadingNodes but no update() runs on the failure path, so toggle()'s `this.update()` at line 315 is skipped and the node stays expanded with the spinner state never refreshed.
 - **Fix:** Wrap the onExpand await in try/catch inside _loadChildren, emit a load-error event, and ensure update() runs in finally (or in toggle's own try/finally).
 
@@ -4742,7 +4742,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No automated tests for the entire component library
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\Birko.Web.Components (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no .Tests sibling, no test runner config (vitest/jest), and package.json has no test script or dev dependencies. ~75 components and pure functions with non-trivial logic (BMarkdownEditor.renderMarkdown, b-form validation/percent-conversion, b-date-range-picker token/constraint math, b-kanban nesting/move, b-pagination) are entirely untested. The framework convention (CLAUDE.md) requires xUnit+FluentAssertions tests for backend projects; the TS web projects have no equivalent. Several of the bugs above (ordered lists, toIndex off-by-one) are exactly the kind a unit test would have caught.
 - **Fix:** Add a vitest setup and at minimum unit-test the pure/static functions: BMarkdownEditor.renderMarkdown, b-date-range-picker date helpers (daysBetween, _resolveToken), b-form validation rules and percent conversion, b-pagination._getPageNumbers.
 
@@ -4750,7 +4750,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SyncManager.dispose() leaks the window 'online' listener and never removes it
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Core\src/offline/sync-manager.ts:30`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The constructor registers `window.addEventListener('online', () => this.sync())` (line 30) with an inline arrow function. dispose() (line 107) only clears the periodic interval — it never removes the 'online' listener. A disposed SyncManager keeps firing sync() on every reconnect (resource leak; the captured `this` also prevents GC). The arrow function also can't be removed because no reference is retained.
 - **Fix:** Store the bound handler in a field (e.g. `private _onlineHandler = () => this.sync();`), register it, and call `window.removeEventListener('online', this._onlineHandler)` in dispose().
 
@@ -4758,7 +4758,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** I18n persists the chosen locale but never restores it on construction
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Core\src/i18n/i18n.ts:29`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** setLocale() writes the active locale to `localStorage[storageKey]` (line 62-64) when storageKey is set, but the constructor (lines 29-35) initializes `_locale` purely from `defaultLocale` and never reads storageKey back. So the persistence is write-only: after a page reload the app always reverts to defaultLocale, defeating the documented purpose of the storageKey option ('LocalStorage key to persist the chosen locale'). The user's previously selected language is lost on every reload.
 - **Fix:** In the constructor, when storageKey is set, read the stored value and use it as the initial locale: `const saved = storageKey ? localStorage.getItem(storageKey) : null; this._locale = signal(saved ?? defaultLocale);` (guard localStorage access in a try/catch for SSR/quota parity with signal.ts).
 
@@ -4766,7 +4766,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Hardcoded consumer-specific 'symbio_' persistence prefix in framework Signal
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Core\src/state/signal.ts:13`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `const PERSIST_PREFIX = 'symbio_';` bakes a specific consumer app's name (Symbio) into the framework-level Signal persistence layer. Every Birko.Web app using `signal(v, { persist: 'key' })` writes localStorage keys like `symbio_key`, which is wrong/confusing for any non-Symbio consumer and risks key collisions when two different Birko apps share an origin. This is a leaked consumer detail in shared framework code.
 - **Fix:** Make the prefix configurable (e.g. a module-level `setPersistPrefix()` or read from a Birko-namespaced default like `'birko_'`), or drop the prefix and require callers to namespace their own keys (consistent with persist.ts, which deliberately adds no prefix).
 
@@ -4774,7 +4774,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test coverage for the entire project
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Core\Birko.Web.Core`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no .Tests sibling and package.json declares no test runner/script. None of the public surface is tested: ApiClient (refresh dedup, offline queueing, error parsing), WsClient/SseClient reconnect logic (where two of the bugs above live), SyncManager FIFO + conflict handling, Signal/Store/computed reactivity + persistence, Router param/nested/wildcard matching, I18n plural + fallback + deep-merge, and the unwrapList/apiErrorMessage helpers. The framework convention (CLAUDE.md Testing section) requires xUnit+FluentAssertions for .NET projects; the equivalent for these TS packages is a JS/TS test suite, which is absent. The reconnect and sync bugs in particular would be caught by unit tests with fake timers.
 - **Fix:** Add a test project/suite (e.g. vitest) covering at minimum WsClient backoff/max-attempts, SyncManager error-path state, Router matching, and I18n resolution/plural.
 
@@ -4782,7 +4782,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Loading state leaks if the API throws (no try/finally)
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Shell\src/pages/base-detail-page.ts:249`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `_save()` sets `saveBtn.setAttribute('loading','')` then awaits `this.api.put(...)` and only calls `removeAttribute('loading')` on the happy path after the await. If `api.put` rejects (network error / thrown interceptor), the `removeAttribute` line is skipped and the exception propagates, leaving the Save button stuck in the spinner state. The sibling `base-crud-page.ts._save()` (lines 883-911) correctly uses try/finally — this one does not.
 - **Fix:** Wrap the request in try/finally and remove the loading attribute in finally, matching base-crud-page.
 
@@ -4790,7 +4790,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Loading state leaks in modal save/open on API rejection
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Shell\src/pages/base-form-modal.ts:235`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Both `_save()` (line 227-235) and `open()` (lines 185-189) set the loading attribute then `await` an API call, removing loading only on the post-await happy path. A rejected promise from `api.put`/`api.post`/`api.get` skips `removeAttribute('loading')`, leaving the Save button spinning (and in open(), the modal open with a stuck spinner). No try/finally around either await.
 - **Fix:** Wrap each awaited request in try/finally and clear the loading attribute in finally. Also consider toasting an error on the catch path so the failure is visible.
 
@@ -4798,7 +4798,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test coverage for any of the library's pure helpers
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Shell\src/ (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no .Tests sibling, no test runner in package.json, and no spec/test files anywhere. Several pieces are pure, deterministic, and trivially testable yet untested: auth-store setAuth/clearAuth claim mapping and JWT decode (the bug above would have been caught), permissions.ts hasPermission/getVisibleOptions wildcard handling, ribbon-builder.ts buildRibbon/buildCategoryRibbon grouping and ordering, route-builder.ts resolveModuleFromHash path parsing, module-nav-provider.ts fuzzyMatch/matches, connection-state.ts listener dispatch, notification-store.ts preview cap, and breadcrumb.ts. The framework convention is 'every new public functionality must have corresponding tests.'
 - **Fix:** Add a test sibling (or in-repo test runner) covering at minimum the auth-store claim/JWT logic, permissions wildcard, ribbon/category builders, hash route resolution, and fuzzyMatch — these are the highest-risk pure functions.
 
