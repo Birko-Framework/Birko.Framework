@@ -13,8 +13,17 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**241 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**244 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+**Batch 58 (2026-07-13):** closed the last three offline-runnable findings — the view-SELECT-builder
+refactor (**M140 + M151**) and the Sync core test-gap (**M157**). M140/M151: extracted the ~140-line
+duplicated view-SELECT builder into a shared `ViewSelectSqlBuilder` in Birko.Data.SQL.View, parameterized
+by a quote func + optional table-qualifier; the base connector, the MSSql SCHEMABINDING builder, and the
+migration `ViewSqlGenerator` now share one implementation (3 copies → 1). M157: verify-first (bidirectional/
+NewestWins-nullable/cancellation already covered), added delete-propagation (sync, 4) + full AsyncSyncProvider
+coverage (8, incl. a new async in-memory store double since Birko.Data.InMemory is sync-only). **Every finding
+runnable without Docker is now closed;** the remaining 31 open all need a live DB/broker (see the deferred pile).
 
 **Correction (Batch 56):** the earlier "everything left needs Docker" was overstated — the
 view-SELECT cluster (M140/M151/M153) and most of the Sync cluster (M157/M162/M163/M166/M167/M168/
