@@ -40,5 +40,6 @@
   <Import Project="..\..\Framework\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.SQL.Views\Birko.Data.SQL.Views.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.SQL.SqLite.View\Birko.Data.SQL.SqLite.View.projitems" Label="Shared" />
 
 </Project>
