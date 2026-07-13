@@ -54,4 +54,32 @@ public class StorageLocationTests
         model.Depth.Should().Be(0);
         model.Path.Should().Be(vm.Path);
     }
+
+    // CR-M222: InventoryDocument scalar fields round-trip (Lines is documented as not VM-populated, CR-M221).
+    [Fact]
+    public void InventoryDocument_LoadFrom_CopiesScalarFields_LinesStayEmpty()
+    {
+        var currency = Guid.NewGuid();
+        var tenant = Guid.NewGuid();
+        var vm = new Birko.Models.Inventory.ViewModels.InventoryDocument
+        {
+            DocumentNumber = "DOC-1",
+            Status = "Open",
+            DocumentType = Birko.Models.Inventory.InventoryDocumentType.Receipt,
+            CurrencyGuid = currency,
+            CurrencySymbol = "€",
+            TenantGuid = tenant,
+        };
+
+        var model = new Birko.Models.Inventory.InventoryDocument();
+        model.LoadFrom(vm);
+
+        model.DocumentNumber.Should().Be("DOC-1");
+        model.Status.Should().Be("Open");
+        model.DocumentType.Should().Be(Birko.Models.Inventory.InventoryDocumentType.Receipt);
+        model.CurrencyGuid.Should().Be(currency);
+        model.CurrencySymbol.Should().Be("€");
+        model.TenantGuid.Should().Be(tenant);
+        model.Lines.Should().BeEmpty("lines are loaded separately, not via the view model (CR-M221)");
+    }
 }
