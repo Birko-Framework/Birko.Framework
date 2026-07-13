@@ -41,6 +41,27 @@ public class MSSqlSettingsAndQuotingTests
     }
 
     [Fact]
+    public void CreateConnection_RemoteSettings_UsesMSSqlBuilderDefaults()
+    {
+        // CR-M136: a plain RemoteSettings (not MSSqlSettings) must build the SAME connection string as
+        // the typed path — not a divergent inline form that hard-codes MARS=False and omits
+        // TrustServerCertificate / Connection Timeout.
+        var connector = new MSSqlConnector(new MSSqlSettings("localhost", "db"));
+        var remote = new Birko.Configuration.RemoteSettings("srv", "mydb", "sa", "secret", 1433, useSecure: true);
+
+        var cs = connector.CreateConnection(remote).ConnectionString;
+
+        cs.Should().Contain("Server=tcp:srv,1433");
+        cs.Should().Contain("Initial Catalog=mydb");
+        cs.Should().Contain("Encrypt=True");
+        cs.Should().Contain("TrustServerCertificate=False");
+        cs.Should().Contain("Connection Timeout=15");
+        // Matches exactly what an equivalent MSSqlSettings would produce.
+        var equivalent = new MSSqlSettings("srv", "mydb", "sa", "secret", 1433, useSecure: true).GetConnectionString();
+        cs.Should().Be(equivalent);
+    }
+
+    [Fact]
     public void LoadFrom_CopiesProviderSpecificFlags()
     {
         var source = new MSSqlSettings("srv", "db", "u", "p")
