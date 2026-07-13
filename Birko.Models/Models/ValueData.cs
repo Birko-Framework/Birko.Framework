@@ -64,6 +64,11 @@ namespace Birko.Models
         {
             if (data == null) return;
 
+            // CR-M213: ViewModels.Value : LogViewModel : ILogEntity carries CreatedAt/UpdatedAt/
+            // PrevUpdatedAt + identity. Copy them first (as AbstractPercentage/AbstractTree do) instead
+            // of silently dropping the log/identity fields.
+            base.LoadFrom(data);
+
             Price = data.Price != null ? Math.Round(data.Price.Value, StoreDecimalPlaces) : (decimal?)null;
             PriceVAT = data.PriceVAT != null ? Math.Round(data.PriceVAT.Value, StoreDecimalPlaces) : (decimal?)null;
             VAT = data.VAT != null ? Math.Round(data.VAT.Value, StoreDecimalPlaces) : (decimal?)null;
