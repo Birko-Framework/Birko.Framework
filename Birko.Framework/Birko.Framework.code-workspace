@@ -1081,6 +1081,10 @@
 			"path": "../../Framework.Tests/Birko.Random.Tests"
 		},
 		{
+			"name": "Tests / Birko.Redis.Tests",
+			"path": "../../Framework.Tests/Birko.Redis.Tests"
+		},
+		{
 			"name": "Tests / Birko.Rules.Tests",
 			"path": "../../Framework.Tests/Birko.Rules.Tests"
 		},

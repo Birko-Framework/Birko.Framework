@@ -4518,7 +4518,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Lazy<ConnectionMultiplexer> permanently caches a connection failure
 - **Path:** `C:\Source\Birko\Framework\Birko.Redis\RedisConnectionManager.cs:26-27,39-40`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). Both `RedisConnectionManager` ctors now build the `Lazy<ConnectionMultiplexer>` with `LazyThreadSafetyMode.PublicationOnly`, which does NOT cache the factory's exception — a transient connect failure at first access can be retried on the next access instead of permanently poisoning the singleton. Covered offline via the new Birko.Redis.Tests (manager null-guards / IsConnected-when-not-created / Dispose idempotency; the retry itself needs a live server).
 - **Detail:** The default Lazy<T> constructor uses LazyThreadSafetyMode.ExecutionAndPublication, which caches the exception thrown by the factory. If ConnectionMultiplexer.Connect throws on first access (transient network/Redis-unavailable at startup), every subsequent GetDatabase()/GetServer()/IsConnected access re-throws the same cached exception forever — the manager is permanently poisoned and never retries, even after Redis comes back. For a long-lived singleton connection manager this is a real availability problem.
 - **Fix:** Either guard against caching (e.g. catch and reset, or use LazyThreadSafetyMode.PublicationOnly via the Lazy(Func, mode) overload — PublicationOnly does NOT cache exceptions and allows a later successful attempt), or hold the multiplexer in a field set under a lock with explicit retry. StackExchange.Redis recommends ConnectionMultiplexer.Connect with internal reconnection, but the Lazy wrapper defeats that on the initial failure.
 
@@ -4526,7 +4526,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling — entire project is untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Redis\Birko.Redis (no Birko.Redis.Tests sibling found)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). Created **`Birko.Redis.Tests`** (registered in .slnx + .code-workspace): `RedisSettingsAndManagerTests` covers `GetConnectionString` (default host/port, raw override, full facet composition, database-0 omission), `GetId`, `LoadFrom` (typed + non-Redis Settings no-op), and `RedisConnectionManager` null-guards / `IsConnected`-when-not-created / Dispose idempotency. Suite 10.
 - **Detail:** Convention requires every new public functionality to have tests in Birko.{ProjectName}.Tests. There is no Birko.Redis.Tests directory at all. Untested public surface: RedisSettings.GetConnectionString() (all branches: raw override, password, user, ssl/sslHost, defaultDatabase, name, default host/port fallbacks), GetId() composition, LoadFrom overloads (typed + Settings dispatch + non-RedisSettings no-op), and RedisConnectionManager constructors / null-guards / Dispose idempotency / IsConnected-when-not-created. GetConnectionString in particular is pure string-building logic that is trivial and high-value to cover.
 - **Fix:** Add a Birko.Redis.Tests xUnit + FluentAssertions project (registered in the slnx) covering GetConnectionString branch matrix, GetId, LoadFrom dispatch, and the connection-manager null/dispose guards.
 
@@ -4534,7 +4534,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Pbkdf2PasswordHasher.Verify throws FormatException on malformed stored hash instead of returning false
 - **Path:** `C:\Source\Birko\Framework\Birko.Security\Hashing/Pbkdf2PasswordHasher.cs:53-54`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). Wrapped the two `Convert.FromBase64String` calls in `try/catch (FormatException) → return false`, so `Verify` is now total over arbitrary stored strings (a corrupted/truncated DB column with the right shape but non-base64 salt/hash returns false instead of throwing). Regression in the new Birko.Security.Tests: a matrix of malformed stored hashes (empty, wrong algo, non-int iterations, non-base64 salt, non-base64 hash) all return false and never throw.
 - **Detail:** Verify() carefully returns false for a wrong segment count or wrong algorithm tag (line 47) and a non-integer iteration count (line 50), but then calls `Convert.FromBase64String(parts[2])` and `parts[3]` unconditionally. If the stored hash has the right shape (4 colon-separated parts, valid algorithm, integer iterations) but a corrupted/non-base64 salt or hash segment, these throw FormatException rather than returning false. A verification routine should be total over arbitrary stored strings (e.g. a DB column that got truncated) and return false rather than throw.
 - **Fix:** Wrap the two Convert.FromBase64String calls in a try/catch (FormatException) returning false, or use Convert.TryFromBase64String into pooled buffers.
 
@@ -4542,7 +4542,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for Birko.Security
 - **Path:** `C:\Source\Birko\Framework\Birko.Security\Birko.Security (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). `Birko.Security.Tests` exists (AuthenticationServiceDisposeTests since the audit); augmented with `PasswordHasherAndEncryptionTests` covering Pbkdf2 Hash/Verify round-trip + wrong-password + the CR-M233 malformed-input matrix, and AesEncryptionProvider round-trip / GenerateKey length / wrong-key (GCM tag failure) / tampered-ciphertext. Token-validation & IP-extraction paths remain a lower-priority follow-up.
 - **Detail:** There is no Birko.Security.Tests sibling directory at all, so none of the public functionality is covered: Pbkdf2PasswordHasher.Hash/Verify (incl. the malformed-input edge above), AesEncryptionProvider round-trip + tamper-detection (GCM tag failure) + wrong-key + GenerateKey, AuthenticationService.ValidateToken (simple tokens, IP-bound bindings, missing/empty token, auth-disabled passthrough), GetClientIpAddress header precedence (X-Forwarded-For first IP, X-Real-IP, CF-Connecting-IP, fallback), and ExpandEnvironmentVariable. The framework convention requires xUnit + FluentAssertions tests for every new public functionality, including success/failure/edge cases — this library is security-critical and has none.
 - **Fix:** Add a Birko.Security.Tests project (xUnit + FluentAssertions) covering hashing round-trip/verify-failure/iteration-bounds, AES encrypt-decrypt/tamper/wrong-key, token validation paths, and IP extraction precedence.
 
@@ -4550,7 +4550,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** HeaderTenantResolver omits 'using System.Linq;' for FirstOrDefault
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.AspNetCore\Tenant/HeaderTenantResolver.cs:18`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). Added `using System.Linq;` to HeaderTenantResolver.cs so `StringValues.FirstOrDefault` resolves without relying on the consumer's ImplicitUsings (the projitems can be imported without it). Compile-hygiene fix — no unit test.
 - **Detail:** The file calls context.Request.Headers[...].FirstOrDefault() (lines 18, 22) but its using block (lines 1-4) imports only System, System.Threading, System.Threading.Tasks, and Microsoft.AspNetCore.Http — no System.Linq. As a shared project (.projitems/.shproj), this compiles only because the consuming project happens to enable ImplicitUsings. A consumer that imports the projitems without ImplicitUsings (a supported scenario for these shared projects) gets CS1061. Every other source file in the project explicitly imports what it uses.
 - **Fix:** Add 'using System.Linq;' to HeaderTenantResolver.cs (StringValues.FirstOrDefault is the LINQ extension on the indexer result).
 
@@ -4574,7 +4574,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GenerateToken does not guard against null claims argument
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Jwt\JwtTokenProvider.cs:38`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). Added `ArgumentNullException.ThrowIfNull(claims)` at the top of `GenerateToken`, matching the ctor's fail-fast guard style, so a null dictionary throws a clear ArgumentNullException instead of a bare NRE from the LINQ projection. Regression in Birko.Security.Jwt.Tests asserts the ArgumentNullException (parameter name "claims").
 - **Detail:** GenerateToken immediately calls claims.Select(...) (line 38) and claims.ContainsKey(...) (lines 41, 43) with no null check. The constructor fail-fasts on null options/empty secret, but the per-call claims dictionary is never validated. Passing null throws a bare NullReferenceException from inside the LINQ projection rather than a clear ArgumentNullException, which is inconsistent with the constructor's fail-fast guard style.
 - **Fix:** Add an early guard clause: 'if (claims == null) throw new ArgumentNullException(nameof(claims));' at the top of GenerateToken (matching the constructor's guard style and the framework's guard-clause convention).
 
@@ -4590,7 +4590,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetSecretPairsAsync throws on malformed/empty responses instead of returning null
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Vault\VaultSecretProvider.cs:179`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 43). `GetSecretPairsAsync` now uses `TryGetProperty` for the outer `data` and (KV2) inner `data`, returning null when the expected shape is absent (mirroring the NotFound handling) instead of throwing KeyNotFoundException. `ParseKv2Response` was hardened the same way (missing data/inner-data → empty value rather than throw). Regression (Birko.Security.Vault.Tests): a 200 with no `data` node, and a KV2 body missing inner `data`, both return null without throwing.
 - **Detail:** GetSecretPairsAsync calls doc.RootElement.GetProperty("data") (line 179) and, for KV2, data.GetProperty("data") (line 180). GetProperty throws KeyNotFoundException when the property is absent. A 200 response with an unexpected/empty body (or a KV2 response where the inner data node is missing) will surface a raw KeyNotFoundException to the caller rather than the documented graceful null/empty behaviour. ParseKv2Response (lines 230-231) has the same brittleness on GetProperty("data").GetProperty("data").
 - **Fix:** Use TryGetProperty for the data / inner-data lookups and return null (or an empty dictionary) when the expected shape is absent, mirroring the NotFound handling already present a few lines above.
 

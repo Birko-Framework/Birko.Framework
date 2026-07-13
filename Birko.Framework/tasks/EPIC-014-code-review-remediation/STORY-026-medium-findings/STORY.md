@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**184 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**191 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,17 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 43 — Redis + Security hardening CR-M231/232/233/234/235/238/240 (7 closed; offline)
+
+- **M231** `RedisConnectionManager` Lazy used ExecutionAndPublication (caches connect failure forever) → both ctors switched to `LazyThreadSafetyMode.PublicationOnly`.
+- **M232** new **Birko.Redis.Tests** (10): GetConnectionString branch matrix, GetId, LoadFrom dispatch, manager guards. Registered in .slnx + .code-workspace.
+- **M233** `Pbkdf2PasswordHasher.Verify` threw FormatException on non-base64 salt/hash → try/catch → false (now total over arbitrary stored strings).
+- **M234** `Birko.Security.Tests` exists (dispose test) → augmented with Pbkdf2 (round-trip/wrong-pw/malformed matrix) + AES (round-trip/GenerateKey/wrong-key/tamper).
+- **M235** HeaderTenantResolver missing `using System.Linq` → added (projitems can be imported without ImplicitUsings).
+- **M238** `JwtTokenProvider.GenerateToken` NRE'd on null claims → `ArgumentNullException.ThrowIfNull`. Test in Jwt.Tests.
+- **M240** Vault `GetSecretPairsAsync` + `ParseKv2Response` threw KeyNotFoundException on malformed body → `TryGetProperty` → null / empty. Tests in Vault.Tests.
+- Suites green: Redis 10, Security 15, Jwt 10, Vault 35.
 
 ### Batch 42 — Serialization ct-gates + Random rollover CR-M230/M243/M244/M245 (4 closed; offline)
 

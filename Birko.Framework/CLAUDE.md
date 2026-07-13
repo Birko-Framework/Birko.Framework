@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Redis + Security hardening (EPIC-014 / STORY-026) (2026-07-13)
+Forty-third STORY-026 batch: **CR-M231/232/233/234/235/238/240** across Birko.Redis + the Birko.Security.* family (7 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Redis Lazy poisoned on first failure (M231)** — `RedisConnectionManager` built its `Lazy<ConnectionMultiplexer>` with the default `ExecutionAndPublication`, which caches the factory's exception, so a transient connect failure at startup permanently poisoned the singleton (every later access re-threw). Both ctors now use `LazyThreadSafetyMode.PublicationOnly` (does not cache exceptions → retried on next access). New **Birko.Redis.Tests** (M232, 10): GetConnectionString branch matrix, GetId, LoadFrom dispatch, manager null-guards / IsConnected-when-not-created / Dispose idempotency.
+- **Pbkdf2 Verify not total (M233)** — `Pbkdf2PasswordHasher.Verify` guarded segment-count/algorithm/iterations but then called `Convert.FromBase64String` unconditionally, throwing FormatException on a corrupted/truncated stored hash. Wrapped in `try/catch (FormatException) → false`. Augmented **Birko.Security.Tests** (M234) with the Pbkdf2 malformed-input matrix + AES round-trip/GenerateKey/wrong-key/tamper.
+- **Jwt null claims (M238)** — `JwtTokenProvider.GenerateToken` NRE'd inside the LINQ projection on null claims; added `ArgumentNullException.ThrowIfNull(claims)` matching the ctor's fail-fast style.
+- **Vault KeyNotFound on malformed body (M240)** — `GetSecretPairsAsync` and `ParseKv2Response` used `GetProperty("data")`, throwing KeyNotFoundException on a 200 with an unexpected/empty body; both now use `TryGetProperty` and return null / empty (mirroring the NotFound handling).
+- **AspNetCore missing using (M235)** — `HeaderTenantResolver` used `StringValues.FirstOrDefault` without `using System.Linq`, compiling only under the consumer's ImplicitUsings; added the explicit import.
+- Suites green: Redis 10, Security 15, Jwt 10, Vault 35. STORY-026 now **191/275**.
+
 ### Code-review remediation — medium findings, Serialization ct-gates + Random (EPIC-014 / STORY-026) (2026-07-13)
 Forty-second STORY-026 batch: **CR-M230/M243/M244/M245** — Serialization CancellationToken gates + stream test coverage, and a verified Random test-gap. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **XML async ignored the token (M243)** — `SystemXmlSerializer`'s SerializeAsync/SerializeAsync&lt;T&gt;/DeserializeAsync/DeserializeAsync&lt;T&gt; wrapped synchronous work in `Task.CompletedTask`/`Task.FromResult` and never checked the token. Added `cancellationToken.ThrowIfCancellationRequested()` to each (XmlSerializer has no async API, so the gate is the idiomatic fix).
