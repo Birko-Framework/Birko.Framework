@@ -177,23 +177,25 @@ public class AzureBlobStorageTests : IDisposable
     }
 
     [Fact]
-    public void GetDownloadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation()
+    public async Task GetDownloadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation()
     {
+        // CR-M249: previously a non-async [Fact] that discarded the ThrowAsync task — the assertion
+        // never ran, so the test passed even if nothing threw. Now awaited.
         using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.GetDownloadUrlAsync("test.txt");
 
-        act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
-    public void GetUploadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation()
+    public async Task GetUploadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation()
     {
         using var storage = new AzureBlobStorage(_settings, _clock);
 
         var act = () => storage.GetUploadUrlAsync("test.txt");
 
-        act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]
