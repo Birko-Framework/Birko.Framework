@@ -9,9 +9,10 @@ namespace Birko.Health.Data;
 /// <summary>
 /// Health check for RavenDB. Calls the server build endpoint.
 /// </summary>
-public sealed class RavenDbHealthCheck : IHealthCheck
+public sealed class RavenDbHealthCheck : IHealthCheck, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
     private readonly string _baseUrl;
 
     /// <summary>
@@ -27,6 +28,7 @@ public sealed class RavenDbHealthCheck : IHealthCheck
         }
 
         _baseUrl = baseUrl.TrimEnd('/');
+        _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
     }
 
@@ -52,6 +54,18 @@ public sealed class RavenDbHealthCheck : IHealthCheck
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy($"RavenDB connection failed: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Disposes the internally-created HttpClient (CR-M192). A caller-supplied client is
+    /// left alone — the caller owns its lifetime.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_ownsClient)
+        {
+            _httpClient.Dispose();
         }
     }
 }

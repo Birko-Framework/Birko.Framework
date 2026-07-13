@@ -10,9 +10,10 @@ namespace Birko.Health.Data;
 /// <summary>
 /// Health check for Azure Cosmos DB. Calls the account endpoint to verify connectivity.
 /// </summary>
-public sealed class CosmosDbHealthCheck : IHealthCheck
+public sealed class CosmosDbHealthCheck : IHealthCheck, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
     private readonly string _baseUrl;
 
     /// <summary>
@@ -28,6 +29,7 @@ public sealed class CosmosDbHealthCheck : IHealthCheck
         }
 
         _baseUrl = baseUrl.TrimEnd('/');
+        _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
     }
 
@@ -61,6 +63,18 @@ public sealed class CosmosDbHealthCheck : IHealthCheck
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy($"Cosmos DB connection failed: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Disposes the internally-created HttpClient (CR-M192). A caller-supplied client is
+    /// left alone — the caller owns its lifetime.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_ownsClient)
+        {
+            _httpClient.Dispose();
         }
     }
 }

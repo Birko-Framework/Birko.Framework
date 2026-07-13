@@ -9,9 +9,10 @@ namespace Birko.Health.Data;
 /// <summary>
 /// Health check for Elasticsearch. Calls the cluster health API.
 /// </summary>
-public sealed class ElasticSearchHealthCheck : IHealthCheck
+public sealed class ElasticSearchHealthCheck : IHealthCheck, IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
     private readonly string _baseUrl;
 
     /// <summary>
@@ -27,6 +28,7 @@ public sealed class ElasticSearchHealthCheck : IHealthCheck
         }
 
         _baseUrl = baseUrl.TrimEnd('/');
+        _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
     }
 
@@ -64,6 +66,18 @@ public sealed class ElasticSearchHealthCheck : IHealthCheck
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy($"Elasticsearch connection failed: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Disposes the internally-created HttpClient (CR-M192). A caller-supplied client is
+    /// left alone — the caller owns its lifetime.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_ownsClient)
+        {
+            _httpClient.Dispose();
         }
     }
 }

@@ -11,10 +11,11 @@ namespace Birko.Health.Data;
 /// Health check for a Server-Sent Events (SSE) endpoint. Tests connectivity by sending
 /// an HTTP GET request and verifying the response content type is text/event-stream.
 /// </summary>
-public sealed class SseHealthCheck : IHealthCheck
+public sealed class SseHealthCheck : IHealthCheck, IDisposable
 {
     private readonly string _url;
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
 
     /// <summary>
     /// Creates an SSE health check.
@@ -29,6 +30,7 @@ public sealed class SseHealthCheck : IHealthCheck
         }
 
         _url = url.TrimEnd('/');
+        _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
     }
 
@@ -75,6 +77,18 @@ public sealed class SseHealthCheck : IHealthCheck
         catch (Exception ex)
         {
             return HealthCheckResult.Unhealthy($"SSE ({_url}) connection failed: {ex.Message}", ex);
+        }
+    }
+
+    /// <summary>
+    /// Disposes the internally-created HttpClient (CR-M192). A caller-supplied client is
+    /// left alone — the caller owns its lifetime.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_ownsClient)
+        {
+            _httpClient.Dispose();
         }
     }
 }
