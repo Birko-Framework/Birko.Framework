@@ -62,6 +62,13 @@ namespace Birko.Models.Customers
             return clone;
         }
 
+        /// <summary>
+        /// Hydrates from the customer view model. CR-M217: this is an intentionally <b>partial</b>
+        /// projection — the view model exposes only Name/Code (via <c>base.LoadFrom</c>) and the
+        /// PriceGroup. Email/Phone/Website/TaxId/VatId/Status/PartnerType/LegalType are NOT editable
+        /// through this view model and are preserved from the existing entity (set via the store /
+        /// domain services, not the VM). Do not treat a VM→model load as a full round-trip.
+        /// </summary>
         public virtual void LoadFrom(ViewModels.Customer data)
         {
             base.LoadFrom(data);
