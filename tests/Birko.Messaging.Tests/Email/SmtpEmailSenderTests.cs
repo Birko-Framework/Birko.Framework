@@ -119,6 +119,36 @@ public class SmtpEmailSenderTests
         act.Should().NotThrow();
     }
 
+    [Fact]
+    public async Task SendAsync_ConcurrentCalls_AreSerialized()
+    {
+        // CR-M210: SmtpClient is not concurrency-safe; the sender must serialize sends. The test-seam
+        // ctor tracks how many sends overlap — with the SemaphoreSlim it must never exceed one.
+        var settings = new EmailSettings("localhost", 25) { DefaultFrom = new MessageAddress("from@test.com") };
+        var current = 0;
+        var max = 0;
+        var gate = new object();
+        System.Func<System.Net.Mail.MailMessage, System.Threading.CancellationToken, Task> send = async (m, ct) =>
+        {
+            var c = System.Threading.Interlocked.Increment(ref current);
+            lock (gate) { if (c > max) max = c; }
+            await Task.Delay(30, ct);
+            System.Threading.Interlocked.Decrement(ref current);
+        };
+        using var sender = new SmtpEmailSender(settings, send);
+
+        var tasks = System.Linq.Enumerable.Range(0, 6).Select(_ => sender.SendAsync(new EmailMessage
+        {
+            From = new MessageAddress("from@test.com"),
+            Recipients = new[] { new MessageAddress("to@test.com") },
+            Subject = "s",
+            Body = "b"
+        }));
+        await Task.WhenAll(tasks);
+
+        max.Should().Be(1, "SmtpClient sends must be serialized so concurrent SendAsync never overlaps");
+    }
+
     private static SmtpEmailSender CreateSender()
     {
         var settings = new EmailSettings("localhost", 25);
