@@ -26,14 +26,17 @@ public class AsyncXmlSyncKnowledgeStore : AsyncXmlStore<XmlSyncKnowledgeItem>, I
     {
         if (lastSyncTime == null) return null;
 
-        var items = await ReadAsync(x => x.Scope == scope, ct: cancellationToken).ConfigureAwait(false);
-        if (items != null)
+        var items = (await ReadAsync(x => x.Scope == scope, ct: cancellationToken).ConfigureAwait(false))?.ToList();
+        if (items != null && items.Count > 0)
         {
             foreach (var item in items)
             {
                 item.LastSyncedAt = lastSyncTime.Value;
-                await UpdateAsync(item, ct: cancellationToken).ConfigureAwait(false);
             }
+
+            // Match CR-M162 (Sync.Json): one bulk UpdateAsync rewrites the XML file a single time instead
+            // of re-serializing the whole file once per item.
+            await UpdateAsync(items, ct: cancellationToken).ConfigureAwait(false);
         }
 
         return lastSyncTime;
