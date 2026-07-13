@@ -17,7 +17,7 @@ public class BirkoOpenTelemetryOptionsTests
         options.EnableOtlpMetricsExporter.Should().BeTrue();
         options.EnableConsoleTraceExporter.Should().BeFalse();
         options.EnableConsoleMetricsExporter.Should().BeFalse();
-        options.EnableAspNetCoreInstrumentation.Should().BeTrue();
+        options.EnableAspNetCoreInstrumentation.Should().BeFalse("CR-M254: AspNetCore instrumentation is opt-in (requires the optional AspNetCore package), consistent with the console-exporter toggles");
         options.MetricsExportInterval.Should().BeNull();
         options.AdditionalMeterNames.Should().BeEmpty();
         options.AdditionalActivitySourceNames.Should().BeEmpty();
