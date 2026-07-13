@@ -32,6 +32,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\StringFunction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Tables\View.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnectorBase_View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\ViewSelectSqlBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_CreateView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_CreateView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractAsyncConnector_SelectView.cs" />
