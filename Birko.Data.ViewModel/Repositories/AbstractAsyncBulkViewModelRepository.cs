@@ -54,17 +54,15 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task CreateAsync(IEnumerable<TViewModel> data, Stores.StoreDataDelegate<TModel>? storeDelegate = null, CancellationToken ct = default)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (BulkStore == null || data == null)
             {
                 return;
             }
 
-            var models = data.Select(vm =>
-            {
-                var model = CreateModelInstance();
-                MapToModel(vm, model);
-                return model;
-            }).Where(m => m != null).ToList()!;
+            // CR-M179: route through LoadModelInstance so the ViewModel→Model mapping matches the
+            // single-item path (uniform behavior).
+            var models = data.Select(LoadModelInstance).Where(m => m != null).ToList()!;
 
             await BulkStore.CreateAsync(models, storeDelegate, ct).ConfigureAwait(false);
         }
@@ -86,9 +84,14 @@ namespace Birko.Data.Repositories
             var models = await BulkStore.ReadAsync(filter, null, limit, offset, ct);
             foreach (var model in models)
             {
-                var viewModel = CreateInstance();
-                viewModel.LoadFrom(model);
-                yield return viewModel;
+                // CR-M179: use LoadInstance so change-tracking (StoreHash) is populated for bulk-read
+                // entities — otherwise a later single-item UpdateAsync sees no stored hash and the
+                // optimistic no-op-update skip is defeated.
+                var viewModel = LoadInstance(model);
+                if (viewModel != null)
+                {
+                    yield return viewModel;
+                }
             }
         }
 
@@ -97,17 +100,13 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task UpdateAsync(IEnumerable<TViewModel> data, Stores.StoreDataDelegate<TModel>? storeDelegate = null, CancellationToken ct = default)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (BulkStore == null || data == null)
             {
                 return;
             }
 
-            var models = data.Select(vm =>
-            {
-                var model = CreateModelInstance();
-                MapToModel(vm, model);
-                return model;
-            }).Where(m => m != null).ToList()!;
+            var models = data.Select(LoadModelInstance).Where(m => m != null).ToList()!; // CR-M179
 
             await BulkStore.UpdateAsync(models, storeDelegate, ct).ConfigureAwait(false);
         }
@@ -117,6 +116,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task UpdateAsync(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction, CancellationToken ct = default)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (BulkStore == null) return;
             await BulkStore.UpdateAsync(filter, updateAction, ct).ConfigureAwait(false);
         }
@@ -126,6 +126,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task UpdateAsync(Expression<Func<TModel, bool>> filter, Stores.PropertyUpdate<TModel> updates, CancellationToken ct = default)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (BulkStore == null) return;
             await BulkStore.UpdateAsync(filter, updates, ct).ConfigureAwait(false);
         }
@@ -135,6 +136,7 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task DeleteAsync(Expression<Func<TModel, bool>> filter, CancellationToken ct = default)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (BulkStore == null) return;
             await BulkStore.DeleteAsync(filter, ct).ConfigureAwait(false);
         }
@@ -144,17 +146,13 @@ namespace Birko.Data.Repositories
         /// </summary>
         public virtual async Task DeleteAsync(IEnumerable<TViewModel> data, CancellationToken ct = default)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (BulkStore == null || data == null)
             {
                 return;
             }
 
-            var models = data.Select(vm =>
-            {
-                var model = CreateModelInstance();
-                MapToModel(vm, model);
-                return model;
-            }).Where(m => m != null).ToList()!;
+            var models = data.Select(LoadModelInstance).Where(m => m != null).ToList()!; // CR-M179
 
             await BulkStore.DeleteAsync(models, ct).ConfigureAwait(false);
         }

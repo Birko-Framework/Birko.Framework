@@ -56,6 +56,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Create(IEnumerable<TViewModel> data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (Store is not IBulkStore<TModel>)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -75,6 +76,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(IEnumerable<TViewModel> data, ProcessDataDelegate<TModel>? processDelegate = null)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (Store is not IBulkStore<TModel>)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -90,6 +92,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(Expression<Func<TModel, bool>> filter, Action<TModel> updateAction)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -100,6 +103,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Update(Expression<Func<TModel, bool>> filter, PropertyUpdate<TModel> updates)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -110,6 +114,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Delete(Expression<Func<TModel, bool>> filter)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (Store is not IBulkStore<TModel> bulkStore)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
@@ -120,6 +125,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual void Delete(IEnumerable<TViewModel> data)
         {
+            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode"); // CR-M180
             if (Store is not IBulkStore<TModel>)
             {
                 throw new ArgumentException($"Store is not type of {typeof(IBulkStore<TModel>)}");
