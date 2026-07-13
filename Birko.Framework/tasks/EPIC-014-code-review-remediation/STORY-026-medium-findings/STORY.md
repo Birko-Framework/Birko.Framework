@@ -13,13 +13,16 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**230 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**232 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 **The entire TypeScript Birko.Web.* track (M256–M266) is CLOSED** (Batch 52). **The SQLite
-integration tier is under way** (Batch 53): CR-M135/M144/M145/M150 closed via a real on-disk SQLite
-`DbConnection`. Remaining open: the SQLite-tier stragglers CR-M152/M154 (headline bugs already
-covered by existing green tests — augmentation pending) and the Docker/async-refactor pile below.
+integration tier is CLOSED** (Batches 53–54): CR-M135/M144/M145/M150/M152/M154 — every SQLite-tier
+finding done via a real on-disk SQLite `DbConnection`. Remaining open (43): only the pile that needs
+**Docker/Testcontainers** (live MSSql/Postgres/ES paths — CR-M089/M136/M138/M139/M146/M149 and the
+MSSql.View/PostgreSQL.View test-gaps) or the **async-interface refactor** (CR-M101 → M108/M109), plus
+the view-SELECT-builder refactor cluster (M140/M151/M153) and the Sync backends (M157–M171) — none
+verifiable in this environment.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
 > lowest risk), THEN tackle the deferred pile below as a dedicated integration-test effort. Deferring
@@ -74,9 +77,22 @@ the audit), so M135/M145 became "extend" not "create".
   non-`SqlMigrationContext` guard and null/empty-arg guards. git-initialized + registered in `.slnx` +
   `.code-workspace`.
 
-Remaining SQLite-tier: M152 (`ViewModel.Tests` — augment with the sync `DataBaseRepository` ctor guard,
-wrapped-store unwrap, `ReadOne`, `AddOnInit`) and M154 (`Views.Tests` — add `SqlViewTranslator.Translate`
-pure tests). Both projects exist with their headline-bug regressions already green.
+### Batch 54 — SQLite tier finish CR-M152/M154 (2 closed; tier complete)
+
+Closed the two SQLite-tier stragglers, both by augmenting existing green projects.
+- **M152** — `Birko.Data.SQL.ViewModel.Tests` (3 → 10): new `SyncDataBaseRepositoryTests` for the sync
+  `DataBaseRepository` — ctor guards (accepts a concrete `SQLiteStore`, rejects an unrelated `InMemoryStore`,
+  default ctor), the unwrapping `Connector` accessor (resolves a `SqLiteConnector` after `SetSettings`),
+  `AddOnInit`/`RemoveOnInit` wiring (verified via `DoInit()` firing/not-firing the registered
+  `InitConnector`), and the `ReadOne` extension (null-connector → default; a real SQLite round-trip →
+  mapped view model). Added the `Birko.Models.SQL` projitems import for the mapping registry.
+- **M154** — `Birko.Data.SQL.Views.Tests` (3 → 10): new `SqlViewTranslatorTests` for the pure-logic
+  surface — `Translate` null guard, name derivation (explicit `HasName` vs concatenated table names),
+  query-mode translation (OnTheFly/Persistent/Auto), and the COUNT(*) base-field path. The
+  field/join/aggregate *mapping* is already validated end-to-end by `SqlViewStoreAsyncTests`.
+
+**The SQLite integration tier (CR-M135/M144/M145/M150/M152/M154) is complete.** Everything still open
+needs Docker/Testcontainers or the async-interface refactor — not verifiable here.
 
 ### Batch 52 — TypeScript Birko.Web.* track CR-M256…M266 (11 closed; whole TS track)
 

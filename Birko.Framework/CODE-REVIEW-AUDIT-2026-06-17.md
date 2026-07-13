@@ -3886,7 +3886,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for Birko.Data.SQL.ViewModel
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Data.SQL.ViewModel.Tests (absent)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.SQL.ViewModel.Tests covers both repos: AsyncDataBaseRepositoryTests (the CR-C17 generic-invariance regression) + new SyncDataBaseRepositoryTests (sync DataBaseRepository ctor guards accept concrete / reject unrelated / default, the unwrapping Connector accessor, AddOnInit/RemoveOnInit wiring via DoInit, and the ReadOne extension incl. a real SQLite round-trip). 10 tests.
 - **Detail:** There is no Birko.Data.SQL.ViewModel.Tests sibling directory. The project's own CLAUDE.md and the framework convention require xUnit + FluentAssertions tests for every public functionality. The public surface (DataBaseRepository constructor validation, Connector unwrap, AddOnInit/RemoveOnInit, AsyncDataBaseRepository constructor validation, and the ReadOne extension) is entirely untested. A test of the AsyncDataBaseRepository constructor with a real concrete store would have immediately surfaced the critical generic-invariance bug above.
 - **Fix:** Add a Birko.Data.SQL.ViewModel.Tests project covering both repositories' constructor guards (valid store accepted, wrong-type store rejected, wrapped-store unwrap) and the ReadOne extension; include a case that passes an AsyncMSSqlStore-equivalent to AsyncDataBaseRepository.
 
@@ -3902,7 +3902,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for the entire library
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.Views\Birko.Data.SQL.Views (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.SQL.Views.Tests: SqlViewStoreAsyncTests exercises the translator field/join/aggregate mapping end-to-end over a real SQLite join view (CR-H096), and new SqlViewTranslatorTests adds the pure-logic surface — name derivation (explicit + concatenated), query-mode translation (all three), the COUNT(*) base-field path, and the null guard. 10 tests.
 - **Detail:** There is no Birko.Data.SQL.Views.Tests sibling, and no test anywhere in the workspace references SqlViewStore, SqlViewManager, or SqlViewTranslator (grep across C:\Source returned nothing). The framework convention (CLAUDE.md Testing section) is that every new public functionality has xUnit + FluentAssertions tests. Untested public surface includes the translator's field/aggregate/join mapping, COUNT(*) base-field selection, name derivation, query-mode/join-type translation, and the store/manager method behaviors — exactly the logic where the GroupBy and sync-over-async issues above hide.
 - **Fix:** Add Birko.Data.SQL.Views.Tests. Translator tests can run with no DB (assert on the produced Tables.View). Store/manager round-trip tests can use SQLite in-memory via an AbstractAsyncConnector.
 
