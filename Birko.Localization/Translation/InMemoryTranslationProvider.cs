@@ -42,10 +42,23 @@ public sealed class InMemoryTranslationProvider : ITranslationProvider
 
     public IReadOnlyList<CultureInfo> GetSupportedCultures()
     {
+        // CR-M197: AddTranslation / the ctor accept arbitrary culture-name strings with no validation,
+        // so a bogus name (typo, custom tag) would make CultureInfo.GetCultureInfo throw. Guard and
+        // filter out the bad entry, matching the Json/Resx providers.
         return _translations.Keys
-            .Select(name => string.IsNullOrEmpty(name) ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(name))
-            .ToList()
-            .AsReadOnly();
+            .Select(name =>
+            {
+                try
+                {
+                    return string.IsNullOrEmpty(name) ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(name);
+                }
+                catch (CultureNotFoundException)
+                {
+                    return null;
+                }
+            })
+            .Where(c => c != null)
+            .ToList()!;
     }
 
     public IReadOnlyDictionary<string, string> GetAll(CultureInfo culture)
