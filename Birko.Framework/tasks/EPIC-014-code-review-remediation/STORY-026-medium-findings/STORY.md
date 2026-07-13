@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**161 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**169 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,20 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 38 — Models cluster CR-M213/215/216/217/221/226/227/228 (8 closed; offline)
+
+Most Models `.Tests` siblings already exist (Category/Contracts/Customers/Inventory/Pricing/Product/SQL/base). User approved creating new projects as needed.
+- **M213** `ValueData.LoadFrom(ViewModels.Value)` skipped `base.LoadFrom` → dropped CreatedAt/UpdatedAt/identity. Added `base.LoadFrom(data)`. Test in Birko.Models.Tests.
+- **M215** `HierarchyHelper.RewriteDescendantPaths` NRE'd on a null `desc.Path` mid-batch → null-guard oldPath/newPath at entry + skip null/non-matching Path (and null NamePath). Tests in Birko.Models.Contracts.Tests.
+- **M216** Contracts test-gap — project exists (HierarchyHelperTests); augmented with the M215 cases. Closed.
+- **M217** Customer VM→model is a partial projection (only Name/Code/PriceGroup) → **documented** as intentional (other fields preserved from the entity).
+- **M221** InventoryDocument VM carries no Lines → **documented** that lines load separately (empty by design).
+- **M226** all seven relational Users FK overloads did `data.Guid!.Value` → crash on a transient VM. Now `if (data?.Guid is Guid g) X = g;`. Tests in new Birko.Models.Users.Tests.
+- **M227** relational Users VMs drop FKs → **documented** that FK assignment is via the relation-specific LoadFrom overloads only.
+- **M228** created **Birko.Models.Users.Tests** (GetDisplayName + M226 guard); registered in .slnx + .code-workspace.
+- Suites green: Models.Tests 35, Contracts.Tests 7, Users.Tests 7.
+- **Still open in the Models cluster:** M214 (Category), M218 (Customers), M222 (Inventory), M223 (Product), M225 (Models.SQL) test-gaps (projects exist — verify/augment next); M219/M220 (Customers.SQL mappings), M224 (SEO), M229 (Users.SQL) need new .Tests projects.
 
 ### Batch 37 — MessageQueue.Redis CR-M206 (1 closed; offline CancellationToken gate)
 

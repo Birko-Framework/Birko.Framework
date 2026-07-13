@@ -4374,7 +4374,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ValueData.LoadFrom(ViewModels.Value) and LoadFrom(IValueData) skip base.LoadFrom — log/identity fields dropped
 - **Path:** `C:\Source\Birko\Framework\Birko.Models\Models\ValueData.cs:46,63`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38). `LoadFrom(ViewModels.Value)` now calls `base.LoadFrom(data)` first (ViewModels.Value : LogViewModel : ILogEntity), so CreatedAt/UpdatedAt/PrevUpdatedAt + identity survive instead of being dropped. The `LoadFrom(IValueData)` overload is left as-is (no log fields on that contract). Regression in Birko.Models.Tests asserts Guid/CreatedAt/UpdatedAt round-trip.
 - **Detail:** ValueData derives from AbstractLogModel and ViewModels.Value derives from LogViewModel (carries CreatedAt/UpdatedAt/PrevUpdatedAt + identity). Both LoadFrom overloads set only Price/PriceVAT/VAT and never call base.LoadFrom(data), so loading a ValueData from a ViewModels.Value silently discards the timestamp/identity fields. This is inconsistent with the sibling abstracts — AbstractPercentage.LoadFrom (AbstractPercentage.cs:15) and AbstractTree.LoadFrom (AbstractTree.cs:30) both call base.LoadFrom(data) first.
 - **Fix:** Call base.LoadFrom(data) at the top of LoadFrom(ViewModels.Value) (the viewmodel implements ILogEntity via LogViewModel). For LoadFrom(IValueData) there are no log fields to copy, so leaving it is defensible, but the ViewModels.Value overload looks like a real data-loss bug.
 
@@ -4390,7 +4390,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unguarded Path dereference can NullReferenceException in RewriteDescendantPaths
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Contracts\Contracts/IHierarchical.cs:99`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38). `RewriteDescendantPaths` now `ArgumentNullException.ThrowIfNull`s oldPath/newPath at entry and, per descendant, skips any whose `Path` is null or doesn't start with oldPath (instead of NRE / ArgumentOutOfRange mid-batch, which left the batch partially mutated); the NamePath branch also guards a null `NamePath`. Regression (Birko.Models.Contracts.Tests): a null-Path descendant is skipped while a matching one is rewritten; null oldPath/newPath throw.
 - **Detail:** `desc.Path.Substring(oldPath.Length)` (and `desc.Path.Count(...)` on line 100) dereference `desc.Path` with no null check. `Path` is a non-nullable interface string but the contract cannot enforce that it has been populated; a freshly-constructed entity whose ComputePath was never called will have a null Path and throw NRE mid-iteration, partially mutating the batch. `oldPath`/`newPath` params are likewise unchecked. There is no test sibling to catch this.
 - **Fix:** Guard early: skip or throw a clear exception when `desc.Path` is null/doesn't start with oldPath, and validate oldPath/newPath are non-null at method entry.
 
@@ -4398,7 +4398,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for HierarchyHelper logic
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Contracts\Birko.Models.Contracts (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38). `Birko.Models.Contracts.Tests` exists (created since the audit) with `HierarchyHelperTests` covering ComputePath (root/child), DeriveParentAndDepthFromPath round-trip, and now (this batch) `RewriteDescendantPaths` incl. the null-Path edge cases from CR-M215.
 - **Detail:** Birko.Models.Contracts.Tests does not exist. The interfaces are trivial, but HierarchyHelper contains real branching logic — ComputePath (root vs child, INamedHierarchical NamePath), RewriteDescendantPaths (path/namepath rewrite, depth recomputation from slash count), IsDescendantOf, and NormalizeSortOrder (returns only changed items). Per the framework convention 'every new public functionality must have corresponding tests', this logic should be covered: root vs nested path/depth, descendant rewrite correctness, the suffix-trim NamePath path, and the no-change branch of NormalizeSortOrder.
 - **Fix:** Add Birko.Models.Contracts.Tests (xUnit + FluentAssertions) covering HierarchyHelper, including the null-Path edge cases above.
 
@@ -4406,7 +4406,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Customer.LoadFrom(ViewModels.Customer) loads only PriceGroupGuid; Email/Phone/Website/TaxId/VatId/Status/PartnerType/LegalType have no load path
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Customers\Models/Customer.cs:42-49`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38, documented). Confirmed intentional: the Customer view model exposes only Name/Code (base) + PriceGroup, so Email/Phone/Website/TaxId/VatId/Status/PartnerType/LegalType are not editable through it. Documented on `LoadFrom(ViewModels.Customer)` that it is a partial projection and those fields are preserved from the existing entity (set via the store/domain services), so a VM→model load is not a full round-trip. Chose documenting over widening the view model (a larger design change with round-trip implications).
 - **Detail:** LoadFrom(ViewModels.Customer) chains base.LoadFrom (Name/Code) and sets PriceGroupGuid, but the eight other Customer fields are never hydrated from any view model — the Customer view model (ViewModels/Customer.cs) does not expose Email/Phone/Website/TaxId/VatId/Status/PartnerType/LegalType at all. Whether this is a real round-trip bug or an intentionally partial projection is ambiguous, but as written a Customer cannot be reconstructed from its view model. This is a model/view-model asymmetry that will surface as data loss in any edit-then-save flow built on these view models.
 - **Fix:** Either add the missing properties to ViewModels.Customer and map them in LoadFrom, or document explicitly that these fields are not editable via the view model. At minimum, confirm the intent — silent partial loads are a common source of save-time data loss.
 
@@ -4438,7 +4438,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** InventoryDocument.Lines is never loaded in LoadFrom
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Inventory\Models/InventoryDocument.cs:32`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38, documented). Confirmed intentional: the view model carries no line collection; lines are loaded/persisted separately via the InventoryDocumentLine store. Documented on `LoadFrom(ViewModels.InventoryDocument)` that Lines is not populated here (a VM→document load yields an empty Lines by design), rather than silently implying a child round-trip.
 - **Detail:** InventoryDocument implements IDocument<InventoryDocumentLine> and exposes a Lines collection (line 30), but LoadFrom(ViewModels.InventoryDocument) copies every scalar field and never populates Lines. The view model (ViewModels/InventoryDocument.cs) also has no Lines member, so loading a document from its view model always yields an empty Lines collection. If line round-tripping is intentionally out of scope this should be documented; otherwise it is data loss for the document's child lines.
 - **Fix:** Either add a Lines collection to the view model and map it in LoadFrom, or add an XML-doc note on InventoryDocument/LoadFrom stating that lines are populated separately (e.g. via the line store) and not through the view model.
 
@@ -4478,7 +4478,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unguarded Guid!.Value can throw on transient (unsaved) view models
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Users\Models/UserLogin.cs:63 (also UserProfile.cs:62, UserRole.cs:30 & :39, UserTenant.cs:21 & :39, RolePermission.cs:29)`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38). Replaced `XGuid = data.Guid!.Value;` with `if (data?.Guid is Guid guid) { XGuid = guid; }` across all seven overloads (UserLogin, UserProfile, UserRole ×2, UserTenant ×2, RolePermission), so a transient (Guid == null) view model leaves the FK unset instead of throwing InvalidOperationException. Regression (new Birko.Models.Users.Tests): LoadFrom of a transient User/Role/Tenant VM doesn't throw; a persisted VM sets the FK.
 - **Detail:** Every relational model's foreign-key LoadFrom overload does `UserGuid = data.Guid!.Value;` (and RoleGuid/TenantGuid equivalents). The `data != null` guard checks the object but NOT its nullable Guid. AbstractModel.Guid is `Guid?` defaulting to null, so a not-yet-persisted view model (Guid == null) passed to e.g. UserLogin.LoadFrom(ViewModels.User) throws InvalidOperationException via `!.Value`. The `!` operator silences the nullable warning but does not make the access safe — it converts a compile-time concern into a runtime crash. This is the project's main correctness risk.
 - **Fix:** Guard the value access, e.g. `if (data?.Guid is Guid g) UserGuid = g;` (or early-return when `data?.Guid == null`). Applies uniformly to UserLogin, UserProfile, UserRole (User + Role), UserTenant (User + Tenant), and RolePermission (Role).
 
@@ -4486,7 +4486,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Relational view models drop their foreign keys on round-trip
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Users\ViewModels/UserRole.cs (also ViewModels/UserTenant.cs, ViewModels/UserLogin.cs, ViewModels/UserProfile.cs, ViewModels/RolePermission.cs)`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38, documented). Confirmed intentional: the relational view models don't carry the parent FK Guids; those are assigned only via the relation-specific `LoadFrom(ViewModels.User)` / `LoadFrom(ViewModels.Role)` / `LoadFrom(ViewModels.Tenant)` overloads. Documented on each own-VM `LoadFrom` (UserRole/UserTenant/UserLogin/UserProfile/RolePermission) that a single VM→model load is not a full FK round-trip. Chose documenting over surfacing FKs on the view models (a design change).
 - **Detail:** The model classes carry FK fields (UserGuid, RoleGuid, TenantGuid) but the corresponding view models expose none of them (UserRole VM has only TenantGuid+GrantedAt; UserTenant VM has only IsOwner+JoinedAt; UserLogin/UserProfile/RolePermission VMs have no UserGuid/RoleGuid). Consequently `model.LoadFrom(viewModel)` (e.g. UserRole.cs:42) never restores UserGuid/RoleGuid — they are only ever set via the separate `LoadFrom(ViewModels.User)` / `LoadFrom(ViewModels.Role)` overloads. Any consumer hydrating a model from just its own view model silently loses the parent linkage (and there is no reverse model->viewmodel projection of the FK at all). Confirm this is intentional (FKs set only via the relation-specific overloads) — if a single-call model<->viewmodel round-trip is expected anywhere, the FK is lost.
 - **Fix:** If view models are meant to be fully round-trippable, surface the FK Guids on the relational view models and copy them in the matching LoadFrom; otherwise document that FK assignment is only via the IRelatedToX overloads.
 
@@ -4494,7 +4494,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling exists for the entire project
 - **Path:** `C:/Source/Birko/Framework/Birko.Models.Users (no Birko.Models.Users.Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 38). Created **`Birko.Models.Users.Tests`** (xUnit + FluentAssertions; registered in `.slnx` + `.code-workspace`): `UserModelsTests` covers `GetDisplayName` (explicit / First+Last / single / empty) and the CR-M226 transient-Guid LoadFrom guard across all five relational models. Filter builders + the PropertyChanged aggregate wiring remain for a later coverage pass.
 - **Detail:** Convention requires every new public functionality to have tests in Birko.{ProjectName}.Tests. There is no Birko.Models.Users.Tests directory. Untested public surface includes: UserProfile.GetDisplayName() (the only non-trivial logic — explicit name vs 'First Last'.Trim() vs empty), all LoadFrom overloads (including the Guid-null crash path above), the ViewModel PropertyChanged -> *ObjectProperty aggregate-raise wiring, and all 8 Filter.Filter() expression builders (notably RolePermission.PermissionCodePrefix StartsWith, UserRole.GlobalOnly TenantGuid==null, UserProfile First/LastName Contains).
 - **Fix:** Add Birko.Models.Users.Tests (xUnit + FluentAssertions) covering GetDisplayName edge cases, LoadFrom with null/transient Guids, and each filter's combine/no-match behavior.
 
