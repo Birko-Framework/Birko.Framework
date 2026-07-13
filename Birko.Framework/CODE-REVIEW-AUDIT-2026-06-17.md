@@ -4261,32 +4261,32 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M199 · 🟡 medium · Birko.MessageQueue (core)
 - **Title:** RetryPolicy has no tests
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue (core)\Retry/RetryPolicy.cs`
-- **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Category:** test-gap · **Verification:** offline unit test (Birko.MessageQueue.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 36). Added `RetryPolicyTests` (fixed → BaseDelay; exponential 2^(n-1) growth; MaxDelay clamp; Default/None factory defaults). Writing the large-attempt boundary test surfaced the **same overflow as CR-M078**: `(long)Math.Pow(2, attemptNumber - 1)` wrapped to a negative value for large attempts, yielding a negative TimeSpan that slipped past the `> MaxDelay` clamp — fixed by computing in `double` and saturating at `MaxDelay` before the cast. Boundary test covers attempt 53/100/1000/int.MaxValue (never negative, saturates at Max).
 - **Detail:** RetryPolicy.GetDelay is the only branch logic in the whole core project (exponential vs fixed backoff, MaxDelay clamp, the overflow edge above) and has zero tests in Birko.MessageQueue.Tests. The Default/None factory properties are also untested. Per the framework convention every new public functionality must have success + failure + boundary tests.
 - **Fix:** Add RetryPolicyTests covering: UseExponentialBackoff=false returns BaseDelay; exponential growth across attempts; clamping at MaxDelay; the large-attemptNumber boundary (no negative/overflow result).
 
 ### CR-M200 · 🟡 medium · Birko.MessageQueue.InMemory
 - **Title:** Old DispatchCts is cancelled but never disposed in RemoveSubscriber
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryChannel.cs:95`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.MessageQueue.InMemory.Tests) — already resolved
+- **Status:** done — 2026-07-13 (STORY-026 batch 36, verify-first). Already fixed under CR-H119: `RemoveSubscriber` now captures the CTS, nulls the field, then `Cancel()` **and** `Dispose()`s it, and `StartDispatching` is only invoked when `DispatchCts == null` (so no live CTS is ever overwritten undisposed). `InMemoryChannelDisposalTests` explicitly covers "RemoveSubscriber must dispose (not just cancel) the CTS" + re-add restarts dispatch. No code change needed this batch.
 - **Detail:** When the last subscriber is removed, state.DispatchCts?.Cancel() then state.DispatchCts = null. The CancellationTokenSource is an IDisposable and is dropped without Dispose(). If subscribers are added and removed repeatedly for the same destination, a new CTS is allocated each time (StartDispatching, line 108) and the previous ones are never disposed.
 - **Fix:** Capture the CTS, Cancel() then Dispose() it before nulling: var cts = state.DispatchCts; state.DispatchCts = null; cts?.Cancel(); cts?.Dispose();
 
 ### CR-M201 · 🟡 medium · Birko.MessageQueue.InMemory
 - **Title:** Delayed SendAsync is fire-and-forget and swallows write failures
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryProducer.cs:29`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.MessageQueue.InMemory.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 36). The detached delayed-send task now has an `OnlyOnFaulted` continuation that observes its exception (so a post-delay failure is no longer an unobserved-task exception), and `SendAsync` is documented as **best-effort for delayed delivery** — a cancellation / channel-closed failure after the delay cannot be reported through the already-completed call. Regression: a delayed send delivers; a delayed send with a pre-cancelled token doesn't throw from SendAsync and isn't delivered.
 - **Detail:** When message.Delay is set, the method spawns _ = Task.Run(...) and returns immediately. Any exception thrown by Task.Delay (e.g. the token is cancelled) or by _channel.WriteAsync (e.g. the bounded channel is completed/disposed) is raised on an unobserved task that no one awaits — it is silently lost. The caller's await SendAsync(...) completes successfully even though the message may never be enqueued. This is the sync-over-async / swallowed-exception anti-pattern called out in the framework conventions.
 - **Fix:** At minimum attach a continuation that observes/logs the fault, or document that delayed sends are best-effort. Consider scheduling delayed delivery inside the channel rather than detaching an untracked task.
 
 ### CR-M202 · 🟡 medium · Birko.MessageQueue.InMemory
 - **Title:** RejectAsync(requeue: true) silently discards the message instead of redelivering
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryConsumer.cs:83`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.MessageQueue.InMemory.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 36). `_pendingAck` now stores `(destination, message)` (the destination is in scope when the entry is added in the ManualAck wrapper), so `RejectAsync(requeue: true)` writes the message back to its originating channel via `_channel.WriteAsync` instead of silently discarding it. Regression: requeue:true redelivers (deliveries reaches 2); requeue:false does not.
 - **Detail:** RejectAsync removes the message from _pendingAck and, when requeue is true, the body of the if is empty (only a comment: the consumer cannot recover the destination, so the message is dropped). The public contract implies requeue:true should make the message available for redelivery; here both requeue:true and requeue:false behave identically (discard). Callers relying on requeue for poison-message handling get silent message loss.
 - **Fix:** Track the originating destination alongside the pending-ack entry (store a (destination, message) tuple keyed by Id) so requeue can call _channel.WriteAsync(destination, message). If requeue genuinely cannot be supported in-memory, throw NotSupportedException rather than silently succeeding.
 

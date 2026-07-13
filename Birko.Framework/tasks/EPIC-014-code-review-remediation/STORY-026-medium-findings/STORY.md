@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**156 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**160 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,15 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 36 — MessageQueue core + InMemory CR-M199/M200/M201/M202 (4 closed; offline)
+
+- **M199** (test-gap + bug) `RetryPolicy` had no tests; added `RetryPolicyTests`, and the large-attempt boundary test surfaced the CR-M078-style overflow (`(long)Math.Pow(...)` wraps negative) → fixed to compute in double + saturate at MaxDelay.
+- **M200** (already resolved, verify-first) `InMemoryChannel.RemoveSubscriber` already captures+cancels+**disposes** the CTS (CR-H119) and `StartDispatching` is guarded on `DispatchCts == null`; existing `InMemoryChannelDisposalTests` covers it. No change.
+- **M201** delayed `InMemoryProducer.SendAsync` was fire-and-forget swallowing faults → observe the detached task's fault (OnlyOnFaulted continuation) + document delayed delivery as best-effort. Offline tests (delivers; cancelled delayed send doesn't throw or deliver).
+- **M202** `InMemoryConsumer.RejectAsync(requeue:true)` silently discarded (destination unknown) → `_pendingAck` now stores `(destination, message)` so requeue writes back to the channel. Offline tests (requeue redelivers; no-requeue doesn't).
+- Suites green: Birko.MessageQueue.Tests 71, Birko.MessageQueue.InMemory.Tests 11.
+- **Deferred (live broker):** MQTT M204 (resubscribe-on-reconnect) / M207 Redis poll-loop / M208 Redis consumer-name / M209 Redis test-gap need a live broker; MQTT M203/M205 need a new `.MQTT.Tests` project; M206 (Redis CancellationToken gate) is offline and can go in a follow-up with the existing Redis.Tests.
 
 ### Batch 35 — Helpers + Localization CR-M195/M196/M197/M198 (4 closed; offline)
 
