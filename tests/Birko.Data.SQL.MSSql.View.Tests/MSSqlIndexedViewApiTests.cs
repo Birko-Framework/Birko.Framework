@@ -86,4 +86,25 @@ public class MSSqlIndexedViewApiTests
 
         connector.Invoking(c => c.IndexedViewExists("")).Should().Throw<ArgumentException>();
     }
+
+    // CR-M139: the async indexed-view methods are now genuine async (not Task.Run(sync)); their guards
+    // fault the returned task rather than throwing synchronously.
+
+    [Fact]
+    public async Task IndexedViewExistsAsync_EmptyName_ThrowsArgumentException()
+    {
+        var connector = NewConnector();
+
+        await connector.Invoking(c => c.IndexedViewExistsAsync(""))
+            .Should().ThrowAsync<ArgumentException>();
+    }
+
+    [Fact]
+    public async Task CreateIndexedViewAsync_NonViewType_ThrowsInvalidOperation()
+    {
+        var connector = NewConnector();
+
+        await connector.Invoking(c => c.CreateIndexedViewAsync(typeof(object)))
+            .Should().ThrowAsync<InvalidOperationException>();
+    }
 }
