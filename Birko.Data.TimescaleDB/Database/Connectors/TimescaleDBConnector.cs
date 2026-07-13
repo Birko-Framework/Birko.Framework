@@ -30,24 +30,38 @@ namespace Birko.Data.SQL.Connectors
         /// Uses default TimescaleDB hypertable settings.
         /// </summary>
         /// <param name="settings">The remote settings for connection.</param>
-        public TimescaleDBConnector(RemoteSettings settings) : base(settings)
+        /// <remarks>
+        /// CR-M176: chains to the typed constructor via <see cref="AsTimescaleSettings"/> so the base
+        /// <c>_settings</c> (used by CreateConnection / bulk ops) and <c>_timescaleSettings</c> are the
+        /// SAME TimescaleDBSettings instance. Previously this called <c>base(settings)</c> with the raw
+        /// RemoteSettings, so <c>_settings</c> was a RemoteSettings that never reached
+        /// <c>TimescaleDBSettings.GetConnectionString()</c> — CreateConnection silently dropped the
+        /// TimescaleDB connection-string semantics on the RemoteSettings path.
+        /// </remarks>
+        public TimescaleDBConnector(RemoteSettings settings) : this(AsTimescaleSettings(settings))
+        {
+        }
+
+        /// <summary>
+        /// Returns the settings as a TimescaleDBSettings — the same instance when already one, otherwise
+        /// a new TimescaleDBSettings carrying the connection fields (hypertable defaults applied).
+        /// </summary>
+        private static TimescaleDBSettings AsTimescaleSettings(RemoteSettings settings)
         {
             if (settings is TimescaleDBSettings timescaleSettings)
             {
-                _timescaleSettings = timescaleSettings;
+                return timescaleSettings;
             }
-            else
+
+            return new TimescaleDBSettings
             {
-                _timescaleSettings = new TimescaleDBSettings
-                {
-                    Location = settings.Location,
-                    Name = settings.Name,
-                    Password = settings.Password,
-                    UserName = settings.UserName,
-                    Port = settings.Port,
-                    UseSecure = settings.UseSecure
-                };
-            }
+                Location = settings.Location,
+                Name = settings.Name,
+                Password = settings.Password,
+                UserName = settings.UserName,
+                Port = settings.Port,
+                UseSecure = settings.UseSecure
+            };
         }
 
         /// <summary>
@@ -88,15 +102,25 @@ namespace Birko.Data.SQL.Connectors
         {
             DoCommand((command) =>
             {
-                command.CommandText = string.Format(
-                    "SELECT create_hypertable({0}, {1}, chunk_time_interval => INTERVAL '{2}', if_not_exists => TRUE)",
-                    "'" + tableName.Replace("'", "''") + "'",
-                    "'" + timeColumn.Replace("'", "''") + "'",
-                    chunkTimeInterval.Replace("'", "''"));
+                command.CommandText = BuildCreateHypertableSql(tableName, timeColumn, chunkTimeInterval);
             }, (command) =>
             {
                 command.ExecuteNonQuery();
             }, true);
+        }
+
+        /// <summary>
+        /// Composes the <c>create_hypertable(...)</c> SQL. Extracted (CR-M177) so the single-quote
+        /// escaping and INTERVAL formatting are covered without a live database, and shared by the
+        /// sync and async paths.
+        /// </summary>
+        internal static string BuildCreateHypertableSql(string tableName, string timeColumn, string chunkTimeInterval)
+        {
+            return string.Format(
+                "SELECT create_hypertable({0}, {1}, chunk_time_interval => INTERVAL '{2}', if_not_exists => TRUE)",
+                "'" + tableName.Replace("'", "''") + "'",
+                "'" + timeColumn.Replace("'", "''") + "'",
+                chunkTimeInterval.Replace("'", "''"));
         }
 
         /// <summary>
@@ -129,11 +153,7 @@ namespace Birko.Data.SQL.Connectors
             try
             {
                 using var command = connection.CreateCommand();
-                command.CommandText = string.Format(
-                    "SELECT create_hypertable({0}, {1}, chunk_time_interval => INTERVAL '{2}', if_not_exists => TRUE)",
-                    "'" + tableName.Replace("'", "''") + "'",
-                    "'" + timeColumn.Replace("'", "''") + "'",
-                    chunkTimeInterval.Replace("'", "''"));
+                command.CommandText = BuildCreateHypertableSql(tableName, timeColumn, chunkTimeInterval);
                 commandText = command.CommandText;
                 await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             }
