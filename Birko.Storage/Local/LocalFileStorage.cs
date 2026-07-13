@@ -135,6 +135,7 @@ public sealed class LocalFileStorage : IFileStorage
         string path,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-M246
         var resolvedPath = ResolvePath(path);
 
         if (!File.Exists(resolvedPath))
@@ -150,6 +151,7 @@ public sealed class LocalFileStorage : IFileStorage
         string path,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-M246
         var resolvedPath = ResolvePath(path);
 
         if (!File.Exists(resolvedPath))
@@ -172,6 +174,7 @@ public sealed class LocalFileStorage : IFileStorage
         string path,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-M246
         var resolvedPath = ResolvePath(path);
         return Task.FromResult(File.Exists(resolvedPath));
     }
@@ -196,6 +199,7 @@ public sealed class LocalFileStorage : IFileStorage
         int? maxResults = null,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-M246
         if (!Directory.Exists(_basePath))
         {
             return Task.FromResult<IReadOnlyList<FileReference>>(Array.Empty<FileReference>());
@@ -231,6 +235,7 @@ public sealed class LocalFileStorage : IFileStorage
 
         var results = files.Select(p =>
         {
+            ct.ThrowIfCancellationRequested(); // CR-M246: honor cancellation while walking the tree
             var resolved = Path.Combine(_basePath, p.Replace('/', Path.DirectorySeparatorChar));
             var info = new FileInfo(resolved);
             return new FileReference
@@ -335,7 +340,14 @@ public sealed class LocalFileStorage : IFileStorage
         var systemPath = withPrefix.Replace('/', Path.DirectorySeparatorChar);
         var resolved = Path.GetFullPath(Path.Combine(_basePath, systemPath));
 
-        if (!resolved.StartsWith(_basePath, StringComparison.OrdinalIgnoreCase))
+        // CR-M247: a bare StartsWith(_basePath) lets a sibling whose name extends the base pass the
+        // containment check (base "C:\data\store" vs "C:\data\store-secrets\x"). Require exact equality
+        // OR a match up to a trailing directory separator.
+        var baseWithSep = _basePath.EndsWith(Path.DirectorySeparatorChar)
+            ? _basePath
+            : _basePath + Path.DirectorySeparatorChar;
+        if (!string.Equals(resolved, _basePath, StringComparison.OrdinalIgnoreCase)
+            && !resolved.StartsWith(baseWithSep, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidPathException(path);
         }
