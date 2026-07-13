@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Migrations.CosmosDB.Settings;
 
@@ -62,8 +63,9 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     /// <summary>
     /// Asynchronously initializes the migration store.
     /// </summary>
-    public Task InitializeAsync()
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+            cancellationToken.ThrowIfCancellationRequested();
         Initialize();
         return Task.CompletedTask;
     }
@@ -98,8 +100,9 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     /// <summary>
     /// Asynchronously gets all applied migration versions.
     /// </summary>
-    public Task<ISet<long>> GetAppliedVersionsAsync()
+    public Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default)
     {
+            cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(GetAppliedVersions());
     }
 
@@ -135,8 +138,9 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     /// <summary>
     /// Asynchronously records that a migration has been applied.
     /// </summary>
-    public Task RecordMigrationAsync(Data.Migrations.IMigration migration)
+    public Task RecordMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
     {
+            cancellationToken.ThrowIfCancellationRequested();
         RecordMigration(migration);
         return Task.CompletedTask;
     }
@@ -165,8 +169,9 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     /// <summary>
     /// Asynchronously removes a migration record.
     /// </summary>
-    public Task RemoveMigrationAsync(Data.Migrations.IMigration migration)
+    public Task RemoveMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
     {
+            cancellationToken.ThrowIfCancellationRequested();
         RemoveMigration(migration);
         return Task.CompletedTask;
     }
@@ -183,8 +188,9 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     /// <summary>
     /// Asynchronously gets the current version.
     /// </summary>
-    public Task<long> GetCurrentVersionAsync()
+    public Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default)
     {
+            cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(GetCurrentVersion());
     }
 
