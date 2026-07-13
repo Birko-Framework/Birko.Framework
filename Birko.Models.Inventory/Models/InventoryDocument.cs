@@ -29,6 +29,12 @@ namespace Birko.Models.Inventory
         public Guid TenantGuid { get; set; }
         public ICollection<InventoryDocumentLine> Lines { get; set; } = new List<InventoryDocumentLine>();
 
+        /// <summary>
+        /// Hydrates the document's scalar fields from the view model. CR-M221: <see cref="Lines"/> is
+        /// <b>not</b> populated here — the view model carries no line collection by design; lines are
+        /// loaded and persisted separately (via the InventoryDocumentLine store), so a VM→document load
+        /// intentionally yields an empty Lines collection rather than round-tripping children.
+        /// </summary>
         public virtual void LoadFrom(ViewModels.InventoryDocument data)
         {
             base.LoadFrom(data);
