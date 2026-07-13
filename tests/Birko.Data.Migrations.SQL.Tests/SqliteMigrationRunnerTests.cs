@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Birko.Data.Migrations;
 using Birko.Data.Migrations.Context;
 using Birko.Data.Migrations.SQL.Settings;
@@ -96,5 +98,43 @@ public class SqliteMigrationRunnerTests : IDisposable
 
         result.ExecutedMigrations.Should().BeEmpty();
         second.CurrentVersion.Should().Be(1);
+    }
+
+    /// <summary>
+    /// CR-M101: the CancellationToken now threads from the runner through SqlMigrationStore into the
+    /// real ADO.NET async calls (connection.OpenAsync(ct)), so a pre-cancelled token aborts the
+    /// operation instead of being ignored.
+    /// </summary>
+    [Fact]
+    public async Task InitializeAsync_CancelledToken_Throws_OnRealSqlitePath()
+    {
+        var settings = new SqLiteSettings(Path.GetDirectoryName(_dbPath)!, Path.GetFileName(_dbPath));
+        var connector = DataBase.GetConnector<SqLiteConnector>(settings);
+        var runner = new SqlMigrationRunner(connector);
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Func<Task> act = () => runner.InitializeAsync(cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task MigrateAsync_CancelledToken_Throws_OnRealSqlitePath()
+    {
+        var settings = new SqLiteSettings(Path.GetDirectoryName(_dbPath)!, Path.GetFileName(_dbPath));
+        var connector = DataBase.GetConnector<SqLiteConnector>(settings);
+        var runner = new SqlMigrationRunner(connector);
+        runner.RegisterMigrations(new CreateWidgetsMigration());
+        runner.Initialize();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // MigrateAsync threads the token into Store.GetCurrentVersionAsync(ct) → connection.OpenAsync(ct).
+        Func<Task> act = () => runner.MigrateAsync(cancellationToken: cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 }
