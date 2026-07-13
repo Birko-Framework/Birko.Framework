@@ -60,8 +60,9 @@ public class AzureKeyVaultHealthCheckTests
     }
 
     [Fact]
-    public async Task CheckAsync_WhenCancelled_ReturnsUnhealthy()
+    public async Task CheckAsync_WhenCancelled_PropagatesCancellation()
     {
+        // CR-M191: cancellation must bubble so HealthCheckRunner applies its timeout-status logic.
         var settings = new AzureKeyVaultSettings(
             "https://test.vault.azure.net", "tenant", "client", "secret");
         using var provider = new AzureKeyVaultSecretProvider(settings);
@@ -70,8 +71,7 @@ public class AzureKeyVaultHealthCheckTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var result = await check.CheckAsync(cts.Token);
-
-        result.Status.Should().Be(HealthStatus.Unhealthy);
+        await check.Invoking(c => c.CheckAsync(cts.Token))
+            .Should().ThrowAsync<OperationCanceledException>();
     }
 }

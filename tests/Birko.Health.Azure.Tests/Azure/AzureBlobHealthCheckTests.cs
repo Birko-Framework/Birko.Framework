@@ -62,8 +62,11 @@ public class AzureBlobHealthCheckTests
     }
 
     [Fact]
-    public async Task CheckAsync_WhenCancelled_ReturnsUnhealthy()
+    public async Task CheckAsync_WhenCancelled_PropagatesCancellation()
     {
+        // CR-M191: cancellation must bubble (not be masked as Unhealthy) so HealthCheckRunner can
+        // apply its timeout-status logic. A pre-cancelled token makes HttpClient.SendAsync throw
+        // TaskCanceledException, which the check now rethrows.
         var settings = new AzureBlobSettings(
             "https://test.blob.core.windows.net", "container",
             "tenant", "client", "secret");
@@ -73,8 +76,7 @@ public class AzureBlobHealthCheckTests
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        var result = await check.CheckAsync(cts.Token);
-
-        result.Status.Should().Be(HealthStatus.Unhealthy);
+        await check.Invoking(c => c.CheckAsync(cts.Token))
+            .Should().ThrowAsync<OperationCanceledException>();
     }
 }
