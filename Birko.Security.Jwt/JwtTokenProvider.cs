@@ -30,6 +30,7 @@ public class JwtTokenProvider : ITokenProvider
 
     public TokenResult GenerateToken(IDictionary<string, string> claims, TokenOptions? options = null)
     {
+        ArgumentNullException.ThrowIfNull(claims); // CR-M238: fail fast like the ctor, not a bare NRE from the LINQ projection
         var opts = options ?? _defaultOptions;
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(opts.Secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
