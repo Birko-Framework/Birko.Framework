@@ -25,20 +25,25 @@ namespace Birko.Models.Users
 
         public virtual void LoadFrom(ViewModels.User data)
         {
-            if (data != null)
+            if (data?.Guid is Guid guid) // CR-M226: guard the nullable Guid, not just the object
             {
-                UserGuid = data.Guid!.Value;
+                UserGuid = guid;
             }
         }
 
         public virtual void LoadFrom(ViewModels.Role data)
         {
-            if (data != null)
+            if (data?.Guid is Guid guid) // CR-M226
             {
-                RoleGuid = data.Guid!.Value;
+                RoleGuid = guid;
             }
         }
 
+        /// <summary>
+        /// CR-M227: the UserRole view model carries no UserGuid/RoleGuid, so those foreign keys are NOT
+        /// restored by this overload — assign them via <c>LoadFrom(ViewModels.User)</c> /
+        /// <c>LoadFrom(ViewModels.Role)</c>. A single VM→model load is intentionally not a full FK round-trip.
+        /// </summary>
         public virtual void LoadFrom(ViewModels.UserRole data)
         {
             base.LoadFrom(data);

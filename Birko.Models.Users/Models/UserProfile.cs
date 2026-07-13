@@ -57,12 +57,16 @@ namespace Birko.Models.Users
 
         public virtual void LoadFrom(ViewModels.User data)
         {
-            if (data != null)
+            if (data?.Guid is Guid guid) // CR-M226
             {
-                UserGuid = data.Guid!.Value;
+                UserGuid = guid;
             }
         }
 
+        /// <summary>
+        /// CR-M227: the UserProfile view model carries no UserGuid — assign it via
+        /// <c>LoadFrom(ViewModels.User)</c>, not this overload.
+        /// </summary>
         public virtual void LoadFrom(ViewModels.UserProfile data)
         {
             base.LoadFrom(data);

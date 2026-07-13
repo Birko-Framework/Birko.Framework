@@ -24,12 +24,16 @@ namespace Birko.Models.Users
 
         public virtual void LoadFrom(ViewModels.Role data)
         {
-            if (data != null)
+            if (data?.Guid is Guid guid) // CR-M226
             {
-                RoleGuid = data.Guid!.Value;
+                RoleGuid = guid;
             }
         }
 
+        /// <summary>
+        /// CR-M227: the RolePermission view model carries no RoleGuid — assign it via
+        /// <c>LoadFrom(ViewModels.Role)</c>, not this overload.
+        /// </summary>
         public virtual void LoadFrom(ViewModels.RolePermission data)
         {
             base.LoadFrom(data);
