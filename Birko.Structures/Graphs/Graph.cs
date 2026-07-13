@@ -20,7 +20,7 @@ public class Graph<T> where T : notnull
     /// <summary>
     /// Gets the number of edges.
     /// </summary>
-    public int EdgeCount
+    public virtual int EdgeCount // CR-M250: virtual so DirectedGraph can override (not shadow) it
     {
         get
         {

@@ -13,7 +13,7 @@ public class DirectedGraph<T> : Graph<T> where T : notnull
     /// <summary>
     /// Gets the number of directed edges.
     /// </summary>
-    public new int EdgeCount
+    public override int EdgeCount // CR-M250: override, not `new` — a base Graph<T> reference now gets the correct directed count
     {
         get
         {
