@@ -4294,7 +4294,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Race in EnsureEventAttached can attach the message handler twice
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.MQTT\MqttConsumer.cs:91-100`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 41). `EnsureEventAttached` now guards the check-and-set with a dedicated `_eventAttachLock` (double-checked): a fast `_eventAttached` early-out, then re-check inside the lock before `+= OnMessageReceivedAsync`, so concurrent `SubscribeAsync` callers attach the handler exactly once (no double-dispatch / dangling subscription). Code-review verified — the race is a concurrent TOCTOU that a deterministic single-threaded test can't distinguish, so no unit test (the pure-logic MQTT surface is covered under M205).
 - **Detail:** _eventAttached is a plain (non-volatile) bool read then written without synchronization. SubscribeAsync is async and can be invoked concurrently from multiple threads; two callers can both observe _eventAttached == false and both execute `_client.ApplicationMessageReceivedAsync += OnMessageReceivedAsync`, double-subscribing the delegate. Every received message would then dispatch to each matching handler twice. Dispose removes the handler only once, leaving a dangling subscription.
 - **Fix:** Guard the check-and-set with a lock, or use Interlocked.CompareExchange on an int flag, before subscribing to the event.
 
@@ -4310,7 +4310,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for the package
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.MQTT`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 41). `Birko.MessageQueue.MQTT.Tests` exists (created since the audit; MqttMetadataRoundTripTests); augmented with `MqttTopicAndSettingsTests` covering exactly the finding's named surface: `MqttTopic.IsValidPublishTopic` / `IsValidSubscribeFilter` / `Matches` (wildcard semantics, `#`-must-be-last, `+`-stands-alone, level-count), `MqttProducer.ToMqttQos` (all three levels), and `MqttSettings.GetId` (ClientId vs "auto") / `LoadFrom` (MQTT-specific field copy). Suite 23.
 - **Detail:** There is no Birko.MessageQueue.MQTT.Tests sibling directory. The framework convention requires xUnit + FluentAssertions tests for every new public functionality. Pure-logic, broker-free units are readily testable: MqttTopic.IsValidPublishTopic / IsValidSubscribeFilter / Matches (wildcard semantics, $SYS edge, multi-level-must-be-last), MqttProducer.ToMqttQos mapping, MqttSettings.GetId / LoadFrom, and MqttQualityOfService mapping. None are covered.
 - **Fix:** Add Birko.MessageQueue.MQTT.Tests covering MqttTopic matching/validation, QoS mapping, and settings LoadFrom/GetId at minimum.
 

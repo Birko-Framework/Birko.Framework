@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**178 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**180 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,12 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 41 — MessageQueue.MQTT CR-M203/M205 (2 closed; race fix + test augment)
+
+- **M203** `MqttConsumer.EnsureEventAttached` did an unsynchronized check-then-set on `_eventAttached`, so concurrent SubscribeAsync callers could both `+= OnMessageReceivedAsync` (double-dispatch). Now double-checked under a dedicated `_eventAttachLock`. Code-review verified (concurrent TOCTOU — not deterministically unit-testable).
+- **M205** `Birko.MessageQueue.MQTT.Tests` already exists (MqttMetadataRoundTripTests) → augmented with `MqttTopicAndSettingsTests`: MqttTopic validate/match wildcard semantics, ToMqttQos mapping, MqttSettings GetId/LoadFrom. Suite 23.
+- **Deferred (live broker):** M204 (resubscribe-on-reconnect with CleanSession=true) needs a live MQTT broker.
 
 ### Batch 40 — Models test-gaps CR-M214/218/222/223/224/225 (6 closed; verify + augment + 1 new project)
 

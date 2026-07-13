@@ -139,6 +139,11 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, MessageQueue.MQTT (EPIC-014 / STORY-026) (2026-07-13)
+Forty-first STORY-026 batch: **CR-M203/M205** in Birko.MessageQueue.MQTT (2 closed; M204 deferred to a live broker). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Double message-handler attach (M203)** — `MqttConsumer.EnsureEventAttached` read-then-wrote a plain `_eventAttached` bool without synchronization, so two concurrent `SubscribeAsync` calls could both `+= OnMessageReceivedAsync`, dispatching every received message twice (and `Dispose` only detaches once). Now double-checked under a dedicated `_eventAttachLock`, so the handler attaches exactly once. Code-review verified (a concurrent TOCTOU a single-threaded test can't distinguish).
+- **Test-gap (M205)** — `Birko.MessageQueue.MQTT.Tests` already exists (created since the audit). Augmented with `MqttTopicAndSettingsTests` covering the finding's named pure-logic surface: `MqttTopic.IsValidPublishTopic`/`IsValidSubscribeFilter`/`Matches` (wildcard semantics — `#`-must-be-last, `+`-stands-alone, level-count), `MqttProducer.ToMqttQos` (all three QoS levels), and `MqttSettings.GetId` (ClientId vs "auto") / `LoadFrom`. Suite green: 23. STORY-026 now **180/275**.
+
 ### Code-review remediation — medium findings, Models test-gaps (EPIC-014 / STORY-026) (2026-07-13)
 Fortieth STORY-026 batch: **CR-M214/218/222/223/224/225** — the Models cluster test-gaps (6 closed). Verify-first: five projects already existed and covered each finding's flagged bug, so this augmented the clearest named gaps and created the one genuinely-missing project (SEO). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Already-covered, closed as verified:** M218 (Customers.Tests: Customer.CopyTo type/all-fields + CustomerAddress.LoadFrom — the exact CR-H127/H128 asks) and M225 (Models.SQL.Tests: ApplyToDatabase column-name+flags, metadata-only facets via GetPropertyMaps, GetTableNames).
