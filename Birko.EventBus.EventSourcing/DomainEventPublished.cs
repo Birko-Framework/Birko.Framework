@@ -53,6 +53,13 @@ namespace Birko.EventBus.EventSourcing
             EventData = domainEvent.EventData;
             Metadata = domainEvent.Metadata;
             UserId = domainEvent.UserId;
+
+            // CR-M186: preserve the domain event's original timestamp and identity instead of letting
+            // EventBase stamp the current wall-clock time and a fresh Guid. During replay
+            // (EventReplayService) this keeps projections/read models seeing the historical event time
+            // and the stable EventId, so time-ordered and idempotent (dedup-by-EventId) rebuilds work.
+            OccurredAt = domainEvent.OccurredAt;
+            EventId = domainEvent.EventId;
         }
 
         /// <summary>
