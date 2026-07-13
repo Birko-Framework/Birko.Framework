@@ -91,14 +91,19 @@ namespace Birko.Data.SQL.Connectors
 
             if (settings is RemoteSettings remotesettings)
             {
-                return new SqlConnection(string.Format("Server=tcp:{0},{4};Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt={5};", new object[] {
-                    remotesettings.Location,
-                    remotesettings.Name,
+                // CR-M136: build the connection string through MSSqlSettings.GetConnectionString()
+                // rather than a divergent inline string. The previous inline form hard-coded
+                // MultipleActiveResultSets=False and omitted TrustServerCertificate / Connection Timeout,
+                // so behaviour silently differed from the typed MSSqlSettings path. Deriving an
+                // MSSqlSettings from the RemoteSettings values yields one consistent builder.
+                var derived = new MSSqlSettings(
+                    remotesettings.Location!,
+                    remotesettings.Name!,
                     remotesettings.UserName,
                     remotesettings.Password,
                     remotesettings.Port,
-                    remotesettings.UseSecure ? "True" : "False"
-                }));
+                    remotesettings.UseSecure);
+                return new SqlConnection(derived.GetConnectionString());
             }
 
             throw new Exception("No path provided");
