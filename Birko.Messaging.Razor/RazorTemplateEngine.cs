@@ -83,11 +83,15 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
 
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // CR-M211: observe the token before and around the (expensive) compile+render step.
+        ct.ThrowIfCancellationRequested();
+
         try
         {
             // Generate a stable cache key for the template content
             var cacheKey = _inlineTemplateKeys.GetOrAdd(template, _ => $"inline_{Guid.NewGuid():N}");
 
+            ct.ThrowIfCancellationRequested();
             var result = await _engine.CompileRenderStringAsync(cacheKey, template, model).ConfigureAwait(false);
             return result;
         }
@@ -95,7 +99,7 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is not ArgumentNullException and not ObjectDisposedException)
+        catch (Exception ex) when (ex is not ArgumentNullException and not ObjectDisposedException and not OperationCanceledException)
         {
             throw new TemplateRenderException("inline", ex.Message, ex);
         }
@@ -119,6 +123,9 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
 
         ObjectDisposedException.ThrowIf(_disposed, this);
 
+        // CR-M211: observe the token before the (expensive) compile+render step.
+        ct.ThrowIfCancellationRequested();
+
         try
         {
             // Try file-based template first if a file provider is available
@@ -128,6 +135,7 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
                 {
                     var fileContent = await _fileProvider.GetTemplateAsync(messageTemplate.Name, ct).ConfigureAwait(false);
                     var cacheKey = $"file_{messageTemplate.Name}";
+                    ct.ThrowIfCancellationRequested();
                     return await _engine.CompileRenderStringAsync(cacheKey, fileContent, model).ConfigureAwait(false);
                 }
                 catch (TemplateRenderException)
@@ -143,7 +151,7 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
         {
             throw;
         }
-        catch (Exception ex) when (ex is not ArgumentNullException and not ObjectDisposedException)
+        catch (Exception ex) when (ex is not ArgumentNullException and not ObjectDisposedException and not OperationCanceledException)
         {
             throw new TemplateRenderException(messageTemplate.Name, ex.Message, ex);
         }
@@ -174,17 +182,21 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
             throw new TemplateRenderException(templateName, "No TemplateBasePath configured. Set RazorTemplateOptions.TemplateBasePath to use file-based templates.");
         }
 
+        // CR-M211: observe the token before the (expensive) compile+render step.
+        ct.ThrowIfCancellationRequested();
+
         try
         {
             var fileContent = await _fileProvider.GetTemplateAsync(templateName, ct).ConfigureAwait(false);
             var cacheKey = $"file_{templateName}";
+            ct.ThrowIfCancellationRequested();
             return await _engine.CompileRenderStringAsync(cacheKey, fileContent, model).ConfigureAwait(false);
         }
         catch (TemplateRenderException)
         {
             throw;
         }
-        catch (Exception ex) when (ex is not ArgumentNullException and not ObjectDisposedException)
+        catch (Exception ex) when (ex is not ArgumentNullException and not ObjectDisposedException and not OperationCanceledException)
         {
             throw new TemplateRenderException(templateName, ex.Message, ex);
         }
