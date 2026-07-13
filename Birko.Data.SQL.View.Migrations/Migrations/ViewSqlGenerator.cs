@@ -1,10 +1,7 @@
 using Birko.Data.SQL;
 using Birko.Data.SQL.Attributes;
-using Birko.Data.SQL.Conditions;
-using Birko.Data.SQL.Fields;
-using Birko.Data.SQL.Tables;
+using Birko.Data.SQL.Connectors;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace Birko.Data.SQL.View.Migrations
@@ -46,7 +43,7 @@ namespace Birko.Data.SQL.View.Migrations
                 throw new InvalidOperationException("View name cannot be empty. Provide a viewName parameter or set ViewAttribute.Name.");
             }
 
-            var selectSql = BuildViewSelectSql(view, quoteChar);
+            var selectSql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => QuoteIdentifier(id, quoteChar));
             return "CREATE OR REPLACE VIEW " + QuoteIdentifier(name!, quoteChar) + " AS " + selectSql;
         }
 
@@ -142,160 +139,5 @@ namespace Birko.Data.SQL.View.Migrations
             return quoteStr + identifier.Replace(quoteStr, quoteStr + quoteStr) + quoteStr;
         }
 
-        /// <summary>
-        /// Quotes a dotted field reference (e.g., "TableName.FieldName").
-        /// </summary>
-        private static string QuoteFieldReference(string fieldRef, char quoteChar)
-        {
-            if (fieldRef.Contains('.'))
-            {
-                return string.Join(".", fieldRef.Split('.').Select(p => QuoteIdentifier(p, quoteChar)));
-            }
-            return QuoteIdentifier(fieldRef, quoteChar);
-        }
-
-        /// <summary>
-        /// Builds the SELECT SQL that defines a view's body from view metadata.
-        /// Replicates the logic from AbstractConnectorBase.BuildViewSelectSql() in a static context.
-        /// </summary>
-        private static string BuildViewSelectSql(Tables.View view, char quoteChar)
-        {
-            if (view.Join == null || !view.Join.Any())
-            {
-                throw new InvalidOperationException("View must have at least one join definition.");
-            }
-
-            var fields = view.GetSelectFields();
-            if (fields == null || !fields.Any())
-            {
-                throw new InvalidOperationException("View must have at least one field.");
-            }
-
-            var tableFields = view.GetTableFields().ToArray();
-
-            var sql = "SELECT " + string.Join(", ", fields.Select(f =>
-            {
-                var fieldAtIndex = f.Key < tableFields.Length ? tableFields[f.Key] : null;
-                if (fieldAtIndex != null && fieldAtIndex.IsAggregate)
-                {
-                    return f.Value + " AS " + QuoteIdentifier(fieldAtIndex.Name, quoteChar);
-                }
-                return f.Value;
-            }));
-
-            sql += " FROM ";
-
-            // Build JOINs — same logic as AbstractConnectorBase.BuildViewSelectSql
-            var joins = new Dictionary<string, List<Conditions.Join>>();
-            string? prevleft = null;
-            string? prevright = null;
-            foreach (var join in view.Join)
-            {
-                if (!string.IsNullOrEmpty(prevleft) && !string.IsNullOrEmpty(prevright)
-                    && !joins.ContainsKey(join.Left) && prevright == join.Left
-                    && joins.ContainsKey(prevleft))
-                {
-                    joins[prevleft].Add(join);
-                }
-                else
-                {
-                    if (!joins.ContainsKey(join.Left))
-                    {
-                        joins.Add(join.Left, new List<Conditions.Join>());
-                    }
-                    joins[join.Left].Add(join);
-                    prevleft = join.Left;
-                }
-                prevright = join.Right;
-            }
-
-            var leftTables = view.Join.Select(x => x.Left).Distinct().Where(x => !string.IsNullOrEmpty(x)).ToList();
-            foreach (var tableName in view.Join.Select(x => x.Right).Distinct().Where(x => !string.IsNullOrEmpty(x)))
-            {
-                leftTables.Remove(tableName);
-            }
-            var tableNames = leftTables.Any()
-                ? (IEnumerable<string>)leftTables
-                : view.Tables.Select(x => x.Name);
-
-            int i = 0;
-            foreach (var table in tableNames.Distinct())
-            {
-                if (i > 0)
-                {
-                    sql += ", ";
-                }
-                sql += QuoteIdentifier(table, quoteChar);
-                if (joins.ContainsKey(table))
-                {
-                    var joingroups = joins[table]
-                        .GroupBy(x => new { x.Right, x.JoinType })
-                        .ToDictionary(
-                            x => x.Key,
-                            x => x.SelectMany(y => y.Conditions ?? Enumerable.Empty<Conditions.Condition>()).Where(z => z != null));
-
-                    foreach (var joingroup in joingroups.Where(x => x.Value.Any()))
-                    {
-                        sql += joingroup.Key.JoinType switch
-                        {
-                            Conditions.JoinType.Inner => " INNER JOIN ",
-                            Conditions.JoinType.LeftOuter => " LEFT OUTER JOIN ",
-                            _ => " CROSS JOIN ",
-                        };
-                        sql += QuoteIdentifier(joingroup.Key.Right, quoteChar);
-                        if (joingroup.Key.JoinType != Conditions.JoinType.Cross && joingroup.Value != null && joingroup.Value.Any())
-                        {
-                            sql += " ON (";
-                            sql += BuildViewJoinConditionSql(joingroup.Value, quoteChar);
-                            sql += ")";
-                        }
-                    }
-                }
-                i++;
-            }
-
-            // GROUP BY for aggregate views
-            if (view.HasAggregateFields())
-            {
-                var groupFields = view.GetSelectFields(true);
-                if (groupFields != null && groupFields.Any())
-                {
-                    sql += " GROUP BY " + string.Join(", ", groupFields.Values);
-                }
-            }
-
-            return sql;
-        }
-
-        /// <summary>
-        /// Builds join condition SQL for view creation (field = field comparisons).
-        /// </summary>
-        private static string BuildViewJoinConditionSql(IEnumerable<Conditions.Condition> conditions, char quoteChar)
-        {
-            var parts = new List<string>();
-            foreach (var condition in conditions)
-            {
-                if (condition.IsField && condition.Values != null)
-                {
-                    var fieldName = condition.Values.Cast<object>().FirstOrDefault()?.ToString();
-                    if (!string.IsNullOrEmpty(condition.Name) && !string.IsNullOrEmpty(fieldName))
-                    {
-                        var left = QuoteFieldReference(condition.Name, quoteChar);
-                        var right = QuoteFieldReference(fieldName, quoteChar);
-                        parts.Add(left + " = " + right);
-                    }
-                }
-                else if (!string.IsNullOrEmpty(condition.Name) && condition.Values != null)
-                {
-                    var value = condition.Values.Cast<object>().FirstOrDefault();
-                    if (value != null)
-                    {
-                        var left = QuoteFieldReference(condition.Name, quoteChar);
-                        parts.Add(left + " = '" + value.ToString()!.Replace("'", "''") + "'");
-                    }
-                }
-            }
-            return string.Join(" AND ", parts);
-        }
     }
 }
