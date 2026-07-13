@@ -262,6 +262,36 @@ public class RazorTemplateEngineTests : IDisposable
         act.Should().Throw<ArgumentNullException>();
     }
 
+    [Fact]
+    public async Task RenderAsync_CancelledToken_ThrowsOperationCanceled()
+    {
+        // CR-M211: the render methods now observe the token. A pre-cancelled token must surface as
+        // OperationCanceledException, NOT be swallowed or wrapped into TemplateRenderException.
+        using var engine = new RazorTemplateEngine();
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel();
+
+        var act = () => engine.RenderAsync("@Model.Name", new { Name = "x" }, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task RenderFileAsync_CancelledToken_ThrowsOperationCanceled()
+    {
+        // CR-M211: RenderFileAsync must also observe the token (before the compile step) and not
+        // wrap the cancellation into TemplateRenderException.
+        var options = new RazorTemplateOptions { TemplateBasePath = _tempDir };
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "T.cshtml"), "@Model.Name");
+        using var engine = new RazorTemplateEngine(options);
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel();
+
+        var act = () => engine.RenderFileAsync("T", new { Name = "x" }, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
     public void Dispose()
     {
         try
