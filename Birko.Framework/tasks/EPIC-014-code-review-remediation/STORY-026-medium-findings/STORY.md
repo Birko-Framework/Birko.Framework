@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**141 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**143 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,12 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 32 — Birko.Data.Tagging CR-M172 + Birko.Data.Tenant CR-M175 (2 closed; cleanup + design doc)
+
+- **M172** `TagService.SetEntityTagsAsync`'s add loop called `AttachTagAsync`, which re-queried `GetEntityTagLinksAsync` on each iteration (N+1) even though the diff already proved the link absent → call `CreateEntityTagAsync` directly with the same payload. Offline regression: adding 3 tags issues exactly 1 link query (call-counter on the in-memory service).
+- **M175** (design/"other") the static `Tenant.Current` singleton coexists with DI-scoped `ITenantContext` as a second source of truth — a store/repo accidentally built with the static fallback in a DI app silently degrades to unfiltered cross-tenant access. Documented the footgun on `Tenant`/`Tenant.Current` (non-DI use only; resolve a scoped context in DI apps). Chose docs over throwing (which would break legitimate console/tool construction).
+- Suite green: Birko.Data.Tagging.Tests 11. (Tenant M175 is comment-only.)
 
 ### Batch 31 — Birko.Data.ViewModel CR-M179/M180/M181 (3 closed; offline bugs + test-gap)
 

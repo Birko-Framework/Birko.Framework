@@ -4045,8 +4045,8 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M172 · 🟡 medium · Birko.Data.Tagging
 - **Title:** SetEntityTagsAsync re-queries links on every added tag (N+1)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tagging\Services\TagService.cs:130-131`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** offline unit test (Birko.Data.Tagging.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 32). The add loop now calls `CreateEntityTagAsync(new EntityTag{...})` directly (the same payload `AttachTagAsync` builds) instead of routing through `AttachTagAsync`, whose `GetEntityTagLinksAsync` re-query is redundant since the `!currentTagIds.Contains(id)` filter already proves the link is absent. Regression: `SetEntityTags_QueriesLinksOnce_NoNPlusOne` asserts adding 3 tags issues exactly 1 link query (via a call-counter on the in-memory service).
 - **Detail:** SetEntityTagsAsync already loaded the current links at line 121 and computed currentTagIds. For each missing tag it calls AttachTagAsync (line 131), which at line 100 re-issues GetEntityTagLinksAsync(entityType, entityId, ct) and re-scans for duplicates. So a sync that adds N tags performs N extra link queries that are redundant — the diff was already computed against a known-not-present set. Correctness is fine (the re-check is harmless), but it's needless I/O proportional to the number of added tags.
 - **Fix:** In the add loop call CreateEntityTagAsync(new EntityTag{...}) directly (the same payload AttachTagAsync builds) instead of routing through AttachTagAsync's re-query, since desiredTagIds.Where(id => !currentTagIds.Contains(id)) already guarantees the link is absent.
 
@@ -4069,8 +4069,8 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M175 · 🟡 medium · Birko.Data.Tenant
 - **Title:** Static Tenant.Current singleton coexists with DI-scoped ITenantContext as a second source of truth
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tenant\Models/TenantContext.cs:114-149; RepositoryServiceCollectionExtensions.cs:39,75,107,137; Stores/*StoreWrapper.cs ctor fallback`
-- **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Category:** other · **Verification:** documentation (design note)
+- **Status:** done — 2026-07-13 (STORY-026 batch 32). Documented the footgun on the static `Tenant` class + `Tenant.Current`: it is for non-DI scenarios (console/tools/tests) only, and in a DI app you must resolve a scoped `ITenantContext` — reading the static fallback there silently degrades tenant filtering to unfiltered cross-tenant access. Chose the doc approach (the finding's primary recommendation) over making the fallback throw, which would break legitimate non-DI construction; the mis-wiring risk is now called out at the point of use.
 - **Detail:** Wrappers and DI factories fall back to `Models.Tenant.Current` (a process-wide static TenantContext) when no ITenantContext is supplied/registered. In an ASP.NET app the recommended registration is AddTenantContextScoped (a per-request DI instance), but TenantMiddleware sets the tenant on whichever ITenantContext was resolved from DI, while any store/repo accidentally constructed with the static fallback reads `Tenant.Current` — a different instance whose tenant was never set. This silently produces non-tenant-mode (unfiltered) access. The two parallel context sources are an easy mis-wiring footgun.
 - **Fix:** Document that the static Tenant.Current is for non-DI/console scenarios only, and consider making the wrapper/factory fallback throw (or log) rather than silently substituting the static singleton when ITenantContext is expected from DI.
 
