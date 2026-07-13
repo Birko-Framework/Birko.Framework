@@ -91,4 +91,32 @@ public class HierarchyHelperTests
         child.Depth.Should().Be(1);
         child.ParentGuid.Should().Be(parentId);
     }
+
+    // ── CR-M215: RewriteDescendantPaths null-safety ──────
+
+    [Fact]
+    public void RewriteDescendantPaths_SkipsNullOrNonMatchingPath_DoesNotThrow()
+    {
+        var match = new Node { Path = "/old/child" };
+        var nullPath = new Node { Path = null! };          // never materialized
+        var unrelated = new Node { Path = "/somewhere/else" };
+
+        var act = () => HierarchyHelper.RewriteDescendantPaths(
+            new[] { match, nullPath, unrelated }, oldPath: "/old", newPath: "/new");
+
+        act.Should().NotThrow();
+        match.Path.Should().Be("/new/child", "a matching descendant is rewritten");
+        nullPath.Path.Should().BeNull("a null-Path descendant is skipped, not NRE'd");
+        unrelated.Path.Should().Be("/somewhere/else", "a non-matching descendant is left alone");
+    }
+
+    [Fact]
+    public void RewriteDescendantPaths_NullOldOrNewPath_Throws()
+    {
+        var nodes = new[] { new Node { Path = "/old/x" } };
+        ((Action)(() => HierarchyHelper.RewriteDescendantPaths(nodes, null!, "/new")))
+            .Should().Throw<ArgumentNullException>();
+        ((Action)(() => HierarchyHelper.RewriteDescendantPaths(nodes, "/old", null!)))
+            .Should().Throw<ArgumentNullException>();
+    }
 }
