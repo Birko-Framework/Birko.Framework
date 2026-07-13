@@ -4101,24 +4101,24 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M179 · 🟡 medium · Birko.Data.ViewModel
 - **Title:** Async bulk repository bypasses change-tracking (StoreHash) used by the single-item paths
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ViewModel\Repositories/AbstractAsyncBulkViewModelRepository.cs:62-93, 105-110, 152-157`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.Data.ViewModel.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 31). ReadAsync now routes through `LoadInstance(model)` (so StoreHash primes change-tracking) and CreateAsync/UpdateAsync/DeleteAsync(IEnumerable) through `LoadModelInstance(vm)` (uniform with the single-item path). Regression: `BulkViewModelRepositoryReadModeTests.Async_bulk_ReadAsync_stores_hash_for_each_entity` asserts StoreHash fires per bulk-read entity.
 - **Detail:** CreateAsync/UpdateAsync/DeleteAsync/ReadAsync inline `CreateModelInstance()+MapToModel` and `CreateInstance()+LoadFrom` instead of calling the base helpers LoadModelInstance/LoadInstance. As a result the async bulk read never calls StoreHash (the base LoadInstance stores the hash at AbstractAsyncViewModelRepository.cs:163), so the change-tracking dictionary is never populated for entities fetched via the bulk ReadAsync. A subsequent single-item UpdateAsync then sees no stored hash and CheckHashChange always returns true — the optimistic no-op-update skip is defeated. The sync bulk Read (AbstractBulkViewModelRepository.cs:48) correctly routes through LoadInstance. Make the async bulk path use LoadInstance/LoadModelInstance for consistency.
 - **Fix:** Use `LoadInstance(model)` in ReadAsync and `LoadModelInstance(vm)` in CreateAsync/UpdateAsync/DeleteAsync so hashing and the ViewModel→Model mapping are applied uniformly.
 
 ### CR-M180 · 🟡 medium · Birko.Data.ViewModel
 - **Title:** ReadMode guard missing on all bulk write operations
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ViewModel\Repositories/AbstractBulkViewModelRepository.cs:57-125; Repositories/AbstractAsyncBulkViewModelRepository.cs:55-160`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.Data.ViewModel.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 31). Added `if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");` (matching the single-item exception type/message) to every bulk mutator: sync Create / Update(IEnumerable) / Update(filter,Action) / Update(filter,PropertyUpdate) / Delete(IEnumerable) / Delete(filter) and their six async counterparts. Regression tests assert each throws in ReadMode.
 - **Detail:** The single-item Create/Update/Delete (sync and async) throw AccessViolationException when ReadMode is true (e.g. AbstractViewModelRepository.cs:186-188). None of the bulk write methods — Create(IEnumerable), Update(IEnumerable), Update(filter,...), Delete(IEnumerable), Delete(filter) and their async counterparts — perform this check, so a repository placed in ReadMode can still mutate the store via the bulk API. This is an inconsistent and exploitable gap in the read-only contract.
 - **Fix:** Add the same `if (ReadMode) throw ...` guard at the top of each bulk mutating method (or factor the guard into a shared protected helper).
 
 ### CR-M181 · 🟡 medium · Birko.Data.ViewModel
 - **Title:** No .Tests sibling — entire public surface is untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ViewModel\Birko.Data.ViewModel (no Birko.Data.ViewModel.Tests sibling)`
-- **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Category:** test-gap · **Verification:** offline unit test (Birko.Data.ViewModel.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 31). `Birko.Data.ViewModel.Tests` exists (created since the audit; BulkViewModelRepositoryDelegateTests covers the CR-H110 delegate-transform contract) and was augmented with BulkViewModelRepositoryReadModeTests covering the ReadMode enforcement on all bulk ops (M180) and the async-bulk StoreHash change-tracking (M179). Suite green: 9.
 - **Detail:** Framework convention requires every new public functionality to have xUnit + FluentAssertions tests in a .Tests sibling. There is no Birko.Data.ViewModel.Tests directory. The change-tracking logic (StoreHash/CheckHashChange round-trip, ReadMode clearing the hash dictionary), the LoadInstance/LoadModelInstance round-trip, the bulk delegate behavior, and the 'Store is not IBulkStore' guard paths are all untested — exactly the areas where the bugs above hide.
 - **Fix:** Add a Birko.Data.ViewModel.Tests project using an InMemory store (Birko.Data.InMemory) as the backing store double; cover change-tracking, ReadMode enforcement on bulk ops, and the delegate-transform contract.
 

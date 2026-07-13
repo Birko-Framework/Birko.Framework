@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**138 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**141 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,13 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 31 — Birko.Data.ViewModel CR-M179/M180/M181 (3 closed; offline bugs + test-gap)
+
+- **M179** the async bulk repo inlined `CreateModelInstance()+MapToModel` / `CreateInstance()+LoadFrom` instead of the base helpers → bulk `ReadAsync` never called StoreHash, so change-tracking stayed empty and a later single-item UpdateAsync always saw a "changed" model (no-op skip defeated). Routed ReadAsync through `LoadInstance` and CreateAsync/UpdateAsync/DeleteAsync(IEnumerable) through `LoadModelInstance`. (Sync bulk repo already used these correctly.)
+- **M180** none of the bulk mutators (sync + async: Create / Update×3 / Delete×2) had the `if (ReadMode) throw` guard the single-item paths enforce → a ReadMode repo could still mutate via the bulk API. Added `AccessViolationException("Repository is in Read Mode")` to all twelve.
+- **M181** `Birko.Data.ViewModel.Tests` exists (created since the audit — CR-H110 delegate tests); augmented with `BulkViewModelRepositoryReadModeTests` (M179 hash-priming + M180 ReadMode enforcement). Also dropped two redundant projitems imports (Contracts/Configuration come transitively) to clear the MSB4011 warnings.
+- Suite green: Birko.Data.ViewModel.Tests 9.
 
 ### Batch 30 — Birko.Data.Tenant CR-M173/M174 (2 closed; offline bugs)
 
