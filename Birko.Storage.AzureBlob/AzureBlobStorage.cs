@@ -324,8 +324,24 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
 
     private string BaseUri => _settings.StorageAccountUri.TrimEnd('/') + "/";
 
+    // CR-M248: percent-encode each blob-path segment so keys with spaces / reserved chars produce a
+    // valid, correctly-routed REST URL (segment encoder shared with the SAS provider's logic).
     private string GetBlobUri(string blobPath) =>
-        $"{BaseUri}{_settings.ContainerName}/{blobPath}";
+        $"{BaseUri}{_settings.ContainerName}/{EncodeBlobPathSegments(blobPath)}";
+
+    private static string EncodeBlobPathSegments(string blobPath)
+    {
+        if (string.IsNullOrEmpty(blobPath))
+        {
+            return blobPath;
+        }
+        var segments = blobPath.Split('/');
+        for (int i = 0; i < segments.Length; i++)
+        {
+            segments[i] = Uri.EscapeDataString(segments[i]);
+        }
+        return string.Join('/', segments);
+    }
 
     private string ResolvePath(string path)
     {

@@ -71,7 +71,10 @@ internal static class AzureBlobPresignedUrlProvider
         sb.Append('/');
         sb.Append(containerName);
         sb.Append('/');
-        sb.Append(blobPath);
+        // CR-M248: percent-encode each path segment (spaces, '#', '?', '%', etc.) so the URL is valid /
+        // correctly routed; the canonicalResource in the string-to-sign keeps the DECODED form per the
+        // Azure Service SAS spec, so the signature still matches.
+        sb.Append(EncodeBlobPath(blobPath));
         sb.Append("?sv=").Append(Uri.EscapeDataString(version));
         sb.Append("&sp=").Append(Uri.EscapeDataString(permissions));
         sb.Append("&st=").Append(Uri.EscapeDataString(FormatTime(start)));
@@ -87,6 +90,24 @@ internal static class AzureBlobPresignedUrlProvider
         sb.Append("&sig=").Append(Uri.EscapeDataString(signature));
 
         return new Uri(sb.ToString());
+    }
+
+    /// <summary>
+    /// CR-M248: percent-encodes each '/'-separated segment of a blob path (preserving the slashes) so
+    /// the value is safe to embed in a URI path, without touching the decoded form used in the signature.
+    /// </summary>
+    internal static string EncodeBlobPath(string blobPath)
+    {
+        if (string.IsNullOrEmpty(blobPath))
+        {
+            return blobPath;
+        }
+        var segments = blobPath.Split('/');
+        for (int i = 0; i < segments.Length; i++)
+        {
+            segments[i] = Uri.EscapeDataString(segments[i]);
+        }
+        return string.Join('/', segments);
     }
 
     private static string FormatTime(DateTimeOffset time)
