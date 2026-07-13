@@ -2,6 +2,7 @@ using Nest;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Birko.Data.Migrations.ElasticSearch
@@ -54,8 +55,9 @@ namespace Birko.Data.Migrations.ElasticSearch
         /// <summary>
         /// Asynchronously initializes the migration store.
         /// </summary>
-        public Task InitializeAsync()
+        public Task InitializeAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Initialize();
             return Task.CompletedTask;
         }
@@ -93,8 +95,9 @@ namespace Birko.Data.Migrations.ElasticSearch
         /// <summary>
         /// Asynchronously gets all applied migration versions.
         /// </summary>
-        public Task<ISet<long>> GetAppliedVersionsAsync()
+        public Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(GetAppliedVersions());
         }
 
@@ -128,8 +131,9 @@ namespace Birko.Data.Migrations.ElasticSearch
         /// <summary>
         /// Asynchronously records that a migration has been applied.
         /// </summary>
-        public Task RecordMigrationAsync(Data.Migrations.IMigration migration)
+        public Task RecordMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             RecordMigration(migration);
             return Task.CompletedTask;
         }
@@ -153,8 +157,9 @@ namespace Birko.Data.Migrations.ElasticSearch
         /// <summary>
         /// Asynchronously removes a migration record.
         /// </summary>
-        public Task RemoveMigrationAsync(Data.Migrations.IMigration migration)
+        public Task RemoveMigrationAsync(Data.Migrations.IMigration migration, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             RemoveMigration(migration);
             return Task.CompletedTask;
         }
@@ -171,8 +176,9 @@ namespace Birko.Data.Migrations.ElasticSearch
         /// <summary>
         /// Asynchronously gets the current version.
         /// </summary>
-        public Task<long> GetCurrentVersionAsync()
+        public Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(GetCurrentVersion());
         }
 
