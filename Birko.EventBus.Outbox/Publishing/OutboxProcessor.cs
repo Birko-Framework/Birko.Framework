@@ -78,7 +78,10 @@ namespace Birko.EventBus.Outbox.Publishing
                 }
                 catch (Exception ex)
                 {
-                    await _store.MarkFailedAsync(entry.Id, ex.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
+                    // CR-M189: record the underlying cause, not the opaque reflection wrapper
+                    // ("Exception has been thrown by the target of an invocation.").
+                    var cause = Unwrap(ex);
+                    await _store.MarkFailedAsync(entry.Id, cause.Message, _options.MaxAttempts, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }
             }
@@ -102,7 +105,21 @@ namespace Birko.EventBus.Outbox.Publishing
                 .GetMethod(nameof(IEventBus.PublishAsync))!
                 .MakeGenericMethod(@event.GetType());
 
-            return (Task)method.Invoke(_publisher, [@event, cancellationToken])!;
+            try
+            {
+                return (Task)method.Invoke(_publisher, [@event, cancellationToken])!;
+            }
+            catch (System.Reflection.TargetInvocationException tie) when (tie.InnerException != null)
+            {
+                // CR-M189: a synchronous throw from PublishAsync (e.g. ObjectDisposedException before the
+                // first await) is wrapped by MethodInfo.Invoke — surface the real cause as a faulted task
+                // so the ProcessBatch catch records the underlying message, not the wrapper.
+                return Task.FromException(tie.InnerException);
+            }
         }
+
+        /// <summary>CR-M189: unwrap the reflection wrapper so LastError carries the underlying cause.</summary>
+        private static Exception Unwrap(Exception ex)
+            => ex is System.Reflection.TargetInvocationException { InnerException: { } inner } ? inner : ex;
     }
 }
