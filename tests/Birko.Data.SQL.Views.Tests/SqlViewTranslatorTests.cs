@@ -106,6 +106,42 @@ public class SqlViewTranslatorTests
     }
 
     [Fact]
+    public void Translate_GroupByFieldNotSelected_Throws()
+    {
+        // CR-M153: grouping by a field that is not also selected used to be silently dropped (the
+        // connector groups by the SELECTed non-aggregate fields), giving wrong aggregates. Now rejected.
+        var def = new ViewDefinitionBuilder<TransView>()
+            .HasName("BadGroup")
+            .From<TransOrder>()
+            .Join<TransOrder, TransPerson, Guid?>(o => o.PersonId, p => p.Guid)
+            .Select<TransPerson, string>(p => p.Name!, v => v.PersonName)
+            .GroupBy<TransPerson, string>(p => p.Name!)   // selected + grouped — fine
+            .GroupBy<TransOrder, decimal>(o => o.Amount)  // grouped but NOT selected — must be rejected
+            .Count<TransOrder>(v => v.OrderCount)
+            .Build();
+
+        Action act = () => SqlViewTranslator.Translate(def);
+        act.Should().Throw<NotSupportedException>().WithMessage("*Amount*");
+    }
+
+    [Fact]
+    public void Translate_WellFormedGroupedAggregate_Succeeds()
+    {
+        // Every GroupBy field is also selected → honored, no throw.
+        var def = new ViewDefinitionBuilder<TransView>()
+            .HasName("GroupedOk")
+            .From<TransOrder>()
+            .Join<TransOrder, TransPerson, Guid?>(o => o.PersonId, p => p.Guid)
+            .Select<TransPerson, string>(p => p.Name!, v => v.PersonName)
+            .GroupBy<TransPerson, string>(p => p.Name!)
+            .Count<TransOrder>(v => v.OrderCount)
+            .Build();
+
+        var view = SqlViewTranslator.Translate(def);
+        view.Name.Should().Be("GroupedOk");
+    }
+
+    [Fact]
     public void Translate_WithCountAggregate_ProducesView()
     {
         // Exercises the COUNT(*) base-field-selection branch (agg.SourceProperty == null). No plain
