@@ -26,14 +26,17 @@ public class AsyncJsonSyncKnowledgeStore : AsyncJsonStore<JsonSyncKnowledgeItem>
     {
         if (lastSyncTime == null) return null;
 
-        var items = await ReadAsync(x => x.Scope == scope, ct: cancellationToken).ConfigureAwait(false);
-        if (items != null)
+        var items = (await ReadAsync(x => x.Scope == scope, ct: cancellationToken).ConfigureAwait(false))?.ToList();
+        if (items != null && items.Count > 0)
         {
             foreach (var item in items)
             {
                 item.LastSyncedAt = lastSyncTime.Value;
-                await UpdateAsync(item, ct: cancellationToken).ConfigureAwait(false);
             }
+
+            // CR-M162: one bulk UpdateAsync rewrites the JSON file a single time, instead of the whole
+            // file being re-serialized once per item (O(n) full-file rewrites).
+            await UpdateAsync(items, ct: cancellationToken).ConfigureAwait(false);
         }
 
         return lastSyncTime;
