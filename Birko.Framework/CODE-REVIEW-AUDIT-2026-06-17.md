@@ -4678,7 +4678,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Untested public functionality: CompressedTrie.GetWordsWithPrefix/GetAllWords/Remove, WeightedGraph, IntervalTree, BloomFilter, RingBuffer, DisjointSet, LruCache, AVLTree edge cases
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Structures.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 48). `CompressedTrieTests` already covers GetWordsWithPrefix (mid-edge/node-boundary/multiple) + GetAllWords (added since the audit); this batch added the remaining gap — `Remove`: existing-word (siblings survive, count drops), missing/prefix-only word (false, no count change), remove-down-to-empty, and the merge-on-remove case (removing a branch that leaves a single child keeps the remaining word findable). All pass — no bug in the merge path. Broader spot-checks of the other structures remain a lower-priority nicety.
 - **Detail:** Test files exist for Graphs, Heaps, Lists, Tries, Caches, Filters, Buffers, Sets and Trees, but coverage is thin in spots. Notably CompressedTrie has tests only for Insert/Search/StartsWith — GetWordsWithPrefix/GetAllWords/Remove (which include the broken mid-edge path) are untested, which is why the high-severity bug above slipped through. Recommend adding prefix-query tests for CompressedTrie and verifying merge-on-remove behavior. (Noted only, not deep-dived.)
 - **Fix:** Add CompressedTrie prefix-query + remove/merge tests as the priority gap; spot-check the other structures' boundary cases (empty, single element, duplicate, removal-down-to-empty).
 

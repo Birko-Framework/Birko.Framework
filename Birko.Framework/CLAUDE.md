@@ -139,6 +139,9 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Structures CompressedTrie.Remove (EPIC-014 / STORY-026) (2026-07-13)
+Forty-eighth STORY-026 batch: **CR-M251** — `Birko.Structures.Tests` already covered CompressedTrie GetWordsWithPrefix/GetAllWords (added since the audit); this batch closes the remaining `Remove` gap the finding flagged (existing-word with siblings preserved, missing/prefix-only word, remove-down-to-empty, and the merge-on-remove single-child case). All pass — the merge path is correct. Suite green: Structures trie tests 14. STORY-026 now **207/275**.
+
 ### Code-review remediation — medium findings, Workflow correctness (EPIC-014 / STORY-026) (2026-07-13)
 Forty-seventh STORY-026 batch: **CR-M267/M273/M274/M275** — Workflow engine + backend correctness (4 closed; the M268–M272 backend test-gaps deferred as 5 new projects). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Half-applied state on fault (M267)** — `WorkflowEngine` advanced `CurrentState` to the target before running the target's OnEntry actions, but the history record is only appended after they succeed. A faulting OnEntry left the instance reporting `CurrentState = ToState` with a History missing that transition. The catch now restores `CurrentState = fromState`. Regression in Birko.Workflow.Tests.
