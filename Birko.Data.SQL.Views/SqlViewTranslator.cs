@@ -30,6 +30,24 @@ public static class SqlViewTranslator
             throw new ArgumentNullException(nameof(definition));
         }
 
+        // CR-M153: this backend derives GROUP BY from the SELECTed non-aggregate fields
+        // (AbstractConnectorBase_View.BuildViewSelectSql), so a GroupBy field that is not also
+        // Select()ed would be silently dropped from the grouping, producing wrong aggregate results
+        // with no error. Reject it explicitly. (The reverse — a selected non-aggregate field missing
+        // from GroupBy — is already rejected by ViewDefinitionBuilder.Build.)
+        foreach (var grp in definition.GroupBy)
+        {
+            var isSelected = definition.Fields.Any(field =>
+                field.SourceType == grp.SourceType && field.SourceProperty == grp.PropertyName);
+            if (!isSelected)
+            {
+                throw new NotSupportedException(
+                    $"GroupBy field '{grp.SourceType.Name}.{grp.PropertyName}' must also be selected via Select(): " +
+                    "the SQL view backend derives GROUP BY from the projected non-aggregate fields, so a group-by " +
+                    "field that is not part of the view's SELECT list cannot be honored.");
+            }
+        }
+
         var view = new Tables.View();
         view.Name = definition.Name;
         view.QueryMode = TranslateQueryMode(definition.QueryMode);
