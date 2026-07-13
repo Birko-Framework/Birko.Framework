@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**238 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**241 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 **Correction (Batch 56):** the earlier "everything left needs Docker" was overstated — the
@@ -87,6 +87,26 @@ the audit), so M135/M145 became "extend" not "create".
   transaction wiring independent of provider dialect — the finding's "at minimum" approach), plus the
   non-`SqlMigrationContext` guard and null/empty-arg guards. git-initialized + registered in `.slnx` +
   `.code-workspace`.
+
+### Batch 57 — Sync file-backend test-gaps + cleanup CR-M162/M163/M171 (3 closed; M166 partial)
+
+The offline half of the Sync cluster:
+- **M162 (cleanup bug)** — `AsyncJsonSyncKnowledgeStore.SetLastSyncTimeAsync` re-serialized the whole JSON
+  file once per item; now mutates all matching items then does one bulk `UpdateAsync(items)`. The
+  identical pattern in the sibling `AsyncXmlSyncKnowledgeStore` got the same fix.
+- **M163** — new **`Birko.Data.Sync.Json.Tests`** (5, real temp-file store): SetLastSyncTime updates
+  every matching item in one write + GetLastSyncTime max, scope isolation, null/empty, CreateKnowledgeItem.
+- **M171** — new **`Birko.Data.Sync.Xml.Tests`** (5, mirrors the JSON suite against a temp-file XML store).
+- **M166 (partial, stays open)** — new **`Birko.Data.Sync.Sql.Tests`** covers `CreateKnowledgeItem`, but
+  the GetLastSyncTime/SetLastSyncTime CRUD paths can't run on SQLite: the model's non-primary
+  `[IncrementField] Id` (with a `[PrimaryField] Guid`) makes `SqLiteConnector.CreateTable` emit invalid
+  `INTEGER NOT NULL AUTOINCREMENT` DDL. That CRUD coverage moves to the Docker pile (real MSSql/Postgres),
+  and it surfaced a genuine SqLiteConnector DDL limitation for dual-key models.
+
+All three new `.Tests` git-initialized + registered in `.slnx`/`.code-workspace`. Remaining runnable:
+**M157** (Sync core — mostly covered already: bidirectional / cancellation / the NewestWins-nullable
+test the finding names all exist; delete-propagation + AsyncSyncProvider residual) and **M140/M151**
+(view-SELECT builder refactor — best for a fresh-context pass).
 
 ### Batch 56 — view GroupBy bug + Tenant sync bugs CR-M153/M167/M168/M169/M170 (5 closed)
 

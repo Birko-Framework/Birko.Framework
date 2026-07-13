@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Sync file-backend test-gaps + cleanup (EPIC-014 / STORY-026) (2026-07-13)
+Fifty-seventh STORY-026 batch: **CR-M162/M163/M171** closed (M166 partial). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **M162 (cleanup bug)** — `AsyncJsonSyncKnowledgeStore.SetLastSyncTimeAsync` re-serialized the whole JSON file once per item; now mutates all matching items then does one bulk `UpdateAsync(items)`. Same fix applied to the sibling `AsyncXmlSyncKnowledgeStore`.
+- **M163** — new **`Birko.Data.Sync.Json.Tests`** (5, real temp-file store): last-sync-time round-trip (all items updated in one write), scope isolation, null/empty, CreateKnowledgeItem.
+- **M171** — new **`Birko.Data.Sync.Xml.Tests`** (5, mirrors the JSON suite against a temp-file XML store).
+- **M166 (partial)** — new **`Birko.Data.Sync.Sql.Tests`** covers `CreateKnowledgeItem`; the CRUD paths can't run on SQLite because the model's non-PK `[IncrementField] Id` (with a `[PrimaryField] Guid`) makes `SqLiteConnector` emit invalid `AUTOINCREMENT` DDL → moved to the Docker pile (needs real MSSql/Postgres). Surfaced a genuine SqLiteConnector DDL limitation for dual-key models. STORY-026 now **241/275**. Remaining runnable: M157 (Sync core — mostly covered) + M140/M151 (view-SELECT refactor).
+
 ### Code-review remediation — medium findings, view GroupBy + Tenant sync bugs (EPIC-014 / STORY-026) (2026-07-13)
 Fifty-sixth STORY-026 batch: **CR-M153/M167/M168/M169/M170** — re-triaged the "un-runnable" pile and found most is offline/SQLite-verifiable; closed a view bug + the three Tenant sync bugs + a (stale) test-gap. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **M153 (bug)** — `SqlViewTranslator` never emitted GROUP BY metadata; the connector derives GROUP BY from the SELECTed non-aggregate fields, so a GroupBy field that wasn't also selected was silently dropped → wrong aggregates. `Translate` now rejects that case (the reverse is already caught by `ViewDefinitionBuilder.Build`). Views.Tests 10 → 12.

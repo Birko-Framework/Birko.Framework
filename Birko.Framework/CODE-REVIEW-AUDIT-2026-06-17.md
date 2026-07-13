@@ -3966,7 +3966,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SetLastSyncTimeAsync rewrites the entire JSON file once per item
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Json\Stores/AsyncJsonSyncKnowledgeStore.cs:32-36`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — SetLastSyncTimeAsync now mutates all matching items then calls the bulk UpdateAsync(items) once (single file rewrite) instead of UpdateAsync(item) per item. Regression in the new Birko.Data.Sync.Json.Tests. (The same cleanup was applied to the sibling Birko.Data.Sync.Xml store while adding CR-M171.)
 - **Detail:** The method mutates each matched knowledge item's LastSyncedAt and calls UpdateAsync(item) inside a foreach loop. On a JSON store every single UpdateAsync triggers AbstractJsonStore.SaveData / SaveDataAsync, which deletes and fully rewrites the entire backing file (AsyncJsonStore.SaveDataAsync, AbstractJsonStore.UpdateCore line 89). For a scope with N knowledge items this performs N full-file delete+recreate cycles instead of one. There is a bulk UpdateAsync(IEnumerable<T>, ...) overload whose UpdateCore(IEnumerable<T>) (AbstractJsonStore.cs:192-208) sets save=true and calls SaveData exactly once. This is the same pattern shared with Birko.Data.Sync.Xml, so it is a consistent design rather than a JSON-specific regression, but it scales poorly and is the main efficiency wart of the file.
 - **Fix:** Mutate the items in the loop, then call UpdateAsync(items, ct: cancellationToken) once after the loop (the bulk overload) so the file is rewritten a single time.
 
@@ -3974,7 +3974,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for any public functionality
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Json\Birko.Data.Sync.Json (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — new Birko.Data.Sync.Json.Tests (5) against a real temp-file JSON store: SetLastSyncTime round-trip (all matching items updated in one write) + GetLastSyncTime max, scope isolation, null/empty, CreateKnowledgeItem field derivation.
 - **Detail:** There is no Birko.Data.Sync.Json.Tests sibling directory, so none of the three public members on AsyncJsonSyncKnowledgeStore are covered: GetLastSyncTimeAsync (empty-scope -> null vs. Max(LastSyncedAt) when items exist), SetLastSyncTimeAsync (null short-circuit at line 27, no-op on empty scope, the multi-item update), and CreateKnowledgeItem (the IsLocalDeleted/IsRemoteDeleted derivation from empty hashes). The framework CLAUDE.md and this project's own CLAUDE.md mandate xUnit + FluentAssertions tests for every new public functionality.
 - **Fix:** Add a Birko.Data.Sync.Json.Tests project (the InMemory-backed TestSyncKnowledgeItemStore in Birko.Data.Sync.Tests is a good model) covering round-trip Set/Get last-sync-time, the empty-scope and null cases, and CreateKnowledgeItem field derivation.
 
@@ -3998,7 +3998,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test coverage for the SQL sync stores
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Sql\Stores\`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** open — PARTIAL. New Birko.Data.Sync.Sql.Tests covers CreateKnowledgeItem (identity/scope + deletion-flag derivation). The GetLastSyncTime/SetLastSyncTime CRUD paths CANNOT run against the SQLite connector: the model's non-primary `[IncrementField] Id` (alongside the `[PrimaryField] Guid`) makes SqLiteConnector emit invalid `INTEGER NOT NULL AUTOINCREMENT` DDL (SQLite allows AUTOINCREMENT only on INTEGER PRIMARY KEY). That CRUD coverage needs a real MSSql/PostgreSQL backend (Docker) — moved to the Docker pile. (Surfaced a real SqLiteConnector DDL limitation for dual-key models.)
 - **Detail:** There is no Birko.Data.Sync.Sql.Tests sibling, and the existing Birko.Data.Sync.Tests project only exercises the abstract sync layer via in-memory test doubles (TestSyncKnowledgeItemStore / TestBulkStore) - it never instantiates SqlSyncKnowledgeStore<DB> or AsyncSqlSyncKnowledgeStore<DB>. The public methods GetLastSyncTime(Async), SetLastSyncTime(Async), and CreateKnowledgeItem on both stores, plus the SqlSyncKnowledgeItem attribute mapping, have no corresponding tests. CLAUDE.md requires every new public functionality to have tests in a .Tests sibling. Because the new Birko.Data.InMemory store is now the canonical test double, these stores could be tested against an in-memory connector or a SQLite connector.
 - **Fix:** Add a Birko.Data.Sync.Sql.Tests project (xUnit + FluentAssertions) covering GetLastSyncTime returning Max(LastSyncedAt) / null on empty, SetLastSyncTime updating all matching items, CreateKnowledgeItem deletion-flag derivation from empty hashes, and async cancellation, ideally against a SQLite connector.
 
@@ -4038,7 +4038,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AsyncXmlSyncKnowledgeStore has no test coverage
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Xml\Stores\AsyncXmlSyncKnowledgeStore.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — new Birko.Data.Sync.Xml.Tests (5) mirroring the JSON suite against a real temp-file XML store (round-trip / scope isolation / null-empty / CreateKnowledgeItem). Also applied the CR-M162 single-bulk-write cleanup to the XML store.
 - **Detail:** The public surface (GetLastSyncTimeAsync, SetLastSyncTimeAsync, CreateKnowledgeItem) has no tests. The Birko.Data.Sync.Tests sibling exists but contains no reference to XmlSyncKnowledgeItem / AsyncXmlSyncKnowledgeStore (grep returned nothing), and there is no Birko.Data.Sync.Xml.Tests project. Framework convention requires every new public functionality to have xUnit + FluentAssertions tests. Behaviors worth covering: GetLastSyncTimeAsync returns max LastSyncedAt for a scope and null when empty; SetLastSyncTimeAsync updates all items in scope and returns null on null input; CreateKnowledgeItem sets IsLocalDeleted/IsRemoteDeleted from empty-hash logic. Note the XML-specific risk that justifies a dedicated test (vs trusting the SQL tests): XmlSyncKnowledgeItem persists the inherited AbstractModel.Guid (Guid?), and AsyncXmlStore.LoadDataAsync only re-adds items where item.Guid.HasValue (AsyncXmlStore.cs:220) — a round-trip serialize/deserialize test would prove items actually survive reload.
 - **Fix:** Add a Birko.Data.Sync.Xml.Tests project (or XML cases in Birko.Data.Sync.Tests) covering CRUD round-trip via a temp-file Settings, plus the three domain methods, mirroring whatever exists for the SQL backend.
 

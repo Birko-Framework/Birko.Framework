@@ -957,6 +957,18 @@
 			"path": "../../Framework.Tests/Birko.Data.Sync.MongoDb.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.Sync.Json.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.Json.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Sync.Xml.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.Xml.Tests"
+		},
+		{
+			"name": "Tests / Birko.Data.Sync.Sql.Tests",
+			"path": "../../Framework.Tests/Birko.Data.Sync.Sql.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.Sync.Tenant.Tests",
 			"path": "../../Framework.Tests/Birko.Data.Sync.Tenant.Tests"
 		},
