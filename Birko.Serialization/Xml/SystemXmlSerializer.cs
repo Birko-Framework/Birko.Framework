@@ -160,6 +160,7 @@ namespace Birko.Serialization.Xml
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M243: XmlSerializer has no async API; gate the token
             var serializer = new XmlSerializer(value.GetType());
             using var xmlWriter = XmlWriter.Create(stream, _writerSettings);
             serializer.Serialize(xmlWriter, value);
@@ -171,6 +172,7 @@ namespace Birko.Serialization.Xml
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M243
             var serializer = new XmlSerializer(typeof(T));
             using var xmlWriter = XmlWriter.Create(stream, _writerSettings);
             serializer.Serialize(xmlWriter, value);
@@ -182,6 +184,7 @@ namespace Birko.Serialization.Xml
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(type);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M243
             var serializer = new XmlSerializer(type);
             using var xmlReader = XmlReader.Create(stream, _readerSettings);
             var result = serializer.Deserialize(xmlReader);
@@ -191,6 +194,7 @@ namespace Birko.Serialization.Xml
         public Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M243
             var serializer = new XmlSerializer(typeof(T));
             using var xmlReader = XmlReader.Create(stream, _readerSettings);
             var result = (T?)serializer.Deserialize(xmlReader);
