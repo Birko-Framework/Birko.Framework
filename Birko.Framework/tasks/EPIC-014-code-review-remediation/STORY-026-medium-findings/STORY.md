@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**207 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**208 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,10 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 49 — Vault.Configuration CR-M242 (1 closed; augment existing, verify-first)
+
+- **M242** the Vault.Configuration projitems compiles into Birko.Security.Vault.Tests; `SecretConfigurationProviderTests` (since the audit) already covers the `--`→KeyDelimiter rewrite / recursion / prefix / multi-path. Added `LocalVaultConfigurationTests` (reflection) for the remaining LocalVault pure logic: `BuildPaths` override-ordering + `ResolveOptions` lowercasing/fallback. No separate project needed. Vault.Tests 44.
 
 ### Batch 48 — Structures CompressedTrie.Remove CR-M251 (1 closed; augment existing)
 

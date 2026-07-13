@@ -139,6 +139,9 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Vault.Configuration path/option logic (EPIC-014 / STORY-026) (2026-07-13)
+Forty-ninth STORY-026 batch: **CR-M242** — verify-first. The Vault.Configuration projitems compiles into `Birko.Security.Vault.Tests`, whose `SecretConfigurationProviderTests` (added since the audit) already covers the `--`→`ConfigurationPath.KeyDelimiter` rewrite, recursive child traversal + prefix composition, multi-path ordering, throwing-ListSecrets graceful handling, and null guards. Added `LocalVaultConfigurationTests` for the remaining LocalVault pure logic — `BuildPaths` override-ordering (defaults → defaults.env → project → project.env → users/…, with domain scope and env/user omission) and `ResolveOptions` (User/Domain/Environment lower-casing + seeded-value-wins) via reflection on the private statics. No separate `.Tests` project needed. Suite green: Birko.Security.Vault.Tests 44. STORY-026 now **208/275**.
+
 ### Code-review remediation — medium findings, Structures CompressedTrie.Remove (EPIC-014 / STORY-026) (2026-07-13)
 Forty-eighth STORY-026 batch: **CR-M251** — `Birko.Structures.Tests` already covered CompressedTrie GetWordsWithPrefix/GetAllWords (added since the audit); this batch closes the remaining `Remove` gap the finding flagged (existing-word with siblings preserved, missing/prefix-only word, remove-down-to-empty, and the merge-on-remove single-child case). All pass — the merge path is correct. Suite green: Structures trie tests 14. STORY-026 now **207/275**.
 
