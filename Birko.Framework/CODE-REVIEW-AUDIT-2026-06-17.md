@@ -3750,7 +3750,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for stores, command execution, transactions, or async cancellation
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL\Birko.Data.SQL.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open — deferred. The store CRUD (DataBaseStore/AsyncDataBaseStore/*BulkStore), RunCommand(Async)/RunReaderCommand(Async), SqlUnitOfWork, and the isLock/CancellationToken behavior all execute against a real `DbConnection`. Birko.Data.SQL.Tests deliberately fakes only `DbCommand` (TestDbCommand/TestDbParameter) for its pure-logic suites (conditions, strategies, expressions, index, retry, caching, views) — there is no fake `DbConnection` or wired SQLite provider, so this needs either a System.Data.SQLite integration tier or a substantial fake-ADO connection harness. Out of scope for the pure-logic remediation batches; left open deliberately rather than falsely closed.
+- **Status:** done — closed via the SQLite integration tier. Birko.Data.SQL.SqLite.Tests (a real on-disk SQLite DbConnection) now covers store CRUD (AsyncSQLiteStore single + bulk round-trips), SqlUnitOfWork begin/commit/rollback + state-machine guards, the isLock=true serialization and cancelled-token read (AsyncConnectorLockAndCancellationTests). RunCommand/RunReaderCommand are exercised indirectly via store CRUD.
 - **Detail:** The .Tests sibling covers condition building, strategies, expression parsing, index management, retry policy, caching, and views, but has no coverage of DataBaseStore/AsyncDataBaseStore/*BulkStore CRUD, RunCommand(Async)/RunReaderCommand(Async), SqlUnitOfWork begin/commit/rollback, or the isLock serialization and CancellationToken behavior flagged above. The two highest-severity bugs here (async lock release, ct propagation) are exactly the kind that a SQLite-backed integration test (a real DbConnection is available via System.Data.SQLite) would catch.
 - **Fix:** Add a SQLite-backed integration test fixture exercising store CRUD, UnitOfWork commit/rollback, concurrent isLock=true inserts, and a cancelled-token read asserting OperationCanceledException.
 
@@ -3822,7 +3822,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk operations bypass transient-error retry (ExecuteWithRetry), defeating the connector's own IsTransientException
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.SqLite\Database\Connectors\SqLiteConnector.cs:219`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — the six native bulk methods now wrap open/transaction/execute in ExecuteWithRetry/ExecuteWithRetryAsync (matching base RunCommandTransaction) so SQLITE_BUSY/LOCKED retry per the RetryPolicy. Covered by bulk CRUD round-trip + IsTransientException tests in Birko.Data.SQL.SqLite.Tests.
 - **Detail:** The connector overrides IsTransientException to flag SQLITE_BUSY (5) and SQLITE_LOCKED (6) — exactly the errors a retry policy exists to handle for concurrent SQLite access. But BulkInsert/BulkUpdate/BulkDelete and their async variants open the connection, begin a transaction, and execute directly, with no ExecuteWithRetry wrapper. The base RunCommand/RunCommandTransaction (AbstractConnector.cs:167,199) wrap execution in ExecuteWithRetry. So under contention the native bulk ops fail immediately instead of retrying, even though the framework's retry policy and the connector's transient-detection were set up for it.
 - **Fix:** Wrap the bulk command bodies in ExecuteWithRetry (or factor the open/transaction/execute into the same retry helper the base connector uses) so SQLITE_BUSY/SQLITE_LOCKED are retried per the configured RetryPolicy.
 
@@ -3830,7 +3830,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for the entire Birko.Data.SQL.SqLite sibling
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.SqLite`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — Birko.Data.SQL.SqLite.Tests exists and now covers native bulk + single CRUD round-trips, SqLiteSettings, Guid conversion, IsTransientException (BUSY/LOCKED), the store factory/DI, and SqLiteIndexManager PRAGMA parsing.
 - **Detail:** There is no Birko.Data.SQL.SqLite.Tests directory (only Birko.Data.SQL.SqLite and Birko.Data.SQL.SqLite.View exist as siblings). The framework convention (CLAUDE.md Testing section) requires xUnit + FluentAssertions tests for every new public functionality. None of the public surface is covered: the native bulk CreateCore/UpdateCore/DeleteCore round-trips, SqLiteSettings.GetConnectionString / Path / LoadFrom, SqLiteConnector type/parameter conversion (Guid→string), the auto-create-on-missing-table behavior, transient-error detection, and SqLiteIndexManager.ListAsync PRAGMA parsing. The index-manager dispatch bug above would have been caught by a test calling GetInfoAsync through the interface.
 - **Fix:** Add a Birko.Data.SQL.SqLite.Tests project (SQLite is file-based, so real round-trip tests against a temp .db file are cheap) covering bulk CRUD round-trips, settings, Guid conversion, and index listing/GetInfoAsync via the IIndexManager interface.
 
@@ -3870,7 +3870,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ViewMigrationExtensions has zero test coverage
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View.Migrations\Migrations\ViewMigrationExtensions.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — new Birko.Data.SQL.View.Migrations.Tests asserts CreateView/DropView (by-type + by-name, sync + async) DDL + transaction propagation via a recording fake DbConnection, plus the non-SqlMigrationContext guard and null/empty guards.
 - **Detail:** The Birko.Data.SQL.Tests project compiles in ViewSqlGenerator.cs via a <Compile Include ... Link> (Birko.Data.SQL.Tests.csproj line 39) and exercises it in ViewSqlGeneratorTests.cs, but ViewMigrationExtensions.cs is neither imported nor tested. None of CreateView / CreateViewAsync / DropView(Type) / DropViewAsync(Type) / DropView(name) / DropViewAsync(name), the GetSqlConnection type-guard (throws InvalidOperationException for a non-SqlMigrationContext), the empty-SQL early-return in ExecuteSql/ExecuteSqlAsync, or transaction propagation onto the command has any coverage. Framework convention (project CLAUDE.md + root CLAUDE.md) requires tests for every new public functionality.
 - **Fix:** Add a ViewMigrationExtensionsTests class (e.g. against a SQLite in-memory SqlMigrationContext) covering create/drop sync+async, the wrong-context-type guard, and cancellation; or at minimum verify the generated CommandText and Transaction assignment via a fake DbConnection/DbCommand.
 

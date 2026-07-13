@@ -192,6 +192,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.SQL.MySQL.Tests/Birko.Data.SQL.MySQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.PostgreSQL.Tests/Birko.Data.SQL.PostgreSQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Views.Tests/Birko.Data.SQL.Views.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.View.Migrations.Tests/Birko.Data.SQL.View.Migrations.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.AspNetCore.Tests/Birko.Communication.AspNetCore.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Tests/Birko.Data.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Helpers.Tests/Birko.Helpers.Tests.csproj" />

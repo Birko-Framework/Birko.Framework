@@ -13,12 +13,13 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**226 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**230 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
-**The entire TypeScript Birko.Web.* track (M256–M266) is now CLOSED** — see Batch 52 below. Every
-remaining open medium finding is in the infra-heavy deferred pile (SQLite/Docker/async-refactor)
-listed under "⏳ Deferred pile".
+**The entire TypeScript Birko.Web.* track (M256–M266) is CLOSED** (Batch 52). **The SQLite
+integration tier is under way** (Batch 53): CR-M135/M144/M145/M150 closed via a real on-disk SQLite
+`DbConnection`. Remaining open: the SQLite-tier stragglers CR-M152/M154 (headline bugs already
+covered by existing green tests — augmentation pending) and the Docker/async-refactor pile below.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
 > lowest risk), THEN tackle the deferred pile below as a dedicated integration-test effort. Deferring
@@ -44,6 +45,38 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 53 — SQLite integration tier CR-M135/M144/M145/M150 (4 closed)
+
+Stood up / extended the in-process SQLite tier (Microsoft.Data.Sqlite, real on-disk `.db` files) — the
+one integration tier verifiable in this environment (no Docker). Verify-first surfaced that
+`Birko.Data.SQL.SqLite.Tests`, `.ViewModel.Tests`, and `.Views.Tests` already existed (created since
+the audit), so M135/M145 became "extend" not "create".
+- **M144 (bug)** — the six `SqLiteConnector` native bulk methods (BulkInsert/Update/Delete + async)
+  opened a connection + transaction and executed directly, bypassing `ExecuteWithRetry`, so
+  SQLITE_BUSY/SQLITE_LOCKED (which the connector's own `IsTransientException` override flags) failed
+  immediately instead of retrying. Wrapped each body in `ExecuteWithRetry`/`ExecuteWithRetryAsync`
+  (matching the base `RunCommandTransaction`; each attempt opens a fresh connection/transaction;
+  cancellation still propagates — OCE isn't transient).
+- **M135** — added `SqLiteStoreCrudTests`: `AsyncSQLiteStore` single + bulk CRUD round-trips (exercises
+  the retry-wrapped bulk paths) and `SqlUnitOfWork` commit-persists / rollback-discards + the
+  state-machine guards (double-begin, commit/rollback-without-active, post-dispose). The isLock
+  serialization + cancelled-token read were already covered by `AsyncConnectorLockAndCancellationTests`.
+- **M145** — same file adds `SqLiteSettingsTests` (GetConnectionString / Path / LoadFrom incl. foreign +
+  null) and `SqLiteTransientDetectionTests` (BUSY=5/LOCKED=6 → transient; ERROR/CONSTRAINT → not;
+  Timeout → transient). Guid→string conversion is proven by the CRUD round-trip; the index-manager
+  PRAGMA path was already covered. `Birko.Data.SQL.SqLite.Tests`: 9 → 24.
+- **M150** — new **`Birko.Data.SQL.View.Migrations.Tests`** (`ViewMigrationExtensionsTests`, 11):
+  CreateView/CreateViewAsync/DropView/DropViewAsync (by-type + by-name) assert the generated DDL
+  (`CREATE OR REPLACE VIEW` / `DROP VIEW IF EXISTS`), custom quote-char, and transaction propagation via
+  a **recording fake `DbConnection`** (SQLite rejects `CREATE OR REPLACE VIEW`, so the fake asserts DDL +
+  transaction wiring independent of provider dialect — the finding's "at minimum" approach), plus the
+  non-`SqlMigrationContext` guard and null/empty-arg guards. git-initialized + registered in `.slnx` +
+  `.code-workspace`.
+
+Remaining SQLite-tier: M152 (`ViewModel.Tests` — augment with the sync `DataBaseRepository` ctor guard,
+wrapped-store unwrap, `ReadOne`, `AddOnInit`) and M154 (`Views.Tests` — add `SqlViewTranslator.Translate`
+pure tests). Both projects exist with their headline-bug regressions already green.
 
 ### Batch 52 — TypeScript Birko.Web.* track CR-M256…M266 (11 closed; whole TS track)
 
