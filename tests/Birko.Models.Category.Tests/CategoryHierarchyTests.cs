@@ -136,4 +136,11 @@ public class DeriveParentAndDepthFromPathTests
         var act = () => HierarchyHelper.DeriveParentAndDepthFromPath(null!);
         act.Should().NotThrow();
     }
+
+    // CR-M214: GetSlugSource feeds the slug generator.
+    [Fact]
+    public void GetSlugSource_ReturnsTitle()
+    {
+        new CategoryModel { Title = "Smart Phones" }.GetSlugSource().Should().Be("Smart Phones");
+    }
 }
