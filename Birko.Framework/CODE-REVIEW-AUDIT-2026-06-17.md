@@ -4317,8 +4317,8 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M206 · 🟡 medium · Birko.MessageQueue.Redis
 - **Title:** CancellationToken ignored in producer and consumer Redis calls
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.Redis\RedisProducer.cs:27-66; RedisConsumer.cs:84-93`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.MessageQueue.Redis.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 37). Added `cancellationToken.ThrowIfCancellationRequested()` on entry to `RedisProducer.SendAsync`, `RedisConsumer.AcknowledgeAsync`, and `RedisConsumer.RejectAsync` (StackExchange.Redis has no per-call token, so gating on entry mirrors the framework's `EnsureInitializedAsync` pattern). The generic `SendAsync<T>` delegates to the gated non-generic. Regression (offline, lazy connection): a pre-cancelled token throws `OperationCanceledException` from each before any Redis call.
 - **Detail:** SendAsync(...) accepts a CancellationToken but never observes it — no ThrowIfCancellationRequested() and StreamAddAsync is called without honoring it, so a cancelled token does not stop a send. AcknowledgeAsync/RejectAsync similarly ignore their token. The framework convention is that async methods observe the CancellationToken. StackExchange.Redis has no per-call token, but at minimum cancellationToken.ThrowIfCancellationRequested() should gate entry (mirrors the EnsureInitializedAsync gate pattern used across Birko stores).
 - **Fix:** Add cancellationToken.ThrowIfCancellationRequested() at the top of SendAsync, AcknowledgeAsync, and RejectAsync.
 

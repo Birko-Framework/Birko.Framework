@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**160 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**161 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,12 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 37 — MessageQueue.Redis CR-M206 (1 closed; offline CancellationToken gate)
+
+- **M206** `RedisProducer.SendAsync` / `RedisConsumer.AcknowledgeAsync` / `RejectAsync` accepted a `CancellationToken` but never observed it → added `ThrowIfCancellationRequested()` on entry (StackExchange.Redis has no per-call token). Offline regression (lazy connection): a pre-cancelled token throws before any Redis call.
+- Suite green: Birko.MessageQueue.Redis.Tests 41.
+- **Still deferred (live broker / new project):** MQTT M203/M205 (new `.MQTT.Tests` project — ask first), M204 (resubscribe-on-reconnect), M207/M208/M209 (Redis poll-loop / consumer-name / integration test-gap — live Redis).
 
 ### Batch 36 — MessageQueue core + InMemory CR-M199/M200/M201/M202 (4 closed; offline)
 

@@ -139,6 +139,9 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, MessageQueue.Redis token gate (EPIC-014 / STORY-026) (2026-07-13)
+Thirty-seventh STORY-026 batch: **CR-M206** in Birko.MessageQueue.Redis — offline. `RedisProducer.SendAsync` and `RedisConsumer.AcknowledgeAsync`/`RejectAsync` accepted a `CancellationToken` but never observed it; added `cancellationToken.ThrowIfCancellationRequested()` on entry (StackExchange.Redis has no per-call token, so the entry gate mirrors the framework's `EnsureInitializedAsync` pattern; the generic `SendAsync<T>` delegates to the gated non-generic). Offline regression asserts a pre-cancelled token throws before any Redis call (lazy connection). Suite green: Birko.MessageQueue.Redis.Tests 41. STORY-026 now **161/275**. (MQTT M203/M205 need a new `.MQTT.Tests` project; M204/M207/M208/M209 need a live broker — deferred.)
+
 ### Code-review remediation — medium findings, MessageQueue core + InMemory (EPIC-014 / STORY-026) (2026-07-13)
 Thirty-sixth STORY-026 batch: **CR-M199/M200/M201/M202** (Birko.MessageQueue core + .InMemory) — offline. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **RetryPolicy overflow + tests (M199)** — the core `RetryPolicy.GetDelay` had no tests; adding the large-attempt boundary case surfaced the **same overflow fixed in Birko.Contracts under CR-M078**: `(long)Math.Pow(2, attemptNumber - 1)` wrapped to a negative value for large attempts, producing a negative TimeSpan that slipped past the `> MaxDelay` clamp. Now computes in `double` and saturates at `MaxDelay` before the cast. New `RetryPolicyTests` covers fixed/exponential/clamp/factory defaults + the 53/100/1000/int.MaxValue boundary.
