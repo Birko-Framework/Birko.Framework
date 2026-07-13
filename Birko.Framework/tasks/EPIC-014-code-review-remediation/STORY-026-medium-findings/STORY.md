@@ -16,6 +16,31 @@ finding-ids: CR-M001 …
 **136 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
+> **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
+> lowest risk), THEN tackle the deferred pile below as a dedicated integration-test effort. Deferring
+> is a conscious sequencing choice, not abandonment — these are logged so they aren't lost.
+
+### ⏳ Deferred pile — handle after the offline sweep
+
+All deferrals share one root cause: the framework's tests are pure-logic/offline (fake `DbCommand`,
+`InMemory`, lazy clients), and these findings need more than that. Grouped by what would unblock them:
+
+- **Needs a real `DbConnection` (SQLite — runs in-process, no Docker; verifiable locally):**
+  CR-M135 (SQL store CRUD / RunCommand / SqlUnitOfWork / isLock / cancellation), CR-M144 (SqLite bulk
+  retry), CR-M145 (SqLite test-gap), CR-M150 (SQL.View.Migrations round-trip), CR-M152 (SQL.ViewModel
+  test-gap), CR-M154 (SQL.Views store/manager round-trip). A SQLite-backed harness closes these and
+  end-to-end-validates the already-committed SQL fixes (M134/M137/M142/M147/M148).
+- **Needs the async-interface change (self-contained refactor):** CR-M101 (thread `CancellationToken`/
+  async through `IMigrationRunner`/`IMigrationStore`/`IDataMigrator` + the ~7 backend implementers),
+  which then unblocks CR-M108 (Migrations.InfluxDB sync-over-async) and CR-M109 (Flux count semantics).
+- **Needs Docker / Testcontainers (genuinely CI-tier, NOT verifiable in this environment):** CR-M089
+  (ES store CRUD/scroll/bulk/aggregation), and the live-DB paths of CR-M136/M138/M139/M146/M149
+  (MSSql/PostgreSQL/SqLite connector + Auto-mode view cache).
+- **Refactor / larger design change:** CR-M140 & CR-M151 (extract the duplicated view-SELECT builder
+  into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
+  connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
+  projects) fit the SQLite/Docker tiers above depending on provider.
+
 ### Batch 29 — Birko.Data.Sync CR-M155/M156 (2 closed; offline bugs)
 
 - **M155** Preview/PreviewAsync's bare catch masked OperationCanceledException as a fake conflict → added `catch (OperationCanceledException) { throw; }` before the broad catch in both. Offline test (store read throws OCE → Preview rethrows).
