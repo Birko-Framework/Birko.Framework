@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Storage.AzureBlob SAS/URL encoding (EPIC-014 / STORY-026) (2026-07-13)
+Forty-fifth STORY-026 batch: **CR-M248/M249** in Birko.Storage.AzureBlob — **crosses 200/275**. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Raw blob path in URLs (M248)** — `GenerateSasUri` appended the raw `blobPath` into the SAS URI (and `AzureBlobStorage.GetBlobUri` into REST URLs); a key with spaces / `#` / `?` / `%` produced a malformed or mis-routed URL and could mismatch the SAS signature. Now percent-encodes each `/`-separated segment (slashes preserved) via a shared `EncodeBlobPath` helper, while the `canonicalResource` in the string-to-sign keeps the DECODED form per the Azure Service SAS spec (so the signature still matches). Regression asserts spaces/reserved chars encode and slashes survive.
+- **Vacuous credential-guard tests (M249)** — `GetDownloadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation` / `GetUploadUrlAsync_…` were non-async `[Fact]`s that called `act.Should().ThrowAsync<…>()` without awaiting — the assertion task was discarded, so they passed even if nothing threw. Made `async Task` + `await`.
+- Suite green: Birko.Storage.AzureBlob.Tests 54. STORY-026 now **200/275**.
+
 ### Code-review remediation — medium findings, Structures/Storage/Telemetry/Time (EPIC-014 / STORY-026) (2026-07-13)
 Forty-fourth STORY-026 batch: **CR-M246/247/250/252/253/254/255** — a cross-project reliability/cleanup sweep (7 closed). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Storage async ct (M246)** — `LocalFileStorage` Download/Delete/Exists/ListAsync accepted a `CancellationToken` but never observed it; added `ThrowIfCancellationRequested()` on entry (and inside the ListAsync `SearchOption.AllDirectories` tree-walk).

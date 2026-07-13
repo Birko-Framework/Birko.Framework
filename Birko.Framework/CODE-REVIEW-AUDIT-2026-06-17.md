@@ -4654,7 +4654,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SAS URL appends raw blobPath without URL-encoding path segments
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage.AzureBlob\AzureBlobPresignedUrlProvider.cs:72-74`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 45). `GenerateSasUri` now appends `EncodeBlobPath(blobPath)` (percent-encodes each '/'-separated segment, preserving slashes), while the `canonicalResource` in the string-to-sign keeps the DECODED form per the Azure Service SAS spec, so the signature still matches. The same per-segment encoding was applied to `AzureBlobStorage.GetBlobUri` (REST calls). Regression (Birko.Storage.AzureBlob.Tests) asserts spaces/`#`/`?`/`%` are encoded and slashes preserved.
 - **Detail:** GenerateSasUri appends the raw blobPath into the URI (sb.Append(blobPath)). If a blob key contains spaces or characters that are invalid in a URI path (e.g. '#', '?', space, '%'), new Uri(...) will either throw or produce a malformed/mis-routed URL. Azure also expects the path component to be percent-encoded while the canonicalizedResource in the string-to-sign uses the decoded form, so naive raw appending both breaks the URL and can mismatch the signature for non-trivial keys. The same raw-concatenation pattern is used in GetBlobUri (AzureBlobStorage.cs:327-328) for the REST calls.
 - **Fix:** Percent-encode each path segment (Uri.EscapeDataString per '/'-split segment, preserving the slashes) when building the URL, while keeping the decoded form in the canonicalizedResource string-to-sign, per the Azure Service SAS spec.
 
@@ -4662,7 +4662,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gap: presigned-URL credential-guard tests are vacuous (not awaited)
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Storage.AzureBlob.Tests\AzureBlob\AzureBlobStorageTests.cs:180-197`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 45). Both tests are now `async Task` and `await` the `ThrowAsync<InvalidOperationException>()` assertion, so the credential-guard is actually verified (previously the assertion task was discarded and the tests passed unconditionally).
 - **Detail:** GetDownloadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation and GetUploadUrlAsync_WithoutAccountKey_ThrowsInvalidOperation are non-async [Fact]s that call act.Should().ThrowAsync<...>() without awaiting the returned Task. The assertion task is discarded, so these tests pass even if the exception is never thrown — they assert nothing. (They happen to be the only guard for ValidateSasCredentials.)
 - **Fix:** Make the tests async Task and 'await act.Should().ThrowAsync<InvalidOperationException>();' — or, since the throw is synchronous, assert with Throw (not ThrowAsync) on a delegate that returns the Task.
 

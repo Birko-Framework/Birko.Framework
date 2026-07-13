@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**198 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**200 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,12 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 45 — Storage.AzureBlob CR-M248/M249 (2 closed; offline) — **200/275 milestone**
+
+- **M248** SAS URL (and GetBlobUri REST) appended raw blobPath → percent-encode each '/'-segment via `EncodeBlobPath` (slashes preserved); canonicalResource keeps the decoded form so the signature matches. Regression tests the encoder (spaces/#/?/% encoded).
+- **M249** the two credential-guard tests were non-async `[Fact]`s that discarded `ThrowAsync` (asserted nothing) → made `async Task` + `await`.
+- Suite green: Birko.Storage.AzureBlob.Tests 54.
 
 ### Batch 44 — Structures/Storage/Telemetry/Time CR-M246/247/250/252/253/254/255 (7 closed; offline)
 
