@@ -45,6 +45,15 @@ public class DatabaseTranslationProvider : ITranslationProvider
         _cacheDuration = cacheDuration ?? TimeSpan.FromMinutes(5);
     }
 
+    /// <summary>
+    /// Gets a translation for the given key and culture.
+    /// </summary>
+    /// <remarks>
+    /// CR-M198: this synchronous member blocks on async store I/O (<c>.GetAwaiter().GetResult()</c>) on a
+    /// cache miss. Avoid calling it on a thread with a single-threaded <see cref="System.Threading.SynchronizationContext"/>
+    /// (legacy ASP.NET, WPF/WinForms UI thread) — the store continuation may need that context and deadlock.
+    /// Prefer <see cref="GetTranslationAsync"/>.
+    /// </remarks>
     public string? GetTranslation(string key, CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(culture);
@@ -52,6 +61,14 @@ public class DatabaseTranslationProvider : ITranslationProvider
         return dict.TryGetValue(key, out var value) ? value : null;
     }
 
+    /// <summary>
+    /// Gets the cultures with translations in the store.
+    /// </summary>
+    /// <remarks>
+    /// CR-M198: blocks on async store I/O — see <see cref="GetTranslation"/>. Avoid on UI /
+    /// single-threaded-sync-context threads; there is no async counterpart for this member, so cache the
+    /// result rather than calling it on a hot/UI path.
+    /// </remarks>
     public IReadOnlyList<CultureInfo> GetSupportedCultures()
     {
         var models = LoadAllAsync().GetAwaiter().GetResult();
@@ -68,6 +85,13 @@ public class DatabaseTranslationProvider : ITranslationProvider
             .ToList()!;
     }
 
+    /// <summary>
+    /// Gets all translations for the given culture.
+    /// </summary>
+    /// <remarks>
+    /// CR-M198: blocks on async store I/O on a cache miss — see <see cref="GetTranslation"/>. Prefer
+    /// <see cref="GetAllAsync"/> on UI / single-threaded-sync-context threads.
+    /// </remarks>
     public IReadOnlyDictionary<string, string> GetAll(CultureInfo culture)
     {
         ArgumentNullException.ThrowIfNull(culture);
