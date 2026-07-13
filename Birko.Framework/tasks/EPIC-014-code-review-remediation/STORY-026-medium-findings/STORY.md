@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**172 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**178 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,17 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 40 — Models test-gaps CR-M214/218/222/223/224/225 (6 closed; verify + augment + 1 new project)
+
+Verify-first: five of these test projects already exist and cover each finding's flagged bug; augmented the clearest named gaps and created the one genuinely-missing project.
+- **M214** Category.Tests exists (LoadFrom round-trips) → added GetSlugSource test.
+- **M218** Customers.Tests exists (CopyTo + CustomerAddress.LoadFrom) → matches the ask exactly; closed as verified.
+- **M222** Inventory.Tests exists (StorageLocation Depth) → added InventoryDocument scalar round-trip (Lines stays empty per M221).
+- **M223** Product.Tests exists (Filter multi-clause) → added ProductPropertiesLoadTests (LoadProperties flatten/null-drop/null-dict).
+- **M224** created **Birko.Models.SEO.Tests** (7: LoadFrom round-trips, PropertyChanged aggregate, SEO<T> guid filter, SEOByPath exact/prefix/empty). Registered in .slnx + .code-workspace.
+- **M225** Models.SQL.Tests exists (ModelMapRegistryApplyTests: ApplyToDatabase + metadata + GetTableNames) → closed as verified.
+- Suites green: Category.Tests 9, Product.Tests 9, Inventory.Tests 3, SEO.Tests 7.
 
 ### Batch 39 — Models SQL mappings CR-M219/M220/M229 (3 closed; 2 new test projects)
 

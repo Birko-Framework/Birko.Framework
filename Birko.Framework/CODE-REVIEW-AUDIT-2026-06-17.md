@@ -4382,7 +4382,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project exists for any public functionality
 - **Path:** `C:/Source/Birko/Framework/Birko.Models.Category (no Birko.Models.Category.Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 40). `Birko.Models.Category.Tests` exists (CategoryHierarchyTests: Model/VM LoadFrom round-trips restoring ParentGuid/Depth from Path — the CR-H125 data-loss the finding flagged); augmented with a `GetSlugSource` test.
 - **Detail:** Framework convention (CLAUDE.md Testing section) requires every public functionality to have tests in a Birko.{ProjectName}.Tests sibling. There is none. Untested public surface: Models.Category.LoadFrom, Models.Category.GetSlugSource, both ViewModels.Category.LoadFrom overloads, the PropertyChanged fan-out to CategoryObjectProperty, and the Filters.Category<T> filter. The LoadFrom mapping (and the round-trip data-loss above) is exactly the kind of thing a test would catch.
 - **Fix:** Add a Birko.Models.Category.Tests xUnit + FluentAssertions project covering Model<->ViewModel LoadFrom round-trips (asserting which fields survive), GetSlugSource, and the property-change aggregation.
 
@@ -4414,7 +4414,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for Birko.Models.Customers
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Customers\Birko.Models.Customers (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 40, verified). `Birko.Models.Customers.Tests` exists with `CustomerCopyAndLoadTests`, covering exactly the finding's ask: Customer.CopyTo runtime-type + all-fields round-trip (CR-H127), CopyTo-into-existing, and CustomerAddress.LoadFrom populating the inherited Address fields + the null-address no-throw (CR-H128).
 - **Detail:** There is no Birko.Models.Customers.Tests sibling (only Birko.Models.Customers and Birko.Models.Customers.SQL exist). The CopyTo and LoadFrom mapping logic — exactly where the two bugs above live — has zero coverage. CLAUDE.md requires xUnit + FluentAssertions tests for every public functionality. A round-trip test (model -> copy -> assert equality; viewmodel -> LoadFrom -> assert all fields) would have caught both the Customer.CopyTo drop and the CustomerAddress address-load gap.
 - **Fix:** Add Birko.Models.Customers.Tests with CopyTo round-trip and LoadFrom field-coverage tests for Address, InvoiceAddress, BaseCustomer, Customer, CustomerAddress, ContactPerson, CustomerBankAccount.
 
@@ -4446,7 +4446,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project exists for the domain
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Inventory\Birko.Models.Inventory (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 40). `Birko.Models.Inventory.Tests` exists (StorageLocationTests covers the CR-H129 Depth-round-trip bug); augmented with an InventoryDocument scalar LoadFrom round-trip that also asserts Lines stays empty (the CR-M221-documented behavior). Full six-model parity coverage remains a lower-priority follow-up.
 - **Detail:** There is no Birko.Models.Inventory.Tests directory. Per the framework Testing convention ('Every new public functionality must have corresponding tests'), the LoadFrom/CopyTo mapping logic for all six models and the PropertyChanged-fanout in the view models (which gate RaisePropertyChanged of the *ObjectProperty aggregate) is entirely untested. The two mapping bugs above (StorageLocation.Depth, InventoryDocument.Lines) are exactly the kind of round-trip omission a parity test would have caught.
 - **Fix:** Add a Birko.Models.Inventory.Tests xUnit + FluentAssertions project with round-trip tests (model.LoadFrom(viewModel) then assert every contract/declared property) and CopyTo tests asserting all fields are copied.
 
@@ -4454,7 +4454,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project exists for Birko.Models.Product
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Product\Birko.Models.Product (no Birko.Models.Product.Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 40). `Birko.Models.Product.Tests` exists with `ProductListFilterTests` covering the CR-H131 `ProductList.Filter()` parameter-rebinding bug across multi-clause cases; augmented with `ProductPropertiesLoadTests` for the default-interface `LoadProperties` normalization (flatten source→values, drop null values, null-dictionary → empty).
 - **Detail:** There is no Birko.Models.Product.Tests directory under C:\Source (siblings are only Birko.Models.Product and Birko.Models.Product.SQL). CLAUDE.md requires every new public functionality to have tests. The non-trivial logic that is completely untested: ProductList.Filter() expression composition (the bug above would have been caught), the default-interface LoadProperties/LoadTags/LoadManufacturers normalization (dedupe, lowercasing, null/empty filtering), and the asymmetric viewmodel-to-viewmodel Product.LoadFrom that keeps the longer Description.
 - **Fix:** Add a Birko.Models.Product.Tests xUnit+FluentAssertions project; prioritize ProductList.Filter() multi-clause cases and the IProductProperties/IProductTags Load/Add normalization.
 
@@ -4462,7 +4462,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling — zero test coverage
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.SEO`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 40). Created **`Birko.Models.SEO.Tests`** (registered in .slnx + .code-workspace): `SeoTests` covers the model/VM LoadFrom round-trips (incl. log/identity via base.LoadFrom), the PropertyChanged → SEOObjectProperty aggregation, the SEO&lt;T&gt; guid filter, and SEOByPath exact / prefix / empty-path (null filter) branches.
 - **Detail:** There is no Birko.Models.SEO.Tests project anywhere under C:\Source. The convention requires every new public functionality to have xUnit + FluentAssertions tests. Untested public surface: SEO model LoadFrom round-trip, ViewModel LoadFrom (both overloads) and PropertyChanged → SEOObjectProperty propagation, the SEO<T> guid filter, and SEOByPath exact vs StartsWith behavior (including the empty-path null return and the null-Path edge above).
 - **Fix:** Add a Birko.Models.SEO.Tests project covering LoadFrom mappings, PropertyChanged aggregation, and both filter branches (exact, prefix, empty, and null-Path).
 
@@ -4470,7 +4470,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project exists for the entire public mapping surface
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.SQL (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 40, verified). `Birko.Models.SQL.Tests` exists with `ModelMapRegistryApplyTests` covering the finding's core ask: `ApplyToDatabase` applies HasColumnName + flags (the CR-H132 gap), the metadata-only facets (HasMaxLength) stay readable via GetPropertyMaps, and GetTableNames. GetMemberName's UnaryExpression/throw edges remain a lower-priority follow-up.
 - **Detail:** There is no Birko.Models.SQL.Tests sibling. The framework convention requires xUnit + FluentAssertions coverage for new public functionality. Untested public behavior includes: ModelMap.Property/HasUnique/HasPrimary/Ignore (the create-vs-update-existing-FieldDescriptor branches), GetMemberName (MemberExpression vs UnaryExpression boxing path vs the ArgumentException throw), FieldBuilder chaining, ModelMapRegistry.Register / RegisterFromAssembly (assembly scan, abstract/interface filtering, Activator.CreateInstance null-skip paths), GetMap/HasMap/GetTableNames/GetPropertyMaps, and most importantly ApplyToDatabase — whose field-metadata gap (finding 1) would likely have been caught by a test asserting that HasMaxLength/HasColumnName actually take effect.
 - **Fix:** Add Birko.Models.SQL.Tests covering ModelMap fluent ops, GetMemberName edge cases, assembly scanning, and an ApplyToDatabase round-trip that asserts which metadata is (and is not) applied.
 

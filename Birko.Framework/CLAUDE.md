@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Models test-gaps (EPIC-014 / STORY-026) (2026-07-13)
+Fortieth STORY-026 batch: **CR-M214/218/222/223/224/225** — the Models cluster test-gaps (6 closed). Verify-first: five projects already existed and covered each finding's flagged bug, so this augmented the clearest named gaps and created the one genuinely-missing project (SEO). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Already-covered, closed as verified:** M218 (Customers.Tests: Customer.CopyTo type/all-fields + CustomerAddress.LoadFrom — the exact CR-H127/H128 asks) and M225 (Models.SQL.Tests: ApplyToDatabase column-name+flags, metadata-only facets via GetPropertyMaps, GetTableNames).
+- **Augmented existing projects:** M214 (Category.Tests → +GetSlugSource), M222 (Inventory.Tests → +InventoryDocument scalar round-trip asserting Lines stays empty per M221), M223 (Product.Tests → +ProductPropertiesLoadTests for the default-interface LoadProperties flatten/null-drop/null-dict normalization).
+- **New project (M224):** **`Birko.Models.SEO.Tests`** (7) — model/VM LoadFrom round-trips incl. log fields, PropertyChanged → SEOObjectProperty aggregation, the SEO&lt;T&gt; guid filter, and SEOByPath exact/prefix/empty-path branches. Registered in `.slnx` + `.code-workspace`.
+- Suites green: Category.Tests 9, Product.Tests 9, Inventory.Tests 3, SEO.Tests 7. STORY-026 now **178/275** — the entire Models cluster (M213–M229) is closed.
+
 ### Code-review remediation — medium findings, Models SQL mappings (EPIC-014 / STORY-026) (2026-07-13)
 Thirty-ninth STORY-026 batch: **CR-M219/M220/M229** — SQL mapping convention/integrity gaps in Birko.Models.Customers.SQL + .Users.SQL (3 closed, 2 new test projects created with user approval). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Unbounded Customer columns (M219)** — CustomerMapping mapped only ToTable + Guid, leaving Name/Code/Email/Phone/Website/TaxId/VatId as unbounded (nvarchar(max)-style, unindexable) columns. Added `HasPrecision` to each (256/64/256/64/256/32/32), matching ContactPersonMapping / Pricing.SQL. Left `IsUnique()` off TaxId/VatId/Code (the finding's "consider" — nullable natural keys, a DB/migration decision).
