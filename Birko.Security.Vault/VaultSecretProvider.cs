@@ -176,8 +176,14 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
         using var doc = JsonDocument.Parse(json);
 
-        var data = doc.RootElement.GetProperty("data");
-        var inner = _settings.KvVersion == 2 ? data.GetProperty("data") : data;
+        // CR-M240: a 200 with an unexpected/empty body (or a KV2 response missing the inner data node)
+        // must return null gracefully, not surface a raw KeyNotFoundException from GetProperty.
+        if (!doc.RootElement.TryGetProperty("data", out var data))
+            return null;
+
+        var inner = data;
+        if (_settings.KvVersion == 2 && !data.TryGetProperty("data", out inner))
+            return null;
 
         var result = new Dictionary<string, string>();
         foreach (var prop in inner.EnumerateObject())
@@ -227,11 +233,16 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
 
     private static SecretResult ParseKv2Response(string key, JsonElement root)
     {
-        var data = root.GetProperty("data");
-        var innerData = data.GetProperty("data");
+        // CR-M240: tolerate a malformed/empty KV2 body (missing data / inner-data) with an empty value
+        // instead of a raw KeyNotFoundException from GetProperty.
+        if (!root.TryGetProperty("data", out var data))
+            return new SecretResult { Key = key, Value = "" };
+        var innerData = data.TryGetProperty("data", out var inner) ? inner : default;
         var metadata = data.TryGetProperty("metadata", out var meta) ? meta : default;
 
-        var value = innerData.TryGetProperty("value", out var val) ? val.GetString() ?? "" : "";
+        var value = innerData.ValueKind == JsonValueKind.Object && innerData.TryGetProperty("value", out var val)
+            ? val.GetString() ?? ""
+            : "";
 
         return new SecretResult
         {
