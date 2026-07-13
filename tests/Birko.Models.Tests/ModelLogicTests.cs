@@ -62,6 +62,31 @@ public class ModelLogicTests
     }
 
     [Fact]
+    public void ValueData_LoadFromViewModel_PreservesLogAndIdentityFields()
+    {
+        // CR-M213: LoadFrom(ViewModels.Value) must call base.LoadFrom so the log/identity fields
+        // (CreatedAt/UpdatedAt/Guid) survive — previously only Price/PriceVAT/VAT were copied.
+        var guid = Guid.NewGuid();
+        var created = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+        var updated = new DateTime(2021, 6, 7, 8, 9, 10, DateTimeKind.Utc);
+        var vm = new Birko.Models.ViewModels.Value
+        {
+            Guid = guid,
+            CreatedAt = created,
+            UpdatedAt = updated,
+            Price = 1m,
+        };
+
+        var target = new ValueData();
+        target.LoadFrom(vm);
+
+        target.Guid.Should().Be(guid);
+        target.CreatedAt.Should().Be(created);
+        target.UpdatedAt.Should().Be(updated);
+        target.Price.Should().Be(1m);
+    }
+
+    [Fact]
     public void ValueData_CopyTo_CopiesAllValueFields()
     {
         var source = new ValueData { Price = 5m, PriceVAT = 6m, VAT = 1m };
