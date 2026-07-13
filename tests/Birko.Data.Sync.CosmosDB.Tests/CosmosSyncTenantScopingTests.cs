@@ -70,4 +70,36 @@ public class CosmosSyncTenantScopingTests
 
         result.TenantId.Should().Be(newTenant);
     }
+
+    // ── CR-M158: the pass-through (already-CosmosSyncKnowledgeItem) branch must populate a null Guid
+    // so the downstream `Guid!.Value` in Update/SetLastSyncTime is provably safe. ──
+
+    [Fact]
+    public void ConvertToCosmosItem_Sync_ExistingItemWithNullGuid_GetsGuidAssigned()
+    {
+        var existing = new CosmosSyncKnowledgeItem { Guid = null, EntityGuid = Guid.NewGuid(), Scope = "S" };
+
+        var result = CosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, null);
+
+        result.Guid.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ConvertToCosmosItem_Async_ExistingItemWithNullGuid_GetsGuidAssigned()
+    {
+        var existing = new CosmosSyncKnowledgeItem { Guid = null, EntityGuid = Guid.NewGuid(), Scope = "S" };
+
+        var result = AsyncCosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, null);
+
+        result.Guid.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void ConvertToCosmosItem_ExistingItemWithGuid_PreservesIt()
+    {
+        var g = Guid.NewGuid();
+        var existing = new CosmosSyncKnowledgeItem { Guid = g };
+
+        CosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, null).Guid.Should().Be(g);
+    }
 }
