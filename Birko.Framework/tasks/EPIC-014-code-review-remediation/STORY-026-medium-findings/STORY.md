@@ -13,8 +13,13 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**232 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**233 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
+
+**The async-interface refactor CR-M101 is CLOSED** (Batch 55): `CancellationToken` now threads through
+`IMigrationRunner` / `IMigrationStore` / `AbstractMigrationRunner` + all 6 backend stores. This is the
+structural prerequisite for CR-M108 (genuine-async InfluxDB) / CR-M109 (Flux count) — but those still
+need a live InfluxDB to validate, so they remain in the Docker-gated pile.
 
 **The entire TypeScript Birko.Web.* track (M256–M266) is CLOSED** (Batch 52). **The SQLite
 integration tier is CLOSED** (Batches 53–54): CR-M135/M144/M145/M150/M152/M154 — every SQLite-tier
@@ -76,6 +81,29 @@ the audit), so M135/M145 became "extend" not "create".
   transaction wiring independent of provider dialect — the finding's "at minimum" approach), plus the
   non-`SqlMigrationContext` guard and null/empty-arg guards. git-initialized + registered in `.slnx` +
   `.code-workspace`.
+
+### Batch 55 — async-interface refactor CR-M101 (1 closed)
+
+Threaded `CancellationToken cancellationToken = default` through the migration async surface:
+- **Interfaces** — `IMigrationRunner` (InitializeAsync/MigrateAsync/RollbackAsync) and `IMigrationStore`
+  (InitializeAsync/GetAppliedVersionsAsync/RecordMigrationAsync/RemoveMigrationAsync/GetCurrentVersionAsync).
+- **`AbstractMigrationRunner`** — threads the token into the `Store.*Async(ct)` calls and the
+  `ExecuteMigrationsAsync(…, ct)` hook (which now `ThrowIfCancellationRequested()`s).
+- **6 backend stores** — `SqlMigrationStore` threads it into the real ADO.NET async calls
+  (`OpenAsync`/`BeginTransactionAsync`/`CommitAsync`/`RollbackAsync`/`ExecuteReaderAsync`/`ReadAsync`/
+  `ExecuteNonQueryAsync`) and its private async helpers; the 5 SDK sync-wrapper stores (Cosmos/ES/
+  Influx/Mongo/Raven) add the param and observe it via `ThrowIfCancellationRequested()` at entry
+  (genuine SDK-async is CR-M108's job — InfluxDB-gated).
+- Adding a defaulted parameter is source-compatible, so all callers still compile; all 6 backend
+  `.Tests` projects build clean.
+- **Regression** — `AsyncMigrationRunnerTests` (14 → 17): the tracking fake now observes the token, and
+  Initialize/Migrate/Rollback with a pre-cancelled token throw `OperationCanceledException` (proving the
+  runner *threads* the token, not just accepts it). `SqliteMigrationRunnerTests` (+2): the runner over a
+  real SQLite DB aborts InitializeAsync/MigrateAsync on a pre-cancelled token via `OpenAsync(ct)`.
+
+This is the structural prerequisite the audit flagged for **CR-M108** (make `IDataMigrator` async +
+rewrite the InfluxDB store/schema/data-migrator to await the SDK) and **CR-M109** (Flux count
+semantics) — both still need a live InfluxDB, so they stay in the Docker/Testcontainers pile.
 
 ### Batch 54 — SQLite tier finish CR-M152/M154 (2 closed; tier complete)
 

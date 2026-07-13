@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, migration async-interface refactor (EPIC-014 / STORY-026) (2026-07-13)
+Fifty-fifth STORY-026 batch: **CR-M101** — threaded `CancellationToken cancellationToken = default` through the migration async surface. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Interfaces** — `IMigrationRunner` (InitializeAsync/MigrateAsync/RollbackAsync) + `IMigrationStore` (InitializeAsync/GetAppliedVersionsAsync/RecordMigrationAsync/RemoveMigrationAsync/GetCurrentVersionAsync).
+- **`AbstractMigrationRunner`** threads it into the `Store.*Async(ct)` calls and the `ExecuteMigrationsAsync(…, ct)` hook.
+- **6 backend stores** — `SqlMigrationStore` threads it into the real ADO.NET async calls + private helpers; the 5 SDK sync-wrapper stores (Cosmos/ES/Influx/Mongo/Raven) observe it via `ThrowIfCancellationRequested()` (genuine SDK-async = CR-M108, InfluxDB-gated). Defaulted param → source-compatible; all 6 backend `.Tests` build clean.
+- **Regression** — `AsyncMigrationRunnerTests` 14 → 17 (cancelled-token throws for Initialize/Migrate/Rollback; the fake observes the token so this proves the runner *threads* it) + `SqliteMigrationRunnerTests` +2 (real-SQLite cancelled-path throws via `OpenAsync(ct)`). STORY-026 now **233/275**. This is the prerequisite for CR-M108/M109 (genuine-async InfluxDB + Flux count) — those still need a live InfluxDB, so they stay Docker-gated.
+
 ### Code-review remediation — medium findings, SQLite integration tier (EPIC-014 / STORY-026) (2026-07-13)
 Fifty-third STORY-026 batch: **CR-M135/M144/M145/M150** — the start of the SQLite integration tier (Microsoft.Data.Sqlite, real on-disk `.db` files; the one integration tier verifiable here without Docker). Verify-first: `Birko.Data.SQL.SqLite.Tests` / `.ViewModel.Tests` / `.Views.Tests` already existed, so M135/M145 were "extend" not "create". [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Bulk retry bug (M144)** — the six `SqLiteConnector` native bulk methods (BulkInsert/Update/Delete + async) opened a connection+transaction and executed directly, **bypassing `ExecuteWithRetry`** — so SQLITE_BUSY/SQLITE_LOCKED (flagged transient by the connector's own `IsTransientException` override) failed immediately instead of retrying. Wrapped each body in `ExecuteWithRetry`/`ExecuteWithRetryAsync` (mirroring the base `RunCommandTransaction`; each attempt opens a fresh connection; cancellation still propagates).
