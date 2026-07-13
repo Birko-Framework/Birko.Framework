@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**180 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**184 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,14 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 42 — Serialization ct-gates + Random rollover CR-M230/M243/M244/M245 (4 closed; offline)
+
+- **M230** (verified) Random.Tests already has the Snowflake sequence-rollover test (20 000 IDs, monotonicity + ExtractTimestamp window) + WaitNextMillisecond — no work.
+- **M243** SystemXmlSerializer's 4 async methods ignored the CancellationToken → added `ThrowIfCancellationRequested()` to each.
+- **M245** ProtobufBinarySerializer's 2 SerializeAsync overloads ignored the token (DeserializeAsync already honored it) → added the gate.
+- **M244** added stream round-trip coverage (sync+async) for JSON/XML/Protobuf + the async cancelled-token tests that lock in M243/M245.
+- Suite green: Birko.Serialization.Tests 81, Birko.Random.Tests (Snowflake) 8.
 
 ### Batch 41 — MessageQueue.MQTT CR-M203/M205 (2 closed; race fix + test augment)
 

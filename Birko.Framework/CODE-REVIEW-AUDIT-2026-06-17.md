@@ -4510,7 +4510,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests cover the Snowflake sequence-rollover (WaitNextMillisecond) path
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Random.Tests\Sequences\SequenceTests.cs:165-235`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 42, verified). `SnowflakeGeneratorTests` (since the audit) already has `Next_ManyIdsAcrossSequenceRollover_StayValid` (generates 20 000 IDs, forcing ≥1 per-ms sequence rollover, asserting strict monotonicity + ExtractTimestamp within a recent window) plus `WaitNextMillisecond_ReturnsEpochRelativeTimestamp` (the CR-H133 root-cause). Exactly the finding's ask — no work needed.
 - **Detail:** SnowflakeGeneratorTests only generates 100 IDs in a tight loop (well under the 4096/ms sequence cap), so the rollover branch that triggers the absolute-vs-relative timestamp bug above is never exercised — which is exactly why that bug is latent. A test that generates >4096 IDs (forcing at least one ms rollover) and asserts monotonicity + that ExtractTimestamp stays within a sane recent window would catch it.
 - **Fix:** Add a test generating e.g. 10_000 IDs and asserting strictly increasing values and ExtractTimestamp(id) within a few seconds of UtcNow.
 
@@ -4614,7 +4614,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** XML async methods completely ignore CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization\Xml\SystemXmlSerializer.cs:159-198`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 42). Added `cancellationToken.ThrowIfCancellationRequested()` (after the null guards) to all four async XML methods, so a pre-cancelled token throws OperationCanceledException per the framework's cancellation contract. Regression (Birko.Serialization.Tests) asserts each of the four throws on a cancelled token + stream round-trips (sync + async).
 - **Detail:** SerializeAsync, SerializeAsync<T>, DeserializeAsync and DeserializeAsync<T> are synchronous bodies wrapped in Task.CompletedTask / Task.FromResult and never inspect the cancellationToken parameter. XmlSerializer has no async API so sync-over-Task is acceptable, but the framework convention is that async methods observe the CancellationToken. A caller that passes an already-cancelled token (the documented contract elsewhere in the framework, e.g. AbstractAsyncStore.EnsureInitializedAsync) gets normal completion instead of OperationCanceledException, and the call is unbreakable mid-flight.
 - **Fix:** Call cancellationToken.ThrowIfCancellationRequested() at the top of each of the four async XML methods (after the null guards), mirroring the framework's idiomatic cancellation gate.
 
@@ -4622,7 +4622,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gap: no stream overloads (sync or async) covered for either serializer
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Serialization.Tests\Json\SystemJsonSerializerTests.cs / Xml\SystemXmlSerializerTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 42). Added stream round-trip coverage (sync + async) for JSON (`JsonStreamTests`, incl. the Utf8JsonWriter dispose-flush path), XML (`XmlStreamAndCancellationTests`), and Protobuf (`ProtobufStreamCancellationTests`), plus the async cancellation tests that surfaced CR-M243 (XML) and CR-M245 (Protobuf).
 - **Detail:** Neither SystemJsonSerializerTests nor SystemXmlSerializerTests reference any Stream, MemoryStream, or *Async member (grep for Async/Stream/MemoryStream returns nothing in both). The eight stream-based ISerializer methods on each serializer -- Serialize(Stream,...) x2, Deserialize(Stream,...) x2, SerializeAsync x2, DeserializeAsync x2 -- are entirely untested, including round-trip correctness and the Utf8JsonWriter using-dispose flush path in SystemJsonSerializer.Serialize<T>(Stream,T). This is half the public surface of each serializer.
 - **Fix:** Add stream round-trip tests (sync and async) for both serializers, plus a cancellation test asserting the async overloads throw OperationCanceledException on an already-cancelled token (which currently passes for JSON but would fail for XML, surfacing finding #1).
 
@@ -4630,7 +4630,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SerializeAsync overloads ignore the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization.Protobuf\ProtobufBinarySerializer.cs:113-127`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 42). Added `cancellationToken.ThrowIfCancellationRequested()` to both `SerializeAsync` overloads, so serialize now agrees with `DeserializeAsync` (which already honored the token) and the framework's cancellation contract. Regression (Birko.Serialization.Tests) asserts both throw on a cancelled token + an async stream round-trip.
 - **Detail:** Both SerializeAsync(Stream, object, ct) and SerializeAsync<T>(Stream, T, ct) do synchronous protobuf-net work and return Task.CompletedTask without ever consulting cancellationToken. The framework convention is that async methods observe the CancellationToken; a caller passing an already-cancelled token gets a normal completed task instead of OperationCanceledException. The sibling MessagePackBinarySerializer.SerializeAsync genuinely awaits stream.WriteAsync(bytes, cancellationToken), making this serializer the inconsistent one. Note the asymmetry within this same class: DeserializeAsync (line 133/139) DOES honor the token via Task.Run(..., cancellationToken), so serialize and deserialize disagree on cancellation behavior.
 - **Fix:** At minimum call cancellationToken.ThrowIfCancellationRequested() at the top of each SerializeAsync. Better: serialize into a MemoryStream synchronously, then await stream.WriteAsync(buffer, cancellationToken) like MessagePackBinarySerializer does, so the token is genuinely observed.
 

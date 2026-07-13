@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Serialization ct-gates + Random (EPIC-014 / STORY-026) (2026-07-13)
+Forty-second STORY-026 batch: **CR-M230/M243/M244/M245** — Serialization CancellationToken gates + stream test coverage, and a verified Random test-gap. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **XML async ignored the token (M243)** — `SystemXmlSerializer`'s SerializeAsync/SerializeAsync&lt;T&gt;/DeserializeAsync/DeserializeAsync&lt;T&gt; wrapped synchronous work in `Task.CompletedTask`/`Task.FromResult` and never checked the token. Added `cancellationToken.ThrowIfCancellationRequested()` to each (XmlSerializer has no async API, so the gate is the idiomatic fix).
+- **Protobuf serialize ignored the token (M245)** — `ProtobufBinarySerializer`'s two `SerializeAsync` overloads returned `Task.CompletedTask` without consulting the token, while its `DeserializeAsync` already honored it via `Task.Run(..., ct)`. Added the gate so the two agree.
+- **Serializer stream test-gap (M244)** — the eight stream ISerializer methods on each serializer were untested. Added stream round-trips (sync + async) for JSON (incl. the Utf8JsonWriter dispose-flush path), XML, and Protobuf, plus the async cancelled-token tests that lock in M243/M245.
+- **Random Snowflake rollover (M230, verified)** — `Birko.Random.Tests` already covers the >4096-ID sequence-rollover path (`Next_ManyIdsAcrossSequenceRollover_StayValid`, 20 000 IDs) + `WaitNextMillisecond_ReturnsEpochRelativeTimestamp` (the CR-H133 root-cause); no work needed.
+- Suites green: Birko.Serialization.Tests 81, Birko.Random.Tests (Snowflake) 8. STORY-026 now **184/275**.
+
 ### Code-review remediation — medium findings, MessageQueue.MQTT (EPIC-014 / STORY-026) (2026-07-13)
 Forty-first STORY-026 batch: **CR-M203/M205** in Birko.MessageQueue.MQTT (2 closed; M204 deferred to a live broker). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Double message-handler attach (M203)** — `MqttConsumer.EnsureEventAttached` read-then-wrote a plain `_eventAttached` bool without synchronization, so two concurrent `SubscribeAsync` calls could both `+= OnMessageReceivedAsync`, dispatching every received message twice (and `Dispose` only detaches once). Now double-checked under a dedicated `_eventAttachLock`, so the handler attaches exactly once. Code-review verified (a concurrent TOCTOU a single-threaded test can't distinguish).
