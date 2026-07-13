@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Birko.Data.Migrations
@@ -49,7 +50,7 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously initializes the migration runner and store.
         /// </summary>
-        Task InitializeAsync();
+        Task InitializeAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Migrates up to the specified version.
@@ -63,7 +64,7 @@ namespace Birko.Data.Migrations
         /// Asynchronously migrates up to the specified version.
         /// </summary>
         /// <param name="targetVersion">The target version, or null for latest.</param>
-        Task<MigrationResult> MigrateAsync(long? targetVersion = null);
+        Task<MigrationResult> MigrateAsync(long? targetVersion = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Rolls back to the specified version.
@@ -76,7 +77,7 @@ namespace Birko.Data.Migrations
         /// Asynchronously rolls back to the specified version.
         /// </summary>
         /// <param name="targetVersion">The target version to roll back to.</param>
-        Task<MigrationResult> RollbackAsync(long targetVersion);
+        Task<MigrationResult> RollbackAsync(long targetVersion, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets pending migrations (not yet applied).

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Birko.Data.Migrations
@@ -18,7 +19,7 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously initializes the migration store.
         /// </summary>
-        Task InitializeAsync();
+        Task InitializeAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets all applied migration versions.
@@ -29,7 +30,7 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously gets all applied migration versions.
         /// </summary>
-        Task<ISet<long>> GetAppliedVersionsAsync();
+        Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Records that a migration has been applied.
@@ -41,7 +42,7 @@ namespace Birko.Data.Migrations
         /// Asynchronously records that a migration has been applied.
         /// </summary>
         /// <param name="migration">The migration that was applied.</param>
-        Task RecordMigrationAsync(IMigration migration);
+        Task RecordMigrationAsync(IMigration migration, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Removes a migration record (when downgrading).
@@ -53,7 +54,7 @@ namespace Birko.Data.Migrations
         /// Asynchronously removes a migration record (when downgrading).
         /// </summary>
         /// <param name="migration">The migration to remove.</param>
-        Task RemoveMigrationAsync(IMigration migration);
+        Task RemoveMigrationAsync(IMigration migration, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Gets the current version of the database.
@@ -64,6 +65,6 @@ namespace Birko.Data.Migrations
         /// <summary>
         /// Asynchronously gets the current version of the database.
         /// </summary>
-        Task<long> GetCurrentVersionAsync();
+        Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default);
     }
 }
