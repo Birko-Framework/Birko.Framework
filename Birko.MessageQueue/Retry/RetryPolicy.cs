@@ -38,8 +38,15 @@ namespace Birko.MessageQueue.Retry
                 return BaseDelay;
             }
 
-            var delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(2, attemptNumber - 1));
-            return delay > MaxDelay ? MaxDelay : delay;
+            // CR-M199: compute the scaled delay in double and saturate at MaxDelay before converting to
+            // ticks. The old `(long)Math.Pow(2, attemptNumber - 1)` overflowed to a negative value for
+            // large attempt numbers (the cast wrapped to long.MinValue), producing a negative TimeSpan
+            // that slipped past the `> MaxDelay` clamp — the same overflow fixed for Birko.Contracts
+            // RetryPolicy under CR-M078.
+            var scaledTicks = BaseDelay.Ticks * Math.Pow(2, attemptNumber - 1);
+            return scaledTicks >= MaxDelay.Ticks
+                ? MaxDelay
+                : TimeSpan.FromTicks((long)scaledTicks);
         }
 
         /// <summary>
