@@ -93,13 +93,13 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
 
         if (data.Guid == null || data.Guid == Guid.Empty)
         {
-            await CreateAsync(data, processDelegate, cancellationToken);
-        }
-        else
-        {
-            await UpdateAsync(data, processDelegate, cancellationToken);
+            // CR-M174: return the CreateAsync result directly (mirroring the sync wrapper) rather than
+            // relying on the inner store mutating data.Guid in place — the IAsyncStore contract does
+            // not guarantee write-back, so a store that allocates the id internally would be lost.
+            return await CreateAsync(data, processDelegate, cancellationToken);
         }
 
+        await UpdateAsync(data, processDelegate, cancellationToken);
         return data.Guid ?? Guid.Empty;
     }
 

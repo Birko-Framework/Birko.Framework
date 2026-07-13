@@ -26,14 +26,16 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public void Delete(IEnumerable<T> data)
     {
-        if (!data.All(BelongsToCurrentTenant))
+        // CR-M173: materialize once so the authorized set equals the persisted set for a lazy source.
+        var items = data as IReadOnlyCollection<T> ?? data.ToList();
+        if (!items.All(BelongsToCurrentTenant))
         {
             throw new UnauthorizedAccessException(
                 $"Cannot delete item: it does not belong to the current tenant"
             );
         }
 
-        _innerStore.Delete(data);
+        _innerStore.Delete(items);
     }
 
     /// <summary>
@@ -51,14 +53,15 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
-        if (!data.All(BelongsToCurrentTenant))
+        var items = data as IReadOnlyCollection<T> ?? data.ToList(); // CR-M173: materialize once
+        if (!items.All(BelongsToCurrentTenant))
         {
             throw new UnauthorizedAccessException(
                 $"Cannot update item: it does not belong to the current tenant"
             );
         }
 
-        _innerStore.Update(data, storeDelegate);
+        _innerStore.Update(items, storeDelegate);
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)

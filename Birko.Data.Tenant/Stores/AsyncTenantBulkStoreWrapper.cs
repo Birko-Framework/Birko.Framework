@@ -28,14 +28,17 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
 
     public async Task DeleteAsync(IEnumerable<T> data, CancellationToken cancellationToken = default)
     {
-        if (!data.All(BelongsToCurrentTenant))
+        // CR-M173: materialize once — validating then passing the same lazy source enumerated it twice,
+        // so a non-deterministic sequence could persist a set different from the one authorized.
+        var items = data as IReadOnlyCollection<T> ?? data.ToList();
+        if (!items.All(BelongsToCurrentTenant))
         {
             throw new UnauthorizedAccessException(
                 $"Cannot delete item: it does not belong to the current tenant"
             );
         }
 
-        await _innerStore.DeleteAsync(data, cancellationToken);
+        await _innerStore.DeleteAsync(items, cancellationToken);
     }
 
     /// <summary>
@@ -53,14 +56,15 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)
     {
-        if (!data.All(BelongsToCurrentTenant))
+        var items = data as IReadOnlyCollection<T> ?? data.ToList(); // CR-M173: materialize once
+        if (!items.All(BelongsToCurrentTenant))
         {
             throw new UnauthorizedAccessException(
                 $"Cannot update item: it does not belong to the current tenant"
             );
         }
 
-        await _innerStore.UpdateAsync(data, storeDelegate, cancellationToken);
+        await _innerStore.UpdateAsync(items, storeDelegate, cancellationToken);
     }
 
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken cancellationToken = default)
