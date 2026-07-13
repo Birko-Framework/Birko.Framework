@@ -9,6 +9,19 @@ namespace Birko.Data.SQL.Connectors
         // PostgreSQL natively supports CREATE OR REPLACE VIEW (the default in AbstractConnectorBase).
         // No override needed for BuildCreateViewSql.
 
+        // CR-M143: DDL composition extracted into these helpers so the SQL text (and identifier
+        // quoting) is unit-testable without a live PostgreSQL, and shared by the sync + async paths.
+        internal string BuildCreateMaterializedViewSql(string viewName, string selectSql)
+            => "CREATE MATERIALIZED VIEW IF NOT EXISTS " + QuoteIdentifier(viewName) + " AS " + selectSql;
+
+        internal string BuildRefreshMaterializedViewSql(string viewName, bool concurrently)
+            => concurrently
+                ? "REFRESH MATERIALIZED VIEW CONCURRENTLY " + QuoteIdentifier(viewName)
+                : "REFRESH MATERIALIZED VIEW " + QuoteIdentifier(viewName);
+
+        internal string BuildDropMaterializedViewSql(string viewName)
+            => "DROP MATERIALIZED VIEW IF EXISTS " + QuoteIdentifier(viewName);
+
         /// <summary>
         /// Checks if a view exists in PostgreSQL using information_schema.
         /// </summary>
@@ -81,7 +94,7 @@ namespace Birko.Data.SQL.Connectors
 
             DoCommandWithTransaction((command) =>
             {
-                command.CommandText = "CREATE MATERIALIZED VIEW IF NOT EXISTS " + QuoteIdentifier(name!) + " AS " + selectSql;
+                command.CommandText = BuildCreateMaterializedViewSql(name!, selectSql);
             }, (command) =>
             {
                 command.ExecuteNonQuery();
@@ -100,9 +113,7 @@ namespace Birko.Data.SQL.Connectors
 
             DoCommandWithTransaction((command) =>
             {
-                command.CommandText = concurrently
-                    ? "REFRESH MATERIALIZED VIEW CONCURRENTLY " + QuoteIdentifier(viewName)
-                    : "REFRESH MATERIALIZED VIEW " + QuoteIdentifier(viewName);
+                command.CommandText = BuildRefreshMaterializedViewSql(viewName, concurrently);
             }, (command) =>
             {
                 command.ExecuteNonQuery();
@@ -119,7 +130,7 @@ namespace Birko.Data.SQL.Connectors
 
             DoCommandWithTransaction((command) =>
             {
-                command.CommandText = "DROP MATERIALIZED VIEW IF EXISTS " + QuoteIdentifier(viewName);
+                command.CommandText = BuildDropMaterializedViewSql(viewName);
             }, (command) =>
             {
                 command.ExecuteNonQuery();
@@ -153,7 +164,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 DoCommandWithTransaction((command) =>
                 {
-                    command.CommandText = "CREATE MATERIALIZED VIEW IF NOT EXISTS " + QuoteIdentifier(name!) + " AS " + selectSql;
+                    command.CommandText = BuildCreateMaterializedViewSql(name!, selectSql);
                 }, (command) =>
                 {
                     command.ExecuteNonQuery();
@@ -200,7 +211,7 @@ namespace Birko.Data.SQL.Connectors
             {
                 DoCommandWithTransaction((command) =>
                 {
-                    command.CommandText = "DROP MATERIALIZED VIEW IF EXISTS " + QuoteIdentifier(viewName);
+                    command.CommandText = BuildDropMaterializedViewSql(viewName);
                 }, (command) =>
                 {
                     command.ExecuteNonQuery();
