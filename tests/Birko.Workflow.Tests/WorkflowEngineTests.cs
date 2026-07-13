@@ -174,6 +174,32 @@ public class WorkflowEngineTests
     }
 
     [Fact]
+    public async Task FireAsync_OnEntryThrows_RollsBackCurrentStateAndAppendsNoHistory()
+    {
+        // CR-M267: CurrentState was advanced before OnEntry ran; if OnEntry faults, the instance must
+        // not report a state its History doesn't contain. It should roll back to the from-state.
+        var workflow = new WorkflowBuilder<TestData>("EntryFault")
+            .InitialState("A")
+            .State("A").And()
+            .State("B")
+                .OnEntry(async (inst, ct) => throw new InvalidOperationException("entry boom"))
+                .IsFinal()
+                .And()
+            .Transition("go", "A", "B").And()
+            .Build();
+
+        var engine = new WorkflowEngine();
+        var instance = WorkflowInstance<TestData>.Create(workflow, new TestData());
+
+        var act = async () => await engine.FireAsync(workflow, instance, "go");
+        await act.Should().ThrowAsync<WorkflowActionException>();
+
+        instance.Status.Should().Be(WorkflowStatus.Faulted);
+        instance.CurrentState.Should().Be("A", "a faulted OnEntry must not leave a half-applied state (CR-M267)");
+        instance.History.Should().BeEmpty("no transition record is appended when OnEntry faults");
+    }
+
+    [Fact]
     public async Task FireAsync_FaultedInstance_Throws()
     {
         var workflow = new WorkflowBuilder<TestData>("Faulting")
