@@ -30,6 +30,45 @@ namespace Birko.MessageQueue.Mqtt
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _clock = clock ?? new SystemDateTimeProvider();
+
+            // CR-M204: with CleanSession (the default) the broker drops all subscriptions on
+            // disconnect, so after an auto-reconnect the in-memory handlers would silently receive
+            // nothing. Replay every subscription on each (re)connect.
+            _client.ConnectedAsync += OnClientConnectedAsync;
+        }
+
+        private async Task OnClientConnectedAsync(MqttClientConnectedEventArgs args)
+        {
+            await ResubscribeAllAsync().ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Re-issues the broker SUBSCRIBE for every registered handler topic. Invoked on each
+        /// (re)connect so subscriptions survive an auto-reconnect (CR-M204). Best-effort: a failed
+        /// resubscribe is swallowed and retried on the next reconnect.
+        /// </summary>
+        internal async Task ResubscribeAllAsync(CancellationToken cancellationToken = default)
+        {
+            if (_disposed || _handlers.IsEmpty)
+            {
+                return;
+            }
+
+            var qos = MqttProducer.ToMqttQos(_options.DefaultQualityOfService);
+            foreach (var filter in _handlers.Keys)
+            {
+                var subscribeOptions = new MqttClientSubscribeOptionsBuilder()
+                    .WithTopicFilter(f => f.WithTopic(filter).WithQualityOfServiceLevel(qos))
+                    .Build();
+                try
+                {
+                    await _client.SubscribeAsync(subscribeOptions, cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Best-effort replay; the next reconnect will retry.
+                }
+            }
         }
 
         public async Task<ISubscription> SubscribeAsync(string destination, Func<QueueMessage, CancellationToken, Task> handler, ConsumerOptions? options = null, CancellationToken cancellationToken = default)
@@ -187,6 +226,8 @@ namespace Birko.MessageQueue.Mqtt
             }
 
             _disposed = true;
+
+            _client.ConnectedAsync -= OnClientConnectedAsync;
 
             if (_eventAttached)
             {
