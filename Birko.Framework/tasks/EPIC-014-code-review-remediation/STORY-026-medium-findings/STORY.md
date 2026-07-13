@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**208 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**210 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,11 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 50 — Security test-gaps CR-M236/M237 (2 closed)
+
+- **M236** (verify-first) AspNetCore permission-resolution path already covered by `PermissionResolutionMiddlewareTests` (5) + `ResolvedPermissionsCurrentUserTests` (8) + TokenServiceAdapterTests (added since audit); residual `?token=` query-string + DI-registration are minor integration-tier, noted.
+- **M237** added `AzureKeyVaultWriteAndTokenTests` (recording handler): SetSecretAsync success + non-404 error, DeleteSecretAsync success + NotFound-tolerated, and access-token cache/reuse (2 GetSecret → 1 token call). AzureKeyVault.Tests 25.
 
 ### Batch 49 — Vault.Configuration CR-M242 (1 closed; augment existing, verify-first)
 

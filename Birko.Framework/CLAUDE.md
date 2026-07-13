@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Security test-gaps AspNetCore + AzureKeyVault (EPIC-014 / STORY-026) (2026-07-13)
+Fiftieth STORY-026 batch: **CR-M236/M237**. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **AspNetCore resolution path (M236, verify-first)** — the headline gap ("no tests for the per-request permission resolution path") is already covered by `PermissionResolutionMiddlewareTests` (5: authenticated populates both permission+role Items slots, no-tenant-claim → null, unauthenticated/invalid-userId no-op, default GetRolesAsync empty) and `ResolvedPermissionsCurrentUserTests` (8), plus the token→claims decode in TokenServiceAdapterTests — all added since the audit. Residual `?token=` query-string extraction + AddBirkoSecurity/AddBirkoJwtBearer DI registration left as minor integration-tier items.
+- **AzureKeyVault write/token (M237)** — added `AzureKeyVaultWriteAndTokenTests` with a recording handler: SetSecretAsync success (PUT `/secrets/{key}`) + non-404 → HttpRequestException, DeleteSecretAsync success + the NotFound-is-OK branch, and the access-token cache/reuse (two GetSecret calls hit `login.microsoftonline.com` exactly once).
+- Suites green: Birko.Security.AzureKeyVault.Tests 25. STORY-026 now **210/275**.
+
 ### Code-review remediation — medium findings, Vault.Configuration path/option logic (EPIC-014 / STORY-026) (2026-07-13)
 Forty-ninth STORY-026 batch: **CR-M242** — verify-first. The Vault.Configuration projitems compiles into `Birko.Security.Vault.Tests`, whose `SecretConfigurationProviderTests` (added since the audit) already covers the `--`→`ConfigurationPath.KeyDelimiter` rewrite, recursive child traversal + prefix composition, multi-path ordering, throwing-ListSecrets graceful handling, and null guards. Added `LocalVaultConfigurationTests` for the remaining LocalVault pure logic — `BuildPaths` override-ordering (defaults → defaults.env → project → project.env → users/…, with domain scope and env/user omission) and `ResolveOptions` (User/Domain/Environment lower-casing + seeded-value-wins) via reflection on the private statics. No separate `.Tests` project needed. Suite green: Birko.Security.Vault.Tests 44. STORY-026 now **208/275**.
 
