@@ -23,8 +23,12 @@ public class XmlWorkflowInstanceModel : AbstractModel
     [XmlElement("DataXml")]
     public string DataXml { get; set; } = string.Empty;
 
+    // CR-M275: the XmlSerializer root for List<StateChangeRecord> is <ArrayOfStateChangeRecord> (the
+    // .NET ArrayOf{TypeName} convention); the old "<ArrayOfTypeName />" placeholder matched no type and
+    // made ToInstance throw ("<ArrayOfTypeName> was not expected") on a model whose HistoryXml wasn't
+    // overwritten by FromInstance/UpdateFromInstance. Use a value that actually round-trips as empty.
     [XmlElement("HistoryXml")]
-    public string HistoryXml { get; set; } = "<ArrayOfTypeName />";
+    public string HistoryXml { get; set; } = "<ArrayOfStateChangeRecord />";
 
     [XmlElement("CreatedAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -38,8 +42,11 @@ public class XmlWorkflowInstanceModel : AbstractModel
     {
         var s = serializer ?? DefaultSerializer;
         var data = s.Deserialize<TData>(DataXml)!;
-        var history = s.Deserialize<List<StateChangeRecord>>(HistoryXml)
-                      ?? new List<StateChangeRecord>();
+        // CR-M275: guard against an empty/whitespace HistoryXml so the new-List fallback is reachable
+        // regardless of the stored literal (System.Xml is quirky around empty collection roots).
+        var history = string.IsNullOrWhiteSpace(HistoryXml)
+                      ? new List<StateChangeRecord>()
+                      : s.Deserialize<List<StateChangeRecord>>(HistoryXml) ?? new List<StateChangeRecord>();
 
         return WorkflowInstance<TData>.Restore(
             Guid ?? System.Guid.NewGuid(),
