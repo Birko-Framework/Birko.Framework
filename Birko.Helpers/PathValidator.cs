@@ -206,11 +206,20 @@ namespace Birko.Helpers
             // Remove any null characters
             path = path.Replace("\0", string.Empty);
 
-            // Remove any attempts at path traversal with forward slashes
-            path = path.Replace("../", string.Empty)
-                       .Replace("..\\", string.Empty)
-                       .Replace("./", string.Empty)
-                       .Replace(".\\", string.Empty);
+            // Remove path-traversal tokens repeatedly until the string stops changing. CR-M195: a single
+            // non-recursive pass let overlapping/nested sequences re-form a token — e.g. "..././" loses
+            // the inner "./" and becomes "../", and "....//"-style inputs can re-create "../" after one
+            // removal. Looping to a fixpoint collapses every such reconstruction.
+            string previous;
+            do
+            {
+                previous = path;
+                path = path.Replace("../", string.Empty)
+                           .Replace("..\\", string.Empty)
+                           .Replace("./", string.Empty)
+                           .Replace(".\\", string.Empty);
+            }
+            while (path != previous);
 
             // Remove leading slashes or backslashes (prevents absolute path injection)
             path = path.TrimStart('/', '\\');
