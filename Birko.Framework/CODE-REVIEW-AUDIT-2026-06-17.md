@@ -4125,16 +4125,16 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-M182 · 🟡 medium · Birko.Data.XML
 - **Title:** EnsureDataLoadedAsync re-reads disk whenever the store is legitimately empty
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.XML\Stores\AbstractAsyncXmlStore.cs:124`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.Data.XML.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 33). Added a `protected bool _loaded` to `AbstractAsyncXmlStore`; `EnsureDataLoadedAsync` now gates on `!_loaded` (sets it true after `LoadDataAsync`) instead of `_items.Count == 0`, so a legitimately-empty store no longer re-reads the disk on every call. `DestroyAsync` (AsyncXmlStore + AsyncXmlSeparateStore) resets `_loaded = false` so a later re-init reloads. Regression: an empty store loads once across multiple reads; destroy forces one reload. (Sync path loads in the ctor, so no per-call reread — M182 is async-only.)
 - **Detail:** EnsureDataLoadedAsync gates loading on `_items == null || _items.Count == 0`. A store that genuinely persists zero rows (empty file, or after all rows deleted) will hit LoadDataAsync on every single read/count/aggregate call, re-opening and re-deserializing the file each time. It also means: after deleting the last entity in-process, the next operation reloads from disk (harmless here since the file matches, but the flag-by-count approach is fragile). A dedicated boolean 'loaded' flag would be correct.
 - **Fix:** Track load state with a separate `bool _loaded` set true after LoadDataAsync, instead of inferring it from Count == 0.
 
 ### CR-M183 · 🟡 medium · Birko.Data.XML
 - **Title:** SaveData deletes file then OpenWrite — data loss window if write fails
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.XML\Stores\XmlStore.cs:225`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** offline unit test (Birko.Data.XML.Tests)
+- **Status:** done — 2026-07-13 (STORY-026 batch 33). `XmlStore.SaveData` (sync) and `AsyncXmlStore.SaveDataAsync` now write to `Path + ".tmp"` then `File.Move(tmp, Path, overwrite: true)`, with a catch that deletes the temp and rethrows on failure — the previous file stays intact until the new one is fully written (the old File.Delete-then-write left a total-data-loss window). The redundant File.Delete before FileMode.Create is gone. Regression: a serializer that throws on the second write leaves the first file byte-identical and drops no temp file.
 - **Detail:** SaveData does File.Delete(Path) then File.OpenWrite to rewrite the whole file (AsyncXmlStore.cs:238 deletes then FileMode.Create). If serialization throws between the delete and a complete write (e.g. a non-serializable property, cancellation, process kill), the existing data file is already gone and the new one is partial or absent — total data loss. The JSON reference store typically writes to a temp file and atomically replaces. Note File.Delete is also redundant in the async case since FileMode.Create already truncates.
 - **Fix:** Write to a temp file then atomically move/replace the target (File.Replace or File.Move with overwrite); drop the explicit Delete before FileMode.Create.
 

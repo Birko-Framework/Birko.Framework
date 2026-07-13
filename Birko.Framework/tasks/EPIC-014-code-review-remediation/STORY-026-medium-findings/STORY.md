@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**143 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**145 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,12 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 33 — Birko.Data.XML CR-M182/M183 (2 closed; offline file-based bugs)
+
+- **M182** async `EnsureDataLoadedAsync` gated on `_items.Count == 0`, so a legitimately-empty store re-read the disk on every read/count/aggregate → added a `_loaded` flag on `AbstractAsyncXmlStore` (set after LoadDataAsync, reset in DestroyAsync). Offline regression: empty store loads once across N reads; destroy forces reload. (Sync path loads in ctor — async-only.)
+- **M183** `XmlStore.SaveData` + `AsyncXmlStore.SaveDataAsync` did File.Delete-then-write, so a mid-write failure destroyed the existing file → write to `.tmp` then `File.Move(overwrite:true)`, cleanup temp + rethrow on failure. Offline regression: a serializer throwing on the 2nd write leaves the 1st file byte-identical, no temp left behind.
+- Suite green: Birko.Data.XML.Tests 16.
 
 ### Batch 32 — Birko.Data.Tagging CR-M172 + Birko.Data.Tenant CR-M175 (2 closed; cleanup + design doc)
 
