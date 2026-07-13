@@ -117,4 +117,19 @@ public class WeightedGraphTests
         result!.Value.Distance.Should().Be(3);
         result.Value.Path.Should().ContainInOrder("A", "B", "C");
     }
+
+    [Fact]
+    public void DirectedGraph_EdgeCount_CorrectViaBaseReference()
+    {
+        // CR-M250: EdgeCount was `new` (shadowing), so a Graph<T> reference to a DirectedGraph got the
+        // base's undirected count/2. It's now virtual+override, so both references agree.
+        var dg = new DirectedGraph<string>();
+        dg.AddEdge("A", "B");
+        dg.AddEdge("A", "C");
+        dg.AddEdge("B", "C");
+
+        dg.EdgeCount.Should().Be(3, "three directed edges");
+        Graph<string> baseRef = dg;
+        baseRef.EdgeCount.Should().Be(3, "the override must win through a base-typed reference (CR-M250)");
+    }
 }
