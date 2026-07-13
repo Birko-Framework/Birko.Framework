@@ -114,6 +114,7 @@ namespace Birko.Serialization.Protobuf
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M245: observe the token (DeserializeAsync already does)
             Serializer.Serialize(stream, value);
             return Task.CompletedTask;
         }
@@ -122,6 +123,7 @@ namespace Birko.Serialization.Protobuf
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-M245
             Serializer.Serialize(stream, value);
             return Task.CompletedTask;
         }
