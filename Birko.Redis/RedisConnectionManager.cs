@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using StackExchange.Redis;
 
 namespace Birko.Redis
@@ -23,8 +24,13 @@ namespace Birko.Redis
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             _connectionString = settings.GetConnectionString();
             _database = settings.Database;
-            _connection = new Lazy<ConnectionMultiplexer>(() =>
-                ConnectionMultiplexer.Connect(_connectionString));
+            _connection = new Lazy<ConnectionMultiplexer>(
+                () => ConnectionMultiplexer.Connect(_connectionString),
+                // CR-M231: PublicationOnly does NOT cache the factory's exception, so a transient
+                // connect failure at first access can be retried on the next access rather than
+                // permanently poisoning this long-lived singleton (the default ExecutionAndPublication
+                // caches the exception forever).
+                LazyThreadSafetyMode.PublicationOnly);
         }
 
         /// <summary>
@@ -36,8 +42,9 @@ namespace Birko.Redis
         {
             _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
             _database = database;
-            _connection = new Lazy<ConnectionMultiplexer>(() =>
-                ConnectionMultiplexer.Connect(_connectionString));
+            _connection = new Lazy<ConnectionMultiplexer>(
+                () => ConnectionMultiplexer.Connect(_connectionString),
+                LazyThreadSafetyMode.PublicationOnly); // CR-M231: don't cache a transient connect failure
         }
 
         /// <summary>
