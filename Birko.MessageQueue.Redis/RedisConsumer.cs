@@ -22,6 +22,21 @@ namespace Birko.MessageQueue.Redis
         private readonly ConcurrentDictionary<Guid, PendingMessage> _pendingAck = new();
         private bool _disposed;
 
+        /// <summary>
+        /// Raised when a subscription's background poll loop hits a non-cancellation error (CR-M207).
+        /// A transient per-iteration fault is reported and the loop keeps polling; a fault that
+        /// terminates the loop is reported and the subscription is removed (so its <see
+        /// cref="RedisSubscription.IsActive"/> flips to false) instead of appearing alive but dead.
+        /// </summary>
+        internal event EventHandler<Exception>? PollError;
+
+        /// <summary>
+        /// True while the given subscription is still registered (its poll loop has not terminated) and
+        /// the consumer is not disposed. Backs <see cref="RedisSubscription.IsActive"/>.
+        /// </summary>
+        internal bool IsSubscriptionActive(Guid subscriptionId)
+            => !_disposed && _subscriptions.ContainsKey(subscriptionId);
+
         internal RedisConsumer(RedisConnectionManager connectionManager, IMessageSerializer serializer, RedisStreamSettings settings)
         {
             if (connectionManager == null) throw new ArgumentNullException(nameof(connectionManager));
@@ -54,9 +69,14 @@ namespace Birko.MessageQueue.Redis
             var opts = options ?? new ConsumerOptions();
             var streamKey = _settings.GetStreamKey(destination);
             var consumerGroup = opts.GroupId ?? _settings.ConsumerGroup;
-            var consumerName = _settings.ConsumerName ?? $"consumer-{Guid.NewGuid():N}";
 
             var subscriptionId = Guid.NewGuid();
+            // CR-M208: a per-subscription suffix keeps each subscription's consumer identity distinct
+            // within the group even when a fixed ConsumerName is configured — otherwise two subscriptions
+            // on the same destination would share one PEL, so XACK/redelivery couldn't tell them apart.
+            var consumerName = _settings.ConsumerName is { } configuredName
+                ? $"{configuredName}-{subscriptionId:N}"
+                : $"consumer-{subscriptionId:N}";
             var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             var state = new SubscriptionState
@@ -141,8 +161,28 @@ namespace Birko.MessageQueue.Redis
 
         private async Task PollLoopAsync(Guid subscriptionId, SubscriptionState state)
         {
-            var db = _databaseFactory();
             var ct = state.Cts.Token;
+            try
+            {
+                await RunPollLoopAsync(state, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown (Unsubscribe/Dispose cancels the CTS).
+            }
+            catch (Exception ex)
+            {
+                // CR-M207: the loop (or its pre-loop setup, e.g. EnsureConsumerGroupAsync) terminated on
+                // an unexpected fault. Surface it and remove the subscription so it stops reporting
+                // IsActive == true while polling nothing.
+                PollError?.Invoke(this, ex);
+                RemoveSubscription(subscriptionId);
+            }
+        }
+
+        private async Task RunPollLoopAsync(SubscriptionState state, CancellationToken ct)
+        {
+            var db = _databaseFactory();
 
             // Create consumer group if configured
             if (state.ConsumerGroup != null && _settings.AutoCreateConsumerGroup)
@@ -223,6 +263,21 @@ namespace Birko.MessageQueue.Redis
                 catch (RedisException)
                 {
                     // Connection error; wait and retry
+                    try
+                    {
+                        await Task.Delay(2000, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // CR-M207: a non-cancellation, non-Redis per-iteration fault (serializer error,
+                    // NRE, …) must not silently kill the loop. Surface it and keep polling after a
+                    // backoff, so one poisoned entry doesn't stop the subscription forever.
+                    PollError?.Invoke(this, ex);
                     try
                     {
                         await Task.Delay(2000, ct).ConfigureAwait(false);

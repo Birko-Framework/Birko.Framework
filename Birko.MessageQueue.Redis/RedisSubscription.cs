@@ -11,9 +11,17 @@ namespace Birko.MessageQueue.Redis
     {
         private readonly RedisConsumer _consumer;
         private readonly Guid _subscriptionId;
+        private bool _unsubscribed;
 
         public string Destination { get; }
-        public bool IsActive { get; private set; } = true;
+
+        /// <summary>
+        /// True only while the subscription has not been unsubscribed/disposed AND its background poll
+        /// loop is still registered with the consumer. CR-M207: a poll loop that terminates on an
+        /// unexpected fault removes its registration, so this now correctly reports false instead of
+        /// staying true while the subscription silently processes nothing.
+        /// </summary>
+        public bool IsActive => !_unsubscribed && _consumer.IsSubscriptionActive(_subscriptionId);
 
         internal RedisSubscription(RedisConsumer consumer, string destination, Guid subscriptionId)
         {
@@ -24,20 +32,20 @@ namespace Birko.MessageQueue.Redis
 
         public Task UnsubscribeAsync(CancellationToken cancellationToken = default)
         {
-            if (IsActive)
+            if (!_unsubscribed)
             {
                 _consumer.RemoveSubscription(_subscriptionId);
-                IsActive = false;
+                _unsubscribed = true;
             }
             return Task.CompletedTask;
         }
 
         public void Dispose()
         {
-            if (IsActive)
+            if (!_unsubscribed)
             {
                 _consumer.RemoveSubscription(_subscriptionId);
-                IsActive = false;
+                _unsubscribed = true;
             }
         }
     }
