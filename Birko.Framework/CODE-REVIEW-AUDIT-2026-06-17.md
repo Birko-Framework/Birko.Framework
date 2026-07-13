@@ -4054,7 +4054,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk Update/Delete enumerate the source IEnumerable twice
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tenant\Stores/TenantBulkStoreWrapper.cs:27-37,52-62 and Stores/AsyncTenantBulkStoreWrapper.cs:29-39,54-64`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — all four bulk methods (Delete/Update on `TenantBulkStoreWrapper` and `AsyncTenantBulkStoreWrapper`) now materialize once (`data as IReadOnlyCollection<T> ?? data.ToList()`) before the `All(BelongsToCurrentTenant)` check and pass the materialized list to the inner store, so the authorized set equals the persisted set even for a lazy/non-deterministic source. Offline tests (Birko.Data.Tenant.Tests) drive a counting enumerable through DeleteAsync/UpdateAsync and assert a single enumeration.
 - **Detail:** Delete(IEnumerable<T> data) / Update(IEnumerable<T> data) call data.All(BelongsToCurrentTenant) and then pass the same `data` to _innerStore.Delete/Update. `data` is enumerated twice. For a lazy/streaming/once-only enumerable (e.g. a yield iterator or a query) this re-runs the source, and if the sequence is non-deterministic the validated set differs from the persisted set — defeating the tenant authorization check. The same double-enumeration occurs in the async variants.
 - **Fix:** Materialize once: `var list = data as IReadOnlyCollection<T> ?? data.ToList();` then validate and pass `list` to the inner store.
 
@@ -4062,7 +4062,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SaveAsync discards CreateAsync return value and relies on the inner store mutating data.Guid
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tenant\Stores/AsyncTenantStoreWrapper.cs:87-104`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — `AsyncTenantStoreWrapper.SaveAsync`'s create branch now `return await CreateAsync(...)` (mirroring the sync `TenantStoreWrapper.Save`) instead of ignoring the result and returning `data.Guid ?? Guid.Empty`, so a new id is returned even when the inner store allocates it internally rather than writing it back to `data.Guid`. Offline test uses a fake inner store that returns an id without mutating `data.Guid` and asserts Save returns it.
 - **Detail:** On the create branch SaveAsync calls `await CreateAsync(...)` but ignores the returned Guid, then returns `data.Guid ?? Guid.Empty`. This only yields the new id if the inner store mutates the passed entity's Guid in place (InMemory does via `data.Guid ??= Guid.NewGuid()`, but that is not guaranteed by the IAsyncStore contract — a store could allocate the id internally and return it without writing it back). The synchronous TenantStoreWrapper.Save (line 99) correctly returns the Create result directly, so the two wrappers are inconsistent and the async one is the fragile one.
 - **Fix:** Mirror the sync wrapper: `return await CreateAsync(data, processDelegate, cancellationToken);` on the create branch.
 

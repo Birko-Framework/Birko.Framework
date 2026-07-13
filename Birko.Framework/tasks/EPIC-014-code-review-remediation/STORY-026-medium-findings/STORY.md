@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**136 / 275 triaged** (as of 2026-07-09). Verify-first paid off repeatedly: several test-gap findings
+**138 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,13 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 30 — Birko.Data.Tenant CR-M173/M174 (2 closed; offline bugs)
+
+- **M173** the tenant bulk wrappers (sync + async Delete/Update) validated `All(BelongsToCurrentTenant)` then passed the same lazy source to the inner store → double-enumeration (authorized set could differ from persisted set) → materialize once.
+- **M174** `AsyncTenantStoreWrapper.SaveAsync` create branch ignored the CreateAsync return and relied on the inner store writing back `data.Guid` → `return await CreateAsync(...)` (mirrors the sync wrapper).
+- Suite green: Birko.Data.Tenant.Tests 16.
+- **Skipped this pass:** the Sync-backend cluster CR-M157–M171 (Sync test-gap needs an async-provider test double; Sync.CosmosDB/ElasticSearch/RavenDB/Sql need live stores; Sync.Json/Xml + M163 need new file-based test projects) — folded into the deferred/infra pass. Swept the core offline projects (Tenant here; Tagging/ViewModel next).
 
 ### Batch 29 — Birko.Data.Sync CR-M155/M156 (2 closed; offline bugs)
 
