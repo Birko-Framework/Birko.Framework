@@ -929,6 +929,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.PostgreSQL.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.PostgreSQL.View.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.PostgreSQL.View.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.Views.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.Views.Tests"
 		},

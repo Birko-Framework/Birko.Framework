@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**257 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**266 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 **Batch 58 (2026-07-13):** closed the last three offline-runnable findings — the view-SELECT-builder
@@ -39,6 +39,18 @@ Docker Sync-backend cluster — they touch live-only stores and changing the int
 verified without running the sync provider, so they belong with M160/M165, not the offline sweep.
 Remaining 18 open: the Docker/live-server pile (ES/Cosmos/Raven/InfluxDB CRUD, live MSSql/Postgres,
 InfluxDB genuine-async) + the bucket-B items whose fix is offline but full verification needs infra.
+
+**Batch 60 (2026-07-13) — bucket B (offline fix / infra-gated verification):** closed **9** more.
+Test-gaps: **M143** (new Birko.Data.SQL.PostgreSQL.View.Tests — extracted materialized-view DDL into
+internal Build* helpers, assert SQL + guards), **M161** (ES sync GenerateId/CreateKnowledgeItem pure
+logic). Code fixes with offline regressions via mock/seam/loopback: **M207** (Redis poll-loop faults
+surface via a new PollError event + keep polling / deactivate on terminate), **M208** (Redis per-subscription
+consumer name), **M209** (Redis AutoAck round-trip + poll-fault coverage over the mock-IDatabase seam),
+**M210** (Messaging SmtpClient send-serialization via SemaphoreSlim + send-delegate seam), **M193**
+(Health SMTP bounded read timeout, verified with a loopback half-open server), **M139** (MSSql.View
+indexed-view methods → genuine async), **M204** (MQTT resubscribe-on-reconnect via ResubscribeAllAsync).
+**Deferred M138** (MSSql transactionless bulk-write atomicity) to the live-MSSql tier — it mutates write
+hot-paths and a mid-bulk failure can't be triggered offline. Remaining 9 open are all Docker/live-server.
 
 **Correction (Batch 56):** the earlier "everything left needs Docker" was overstated — the
 view-SELECT cluster (M140/M151/M153) and most of the Sync cluster (M157/M162/M163/M166/M167/M168/
