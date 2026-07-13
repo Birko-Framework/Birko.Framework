@@ -138,9 +138,16 @@ namespace Birko.EventBus.Local
                 {
                     await handler.HandleAsync(@event, context, cancellationToken).ConfigureAwait(false);
                 }
-                catch when (_options.ErrorHandling == ErrorHandlingMode.Continue)
+                catch (Exception ex) when (_options.ErrorHandling == ErrorHandlingMode.Continue)
                 {
-                    // Error isolation: continue to next handler
+                    // Error isolation: report (CR-M185) then continue to next handler.
+                    _options.OnHandlerError?.Invoke(@event, ex);
+                }
+                catch (Exception ex)
+                {
+                    // Stop mode: report (CR-M185) then propagate to abort the loop.
+                    _options.OnHandlerError?.Invoke(@event, ex);
+                    throw;
                 }
             }
         }
@@ -148,24 +155,54 @@ namespace Birko.EventBus.Local
         private async Task DispatchParallelAsync<TEvent>(List<IEventHandler<TEvent>> handlers, TEvent @event, EventContext context, CancellationToken cancellationToken) where TEvent : IEvent
         {
             using var semaphore = new SemaphoreSlim(_options.MaxConcurrency);
+            // CR-M184: in Stop mode a handler failure must halt the remaining handlers. All tasks are
+            // launched eagerly (bounded by the semaphore), so we cancel this linked source on the first
+            // failure — queued handlers waiting on the semaphore and any that observe the token abort
+            // instead of running to completion (the old code let every handler finish regardless of mode).
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var token = cts.Token;
+            Exception? firstStopError = null;
+
             var tasks = handlers.Select(async handler =>
             {
-                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
-                    await handler.HandleAsync(@event, context, cancellationToken).ConfigureAwait(false);
+                    await semaphore.WaitAsync(token).ConfigureAwait(false);
+                    try
+                    {
+                        await handler.HandleAsync(@event, context, token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
                 }
-                catch when (_options.ErrorHandling == ErrorHandlingMode.Continue)
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
-                    // Error isolation
+                    // Aborted by our Stop-mode cancellation (not the caller's token) — the real cause is
+                    // captured in firstStopError and rethrown after WhenAll; swallow this follow-on OCE.
                 }
-                finally
+                catch (Exception ex) when (_options.ErrorHandling == ErrorHandlingMode.Continue)
                 {
-                    semaphore.Release();
+                    // Error isolation: report (CR-M185) then let the other handlers proceed.
+                    _options.OnHandlerError?.Invoke(@event, ex);
+                }
+                catch (Exception ex)
+                {
+                    // Stop mode: report (CR-M185), capture the first cause, and cancel the rest.
+                    _options.OnHandlerError?.Invoke(@event, ex);
+                    Interlocked.CompareExchange(ref firstStopError, ex, null);
+                    cts.Cancel();
                 }
             });
 
             await Task.WhenAll(tasks).ConfigureAwait(false);
+
+            // Surface the original handler failure (not a follow-on cancellation) in Stop mode.
+            if (firstStopError != null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstStopError).Throw();
+            }
         }
 
         public void Dispose()

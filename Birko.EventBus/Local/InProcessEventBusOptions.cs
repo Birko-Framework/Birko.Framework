@@ -1,3 +1,5 @@
+using System;
+
 namespace Birko.EventBus.Local
 {
     /// <summary>
@@ -15,6 +17,15 @@ namespace Birko.EventBus.Local
         /// What happens when a handler throws an exception.
         /// </summary>
         public ErrorHandlingMode ErrorHandling { get; set; } = ErrorHandlingMode.Continue;
+
+        /// <summary>
+        /// CR-M185: optional callback invoked with the event and the exception whenever a handler
+        /// throws — for both <see cref="ErrorHandlingMode.Continue"/> (before continuing) and
+        /// <see cref="ErrorHandlingMode.Stop"/> (before the exception propagates). Wire this to your
+        /// logger. Without it the bus has no logging dependency, so a throwing handler is dropped
+        /// silently in Continue mode; set this to observe those failures.
+        /// </summary>
+        public Action<IEvent, Exception>? OnHandlerError { get; set; }
     }
 
     /// <summary>
