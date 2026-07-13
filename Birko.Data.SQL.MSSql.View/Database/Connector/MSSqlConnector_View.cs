@@ -164,9 +164,57 @@ namespace Birko.Data.SQL.Connectors
         /// <param name="viewType">The type decorated with ViewAttribute(s).</param>
         /// <param name="viewName">Optional custom view name.</param>
         /// <param name="ct">Cancellation token.</param>
-        public Task CreateIndexedViewAsync(System.Type viewType, string? viewName = null, CancellationToken ct = default)
+        public async Task CreateIndexedViewAsync(System.Type viewType, string? viewName = null, CancellationToken ct = default)
         {
-            return Task.Run(() => CreateIndexedView(viewType, viewName), ct);
+            // CR-M139: genuine async via the connector's async primitives instead of Task.Run(sync),
+            // so the CancellationToken is observed during the DB round-trips and no thread-pool thread
+            // is blocked on ADO.NET.
+            var view = DataBase.LoadView(viewType);
+            if (view == null || view.Tables == null || !view.Tables.Any())
+            {
+                throw new System.InvalidOperationException($"Type '{viewType.Name}' does not have valid view attributes.");
+            }
+
+            var name = viewName ?? view.Name;
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new System.InvalidOperationException("View name cannot be empty.");
+            }
+
+            var selectSql = BuildSchemaBindingSelectSql(view);
+            var keyColumns = GetIndexedViewKeyColumns(view);
+            var indexName = "IX_" + name;
+
+            // Step 1: Create the view with SCHEMABINDING
+            await DoCommandWithTransactionAsync(async (command) =>
+            {
+                command.CommandText = "CREATE OR ALTER VIEW " + QuoteIdentifier(name!) + " WITH SCHEMABINDING AS " + selectSql;
+                await System.Threading.Tasks.Task.CompletedTask;
+            }, async (command) =>
+            {
+                await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }, true, ct).ConfigureAwait(false);
+
+            // Step 2: Create the unique clustered index
+            var columnsSql = string.Join(", ", keyColumns.Select(c =>
+            {
+                if (c.Contains('.'))
+                {
+                    return string.Join(".", c.Split('.').Select(p => QuoteIdentifier(p)));
+                }
+                return QuoteIdentifier(c);
+            }));
+
+            await DoCommandWithTransactionAsync(async (command) =>
+            {
+                command.CommandText = "CREATE UNIQUE CLUSTERED INDEX " + QuoteIdentifier(indexName!) + " ON " + QuoteIdentifier(name!) + " (" + columnsSql + ")";
+                await System.Threading.Tasks.Task.CompletedTask;
+            }, async (command) =>
+            {
+                await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }, true, ct).ConfigureAwait(false);
+
+            InvalidateViewExistsCache(name!);
         }
 
         /// <summary>
@@ -196,12 +244,22 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         /// <param name="viewName">The name of the indexed view to drop.</param>
         /// <param name="ct">Cancellation token.</param>
-        public Task DropIndexedViewAsync(string viewName, CancellationToken ct = default)
+        public async Task DropIndexedViewAsync(string viewName, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(viewName))
                 throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            return Task.Run(() => DropIndexedView(viewName), ct);
+            // CR-M139: genuine async instead of Task.Run(sync).
+            await DoCommandWithTransactionAsync(async (command) =>
+            {
+                command.CommandText = "DROP VIEW IF EXISTS " + QuoteIdentifier(viewName);
+                await System.Threading.Tasks.Task.CompletedTask;
+            }, async (command) =>
+            {
+                await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+            }, true, ct).ConfigureAwait(false);
+
+            InvalidateViewExistsCache(viewName);
         }
 
         /// <summary>
@@ -237,12 +295,29 @@ WHERE v.name = @viewName AND v.is_ms_shipped = 0 AND i.type = 1";
         /// </summary>
         /// <param name="viewName">The name of the indexed view to check.</param>
         /// <param name="ct">Cancellation token.</param>
-        public Task<bool> IndexedViewExistsAsync(string viewName, CancellationToken ct = default)
+        public async Task<bool> IndexedViewExistsAsync(string viewName, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(viewName))
                 throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            return Task.Run(() => IndexedViewExists(viewName), ct);
+            // CR-M139: genuine async via DoCommandAsync + ExecuteReaderAsync instead of Task.Run(sync).
+            bool exists = false;
+            await DoCommandAsync(async (command) =>
+            {
+                command.CommandText = @"SELECT 1 FROM sys.views v
+INNER JOIN sys.indexes i ON v.object_id = i.object_id
+WHERE v.name = @viewName AND v.is_ms_shipped = 0 AND i.type = 1";
+                var param = command.CreateParameter();
+                param.ParameterName = "@viewName";
+                param.Value = viewName;
+                command.Parameters.Add(param);
+                await System.Threading.Tasks.Task.CompletedTask;
+            }, async (command) =>
+            {
+                using var reader = await command.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                exists = reader.HasRows;
+            }, false, ct).ConfigureAwait(false);
+            return exists;
         }
     }
 }
