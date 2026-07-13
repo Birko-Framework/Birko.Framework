@@ -4582,7 +4582,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Token-issuance path has no test coverage
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.NFC\NfcAuthProvider.cs:69-92`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 46). Added `NfcAuthProviderTokenTests` with a fake `ITokenProvider`: asserts a token is issued on success with the sub/nfc_uid/auth_method claims, that email/name claims appear only when present on the mapping, and that no token is issued when `IssueTokens` is false or the provider is null.
 - **Detail:** AuthenticateAsync's entire JWT branch (the `if (_settings.IssueTokens && _tokenProvider != null)` block: claims dictionary build, conditional email/name claims, GenerateToken call, and Token propagation into NfcAuthResult.Success) is never exercised. NfcAuthProviderTests.cs never constructs the provider with an ITokenProvider — grep for Token/tokenProvider/IssueTokens in the test file returns nothing. This is the security-relevant core of the project and is the optional constructor dependency, so the untested branch is the most consequential one.
 - **Fix:** Add tests with a fake/mock ITokenProvider: assert a token is returned on success, that sub/nfc_uid/auth_method claims are set, that email/name claims appear only when present on the mapping, and that no token is issued when IssueTokens is false or the provider is null.
 
@@ -4598,7 +4598,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gaps: SetSecretAsync, DeleteSecretAsync, GetSecretPairsAsync success paths untested
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Security.Vault.Tests\VaultSecretProviderTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 46). Added `VaultSecretProviderWriteTests` with a capturing HttpMessageHandler asserting the outgoing method/URI/body: SetSecretAsync (KV2 `{data:{...}}` to `/data/` vs KV1 flat payload), DeleteSecretAsync (KV2 `/metadata/` path + the NotFound-is-tolerated branch), and GetSecretPairsAsync KV2 inner-data → dictionary. (The CR-M240 malformed-body → null cases were added in batch 43.)
 - **Detail:** The test suite covers null-arg guards, GetSecret/GetSecretWithMetadata (KV1/KV2), List, and IsHealthy, but has no success-path coverage for: SetSecretAsync (KV2 {data:{...}} vs KV1 flat payload shape and the /data/ path injection), DeleteSecretAsync (KV2 metadata path vs KV1 path, and the NotFound-is-tolerated branch at line 118), and GetSecretPairsAsync entirely (KV1, KV2 inner-data, NotFound->null, and the non-string JSON value -> GetRawText branch at line 189). CreatedAt/UpdatedAt parsing is also never asserted, which is why the UpdatedAt bug above is undetected.
 - **Fix:** Add FakeHttpHandler-based tests that capture the outgoing request (URI + body) for Set/Delete across KvVersion 1 and 2, plus GetSecretPairsAsync tests including a non-string value and NotFound. Assert CreatedAt/UpdatedAt to lock in the timestamp behaviour.
 

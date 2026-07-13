@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**200 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**202 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,11 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 46 — Security test-gaps CR-M239/M241 (2 closed; augment existing projects)
+
+- **M239** NFC token-issuance branch untested → `NfcAuthProviderTokenTests` with a fake ITokenProvider: token issued + sub/nfc_uid/auth_method claims, conditional email/name, no-token when IssueTokens=false / provider null. NFC.Tests 46.
+- **M241** Vault Set/Delete/GetSecretPairs success paths untested → `VaultSecretProviderWriteTests` with a request-capturing handler: SetSecretAsync KV2/KV1 payload+path, DeleteSecretAsync KV2 metadata path + NotFound-tolerated, GetSecretPairsAsync KV2 inner-data. Vault.Tests 40.
 
 ### Batch 45 — Storage.AzureBlob CR-M248/M249 (2 closed; offline) — **200/275 milestone**
 

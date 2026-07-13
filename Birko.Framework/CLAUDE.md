@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Security test-gaps NFC + Vault (EPIC-014 / STORY-026) (2026-07-13)
+Forty-sixth STORY-026 batch: **CR-M239/M241** — security test-gaps closed by augmenting existing `.Tests` projects. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **NFC token issuance (M239)** — `NfcAuthProvider.AuthenticateAsync`'s JWT branch (IssueTokens + ITokenProvider) was never exercised (the tests never passed a token provider). Added `NfcAuthProviderTokenTests` with a fake `ITokenProvider`: token issued on success with sub/nfc_uid/auth_method claims, email/name only when present on the mapping, and no token when IssueTokens=false or the provider is null.
+- **Vault write success paths (M241)** — added `VaultSecretProviderWriteTests` with a request-capturing `HttpMessageHandler` asserting method/URI/body for `SetSecretAsync` (KV2 `{data:{...}}`→`/data/` vs KV1 flat), `DeleteSecretAsync` (KV2 `/metadata/` + NotFound-tolerated), and `GetSecretPairsAsync` KV2 inner-data → dictionary.
+- Suites green: Birko.Security.NFC.Tests 46, Birko.Security.Vault.Tests 40. STORY-026 now **202/275**.
+
 ### Code-review remediation — medium findings, Storage.AzureBlob SAS/URL encoding (EPIC-014 / STORY-026) (2026-07-13)
 Forty-fifth STORY-026 batch: **CR-M248/M249** in Birko.Storage.AzureBlob — **crosses 200/275**. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **Raw blob path in URLs (M248)** — `GenerateSasUri` appended the raw `blobPath` into the SAS URI (and `AzureBlobStorage.GetBlobUri` into REST URLs); a key with spaces / `#` / `?` / `%` produced a malformed or mis-routed URL and could mismatch the SAS signature. Now percent-encodes each `/`-separated segment (slashes preserved) via a shared `EncodeBlobPath` helper, while the `canonicalResource` in the string-to-sign keeps the DECODED form per the Azure Service SAS spec (so the signature still matches). Regression asserts spaces/reserved chars encode and slashes survive.
