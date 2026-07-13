@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — medium findings, Models SQL mappings (EPIC-014 / STORY-026) (2026-07-13)
+Thirty-ninth STORY-026 batch: **CR-M219/M220/M229** — SQL mapping convention/integrity gaps in Birko.Models.Customers.SQL + .Users.SQL (3 closed, 2 new test projects created with user approval). [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
+- **Unbounded Customer columns (M219)** — CustomerMapping mapped only ToTable + Guid, leaving Name/Code/Email/Phone/Website/TaxId/VatId as unbounded (nvarchar(max)-style, unindexable) columns. Added `HasPrecision` to each (256/64/256/64/256/32/32), matching ContactPersonMapping / Pricing.SQL. Left `IsUnique()` off TaxId/VatId/Code (the finding's "consider" — nullable natural keys, a DB/migration decision).
+- **Unbounded Address family (M220)** — AddressMapping + InvoiceAddressMapping likewise mapped no string columns. Bounded the whole address shape (Name/Street 256, ZIP 16, Country 128, …); InvoiceAddress : Address re-maps the inherited address columns (each mapping owns its table) plus BIN/TIN/VATIN/BankAccount.
+- **UserLogin natural key (M229)** — (Provider, ProviderKey) had no constraint. Recorded it as a shared composite index (`UX_UserLogin_Provider_ProviderKey`, order 0/1) and documented that mapping index/unique metadata is advisory (not emitted by `ApplyToDatabase`) and there's no composite-UNIQUE mapping primitive, so the UNIQUE constraint is enforced via migration — the mapping records intent/natural key.
+- New **Birko.Models.Customers.SQL.Tests** (22) + **Birko.Models.Users.SQL.Tests** (3) assert the precision/index facets via `ModelMapRegistry.GetPropertyMaps`; registered in `.slnx` + `.code-workspace`. STORY-026 now **172/275**.
+
 ### Code-review remediation — medium findings, Models cluster (EPIC-014 / STORY-026) (2026-07-13)
 Thirty-eighth STORY-026 batch: **CR-M213/215/216/217/221/226/227/228** across the Birko.Models.* domain projects (8 closed). Most Models `.Tests` siblings already existed; created one new (`Birko.Models.Users.Tests`) with the user's approval. [tasks/EPIC-014/STORY-026](tasks/EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md).
 - **ValueData dropped log fields (M213)** — `ValueData.LoadFrom(ViewModels.Value)` set only Price/PriceVAT/VAT and never called `base.LoadFrom`, silently discarding CreatedAt/UpdatedAt/PrevUpdatedAt + identity (unlike the sibling AbstractPercentage/AbstractTree). Added `base.LoadFrom(data)` (ViewModels.Value : LogViewModel : ILogEntity).

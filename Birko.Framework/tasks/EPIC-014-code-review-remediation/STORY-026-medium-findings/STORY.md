@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**169 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**172 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,13 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 39 — Models SQL mappings CR-M219/M220/M229 (3 closed; 2 new test projects)
+
+- **M219** CustomerMapping bounded all string columns via HasPrecision (Name/Code/Email/Phone/Website/TaxId/VatId), matching ContactPersonMapping. IsUnique left off (nullable natural keys; DB decision).
+- **M220** AddressMapping + InvoiceAddressMapping bounded every address string column; InvoiceAddress re-maps the inherited address columns + BIN/TIN/VATIN/BankAccount.
+- **M229** UserLoginMapping records (Provider, ProviderKey) as a shared composite index (natural key). Documented that mapping index/unique metadata is advisory (not DDL-emitted) and composite-UNIQUE isn't a mapping primitive → the UNIQUE constraint is a migration concern.
+- New test projects (user-approved): **Birko.Models.Customers.SQL.Tests** (22) + **Birko.Models.Users.SQL.Tests** (3), asserting the precision/index metadata via `ModelMapRegistry.GetPropertyMaps`. Registered in .slnx + .code-workspace.
 
 ### Batch 38 — Models cluster CR-M213/215/216/217/221/226/227/228 (8 closed; offline)
 
