@@ -227,6 +227,33 @@ public class VaultSecretProviderTests
         healthy.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task GetSecretPairsAsync_MalformedBody_ReturnsNull_NoThrow()
+    {
+        // CR-M240: a 200 with an unexpected body (no "data" node) must return null gracefully,
+        // not surface a raw KeyNotFoundException from GetProperty.
+        var handler = new FakeHttpHandler(HttpStatusCode.OK, "{\"unexpected\":true}");
+        var httpClient = new HttpClient(handler);
+        var settings = new VaultSettings { Address = "http://localhost:8200", Token = "test", KvVersion = 2 };
+        using var provider = new VaultSecretProvider(settings, httpClient);
+
+        var result = await provider.Invoking(p => p.GetSecretPairsAsync("myapp"))
+            .Should().NotThrowAsync();
+        result.Subject.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetSecretPairsAsync_Kv2_MissingInnerData_ReturnsNull()
+    {
+        // KV2 outer "data" present but inner "data" absent → null, not KeyNotFoundException.
+        var handler = new FakeHttpHandler(HttpStatusCode.OK, "{\"data\":{\"metadata\":{}}}");
+        var httpClient = new HttpClient(handler);
+        var settings = new VaultSettings { Address = "http://localhost:8200", Token = "test", KvVersion = 2 };
+        using var provider = new VaultSecretProvider(settings, httpClient);
+
+        (await provider.GetSecretPairsAsync("myapp")).Should().BeNull();
+    }
+
     #region Test Helpers
 
     private class FakeHttpHandler : HttpMessageHandler
