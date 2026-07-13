@@ -20,17 +20,27 @@ namespace Birko.MessageQueue.InMemory
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         }
 
+        /// <summary>
+        /// Sends a message to the destination. When <see cref="QueueMessage.Delay"/> is set the enqueue is
+        /// scheduled after the delay on a detached task and <b>delivery is best-effort</b> (CR-M201): a
+        /// failure after the delay — cancellation, or the channel being completed/disposed — cannot be
+        /// reported back through this already-completed call. Its fault is observed (not left unobserved)
+        /// but is otherwise swallowed. For guaranteed delivery, send without a delay.
+        /// </summary>
         public async Task SendAsync(string destination, QueueMessage message, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
             if (message.Delay.HasValue)
             {
+                // Observe the detached task's fault so a post-delay failure isn't raised as an
+                // unobserved-task exception (best-effort, as documented above).
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(message.Delay.Value, cancellationToken).ConfigureAwait(false);
                     await _channel.WriteAsync(destination, message, cancellationToken).ConfigureAwait(false);
-                }, cancellationToken);
+                }, cancellationToken)
+                .ContinueWith(static t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                 return;
             }
 

@@ -13,7 +13,9 @@ namespace Birko.MessageQueue.InMemory
     {
         private readonly InMemoryChannel _channel;
         private readonly IMessageSerializer _serializer;
-        private readonly ConcurrentDictionary<Guid, QueueMessage> _pendingAck = new();
+        // CR-M202: track the originating destination alongside the message so RejectAsync(requeue:true)
+        // can write it back to the right channel instead of silently discarding it.
+        private readonly ConcurrentDictionary<Guid, (string Destination, QueueMessage Message)> _pendingAck = new();
         private bool _disposed;
 
         internal InMemoryConsumer(InMemoryChannel channel, IMessageSerializer serializer)
@@ -31,7 +33,7 @@ namespace Birko.MessageQueue.InMemory
             {
                 if (opts.AckMode == MessageAckMode.ManualAck)
                 {
-                    _pendingAck.TryAdd(message.Id, message);
+                    _pendingAck.TryAdd(message.Id, (destination, message));
                 }
 
                 try
@@ -80,18 +82,17 @@ namespace Birko.MessageQueue.InMemory
             return Task.CompletedTask;
         }
 
-        public Task RejectAsync(Guid messageId, bool requeue = false, CancellationToken cancellationToken = default)
+        public async Task RejectAsync(Guid messageId, bool requeue = false, CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_pendingAck.TryRemove(messageId, out var message) && requeue)
+            if (_pendingAck.TryRemove(messageId, out var entry) && requeue)
             {
-                // Re-deliver by writing back to the channel
-                // We need the destination, but for in-memory we can't know it here.
-                // The message is simply discarded if not requeued.
+                // CR-M202: re-deliver by writing the message back to its originating channel (the
+                // destination is now tracked with the pending entry). Previously requeue:true was a
+                // silent no-op — identical to discard — causing message loss for poison-message handling.
+                await _channel.WriteAsync(entry.Destination, entry.Message, cancellationToken).ConfigureAwait(false);
             }
-
-            return Task.CompletedTask;
         }
 
         private T? DeserializePayload<T>(QueueMessage message) where T : class
