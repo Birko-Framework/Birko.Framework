@@ -126,9 +126,19 @@ public abstract class TagServiceBase : ITagService
         foreach (var link in links.Where(l => !desiredTagIds.Contains(l.TagId)))
             await DeleteEntityTagAsync(link, ct);
 
-        // Add missing
+        // Add missing. CR-M172: create the link directly rather than routing through
+        // AttachTagAsync — the `!currentTagIds.Contains(id)` filter already proves the link is
+        // absent, so AttachTagAsync's own GetEntityTagLinksAsync re-query is redundant I/O (one
+        // extra link query per added tag, i.e. N+1).
+        var tenantId = GetCurrentTenantId();
         foreach (var tagId in desiredTagIds.Where(id => !currentTagIds.Contains(id)))
-            await AttachTagAsync(entityType, entityId, tagId, ct);
+            await CreateEntityTagAsync(new EntityTag
+            {
+                TenantGuid = tenantId,
+                TagId = tagId,
+                EntityId = entityId,
+                EntityType = entityType,
+            }, ct);
     }
 
     public async Task<TagDto> AttachTagByNameAsync(string entityType, Guid entityId, string tagName, string? color = null, CancellationToken ct = default)
