@@ -35,9 +35,17 @@ namespace Birko.Workflow.SQL
 
         public AsyncDataBaseBulkStore<DB, WorkflowInstanceModel> Store => _store;
 
+        /// <summary>
+        /// Persists (upsert) a workflow instance. CR-M274: this is a best-effort read-then-write —
+        /// callers MUST serialize saves per <c>InstanceId</c>. Two concurrent SaveAsync calls for the
+        /// same instance can both observe <c>existing == null</c> and both CreateAsync; because Guid is a
+        /// PrimaryField the second insert throws a primary-key violation (and an overlapping save can lose
+        /// the first writer's changes). A native MERGE/ON-CONFLICT upsert would remove the race but is
+        /// provider-specific; the per-instance serialization contract is the supported guarantee.
+        /// </summary>
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
-            var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
+            var existing = await _store.ReadFirstAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
             if (existing != null)
             {
                 existing.UpdateFromInstance(instance);
