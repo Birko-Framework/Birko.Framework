@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Migrations;
 using Birko.Data.Migrations.Context;
@@ -22,15 +23,15 @@ public class MigrationRunnerLogicTests
         public readonly HashSet<long> Applied = new();
         public long Current;
         public void Initialize() { }
-        public Task InitializeAsync() => Task.CompletedTask;
+        public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public ISet<long> GetAppliedVersions() => Applied;
-        public Task<ISet<long>> GetAppliedVersionsAsync() => Task.FromResult<ISet<long>>(Applied);
+        public Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default) => Task.FromResult<ISet<long>>(Applied);
         public void RecordMigration(IMigration migration) { }
-        public Task RecordMigrationAsync(IMigration migration) => Task.CompletedTask;
+        public Task RecordMigrationAsync(IMigration migration, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void RemoveMigration(IMigration migration) { }
-        public Task RemoveMigrationAsync(IMigration migration) => Task.CompletedTask;
+        public Task RemoveMigrationAsync(IMigration migration, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public long GetCurrentVersion() => Current;
-        public Task<long> GetCurrentVersionAsync() => Task.FromResult(Current);
+        public Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default) => Task.FromResult(Current);
     }
 
     private sealed class Mig : IMigration

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Migrations;
 using Birko.Data.Migrations.Context;
@@ -22,15 +23,17 @@ public class AsyncMigrationRunnerTests
         public long Version;
 
         public void Initialize() => InitializeCalled = true;
-        public Task InitializeAsync() { InitializeAsyncCalled = true; return Task.CompletedTask; }
+        // The fake genuinely observes the token so the tests below prove the runner THREADS it in
+        // (CR-M101), not merely that the parameter exists.
+        public Task InitializeAsync(CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); InitializeAsyncCalled = true; return Task.CompletedTask; }
         public ISet<long> GetAppliedVersions() => new HashSet<long>();
-        public Task<ISet<long>> GetAppliedVersionsAsync() => Task.FromResult<ISet<long>>(new HashSet<long>());
+        public Task<ISet<long>> GetAppliedVersionsAsync(CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); return Task.FromResult<ISet<long>>(new HashSet<long>()); }
         public void RecordMigration(IMigration migration) { }
-        public Task RecordMigrationAsync(IMigration migration) => Task.CompletedTask;
+        public Task RecordMigrationAsync(IMigration migration, CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); return Task.CompletedTask; }
         public void RemoveMigration(IMigration migration) { }
-        public Task RemoveMigrationAsync(IMigration migration) => Task.CompletedTask;
+        public Task RemoveMigrationAsync(IMigration migration, CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); return Task.CompletedTask; }
         public long GetCurrentVersion() { GetCurrentVersionCalled = true; return Version; }
-        public Task<long> GetCurrentVersionAsync() { GetCurrentVersionAsyncCalled = true; return Task.FromResult(Version); }
+        public Task<long> GetCurrentVersionAsync(CancellationToken cancellationToken = default) { cancellationToken.ThrowIfCancellationRequested(); GetCurrentVersionAsyncCalled = true; return Task.FromResult(Version); }
     }
 
     private sealed class TestMigration : IMigration
@@ -93,5 +96,47 @@ public class AsyncMigrationRunnerTests
 
         store.GetCurrentVersionAsyncCalled.Should().BeTrue();
         store.GetCurrentVersionCalled.Should().BeFalse();
+    }
+
+    // ── CR-M101: the runner threads the CancellationToken into the store's async calls ──
+
+    [Fact]
+    public async Task InitializeAsync_CancelledToken_Throws()
+    {
+        var runner = new TrackingRunner(new TrackingStore());
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Func<Task> act = () => runner.InitializeAsync(cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task MigrateAsync_CancelledToken_Throws()
+    {
+        var runner = new TrackingRunner(new TrackingStore { Version = 0 });
+        runner.RegisterMigrations(new TestMigration { Version = 1 });
+        await runner.InitializeAsync();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // The cancelled token is threaded into Store.GetCurrentVersionAsync(ct), which observes it.
+        Func<Task> act = () => runner.MigrateAsync(cancellationToken: cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task RollbackAsync_CancelledToken_Throws()
+    {
+        var runner = new TrackingRunner(new TrackingStore { Version = 5 });
+        await runner.InitializeAsync();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Func<Task> act = () => runner.RollbackAsync(2, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 }
