@@ -13,7 +13,7 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**210 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**215 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 > **Plan (decided 2026-07-13):** finish the pure-logic/offline sweep first (highest value-per-effort,
@@ -40,6 +40,14 @@ All deferrals share one root cause: the framework's tests are pure-logic/offline
   into a shared helper), CR-M153 (SQL.Views GroupBy needs real GROUP-BY metadata on `Tables.View` +
   connector changes — overlaps M151). CR-M141/M143 (MSSql.View / PostgreSQL.View test-gaps → new
   projects) fit the SQLite/Docker tiers above depending on provider.
+
+### Batch 51 — Workflow backend test-gaps CR-M268/269/270/271/272 (5 closed; 5 new projects)
+
+Created 5 new `.Tests` projects for the Workflow backends, each covering the backend-independent model round-trip (FromInstance/ToInstance/UpdateFromInstance — Data+History survive, CreatedAt-preserved-on-update + UpdatedAt bumped, Status enum casting) without a live server. The store CRUD stays integration-tier. SDK packages are carried by the `Birko.Data.X` projitems (transitive).
+- **M270** Birko.Workflow.JSON.Tests (5). **M271** Birko.Workflow.MongoDB.Tests (3). **M272** Birko.Workflow.RavenDB.Tests (3). **M268** Birko.Workflow.CosmosDB.Tests (3). **M269** Birko.Workflow.ElasticSearch.Tests (3).
+- All git-initialized + registered in .slnx + .code-workspace. All suites green.
+
+**This closes the entire offline .NET medium backlog.** Remaining open findings are the TypeScript Birko.Web.* track (M256–M266) — verified via the Playground build, not xUnit.
 
 ### Batch 50 — Security test-gaps CR-M236/M237 (2 closed)
 

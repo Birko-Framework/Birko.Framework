@@ -4814,7 +4814,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No Birko.Workflow.CosmosDB.Tests project exists
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.CosmosDB`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 51). Created **`Birko.Workflow.CosmosDB.Tests`** (registered in .slnx + .code-workspace) covering the backend-independent `CosmosWorkflowInstanceModel` round-trip: FromInstance→ToInstance (Data + History survive, InstanceId/CurrentState/Status), UpdateFromInstance (CreatedAt preserved, UpdatedAt bumped, state/data/history updated), and Status enum casting — no live Cosmos emulator needed. Store CRUD stays integration-tier.
 - **Detail:** There is no .Tests sibling for this project (other workflow backends such as Birko.Workflow.SQL have Birko.Workflow.SQL.Tests). All public functionality of CosmosDBWorkflowInstanceStore (SaveAsync create/update branches, LoadAsync, DeleteAsync, the three Find* queries) and the FromInstance/ToInstance/UpdateFromInstance round-trip in CosmosWorkflowInstanceModel are untested. The framework convention requires every new public functionality to have corresponding tests. The model round-trip logic (JSON serialize/deserialize of Data + History) is backend-independent and could be covered without a live Cosmos emulator, and the store could be exercised against the AsyncCosmosDBStore using the in-memory store pattern or the Cosmos emulator as the SQL/Raven suites do.
 - **Fix:** Add Birko.Workflow.CosmosDB.Tests (xUnit + FluentAssertions) covering the model round-trip and the create-vs-update path of SaveAsync, registering it in Birko.Framework.slnx / .code-workspace per CLAUDE-maintenance.
 
@@ -4822,7 +4822,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling — entire public surface untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.ElasticSearch\Birko.Workflow.ElasticSearch (project root)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 51). Created **`Birko.Workflow.ElasticSearch.Tests`** (registered in .slnx + .code-workspace) covering the `ElasticWorkflowInstanceModel` round-trip (FromInstance/ToInstance/UpdateFromInstance — Data+History, CreatedAt-preserved, Status casting) without a live cluster. Store CRUD/upsert stays integration-tier.
 - **Detail:** There is no Birko.Workflow.ElasticSearch.Tests sibling, and grepping Birko.Workflow.Tests / Birko.Workflow.SQL.Tests finds zero references to ElasticSearchWorkflowInstanceStore, ElasticWorkflowInstanceModel, or ElasticSearchWorkflowInstanceSchema. Public functionality with no coverage: SaveAsync create-vs-update upsert branch, LoadAsync round-trip, DeleteAsync no-op-when-missing, FindByState/Status/WorkflowName filtering+ordering+limit, and the model's FromInstance/ToInstance/UpdateFromInstance JSON round-trip (including the empty-DataJson and null-Guid edges above). The framework convention requires xUnit + FluentAssertions tests for every new public functionality.
 - **Fix:** Add a Birko.Workflow.ElasticSearch.Tests project. The model's FromInstance/ToInstance/UpdateFromInstance round-trip and the upsert branch logic can be unit-tested without a live cluster; the store CRUD can reuse the ElasticSearch integration-test harness used by Birko.Data.ElasticSearch.Tests.
 
@@ -4830,7 +4830,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for Birko.Workflow.JSON
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.JSON (no .Tests sibling)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 51). Created **`Birko.Workflow.JSON.Tests`** (5, registered in .slnx + .code-workspace) covering the `JsonWorkflowInstanceModel` round-trip: FromInstance field mapping, ToInstance Data+History deserialization, empty-history → empty list, UpdateFromInstance (CreatedAt preserved / UpdatedAt bumped), and Status casting both ways. Store upsert CRUD stays integration-tier (file backend).
 - **Detail:** There is no Birko.Workflow.JSON.Tests sibling, and no existing test (Birko.Workflow.Tests, Birko.Workflow.SQL.Tests) references JsonWorkflowInstanceStore or JsonWorkflowInstanceModel. The entire public surface is untested: SaveAsync upsert (both create and update branches), LoadAsync round-trip, DeleteAsync, the three FindBy* queries with ordering/limit, and the FromInstance/ToInstance/UpdateFromInstance serialization round-trip (DataJson + HistoryJson). The framework convention requires every new public functionality to have xUnit + FluentAssertions tests; sibling backends like Birko.Workflow.SQL have a .Tests project.
 - **Fix:** Add Birko.Workflow.JSON.Tests covering SaveAsync upsert semantics, Load/Delete, the FindBy* queries (ordering by UpdatedAt desc + limit), and a serialization round-trip asserting Data and History survive FromInstance -> ToInstance. Consider reusing the new Birko.Data.InMemory store as a test double where the file backend is not the unit under test.
 
@@ -4838,7 +4838,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No Birko.Workflow.MongoDB.Tests sibling — store and model untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.MongoDB\Birko.Workflow.MongoDB (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 51). Created **`Birko.Workflow.MongoDB.Tests`** (registered in .slnx + .code-workspace) covering the `MongoWorkflowInstanceModel` round-trip (FromInstance/ToInstance/UpdateFromInstance — Data+History survive, CreatedAt-preserved-on-update + UpdatedAt bumped, Status casting) with no live MongoDB. Store CRUD stays integration-tier.
 - **Detail:** There is no Birko.Workflow.MongoDB.Tests project, and Birko.Workflow.Tests contains no references to MongoDBWorkflowInstanceStore or MongoWorkflowInstanceModel. All public functionality is untested: SaveAsync create-vs-update branch, LoadAsync, DeleteAsync, the three FindBy* queries, and the model's FromInstance/UpdateFromInstance/ToInstance round-trip (including the CreatedAt-preserved-on-update behavior and the History/Data JSON serialization). Per the framework testing convention every new public functionality must have xUnit+FluentAssertions tests. (Sibling Birko.Workflow.JSON also lacks a dedicated test project, so this is a pre-existing gap pattern, but it still applies.)
 - **Fix:** Add Birko.Workflow.MongoDB.Tests. The model-level round-trip tests (FromInstance -> ToInstance, UpdateFromInstance preserving CreatedAt and bumping UpdatedAt) need no live MongoDB and would cover most of the risk; store CRUD can use a mongo2go/testcontainer or be marked integration.
 
@@ -4846,7 +4846,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project — entire backend is untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.RavenDB\RavenDBWorkflowInstanceStore.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — 2026-07-13 (STORY-026 batch 51). Created **`Birko.Workflow.RavenDB.Tests`** (registered in .slnx + .code-workspace) covering the `RavenWorkflowInstanceModel` round-trip (FromInstance/ToInstance/UpdateFromInstance — Data+History, CreatedAt-preserved, Status casting) without a live Raven server. Store CRUD + the CR-M273 ReadFirstAsync paths stay integration-tier.
 - **Detail:** There is no Birko.Workflow.RavenDB.Tests directory, and no tests reference RavenDBWorkflowInstanceStore anywhere. The sibling SQL backend has a dedicated Birko.Workflow.SQL.Tests project, so this is a deviation from the framework's own pattern. All public functionality (SaveAsync create-vs-update branch, LoadAsync, DeleteAsync, the three FindBy* query methods, RavenWorkflowInstanceModel round-trip via FromInstance/ToInstance/UpdateFromInstance) is unverified. Per CLAUDE.md, every new public functionality must have corresponding tests in Birko.{ProjectName}.Tests.
 - **Fix:** Add a Birko.Workflow.RavenDB.Tests xUnit + FluentAssertions project (mirroring Birko.Workflow.SQL.Tests) covering CRUD, the create/update branch in SaveAsync, the FindBy* filters/limits, and JSON serialization round-trips.
 

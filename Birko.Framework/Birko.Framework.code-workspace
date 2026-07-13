@@ -1157,6 +1157,26 @@
 			"path": "../../Framework.Tests/Birko.Workflow.SQL.Tests"
 		},
 		{
+			"name": "Tests / Birko.Workflow.JSON.Tests",
+			"path": "../../Framework.Tests/Birko.Workflow.JSON.Tests"
+		},
+		{
+			"name": "Tests / Birko.Workflow.MongoDB.Tests",
+			"path": "../../Framework.Tests/Birko.Workflow.MongoDB.Tests"
+		},
+		{
+			"name": "Tests / Birko.Workflow.RavenDB.Tests",
+			"path": "../../Framework.Tests/Birko.Workflow.RavenDB.Tests"
+		},
+		{
+			"name": "Tests / Birko.Workflow.CosmosDB.Tests",
+			"path": "../../Framework.Tests/Birko.Workflow.CosmosDB.Tests"
+		},
+		{
+			"name": "Tests / Birko.Workflow.ElasticSearch.Tests",
+			"path": "../../Framework.Tests/Birko.Workflow.ElasticSearch.Tests"
+		},
+		{
 			"name": "Tests / Birko.Workflow.Tests",
 			"path": "../../Framework.Tests/Birko.Workflow.Tests"
 		},

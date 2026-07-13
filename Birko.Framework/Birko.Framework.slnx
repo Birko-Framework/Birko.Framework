@@ -306,6 +306,11 @@
     <Project Path="../../Framework.Tests/Birko.Data.Sync.Tenant.Tests/Birko.Data.Sync.Tenant.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.SQL.Tests/Birko.BackgroundJobs.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Workflow.SQL.Tests/Birko.Workflow.SQL.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.JSON.Tests/Birko.Workflow.JSON.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.MongoDB.Tests/Birko.Workflow.MongoDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.RavenDB.Tests/Birko.Workflow.RavenDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.CosmosDB.Tests/Birko.Workflow.CosmosDB.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.ElasticSearch.Tests/Birko.Workflow.ElasticSearch.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Camera.Tests/Birko.Communication.Camera.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Migrations.SQL.Tests/Birko.Data.Migrations.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Caching.Tests/Birko.Caching.Tests.csproj" />
