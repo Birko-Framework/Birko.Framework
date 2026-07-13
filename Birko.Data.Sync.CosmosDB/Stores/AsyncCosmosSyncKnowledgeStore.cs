@@ -175,6 +175,11 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
             {
                 cosmosItem.TenantId = tenantId;
             }
+            // CR-M158: ensure the id is populated on the pass-through branch too, so the `Guid!.Value`
+            // dereferences in Update/SetLastSyncTime are provably safe (the base store's CreateCore/Save
+            // does the same `??=`). Without this a caller-supplied CosmosSyncKnowledgeItem with a null
+            // Guid NRE'd downstream.
+            cosmosItem.Guid ??= Guid.NewGuid();
             return cosmosItem;
         }
 

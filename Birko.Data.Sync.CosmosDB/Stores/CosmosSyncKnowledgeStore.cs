@@ -166,6 +166,9 @@ public class CosmosSyncKnowledgeStore : CosmosDBStore<CosmosSyncKnowledgeItem>
             {
                 cosmosItem.TenantId = tenantId;
             }
+            // CR-M158: ensure the id is populated on the pass-through branch too, so the `Guid!.Value`
+            // dereferences in Update/SetLastSyncTime are provably safe (mirrors the base store's `??=`).
+            cosmosItem.Guid ??= Guid.NewGuid();
             return cosmosItem;
         }
 
