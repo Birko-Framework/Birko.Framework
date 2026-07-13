@@ -31,7 +31,7 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
-            var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
+            var existing = await _store.ReadFirstAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);
             if (existing != null)
             {
                 existing.UpdateFromInstance(instance);
@@ -46,13 +46,13 @@ namespace Birko.Workflow.RavenDB
 
         public async Task<WorkflowInstance<TData>?> LoadAsync(Guid instanceId, CancellationToken cancellationToken = default)
         {
-            var model = await _store.ReadAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
+            var model = await _store.ReadFirstAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
             return model?.ToInstance<TData>();
         }
 
         public async Task DeleteAsync(Guid instanceId, CancellationToken cancellationToken = default)
         {
-            var model = await _store.ReadAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
+            var model = await _store.ReadFirstAsync(m => m.Guid == instanceId, cancellationToken).ConfigureAwait(false);
             if (model != null)
             {
                 await _store.DeleteAsync(model, cancellationToken).ConfigureAwait(false);
