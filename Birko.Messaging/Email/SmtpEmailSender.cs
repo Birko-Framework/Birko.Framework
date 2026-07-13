@@ -11,7 +11,13 @@ namespace Birko.Messaging.Email;
 public sealed class SmtpEmailSender : IEmailSender, IDisposable
 {
     private readonly EmailSettings _settings;
-    private readonly SmtpClient _client;
+    private readonly SmtpClient? _client;
+    private readonly Func<MailMessage, CancellationToken, Task> _sendMail;
+    // CR-M210: System.Net.Mail.SmtpClient does not support concurrent SendMailAsync on one instance
+    // (a second in-flight send throws "An asynchronous call is already in progress"). This sender is a
+    // natural singleton (it owns a disposable client), so concurrent SendAsync calls from different
+    // requests are serialized here rather than corrupting the shared client's state.
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
 
     public SmtpEmailSender(EmailSettings settings)
     {
@@ -29,6 +35,19 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         {
             _client.Credentials = new NetworkCredential(settings.UserName, settings.Password);
         }
+
+        _sendMail = _client.SendMailAsync;
+    }
+
+    /// <summary>
+    /// Test seam: sends via a supplied delegate instead of a live <see cref="SmtpClient"/>, so the
+    /// send-serialization (CR-M210) can be verified without a real SMTP server.
+    /// </summary>
+    internal SmtpEmailSender(EmailSettings settings, Func<MailMessage, CancellationToken, Task> sendMail)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _sendMail = sendMail ?? throw new ArgumentNullException(nameof(sendMail));
+        _client = null;
     }
 
     public async Task<MessageResult> SendAsync(EmailMessage message, CancellationToken ct = default)
@@ -54,7 +73,16 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         try
         {
             using var mailMessage = BuildMailMessage(message, from);
-            await _client.SendMailAsync(mailMessage, ct).ConfigureAwait(false);
+            // Serialize concurrent sends — SmtpClient is not safe for concurrent SendMailAsync (CR-M210).
+            await _sendLock.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                await _sendMail(mailMessage, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                _sendLock.Release();
+            }
             return MessageResult.Succeeded(messageId);
         }
         catch (SmtpException ex)
@@ -108,7 +136,11 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         return SendAsync(message, ct);
     }
 
-    public void Dispose() => _client.Dispose();
+    public void Dispose()
+    {
+        _client?.Dispose();
+        _sendLock.Dispose();
+    }
 
     private static MailMessage BuildMailMessage(EmailMessage message, MessageAddress from)
     {
