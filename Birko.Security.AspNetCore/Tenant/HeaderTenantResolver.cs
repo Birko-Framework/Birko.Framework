@@ -1,4 +1,5 @@
 using System;
+using System.Linq; // CR-M235: StringValues.FirstOrDefault is a LINQ extension; don't rely on the consumer's ImplicitUsings
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
