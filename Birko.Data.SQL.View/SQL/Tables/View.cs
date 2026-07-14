@@ -150,8 +150,10 @@ namespace Birko.Data.SQL.Tables
         }
 
         /// <summary>
-        /// Gets field names for querying a persistent view (no table prefix, just column names).
-        /// Uses the field's Name property since the persistent view columns match field names.
+        /// Gets column names for querying a persistent view (no table prefix, just column names).
+        /// Non-aggregate columns use the field Name (the source column). Aggregate columns use the
+        /// view-property name to match the AS alias emitted by <c>ViewSelectSqlBuilder</c> — the aggregate
+        /// function name would collide across two aggregates of the same function (CR-L195).
         /// </summary>
         public IDictionary<int, string> GetPersistentViewSelectFields()
         {
@@ -166,7 +168,7 @@ namespace Birko.Data.SQL.Tables
 
                 foreach (var field in table.Fields.Values)
                 {
-                    result.Add(i, field.Name);
+                    result.Add(i, field.IsAggregate ? field.Property.Name : field.Name);
                     i++;
                 }
             }

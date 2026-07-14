@@ -61,7 +61,11 @@ namespace Birko.Data.SQL.Connectors
                 var fieldAtIndex = f.Key < tableFields.Length ? tableFields[f.Key] : null;
                 if (fieldAtIndex != null && fieldAtIndex.IsAggregate)
                 {
-                    return f.Value + " AS " + quoteIdentifier(fieldAtIndex.Name);
+                    // Alias aggregate columns by the unique view-property name, not the aggregate
+                    // function name (FunctionField.Name = "COUNT"/"SUM"/…): two aggregates of the same
+                    // function would otherwise collide on a duplicate column name in the view DDL, and
+                    // the alias must equal the column GetPersistentViewSelectFields queries back (CR-L195).
+                    return f.Value + " AS " + quoteIdentifier(fieldAtIndex.Property.Name);
                 }
                 return f.Value;
             }));
@@ -170,11 +174,28 @@ namespace Birko.Data.SQL.Connectors
                     if (value != null)
                     {
                         var left = QuoteFieldReference(condition.Name, quoteIdentifier);
-                        parts.Add(left + " = '" + value.ToString()!.Replace("'", "''") + "'");
+                        parts.Add(left + " = " + FormatJoinConditionValue(value));
                     }
                 }
             }
             return string.Join(" AND ", parts);
+        }
+
+        /// <summary>
+        /// Formats a constant join-condition value as a SQL literal. Numerics and bools are emitted
+        /// unquoted (numerics via InvariantCulture so a comma-decimal locale doesn't corrupt the SQL);
+        /// everything else is a single-quoted string with embedded quotes doubled (CR-L196). CREATE VIEW
+        /// cannot be parameterized, so view-definition constants must be trusted (not user input).
+        /// </summary>
+        internal static string FormatJoinConditionValue(object value)
+        {
+            return value switch
+            {
+                bool b => b ? "TRUE" : "FALSE",
+                byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal
+                    => System.Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!,
+                _ => "'" + value.ToString()!.Replace("'", "''") + "'",
+            };
         }
 
         /// <summary>

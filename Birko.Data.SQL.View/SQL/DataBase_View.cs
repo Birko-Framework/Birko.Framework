@@ -221,8 +221,13 @@ namespace Birko.Data.SQL
         {
             var type = data.GetType();
             var view = LoadView(type);
-            var tableFields = view?.GetTableFields();
-            return Read(tableFields!, reader, data, index);
+            // LoadView can return null (the view.Tables == null branch); guard rather than deferring a
+            // NullReferenceException into Read via a null-forgiving `!` (CR-L197).
+            if (view == null)
+            {
+                throw new Exceptions.TableAttributeException($"No view definition for type '{type.Name}'.");
+            }
+            return Read(view.GetTableFields(), reader, data, index);
         }
     }
 }
