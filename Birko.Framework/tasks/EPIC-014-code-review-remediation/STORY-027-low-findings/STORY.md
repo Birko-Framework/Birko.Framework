@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**69 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–D2 done).
+**77 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–E done).
+
+**Sub-batch E (CR-L070 … CR-L077) — NFC + OAuth + OAuth.Providers:** **L070** (`SerialNfcTransport.TransceiveAsync`
+wraps the blocking serial Write/Read in `Task.Run` + observes the token, mirroring ReadTagAsync), **L071**
+(documented `NfcReaderPort.Write` blocks + drops the APDU response — use `TransceiveApduAsync`), **L072**
+(documented `NfcReaderSettings` intentionally stays on `PortSettings`), **L073** (`NdefRecord.GetText` UTF-16
+now defaults to big-endian per the NFC Forum spec, honoring a LE BOM — was UTF-16LE unconditionally),
+**L074** (OAuth `GetTokenAsync` no longer re-issues an identical just-failed refresh under the RefreshToken
+grant — rethrows + removed the dead switch arm), **L075** (device-code poll issues the first request
+immediately, delaying only after authorization_pending/slow_down per RFC 8628), **L076** (GitHub
+`CreateDeviceFlowClient` delegates to `CreateDeviceFlowSettings` — single source of truth), **L077** (new
+**Birko.Communication.OAuth.Providers.Tests** project, git-init'd + registered). Suites green: NFC 121,
+OAuth 54, OAuth.Providers 5.
 
 **Sub-batch D2 (CR-L065 … CR-L069) — Modbus + Network:** **L065** (dropped the always-overwritten dead
 `expectedMinResponse` parameter of `SendWriteRequest` + the four `8` call-site args), **L066** (documented

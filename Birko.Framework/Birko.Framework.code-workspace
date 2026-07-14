@@ -841,6 +841,10 @@
 			"path": "../../Framework.Tests/Birko.Communication.Tests"
 		},
 		{
+			"name": "Tests / Birko.Communication.OAuth.Providers.Tests",
+			"path": "../../Framework.Tests/Birko.Communication.OAuth.Providers.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.ViewModel.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests"
 		},

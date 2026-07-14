@@ -5432,7 +5432,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SerialNfcTransport.TransceiveAsync does synchronous blocking I/O on the calling thread
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Transports/SerialNfcTransport.cs:144`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14)
 - **Detail:** TransceiveAsync is declared async-returning but performs synchronous _port.Write and _port.Read (which blocks up to the 2000ms ReadTimeout) directly on the caller's thread, then returns Task.FromResult. It also ignores the cancellationToken entirely. Called via NfcReaderPort.Write/TransceiveApduAsync this blocks the caller. ReadTagAsync correctly wraps the blocking read in Task.Run; TransceiveAsync does not.
 - **Fix:** Wrap the Write/Read in Task.Run with a CancelAfter-linked token (mirroring ReadTagAsync), and observe cancellationToken.
 
@@ -5440,7 +5440,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** NfcReaderPort.Write/Open/Close block on async via GetAwaiter().GetResult() (sync-over-async)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Ports/NfcReaderPort.cs:104`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14) — documented: NfcReaderPort.Write is the synchronous IPort surface (blocks on the async transceive and drops the APDU response); callers wanting the reply / non-blocking network I/O use TransceiveApduAsync / ReadTagAsync
 - **Detail:** Open(), Close(), and Write() call `_transport.XxxAsync().GetAwaiter().GetResult()`. This is the AbstractPort sync contract so it is partly unavoidable, but HttpNfcTransport.ConnectAsync/TransceiveAsync perform real network I/O; blocking on them from a sync context risks thread-pool starvation / deadlock under a SynchronizationContext. Write() also discards the TransceiveAsync response, so a caller using the IPort.Write surface can never see the APDU reply.
 - **Fix:** Acceptable for the sync IPort surface, but document the blocking behavior; consider exposing the async methods as the primary API (already done via ReadTagAsync/TransceiveApduAsync) and noting Write() drops the response.
 
@@ -5448,7 +5448,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** NfcReaderSettings does not descend the Birko Settings chain; uses base.SetSettings convention not applied
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Ports/NfcReaderSettings.cs:8`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14) — documented as intentional: NfcReaderSettings stays on PortSettings (consistent with the whole Birko.Communication.Ports layer), not the Birko.Configuration RemoteSettings chain; network transports carry their target in ConnectionString
 - **Detail:** NfcReaderSettings extends Birko.Communication.Ports.PortSettings (the communication-port settings base), not the Birko.Configuration Settings -> PasswordSettings -> RemoteSettings chain documented in CLAUDE.md. For a network-attached reader the HTTP transport carries a base URL in a plain ConnectionString string instead of reusing RemoteSettings (Location/Port/UseSecure). This is consistent with the rest of Birko.Communication.Ports (AbstractPort uses PortSettings), so it may be intentional for this layer, but it diverges from the framework-wide settings convention and re-implements connection-target fields by hand.
 - **Fix:** Confirm whether the communication-ports layer is intended to stay on PortSettings; if network readers should integrate with the rest of the framework, consider composing RemoteSettings for the HTTP transport target.
 
@@ -5456,7 +5456,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** NdefRecord.GetText decodes UTF-16 records as little-endian (Encoding.Unicode)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.NFC\Models/NdefRecord.cs:96`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14)
 - **Detail:** The NFC Forum Text Record spec encodes UTF-16 text as UTF-16 *big-endian* unless a BOM is present. GetText() uses Encoding.Unicode (UTF-16LE) unconditionally for the isUtf16 case, which will mojibake big-endian payloads and ignores any BOM. UTF-8 (the common case) is handled correctly.
 - **Fix:** Detect a BOM at the start of the text bytes and otherwise default to Encoding.BigEndianUnicode for UTF-16 text records.
 
@@ -5464,7 +5464,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant duplicate refresh-token request in GetTokenAsync
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.OAuth\OAuthClient.cs:62-84`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14)
 - **Detail:** Lines 62-74 attempt a refresh whenever `_cachedToken?.RefreshToken != null`, catching OAuthException to 'fall through to normal flow'. But when GrantType == RefreshToken, the catch leaves `_cachedToken` (and thus its RefreshToken) unchanged, so the switch arm at lines 79-80 (`OAuthGrantType.RefreshToken when _cachedToken?.RefreshToken != null`) immediately re-issues BuildRefreshTokenParameters with the exact same just-failed refresh token, producing a second guaranteed-to-fail HTTP request. The duplicated refresh-attempt logic should be consolidated so a failed refresh under the RefreshToken grant surfaces directly instead of being retried identically.
 - **Fix:** After the catch, for GrantType == RefreshToken either rethrow or fall through to the default arm (which throws a clear 'no automatic acquisition' OAuthException) rather than repeating the same refresh call.
 
@@ -5472,7 +5472,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Device-code polling delays before the first poll
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.OAuth\OAuthClient.cs:214-221`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14)
 - **Detail:** The poll loop calls Task.Delay(interval) at the top of the loop body, before issuing the first token request. RFC 8628 expects the client to poll immediately and then wait `interval` between subsequent polls; the current order inserts an unnecessary initial wait (default 5s) before the very first attempt, slightly slowing every device-code completion. Not a correctness bug, but the delay should occur after a poll that returned authorization_pending, not before the first request.
 - **Fix:** Issue the first poll immediately, then Task.Delay before each subsequent poll (e.g. delay only after receiving authorization_pending/slow_down).
 
@@ -5480,7 +5480,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated OAuthSettings initialization between the two factory methods
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.OAuth.Providers\GitHubOAuthProvider.cs:27-58`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14)
 - **Detail:** CreateDeviceFlowClient (lines 29-38) and CreateDeviceFlowSettings (lines 48-57) build the exact same OAuthSettings object initializer (GrantType, ClientId, TokenEndpoint, DeviceAuthorizationEndpoint, Scope, DeviceCodePollingIntervalSeconds=5, DeviceCodeTimeoutSeconds=600). The two blocks can drift independently — e.g. if the polling interval or timeout default is changed in one but not the other, the client and the settings helpers would silently disagree.
 - **Fix:** Have CreateDeviceFlowClient delegate to CreateDeviceFlowSettings: 'return new OAuthClient(CreateDeviceFlowSettings(clientId, scope), httpClient);'. Single source of truth for the device-flow settings.
 
@@ -5488,7 +5488,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project for the public factory
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.OAuth.Providers\GitHubOAuthProvider.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster E, 2026-07-14)
 - **Detail:** There is no Birko.Communication.OAuth.Providers.Tests directory. Both public methods (CreateDeviceFlowClient, CreateDeviceFlowSettings) and the two endpoint constants are untested. The convention is that every new public functionality has corresponding xUnit + FluentAssertions tests. A cheap, valuable test would assert that CreateDeviceFlowSettings populates GrantType=DeviceCode, the correct GitHub endpoints, the default scope 'read:user', and the polling/timeout values — which would also have caught the duplication-drift risk above.
 - **Fix:** Add a small test project asserting the produced OAuthSettings field values (endpoints, grant type, default scope, polling=5, timeout=600) and that a non-null IOAuthClient is returned.
 
