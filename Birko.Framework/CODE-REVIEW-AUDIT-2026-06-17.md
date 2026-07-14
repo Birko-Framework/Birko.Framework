@@ -6304,7 +6304,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SqlConnection.Open() in sync BulkInsert without try/finally before the using-scoped catch
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MSSql\Database/Connector/MSSqlConnector.cs:276-292`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** connection.Open() (line 277) is outside the try block; if Open throws (transient network/login), the exception propagates raw rather than through InitException, inconsistent with the rest of the method's error handling. Minor, but the async variants have the same shape (OpenAsync outside try at 307/409/527).
 - **Fix:** Move Open()/OpenAsync() inside the try (the using still disposes the connection) for consistent error routing, or document that open failures intentionally bypass InitException.
 
@@ -6312,7 +6312,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetSchemaName hard-codes "dbo" with no override seam
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MSSql.View\Database/Connector/MSSqlConnector_View.cs:46-49`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetSchemaName always returns the literal "dbo". Indexed views (and SCHEMABINDING two-part names) break for any database whose target tables live in a non-dbo schema. The framework convention is protected virtual / protected setters for values derived classes may need to vary; this is a private const-like method.
 - **Fix:** Make it a protected virtual method or read the schema from connector/settings so consumers on non-dbo schemas can override it.
 
@@ -6320,7 +6320,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Aggregate indexed views are not guaranteed to satisfy SQL Server's COUNT_BIG(*) requirement
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MSSql.View\Database/Connector/MSSqlConnector_View.cs:149-157`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** For an indexed view WITH SCHEMABINDING that contains GROUP BY, SQL Server requires the select list to include COUNT_BIG(*). BuildSchemaBindingSelectSql reuses the generic aggregate/GROUP BY path (HasAggregateFields -> GROUP BY) but never injects COUNT_BIG(*), so creating a clustered index on an aggregate view (CreateIndexedView step 2) will fail at runtime unless the view type happens to declare a COUNT_BIG column. This is a feature-completeness gap rather than a crash in non-aggregate use, but it makes CreateIndexedView silently unusable for the aggregate case it appears to support.
 - **Fix:** Either auto-append COUNT_BIG(*) AS <col> for aggregate indexed views, or document/validate that aggregate views passed to CreateIndexedView must define a COUNT_BIG field and throw a clear error otherwise.
 
@@ -6328,7 +6328,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CLAUDE.md documents only 2 of ~10 members; whole indexed-view API undocumented
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MSSql.View\Database/Connector/MSSqlConnector_View.cs / CLAUDE.md`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The project CLAUDE.md Components section lists only BuildCreateViewSql and ViewExists, but the file also adds CreateIndexedView(+Async), DropIndexedView(+Async), IndexedViewExists(+Async), GetIndexedViewKeyColumns, BuildSchemaBindingSelectSql and helpers — the bulk of the file. Per the framework's maintenance convention, CLAUDE.md/README must reflect new public API.
 - **Fix:** Update CLAUDE.md (and README) to document the indexed-view methods, the SCHEMABINDING / unique-clustered-index behavior, and the SQL Server version requirements.
 

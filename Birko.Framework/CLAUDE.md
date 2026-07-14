@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, MSSql cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch U: **CR-L179** (Birko.Data.SQL.MSSql) + **CR-L180 … CR-L182** (Birko.Data.SQL.MSSql.View). All closed; **/code-review clean**.
+- **Bug (L179)** — the six native bulk methods (`BulkInsert`/`BulkUpdate`/`BulkDelete`, sync + async) opened the connection (and began the transaction) **outside** the `try`, so an `Open`/transient failure bypassed `InitException`. Moved `Open`/`OpenAsync` (+ `BeginTransaction(Async)`) inside the `try`; the transaction methods declare a nullable `SqlTransaction? transaction` outside, roll back via a null-check in `catch`, and dispose in a `finally` (replacing the former `using var transaction`).
+- **Convention (L180)** — `MSSqlConnector_View.GetSchemaName` (was a private hardcoded `"dbo"`) is now `protected virtual` so a derived connector can target a non-dbo schema in the SCHEMABINDING two-part names.
+- **Bug (L181)** — a new `EnsureIndexedViewSupported` guard makes `CreateIndexedView`/`CreateIndexedViewAsync` throw a clear `NotSupportedException` for aggregate (GROUP BY) views: SQL Server requires `COUNT_BIG(*)` in a SCHEMABINDING aggregate view's select list, which the generic aggregate SELECT builder doesn't emit — the clustered-index step would otherwise fail at runtime with an opaque error.
+- **Convention (L182)** — rewrote the MSSql.View CLAUDE.md Components section to document the full indexed-view API (Create/Drop/Exists ×sync+async, the key-column ladder, BuildSchemaBindingSelectSql, GetSchemaName) plus the SCHEMABINDING / aggregate-view limitations.
+- **Tests** — MSSql.Tests 21 (L179 bulk paths are live-SQL-Server-only; build-verified + code-review), MSSql.View.Tests 15 → 19 (aggregate `CreateIndexedView[Async]` → NotSupportedException; non-aggregate passes the guard; `GetSchemaName` override changes the two-part qualification).
+- Suites green: Birko.Data.SQL.MSSql.Tests 21, .MSSql.View.Tests 19. STORY-027 now **182/418**.
+
 ### Code-review remediation — low findings, Data.SQL.Caching cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch T: **CR-L177, CR-L178** — Birko.Data.SQL.Caching. Both closed; **/code-review clean** (comment/doc only, no logic change).
 - **Verify-first (L177)** — documented on `CachedAsyncDataBaseBulkStore.ResolveTableName` that resolving the table name at construction is intentional and correct: it depends only on T's mapping attributes (not connection/settings state) and `LoadTable` is static/cached, so it's cheap and safe before `SetSettings`/`Init`, feeding only the cache-key prefix. The finding itself said "no action required".

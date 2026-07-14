@@ -13,7 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**178 / 418 triaged** as of 2026-07-14. Next open is CR-L179 (Birko.Data.SQL.MSSql).
+**182 / 418 triaged** as of 2026-07-14. Next open is CR-L183 (Birko.Data.SQL.MySQL).
+
+**Batch U — MSSql cluster (CR-L179; CR-L180 … CR-L182):** Birko.Data.SQL.MSSql + .MSSql.View. All closed;
+**/code-review clean**. **L179** (bug): the six native bulk methods (`BulkInsert`/`Update`/`Delete` sync+async)
+opened the connection (and began the transaction) **outside** the `try`, so an `Open`/transient failure
+bypassed `InitException`. Moved `Open`/`OpenAsync` (and `BeginTransaction(Async)`) inside the `try`; the
+transaction-bearing methods now declare a nullable `SqlTransaction? transaction` outside, roll back via a
+null-check in `catch`, and dispose it in a `finally` (replacing the former `using var transaction`). **L180**
+(convention): `MSSqlConnector_View.GetSchemaName` (was a private hardcoded `"dbo"`) is now `protected virtual`
+so a derived connector can target a non-dbo schema in the SCHEMABINDING two-part names. **L181** (bug): a new
+`EnsureIndexedViewSupported` guard makes `CreateIndexedView`/`CreateIndexedViewAsync` throw a clear
+`NotSupportedException` for aggregate (GROUP BY) views (SQL Server requires `COUNT_BIG(*)` in a SCHEMABINDING
+aggregate view's select list, which the generic builder doesn't emit — the clustered-index step would fail
+at runtime with an opaque error). **L182** (convention): rewrote the MSSql.View CLAUDE.md Components section
+to document the full indexed-view API (Create/Drop/Exists ×sync+async, key-column ladder,
+BuildSchemaBindingSelectSql, GetSchemaName) + the SCHEMABINDING / aggregate-view limitations. **Tests:**
+MSSql.Tests 21 (L179 bulk paths are live-SQL-Server-only — build-verified/code-review), MSSql.View.Tests
+15 → 19 (aggregate CreateIndexedView[Async] → NotSupportedException; non-aggregate passes the guard;
+GetSchemaName override changes the two-part qualification). Suites green: MSSql 21, MSSql.View 19.
 
 **Batch T — Data.SQL.Caching cluster (CR-L177, CR-L178):** Birko.Data.SQL.Caching. Both closed;
 **/code-review clean** (comment/doc only, no logic change). **L177** (verify-first, "no action required"):
