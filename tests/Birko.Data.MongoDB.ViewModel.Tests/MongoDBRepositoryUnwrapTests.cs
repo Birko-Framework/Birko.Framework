@@ -101,4 +101,35 @@ public class MongoDBRepositoryUnwrapTests
 
         act.Should().Throw<ArgumentException>();
     }
+
+    // CR-L155/L156: the repos no longer override Destroy/DestroyAsync (which re-invoked Drop/DropAsync
+    // and dropped the collection twice, bypassing any wrapper on the second call). The base already
+    // destroys the store; Drop/DropAsync remain as explicit collection-drop helpers.
+    [Fact]
+    public void Async_repository_does_not_re_declare_DestroyAsync_but_keeps_DropAsync()
+    {
+        var type = typeof(AsyncMongoDBRepository<,>);
+
+        type.GetMethod("DestroyAsync",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+            .Should().BeNull("the base DestroyAsync already destroys the store — no override needed");
+
+        type.GetMethod("DropAsync",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+            .Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Sync_repository_does_not_re_declare_Destroy_but_keeps_Drop()
+    {
+        var type = typeof(MongoDBRepository<,>);
+
+        type.GetMethod("Destroy",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+            .Should().BeNull("the base Destroy already destroys the store — no override needed");
+
+        type.GetMethod("Drop",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.DeclaredOnly)
+            .Should().NotBeNull();
+    }
 }
