@@ -32,6 +32,7 @@ the tree up front.
 - STORY-025 — High findings (147) — `CR-H001 … CR-H147`
 - STORY-026 — Medium findings (275) — `CR-M001 …`
 - STORY-027 — Low findings (418) — `CR-L001 …`
+- STORY-028 — Integration-test tier (9, theme) — the Docker-gated findings pulled out of STORY-026: `CR-M089, M108, M109, M138, M159, M160, M164, M165, M166`
 
 ## Success criteria
 
