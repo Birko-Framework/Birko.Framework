@@ -6456,7 +6456,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** quoteChar is a single char but README/CLAUDE document a tuple for bracket-style quoting
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View.Migrations\Migrations\ViewSqlGenerator.cs:30`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The implementation uses a single char quoteChar for both opening and closing the identifier (QuoteIdentifier wraps with quoteStr on both sides, line 139-143). README.md line 15 and CLAUDE.md document quoteChar as a 'tuple (string open, string close)' for MSSQL '[ ]' and PostgreSQL/MySQL quoting. With a single char, MSSQL bracket quoting ([identifier]) is impossible and 'CREATE OR REPLACE VIEW' (line 50) is also not valid T-SQL (SQL Server uses CREATE OR ALTER VIEW). So the project effectively only supports ANSI/MySQL-style symmetric quoting despite the docs claiming broader provider support. Not a runtime bug, but the docs misstate the public API and supported providers.
 - **Fix:** Either update README.md/CLAUDE.md to state the single-char symmetric-quote limitation (and that MSSQL/bracket providers are out of scope), or widen the API to accept open/close quote strings and a configurable CREATE statement so provider-specific DDL can be emitted.
 
@@ -6464,7 +6464,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async repository exposes no connector accessor and no AddOnInit/RemoveOnInit, unlike the sync repo and the IDataBaseRepository contract
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.ViewModel\Repositories\AsyncDataBaseRepository.cs:27`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The sync DataBaseRepository exposes Connector plus AddOnInit/RemoveOnInit (via IDataBaseRepository<...>). The async version only exposes DataBaseStore and has the Connector accessor commented out (line 27), and implements no async equivalent of the IDataBaseRepository contract. This is an API-parity inconsistency between the sync and async halves of the same project; combined with the type bug above it leaves the async path with no usable way to reach the connector.
 - **Fix:** Once the TConnector generic fix is in, restore a TConnector? Connector => DataBaseStore?.Connector accessor and consider an IAsyncDataBaseRepository interface mirroring the sync one.
 
@@ -6472,7 +6472,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead commented-out ReadView block left in DataBaseRepository
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.ViewModel\Repositories\DataBaseRepository.cs:60-79`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** A ~20-line commented-out ReadView<TView> implementation (referencing a no-longer-present GetConnector()/SelectView API) is retained in the file. It is dead code that no longer matches the current connector API and should be removed (git preserves history).
 - **Fix:** Delete the commented block.
 

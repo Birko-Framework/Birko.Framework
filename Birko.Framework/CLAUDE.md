@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, SQL.View.Migrations + SQL.ViewModel (EPIC-014 / STORY-027) (2026-07-14)
+Batch AA: **CR-L198** (Birko.Data.SQL.View.Migrations) + **CR-L199, CR-L200** (Birko.Data.SQL.ViewModel). All closed; **/code-review clean**.
+- **Convention/docs (L198)** — rewrote the `ViewSqlGenerator` docs (README + CLAUDE) to the real API: a single `char quoteChar` applied **symmetrically** (default `"`), supporting ANSI/PostgreSQL + MySQL only; SQL Server bracket quoting `[ ]` and T-SQL `CREATE OR ALTER VIEW` are out of scope (use Birko.Data.SQL.MSSql.View). The docs had claimed a `(open, close)` tuple + broad provider support the single-char API can't deliver.
+- **Convention (L199)** — `AsyncDataBaseRepository` gains `AddOnInit`/`RemoveOnInit` (delegating to the unwrapping `DataBaseStore`) for parity with the sync repo; the `Connector` accessor was already restored under CR-C17 (verify-first).
+- **Cleanup (L200)** — deleted the ~20-line commented-out `ReadView<TView>` block in the sync `DataBaseRepository` (referenced a removed `GetConnector()`/`SelectView` API).
+- **Tests** — SQL.ViewModel.Tests 10 → 11 (async `AddOnInit`/`RemoveOnInit` fire/unfire via `Connector.DoInit()` over a real SQLite store).
+- Suite green: Birko.Data.SQL.ViewModel.Tests 11. STORY-027 now **200/418**.
+
 ### Code-review remediation — low findings, Data.SQL.View cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch Z: **CR-L195, CR-L196, CR-L197** — Birko.Data.SQL.View. All closed; **/code-review clean**.
 - **Bug (L195)** — aggregate view columns are aliased by the **unique view-property name** (`field.Property.Name`) in both `ViewSelectSqlBuilder` (the `AS` alias) and `GetPersistentViewSelectFields` (the queried column), instead of the aggregate **function name** (`FunctionField.Name` = "COUNT"/"SUM"). Two aggregates of the same function collided on a duplicate column name in a persistent view's DDL, and the alias must equal the column the persistent query selects back. (Updated the MSSql.View schema-binding test assertions to the new `AS [OrderCount]`/`AS [TotalSpent]` aliases.)

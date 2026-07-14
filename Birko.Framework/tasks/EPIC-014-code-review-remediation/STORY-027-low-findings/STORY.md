@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**197 / 418 triaged** as of 2026-07-14. Next open is CR-L198 (Birko.Data.SQL.View.Migrations).
+**200 / 418 triaged** as of 2026-07-14. Next open is CR-L201 (Birko.Data.SQL.Views).
+
+**Batch AA — SQL.View.Migrations + SQL.ViewModel (CR-L198; CR-L199, CR-L200):** All closed;
+**/code-review clean**. **L198** (convention, docs): rewrote the `ViewSqlGenerator` docs in
+Birko.Data.SQL.View.Migrations README + CLAUDE to state the real API — a single `char quoteChar` applied
+**symmetrically** (default `"`), supporting ANSI/PostgreSQL + MySQL only; **SQL Server bracket quoting
+`[ ]` and T-SQL `CREATE OR ALTER VIEW` are out of scope** (use Birko.Data.SQL.MSSql.View) — the docs had
+claimed a `(open, close)` tuple and broad provider support that the single-char API can't deliver.
+**L199** (convention): `AsyncDataBaseRepository` gains `AddOnInit`/`RemoveOnInit` (delegating to the
+unwrapping `DataBaseStore`) for parity with the sync `DataBaseRepository`; the `Connector` accessor was
+already restored under CR-C17 (verify-first). **L200** (cleanup): deleted the ~20-line commented-out
+`ReadView<TView>` block in the sync `DataBaseRepository` (referenced a removed `GetConnector()`/`SelectView`
+API). **Tests:** SQL.ViewModel.Tests 10 → 11 (async `AddOnInit`/`RemoveOnInit` fire/unfire via
+`Connector.DoInit()` over a real SQLite store). Suite green: SQL.ViewModel.Tests 11.
 
 **Batch Z — Data.SQL.View cluster (CR-L195, CR-L196, CR-L197):** Birko.Data.SQL.View. All closed;
 **/code-review clean**. **L195** (bug): aggregate view columns are now aliased by the **unique view-property
