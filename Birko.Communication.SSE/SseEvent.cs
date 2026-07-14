@@ -49,23 +49,23 @@ namespace Birko.Communication.SSE
                 // A colon-prefixed line with no field name is an SSE comment.
                 foreach (var line in Comment.Split('\n'))
                 {
-                    sb.AppendLine($": {line.TrimEnd('\r')}");
+                    sb.Append($": {line.TrimEnd('\r')}").Append('\n');
                 }
             }
 
             if (!string.IsNullOrEmpty(Id))
             {
-                sb.AppendLine($"id: {Id}");
+                sb.Append($"id: {Id}").Append('\n');
             }
 
             if (!string.IsNullOrEmpty(Event))
             {
-                sb.AppendLine($"event: {Event}");
+                sb.Append($"event: {Event}").Append('\n');
             }
 
             if (Retry.HasValue)
             {
-                sb.AppendLine($"retry: {Retry.Value}");
+                sb.Append($"retry: {Retry.Value}").Append('\n');
             }
 
             if (!string.IsNullOrEmpty(Data))
@@ -74,12 +74,12 @@ namespace Birko.Communication.SSE
                 var lines = Data.Split('\n');
                 foreach (var line in lines)
                 {
-                    sb.AppendLine($"data: {line.TrimEnd('\r')}");
+                    sb.Append($"data: {line.TrimEnd('\r')}").Append('\n');
                 }
             }
 
             // Blank line to end the event
-            sb.AppendLine();
+            sb.Append('\n');
 
             return sb.ToString();
         }
