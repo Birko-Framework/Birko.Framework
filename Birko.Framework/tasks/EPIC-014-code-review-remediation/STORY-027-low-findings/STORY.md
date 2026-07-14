@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**40 / 418 triaged** as of 2026-07-14 (batch 3 done).
+**47 / 418 triaged** as of 2026-07-14 (Communication sub-batch A done).
+
+**Batch 4 — Communication cluster (in progress).** Worked in sub-batches by project.
+- **Sub-batch A (CR-L041 … CR-L047) — core + Bluetooth:** **L041** (`PortSettings.GetID` typo
+  `AbstratPort`→`AbstractPort`), **L042** (`AbstractPort.InvokeProcessData` public→protected — fired
+  internally by derived ports, not part of the IPort contract), **L043** (`IPort : IDisposable` +
+  `AbstractPort.Dispose()`→`Close()` with a `_disposed` guard; the 3 ports that already had `Dispose`
+  — Serial/NFC/BluetoothLE — became `override`), **L044** (new **Birko.Communication.Tests** project,
+  git-initialized + registered in `.slnx`/`.code-workspace`, 6 hardware-free tests via an in-memory
+  `AbstractPort` subclass). Bluetooth (platform-gated): **L046** (read worker surfaces faults via a new
+  `ReadError` event instead of a bare `catch{break;}`), **L045** (WinRT discovery keys by `args.Id`
+  instead of the not-always-present address property — code-review-only), **L047** (Linux P/Invoke uses
+  `Marshal.SizeOf<SockaddrL2>()` + `[StructLayout(Sequential)]` — compile-checked with `DefineConstants=LINUX`).
+  Suites green: Communication.Tests 6; Bluetooth/Hardware/NFC test projects build clean.
+
+**Batch 3 (2026-07-14) — Caching cluster (CR-L034 … CR-L040, 7 findings):** Birko.Caching + .Hybrid + .Redis.
 
 **Batch 3 (2026-07-14) — Caching cluster (CR-L034 … CR-L040, 7 findings):** Birko.Caching + .Hybrid + .Redis.
 **Bugs fixed:** L036 (`MemoryCache.GetAsync` degrades a type-mismatch to a Miss via `is T` instead of the

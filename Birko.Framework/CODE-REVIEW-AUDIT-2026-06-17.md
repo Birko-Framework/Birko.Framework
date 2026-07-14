@@ -5200,7 +5200,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Typo in PortSettings.GetID() identifier string
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication\Ports\AbstractPort.cs:14`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14)
 - **Detail:** GetID() returns string.Format("AbstratPort|{0}", Name) — 'AbstratPort' is misspelled (missing 'c'). If this ID is used as a dictionary/cache key or persisted, the typo is baked into stored data and any consumer matching on the prefix must replicate the misspelling.
 - **Fix:** Change the format prefix to "AbstractPort|{0}" (verify no consumer relies on the current spelling first).
 
@@ -5208,7 +5208,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** InvokeProcessData() is public on AbstractPort but missing from IPort
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication\Ports\AbstractPort.cs:107`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14)
 - **Detail:** AbstractPort exposes public void InvokeProcessData() to fire the OnProcessData event, but IPort declares only Subscribe/UnSubscribe. Callers holding an IPort reference cannot trigger the notification, so the contract is asymmetric. Either it should be part of the interface, or it should be protected (only the derived port fires it after writing data, which the delegate's doc comment 'called after the port has sended data' implies).
 - **Fix:** Make InvokeProcessData protected (preferred, matches the 'fired internally after send' semantics) or add it to IPort if external triggering is intended.
 
@@ -5216,7 +5216,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AbstractPort does not implement IDisposable despite wrapping OS ports
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication\Ports\AbstractPort.cs:22`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14)
 - **Detail:** IPort/AbstractPort model an openable/closable port (Open/Close), which in concrete backends (serial, USB, network) holds unmanaged OS handles. Neither IPort nor AbstractPort implements IDisposable, so consumers cannot use 'using' and there is no finalizer/cleanup contract. The project's own CLAUDE.md Best Practices section #1 states 'Resource cleanup - Always implement IDisposable'. Without it on the base type, each concrete port must reinvent disposal and risk handle leaks.
 - **Fix:** Have IPort extend IDisposable (Dispose calling Close), and provide a virtual Dispose pattern on AbstractPort.
 
@@ -5224,7 +5224,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project for Birko.Communication
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14)
 - **Detail:** Sibling communication projects have .Tests companions (GraphQL.Tests, gRPC.Tests, OAuth.Tests, REST.Tests, WebSocket.Tests, etc.) but Birko.Communication has none. The concrete behavior here is testable without hardware: PortSettings.GetID(), AbstractPort.Clear/IsEmpty/GetData over ReadData, and the SubscribeProcessData/UnSubscribeProcessData/InvokeProcessData event wiring (subscribe -> invoke fires, unsubscribe -> invoke does not fire). Noting only per instructions.
 - **Fix:** Add a small Birko.Communication.Tests project covering the non-abstract members via a trivial concrete AbstractPort subclass.
 
@@ -5232,7 +5232,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Windows discovery RSSI Updated handler keys on a property that is not requested
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLEDevices.cs:136-156`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14) — WinRT (#if WINDOWS), code-review-only (not compilable off a Windows TFM): Added/Updated now key discoveredDevices by args.Id (present on both) instead of re-reading the address property from the update
 - **Detail:** The Updated handler looks up devices by 'System.Devices.Aep.DeviceAddress' from DeviceInformationUpdate.Properties, but DeviceInformationUpdate only carries the properties that changed (and the requested set). RSSI ('System.Devices.Aep.SignalStrength') is requested, but the address may not be present on update events, so the lookup frequently fails and RSSI is never updated. The watcher is also never given a way to surface advertisement/service data, so DeviceAdvertisesService() is a hardcoded 'return true' placeholder.
 - **Fix:** Track devices by DeviceInformationUpdate.Id (always present) rather than re-reading the address property on updates.
 
@@ -5240,7 +5240,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Read worker swallows all exceptions with a bare catch
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:482-498`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14)
 - **Detail:** ReadWorker wraps the per-iteration body in catch { break; } with no logging or error propagation, so any failure (including programming errors) silently terminates the read loop and the only signal is a possible reconnect. Combined with the no-op Windows ReadWindowsWorker (which never reads anything — Windows data path is unimplemented), the Windows port effectively never delivers inbound data.
 - **Fix:** At minimum surface the exception (event/log) before breaking; implement the Windows ValueChanged notification path so the Windows side actually reads, rather than the current no-op poll.
 
@@ -5248,7 +5248,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Linux SockaddrL2 uses sizeof on a struct without unsafe / Marshal.SizeOf
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Bluetooth\Ports/BluetoothLE.cs:241,308-315`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster A, 2026-07-14) — LINUX (#if LINUX) branch, compile-checked with -p:DefineConstants=LINUX: connect uses (uint)Marshal.SizeOf<SockaddrL2>() and SockaddrL2/BluetoothAddress carry [StructLayout(Sequential)] (BluetoothAddress Pack=1)
 - **Detail:** connect(_socket, ref sockaddr, sizeof(SockaddrL2)) uses the sizeof operator on a user-defined struct, which is only allowed in an unsafe context. As written this would not compile under the LINUX symbol (the code is behind #if LINUX so it likely has never been compiled). Marshal.SizeOf<SockaddrL2>() is the safe form. The struct layout also lacks [StructLayout(LayoutKind.Sequential)], so field order/packing for the P/Invoke is not guaranteed.
 - **Fix:** Use (uint)Marshal.SizeOf<SockaddrL2>() and annotate the interop structs with [StructLayout(LayoutKind.Sequential)] (the address struct may need Pack=1).
 

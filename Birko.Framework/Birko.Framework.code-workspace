@@ -837,6 +837,10 @@
 			"path": "../../Framework.Tests/Birko.Communication.Hardware.Tests"
 		},
 		{
+			"name": "Tests / Birko.Communication.Tests",
+			"path": "../../Framework.Tests/Birko.Communication.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.ViewModel.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.ViewModel.Tests"
 		},

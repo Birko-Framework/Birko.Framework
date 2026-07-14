@@ -281,6 +281,7 @@
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.ElasticSearch.Tests/Birko.BackgroundJobs.ElasticSearch.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.BackgroundJobs.RavenDB.Tests/Birko.BackgroundJobs.RavenDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Caching.Redis.Tests/Birko.Caching.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Communication.Tests/Birko.Communication.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Bluetooth.Tests/Birko.Communication.Bluetooth.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Network.Tests/Birko.Communication.Network.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.REST.Server.Tests/Birko.Communication.REST.Server.Tests.csproj" />
