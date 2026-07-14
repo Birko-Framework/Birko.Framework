@@ -64,4 +64,29 @@ public class ProviderRateLimiterTests
         limiter.CanMakeRequest("p").Should().BeTrue();
         limiter.GetRetryAfter("p").Should().BeNull();
     }
+
+    [Fact]
+    public void Ctor_DuplicateProvidersDifferingByCase_LastWinsWithoutThrowing()
+    {
+        // Regression for CR-L013: the ToDictionary build threw ArgumentException when two config
+        // entries lowercased to the same key (e.g. "OpenAI" and "openai"). Build is now last-wins.
+        var config = new RateLimitConfiguration
+        {
+            Enabled = true,
+            ProviderLimits =
+            {
+                new ProviderRateLimit { Provider = "OpenAI", RequestsPerMinute = 1 },
+                new ProviderRateLimit { Provider = "openai", RequestsPerMinute = 5 },
+            }
+        };
+
+        ProviderRateLimiter? limiter = null;
+        var act = () => limiter = new ProviderRateLimiter(config);
+        act.Should().NotThrow();
+
+        // Last-wins: the second entry's limit of 5 applies — after one recorded request,
+        // the provider is still under limit (it would be blocked if the first entry's 1 had won).
+        limiter!.RecordRequest("openai");
+        limiter.CanMakeRequest("openai").Should().BeTrue();
+    }
 }
