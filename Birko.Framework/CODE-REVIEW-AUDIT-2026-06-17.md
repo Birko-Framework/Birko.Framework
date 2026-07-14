@@ -5904,7 +5904,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async bulk UpdateCoreAsync upserts non-existent items instead of skipping them
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON\Stores\AbstractAsyncJsonStore.cs:258`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** UpdateCoreAsync (bulk) iterates items with a Guid and writes `_items[item.Guid.Value] = item` without checking ContainsKey, so updating an entity that does not exist silently inserts it. Every other update path in the family guards on ContainsKey first: single-item UpdateCoreAsync (line 86), sync single UpdateCore (AbstractJsonStore.cs:85) and sync bulk UpdateCore (AbstractJsonStore.cs:197). This makes async-bulk Update behave as an upsert, inconsistent with the rest and with typical store Update semantics.
 - **Fix:** Add the `_items.ContainsKey(item.Guid.Value)` check before assigning, matching the sync bulk UpdateCore.
 
@@ -5912,7 +5912,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AsyncJsonBatchStore.SetSettings(Settings) hard-casts to BatchSettings
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON\Stores\AsyncJsonBatchStore.cs:55`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SetSettings(Settings settings) does `SetSettings((BatchSettings)settings)`, an explicit cast that throws InvalidCastException with an opaque message when a plain Settings (non-BatchSettings) is supplied. The sync JsonBatchStore.SetSettings (JsonBatchStore.cs:48) and JsonBatchBulkStore (line 48) handle this with a clear `is not BatchSettings` check throwing InvalidDataException.
 - **Fix:** Use the same `if (settings is not BatchSettings bs) throw ...; SetSettings(bs);` pattern as the sync batch stores.
 
@@ -5920,7 +5920,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** LoadData dereferences item.Guid!.Value with no null guard (NRE on malformed file)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON\Stores\JsonStore.cs:199`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** LoadData loops `foreach (var item in items) _items.Add(item.Guid!.Value, item);` using the null-forgiving `!` with no HasValue check. A JSON record with a missing/null guid produces a NullReferenceException. The async LoadDataAsync (AsyncJsonStore.cs:211) and the separate/batch loaders all correctly guard with `if (item.Guid.HasValue)`. Same unguarded `item.Guid!.Value` appears in JsonBatchStore.cs:91 and JsonBatchBulkStore.cs:79.
 - **Fix:** Guard each item with `if (item?.Guid.HasValue == true)` before Add, matching the async/separate loaders.
 
@@ -5928,7 +5928,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Sync/async single-file stores diverge in GetPath null-check (Location vs Name)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON\Stores\AsyncJsonStore.cs:132`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** JsonStore.GetPath() returns null when Location OR Name is empty (JsonStore.cs:130), but AsyncJsonStore.GetPath() only checks Name (line 132), relying on GetDirectory() to reject an empty Location. Behavior converges in practice but the two should not diverge; minor maintenance hazard.
 - **Fix:** Align the two GetPath() null guards for clarity.
 
@@ -5936,7 +5936,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project exists for the repositories
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON.ViewModel`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no Birko.Data.JSON.ViewModel.Tests sibling directory. The two public repository types (JsonRepository, AsyncJsonRepository) carry behavior worth covering: the constructor store-type validation (ArgumentException when a non-JsonStore store is passed) and the JsonStore unwrap property (GetUnwrappedStore through a tenant wrapper). The framework convention requires every new public functionality to have corresponding tests. Note that the validation/unwrap logic is shared with the other .ViewModel siblings, so coverage may exist transitively, but this project has none of its own.
 - **Fix:** Add a small Birko.Data.JSON.ViewModel.Tests project (xUnit + FluentAssertions) asserting: (1) constructing with a non-JsonStore store throws ArgumentException, (2) constructing with a raw AsyncJsonStore/JsonStore succeeds and JsonStore resolves, (3) JsonStore resolves through a tenant wrapper.
 
@@ -5944,7 +5944,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused using directives
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.JSON.ViewModel\Repositories/JsonRepository.cs:4, Repositories/AsyncJsonRepository.cs:3`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** JsonRepository.cs has 'using Birko.Configuration;' (line 4) which is not referenced. AsyncJsonRepository.cs has 'using Birko.Configuration;' (line 3) which is not referenced. Harmless (no warnings-as-errors for unused usings in this framework) but dead.
 - **Fix:** Remove the unused 'using Birko.Configuration;' from both files.
 

@@ -13,7 +13,24 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**128 / 418 triaged** as of 2026-07-14. Next open is CR-L129 (Birko.Data.JSON).
+**134 / 418 triaged** as of 2026-07-14. Next open is CR-L135 (Birko.Data.JSON.ViewModel or next project).
+
+**Batch K — Data.JSON cluster (CR-L129 … CR-L134):** JSON + JSON.ViewModel.
+**Bugs fixed:** L129 (async bulk `UpdateCoreAsync` guards `ContainsKey` before writing + only saves when
+something changed — was silently upserting a non-existent item, unlike single-item + sync-bulk Update),
+L130 (`AsyncJsonBatchStore.SetSettings(Settings)` uses `is not BatchSettings` → clear `InvalidDataException`
+instead of an opaque `InvalidCastException` from the old `(BatchSettings)` hard-cast, matching the sync
+batch stores), L131 (`JsonStore.LoadData` + `JsonBatchStore` + `JsonBatchBulkStore` loaders guard
+`item?.Guid.HasValue == true` before `_items.Add` — a record with a missing/null guid used to NRE via the
+`Guid!.Value`; matches the async/separate loaders). **Convention:** L132 (`AsyncJsonStore.GetPath` guards
+both `Location` and `Name`, aligning with the sync `JsonStore.GetPath` — behavior already converged via
+`GetDirectory()`). **Cleanup:** L134 (removed the unused `using Birko.Configuration;` from both
+JSON.ViewModel repo files — `using Birko.Data.Stores;` kept, needed for the extension methods). **New
+project:** L133 (**Birko.Data.JSON.ViewModel.Tests** — sync/async repo ctor guard + JsonStore unwrap, 5
+tests; git-init'd + registered in `.slnx`/`.code-workspace`). **Tests:** JSON.Tests +4 (async-bulk no-upsert,
+batch SetSettings clear-throw + accept, LoadData null-guid skip via a hand-written camelCase file located
+through the public `GetPath()`). **/code-review: clean (no findings).** Suites green: JSON 18,
+JSON.ViewModel 5.
 
 **Batch J — EventSourcing + InfluxDB + InfluxDB.ViewModel + InMemory (CR-L120 … CR-L128):**
 **Fixes:** L122 (InfluxDB `MapRecordToModel` outer catch now rethrows `InvalidOperationException` with

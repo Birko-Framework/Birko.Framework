@@ -337,6 +337,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.Composition.Tests/Birko.Data.Composition.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.ViewModel.Tests/Birko.Data.ElasticSearch.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.InfluxDB.ViewModel.Tests/Birko.Data.InfluxDB.ViewModel.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.JSON.ViewModel.Tests/Birko.Data.JSON.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.MongoDB.ViewModel.Tests/Birko.Data.MongoDB.ViewModel.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.RavenDB.ViewModel.Tests/Birko.Data.RavenDB.ViewModel.Tests.csproj" />
   </Folder>
