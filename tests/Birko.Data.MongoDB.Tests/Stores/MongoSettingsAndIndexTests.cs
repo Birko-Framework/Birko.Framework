@@ -63,6 +63,31 @@ public class MongoSettingsAndIndexTests
         settings.GetConnectionString().Should().NotContain("@");
     }
 
+    // CR-L153: ReplicaSet is optional (string?, no null! suppression). A fresh Settings has a null
+    // ReplicaSet and the connection string must omit replicaSet=; LoadFrom round-trips the null.
+    [Fact]
+    public void ReplicaSet_defaults_to_null_and_is_omitted_from_connection_string()
+    {
+        var settings = new Settings { Location = "localhost", Port = 27017 };
+
+        settings.ReplicaSet.Should().BeNull();
+        settings.GetConnectionString().Should().NotContain("replicaSet");
+    }
+
+    [Fact]
+    public void LoadFrom_copies_replicaset_including_a_null_value()
+    {
+        var withRs = new Settings { Location = "localhost", ReplicaSet = "rs0" };
+        var target = new Settings();
+        target.LoadFrom(withRs);
+        target.ReplicaSet.Should().Be("rs0");
+
+        var withoutRs = new Settings { Location = "localhost" };
+        var target2 = new Settings { ReplicaSet = "stale" };
+        target2.LoadFrom(withoutRs);
+        target2.ReplicaSet.Should().BeNull();
+    }
+
     [Fact]
     public void GetId_composes_location_port_name_username()
     {
