@@ -2,7 +2,7 @@
 id: TASK-058
 parent: null
 feature: null
-status: todo  # todo | in-progress | review | blocked | done | cancelled
+status: done  # todo | in-progress | review | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-14
@@ -99,6 +99,20 @@ emit `INTEGER PRIMARY KEY AUTOINCREMENT` as one adjacent clause (and ensure the 
 - **Bonus:** if option (a) is taken, the CR-M166 SQL-sync `GetLastSyncTime`/`SetLastSyncTime` CRUD
   round-trips can then run on SQLite offline — **potentially closing CR-M166 without Docker** (verify
   and, if so, update STORY-028 cluster 1 + the audit).
+
+## Resolution (2026-07-14, done)
+
+Chose **option (a)** + the PK-adjacency/type fix. `SqLiteConnector.FieldDefinition` now:
+- emits `INTEGER PRIMARY KEY AUTOINCREMENT` (adjacent, type forced to `INTEGER`) when a field is
+  **both** primary and autoincrement, and
+- emits a **plain column** (no `AUTOINCREMENT`) for a non-PK `[IncrementField]` — the caller assigns
+  the value; documented inline that MSSql (`IDENTITY`) / PostgreSQL (`SERIAL`) support real non-PK
+  identity and differ.
+
+**Verified offline (no Docker):** `Birko.Data.SQL.SqLite.Tests` 24 green (no regression); the dual-key
+`SqlSyncKnowledgeItem.CreateTable` now produces valid DDL and the full SQL sync-store CRUD round-trip
+runs on a real SQLite `.db` (`Birko.Data.Sync.Sql.Tests` 2 → 6). **This closed CR-M166 offline** and
+removed it from STORY-028 (integration-test tier).
 
 ## Notes
 

@@ -5,17 +5,19 @@ status: planned
 created: 2026-07-14
 source: CODE-REVIEW-AUDIT-2026-06-17.md
 theme: integration-test-tier
-finding-count: 9
-finding-ids: CR-M089, CR-M108, CR-M109, CR-M138, CR-M159, CR-M160, CR-M164, CR-M165, CR-M166
+finding-count: 8
+finding-ids: CR-M089, CR-M108, CR-M109, CR-M138, CR-M159, CR-M160, CR-M164, CR-M165
+closed-offline: CR-M166 (via TASK-058 — SqLiteConnector DDL fix; no Docker needed after all)
 ---
 
 # Integration-test tier — the Docker-gated remediation findings
 
 ## Why this is its own story
 
-STORY-026 (medium findings) closed **266 / 275** entirely with **offline** tests — the Birko suites
+STORY-026 (medium findings) closed **267 / 275** entirely with **offline** tests — the Birko suites
 are offline by design (fake `DbCommand`, `Birko.Data.InMemory`, lazy SDK clients, mock `IDatabase`,
-loopback sockets). The remaining **9** findings are not "small leftovers": each requires observing
+loopback sockets). The remaining **8** findings (was 9 — CR-M166 closed offline via TASK-058) are not
+"small leftovers": each requires observing
 **real server behaviour** that no in-process fake reproduces — multi-node scroll paging, Flux
 aggregation semantics, transactional rollback of a partial bulk write, cross-tenant document
 filtering, `AUTOINCREMENT` DDL on a real engine, genuine-async deadlock behaviour.
@@ -44,12 +46,15 @@ up and **skips cleanly** with Docker down; CI has an opt-in integration job.
 ---
 
 ## Cluster 1 — SQL sync + MSSql bulk atomicity · MSSql/Postgres container
-**Findings:** CR-M166 (partial), CR-M138 (deferred)
+**Findings:** CR-M138 (deferred) · CR-M166 (✅ closed offline via TASK-058 — kept below for provenance)
 
-- **CR-M166** — `Birko.Data.Sync.Sql.Tests` already covers `CreateKnowledgeItem` (done offline). The
-  `GetLastSyncTime`/`SetLastSyncTime` CRUD paths **cannot run on SQLite**: the model's non-PK
-  `[IncrementField] Id` alongside `[PrimaryField] Guid` makes `SqLiteConnector` emit invalid
-  `INTEGER NOT NULL AUTOINCREMENT` DDL. Needs a real MSSql/Postgres backend.
+- **CR-M166 — ✅ CLOSED OFFLINE (no Docker), 2026-07-14.** The blocker was a real connector bug, not a
+  limitation to route around: [TASK-058](../../_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md)
+  fixed `SqLiteConnector` DDL (AUTOINCREMENT scoped to `INTEGER PRIMARY KEY`; a non-PK
+  `[IncrementField]` is now a plain column), so the dual-key `SqlSyncKnowledgeItem` creates and the
+  full SQL sync-store CRUD round-trip runs on a real SQLite `.db`. `Birko.Data.Sync.Sql.Tests` 2 → 6.
+  **No MSSql/Postgres container needed for M166.** (A live MSSql/Postgres would still add value for
+  provider-specific behaviour, but it is no longer required to close the finding.)
   - **Spin-off → [TASK-058](../../_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md)
     (SqLiteConnector dual-key AUTOINCREMENT DDL).** This surfaced a genuine connector bug (SQLite
     allows `AUTOINCREMENT` only on `INTEGER PRIMARY KEY`; `FieldDefinition` emits it for any
@@ -131,7 +136,7 @@ size-limit enforced; aggregation parsed correctly against a live index.
 | Order | Cluster | Fixture | Effort | Findings |
 |---|---|---|---|---|
 | 0 | Harness (TASK-028-00) | — | M | prerequisite |
-| 1 | SQL sync + MSSql bulk | MSSql/Postgres | S–M | M166, M138 |
+| 1 | MSSql bulk atomicity | MSSql/Postgres | S–M | M138 (M166 already closed offline via TASK-058) |
 | 2 | InfluxDB migrations | InfluxDB 2.x | M | M108, M109 |
 | 3 | Cosmos sync | Cosmos emulator | M | M159, M160 |
 | 4 | RavenDB sync | RavenDB test server | M | M164, M165 |

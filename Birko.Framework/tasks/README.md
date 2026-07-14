@@ -7,11 +7,11 @@ _Generated 2026-07-14. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 23      | —     |
-| todo         | —     | —       | 35    |
+| todo         | —     | —       | 34    |
 | in-progress  | 4     | 3       | 1     |
 | review       | —     | —       | 5     |
 | blocked      | —     | —       | 0     |
-| done         | 2     | 16      | 17    |
+| done         | 2     | 16      | 18    |
 | cancelled    | 0     | 0       | 0     |
 
 ## In progress now
@@ -105,9 +105,9 @@ _Generated 2026-07-14. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 - **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (864 findings; tasks extracted on demand from CODE-REVIEW-AUDIT-2026-06-17.md)
   - STORY-024 [Critical findings (24)](EPIC-014-code-review-remediation/STORY-024-critical-findings/STORY.md) — done (CR-C01 … CR-C24)
   - STORY-025 [High findings (147)](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — done (CR-H001 … CR-H147)
-  - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — in-progress (266/275; the last 9 are Docker-gated → STORY-028)
+  - STORY-026 [Medium findings (275)](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — in-progress (267/275; the last 8 are Docker-gated → STORY-028)
   - STORY-027 [Low findings (418)](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — planned (CR-L001 …)
-  - STORY-028 [Integration-test tier (9, theme)](EPIC-014-code-review-remediation/STORY-028-integration-test-tier/STORY.md) — planned (the Docker-gated findings pulled from STORY-026: M089/108/109/138/159/160/164/165/166)
+  - STORY-028 [Integration-test tier (8, theme)](EPIC-014-code-review-remediation/STORY-028-integration-test-tier/STORY.md) — planned (Docker-gated findings from STORY-026: M089/108/109/138/159/160/164/165; M166 closed offline via TASK-058)
 - **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework](EPIC-015-birko-xaml-ui-framework/EPIC.md) — done (8 stories + follow-up controls: Slider, field-type parity, date/time pickers, multi-select/tags/file)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Restyled Slider (Tier-1 gap) + Range Form field type (P3, ai) — **done**
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Form field-type parity with b-form: wire existing controls + FormField props (P2, ai) — **done**
@@ -142,7 +142,7 @@ _Generated 2026-07-14. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 ### Loose tasks (no parent epic)
 
 - [ ] [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Web,Framework.Tests,Consumers} + aicode bucket (P1, ai) 🔍 review
-- [ ] [TASK-058](_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-PK increment fields (dual-key models) (P2, ai) — offline-fixable; may unblock CR-M166
+- [x] [TASK-058](_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-PK increment fields (dual-key models) (P2, ai) — **done** (fixed offline; closed CR-M166)
 
 <details>
 <summary>Completed (1 epic)</summary>

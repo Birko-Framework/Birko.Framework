@@ -13,7 +13,10 @@ finding-ids: CR-M001 …
 
 ## Progress
 
-**266 / 275 triaged** (as of 2026-07-13). Verify-first paid off repeatedly: several test-gap findings
+**267 / 275 triaged** (as of 2026-07-14). **CR-M166** was reclassified out of the Docker pile and
+**closed offline** after [TASK-058](../../_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md)
+fixed the underlying `SqLiteConnector` AUTOINCREMENT DDL bug — the SQL sync-store CRUD now round-trips
+on SQLite. Remaining 8 open are all Docker/live-server (STORY-028). Verify-first paid off repeatedly: several test-gap findings
 were already resolved by test projects created since the audit, and CR-M006 / CR-M033 / CR-M053 / CR-M127 were false positives / already-resolved.
 
 **Batch 58 (2026-07-13):** closed the last three offline-runnable findings — the view-SELECT-builder
