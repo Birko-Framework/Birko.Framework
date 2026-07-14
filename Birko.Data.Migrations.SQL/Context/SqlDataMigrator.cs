@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using Birko.Data.Migrations.Context;
+using Birko.Data.SQL.Connectors;
 
 namespace Birko.Data.Migrations.SQL.Context
 {
@@ -11,12 +12,19 @@ namespace Birko.Data.Migrations.SQL.Context
     {
         private readonly DbConnection _connection;
         private readonly DbTransaction? _transaction;
+        private readonly AbstractConnector? _connector;
 
-        public SqlDataMigrator(DbConnection connection, DbTransaction? transaction)
+        public SqlDataMigrator(DbConnection connection, DbTransaction? transaction, AbstractConnector? connector = null)
         {
             _connection = connection;
             _transaction = transaction;
+            _connector = connector;
         }
+
+        // CR-L150: route identifier quoting through the connector dialect (e.g. [brackets] on SQL Server)
+        // instead of hardcoding ANSI double quotes, matching SqlSchemaBuilder.
+        private string QuoteIdentifier(string name)
+            => _connector != null ? _connector.QuoteIdentifier(name) : $"\"{name}\"";
 
         public void UpdateDocuments(string collection, string filterJson, IDictionary<string, object> updates)
         {
@@ -29,12 +37,12 @@ namespace Birko.Data.Migrations.SQL.Context
             foreach (var kvp in updates)
             {
                 var paramName = $"@p{paramIndex++}";
-                setClauses.Add($"\"{kvp.Key}\" = {paramName}");
+                setClauses.Add($"{QuoteIdentifier(kvp.Key)} = {paramName}");
                 parameters.Add((paramName, kvp.Value));
             }
 
-            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters);
-            var sql = $"UPDATE \"{collection}\" SET {string.Join(", ", setClauses)}";
+            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
+            var sql = $"UPDATE {QuoteIdentifier(collection)} SET {string.Join(", ", setClauses)}";
             if (!string.IsNullOrEmpty(whereClause))
                 sql += $" WHERE {whereClause}";
 
@@ -45,9 +53,9 @@ namespace Birko.Data.Migrations.SQL.Context
         {
             var paramIndex = 0;
             var parameters = new List<(string Name, object? Value)>();
-            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters);
+            var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
 
-            var sql = $"DELETE FROM \"{collection}\"";
+            var sql = $"DELETE FROM {QuoteIdentifier(collection)}";
             if (!string.IsNullOrEmpty(whereClause))
                 sql += $" WHERE {whereClause}";
 
@@ -58,11 +66,11 @@ namespace Birko.Data.Migrations.SQL.Context
         {
             var paramIndex = 0;
             var parameters = new List<(string Name, object? Value)>();
-            var sql = $"SELECT COUNT(*) FROM \"{collection}\"";
+            var sql = $"SELECT COUNT(*) FROM {QuoteIdentifier(collection)}";
 
             if (!string.IsNullOrEmpty(filterJson))
             {
-                var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters);
+                var whereClause = ParseFilterToWhere(filterJson, ref paramIndex, parameters, QuoteIdentifier);
                 if (!string.IsNullOrEmpty(whereClause))
                     sql += $" WHERE {whereClause}";
             }
@@ -77,7 +85,7 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
         {
-            ExecuteCommand($"INSERT INTO \"{targetCollection}\" SELECT * FROM \"{sourceCollection}\"");
+            ExecuteCommand($"INSERT INTO {QuoteIdentifier(targetCollection)} SELECT * FROM {QuoteIdentifier(sourceCollection)}");
         }
 
         public void BulkInsert(string collection, IEnumerable<IDictionary<string, object>> documents)
@@ -95,12 +103,12 @@ namespace Birko.Data.Migrations.SQL.Context
                 foreach (var kvp in doc)
                 {
                     var paramName = $"@p{paramIndex++}";
-                    columns.Add($"\"{kvp.Key}\"");
+                    columns.Add(QuoteIdentifier(kvp.Key));
                     parameters.Add((paramName, kvp.Value));
                 }
 
                 var values = string.Join(", ", parameters.ConvertAll(p => p.Name));
-                var sql = $"INSERT INTO \"{collection}\" ({string.Join(", ", columns)}) VALUES ({values})";
+                var sql = $"INSERT INTO {QuoteIdentifier(collection)} ({string.Join(", ", columns)}) VALUES ({values})";
                 ExecuteCommand(sql, parameters);
             }
         }
@@ -126,8 +134,11 @@ namespace Birko.Data.Migrations.SQL.Context
             command.Parameters.Add(param);
         }
 
-        internal static string ParseFilterToWhere(string filterJson, ref int paramIndex, List<(string Name, object? Value)> parameters)
+        internal static string ParseFilterToWhere(string filterJson, ref int paramIndex, List<(string Name, object? Value)> parameters, Func<string, string>? quoteIdentifier = null)
         {
+            // CR-L150: quote field identifiers via the caller's dialect-aware quoter; fall back to ANSI quotes.
+            quoteIdentifier ??= id => $"\"{id}\"";
+
             if (string.IsNullOrWhiteSpace(filterJson) || filterJson.Trim() == "{}")
                 return string.Empty;
 
@@ -152,14 +163,14 @@ namespace Birko.Data.Migrations.SQL.Context
                             _ => "="
                         };
                         var paramName = $"@p{paramIndex++}";
-                        conditions.Add($"\"{fieldName}\" {sqlOp} {paramName}");
+                        conditions.Add($"{quoteIdentifier(fieldName)} {sqlOp} {paramName}");
                         parameters.Add((paramName, ExtractValue(op.Value)));
                     }
                 }
                 else
                 {
                     var paramName = $"@p{paramIndex++}";
-                    conditions.Add($"\"{fieldName}\" = {paramName}");
+                    conditions.Add($"{quoteIdentifier(fieldName)} = {paramName}");
                     parameters.Add((paramName, ExtractValue(property.Value)));
                 }
             }

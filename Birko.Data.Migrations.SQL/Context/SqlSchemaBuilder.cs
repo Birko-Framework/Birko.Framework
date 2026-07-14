@@ -40,9 +40,17 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public bool CollectionExists(string name)
         {
+            // CR-L152: INFORMATION_SCHEMA is standard for MSSql/MySQL/PostgreSQL but does not exist in
+            // SQLite (which uses sqlite_master), so an unconditional INFORMATION_SCHEMA query threw there.
+            // Pick the catalog query from the connection's provider.
+            var connTypeName = _connection.GetType().Name;
+            var isSqlite = connTypeName.IndexOf("Sqlite", StringComparison.OrdinalIgnoreCase) >= 0;
+
             using var command = _connection.CreateCommand();
             command.Transaction = _transaction;
-            command.CommandText = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tableName";
+            command.CommandText = isSqlite
+                ? "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @tableName"
+                : "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tableName";
             var param = command.CreateParameter();
             param.ParameterName = "@tableName";
             param.Value = name;

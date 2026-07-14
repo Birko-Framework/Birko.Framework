@@ -42,15 +42,18 @@ namespace Birko.Data.Migrations.SQL
         /// Initializes a new instance of the SqlMigrationStore class with PasswordSettings.
         /// </summary>
         public SqlMigrationStore(Func<DbConnection> connectionFactory, Birko.Configuration.RemoteSettings remoteSettings)
-            : this(connectionFactory, new SqlMigrationSettings
-            {
-                Location = remoteSettings.Location,
-                Port = remoteSettings.Port,
-                Name = remoteSettings.Name,
-                UserName = remoteSettings.UserName,
-                Password = remoteSettings.Password
-            })
+            : this(connectionFactory, CreateSettings(remoteSettings))
         {
+        }
+
+        // CR-L151: copy the whole inherited RemoteSettings chain via LoadFrom rather than hand-listing
+        // properties (the manual copy silently dropped fields not enumerated, e.g. UseSecure, and had to
+        // be updated whenever the settings chain grew).
+        private static SqlMigrationSettings CreateSettings(Birko.Configuration.RemoteSettings remoteSettings)
+        {
+            var settings = new SqlMigrationSettings();
+            settings.LoadFrom(remoteSettings);
+            return settings;
         }
 
         /// <summary>

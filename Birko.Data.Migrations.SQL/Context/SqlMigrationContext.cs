@@ -31,7 +31,7 @@ namespace Birko.Data.Migrations.SQL.Context
             _transaction = transaction;
             ProviderName = providerName;
             Schema = new SqlSchemaBuilder(connection, transaction, connector);
-            Data = new SqlDataMigrator(connection, transaction);
+            Data = new SqlDataMigrator(connection, transaction, connector);
         }
 
         public void Raw(Action<object> providerAction)
