@@ -13,7 +13,27 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**172 / 418 triaged** as of 2026-07-14. Next open is CR-L173 (Birko.Data.SQL).
+**176 / 418 triaged** as of 2026-07-14. Next open is CR-L177 (Birko.Data.SQL.Caching).
+
+**Batch S — Data.SQL core cluster (CR-L173 … CR-L176):** Birko.Data.SQL (+ provider overrides in
+.SQL.PostgreSQL / .MSSql / .MySQL). All closed; **/code-review clean**. **L173** (bug, diagnostic):
+`DataBase.GetGeneratedQuery` replaces parameter names longest-first (`OrderByDescending(name.Length)`) so a
+name that's a prefix of another (`@WHEREName0_5` ⊂ `@WHEREName0_50`, `@LIMIT` ⊂ `@LIMITxxx`) can't corrupt
+the rendered SQL — this string is the OnExecute/InitException diagnostic, not executed. **L174** (bug): the
+bulk `Insert(tableName, IEnumerable<IDictionary>)` (sync + async) validates that every row shares the first
+row's column set (`HashSet.SetEquals`) and throws `ArgumentException` otherwise, instead of silently
+mis-binding heterogeneous dictionaries (a missing key left the prior row's stale value); rows are also
+materialized once instead of being re-enumerated 4×. **L175** (convention): `SqlUnitOfWork.FromStore` passes
+`connector.Settings` (the public property) into the normal ctor, deleting the dummy ctor + the reflection
+helper that read the private `_settings` field by name. **L176** (convention/bug): promoted table-missing
+detection to a virtual `AbstractConnectorBase.IsMissingTableException(Exception)` (base = SQLite's
+"no such table"), routed the three reader catches through it, and added provider overrides — PostgreSQL
+(`relation … does not exist` / SQLSTATE 42P01), MSSql (`Invalid object name` / error 208), MySQL
+(`doesn't exist` / error 1146) — so a missing table yields an empty read on all backends, not a hard error.
+**Tests:** SQL.Tests 289 → 294 (GetGeneratedQuery prefix-collision + string-quoting; base
+IsMissingTableException matrix), SqLite.Tests 24 → 26 (heterogeneous bulk-insert throws; `FromStore`
+Begin/Commit persists without reflection), MSSql/PostgreSQL/MySQL .Tests +3 each (provider
+IsMissingTableException wording matrix). Suites green: SQL 294, SqLite 26, MSSql 21, PostgreSQL 17, MySQL 14.
 
 **Batch R — Data.Repositories cluster (CR-L171, CR-L172):** Birko.Data.Repositories. Both closed;
 **/code-review clean**. **L171** (convention): the bulk repository layer now surfaces `ReadFirst(filter)` /

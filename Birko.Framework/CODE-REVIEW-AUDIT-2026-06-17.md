@@ -6256,7 +6256,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetGeneratedQuery uses naive substring replacement — parameter-name collisions
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL\SQL/DataBase.cs:92-105`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetGeneratedQuery does query.Replace(parameter.ParameterName, value) per parameter. Parameter names like @WHEREName0_5 are a prefix of @WHEREName0_50 (GenerateParameterName suffixes with _{count}), and @LIMIT is a prefix of any @LIMITxxx; naive Replace can corrupt the rendered SQL when one name is a prefix of another. This string is used for the OnExecute log/diagnostic and InitException commandText, not for actual execution, so impact is limited to logging accuracy.
 - **Fix:** Replace longest parameter names first, or use a regex with word boundaries, or simply log CommandText + a structured parameter list instead of inlining values.
 
@@ -6264,7 +6264,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk INSERT derives column list and SET clause from only the first row
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL\SQL/Connectors/AbstractConnector_Insert.cs:57-84; AbstractAsyncConnector_Insert.cs:62-90`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Insert(string, IEnumerable<IDictionary>) builds the INSERT column list and VALUES placeholders from values.First(), then in the execute delegate iterates every row re-binding parameters by key and calling ExecuteNonQuery. This is correct only if every row dictionary has the identical key set in the same shape as the first. Rows are produced by DataBase.Write over the same Table fields so in practice they match, but the contract silently mis-binds if a caller passes heterogeneous dictionaries (extra/missing keys are ignored or left as stale parameter values from the prior row). Guard is values.All(x => x.Any()) which only checks non-empty, not key-consistency.
 - **Fix:** Either document that all rows must share the first row's key set, or validate key-set equality and throw, or rebuild the command text per distinct schema.
 
@@ -6272,7 +6272,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SqlUnitOfWork private ctor leaves _settings null, relying on reflection fallback
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL\UnitOfWork/SqlUnitOfWork.cs:42-60, 101-107`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** FromStore<DB,T> routes through a private ctor that sets _settings = null! and then BeginAsync falls back to GetSettingsFromConnector(), which reflects the NonPublic _settings field off AbstractConnectorBase by string name. This is brittle (breaks silently if the field is renamed) and bypasses the typed Settings property that AbstractConnectorBase already exposes publicly (public PasswordSettings Settings => _settings).
 - **Fix:** Drop the reflection helper and the dummy ctor; pass connector.Settings into the normal ctor: new SqlUnitOfWork(connector, connector.Settings).
 
@@ -6280,7 +6280,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** 'no such table' exception filter is SQLite-specific in the provider-agnostic base
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL\SQL/Connectors/AbstractConnector.cs:126, 257; AbstractAsyncConnector.cs:152`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Reader execution swallows exceptions whose Message contains 'no such table' (SQLite's wording) and yields an empty result. Other providers phrase this differently (PostgreSQL: 'relation "x" does not exist', MySQL: 'doesn't exist', MSSQL: 'Invalid object name'), so on non-SQLite backends a missing table surfaces as a hard error instead of an empty set, making behavior provider-inconsistent in a base class that is meant to be provider-agnostic.
 - **Fix:** Promote table-missing detection to a virtual bool IsMissingTableException(Exception) overridable per provider, mirroring the existing IsTransientException pattern.
 
