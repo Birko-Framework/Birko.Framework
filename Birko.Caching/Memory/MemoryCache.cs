@@ -16,7 +16,7 @@ public sealed class MemoryCache : ICache
     private readonly ConcurrentDictionary<string, MemoryCacheEntry> _entries = new();
     private readonly ConcurrentDictionary<string, KeyLock> _locks = new();
     private readonly Timer _cleanupTimer;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     /// <summary>
     /// Reference-counted per-key lock. A lock is only removed by its last releaser (Refs back to 0)
@@ -39,6 +39,7 @@ public sealed class MemoryCache : ICache
 
     public Task<CacheResult<T>> GetAsync<T>(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_entries.TryGetValue(key, out var entry))
         {
             if (entry.IsExpired())
@@ -48,7 +49,14 @@ public sealed class MemoryCache : ICache
             }
 
             entry.LastAccessedAt = DateTime.UtcNow;
-            return Task.FromResult(CacheResult<T>.Hit((T)entry.Value!));
+            // Degrade a type mismatch to a Miss rather than throwing InvalidCastException on the
+            // unchecked (T)entry.Value! cast (a shared key read with different T is a real foot-gun
+            // for a general-purpose cache). A stored null is a legitimate hit (CR-L036).
+            if (entry.Value is null)
+                return Task.FromResult(CacheResult<T>.Hit(default!));
+            return Task.FromResult(entry.Value is T typed
+                ? CacheResult<T>.Hit(typed)
+                : CacheResult<T>.Miss());
         }
 
         return Task.FromResult(CacheResult<T>.Miss());
@@ -56,6 +64,7 @@ public sealed class MemoryCache : ICache
 
     public Task SetAsync<T>(string key, T value, CacheEntryOptions? options = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var entry = new MemoryCacheEntry(value, options ?? CacheEntryOptions.Default);
         _entries[key] = entry;
         return Task.CompletedTask;
@@ -63,12 +72,14 @@ public sealed class MemoryCache : ICache
 
     public Task RemoveAsync(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         _entries.TryRemove(key, out _);
         return Task.CompletedTask;
     }
 
     public Task<bool> ExistsAsync(string key, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (_entries.TryGetValue(key, out var entry))
         {
             if (entry.IsExpired())
@@ -142,6 +153,7 @@ public sealed class MemoryCache : ICache
 
     public Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var keysToRemove = _entries.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal));
         foreach (var key in keysToRemove)
             _entries.TryRemove(key, out _);
@@ -150,12 +162,17 @@ public sealed class MemoryCache : ICache
 
     public Task ClearAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         _entries.Clear();
         return Task.CompletedTask;
     }
 
     private void EvictExpired()
     {
+        // Don't run against a disposed cache — the timer callback can fire concurrently with Dispose
+        // (CR-L035). EvictExpired only touches the thread-safe _entries now (per-key locks are no
+        // longer swept here, CR-M030), so this guard is belt-and-suspenders hardening.
+        if (_disposed) return;
         foreach (var kvp in _entries)
         {
             if (kvp.Value.IsExpired() && kvp.Value.Options.Priority != CachePriority.NeverRemove)
