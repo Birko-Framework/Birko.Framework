@@ -13,7 +13,24 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**194 / 418 triaged** as of 2026-07-14. Next open is CR-L195 (Birko.Data.SQL.View).
+**197 / 418 triaged** as of 2026-07-14. Next open is CR-L198 (Birko.Data.SQL.View.Migrations).
+
+**Batch Z — Data.SQL.View cluster (CR-L195, CR-L196, CR-L197):** Birko.Data.SQL.View. All closed;
+**/code-review clean**. **L195** (bug): aggregate view columns are now aliased by the **unique view-property
+name** (`field.Property.Name`) in both `ViewSelectSqlBuilder` (the `AS` alias) and
+`GetPersistentViewSelectFields` (the queried column), instead of the aggregate **function name**
+(`FunctionField.Name` = "COUNT"/"SUM") — two aggregates of the same function collided on a duplicate column
+name in a persistent view's DDL, and the two sides must name the identical column so the persistent query
+resolves. **L196** (bug): `BuildViewJoinConditionSql` routes a constant join value through a new
+`FormatJoinConditionValue` — numerics emit unquoted via **InvariantCulture** (a comma-decimal locale no
+longer corrupts the SQL), bools emit `TRUE`/`FALSE`, and strings keep the single-quoted + doubled-quote
+escaping (was: everything quoted as a culture-dependent string). **L197** (nullable): `DataBase.ReadView`
+guards a null `LoadView` result with a clear `TableAttributeException` instead of deferring an NRE into the
+base `Read` via a null-forgiving `!`. **Tests:** SQL.Tests 294 → 299 (aggregate aliases use property names +
+match `GetPersistentViewSelectFields`; `FormatJoinConditionValue` string/int/bool/decimal-under-de-DE-locale
+matrix). Updated the MSSql.View schema-binding assertions to the new property-name aliases
+(`AS [OrderCount]`/`AS [TotalSpent]`). All SQL.View consumers green: SQL.Tests 299, MSSql.View 19,
+SqLite.View 9, Views 17, View.Migrations 11, ViewModel 10.
 
 **Batch Y — SqLite cluster (CR-L192; CR-L193, CR-L194):** Birko.Data.SQL.SqLite + .SqLite.View.
 All closed; **/code-review clean**. **L192** (bug): `SqLiteConnector_OnException` detects the missing-table

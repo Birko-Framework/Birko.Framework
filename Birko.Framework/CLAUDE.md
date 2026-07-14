@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.SQL.View cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch Z: **CR-L195, CR-L196, CR-L197** — Birko.Data.SQL.View. All closed; **/code-review clean**.
+- **Bug (L195)** — aggregate view columns are aliased by the **unique view-property name** (`field.Property.Name`) in both `ViewSelectSqlBuilder` (the `AS` alias) and `GetPersistentViewSelectFields` (the queried column), instead of the aggregate **function name** (`FunctionField.Name` = "COUNT"/"SUM"). Two aggregates of the same function collided on a duplicate column name in a persistent view's DDL, and the alias must equal the column the persistent query selects back. (Updated the MSSql.View schema-binding test assertions to the new `AS [OrderCount]`/`AS [TotalSpent]` aliases.)
+- **Bug (L196)** — `BuildViewJoinConditionSql` routes a constant join value through a new `FormatJoinConditionValue`: numerics emit unquoted via **InvariantCulture** (a comma-decimal locale no longer corrupts the SQL), bools emit `TRUE`/`FALSE`, strings keep single-quote + doubled-quote escaping (was: everything quoted as a culture-dependent string).
+- **Nullable (L197)** — `DataBase.ReadView` guards a null `LoadView` result with a clear `TableAttributeException` instead of deferring an NRE into the base `Read` via a null-forgiving `!`.
+- **Tests** — SQL.Tests 294 → 299 (aggregate aliases use property names + match `GetPersistentViewSelectFields`; `FormatJoinConditionValue` string/int/bool/decimal-under-de-DE matrix). All SQL.View consumers green: SQL.Tests 299, MSSql.View 19, SqLite.View 9, Views 17, View.Migrations 11, ViewModel 10.
+- STORY-027 now **197/418**.
+
 ### Code-review remediation — low findings, SqLite cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch Y: **CR-L192** (Birko.Data.SQL.SqLite) + **CR-L193, CR-L194** (Birko.Data.SQL.SqLite.View). All closed; **/code-review clean**.
 - **Bug (L192)** — `SqLiteConnector_OnException` detects the missing-table auto-init case via the typed `SqliteException` + `SqliteErrorCode == 1` (SQLITE_ERROR) and a case-insensitive `"no such table"` match, instead of the brittle locale/version-dependent `"SQLite Error"` prefix substring (would break on a Microsoft.Data.Sqlite upgrade / non-English locale).

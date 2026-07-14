@@ -6432,7 +6432,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetPersistentViewSelectFields includes aggregate columns that may not exist as plain columns
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View\SQL/Tables/View.cs:154-172 vs SQL/Connectors/AbstractConnectorBase_View.cs:63-70`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** For a persistent view query, CreatePersistentViewSelectCommand selects `QuoteIdentifier(f)` for each field Name returned by GetPersistentViewSelectFields, which iterates ALL table.Fields.Values including aggregate FunctionFields. The persistent view (built by BuildViewSelectSql) aliases aggregate columns to `fieldAtIndex.Name` (line 163), but the FunctionField.Name is the SQL function name (e.g. "COUNT"/"SUM") combined oddly in DataBase_View.cs:151-157 (`tableFieldName += functionField.Name`), so the column name selected from the persistent view may not match the alias actually created. Aggregate persistent views risk selecting a non-existent column name. Worth verifying with an aggregate + Persistent QueryMode round-trip test.
 - **Fix:** Ensure the alias used in BuildViewSelectSql (line 163) and the column name listed in GetPersistentViewSelectFields are the exact same string for aggregate fields.
 
@@ -6440,7 +6440,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Join-condition value literal built via string concatenation in CREATE VIEW SQL
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View\SQL/Connectors/AbstractConnectorBase_View.cs:266-273`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** BuildViewJoinConditionSql inlines a constant join value as `'" + value.ToString().Replace("'","''") + "'`. It only escapes single quotes and always wraps in quotes, so non-string values (numbers, bools) become quoted strings and any other injection vectors (e.g. backslash handling on some providers) aren't covered. Since CREATE VIEW cannot be parameterized this is partly unavoidable, but the current escaping is minimal and type-blind.
 - **Fix:** Format numerics/bools without quotes by inspecting the value type, and document that view-definition constants must be trusted (not user input).
 
@@ -6448,7 +6448,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DataBase.ReadView dereferences tableFields with null-forgiving operator
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.View\SQL/DataBase_View.cs:209-215`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ReadView does `var tableFields = view?.GetTableFields();` then `return Read(tableFields!, ...)`. If LoadView returns null (the early `return null!;` path at line 198 when view.Tables is null) tableFields is null and the `!` defers a NullReferenceException into the base Read. Given LoadView already throws TableAttributeException for missing attributes, the null path is narrow but the `!` hides it rather than guarding.
 - **Fix:** Guard: `if (view == null) throw new ...;` (or return index unchanged) before calling GetTableFields, instead of suppressing with `!`.
 
