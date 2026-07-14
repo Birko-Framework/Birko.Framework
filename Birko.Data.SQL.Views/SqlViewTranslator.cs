@@ -65,18 +65,22 @@ public static class SqlViewTranslator
             }
         }
 
-        // Add selected fields
+        // Add selected fields. A failed lookup here means the view definition references an unmapped
+        // table, a misspelled source property, or a non-existent view property — surface it rather than
+        // silently dropping the column and producing a structurally-wrong view (CR-L201).
         foreach (var field in definition.Fields)
         {
             if (!tableCache.TryGetValue(field.SourceType, out var table))
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View field '{field.ViewProperty}' references source type '{field.SourceType.Name}', which has no mapped table.");
             }
 
             var sourceField = table.GetFieldByPropertyName(field.SourceProperty);
             if (sourceField == null)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View field '{field.ViewProperty}' references unmapped source property '{field.SourceType.Name}.{field.SourceProperty}'.");
             }
 
             // Create a field copy with the view property info
@@ -84,7 +88,8 @@ public static class SqlViewTranslator
                 BindingFlags.Public | BindingFlags.Instance);
             if (viewProp == null)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View type '{definition.ViewType.Name}' has no public instance property '{field.ViewProperty}'.");
             }
 
             var loadedFields = DataBase.LoadField(sourceField.Property);
@@ -95,19 +100,21 @@ public static class SqlViewTranslator
             }
         }
 
-        // Add aggregate fields
+        // Add aggregate fields (same fail-fast rationale as the field loop above, CR-L201).
         foreach (var agg in definition.Aggregates)
         {
             if (!tableCache.TryGetValue(agg.SourceType, out var table))
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View aggregate '{agg.ViewProperty}' references source type '{agg.SourceType.Name}', which has no mapped table.");
             }
 
             var viewProp = definition.ViewType.GetProperty(agg.ViewProperty,
                 BindingFlags.Public | BindingFlags.Instance);
             if (viewProp == null)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View type '{definition.ViewType.Name}' has no public instance property '{agg.ViewProperty}' for aggregate.");
             }
 
             var sqlFuncName = SQL.Connectors.AbstractConnectorBase.GetSqlFunctionName(agg.Function);
@@ -118,7 +125,8 @@ public static class SqlViewTranslator
                 var firstField = table.Fields?.Values.FirstOrDefault();
                 if (firstField == null)
                 {
-                    continue;
+                    throw new InvalidOperationException(
+                        $"View aggregate '{agg.ViewProperty}' cannot resolve a base column: table '{table.Name}' has no fields.");
                 }
 
                 var countField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, firstField);
@@ -132,7 +140,8 @@ public static class SqlViewTranslator
                 var sourceField = table.GetFieldByPropertyName(agg.SourceProperty);
                 if (sourceField == null)
                 {
-                    continue;
+                    throw new InvalidOperationException(
+                        $"View aggregate '{agg.ViewProperty}' references unmapped source property '{agg.SourceType.Name}.{agg.SourceProperty}'.");
                 }
 
                 var functionField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, sourceField);
@@ -143,20 +152,22 @@ public static class SqlViewTranslator
             }
         }
 
-        // Add joins
+        // Add joins (same fail-fast rationale, CR-L201).
         foreach (var join in definition.Joins)
         {
             if (!tableCache.TryGetValue(join.LeftType, out var leftTable) ||
                 !tableCache.TryGetValue(join.RightType, out var rightTable))
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View join references an unmapped table: '{join.LeftType.Name}' or '{join.RightType.Name}'.");
             }
 
             var leftField = leftTable.GetFieldByPropertyName(join.LeftProperty);
             var rightField = rightTable.GetFieldByPropertyName(join.RightProperty);
             if (leftField == null || rightField == null)
             {
-                continue;
+                throw new InvalidOperationException(
+                    $"View join references an unmapped property: '{join.LeftType.Name}.{join.LeftProperty}' or '{join.RightType.Name}.{join.RightProperty}'.");
             }
 
             var sqlJoinType = TranslateJoinType(join.JoinType);
