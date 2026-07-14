@@ -33,18 +33,24 @@ public class GrpcSettings : RemoteSettings
     public int? MaxSendMessageSizeBytes { get; set; }
 
     /// <summary>
-    /// Optional per-call deadline in seconds, applied by interceptors that honor it. Null = no deadline.
+    /// Optional per-call deadline in seconds.
+    /// <para><b>Reserved — not yet consumed (CR-L054):</b> no code currently reads this; to enforce a
+    /// deadline, set <c>CallOptions.Deadline</c> on the call (e.g. via a custom interceptor).</para>
     /// </summary>
     public int? DeadlineSeconds { get; set; }
 
     /// <summary>
-    /// Explicit channel credentials. When null, credentials are inferred from the endpoint scheme
-    /// (https → <see cref="ChannelCredentials.SecureSsl"/>, http → <see cref="ChannelCredentials.Insecure"/>).
+    /// Explicit channel credentials. When null, the channel is created by
+    /// <see cref="Grpc.Net.Client.GrpcChannel.ForAddress(string)"/>, which infers credentials from the
+    /// endpoint scheme (https → transport security, http → insecure) — the pool does no extra inference.
     /// </summary>
     public ChannelCredentials? Credentials { get; set; }
 
     /// <summary>
-    /// Extra metadata (headers) attached to every outgoing call by the authentication interceptor.
+    /// Extra metadata (headers) to attach to outgoing calls.
+    /// <para><b>Reserved — not auto-applied (CR-L055):</b> this settings property is not read by the
+    /// factory/pool. To attach static metadata, pass it to <see cref="GrpcAuthenticationInterceptor"/>
+    /// explicitly (its <c>extraMetadata</c> constructor parameter) when creating the client.</para>
     /// </summary>
     public Dictionary<string, string> ExtraMetadata { get; set; } = new();
 }
