@@ -50,10 +50,12 @@ up and **skips cleanly** with Docker down; CI has an opt-in integration job.
   `GetLastSyncTime`/`SetLastSyncTime` CRUD paths **cannot run on SQLite**: the model's non-PK
   `[IncrementField] Id` alongside `[PrimaryField] Guid` makes `SqLiteConnector` emit invalid
   `INTEGER NOT NULL AUTOINCREMENT` DDL. Needs a real MSSql/Postgres backend.
-  - **Spin-off — TASK: SqLiteConnector dual-key DDL limitation.** This surfaced a genuine connector
-    bug (SQLite allows `AUTOINCREMENT` only on `INTEGER PRIMARY KEY`). Either fix the DDL emit for
-    dual-key models or document the constraint. Worth its own finding/task; not strictly required to
-    close M166 (which just needs a non-SQLite backend), but should be logged here.
+  - **Spin-off → [TASK-058](../../_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md)
+    (SqLiteConnector dual-key AUTOINCREMENT DDL).** This surfaced a genuine connector bug (SQLite
+    allows `AUTOINCREMENT` only on `INTEGER PRIMARY KEY`; `FieldDefinition` emits it for any
+    increment field, detached from PRIMARY KEY). **Offline-fixable** (not Docker-gated). If it lands
+    with option (a) — plain `INTEGER` for a non-PK increment column — the M166 SQL-sync CRUD may then
+    run on **SQLite offline**, potentially closing M166 here without a container. Track that outcome.
 - **CR-M138** — MSSql native bulk (`BulkInsert/Update/Delete` + async) uses a **transactionless
   `SqlBulkCopy`**, so a mid-copy failure leaves partial rows (the base `RunCommandTransaction` rolls
   back). `InitException` semantics were confirmed contract-consistent last session; the residual is
