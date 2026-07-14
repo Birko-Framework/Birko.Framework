@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.SQL.Views cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch AB: **CR-L201, CR-L202** — Birko.Data.SQL.Views. Both closed; **/code-review clean**.
+- **Bug (L201)** — `SqlViewTranslator.Translate` replaces the nine silent `continue`s (failed table/field/view-property/join lookups) with descriptive `InvalidOperationException`s naming the unresolved `SourceType.SourceProperty`. A view referencing an unmapped table or a misspelled/unmapped property now fails loudly at translation time instead of silently producing a structurally-wrong SQL view.
+- **Cleanup (L202)** — removed the unused `using System.Reflection;` from `SqlViewStore.cs`.
+- **Tests** — SQL.Views.Tests 17 → 18 (a view over an unregistered source type throws `InvalidOperationException` naming it; well-formed grouped-aggregate/COUNT views still translate).
+- Suite green: Birko.Data.SQL.Views.Tests 18. STORY-027 now **202/418**.
+
 ### Code-review remediation — low findings, SQL.View.Migrations + SQL.ViewModel (EPIC-014 / STORY-027) (2026-07-14)
 Batch AA: **CR-L198** (Birko.Data.SQL.View.Migrations) + **CR-L199, CR-L200** (Birko.Data.SQL.ViewModel). All closed; **/code-review clean**.
 - **Convention/docs (L198)** — rewrote the `ViewSqlGenerator` docs (README + CLAUDE) to the real API: a single `char quoteChar` applied **symmetrically** (default `"`), supporting ANSI/PostgreSQL + MySQL only; SQL Server bracket quoting `[ ]` and T-SQL `CREATE OR ALTER VIEW` are out of scope (use Birko.Data.SQL.MSSql.View). The docs had claimed a `(open, close)` tuple + broad provider support the single-char API can't deliver.

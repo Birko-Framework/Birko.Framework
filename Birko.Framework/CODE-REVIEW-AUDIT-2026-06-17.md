@@ -6480,7 +6480,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Aggregate translation silently no-ops on unresolved source field / view property
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.Views\SqlViewTranslator.cs:51-126`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Across the Fields, Aggregates, and Joins loops, every failed lookup (table not in cache, GetFieldByPropertyName == null, missing view property) does `continue`, producing a view that is silently missing columns/joins. A view definition that references a misspelled or unmapped property yields a structurally different (and likely wrong) SQL view rather than an error, making such mistakes very hard to diagnose. This compounds the lack of tests.
 - **Fix:** At minimum, surface the dropped fields/joins (throw InvalidOperationException naming the unresolved SourceType.SourceProperty, or expose a diagnostics callback). Silent continue is acceptable only if intentional and documented.
 
@@ -6488,7 +6488,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused using System.Reflection in SqlViewStore
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.Views\SqlViewStore.cs:6`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** System.Reflection is imported but no reflection types are used in the file (the transform uses field.Read / field.Property, not reflection directly). Dead using.
 - **Fix:** Remove the using directive.
 

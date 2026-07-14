@@ -13,7 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**200 / 418 triaged** as of 2026-07-14. Next open is CR-L201 (Birko.Data.SQL.Views).
+**202 / 418 triaged** as of 2026-07-14. Next open is CR-L203 (Birko.Data.Stores).
+
+**Batch AB — Data.SQL.Views cluster (CR-L201, CR-L202):** Birko.Data.SQL.Views. Both closed;
+**/code-review clean**. **L201** (bug): `SqlViewTranslator.Translate` replaces the nine silent `continue`s
+(on a failed table/field/view-property/join lookup) with descriptive `InvalidOperationException`s that name
+the unresolved `SourceType.SourceProperty` — a view referencing an unmapped table or a misspelled/unmapped
+property now fails loudly at translation time instead of silently producing a structurally-wrong SQL view
+that's very hard to diagnose. **L202** (cleanup): removed the unused `using System.Reflection;` from
+`SqlViewStore.cs`. **Tests:** SQL.Views.Tests 17 → 18 (a view over an unregistered source type throws
+`InvalidOperationException` naming it; well-formed views still translate — the grouped-aggregate/COUNT paths
+stay green). Suite green: SQL.Views.Tests 18.
 
 **Batch AA — SQL.View.Migrations + SQL.ViewModel (CR-L198; CR-L199, CR-L200):** All closed;
 **/code-review clean**. **L198** (convention, docs): rewrote the `ViewSqlGenerator` docs in
