@@ -156,7 +156,7 @@ namespace Birko.Communication.NFC.Ports
         /// SerialPort / HttpClient / CancellationTokenSource). Without this the port leaked those
         /// handles and kept itself alive via the transport's event subscriptions (CR-H028).
         /// </summary>
-        public void Dispose()
+        public override void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
