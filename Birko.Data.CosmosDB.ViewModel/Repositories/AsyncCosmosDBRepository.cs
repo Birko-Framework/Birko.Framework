@@ -92,13 +92,7 @@ public abstract class AsyncCosmosDBRepository<TViewModel, TModel> : Data.Reposit
         return CosmosStore?.IsHealthy() ?? false;
     }
 
-    /// <inheritdoc />
-    public override async Task DestroyAsync(CancellationToken ct = default)
-    {
-        await base.DestroyAsync(ct);
-        if (CosmosStore != null)
-        {
-            await CosmosStore.DestroyAsync(ct);
-        }
-    }
+    // CR-L106: removed a DestroyAsync override that called base.DestroyAsync (which already destroys the
+    // BulkStore — the same underlying instance CosmosStore unwraps to) and then destroyed CosmosStore
+    // again. The base is sufficient; the sync CosmosDBRepository correctly has no such override.
 }
