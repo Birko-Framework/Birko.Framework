@@ -26,7 +26,11 @@ namespace Birko.BackgroundJobs
         Completed = 3,
 
         /// <summary>
-        /// Job failed but will be retried.
+        /// Reserved. Currently unused by every shipped backend: a retry-eligible failure is recorded as
+        /// <see cref="Scheduled"/> (with a future ScheduledAt) and an exhausted one as <see cref="Dead"/>,
+        /// mirroring the reference <c>InMemoryJobQueue.FailAsync</c>. <c>DequeueAsync</c> only re-picks
+        /// Pending/Scheduled, so a job left in this state would never be re-dequeued — new backends must
+        /// keep it unused and follow the Scheduled/Dead convention (CR-L015).
         /// </summary>
         Failed = 4,
 

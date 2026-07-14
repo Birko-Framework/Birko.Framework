@@ -109,7 +109,10 @@ namespace Birko.BackgroundJobs.Processing
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                // Graceful shutdown — re-enqueue
+                // Graceful shutdown: this is recorded as a *failed attempt* (it consumes a retry, and a
+                // last-attempt job goes to Dead). A true no-retry requeue would need a dedicated
+                // IJobQueue.RequeueAsync — the current EnqueueAsync is an insert (CreateAsync) across the
+                // backends, so re-enqueuing the same descriptor id would PK-conflict; deferred (CR-L016).
                 await _queue.FailAsync(descriptor.Id, "Job cancelled due to processor shutdown", CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)

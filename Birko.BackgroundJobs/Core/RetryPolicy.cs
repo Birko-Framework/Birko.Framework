@@ -39,8 +39,14 @@ namespace Birko.BackgroundJobs
                 return BaseDelay;
             }
 
-            var delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(2, attemptNumber - 1));
-            return delay > MaxDelay ? MaxDelay : delay;
+            // Compute the scaled delay in double and saturate at MaxDelay before allocating the
+            // TimeSpan. The old (long)Math.Pow(...) * BaseDelay.Ticks overflowed to a negative tick
+            // count for a large BaseDelay and/or attemptNumber, and a negative TimeSpan slipped past
+            // the "> MaxDelay" clamp — scheduling the retry in the past (CR-L014).
+            var scaledTicks = BaseDelay.Ticks * Math.Pow(2, attemptNumber - 1);
+            if (scaledTicks >= MaxDelay.Ticks)
+                return MaxDelay;
+            return TimeSpan.FromTicks((long)scaledTicks);
         }
 
         /// <summary>

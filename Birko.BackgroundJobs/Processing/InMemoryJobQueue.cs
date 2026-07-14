@@ -28,6 +28,10 @@ namespace Birko.BackgroundJobs.Processing
 
         public Task<Guid> EnqueueAsync(JobDescriptor descriptor, CancellationToken cancellationToken = default)
         {
+            // Stamp EnqueuedAt from the injected clock so the whole queue flows through IDateTimeProvider
+            // (the descriptor default is DateTime.UtcNow, set before it reaches the clock-aware queue) —
+            // this makes enqueue time and the ThenBy(EnqueuedAt) dequeue ordering test-deterministic (CR-L017).
+            descriptor.EnqueuedAt = _clock.UtcNow;
             _jobs[descriptor.Id] = descriptor;
             return Task.FromResult(descriptor.Id);
         }

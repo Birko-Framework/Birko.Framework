@@ -69,10 +69,15 @@ namespace Birko.BackgroundJobs.Processing
                     }
 
                     var task = (Task?)executeMethod.Invoke(job, new[] { input, context, cancellationToken });
-                    if (task != null)
+                    if (task == null)
                     {
-                        await task.ConfigureAwait(false);
+                        // A matched ExecuteAsync that did not return an awaitable Task is a contract
+                        // violation (IJob<TInput> requires Task). Surface it as a failure rather than
+                        // falling through to Succeeded without ever running/awaiting the job (CR-L019).
+                        return JobResult.Failed(stopwatch.Elapsed, $"ExecuteAsync on {jobType.Name} did not return a Task");
                     }
+
+                    await task.ConfigureAwait(false);
                 }
                 else
                 {
