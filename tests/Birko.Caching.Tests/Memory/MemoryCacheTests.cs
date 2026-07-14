@@ -240,4 +240,83 @@ public class MemoryCacheTests
     }
 
     #endregion
+
+    #region CR-L034 / L036 / L037
+
+    [Fact]
+    public async Task GetAsync_TypeMismatch_DegradesToMiss()
+    {
+        // Regression for CR-L036: reading a key with an incompatible T threw InvalidCastException from
+        // the unchecked (T)entry.Value! cast. It must now degrade to a Miss.
+        using var cache = new MemoryCache();
+        await cache.SetAsync("k", "a string");
+
+        var mismatch = await cache.GetAsync<int>("k");
+        var match = await cache.GetAsync<string>("k");
+
+        mismatch.HasValue.Should().BeFalse();
+        match.HasValue.Should().BeTrue();
+        match.Value.Should().Be("a string");
+    }
+
+    [Fact]
+    public async Task GetAsync_StoredNull_IsAHit()
+    {
+        using var cache = new MemoryCache();
+        await cache.SetAsync<string?>("k", null);
+
+        var result = await cache.GetAsync<string?>("k");
+
+        result.HasValue.Should().BeTrue();
+        result.Value.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("get")]
+    [InlineData("set")]
+    [InlineData("remove")]
+    [InlineData("exists")]
+    [InlineData("removeByPrefix")]
+    [InlineData("clear")]
+    public async Task AsyncMethods_ObserveCancellationToken(string op)
+    {
+        // Regression for CR-L034: the async CRUD methods accepted a CancellationToken but never observed
+        // it; an already-cancelled token now throws uniformly (GetOrSetAsync already honored it).
+        using var cache = new MemoryCache();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var ct = cts.Token;
+
+        Func<Task> act = op switch
+        {
+            "get" => () => cache.GetAsync<string>("k", ct),
+            "set" => () => cache.SetAsync("k", "v", null, ct),
+            "remove" => () => cache.RemoveAsync("k", ct),
+            "exists" => () => cache.ExistsAsync("k", ct),
+            "removeByPrefix" => () => cache.RemoveByPrefixAsync("k", ct),
+            _ => () => cache.ClearAsync(ct),
+        };
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task SlidingExpiration_AccessResetsTheWindow()
+    {
+        // Regression for CR-L037 (sliding-expiration coverage): each access resets the window, so a key
+        // touched within the window stays alive past its original creation-relative lifetime.
+        using var cache = new MemoryCache();
+        await cache.SetAsync("k", "v", CacheEntryOptions.Sliding(TimeSpan.FromMilliseconds(200)));
+
+        for (var i = 0; i < 3; i++)
+        {
+            await Task.Delay(90);
+            (await cache.GetAsync<string>("k")).HasValue.Should().BeTrue("access must reset the sliding window");
+        }
+
+        await Task.Delay(350); // no access for longer than the window
+        (await cache.GetAsync<string>("k")).HasValue.Should().BeFalse();
+    }
+
+    #endregion
 }
