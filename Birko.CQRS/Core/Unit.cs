@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks; // CR-L098: self-contained (was relying on the host's ImplicitUsings)
 
 namespace Birko.CQRS
 {

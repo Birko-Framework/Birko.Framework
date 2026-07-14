@@ -16,6 +16,9 @@ namespace Birko.CQRS
         // Keyed on (requestType, resultType): the wrapper bakes in TResult, so caching by request
         // type alone returned a wrapper built for a different TResult on covariant dispatch,
         // throwing InvalidCastException / resolving the wrong handler (CR-H039).
+        // Static / process-wide by design (CR-L097): the cached value is only a reflection-built wrapper
+        // Type with no captured services, so it is safe to share across ServiceProviders and reuse gives
+        // a real win. It is not reset between DI containers / test fixtures within one process.
         private static readonly ConcurrentDictionary<(Type RequestType, Type ResultType), RequestHandlerBase> _handlerCache = new();
 
         public Mediator(IServiceProvider serviceProvider)
