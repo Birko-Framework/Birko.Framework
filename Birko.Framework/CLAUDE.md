@@ -139,6 +139,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.Sync core cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch AD: **CR-L207, CR-L208, CR-L209** — Birko.Data.Sync. All closed; **/code-review clean**.
+- **Cleanup (L207)** — `SyncOptions.MaxItems` is now honored (Sync/Preview, sync + async, cap `allGuids` via `.Take`); `SaveFilterBlockAction.MarkConflict` (previously falling through the switch → behaving like Skip) now invokes `OnConflict` with a `ConflictInfo`; `SkipPreview` documented as reserved (no internal caller — Preview and Sync are independent public entry points).
+- **Cleanup (L208)** — dropped the unused `localExists`/`remoteExists`/`hasKnowledge` bools in `ProcessBatch(Async)` (the `out` vars remain used).
+- **Bug (L209)** — entity dictionaries are built via a new `BuildEntityDictionary` helper that throws a clear `InvalidOperationException` naming the side when an entity has an empty Guid (all unsaved entities map to `Guid.Empty`) or two collide — instead of the opaque `ArgumentException` a plain `ToDictionary(GetGuid)` throws (surfacing as a generic "Sync failed").
+- **Tests** — Sync.Tests 41 → 43 (`MaxItems` caps / null processes everything). L209's empty-Guid guard is code-review verified — the InMemory test store auto-assigns Guids on Create.
+- Suite green: Birko.Data.Sync.Tests 43. STORY-027 now **209/418**.
+
 ### Code-review remediation — low findings, Data.Stores cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch AC: **CR-L203 … CR-L206** — Birko.Data.Stores. All closed; **/code-review clean**.
 - **Cleanup (L203)** — removed the dead `AggregateMath.BucketByTime<T>` (no callers; the mutation concern it was meant to fix was already resolved under CR-H097 — `AggregateHelper` computes bucket time on-the-fly via `BucketTimeOf`/`TruncateToBucket`).

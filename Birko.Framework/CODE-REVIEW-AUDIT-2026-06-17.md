@@ -6528,7 +6528,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SyncOptions.MaxItems and SkipPreview are defined but never honored
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync\Models/SyncOptions.cs:34`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** MaxItems (line 34) and SkipPreview (line 76) are public options but are not referenced anywhere in SyncProvider/AsyncSyncProvider/SyncProviderBase — sync always processes all allGuids and never consults either flag. SaveFilterBlockAction.MarkConflict (SyncFilterOptions.cs:66) is likewise never handled in HandleSaveFilterBlock's switch (SyncProviderBase.cs:310-323), so selecting it silently behaves like Skip. These advertise behavior that does not exist.
 - **Fix:** Either implement MaxItems (cap allGuids), SkipPreview, and the MarkConflict block action, or remove them until implemented.
 
@@ -6536,7 +6536,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused locals: localExists/remoteExists/hasKnowledge in ProcessBatch
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync\SyncProvider.cs:225 / AsyncSyncProvider.cs:226`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** In ProcessBatch(Async), localExists, remoteExists and hasKnowledge are assigned from TryGetValue (lines 225-227 / 226-228) but never read — only the out variables localItem/remoteItem/knowledgeItem are used afterward. Minor dead assignments; the TryGetValue calls are still needed for the out values.
 - **Fix:** Drop the unused bool locals (assign to discards or just call TryGetValue for the out value).
 
@@ -6544,7 +6544,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetGuid swallows malformed Guid by returning Guid.Empty, risking ToDictionary key collision
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync\Internal/SyncProviderBase.cs:329`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetGuid returns Guid.Empty when the reflected Guid property value is null or not a Guid. Since AbstractModel.Guid is Guid? and defaults to null (AbstractModel.cs:9), any entity not yet assigned a Guid maps to Guid.Empty. If two such entities are fetched from a store, localItems.ToDictionary(GetGuid) (SyncProvider.cs:57) throws ArgumentException on duplicate key, surfacing as a generic 'Sync failed'. Worth guarding or validating that entities have non-empty Guids before keying.
 - **Fix:** Validate/skip entities with a null/empty Guid before building the dictionaries, or surface a clear error rather than relying on Guid.Empty collisions.
 

@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**206 / 418 triaged** as of 2026-07-14. Next open is CR-L207 (Birko.Data.Sync).
+**209 / 418 triaged** as of 2026-07-14. Next open is CR-L210 (Birko.Data.Sync.CosmosDB).
+
+**Batch AD — Data.Sync core cluster (CR-L207, CR-L208, CR-L209):** Birko.Data.Sync. All closed;
+**/code-review clean**. **L207** (cleanup): `SyncOptions.MaxItems` is now honored — Sync/Preview (sync + async)
+cap `allGuids` via `.Take(MaxItems)`; the `SaveFilterBlockAction.MarkConflict` block action (previously
+falling through the switch to behave like Skip) now invokes `OnConflict` with a `ConflictInfo`, making a
+blocked save distinguishable from a skip; `SkipPreview` documented as reserved (no internal caller —
+Preview and Sync are independent public entry points). **L208** (cleanup): dropped the unused
+`localExists`/`remoteExists`/`hasKnowledge` bools in `ProcessBatch(Async)` (the `out` vars are still used).
+**L209** (bug): entity change-detection dictionaries are built via a new `BuildEntityDictionary` helper that
+throws a **clear** `InvalidOperationException` naming the side when an entity has an empty Guid (all unsaved
+entities map to `Guid.Empty`) or two entities collide — instead of the opaque `ArgumentException` a plain
+`ToDictionary(GetGuid)` throws (surfacing as a generic "Sync failed"). **Tests:** Sync.Tests 41 → 43
+(`MaxItems` caps the processed set; null `MaxItems` processes everything). L209's empty-Guid guard is
+code-review verified — the InMemory test store auto-assigns Guids on Create, so empty-Guid entities can't be
+staged through it. Suite green: Sync.Tests 43.
 
 **Batch AC — Data.Stores cluster (CR-L203 … CR-L206):** Birko.Data.Stores. All closed;
 **/code-review clean**. **L203** (cleanup): removed the dead `AggregateMath.BucketByTime<T>` (no callers;
