@@ -189,8 +189,14 @@ namespace Birko.Communication.Camera.Cameras
         /// <summary>Frame height. Default: 480.</summary>
         public int Height { get; set; } = 480;
 
-        /// <summary>JPEG quality (1=best, 31=worst). Default: 5.</summary>
-        public int JpegQuality { get; set; } = 5;
+        private int _jpegQuality = 5;
+        /// <summary>JPEG quality (1=best, 31=worst). Values are clamped to [1,31] so an out-of-range
+        /// value can't silently fail the ffmpeg capture. Default: 5.</summary>
+        public int JpegQuality
+        {
+            get => _jpegQuality;
+            set => _jpegQuality = System.Math.Clamp(value, 1, 31); // CR-L048
+        }
 
         /// <summary>Path to ffmpeg binary. Null = use PATH.</summary>
         public string? FfmpegPath { get; set; }
