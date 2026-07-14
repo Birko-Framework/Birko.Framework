@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**212 / 418 triaged** as of 2026-07-14. Next open is CR-L213 (Birko.Data.Sync.Json).
+**214 / 418 triaged** as of 2026-07-14. Next open is CR-L215 (Birko.Data.Sync.MongoDb).
+
+**Batch AG — Data.Sync.Json cluster (CR-L213, CR-L214):** Birko.Data.Sync.Json. Both closed;
+**/code-review clean (no findings)**. **L213** (cleanup): removed the vestigial `int Id` field (serialized
+`"id"`) from `JsonSyncKnowledgeItem` — dead state that defaulted to 0 in every record (the store keys
+exclusively by `AbstractModel.Guid`, and neither `ISyncKnowledgeItem` nor the sync provider ever read/wrote
+it; identity is covered by Guid/EntityGuid). Existing files carrying `"id":0` are harmless — System.Text.Json
+skips unmapped members. This is the JSON analogue of Batch AF's ES `RecordId` and the Mongo `IdRecord`.
+**L214** (other, docs — finding rated "acceptable as-is"): documented the derived-timestamp contract on
+`GetLastSyncTimeAsync`/`SetLastSyncTimeAsync` — last-sync-time is the max `LastSyncedAt` over a scope's items,
+so stamping an **empty** scope persists nothing (Set echoes the value back, a later Get still returns null →
+reads as initial-sync). Kept the derived design: `AsyncSyncProvider` always persists the round's knowledge
+items (Create/Update) before stamping (`AsyncSyncProvider.cs:204-208`), so a stamp only ever lands on a
+populated scope; a sentinel/scope record would change the persisted shape for a case that never occurs.
+**Tests:** Sync.Json.Tests 5 → 7 (`SetLastSyncTime_EmptyScope_IsANoOp_AndGetStaysNull` pins the L214
+contract; `Model_HasNoVestigialIdField` reflection-asserts the L213 removal). Suite green: Sync.Json.Tests 7.
 
 **Batch AF — Data.Sync.ElasticSearch (CR-L212):** Birko.Data.Sync.ElasticSearch. Closed;
 **/code-review clean (no findings)**. **L212** (cleanup, verify-first — finding partly stale): the model

@@ -6576,18 +6576,19 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L213 · ⚪ low · Birko.Data.Sync.Json
 - **Title:** Vestigial Id field on JsonSyncKnowledgeItem
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Json\Models/JsonSyncKnowledgeItem.cs:18-19`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AG)
+- **Status:** done
 - **Detail:** The model declares an int Id property (serialized as "id"). The store keys entities exclusively by AbstractModel.Guid (AsyncJsonStore loads/saves by item.Guid; CreateKnowledgeItem sets Guid = Guid.NewGuid()), and neither ISyncKnowledgeItem nor AsyncSyncProvider ever reads or writes Id (grep for .Id in AsyncSyncProvider returns nothing). It is dead state that defaults to 0 in every persisted record and could mislead a reader into thinking it identifies the row.
 - **Fix:** Remove the Id property (the interface ISyncKnowledgeItem.Guid / EntityGuid already cover identity), or document why it is retained if a downstream consumer relies on the serialized "id" field.
 
 ### CR-L214 · ⚪ low · Birko.Data.Sync.Json
 - **Title:** Last-sync-time derived from Max(LastSyncedAt) cannot record an empty-scope sync
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Json\Stores/AsyncJsonSyncKnowledgeStore.cs:25-39`
-- **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Category:** other · **Verification:** verified — documented as acceptable-as-is (STORY-027 Batch AG)
+- **Status:** done
 - **Detail:** GetLastSyncTimeAsync derives the scope's last sync time from Max(LastSyncedAt) over existing knowledge items, and SetLastSyncTimeAsync only stamps existing items. If a scope has zero knowledge items, SetLastSyncTimeAsync silently persists nothing yet returns lastSyncTime, so a subsequent GetLastSyncTimeAsync still returns null (isInitialSync stays true). This differs from the canonical in-memory test store (Birko.Data.Sync.Tests/TestInfrastructure/TestSyncKnowledgeItemStore.cs) which keeps an explicit per-scope sync-time map and would round-trip an empty-scope timestamp. In the current AsyncSyncProvider flow the provider always writes knowledge items before stamping (AsyncSyncProvider.cs:170-172), so it works today, but the implementation is fragile to a caller that stamps a scope with no items.
 - **Fix:** Acceptable as-is given the provider ordering; if robustness is desired, track scope sync-time explicitly (a sentinel/scope record) so an empty-scope SetLastSyncTimeAsync is observable, matching the test store's semantics.
+- **Resolution (Batch AG):** documented the derived-timestamp contract + empty-scope no-op on both `GetLastSyncTimeAsync`/`SetLastSyncTimeAsync` (kept the derived design — the provider always persists the round's items before stamping, so a stamp only ever lands on a populated scope; a sentinel record would change the persisted shape for a case that never occurs in the real flow). Regression test pins the empty-scope no-op (Set echoes the value, Get stays null).
 
 ### CR-L215 · ⚪ low · Birko.Data.Sync.MongoDb
 - **Title:** CollectionName property is dead/misleading — the base store ignores it
