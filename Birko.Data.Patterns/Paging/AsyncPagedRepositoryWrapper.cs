@@ -42,13 +42,12 @@ public class AsyncPagedRepositoryWrapper<T> : IAsyncPagedRepository<T>
 
         var offset = (page - 1) * pageSize;
 
-        var itemsTask = _repository.ReadAsync(filter, orderBy, pageSize, offset, ct);
-        var countTask = _repository.CountAsync(filter, ct);
-
-        await Task.WhenAll(itemsTask, countTask);
-
-        var items = (await itemsTask).ToList();
-        var totalCount = await countTask;
+        // Await sequentially rather than concurrently: the wrapped repository may be backed by a
+        // non-thread-safe store/connection that cannot service two in-flight calls on one instance
+        // (the count and the page read share the same _repository). Correctness over the marginal
+        // latency win. (CR-L159)
+        var items = (await _repository.ReadAsync(filter, orderBy, pageSize, offset, ct)).ToList();
+        var totalCount = await _repository.CountAsync(filter, ct);
 
         return new PagedResult<T>(items, totalCount, page, pageSize);
     }

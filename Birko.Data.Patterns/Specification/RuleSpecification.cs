@@ -78,7 +78,6 @@ public class RuleSpecification<T> : Specification<T> where T : class
             return Expression.Constant(false);
 
         var member = Expression.Property(param, property);
-        var memberAsObject = Expression.Convert(member, typeof(object));
 
         Expression expr = rule.Operator switch
         {
@@ -117,14 +116,19 @@ public class RuleSpecification<T> : Specification<T> where T : class
         object? value,
         Func<Expression, Expression, BinaryExpression> comparison)
     {
-        var constant = Expression.Constant(Convert.ChangeType(value, member.Type), member.Type);
+        // A value that cannot be converted to the member type (null against a non-nullable
+        // value type, or a non-convertible/mistyped value) makes the leaf unsatisfiable rather
+        // than throwing when the compiled delegate runs in-memory or the provider translates it.
+        if (!TryConvertConstant(value, member.Type, out var constant))
+            return Expression.Constant(false);
         return comparison(member, constant);
     }
 
     private static Expression BuildBetween(MemberExpression member, object? lower, object? upper)
     {
-        var lowerConst = Expression.Constant(Convert.ChangeType(lower, member.Type), member.Type);
-        var upperConst = Expression.Constant(Convert.ChangeType(upper, member.Type), member.Type);
+        if (!TryConvertConstant(lower, member.Type, out var lowerConst) ||
+            !TryConvertConstant(upper, member.Type, out var upperConst))
+            return Expression.Constant(false);
         return Expression.AndAlso(
             Expression.GreaterThanOrEqual(member, lowerConst),
             Expression.LessThanOrEqual(member, upperConst)
@@ -133,10 +137,58 @@ public class RuleSpecification<T> : Specification<T> where T : class
 
     private static Expression BuildStringMethod(MemberExpression member, object? value, string methodName)
     {
+        // String methods only apply to string members; a non-string field is never a match.
+        if (member.Type != typeof(string))
+            return Expression.Constant(false);
+
         var method = typeof(string).GetMethod(methodName, [typeof(string), typeof(StringComparison)])!;
         var valueExpr = Expression.Constant(value?.ToString() ?? string.Empty, typeof(string));
         var comparisonExpr = Expression.Constant(StringComparison.OrdinalIgnoreCase, typeof(StringComparison));
-        return Expression.Call(member, method, valueExpr, comparisonExpr);
+        var call = Expression.Call(member, method, valueExpr, comparisonExpr);
+
+        // Guard against a null string property: null.Contains(...) would NRE when the compiled
+        // delegate runs in-memory. A null field is treated as "does not match".
+        var notNull = Expression.NotEqual(member, Expression.Constant(null, typeof(string)));
+        return Expression.AndAlso(notNull, call);
+    }
+
+    /// <summary>
+    /// Attempts to build a constant of <paramref name="targetType"/> from <paramref name="value"/>.
+    /// Returns false (leaving <paramref name="constant"/> a placeholder) when the value is null
+    /// against a non-nullable value type or cannot be converted, so the caller can degrade to an
+    /// unsatisfiable leaf instead of throwing.
+    /// </summary>
+    private static bool TryConvertConstant(object? value, Type targetType, out Expression constant)
+    {
+        constant = Expression.Constant(false);
+        try
+        {
+            object? converted;
+            if (value is null)
+            {
+                // null is only representable for reference types and Nullable<T>.
+                if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) is null)
+                    return false;
+                converted = null;
+            }
+            else if (targetType.IsInstanceOfType(value))
+            {
+                // Already the right type (covers enums and exact matches ChangeType can't handle).
+                converted = value;
+            }
+            else
+            {
+                var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+                converted = Convert.ChangeType(value, underlying);
+            }
+
+            constant = Expression.Constant(converted, targetType);
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException or ArgumentException)
+        {
+            return false;
+        }
     }
 
     private static Expression BuildGroupExpression(RuleGroup group, ParameterExpression param)
