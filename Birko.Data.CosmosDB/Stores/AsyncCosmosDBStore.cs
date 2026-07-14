@@ -471,6 +471,7 @@ public class AsyncCosmosDBStore<T>
     /// <returns>True if the endpoint is reachable, false otherwise.</returns>
     public async Task<bool> IsHealthyAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-L103: observe the token (ReadAccountAsync has no ct overload)
         if (_cosmosClient == null) return false;
 
         try
