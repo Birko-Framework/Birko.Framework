@@ -13,7 +13,15 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**58 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–C done).
+**64 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–C + D1 done).
+
+**Sub-batch D1 (CR-L059 … CR-L064) — Hardware + IR:** **L059** (verify-first — Serial Read/HasReadData/
+RemoveReadData already guard size<0, "negative = all", CR-M049), **L060** (removed a no-op `catch(Exception){throw;}`
+in `Serial.Open`), **L061** (rewrote Hardware CLAUDE.md to the real Serial/Infraport/LPT surface; README was
+already accurate), **L062** (`InfraredPort.HandleReceivedTiming` tries RawProtocol last regardless of
+registration order — RawProtocol matches any non-empty timing; + regression test), **L063** (documented
+`SamsungAcProfile.Protocol` as informational — transmit AC via `GetTiming()`), **L064** (documented
+`IrTiming.TotalDurationUs` as single-pass, excluding repeats). Suites green: Hardware 23, IR 103.
 
 **Sub-batch C (CR-L053 … CR-L058) — gRPC + gRPC.Server:** **L053** (Credentials doc corrected to
 attribute scheme-based inference to `GrpcChannel.ForAddress`, not the pool), **L054/L055** (`DeadlineSeconds`

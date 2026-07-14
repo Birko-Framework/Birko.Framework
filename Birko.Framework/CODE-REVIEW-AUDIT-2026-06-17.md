@@ -5344,7 +5344,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Serial.Read with negative size silently returns whole buffer; HasReadData(negative) always true
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\Ports/Serial.cs:50-64,134-137`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D1, 2026-07-14) — verify-first / already resolved: Serial.Read, HasReadData and RemoveReadData all guard size<0 (RemoveReadData under CR-M049), with a consistent 'negative = all available' contract; no crash
 - **Detail:** HasReadData(size) is 'ReadData.Count >= size'; for a negative size this is always true. Read then takes the size<0 branch returning the full buffer (GetRange(0, ReadData.Count)). This 'negative means all' behavior is undocumented and inconsistent with RemoveReadData (which would call ReadData.RemoveRange(0, size) with a negative size and throw). Callers passing a negative size to RemoveReadData crash.
 - **Fix:** Decide the contract explicitly: reject negative size with a guard clause, or handle size<0 uniformly in both Read and RemoveReadData.
 
@@ -5352,7 +5352,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant catch (Exception) { throw; } and dead else branches
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\Ports/Serial.cs:82-85`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D1, 2026-07-14)
 - **Detail:** Open() has 'catch (Exception) { throw; }' which is a no-op rethrow that adds no value (can be removed entirely). Combined with the IsOpen()/port.IsOpen guards this is dead boilerplate.
 - **Fix:** Remove the catch-all rethrow; keep only the meaningful UnauthorizedAccessException handler.
 
@@ -5360,7 +5360,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CLAUDE.md / README document a different, non-existent API
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Hardware\CLAUDE.md:15-65`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D1, 2026-07-14) — CLAUDE.md rewritten to the real Serial/Infraport/LPT + *Settings surface (AbstractPort/IPort, Open/Write/Read/RemoveReadData, SubscribeProcessData); the fictional SerialPortCommunicator/UsbCommunicator/etc. API is gone (README was already accurate)
 - **Detail:** The project docs describe SerialPortCommunicator, AsyncSerialPortCommunicator, UsbCommunicator, UsbDeviceFinder, SerialPortSettings, HardwareDeviceInfo and a DataReceived event with 'PortName'/Connect()/Send() API. None of these exist; the actual code exposes AbstractPort-derived Serial/LPT/Infraport with PortSettings.Name and Open/Write/Read. The documented usage examples will not compile, which violates the framework's 'keep README/CLAUDE.md in sync with the public API' maintenance rule.
 - **Fix:** Rewrite CLAUDE.md/README to document the real Serial/LPT/Infraport + *Settings (GetID) surface, or rename the types to match the docs.
 
@@ -5368,7 +5368,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RawProtocol catch-all defeats multi-protocol decode ordering
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.IR\Ports/InfraredPort.cs:164-185`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D1, 2026-07-14) — fixed: HandleReceivedTiming now tries structured protocols first and RawProtocol last regardless of registration order (RawProtocol.Decode matches any non-empty timing). Regression test: Raw registered first, NEC still wins
 - **Detail:** HandleReceivedTiming tries each registered protocol in registration order and returns on the first non-null Decode. RawProtocol.Decode succeeds for any non-empty timing (it only returns null on empty). If a consumer registers RawProtocol before a real protocol (e.g. NEC), every signal is swallowed as Raw and the structured protocols never run. This is order-dependent and easy to get wrong; not a hard bug but a sharp edge worth documenting (register RawProtocol last) or guarding.
 - **Fix:** Document that RawProtocol must be registered last, or special-case it as a fallback only used when no structured protocol matches.
 
@@ -5376,7 +5376,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SamsungAcProfile.Protocol exposes a base SamsungProtocol that cannot encode AC frames
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.IR\Devices/SamsungAcProfile.cs:65-69,236-261`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D1, 2026-07-14) — documented: SamsungAcProfile.Protocol is informational (base 32-bit TV variant); AC frames must be transmitted via GetTiming(), not Protocol.Encode
 - **Detail:** The profile's Protocol property returns a plain SamsungProtocol (32-bit TV variant), but actual transmission uses the private EncodeSamsungAc (14-byte, 3-section frame). A caller who takes profile.Protocol and calls Encode(profile.GetCommand("PowerOn")) gets a wrong 32-bit waveform silently, instead of the AC waveform GetTiming produces. The IDeviceProfile contract implies Protocol is the encoder for this device.
 - **Fix:** Either implement an internal IIrProtocol that actually encodes the 14-byte AC frame and return it from Protocol, or document clearly that AC profiles must be transmitted via GetTiming() and Protocol is informational only.
 
@@ -5384,7 +5384,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IrTiming.TotalDurationUs ignores repeats
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.IR\Protocols/IrTiming.cs:47-55`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D1, 2026-07-14) — documented: IrTiming.TotalDurationUs is a single-pass duration that deliberately excludes RepeatCount/RepeatGapUs
 - **Detail:** TotalDurationUs sums only Durations once, ignoring RepeatCount and RepeatGapUs. The XML doc says 'total duration of the signal', which a caller could reasonably read as including repeats. Minor, but the method name/doc and behavior can mislead timing/scheduling consumers.
 - **Fix:** Either clarify the doc comment that it returns a single-pass duration excluding repeats, or factor in RepeatCount * (sum + RepeatGapUs).
 
