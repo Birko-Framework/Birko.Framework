@@ -41,11 +41,31 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Gets the schema name for SCHEMABINDING. Defaults to "dbo".
+        /// Gets the schema name used for SCHEMABINDING two-part names. Defaults to "dbo"; override in a
+        /// derived connector for databases whose target tables live in a non-dbo schema (CR-L180).
         /// </summary>
-        private string GetSchemaName()
+        protected virtual string GetSchemaName()
         {
             return "dbo";
+        }
+
+        /// <summary>
+        /// SQL Server requires an aggregate indexed view (WITH SCHEMABINDING + GROUP BY) to include
+        /// COUNT_BIG(*) in its select list, which the generic aggregate SELECT builder does not emit —
+        /// so the unique clustered index (CreateIndexedView step 2) would fail at runtime with an opaque
+        /// error. Fail fast with a clear message instead (CR-L181). Non-aggregate indexed views are
+        /// unaffected.
+        /// </summary>
+        private static void EnsureIndexedViewSupported(Tables.View view)
+        {
+            if (view.HasAggregateFields())
+            {
+                throw new System.NotSupportedException(
+                    "Aggregate (GROUP BY) indexed views are not supported by CreateIndexedView: SQL Server " +
+                    "requires COUNT_BIG(*) in the select list of a SCHEMABINDING aggregate view, which the " +
+                    "generated SELECT does not include. Use a non-aggregate view, or create the aggregate " +
+                    "indexed view manually with an explicit COUNT_BIG(*) column.");
+            }
         }
 
         /// <summary>
@@ -122,6 +142,7 @@ namespace Birko.Data.SQL.Connectors
                 throw new System.InvalidOperationException("View name cannot be empty.");
             }
 
+            EnsureIndexedViewSupported(view);
             var selectSql = BuildSchemaBindingSelectSql(view);
             var keyColumns = GetIndexedViewKeyColumns(view);
             var indexName = "IX_" + name;
@@ -181,6 +202,7 @@ namespace Birko.Data.SQL.Connectors
                 throw new System.InvalidOperationException("View name cannot be empty.");
             }
 
+            EnsureIndexedViewSupported(view);
             var selectSql = BuildSchemaBindingSelectSql(view);
             var keyColumns = GetIndexedViewKeyColumns(view);
             var indexName = "IX_" + name;
