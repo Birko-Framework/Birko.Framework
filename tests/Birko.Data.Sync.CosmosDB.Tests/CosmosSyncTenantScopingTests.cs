@@ -1,6 +1,5 @@
 using System;
 using Birko.Data.Sync.CosmosDB.Models;
-using Birko.Data.Sync.CosmosDB.Stores;
 using Birko.Data.Sync.Models;
 using FluentAssertions;
 using Xunit;
@@ -10,9 +9,13 @@ namespace Birko.Data.Sync.CosmosDB.Tests;
 /// <summary>
 /// CR-H100: the Cosmos sync knowledge store accepted a tenantId on every read/delete/last-sync
 /// method but never used it, and the model had no tenant field — so operations leaked/clobbered
-/// across tenants. The model now carries TenantId, ConvertToCosmosItem stamps it, and the queries
+/// across tenants. The model now carries TenantId, the conversion factory stamps it, and the queries
 /// filter on it. The LINQ filter itself needs a live Cosmos DB, so these offline tests pin the model
 /// round-trip and the tenant-stamping conversion. (Filter behavior is an integration/infra check.)
+///
+/// CR-L211: the per-store <c>ConvertToCosmosItem</c> copies were consolidated into a single shared
+/// factory <see cref="CosmosSyncKnowledgeItem.FromInterface"/>, so the mapping can't drift between the
+/// sync and async stores. These tests now exercise that one factory.
 /// </summary>
 public class CosmosSyncTenantScopingTests
 {
@@ -38,68 +41,89 @@ public class CosmosSyncTenantScopingTests
     }
 
     [Fact]
-    public void ConvertToCosmosItem_StampsTenant_OnPlainItem()
+    public void FromInterface_StampsTenant_OnPlainItem()
     {
         var tenant = Guid.NewGuid();
         var src = new PlainKnowledge { EntityGuid = Guid.NewGuid(), Scope = "Products" };
 
-        var result = CosmosSyncKnowledgeStore.ConvertToCosmosItem(src, tenant);
+        var result = CosmosSyncKnowledgeItem.FromInterface(src, tenant);
 
         result.TenantId.Should().Be(tenant);
         result.Scope.Should().Be("Products");
     }
 
     [Fact]
-    public void ConvertToCosmosItem_NullTenant_LeavesTenantNull()
+    public void FromInterface_NullTenant_LeavesTenantNull()
     {
         var src = new PlainKnowledge { EntityGuid = Guid.NewGuid(), Scope = "Products" };
 
-        var result = CosmosSyncKnowledgeStore.ConvertToCosmosItem(src, null);
+        var result = CosmosSyncKnowledgeItem.FromInterface(src, null);
 
         result.TenantId.Should().BeNull();
     }
 
     [Fact]
-    public void ConvertToCosmosItem_ExplicitTenant_OverridesExistingCosmosItemTenant()
+    public void FromInterface_ExplicitTenant_OverridesExistingCosmosItemTenant()
     {
         var original = Guid.NewGuid();
         var newTenant = Guid.NewGuid();
         var existing = new CosmosSyncKnowledgeItem { Guid = Guid.NewGuid(), TenantId = original };
 
-        var result = CosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, newTenant);
+        var result = CosmosSyncKnowledgeItem.FromInterface(existing, newTenant);
 
         result.TenantId.Should().Be(newTenant);
     }
 
     // ── CR-M158: the pass-through (already-CosmosSyncKnowledgeItem) branch must populate a null Guid
-    // so the downstream `Guid!.Value` in Update/SetLastSyncTime is provably safe. ──
+    // so the downstream `Guid!.Value` in Update/SetLastSyncTime is provably safe. CR-L211 folded the
+    // former sync + async copies into this one factory, so a single test now covers both paths. ──
 
     [Fact]
-    public void ConvertToCosmosItem_Sync_ExistingItemWithNullGuid_GetsGuidAssigned()
+    public void FromInterface_ExistingItemWithNullGuid_GetsGuidAssigned()
     {
         var existing = new CosmosSyncKnowledgeItem { Guid = null, EntityGuid = Guid.NewGuid(), Scope = "S" };
 
-        var result = CosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, null);
+        var result = CosmosSyncKnowledgeItem.FromInterface(existing, null);
 
         result.Guid.Should().NotBeNull();
     }
 
     [Fact]
-    public void ConvertToCosmosItem_Async_ExistingItemWithNullGuid_GetsGuidAssigned()
-    {
-        var existing = new CosmosSyncKnowledgeItem { Guid = null, EntityGuid = Guid.NewGuid(), Scope = "S" };
-
-        var result = AsyncCosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, null);
-
-        result.Guid.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void ConvertToCosmosItem_ExistingItemWithGuid_PreservesIt()
+    public void FromInterface_ExistingItemWithGuid_PreservesIt()
     {
         var g = Guid.NewGuid();
         var existing = new CosmosSyncKnowledgeItem { Guid = g };
 
-        CosmosSyncKnowledgeStore.ConvertToCosmosItem(existing, null).Guid.Should().Be(g);
+        CosmosSyncKnowledgeItem.FromInterface(existing, null).Guid.Should().Be(g);
+    }
+
+    [Fact]
+    public void FromInterface_PlainItem_CopiesAllFields()
+    {
+        var entity = Guid.NewGuid();
+        var when = new DateTime(2026, 7, 14, 8, 30, 0, DateTimeKind.Utc);
+        var src = new PlainKnowledge
+        {
+            EntityGuid = entity,
+            Scope = "Orders",
+            LastSyncedAt = when,
+            LocalVersion = "lv1",
+            RemoteVersion = "rv1",
+            IsLocalDeleted = true,
+            IsRemoteDeleted = false,
+            Metadata = "{\"k\":1}"
+        };
+
+        var result = CosmosSyncKnowledgeItem.FromInterface(src, null);
+
+        result.EntityGuid.Should().Be(entity);
+        result.Scope.Should().Be("Orders");
+        result.LastSyncedAt.Should().Be(when);
+        result.LocalVersion.Should().Be("lv1");
+        result.RemoteVersion.Should().Be("rv1");
+        result.IsLocalDeleted.Should().BeTrue();
+        result.IsRemoteDeleted.Should().BeFalse();
+        result.Metadata.Should().Be("{\"k\":1}");
+        result.Guid.Should().NotBeNull("a plain item with no Guid is assigned a fresh one");
     }
 }
