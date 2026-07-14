@@ -26,6 +26,17 @@ public class MySQLConnectorTests
     private static DateTimeField DateTimeField()
         => new(typeof(Sample).GetProperty(nameof(Sample.When))!, "When");
 
+    // CR-L176: the missing-table seam recognizes MySQL's "Table 'x' doesn't exist" wording (plus the
+    // inherited SQLite base match) so a reader over a missing table yields empty instead of faulting.
+    [Theory]
+    [InlineData("Table 'db.widgets' doesn't exist", true)]
+    [InlineData("no such table: widgets", true)]
+    [InlineData("some other error", false)]
+    public void IsMissingTableException_matches_mysql_and_base_wording(string message, bool expected)
+    {
+        NewConnector().IsMissingTableException(new Exception(message)).Should().Be(expected);
+    }
+
     [Theory]
     [InlineData(DbType.DateTime, "DATETIME")]
     [InlineData(DbType.DateTime2, "DATETIME")]
