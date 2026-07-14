@@ -67,8 +67,23 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
         Guid? tenantId,
         CancellationToken ct = default)
     {
-        var knowledge = await GetKnowledgeAsync(scope, tenantId, ct);
-        return knowledge.TryGetValue(entityGuid, out var item) ? item : null;
+        if (Container == null) return null;
+
+        // CR-L210: query directly on Scope + TenantId + EntityGuid and take the first result, instead of
+        // materializing every document in the scope into a Dictionary just to pull one item out of it.
+        var queryable = Container.GetItemLinqQueryable<CosmosSyncKnowledgeItem>()
+            .Where(x => x.Scope == scope && x.TenantId == tenantId && x.EntityGuid == entityGuid)
+            .Take(1);
+
+        using var iterator = queryable.ToFeedIterator();
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(ct);
+            var first = response.FirstOrDefault();
+            if (first != null) return first;
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -84,7 +99,7 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
         var tasks = new List<Task>();
         foreach (var item in items)
         {
-            var cosmosItem = ConvertToCosmosItem(item, tenantId);
+            var cosmosItem = CosmosSyncKnowledgeItem.FromInterface(item, tenantId);
             tasks.Add(Container.UpsertItemAsync(cosmosItem, new PartitionKey(cosmosItem.Guid!.Value.ToString()), cancellationToken: ct));
         }
 
@@ -163,38 +178,5 @@ public class AsyncCosmosSyncKnowledgeStore : AsyncCosmosDBStore<CosmosSyncKnowle
         }
 
         await Task.WhenAll(tasks);
-    }
-
-    internal static CosmosSyncKnowledgeItem ConvertToCosmosItem(ISyncKnowledgeItem item, Guid? tenantId)
-    {
-        if (item is CosmosSyncKnowledgeItem cosmosItem)
-        {
-            // Stamp the tenant so this row is scoped to it on subsequent reads (CR-H100); an explicit
-            // tenantId wins, otherwise keep whatever the item already carried.
-            if (tenantId.HasValue)
-            {
-                cosmosItem.TenantId = tenantId;
-            }
-            // CR-M158: ensure the id is populated on the pass-through branch too, so the `Guid!.Value`
-            // dereferences in Update/SetLastSyncTime are provably safe (the base store's CreateCore/Save
-            // does the same `??=`). Without this a caller-supplied CosmosSyncKnowledgeItem with a null
-            // Guid NRE'd downstream.
-            cosmosItem.Guid ??= Guid.NewGuid();
-            return cosmosItem;
-        }
-
-        return new CosmosSyncKnowledgeItem
-        {
-            Guid = item.Guid ?? Guid.NewGuid(),
-            EntityGuid = item.EntityGuid,
-            TenantId = tenantId,
-            Scope = item.Scope,
-            LastSyncedAt = item.LastSyncedAt,
-            LocalVersion = item.LocalVersion,
-            RemoteVersion = item.RemoteVersion,
-            IsLocalDeleted = item.IsLocalDeleted,
-            IsRemoteDeleted = item.IsRemoteDeleted,
-            Metadata = item.Metadata
-        };
     }
 }

@@ -74,6 +74,47 @@ public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     public const string ContainerName = "SyncKnowledge";
 
     /// <summary>
+    /// Builds a <see cref="CosmosSyncKnowledgeItem"/> from any <see cref="ISyncKnowledgeItem"/>, stamping
+    /// the tenant. Shared by the sync and async stores so the 14-line mapping can't drift between them
+    /// (CR-L211) — this is the mapper that changes whenever the model gains a field (e.g. TenantId).
+    /// </summary>
+    /// <remarks>
+    /// If <paramref name="item"/> is already a <see cref="CosmosSyncKnowledgeItem"/> it is returned as-is
+    /// (an explicit <paramref name="tenantId"/> wins over whatever it already carried); otherwise a fresh
+    /// row is materialized. The Guid is populated when null so the downstream <c>Guid!.Value</c>
+    /// dereferences in Update/SetLastSyncTime are provably safe (mirrors the base store's <c>??=</c>) —
+    /// see CR-H100 (tenant scoping) and CR-M158 (null-Guid pass-through).
+    /// </remarks>
+    internal static CosmosSyncKnowledgeItem FromInterface(ISyncKnowledgeItem item, Guid? tenantId)
+    {
+        if (item is CosmosSyncKnowledgeItem cosmosItem)
+        {
+            if (tenantId.HasValue)
+            {
+                cosmosItem.TenantId = tenantId;
+            }
+            // System.Guid is fully qualified: the inherited instance property `Guid` shadows the type
+            // name in this static method's expression context.
+            cosmosItem.Guid ??= System.Guid.NewGuid();
+            return cosmosItem;
+        }
+
+        return new CosmosSyncKnowledgeItem
+        {
+            Guid = item.Guid ?? System.Guid.NewGuid(),
+            EntityGuid = item.EntityGuid,
+            TenantId = tenantId,
+            Scope = item.Scope,
+            LastSyncedAt = item.LastSyncedAt,
+            LocalVersion = item.LocalVersion,
+            RemoteVersion = item.RemoteVersion,
+            IsLocalDeleted = item.IsLocalDeleted,
+            IsRemoteDeleted = item.IsRemoteDeleted,
+            Metadata = item.Metadata
+        };
+    }
+
+    /// <summary>
     /// Returns a string representation for debugging.
     /// </summary>
     public override string ToString()
