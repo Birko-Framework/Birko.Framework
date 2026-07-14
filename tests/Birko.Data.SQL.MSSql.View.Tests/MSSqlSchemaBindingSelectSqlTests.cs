@@ -58,11 +58,11 @@ public class MSSqlSchemaBindingSelectSqlTests
         var sql = SchemaBindingSelect(NewConnector(), LoadView());
 
         sql.Should().StartWith("SELECT ");
-        // Aggregate AS aliases use the aggregate name (bracket-quoted), same as the base builder.
+        // Aggregate AS aliases use the unique view-property name (CR-L195), same as the base builder.
         sql.Should().Contain("COUNT(SbOrders.Guid)");
-        sql.Should().Contain("AS [COUNT]");
+        sql.Should().Contain("AS [OrderCount]");
         sql.Should().Contain("SUM(SbOrders.Total)");
-        sql.Should().Contain("AS [SUM]");
+        sql.Should().Contain("AS [TotalSpent]");
         sql.Should().Contain("GROUP BY");
     }
 
