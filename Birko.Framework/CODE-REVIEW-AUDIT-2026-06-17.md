@@ -5624,7 +5624,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** PasswordSettings constructor uses `password ?? null!` which is a no-op laundering null
 - **Path:** `C:\Source\Birko\Framework\Birko.Configuration\Settings.cs:134`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14)
 - **Detail:** `Password = password ?? null!;` accepts a `string? password` and assigns `null!` when null, which is functionally identical to just assigning the nullable into a non-nullable property while suppressing the warning. The Password property is declared non-nullable (`= null!`), so a consumer that constructs PasswordSettings without a password ends up with a null Password that the type system claims is non-null — a latent CS8602 risk for any code that dereferences Password trusting the annotation.
 - **Fix:** Either make Password nullable (`string? Password`) to reflect reality, or default it to string.Empty: `Password = password ?? string.Empty;`. The current `password ?? null!` expresses no intent and silently re-introduces the null.
 
@@ -5632,7 +5632,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetDelay does not guard a non-positive attemptNumber
 - **Path:** `C:\Source\Birko\Framework\Birko.Contracts\Retry/RetryPolicy.cs:47-66`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14)
 - **Detail:** The method assumes attemptNumber >= 1 (it uses attemptNumber - 1 as the exponent). If a caller passes 0 or a negative number, Math.Pow(BackoffMultiplier, negative) returns a fraction < 1, yielding a delay smaller than BaseDelay (and for very negative values, ~0). There is no documented precondition or guard clause. Given this is a shared utility consumed by multiple subsystems, a guard (e.g. clamp attemptNumber to at least 1) would make behavior predictable.
 - **Fix:** Add an early clamp: if (attemptNumber < 1) attemptNumber = 1; (a guard clause at the top of the method).
 
@@ -5640,7 +5640,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CLAUDE.md documents IDefault.Default but the property is IsDefault
 - **Path:** `C:\Source\Birko\Framework\Birko.Contracts\CLAUDE.md:21`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14)
 - **Detail:** CLAUDE.md states 'IDefault — Single bool Default property', but Models/IDefault.cs declares 'bool IsDefault { get; set; }'. Documentation drift; harmless at runtime but misleading for consumers reading the project doc.
 - **Fix:** Update CLAUDE.md line 21 to reference IsDefault.
 
@@ -5648,7 +5648,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Cache is static and shared process-wide across all mediator instances / DI containers
 - **Path:** `C:\Source\Birko\Framework\Birko.CQRS\Mediator/Mediator.cs:16`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14) — documented: the static _handlerCache is process-wide by design (only a reflection-built wrapper Type, no captured services); safe to share across ServiceProviders, not reset between DI containers/fixtures
 - **Detail:** _handlerCache is static, so it persists across all ServiceProviders in the process. The cached value is only a reflection-built wrapper Type (no captured services), so this is functionally safe for normal use, but it means the cache never resets between test fixtures or app restarts within one process and the cached entry's baked-in TResult (see the high finding above) leaks across containers. Worth being deliberate about: a per-Mediator or per-assembly cache would be more isolated, at the cost of losing cross-instance reuse.
 - **Fix:** Either document the process-wide caching intent, or move the cache to an injected singleton so its lifetime is container-scoped; ensure it is combined with the TResult-aware key fix.
 
@@ -5656,7 +5656,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unit.cs uses Task<Unit> without 'using System.Threading.Tasks;'
 - **Path:** `C:\Source\Birko\Framework\Birko.CQRS\Core/Unit.cs:18`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14)
 - **Detail:** The field 'public static readonly Task<Unit> Task' references the open type Task<> on the declaration's left side, but the file has no 'using System.Threading.Tasks;'. It compiles today only because the consuming host enables ImplicitUsings (global usings). As a shared .projitems compiled into arbitrary hosts, this is fragile — a consumer with ImplicitUsings disabled gets CS0246. Every other file in the project (IRequestHandler, ICommandHandler, etc.) explicitly imports System.Threading.Tasks.
 - **Fix:** Add 'using System.Threading.Tasks;' to Core/Unit.cs for self-containment, matching the rest of the project.
 
@@ -5664,7 +5664,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test for pipeline behavior exception propagation or cancellation observance
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.CQRS.Tests/PipelineTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14)
 - **Detail:** Pipeline tests cover ordering, short-circuit, no-behaviors, and query behaviors, but not: an exception thrown inside a behavior or handler propagating through the chain, nor a pre-cancelled CancellationToken surfacing OperationCanceledException through SendAsync. These are the standard correctness edges for a mediator pipeline.
 - **Fix:** Add tests for exception propagation through the behavior chain and for cancellation-token observance end-to-end.
 
@@ -5672,7 +5672,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Expand never emits Update operations; in-place modifications to children are not detected
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Aggregates\Mapping/AggregateMapper.cs:162-208`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14) — documented on AggregateMapper.Expand: emits Insert/Delete only (OneToOne = Delete+Insert; collection diff acts on Added/Removed); in-place child field changes produce no op and SyncOperationType.Update is not emitted (kept the enum — removing is breaking)
 - **Detail:** SyncOperationType.Update exists but ExpandSingle/ExpandCollection only ever produce Insert/Delete (OneToOne replacement is modeled as Delete+Insert; collection diff uses Added/Removed and ignores DiffResult.Unchanged). A child entity present in both current and desired but with changed field values produces no operation, so edits to existing nested entities are not synced. This appears to be an intentional design (the XML doc on IAggregateMapper.Expand says 'Returns insert/delete operations'), but it is a real functional limitation worth confirming against the intended sync semantics, and there is no test asserting the 'unchanged-but-modified' case.
 - **Fix:** If updates are out of scope, note it explicitly in the README/CLAUDE.md and consider removing the unused SyncOperationType.Update to avoid implying support. If updates are intended, use DiffResult.Unchanged to emit Update operations for entities whose payload differs.
 
@@ -5680,7 +5680,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ICopyable<T> contract does not match nullable-default implementations
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Core\Models/ICopyable.cs:9`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14) — documented the ICopyable<T> nullability contract (implementations accept a null/omitted target and allocate; return always non-null). The interface parameter is kept non-nullable: aligning it to T? would cascade CS8767 nullable warnings across ~15 model implementers (several use a non-nullable CopyTo(T clone) overload) — disproportionate for a low convention finding
 - **Detail:** ICopyable<T> declares `T CopyTo(T clone)` with a non-nullable parameter and non-nullable return. AbstractModel/AbstractLogModel implement it as `CopyTo(T? clone = null)`. The interface and its implementors disagree on nullability of both the parameter and the effective return, which is the root of the null-return issue above.
 - **Fix:** Align the interface and implementations on one nullability story (e.g. `T CopyTo(T? clone = null)` returning non-null by allocating when clone is null).
 
@@ -5688,7 +5688,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Timestamp property constants and accessors duplicated across two parallel viewmodel hierarchies
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Core\ViewModels/LogViewModel.cs:10-54`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: core-foundation low cluster G, 2026-07-14) — documented/deferred: LogViewModel and AbstractLogViewModel are parallel hierarchies with different bases (ModelViewModel vs ViewModel), so a shared base isn't straightforward; the duplicated string constants already equal the property names ("CreatedAt" == nameof(CreatedAt)). Left as a deferred cleanup rather than restructuring the viewmodel hierarchy for a low finding
 - **Detail:** LogViewModel (: ModelViewModel) and AbstractLogViewModel (: ViewModel) each independently declare identical CreatedAtProperty/UpdatedAtProperty/PrevUpdatedAtProperty constants and identical CreatedAt/UpdatedAt/PrevUpdatedAt backing-field+RaisePropertyChanged accessors. The timestamp accessor block is copy-pasted between the two log viewmodels.
 - **Fix:** Consider a shared base or mixin for the timestamp accessors so the ILogEntity timestamp surface lives in one place; reference nameof(CreatedAt) etc. instead of duplicated string constants.
 

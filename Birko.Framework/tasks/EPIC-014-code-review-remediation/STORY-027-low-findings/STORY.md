@@ -13,8 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**93 / 418 triaged** as of 2026-07-14. **The Communication cluster (CR-L041 … CR-L093) is complete**;
-next open is CR-L094 (Birko.Configuration).
+**102 / 418 triaged** as of 2026-07-14. Communication cluster complete; next open is CR-L103 (Birko.Data.CosmosDB).
+
+**Batch G — core foundation (CR-L094 … CR-L102):** Configuration, Contracts, CQRS, Data.Aggregates,
+Data.Core. **Fixes:** L094 (`PasswordSettings.Password` defaults to `string.Empty` not `null!` — no
+consumer distinguishes null from empty), L095 (`Contracts.RetryPolicy.GetDelay` clamps `attemptNumber` to
+≥1), L098 (`CQRS/Unit.cs` adds `using System.Threading.Tasks;` for self-containment). **Docs/verify:**
+L096 (Contracts CLAUDE.md `IDefault.Default`→`IsDefault`), L097 (Mediator static-cache process-wide intent),
+L100 (AggregateMapper.Expand emits insert/delete only), L101 (ICopyable nullability contract — full
+alignment deferred, would cascade warnings across ~15 implementers), L102 (LogViewModel duplication
+deferred — parallel hierarchies). **Tests:** CQRS pipeline exception-propagation + pre-cancelled-token,
+Contracts clamp Theory, Configuration empty-password. **/code-review: clean (no findings).** Suites green:
+Configuration 12, Contracts 13, CQRS 30.
 
 **Sub-batch F2 (CR-L084 … CR-L093) — SOAP + SSE + WebSocket:** **L084** (SOAP Send* helpers close the
 OutputStream in `finally`), **L085** (StreamReader honors `request.ContentEncoding`), **L086** (extracted a
