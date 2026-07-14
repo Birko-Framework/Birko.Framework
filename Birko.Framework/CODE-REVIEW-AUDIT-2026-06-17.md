@@ -6152,7 +6152,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** WireInnerEvents duplicated verbatim in both transport decorators
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Processors\Transport/HttpProcessor.cs:118`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** HttpProcessor.WireInnerEvents (lines 118-139) and ZipProcessor.WireInnerEvents (lines 139-160) are byte-for-byte identical (forwarding OnItemProcessed/Sync, OnProcessFinished/Sync, OnElementStart/Value/End from the outer decorator to the inner processor). Both decorators share the same shape (AbstractProcessor<TModel> wrapping an inner IStreamProcessor). Duplicated logic that should live in one place.
 - **Fix:** Extract a shared base (e.g. AbstractDecoratorProcessor<TProcessor,TModel> : AbstractProcessor<TModel>) that holds _inner and wires the events once, and have HttpProcessor/ZipProcessor derive from it.
 
@@ -6160,7 +6160,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ProcessorParseException fabricates a fake inner exception
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Processors\Core/ProcessorException.cs:25`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When no innerException is supplied, the constructor passes innerException ?? new Exception(message) to the base, so every parse exception ends up with a synthetic inner Exception carrying a duplicate message and no meaningful stack. This pollutes logs and exception chains with a misleading 'caused by' entry.
 - **Fix:** Pass the nullable innerException through directly: base(message, innerException!) is wrong too; instead add a base ctor overload or call base(message) when innerException is null.
 
@@ -6168,7 +6168,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for ZipProcessor nested-folder entries or path-escape handling
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Data.Processors.Tests/ZipProcessorTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ZipProcessorTests covers flat single-file archives, empty archive, bad index, and cleanup, but not an entry whose FullName contains a subdirectory (would currently fail) nor a malicious '../' entry (the Zip Slip path). Both are the highest-risk paths in the project and are untested.
 - **Fix:** Add a test for an archive whose entry is in a subfolder, and a test asserting a '../' entry does not write outside the extract path.
 
@@ -6176,7 +6176,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** HttpProcessor download/process happy path untested
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Data.Processors.Tests/HttpProcessorTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** HttpProcessorTests only covers dispose, sanitization, event wiring, and the failure (invalid URL) path. The successful download -> write temp file -> inner.ProcessStream(Async) -> temp file cleanup flow (the core behaviour, including the finally-block file deletion) is never exercised. A stub HttpMessageHandler returning a small CSV body would close this gap.
 - **Fix:** Add a test with a mock/stub HttpMessageHandler that returns CSV content, asserting items are produced and the temp file is deleted afterward.
 

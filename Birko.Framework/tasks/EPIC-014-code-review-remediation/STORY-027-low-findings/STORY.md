@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**159 / 418 triaged** as of 2026-07-14. Next open is CR-L160 (Birko.Data.Processors).
+**163 / 418 triaged** as of 2026-07-14. Next open is CR-L164 (Birko.Data.RavenDB).
+
+**Batch P — Data.Processors cluster (CR-L160 … CR-L163):** Birko.Data.Processors. All closed;
+**/code-review clean**. **L160** (cleanup): extracted a shared `AbstractDecoratorProcessor<TProcessor, TModel>
+: AbstractProcessor<TModel>` that holds `_inner` + the public `Inner` accessor and wires the whole event
+pipeline once; `HttpProcessor`/`ZipProcessor` now derive from it, deleting the byte-identical
+`WireInnerEvents` copies (registered the new file in `.projitems`). **L161** (cleanup): `ProcessorParseException`
+no longer fabricates a synthetic `new Exception(message)` inner exception when none is supplied — it passes
+the nullable `innerException` straight through (the base `ProcessorException(string, Exception?)` ctor was
+relaxed to accept null), so a parse exception without a cause has a clean null `InnerException` instead of a
+misleading duplicate-message "caused by". **L162** (test-gap, verify-first): already covered — the nested
+subfolder entry by CR-M127's `ProcessStreamAsync_NestedFolderEntry_Extracts` and the `../` Zip Slip path by
+the dedicated `ZipProcessorZipSlipTests` (CR-H076). **L163** (test-gap): added the HTTP download→temp-file→
+inner.ProcessStream(Async)→cleanup happy path (sync + async) via a stub `HttpMessageHandler` returning CSV,
+asserting items are produced and the temp file is deleted. **Tests:** Processors.Tests 36 → 40
+(HttpProcessor happy path ×2, ProcessorParseException null/preserved inner ×2). Suite green: Processors.Tests 40.
 
 **Batch O — Data.Patterns cluster (CR-L158, CR-L159):** Birko.Data.Patterns. Both closed;
 **/code-review clean**. **L158** (`RuleSpecification`): removed the dead `memberAsObject` local, and hardened
