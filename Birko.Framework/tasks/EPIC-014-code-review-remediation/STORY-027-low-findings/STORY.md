@@ -13,7 +13,30 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**163 / 418 triaged** as of 2026-07-14. Next open is CR-L164 (Birko.Data.RavenDB).
+**170 / 418 triaged** as of 2026-07-14. Next open is CR-L171 (Birko.Data.Repositories).
+
+**Batch Q — RavenDB cluster (CR-L164 … CR-L170):** Birko.Data.RavenDB (store + repos), .ViewModel,
+.Views. All closed; **/code-review clean**. **L164** (bug): both `RavenDBStore`/`AsyncRavenDBStore` now
+implement `IDisposable` and track a `_ownsStore` flag — the connection-string ctor + `Settings.CreateDocumentStore`
+paths mark the store owned (disposed on `Dispose`), while an externally-supplied `IDocumentStore` (the
+`IDocumentStore` ctor) is left untouched; a repeat `SetSettings` disposes the previously-owned store via a
+shared `ReplaceDocumentStore` helper (was leaking the prior store). **L165/L166** (convention): added a sync
+`IsHealthy()` to `RavenDBStore` mirroring the async store's real connectivity probe (an empty
+`Query<T>().Take(0)`), and pointed the sync repos (`RavenDBRepository`/`RavenDBModelRepository` in the store
+project + the `.ViewModel` sync repo) at it instead of `DatabaseExists()` — which returned true for an empty
+database name without touching the server, so sync `IsHealthy` disagreed with async. **L167** (other):
+documented that the ViewModel `SetSettings(RemoteSettings)` is a delegation no-op only when the store fails
+to unwrap (never for the constructor-guaranteed backing store). **L168** (bug): `RavenViewTranslator` emits
+`group result by 1 into g` (global aggregate) for an aggregate-only view with no GroupBy/Fields, instead of
+the invalid `group result by new {  } into g` an empty composite key produced (RavenDB rejected it at
+index-put with an opaque error). **L169** (cleanup): removed the dead `firstJoin`/`rightTypeName` locals in
+the join-map build (the per-join loop recomputes the name). **L170** (other): `RavenViewStore.QueryAsync`
+replaces the bare `(IRavenQueryable<TView>)sorted` hard-cast with a guarded `is not` pattern that throws a
+descriptive `InvalidOperationException`, so a future non-Raven `IQueryable` in the pipeline fails clearly
+rather than with an opaque `InvalidCastException`. **Tests:** RavenDB.Tests 30 → 35 (`RavenDBStoreDisposalTests`
+— owned-store disposed, external-store untouched, idempotent, sync + async; offline since `DocumentStore.Initialize`
+doesn't connect), Views.Tests 4 → 5 (aggregate-only view groups by the constant `1`). L165/L166 health probes
+are live-server paths (code-review verified). Suites green: RavenDB.Tests 35, ViewModel.Tests 4, Views.Tests 5.
 
 **Batch P — Data.Processors cluster (CR-L160 … CR-L163):** Birko.Data.Processors. All closed;
 **/code-review clean**. **L160** (cleanup): extracted a shared `AbstractDecoratorProcessor<TProcessor, TModel>

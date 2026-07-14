@@ -6184,7 +6184,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stores own a DocumentStore but never dispose it
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB\Stores/RavenDBStore.cs:65 and Stores/AsyncRavenDBStore.cs:67`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When constructed via the connection-string ctor, the store creates and Initialize()s a DocumentStore (IDisposable) that it owns, but the store class is not IDisposable, so that DocumentStore is never disposed. Additionally SetSettings can be called more than once and overwrites _documentStore (RavenDBStore.cs:103/109, AsyncRavenDBStore.cs:105/111) without disposing the previous store created by Settings.CreateDocumentStore(). This is partly consistent with the framework's externally-managed-store pattern, but the connection-string ctor and CreateDocumentStore paths create stores the class is responsible for.
 - **Fix:** Track ownership (a bool _ownsStore) and dispose the previous _documentStore when overwriting it / when the store is disposed for stores created from a connection string or Settings.CreateDocumentStore().
 
@@ -6192,7 +6192,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Sync IsHealthy reports healthy via DatabaseExists which returns true for empty db name
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB\Repositories/RavenDBRepository.cs:91 and Repositories/RavenDBModelRepository.cs:63`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The sync repositories implement IsHealthy() by calling RavenDBStore.DatabaseExists(), which returns true when the database name is empty (RavenDBStore.cs:457) and otherwise issues a server call. The async repositories call the store's real IsHealthy() which actually probes the server with a query. This makes sync IsHealthy a weaker/different check (it can report healthy with no real connectivity test, and there is no sync IsHealthy() on RavenDBStore unlike AsyncRavenDBStore which has one at line 589).
 - **Fix:** Add a sync IsHealthy() to RavenDBStore (mirror the async one: open a session, Query<T>().Take(0).ToList(), catch) and have the sync repositories call it, for parity with the async path.
 
@@ -6200,7 +6200,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IsHealthy uses different underlying probe in sync vs async repository
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB.ViewModel\Repositories\AsyncRavenDBRepository.cs:92 and RavenDBRepository.cs:91`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The sync repository's IsHealthy() calls RavenDBStore.DatabaseExists() (RavenDBRepository.cs:91) while the async repository's IsHealthy() calls RavenDBStore.IsHealthy() (AsyncRavenDBRepository.cs:92). Same method name on the two repositories but two different store probes, so the two repos can report different health for the same server/state. This is an inconsistency in the public contract rather than a crash bug.
 - **Fix:** Pick one health-probe semantic and use it in both repositories (e.g. have both call the store's IsHealthy(), or both call DatabaseExists()), so the public IsHealthy() means the same thing across sync and async.
 
@@ -6208,7 +6208,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SetSettings silently no-ops when the store cannot be unwrapped
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB.ViewModel\Repositories\AsyncRavenDBRepository.cs:78-84 and RavenDBRepository.cs:77-83`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SetSettings(RemoteSettings) only applies the settings when RavenDBStore (the unwrapped AsyncRavenDBStore/RavenDBStore) is non-null. If Store is a wrapper whose unwrap returns null, the call is a silent no-op — the caller believes settings were applied. Same pattern in IsHealthy (returns false rather than indicating 'unknown'). Not a bug for the normal construction paths (the store is always a RavenDB store there), but a caller passing a custom wrapper gets no feedback that settings were dropped. Note: this is delegation to the store's SetSettings, which is the correct convention for repositories (the 'RemoteSettings via base.SetSettings()' rule targets stores), so the delegation itself is fine.
 - **Fix:** Consider returning a bool from SetSettings, or leaving as-is but documenting that SetSettings is a no-op for stores that do not unwrap to a RavenDB store. Low priority given the constructors guarantee a RavenDB-backed store.
 
@@ -6216,7 +6216,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Reduce emits malformed grouping when there are no GroupBy fields and no Fields
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB.Views\RavenViewTranslator.cs:148-168`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** If a view HasAggregates but has neither GroupBy clauses nor regular Fields, groupByFields stays empty, falls into the else branch, and produces `group result by new {  } into g` — invalid C# that RavenDB will reject at index-put time with an opaque error. This is an edge case (aggregate-only view with no grouping/fields) but fails late and unclearly.
 - **Fix:** Guard early: if there are aggregates but groupByFields ends up empty, either group by a constant (`group result by 1 into g`) for a global aggregate or throw a clear InvalidOperationException explaining a GroupBy or Field is required.
 
@@ -6224,7 +6224,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead variables in join map build
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB.Views\RavenViewTranslator.cs:40-41`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `var firstJoin = definition.Joins[0];` and `var rightTypeName = firstJoin.RightType.Name;` are assigned but never used — the per-join loop below (line 47-53) recomputes the right type name as `joinRightName`. Leftover from an earlier single-join implementation.
 - **Fix:** Remove both lines.
 
@@ -6232,7 +6232,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** QueryAsync casts to IRavenQueryable after going through Queryable extension/reflection methods
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.RavenDB.Views\RavenViewStore.cs:54-67`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `sorted` is typed as IQueryable<TView> and is passed through OrderByHelper (reflection over Queryable.OrderBy) and the standard Queryable.Skip/Take extension methods, then hard-cast back to IRavenQueryable<TView> for ToListAsync. This works today only because RavenDB's query provider returns IRavenQueryable from CreateQuery; if any path ever yielded a non-Raven IQueryable (e.g., a future helper materializing to an in-memory enumerable) the cast throws InvalidCastException at runtime. Lower risk than it looks but worth noting as a fragile assumption — the Cosmos sibling avoids this by keeping the provider-native iterator pattern.
 - **Fix:** Either keep the variable typed IRavenQueryable throughout (Raven's Skip/Take return IRavenQueryable) or use `sorted.ToListAsync` via an explicit Raven-aware path, so the cast assumption is local and obvious.
 

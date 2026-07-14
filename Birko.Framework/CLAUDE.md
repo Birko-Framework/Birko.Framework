@@ -139,6 +139,17 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.RavenDB cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch Q: **CR-L164 … CR-L170** — Birko.Data.RavenDB (store + repos), .RavenDB.ViewModel, .RavenDB.Views. All closed; **/code-review clean**.
+- **Bug (L164)** — `RavenDBStore`/`AsyncRavenDBStore` now implement `IDisposable` + track `_ownsStore`. The connection-string ctor and `Settings.CreateDocumentStore` paths mark the `IDocumentStore` owned (disposed on `Dispose`); an externally-supplied store (the `IDocumentStore` ctor) is never disposed. A repeat `SetSettings` disposes the previously-owned store via a shared `ReplaceDocumentStore` helper (was silently leaking the prior store).
+- **Convention (L165/L166)** — added a sync `IsHealthy()` to `RavenDBStore` mirroring the async store's genuine connectivity probe (empty `Query<T>().Take(0)`); the sync repos (`RavenDBRepository`/`RavenDBModelRepository` + the `.ViewModel` sync repo) now call it instead of `DatabaseExists()`, which returned true for an empty database name without touching the server — so sync `IsHealthy` no longer disagrees with async.
+- **Docs (L167)** — documented that the ViewModel `SetSettings(RemoteSettings)` is a delegation no-op only when the store fails to unwrap (never for the ctor-guaranteed backing store).
+- **Bug (L168)** — `RavenViewTranslator` emits `group result by 1 into g` (global aggregate) for an aggregate-only view with no GroupBy/Fields, instead of the invalid `group result by new {  } into g` an empty composite produced (RavenDB rejected it at index-put with an opaque error).
+- **Cleanup (L169)** — removed the dead `firstJoin`/`rightTypeName` locals in the join-map build.
+- **Other (L170)** — `RavenViewStore.QueryAsync` replaces the bare `(IRavenQueryable<TView>)sorted` cast with an `is not` guard throwing a descriptive `InvalidOperationException`, so a future non-Raven `IQueryable` fails clearly rather than with an opaque `InvalidCastException`.
+- **Tests** — RavenDB.Tests 30 → 35 (`RavenDBStoreDisposalTests`: owned-store disposed / external-store untouched / idempotent, sync + async — offline, `DocumentStore.Initialize` doesn't connect), Views.Tests 4 → 5 (aggregate-only view groups by constant `1`). L165/L166 health probes are live-server paths (code-review verified).
+- Suites green: Birko.Data.RavenDB.Tests 35, .ViewModel.Tests 4, .Views.Tests 5. STORY-027 now **170/418**.
+
 ### Code-review remediation — low findings, Data.Processors cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch P: **CR-L160 … CR-L163** — Birko.Data.Processors. All closed; **/code-review clean**.
 - **Cleanup (L160)** — extracted a shared `AbstractDecoratorProcessor<TProcessor, TModel> : AbstractProcessor<TModel>` (new `Core/AbstractDecoratorProcessor.cs`, registered in `.projitems`) that holds the `_inner` processor + the public `Inner` accessor and forwards the whole event pipeline (OnItemProcessed(Sync)/OnProcessFinished(Sync)/OnElementStart/Value/End) once. `HttpProcessor` and `ZipProcessor` now derive from it, deleting their byte-identical `WireInnerEvents` copies (the wiring moves to the base ctor — safe, since it only touches `_inner` + reads the outer event props at invocation time, no derived fields).
