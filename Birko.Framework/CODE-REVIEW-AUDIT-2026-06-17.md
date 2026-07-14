@@ -6551,16 +6551,16 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L210 · ⚪ low · Birko.Data.Sync.CosmosDB
 - **Title:** GetKnowledgeItemAsync reads the entire scope to fetch one item
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.CosmosDB\Stores\AsyncCosmosSyncKnowledgeStore.cs:62-70`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AE)
+- **Status:** done
 - **Detail:** GetKnowledgeItemAsync(entityGuid, scope, ...) calls GetKnowledgeAsync(scope) — which materializes every document in the scope into a Dictionary — then does a single TryGetValue. For a large scope this pulls the whole partition set across the wire just to return one item. A `.Where(x => x.Scope == scope && x.EntityGuid == entityGuid)` query with a single ReadNextAsync would be far cheaper. Same in the sync store GetKnowledgeItem (CosmosSyncKnowledgeStore.cs:53-61).
 - **Fix:** Query directly on Scope + EntityGuid and take the first result instead of fetching and dictionary-ifying the entire scope.
 
 ### CR-L211 · ⚪ low · Birko.Data.Sync.CosmosDB
 - **Title:** ConvertToCosmosItem duplicated verbatim between sync and async stores
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.CosmosDB\Stores\CosmosSyncKnowledgeStore.cs:155-174`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AE)
+- **Status:** done
 - **Detail:** ConvertToCosmosItem is identical in CosmosSyncKnowledgeStore.cs:155-174 and AsyncCosmosSyncKnowledgeStore.cs:164-183 (same 14-line mapping). Two copies will drift (note this is exactly the kind of mapper that needs to change when the model gains a TenantId — see the tenant finding). Extract to a single static helper (e.g. a CosmosSyncKnowledgeItem.FromInterface factory on the model itself).
 - **Fix:** Move ConvertToCosmosItem to a shared static (e.g. on CosmosSyncKnowledgeItem) and have both stores call it.
 

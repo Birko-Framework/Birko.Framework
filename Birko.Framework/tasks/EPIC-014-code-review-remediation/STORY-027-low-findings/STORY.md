@@ -13,7 +13,23 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**209 / 418 triaged** as of 2026-07-14. Next open is CR-L210 (Birko.Data.Sync.CosmosDB).
+**211 / 418 triaged** as of 2026-07-14. Next open is CR-L212 (Birko.Data.Sync.ElasticSearch).
+
+**Batch AE — Data.Sync.CosmosDB cluster (CR-L210, CR-L211):** Birko.Data.Sync.CosmosDB. Both closed;
+**/code-review clean (no findings)**. **L210** (cleanup, efficiency): `GetKnowledgeItem` / `GetKnowledgeItemAsync`
+now query directly on `Scope + TenantId + EntityGuid` with a `.Take(1)` (async iterates the feed and
+returns the first non-null; sync reuses the `allowSynchronousQueryExecution` + `.ToList().FirstOrDefault()`
+pattern), instead of materializing every document in the scope into a Dictionary just to pull one item out
+via `TryGetValue` — a single-item read no longer pulls the whole partition set across the wire. Incidental
+robustness gain: the old whole-scope `ToDictionary(x => x.EntityGuid)` threw on a duplicate EntityGuid;
+`.Take(1)` returns the first. **L211** (cleanup): the 14-line `ConvertToCosmosItem` mapping — duplicated
+verbatim across both stores — is consolidated into a single shared factory
+`CosmosSyncKnowledgeItem.FromInterface(item, tenantId)` on the model; both stores call it (the tenant-stamp
+CR-H100 and null-Guid-populate CR-M158 behavior is preserved). `System.Guid.NewGuid()` is fully qualified in
+the factory because the inherited `AbstractModel.Guid` instance property shadows the type name in a static
+method's expression context. **Tests:** Sync.CosmosDB.Tests 6 → 7 (the sync/async `ConvertToCosmosItem`
+duplicate tests fold into one `FromInterface` set; added a full field-copy assertion). L210's LINQ filter
+is a live-Cosmos path (code-review verified). Suite green: Sync.CosmosDB.Tests 7.
 
 **Batch AD — Data.Sync core cluster (CR-L207, CR-L208, CR-L209):** Birko.Data.Sync. All closed;
 **/code-review clean**. **L207** (cleanup): `SyncOptions.MaxItems` is now honored — Sync/Preview (sync + async)
