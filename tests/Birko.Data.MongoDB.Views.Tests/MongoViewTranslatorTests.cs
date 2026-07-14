@@ -134,4 +134,28 @@ public class MongoViewTranslatorTests
         var project = pipeline.Last()["$project"].AsBsonDocument;
         project.Contains("Total").Should().BeTrue();
     }
+
+    // CR-L157: the group-by keys are materialized once and reused for both the _id composite and the
+    // $first-carried-forward fields. The $group stage must carry the key in _id AND as a $first field.
+    [Fact]
+    public void Group_stage_carries_the_group_key_in_id_and_as_first_field()
+    {
+        var def = new ViewDefinitionBuilder<CustomerTotalView>()
+            .From<Order>()
+            .GroupBy<Order, Guid>(o => o.CustomerId)
+            .Select<Order, Guid>(o => o.CustomerId, v => v.CustomerId)
+            .Sum<Order, decimal>(o => o.Amount, v => v.Total)
+            .Build();
+
+        var pipeline = MongoViewTranslator.TranslatePipeline(def);
+
+        var group = pipeline.Single(s => s.Contains("$group"))["$group"].AsBsonDocument;
+
+        // group key present in the _id composite ...
+        group["_id"].AsBsonDocument["CustomerId"].AsString.Should().Be("$CustomerId");
+        // ... and carried forward via $first (identical projection, reused list) ...
+        group["CustomerId"].AsBsonDocument["$first"].AsString.Should().Be("$CustomerId");
+        // ... plus the accumulator.
+        group["Total"].AsBsonDocument.Contains("$sum").Should().BeTrue();
+    }
 }
