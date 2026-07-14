@@ -6,11 +6,10 @@ namespace Birko.Data.Processors;
 /// Decorator that downloads a file via HTTP, then delegates to an inner IStreamProcessor.
 /// Cleans up the downloaded file after processing.
 /// </summary>
-public class HttpProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IDisposable
+public class HttpProcessor<TProcessor, TModel> : AbstractDecoratorProcessor<TProcessor, TModel>, IDisposable
     where TProcessor : AbstractProcessor<TModel>, IStreamProcessor
     where TModel : new()
 {
-    private readonly TProcessor _inner;
     private readonly string _url;
     private readonly string _downloadPath;
     private readonly string _fileName;
@@ -25,19 +24,14 @@ public class HttpProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IDis
         string fileName,
         HttpClient? httpClient = null,
         ILogger? logger = null)
-        : base(logger)
+        : base(inner, logger)
     {
-        _inner = inner;
         _url = url;
         _downloadPath = downloadPath;
         _fileName = SanitizeFileName(fileName);
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
-        WireInnerEvents();
     }
-
-    /// <summary>The inner processor for direct configuration access.</summary>
-    public TProcessor Inner => _inner;
 
     public override void Process()
     {
@@ -113,29 +107,6 @@ public class HttpProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IDis
                 File.Delete(filePath);
             }
         }
-    }
-
-    private void WireInnerEvents()
-    {
-        _inner.OnItemProcessed = async (item, ct) =>
-        {
-            if (OnItemProcessed != null)
-            {
-                await OnItemProcessed(item, ct).ConfigureAwait(false);
-            }
-        };
-        _inner.OnItemProcessedSync = item => OnItemProcessedSync?.Invoke(item);
-        _inner.OnProcessFinished = async ct =>
-        {
-            if (OnProcessFinished != null)
-            {
-                await OnProcessFinished(ct).ConfigureAwait(false);
-            }
-        };
-        _inner.OnProcessFinishedSync = () => OnProcessFinishedSync?.Invoke();
-        _inner.OnElementStart = name => OnElementStart?.Invoke(name);
-        _inner.OnElementValue = (name, value) => OnElementValue?.Invoke(name, value);
-        _inner.OnElementEnd = name => OnElementEnd?.Invoke(name);
     }
 
     private static string SanitizeFileName(string name) =>

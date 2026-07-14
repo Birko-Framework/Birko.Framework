@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\IProcessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\ProcessorException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\AbstractProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\AbstractDecoratorProcessor.cs" />
     <!-- Formats -->
     <Compile Include="$(MSBuildThisFileDirectory)Formats\XmlProcessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Formats\CsvProcessor.cs" />

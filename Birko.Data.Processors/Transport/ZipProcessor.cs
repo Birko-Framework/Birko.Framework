@@ -9,11 +9,10 @@ namespace Birko.Data.Processors;
 /// then delegates to an inner IStreamProcessor.
 /// Cleans up the extracted file after processing.
 /// </summary>
-public class ZipProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IStreamProcessor, IDisposable
+public class ZipProcessor<TProcessor, TModel> : AbstractDecoratorProcessor<TProcessor, TModel>, IStreamProcessor, IDisposable
     where TProcessor : AbstractProcessor<TModel>, IStreamProcessor
     where TModel : new()
 {
-    private readonly TProcessor _inner;
     private readonly string? _sourceFile;
     private readonly string _extractPath;
     private readonly Encoding _encoding;
@@ -30,17 +29,12 @@ public class ZipProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IStre
         string extractPath = ".",
         Encoding? encoding = null,
         ILogger? logger = null)
-        : base(logger)
+        : base(inner, logger)
     {
-        _inner = inner;
         _sourceFile = sourceFile;
         _extractPath = extractPath;
         _encoding = encoding ?? Encoding.UTF8;
-        WireInnerEvents();
     }
-
-    /// <summary>The inner processor for direct configuration access.</summary>
-    public TProcessor Inner => _inner;
 
     public override void Process()
     {
@@ -154,29 +148,6 @@ public class ZipProcessor<TProcessor, TModel> : AbstractProcessor<TModel>, IStre
         {
             throw new ProcessorException("Invalid ZIP archive.", ex);
         }
-    }
-
-    private void WireInnerEvents()
-    {
-        _inner.OnItemProcessed = async (item, ct) =>
-        {
-            if (OnItemProcessed != null)
-            {
-                await OnItemProcessed(item, ct).ConfigureAwait(false);
-            }
-        };
-        _inner.OnItemProcessedSync = item => OnItemProcessedSync?.Invoke(item);
-        _inner.OnProcessFinished = async ct =>
-        {
-            if (OnProcessFinished != null)
-            {
-                await OnProcessFinished(ct).ConfigureAwait(false);
-            }
-        };
-        _inner.OnProcessFinishedSync = () => OnProcessFinishedSync?.Invoke();
-        _inner.OnElementStart = name => OnElementStart?.Invoke(name);
-        _inner.OnElementValue = (name, value) => OnElementValue?.Invoke(name, value);
-        _inner.OnElementEnd = name => OnElementEnd?.Invoke(name);
     }
 
     public void Dispose()
