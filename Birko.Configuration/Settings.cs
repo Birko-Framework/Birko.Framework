@@ -115,7 +115,7 @@ namespace Birko.Configuration
         /// <summary>
         /// Gets or sets the password for authentication.
         /// </summary>
-        public string Password { get; set; } = null!;
+        public string Password { get; set; } = string.Empty;
 
         #endregion
 
@@ -134,7 +134,9 @@ namespace Birko.Configuration
         /// <param name="password">The authentication password.</param>
         public PasswordSettings(string location, string name, string? password = null) : base(location, name)
         {
-            Password = password ?? null!;
+            // Default to empty rather than laundering null through null! into a non-nullable property
+            // (a null Password the type system claims is non-null is a latent NRE) — CR-L094.
+            Password = password ?? string.Empty;
         }
 
         #endregion
