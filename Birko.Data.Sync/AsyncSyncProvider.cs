@@ -55,9 +55,14 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
             var localItems = await GetAllItemsAsync(_localStore, filterOptions?.LocalFetchPredicate, options.CancellationToken);
             var remoteItems = await GetAllItemsAsync(_remoteStore, filterOptions?.RemoteFetchPredicate, options.CancellationToken);
 
-            var localDict = localItems.ToDictionary(GetGuid);
-            var remoteDict = remoteItems.ToDictionary(GetGuid);
+            var localDict = BuildEntityDictionary(localItems, "local");
+            var remoteDict = BuildEntityDictionary(remoteItems, "remote");
             var allGuids = localDict.Keys.Union(remoteDict.Keys).ToList();
+            // CR-L207: honor MaxItems by capping the set of Guids processed this run.
+            if (options.MaxItems is int max && max >= 0 && allGuids.Count > max)
+            {
+                allGuids = allGuids.Take(max).ToList();
+            }
 
             foreach (var guid in allGuids)
             {
@@ -130,11 +135,16 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
             var localItems = await GetAllItemsAsync(_localStore, filterOptions?.LocalFetchPredicate, options.CancellationToken);
             var remoteItems = await GetAllItemsAsync(_remoteStore, filterOptions?.RemoteFetchPredicate, options.CancellationToken);
 
-            var localDict = localItems.ToDictionary(GetGuid);
-            var remoteDict = remoteItems.ToDictionary(GetGuid);
+            var localDict = BuildEntityDictionary(localItems, "local");
+            var remoteDict = BuildEntityDictionary(remoteItems, "remote");
             progress.TotalItems = localDict.Count + remoteDict.Count;
 
             var allGuids = localDict.Keys.Union(remoteDict.Keys).ToList();
+            // CR-L207: honor MaxItems by capping the set of Guids processed this run.
+            if (options.MaxItems is int max && max >= 0 && allGuids.Count > max)
+            {
+                allGuids = allGuids.Take(max).ToList();
+            }
             var knowledgeUpdates = new List<TKnowledge>();
 
             // Process in batches
@@ -252,9 +262,9 @@ public class AsyncSyncProvider<TStore, T, TKnowledge> : SyncProviderBase<T, TKno
             if (options.CancellationToken.IsCancellationRequested)
                 break;
 
-            var localExists = localDict.TryGetValue(guid, out var localItem);
-            var remoteExists = remoteDict.TryGetValue(guid, out var remoteItem);
-            var hasKnowledge = knowledge.TryGetValue(guid, out var knowledgeItem);
+            localDict.TryGetValue(guid, out var localItem);
+            remoteDict.TryGetValue(guid, out var remoteItem);
+            knowledge.TryGetValue(guid, out var knowledgeItem);
 
             // Determine sync action
             var action = DetermineSyncAction(guid, localItem, remoteItem, knowledgeItem, isInitialSync, options, filterOptions);

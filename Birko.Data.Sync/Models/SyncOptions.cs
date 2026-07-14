@@ -71,7 +71,10 @@ public class SyncOptions
     public Action<SyncBatchResult>? OnBatchCompleted { get; set; }
 
     /// <summary>
-    /// Whether to skip preview and execute directly
+    /// Reserved (CR-L207): a hint that a caller intends to execute directly without a preview. It is not
+    /// consulted by the provider — <c>Preview</c>/<c>PreviewAsync</c> and <c>Sync</c>/<c>SyncAsync</c> are
+    /// independent public entry points, so "skipping" the preview simply means not calling it. Kept for
+    /// source compatibility and caller-side branching.
     /// </summary>
     public bool SkipPreview { get; set; } = false;
 }

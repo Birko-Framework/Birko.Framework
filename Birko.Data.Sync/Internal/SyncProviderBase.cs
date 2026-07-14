@@ -311,6 +311,16 @@ public abstract class SyncProviderBase<T, TKnowledge>
                     Message = $"Item {guid} blocked by save filter for {target}"
                 });
                 break;
+
+            case SaveFilterBlockAction.MarkConflict:
+                // CR-L207: MarkConflict used to fall through the switch and behave like Skip. Surface it
+                // via the OnConflict callback so a blocked save is distinguishable from a plain skip.
+                options.OnConflict?.Invoke(new ConflictInfo
+                {
+                    Guid = guid,
+                    Reason = $"Item {guid} blocked by save filter for {target}"
+                });
+                break;
         }
     }
 
@@ -321,6 +331,33 @@ public abstract class SyncProviderBase<T, TKnowledge>
     {
         var value = GuidProperty.GetValue(entity);
         return value is Guid guid ? guid : Guid.Empty;
+    }
+
+    /// <summary>
+    /// Keys a set of entities by Guid for change detection, surfacing a clear error when an entity has
+    /// no Guid or two entities share one — rather than the opaque ArgumentException a plain
+    /// ToDictionary(GetGuid) throws when several unsaved entities all map to Guid.Empty (CR-L209).
+    /// </summary>
+    /// <param name="items">The entities to key.</param>
+    /// <param name="side">"local" or "remote", for the error message.</param>
+    protected Dictionary<Guid, T> BuildEntityDictionary(IEnumerable<T> items, string side)
+    {
+        var dict = new Dictionary<Guid, T>();
+        foreach (var item in items)
+        {
+            var guid = GetGuid(item);
+            if (guid == Guid.Empty)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot sync a {side} entity with an empty Guid; all syncable entities must have a Guid assigned.");
+            }
+            if (!dict.TryAdd(guid, item))
+            {
+                throw new InvalidOperationException(
+                    $"Duplicate {side} entity Guid '{guid}' encountered during sync.");
+            }
+        }
+        return dict;
     }
 
     /// <summary>
