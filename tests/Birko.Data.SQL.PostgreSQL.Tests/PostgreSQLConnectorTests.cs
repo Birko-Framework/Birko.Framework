@@ -26,6 +26,17 @@ public class PostgreSQLConnectorTests
     private static DateTimeField DateTimeField()
         => new(typeof(Sample).GetProperty(nameof(Sample.When))!, "When");
 
+    // CR-L176: the missing-table seam recognizes PostgreSQL's 'relation "x" does not exist' wording
+    // (plus the inherited SQLite base match) so a reader over a missing table yields empty, not a fault.
+    [Theory]
+    [InlineData("relation \"widgets\" does not exist", true)]
+    [InlineData("no such table: widgets", true)]
+    [InlineData("some other error", false)]
+    public void IsMissingTableException_matches_postgres_and_base_wording(string message, bool expected)
+    {
+        NewConnector().IsMissingTableException(new Exception(message)).Should().Be(expected);
+    }
+
     [Theory]
     [InlineData(DbType.DateTime, "TIMESTAMP")]
     [InlineData(DbType.DateTime2, "TIMESTAMP")]
