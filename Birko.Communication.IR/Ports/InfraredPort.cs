@@ -163,8 +163,10 @@ namespace Birko.Communication.IR.Ports
 
         private void HandleReceivedTiming(object? sender, IrTiming timing)
         {
-            // Try each registered protocol for decoding
-            foreach (var protocol in _protocols)
+            // Try structured protocols first and RawProtocol last, regardless of registration order:
+            // RawProtocol.Decode succeeds for ANY non-empty timing, so if it ran first it would swallow
+            // every signal and the structured protocols (NEC, RC5, …) would never match (CR-L062).
+            foreach (var protocol in System.Linq.Enumerable.OrderBy(_protocols, p => p is RawProtocol ? 1 : 0))
             {
                 var command = protocol.Decode(timing);
                 if (command != null)

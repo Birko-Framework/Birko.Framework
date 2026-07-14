@@ -66,6 +66,11 @@ namespace Birko.Communication.IR.Devices
 
         public string Manufacturer => "Samsung";
         public string Model => "AC (Generic)";
+        /// <summary>
+        /// Informational only — the base 32-bit Samsung TV protocol. AC frames use a 14-byte, 3-section
+        /// encoding that this protocol cannot produce; <b>transmit AC commands via <see cref="GetTiming"/></b>,
+        /// not by calling <c>Protocol.Encode(...)</c> (which would yield a wrong 32-bit waveform) — CR-L063.
+        /// </summary>
         public IIrProtocol Protocol => _baseProtocol;
 
         // Current state

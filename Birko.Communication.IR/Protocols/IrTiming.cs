@@ -42,7 +42,9 @@ namespace Birko.Communication.IR.Protocols
         }
 
         /// <summary>
-        /// Returns the total duration of the signal in microseconds.
+        /// Returns the duration in microseconds of a <b>single pass</b> of the signal — the sum of
+        /// <see cref="Durations"/> only. This deliberately excludes <c>RepeatCount</c> and
+        /// <c>RepeatGapUs</c>; multiply/add those yourself if you need the full repeated duration (CR-L064).
         /// </summary>
         public long TotalDurationUs()
         {
