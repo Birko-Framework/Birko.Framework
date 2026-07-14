@@ -226,18 +226,16 @@ namespace Birko.Communication.REST
                     return await registration.Handler(request).ConfigureAwait(false);
                 }
 
-                // Try pattern match for routes with parameters
-                var matchedRoute = _routes.FirstOrDefault(r =>
-                    IsRouteMatch(r.Value.Path, request.Path, out var pathParameters));
-
-                if (matchedRoute.Value != null)
+                // Try pattern match for routes with parameters — iterate once and reuse the parameters
+                // dictionary produced by the matching call (CR-L081: it used to run IsRouteMatch twice
+                // and discard the first call's out parameter, allocating the dictionary twice).
+                foreach (var r in _routes)
                 {
-                    // Extract path parameters
-                    if (IsRouteMatch(matchedRoute.Value.Path, request.Path, out var parameters))
+                    if (IsRouteMatch(r.Value.Path, request.Path, out var parameters))
                     {
                         request.PathParameters = parameters;
+                        return await r.Value.Handler(request).ConfigureAwait(false);
                     }
-                    return await matchedRoute.Value.Handler(request).ConfigureAwait(false);
                 }
 
                 return RestResponse.NotFound("Route not found");
@@ -307,12 +305,14 @@ namespace Birko.Communication.REST
                 var parameters = query.TrimStart('?').Split('&');
                 foreach (var param in parameters)
                 {
-                    var parts = param.Split('=');
-                    if (parts.Length == 2)
-                    {
-                        restRequest.QueryParameters[Uri.UnescapeDataString(parts[0])] =
-                            Uri.UnescapeDataString(parts[1]);
-                    }
+                    if (param.Length == 0)
+                        continue;
+                    // Split on the FIRST '=' only, so a value containing '=' (base64/JWT tokens, cursors)
+                    // isn't silently dropped by the old parts.Length == 2 guard (CR-L082).
+                    var idx = param.IndexOf('=');
+                    var key = idx < 0 ? param : param[..idx];
+                    var value = idx < 0 ? string.Empty : param[(idx + 1)..];
+                    restRequest.QueryParameters[Uri.UnescapeDataString(key)] = Uri.UnescapeDataString(value);
                 }
             }
 
@@ -363,14 +363,21 @@ namespace Birko.Communication.REST
                 }
             }
 
-            if (!string.IsNullOrEmpty(restResponse.Content))
+            try
             {
-                var bytes = Encoding.UTF8.GetBytes(restResponse.Content);
-                response.ContentLength64 = bytes.Length;
-                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(restResponse.Content))
+                {
+                    var bytes = Encoding.UTF8.GetBytes(restResponse.Content);
+                    response.ContentLength64 = bytes.Length;
+                    await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+                }
             }
-
-            response.OutputStream.Close();
+            finally
+            {
+                // Always close the output stream, even if WriteAsync throws on a mid-write client
+                // disconnect, so the connection isn't left half-open (CR-L083).
+                response.OutputStream.Close();
+            }
         }
 
         private static async Task SendServerErrorAsync(HttpListenerResponse response, string errorMessage)
@@ -382,8 +389,14 @@ namespace Birko.Communication.REST
             var bytes = Encoding.UTF8.GetBytes(errorJson);
             response.ContentLength64 = bytes.Length;
 
-            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            response.OutputStream.Close();
+            try
+            {
+                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            }
+            finally
+            {
+                response.OutputStream.Close(); // CR-L083: always close, even if the write throws
+            }
         }
 
         internal static string EscapeJson(string text)
