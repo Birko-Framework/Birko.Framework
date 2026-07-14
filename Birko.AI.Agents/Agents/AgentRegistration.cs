@@ -13,6 +13,7 @@ namespace Birko.AI.Agents
     public static class AgentRegistration
     {
         private static bool _registered;
+        private static readonly object _lock = new();
 
         /// <summary>
         /// Agent types that benefit from coding-optimized endpoints (e.g., Z.AI coding endpoint).
@@ -39,7 +40,12 @@ namespace Birko.AI.Agents
             if (_registered)
                 return;
 
-            ProviderRegistration.RegisterAll();
+            lock (_lock)
+            {
+                if (_registered)
+                    return;
+
+                ProviderRegistration.RegisterAll();
 
             // Core coding agents
             AgentFactory.Register("coding", (llm, opts) => new CodingAgent(llm, opts));
@@ -78,7 +84,8 @@ namespace Birko.AI.Agents
             AgentFactory.RegisterAlias("testing", "test");
             AgentFactory.RegisterAlias("diagram", "diagramming");
 
-            _registered = true;
+                _registered = true;
+            }
         }
 
         /// <summary>
