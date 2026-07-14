@@ -52,6 +52,12 @@ namespace Birko.Data.Migrations.InfluxDB
         /// <summary>
         /// Asynchronously initializes the migration store.
         /// </summary>
+        /// <remarks>
+        /// CR-L145: the <c>*Async</c> members observe the <see cref="CancellationToken"/> at entry via
+        /// <c>ThrowIfCancellationRequested</c>, but do not yet thread it into the InfluxDB SDK's async
+        /// calls — the bodies run the synchronous store methods. Genuine SDK-async cancellation is the
+        /// deferred CR-M108 work (needs a live InfluxDB to verify).
+        /// </remarks>
         public Task InitializeAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -60,14 +66,24 @@ namespace Birko.Data.Migrations.InfluxDB
         }
 
         /// <summary>
-        /// Gets all applied migration versions.
+        /// Lazily initializes the store (CR-L147: single helper replacing the duplicated
+        /// <c>if (_migrationsBucket == null) Initialize();</c> blocks). Not double-checked-locked — the
+        /// migration runner drives this single-threaded.
         /// </summary>
-        public ISet<long> GetAppliedVersions()
+        private void EnsureInitialized()
         {
             if (_migrationsBucket == null)
             {
                 Initialize();
             }
+        }
+
+        /// <summary>
+        /// Gets all applied migration versions.
+        /// </summary>
+        public ISet<long> GetAppliedVersions()
+        {
+            EnsureInitialized();
 
             var queryApi = _client.GetQueryApi();
             var query = $@"
@@ -94,9 +110,12 @@ namespace Birko.Data.Migrations.InfluxDB
                     }
                 }
             }
-            catch
+            catch (global::InfluxDB.Client.Core.Exceptions.InfluxException)
             {
-                // Bucket may not have data yet
+                // CR-L146: only swallow InfluxDB-reported failures ("bucket may not have data yet"); a
+                // non-Influx exception (programming error, etc.) now propagates instead of being silently
+                // eaten. Precisely distinguishing an empty bucket from an auth/connectivity InfluxException
+                // needs a live server to classify (deferred to the integration tier).
             }
 
             return result;
@@ -116,10 +135,7 @@ namespace Birko.Data.Migrations.InfluxDB
         /// </summary>
         public void RecordMigration(Data.Migrations.IMigration migration)
         {
-            if (_migrationsBucket == null)
-            {
-                Initialize();
-            }
+            EnsureInitialized();
 
             // Use the synchronous WriteApiAsync (writes immediately, no background worker) instead of
             // the batching GetWriteApi() — the latter is IDisposable, owns a background thread, was
@@ -150,10 +166,7 @@ namespace Birko.Data.Migrations.InfluxDB
         /// </summary>
         public void RemoveMigration(Data.Migrations.IMigration migration)
         {
-            if (_migrationsBucket == null)
-            {
-                Initialize();
-            }
+            EnsureInitialized();
 
             var deleteApi = _client.GetDeleteApi();
             // CR-M111: escape the interpolated name so a value containing a quote/backslash can't break
@@ -167,9 +180,11 @@ namespace Birko.Data.Migrations.InfluxDB
             {
                 deleteApi.Delete(start, stop, fluxPredicate, MigrationsBucketName, _migrationsBucket!.OrgID);
             }
-            catch
+            catch (global::InfluxDB.Client.Core.Exceptions.InfluxException)
             {
-                // Ignore if already deleted
+                // CR-L146: only swallow InfluxDB-reported delete failures ("already deleted"); a non-Influx
+                // exception now propagates. Distinguishing already-deleted from a genuine delete failure
+                // within InfluxException needs a live server (deferred to the integration tier).
             }
         }
 
