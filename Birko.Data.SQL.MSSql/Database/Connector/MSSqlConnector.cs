@@ -306,9 +306,9 @@ namespace Birko.Data.SQL.Connectors
             var dataTable = BuildDataTable(table.Name, fields, models);
 
             using var connection = (SqlConnection)CreateConnection(_settings);
-            connection.Open();
             try
             {
+                connection.Open();
                 using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.TableLock, null);
                 bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
                 foreach (DataColumn col in dataTable.Columns)
@@ -336,9 +336,9 @@ namespace Birko.Data.SQL.Connectors
             var dataTable = BuildDataTable(table.Name, fields, models);
 
             using var connection = (SqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
             try
             {
+                await connection.OpenAsync(ct).ConfigureAwait(false);
                 using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.TableLock, null);
                 bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
                 foreach (DataColumn col in dataTable.Columns)
@@ -372,11 +372,15 @@ namespace Birko.Data.SQL.Connectors
                 return;
 
             using var connection = (SqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
+            // Open() and BeginTransaction() are inside the try so an open/transient failure routes
+            // through InitException like the rest of the method (CR-L179). The transaction is declared
+            // outside so the catch can roll back and the finally can dispose it.
+            SqlTransaction? transaction = null;
             string? commandText = null;
             try
             {
+                connection.Open();
+                transaction = connection.BeginTransaction();
                 using var command = connection.CreateCommand();
                 command.Transaction = transaction;
 
@@ -414,8 +418,12 @@ namespace Birko.Data.SQL.Connectors
             }
             catch (Exception ex)
             {
-                transaction.Rollback();
+                transaction?.Rollback();
                 InitException(ex, commandText ?? "BulkUpdate " + table.Name);
+            }
+            finally
+            {
+                transaction?.Dispose();
             }
         }
 
@@ -438,11 +446,14 @@ namespace Birko.Data.SQL.Connectors
                 return;
 
             using var connection = (SqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+            // OpenAsync/BeginTransactionAsync inside the try so an open/transient failure routes through
+            // InitException (CR-L179); the transaction is declared outside for rollback/dispose.
+            SqlTransaction? transaction = null;
             string? commandText = null;
             try
             {
+                await connection.OpenAsync(ct).ConfigureAwait(false);
+                transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
                 using var command = connection.CreateCommand();
                 command.Transaction = transaction;
 
@@ -481,13 +492,17 @@ namespace Birko.Data.SQL.Connectors
             }
             catch (OperationCanceledException)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
+            }
+            finally
+            {
+                if (transaction != null) await transaction.DisposeAsync().ConfigureAwait(false);
             }
         }
 
@@ -505,11 +520,14 @@ namespace Birko.Data.SQL.Connectors
                 return;
 
             using var connection = (SqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
+            // Open()/BeginTransaction() inside the try so an open/transient failure routes through
+            // InitException (CR-L179); the transaction is declared outside for rollback/dispose.
+            SqlTransaction? transaction = null;
             string? commandText = null;
             try
             {
+                connection.Open();
+                transaction = connection.BeginTransaction();
                 using var command = connection.CreateCommand();
                 command.Transaction = transaction;
 
@@ -537,8 +555,12 @@ namespace Birko.Data.SQL.Connectors
             }
             catch (Exception ex)
             {
-                transaction.Rollback();
+                transaction?.Rollback();
                 InitException(ex, commandText ?? "BulkDelete " + table.Name);
+            }
+            finally
+            {
+                transaction?.Dispose();
             }
         }
 
@@ -556,11 +578,14 @@ namespace Birko.Data.SQL.Connectors
                 return;
 
             using var connection = (SqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+            // OpenAsync/BeginTransactionAsync inside the try so an open/transient failure routes through
+            // InitException (CR-L179); the transaction is declared outside for rollback/dispose.
+            SqlTransaction? transaction = null;
             string? commandText = null;
             try
             {
+                await connection.OpenAsync(ct).ConfigureAwait(false);
+                transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
                 using var command = connection.CreateCommand();
                 command.Transaction = transaction;
 
@@ -589,13 +614,17 @@ namespace Birko.Data.SQL.Connectors
             }
             catch (OperationCanceledException)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 throw;
             }
             catch (Exception ex)
             {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
                 InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
+            }
+            finally
+            {
+                if (transaction != null) await transaction.DisposeAsync().ConfigureAwait(false);
             }
         }
 
