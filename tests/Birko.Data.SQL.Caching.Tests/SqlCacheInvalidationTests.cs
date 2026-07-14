@@ -27,6 +27,19 @@ public class SqlCacheInvalidationTests
         SqlCacheKeyBuilder.BuildKey("Users", null, null, null, null).Should().StartWith(prefix);
     }
 
+    // CR-L178: the filter/order hash segments are the first 8 SHA-256 bytes = exactly 16 hex chars
+    // (the comment previously mis-stated "12 bytes"). Lock the segment width.
+    [Fact]
+    public void BuildKey_HashSegments_Are16HexChars()
+    {
+        var key = SqlCacheKeyBuilder.BuildKey("Users", "x => x.Age > 5", "Name:asc", null, null);
+
+        // sql:Users:<filterHash>:<orderHash>:_:_
+        var parts = key.Split(':');
+        parts[2].Should().HaveLength(16).And.MatchRegex("^[0-9a-f]{16}$");
+        parts[3].Should().HaveLength(16).And.MatchRegex("^[0-9a-f]{16}$");
+    }
+
     [Fact]
     public void BuildKey_IsDeterministic_AndFilterSensitive()
     {
