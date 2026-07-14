@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.SQL.Caching cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch T: **CR-L177, CR-L178** — Birko.Data.SQL.Caching. Both closed; **/code-review clean** (comment/doc only, no logic change).
+- **Verify-first (L177)** — documented on `CachedAsyncDataBaseBulkStore.ResolveTableName` that resolving the table name at construction is intentional and correct: it depends only on T's mapping attributes (not connection/settings state) and `LoadTable` is static/cached, so it's cheap and safe before `SetSettings`/`Init`, feeding only the cache-key prefix. The finding itself said "no action required".
+- **Cleanup (L178)** — corrected the misleading `SqlCacheKeyBuilder.ComputeHash` comment ("Use first 12 bytes" → "8 bytes"); the loop already reads 8 bytes = 16 hex chars (matching the `StringBuilder(16)` capacity), so only the comment was wrong.
+- **Tests** — SQL.Caching.Tests 6 → 7 (BuildKey filter/order hash segments are exactly 16 hex chars).
+- Suite green: Birko.Data.SQL.Caching.Tests 7. STORY-027 now **178/418**.
+
 ### Code-review remediation — low findings, Data.SQL core cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch S: **CR-L173 … CR-L176** — Birko.Data.SQL, with provider overrides backported to .SQL.PostgreSQL / .SQL.MSSql / .SQL.MySQL. All closed; **/code-review clean**.
 - **Bug/diagnostic (L173)** — `DataBase.GetGeneratedQuery` replaces parameter names **longest-first** (`OrderByDescending(name.Length)`), so a name that's a prefix of another (`@WHEREName0_5` ⊂ `@WHEREName0_50`, `@LIMIT` ⊂ `@LIMITxxx`) no longer corrupts the rendered SQL. This string is the OnExecute log / InitException commandText diagnostic, not executed.

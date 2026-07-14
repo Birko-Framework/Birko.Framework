@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**176 / 418 triaged** as of 2026-07-14. Next open is CR-L177 (Birko.Data.SQL.Caching).
+**178 / 418 triaged** as of 2026-07-14. Next open is CR-L179 (Birko.Data.SQL.MSSql).
+
+**Batch T — Data.SQL.Caching cluster (CR-L177, CR-L178):** Birko.Data.SQL.Caching. Both closed;
+**/code-review clean** (comment/doc only, no logic change). **L177** (verify-first, "no action required"):
+documented on `CachedAsyncDataBaseBulkStore.ResolveTableName` that construction-time table-name resolution
+is intentional and correct — it depends only on T's mapping attributes (not connection/settings state) and
+`LoadTable` is static/cached, so resolving it before `SetSettings`/`Init` is cheap and safe; it feeds only
+the cache-key prefix. **L178** (cleanup): fixed the misleading `SqlCacheKeyBuilder.ComputeHash` comment
+("Use first 12 bytes" → "8 bytes"); the loop already reads 8 bytes = 16 hex chars, matching the
+`StringBuilder(16)` capacity, so only the comment was wrong. **Tests:** SQL.Caching.Tests 6 → 7 (assert the
+BuildKey filter/order hash segments are exactly 16 hex chars, locking in the corrected comment). Suite green:
+SQL.Caching.Tests 7.
 
 **Batch S — Data.SQL core cluster (CR-L173 … CR-L176):** Birko.Data.SQL (+ provider overrides in
 .SQL.PostgreSQL / .MSSql / .MySQL). All closed; **/code-review clean**. **L173** (bug, diagnostic):

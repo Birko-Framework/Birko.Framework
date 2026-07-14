@@ -6288,7 +6288,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ResolveTableName called in constructor before SetSettings/Init
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.Caching\Stores/CachedAsyncDataBaseBulkStore.cs:38,163-173`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _tableName is resolved in the constructor via SQL.DataBase.LoadTable(typeof(T)), which is fine (it depends only on T's attributes, not on connection state) and LoadTable null-result is guarded. Worth noting only because it couples the table name at construction; if the table is later renamed via attribute changes it won't matter. Not a defect, just a coupling note — LoadTable is cached/static so the call is cheap and safe.
 - **Fix:** No action required; optionally make _tableName lazily resolved for symmetry with the lazy-init pattern, but the current placement is correct.
 
@@ -6296,7 +6296,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Misleading hash comment (says 12 bytes, computes 8)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.Caching\Caching/SqlCacheKeyBuilder.cs:49-54`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The comment states 'Use first 12 bytes (16 hex chars)' but the loop is for (i = 0; i < 8; i++), producing 8 bytes = 16 hex chars. The 16-hex-char result matches the StringBuilder(16) capacity, so the code is internally consistent; only the comment's '12 bytes' is wrong.
 - **Fix:** Change the comment to 'Use first 8 bytes (16 hex chars)'.
 
