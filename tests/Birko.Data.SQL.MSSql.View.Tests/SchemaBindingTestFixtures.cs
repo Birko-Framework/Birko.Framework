@@ -37,3 +37,20 @@ public class SbCustomerOrderView
     [SumField(typeof(SbOrderModel), nameof(SbOrderModel.Total))]
     public decimal TotalSpent { get; set; }
 }
+
+/// <summary>
+/// Non-aggregate join view (only ViewFields, no Count/Sum) — HasAggregateFields() is false, so it is
+/// accepted by the indexed-view guard (CR-L181).
+/// </summary>
+[View(typeof(SbCustomerModel), typeof(SbOrderModel), nameof(SbCustomerModel.Guid), nameof(SbOrderModel.CustomerId), connect: ViewConnect.CheckExisting)]
+public class SbCustomerOrderPlainView
+{
+    [ViewField(typeof(SbCustomerModel), nameof(SbCustomerModel.Guid))]
+    public Guid? CustomerId { get; set; }
+
+    [ViewField(typeof(SbCustomerModel), nameof(SbCustomerModel.Name))]
+    public string CustomerName { get; set; } = null!;
+
+    [ViewField(typeof(SbOrderModel), nameof(SbOrderModel.Total))]
+    public decimal Total { get; set; }
+}
