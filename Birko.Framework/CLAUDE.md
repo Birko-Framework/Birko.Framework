@@ -139,6 +139,16 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### PathValidator.ValidateDirectory — reject only path-invalid chars (consumer backport) (2026-07-14)
+`Birko.Helpers.PathValidator.ValidateDirectory` checked the **whole** directory path against
+`Path.GetInvalidPathChars()` **plus** `Path.GetInvalidFileNameChars()` — but the file-name set additionally
+includes the directory separators (`\`/`/`) and the drive-letter `:` on Windows, so it threw
+`ArgumentException` on **every absolute Windows path** (e.g. `C:\Users\…`). A directory path legitimately
+contains separators and a drive colon; the method now checks against `Path.GetInvalidPathChars()` only
+(control chars etc.), and `Path.GetFullPath` still rejects truly-malformed paths. Surfaced by a consumer app.
+Tests: `Birko.Helpers.Tests` 88 → 92 (`ValidateDirectory` accepts an absolute path + separators/drive-colon,
+rejects a NUL control char, rejects null/empty).
+
 ### Code-review remediation — low findings, Data.Sync core cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch AD: **CR-L207, CR-L208, CR-L209** — Birko.Data.Sync. All closed; **/code-review clean**.
 - **Cleanup (L207)** — `SyncOptions.MaxItems` is now honored (Sync/Preview, sync + async, cap `allGuids` via `.Take`); `SaveFilterBlockAction.MarkConflict` (previously falling through the switch → behaving like Skip) now invokes `OnConflict` with a `ConflictInfo`; `SkipPreview` documented as reserved (no internal caller — Preview and Sync are independent public entry points).
