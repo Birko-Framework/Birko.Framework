@@ -42,6 +42,26 @@ public class ElasticSyncKnowledgeMappingTests
     }
 
     [Fact]
+    public void RecordId_Removed_AsDeadField()
+    {
+        // CR-L212: the int RecordId field (mapped "recordId") was dead — never assigned, never read,
+        // always persisted as 0, not in ISyncKnowledgeItem. Assert both the property and its mapping
+        // are gone so a future reintroduction is caught.
+        typeof(ElasticSyncKnowledgeItem)
+            .GetProperty("RecordId", BindingFlags.Public | BindingFlags.Instance)
+            .Should().BeNull("the dead RecordId field was removed under CR-L212");
+
+        var names = typeof(ElasticSyncKnowledgeItem)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => p.GetCustomAttribute<ElasticsearchPropertyAttributeBase>())
+            .Where(a => a != null)
+            .Select(a => a!.Name)
+            .ToList();
+
+        names.Should().NotContain("recordId");
+    }
+
+    [Fact]
     public void AutoMap_DoesNotEmit_ReservedIdField()
     {
         // Render the AutoMap for the type offline (no server) and confirm the produced mapping JSON
