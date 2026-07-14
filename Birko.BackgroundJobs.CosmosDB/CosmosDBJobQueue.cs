@@ -57,9 +57,13 @@ public class CosmosDBJobQueue : IJobQueue
         var scheduledStatus = (int)JobStatus.Scheduled;
 
         var results = await _store.ReadAsync(
-            filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt <= now))
+            // Guard ScheduledAt != null (a Scheduled row with a null ScheduledAt is malformed and the
+            // null-comparison semantics under the Cosmos SQL translation aren't guaranteed to match
+            // in-memory nullable-DateTime comparison), and add a FIFO tiebreaker so equal-priority jobs
+            // dequeue in enqueue order — matching the MongoDB backend (CR-L020/L021).
+            filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
                 && (queueName == null || j.QueueName == queueName),
-            orderBy: OrderBy<CosmosJobDescriptorModel>.ByName(nameof(CosmosJobDescriptorModel.Priority), descending: true),
+            orderBy: OrderBy<CosmosJobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
             limit: 1,
             ct: ct
         ).ConfigureAwait(false);
@@ -87,7 +91,7 @@ public class CosmosDBJobQueue : IJobQueue
     }
 
     /// <inheritdoc />
-    public async Task FailAsync(Guid jobId, string? error = null, CancellationToken ct = default)
+    public async Task FailAsync(Guid jobId, string error, CancellationToken ct = default)
     {
         var model = await _store.ReadAsync(jobId, ct).ConfigureAwait(false);
         if (model == null) return;
