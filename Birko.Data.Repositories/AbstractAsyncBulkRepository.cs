@@ -54,6 +54,13 @@ namespace Birko.Data.Repositories
             return await BulkStore.ReadAsync(filter, orderBy, limit, offset, ct);
         }
 
+        /// <inheritdoc />
+        public virtual async Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
+        {
+            if (BulkStore == null) return null;
+            return await BulkStore.ReadFirstAsync(filter, ct);
+        }
+
         #endregion
 
         #region Bulk Create Operations

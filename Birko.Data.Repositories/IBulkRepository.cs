@@ -29,6 +29,15 @@ namespace Birko.Data.Repositories
         /// <param name="offset">Number of entities to skip.</param>
         /// <returns>A collection of matching entities.</returns>
         IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null);
+
+        /// <summary>
+        /// Reads the first entity matching the filter. Provided for parity with the store contract's
+        /// <see cref="Stores.IBulkReadStore{T}.ReadFirst"/> — on a bulk repository the inherited
+        /// <c>Read(filter)</c> returns the collection, so this is the single-result accessor.
+        /// </summary>
+        /// <param name="filter">Optional filter expression.</param>
+        /// <returns>The first matching entity, or null.</returns>
+        T? ReadFirst(Expression<Func<T, bool>>? filter = null);
     }
 
     #endregion

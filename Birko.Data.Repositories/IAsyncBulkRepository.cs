@@ -32,6 +32,16 @@ namespace Birko.Data.Repositories
         /// <param name="ct">A cancellation token to cancel the operation.</param>
         /// <returns>A collection of matching entities.</returns>
         Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken ct = default);
+
+        /// <summary>
+        /// Asynchronously reads the first entity matching the filter. Provided for parity with the store
+        /// contract's <see cref="Stores.IAsyncBulkReadStore{T}.ReadFirstAsync"/> — on a bulk repository the
+        /// inherited <c>ReadAsync(filter)</c> returns the collection, so this is the single-result accessor.
+        /// </summary>
+        /// <param name="filter">Optional filter expression.</param>
+        /// <param name="ct">A cancellation token to cancel the operation.</param>
+        /// <returns>The first matching entity, or null.</returns>
+        Task<T?> ReadFirstAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default);
     }
 
     #endregion

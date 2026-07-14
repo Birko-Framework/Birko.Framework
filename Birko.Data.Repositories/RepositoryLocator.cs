@@ -81,12 +81,20 @@ namespace Birko.Data.Repositories
         }
 
         /// <summary>
-        /// Get or create a repository using settings to determine the cache key.
-        /// Creates the repository via default constructor.
+        /// Get or create a repository using settings to determine the cache key, constructing it via its
+        /// parameterless constructor.
+        /// <para>
+        /// NOTE: <paramref name="settings"/> is used <b>only</b> as the cache key — it is not applied to the
+        /// created repository (this overload has no store/model type with which to build a configured store).
+        /// <typeparamref name="TRepository"/> must therefore expose a public parameterless constructor (which
+        /// self-provisions its own default store); to apply the settings, use a store-injecting overload such
+        /// as <see cref="GetRepository{TStore, TRepository}"/> or call the repository's own SetSettings after
+        /// retrieval. A repository whose only constructor takes a store will get a clear exception here.
+        /// </para>
         /// </summary>
-        /// <typeparam name="TRepository">The type of repository.</typeparam>
+        /// <typeparam name="TRepository">The type of repository (must have a public parameterless constructor).</typeparam>
         /// <typeparam name="TSettings">The type of settings.</typeparam>
-        /// <param name="settings">The settings to use for cache key.</param>
+        /// <param name="settings">The settings whose GetId() forms the cache key.</param>
         /// <returns>The repository instance.</returns>
         public static TRepository GetRepository<TRepository, TSettings>(TSettings settings)
             where TRepository : IBaseRepository
@@ -104,9 +112,25 @@ namespace Birko.Data.Repositories
 
                 if (!_repositories[id].ContainsKey(type))
                 {
-                    _repositories[id].Add(type, (TRepository)Activator.CreateInstance(type)!);
+                    _repositories[id].Add(type, (TRepository)CreateParameterless(type));
                 }
                 return (TRepository)_repositories[id][type];
+            }
+        }
+
+        private static object CreateParameterless(Type type)
+        {
+            try
+            {
+                return Activator.CreateInstance(type)!;
+            }
+            catch (MissingMethodException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Repository '{type.FullName}' has no public parameterless constructor. The settings-keyed " +
+                    "GetRepository<TRepository, TSettings> overload constructs the repository parameterlessly and " +
+                    "uses the settings only as a cache key; use a store-injecting GetRepository overload instead.",
+                    ex);
             }
         }
 

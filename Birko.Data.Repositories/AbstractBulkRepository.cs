@@ -49,6 +49,16 @@ namespace Birko.Data.Repositories
             return bulkStore.Read(filter, orderBy, limit, offset);
         }
 
+        /// <inheritdoc />
+        public virtual T? ReadFirst(Expression<Func<T, bool>>? filter = null)
+        {
+            if (Store is not Stores.IBulkStore<T> bulkStore)
+            {
+                throw new InvalidOperationException($"Store is not type of {typeof(Stores.IBulkStore<T>)}");
+            }
+            return bulkStore.ReadFirst(filter);
+        }
+
         #endregion
 
         #region Bulk Create Operations
