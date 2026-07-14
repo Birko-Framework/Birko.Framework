@@ -18,7 +18,7 @@ Zero-dependency shared project containing the most fundamental interfaces used a
 - `ICopyable<T>` — Copy-to pattern interface
 
 ### Models/IDefault.cs
-- `IDefault` — Single `bool Default` property
+- `IDefault` — Single `bool IsDefault` property
 
 ### Models/ITimestamped.cs
 - `ITimestamped` — `CreatedAt`, `UpdatedAt`, `PrevUpdatedAt` timestamp tracking

@@ -46,6 +46,11 @@ namespace Birko
         /// </summary>
         public TimeSpan GetDelay(int attemptNumber)
         {
+            // Clamp to at least 1: the exponential path uses (attemptNumber - 1) as the exponent, so a
+            // 0/negative attempt would yield a fractional (sub-BaseDelay, ~0) delay (CR-L095).
+            if (attemptNumber < 1)
+                attemptNumber = 1;
+
             TimeSpan delay;
             if (!UseExponentialBackoff)
             {
