@@ -13,7 +13,26 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**214 / 418 triaged** as of 2026-07-14. Next open is CR-L215 (Birko.Data.Sync.MongoDb).
+**216 / 418 triaged** as of 2026-07-14. Next open is CR-L217 (Birko.Data.Sync.RavenDB).
+
+**Batch AH — Data.Sync.MongoDb cluster (CR-L215, CR-L216):** Birko.Data.Sync.MongoDb. Both closed;
+**/code-review clean (no findings)**. **L215** (cleanup): removed the decorative
+`[BsonIgnore] CollectionName => "SyncKnowledge"` property from `MongoSyncKnowledgeItem` and fixed the
+matching CLAUDE.md claim. It never affected where documents live — the base store resolves the collection
+via `MongoDBClient.GetCollection<T>()` → `collectionName ?? typeof(T).Name`, so documents live in a
+`MongoSyncKnowledgeItem` collection. Wiring it through was deliberately declined: that would silently
+relocate existing data to `SyncKnowledge`. (Contrast `CosmosSyncKnowledgeItem.ContainerName`, honored because
+it is passed to the base ctor.) **L216** (cleanup): removed the dead `int IdRecord` field (`BsonElement
+"recordId"`, "for compatibility") — never assigned by `CreateKnowledgeItem`, never queried, inflating every
+document with `recordId:0`. **Backward-compat guard:** because `IdRecord` WAS a persisted element and the
+MongoDB driver throws on unmapped elements by default (no IgnoreExtraElements convention is registered in the
+Birko Mongo layer — grep-confirmed), added `[BsonIgnoreExtraElements]` to the model so documents already
+written with `recordId` still deserialize; without it, dropping a persisted field would break reads of
+existing data. `CollectionName` was `[BsonIgnore]` (never persisted), so its removal has zero data impact.
+**Tests:** Sync.MongoDb.Tests 3 → 5 (`Model_HasNoDeadFields` reflection-asserts both members are gone;
+`Deserialize_LegacyDocumentWithRecordId_DoesNotThrow` — an offline `BsonSerializer.Deserialize` of a
+hand-built doc carrying a legacy `recordId` element succeeds, proving the guard; built by hand to sidestep
+the driver's global GuidRepresentation config). Suite green: Sync.MongoDb.Tests 5.
 
 **Batch AG — Data.Sync.Json cluster (CR-L213, CR-L214):** Birko.Data.Sync.Json. Both closed;
 **/code-review clean (no findings)**. **L213** (cleanup): removed the vestigial `int Id` field (serialized

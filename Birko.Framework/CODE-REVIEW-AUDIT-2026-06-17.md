@@ -6593,18 +6593,20 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L215 · ⚪ low · Birko.Data.Sync.MongoDb
 - **Title:** CollectionName property is dead/misleading — the base store ignores it
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.MongoDb\Models/MongoSyncKnowledgeItem.cs:80-81`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AH)
+- **Status:** done
 - **Detail:** MongoSyncKnowledgeItem exposes `[BsonIgnore] public string CollectionName => "SyncKnowledge"`, and the project CLAUDE.md documents it as the 'CollectionName property for MongoDB collection targeting'. But AsyncMongoDBStore.Collection resolves the collection via MongoDBClient.GetCollection<T>(), which uses `typeof(T).Name` (Birko.Data.MongoDB/MongoDBClient.cs:56). So documents actually live in a collection named 'MongoSyncKnowledgeItem', not 'SyncKnowledge'. The property has no effect on where data is stored — it is purely decorative and the doc claim is wrong.
 - **Fix:** Either remove CollectionName (and fix the CLAUDE.md claim), or wire it through by overriding the collection name (e.g. pass it to GetCollection / override the Collection resolution) so the property does what it claims. The other sync siblings either don't carry such a property or carry a genuinely-used one (CosmosSyncKnowledgeItem.ContainerName is actually passed to the base ctor).
+- **Resolution (Batch AH):** removed the decorative `CollectionName` property and fixed the CLAUDE.md claim. Wiring it through was deliberately declined — that would silently relocate existing data from the `MongoSyncKnowledgeItem` collection (base store resolves via `typeof(T).Name`) to `SyncKnowledge`.
 
 ### CR-L216 · ⚪ low · Birko.Data.Sync.MongoDb
 - **Title:** IdRecord field is unused 'compatibility' cruft
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.MongoDb\Models/MongoSyncKnowledgeItem.cs:25-26`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AH)
+- **Status:** done
 - **Detail:** IdRecord (int, BsonElement 'recordId', commented 'for compatibility') is never assigned or read anywhere in the project (CreateKnowledgeItem does not set it; no query uses it). It is dead surface that just inflates every persisted document with a recordId:0 field. The identity used everywhere is the AbstractModel.Guid field (ModelByGuid filters on x.Guid) plus the Mongo-generated _id string.
 - **Fix:** Drop IdRecord unless a concrete consumer relies on the legacy 'recordId' element; if it must stay for migration compatibility, document the consumer that reads it.
+- **Resolution (Batch AH):** dropped IdRecord. Because it WAS a persisted element (`recordId`) and the MongoDB driver throws on unmapped elements by default (no IgnoreExtraElements convention is registered in the Birko Mongo layer), added `[BsonIgnoreExtraElements]` to the model so documents already written with `recordId` still deserialize. Offline regression test proves a doc with a legacy `recordId` element deserializes without throwing.
 
 ### CR-L217 · ⚪ low · Birko.Data.Sync.RavenDB
 - **Title:** Sync store methods named *Async but are synchronous and return void/value
