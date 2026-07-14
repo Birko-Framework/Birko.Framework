@@ -43,7 +43,9 @@ public class CosmosViewStore<TView> : IViewStore<TView> where TView : class, new
         int? offset = null,
         CancellationToken ct = default)
     {
-        if (_definition.HasAggregates)
+        // Take the SQL path for group-by-only (distinct/grouping) views too, not just aggregate views —
+        // otherwise a HasGroupBy && !HasAggregates view would return raw ungrouped docs via LINQ (CR-L110).
+        if (_definition.HasAggregates || _definition.HasGroupBy)
         {
             return await QueryAggregateAsync(filter, orderBy, limit, offset, ct).ConfigureAwait(false);
         }

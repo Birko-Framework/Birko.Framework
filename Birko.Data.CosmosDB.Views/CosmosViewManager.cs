@@ -52,7 +52,15 @@ public class CosmosViewManager : IViewManager
         }
 
         var container = _database.GetContainer(viewName);
-        await container.DeleteContainerAsync(cancellationToken: ct).ConfigureAwait(false);
+        try
+        {
+            await container.DeleteContainerAsync(cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Idempotent teardown: dropping a non-existent view container is a no-op, matching
+            // ExistsAsync's NotFound handling (CR-L109).
+        }
     }
 
     /// <summary>
