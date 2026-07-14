@@ -8,7 +8,7 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Time</Import_RootNamespace>
   </PropertyGroup>
-  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" />
+  <Import Project="$(MSBuildThisFileDirectory)..\Birko.Time.Abstractions\Birko.Time.Abstractions.projitems" Label="Shared" Condition="'$(BirkoTimeAbstractionsProjitemsImported)' != 'true'" />
   <ItemGroup>
     <!-- Core -->
     <Compile Include="$(MSBuildThisFileDirectory)Core\ITimeZoneConverter.cs" />
