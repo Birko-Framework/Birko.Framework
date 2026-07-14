@@ -4,6 +4,11 @@ Historical record of architectural changes that are no longer "recent" but prese
 
 ---
 
+## 2026-07-14 — Birko.Communication.Ports — BREAKING: `IPort : IDisposable`, `InvokeProcessData` protected (CR-L042/L043)
+Two public-API changes landed with the STORY-027 low-findings sweep. **No in-tree consumer is affected** (a scan of `Consumers/` found no source implementing `IPort` directly nor calling `InvokeProcessData`), but they are breaking for **external** consumers, so recording them here.
+- **`IPort` now extends `IDisposable`** (CR-L043). Every port is disposable (`AbstractPort.Dispose()` calls `Close()`), so consumers can use `using`. **Impact:** any type implementing `IPort` **directly** (not via `AbstractPort`) must now provide a `Dispose()`. Types deriving from `AbstractPort` inherit it and are unaffected; the three ports that already had their own `Dispose` (Serial, NfcReaderPort, BluetoothLE) became `override`. The one in-tree direct implementer, the Modbus test `MockPort`, was updated.
+- **`AbstractPort.InvokeProcessData()` is now `protected`** (was `public`) (CR-L042). It fires the `OnProcessData` notification internally from a derived port after it processes data — it was never part of the `IPort` contract. **Impact:** external code calling `InvokeProcessData()` on a concrete port instance won't compile; derived ports (which is every caller in-tree) are unaffected.
+
 ## 2026-07-08 — Birko.Xaml — imperative dialog service (web `dialogs` backport)
 Backported the web `birko-web-components/dialogs` helper (Reps TASK-062/063) into the XAML skin: an imperative, awaitable dialog API so a view-model calls a function instead of hand-wiring a `Modal` + buttons per screen.
 - **`Birko.Xaml.Core/Dialogs/IDialogService`** (Avalonia-free — Core constraint #1) + option/enum models (`ConfirmOptions`, `PromptOptions`, `ChooseOption<T>`, `DialogVariant`, `NotifyVariant`). Eight members mirroring the web: `ConfirmAsync` / `ConfirmDeleteAsync` (→`Task<bool>`), `AlertAsync`, `PromptAsync` (→`Task<string?>`), `ChooseAsync<T>` (→`Task<T?>`), `PromptFormAsync<T>` (model-based, not a value dict — matches the XAML `Form` which two-way binds a POCO → returns the mutated model or `null`), `BusyAsync<T>`/`BusyAsync`, and `Notify`.
