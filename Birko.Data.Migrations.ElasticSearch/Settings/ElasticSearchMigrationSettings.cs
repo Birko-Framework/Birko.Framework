@@ -17,6 +17,11 @@ namespace Birko.Data.Migrations.ElasticSearch.Settings
         /// Gets or sets whether migrations use index aliases for zero-downtime deployments.
         /// Default is true.
         /// </summary>
+        /// <remarks>
+        /// CR-L142: reserved / not yet wired — no alias logic exists in the store or schema builder today.
+        /// <see cref="NumberOfShards"/> / <see cref="NumberOfReplicas"/> are honored by the migrations-index
+        /// create; the data-collection schema builder does not yet receive these settings.
+        /// </remarks>
         public bool UseAliases { get; set; } = true;
 
         /// <summary>

@@ -36,8 +36,9 @@ namespace Birko.Data.Migrations.ElasticSearch
             {
                 _client.Indices.Create(indexName, c => c
                     .Settings(s => s
-                        .NumberOfShards(1)
-                        .NumberOfReplicas(0)
+                        // CR-L142: honor the configured shard/replica counts (were hardcoded 1/0).
+                        .NumberOfShards(_settings.NumberOfShards ?? 1)
+                        .NumberOfReplicas(_settings.NumberOfReplicas ?? 0)
                     )
                     .Map<MigrationDocument>(m => m
                         .Properties(p => p

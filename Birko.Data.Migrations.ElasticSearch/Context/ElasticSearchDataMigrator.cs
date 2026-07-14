@@ -87,6 +87,16 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
 
         public void CopyData(string sourceCollection, string targetCollection, string? transformJson = null)
         {
+            // CR-L144: the ElasticSearch reindex path does not apply a document transform. Rather than
+            // silently producing untransformed data, reject a transform request so the caller learns it
+            // is unimplemented for this backend.
+            if (!string.IsNullOrWhiteSpace(transformJson))
+            {
+                throw new NotSupportedException(
+                    "ElasticSearchDataMigrator.CopyData does not support transformJson; the server-side " +
+                    "reindex copies documents unchanged. Use a separate update step for transformations.");
+            }
+
             var reindexResponse = _client.ReindexOnServer(r => r
                 .Source(s => s.Index(sourceCollection))
                 .Destination(d => d.Index(targetCollection))
@@ -165,28 +175,28 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                                 mustClauses.Add(new QueryContainer(new NumericRangeQuery
                                 {
                                     Field = fieldName,
-                                    GreaterThan = Convert.ToDouble(value)
+                                    GreaterThan = ToRangeBound(value, fieldName, op.Name)
                                 }));
                                 break;
                             case "$gte":
                                 mustClauses.Add(new QueryContainer(new NumericRangeQuery
                                 {
                                     Field = fieldName,
-                                    GreaterThanOrEqualTo = Convert.ToDouble(value)
+                                    GreaterThanOrEqualTo = ToRangeBound(value, fieldName, op.Name)
                                 }));
                                 break;
                             case "$lt":
                                 mustClauses.Add(new QueryContainer(new NumericRangeQuery
                                 {
                                     Field = fieldName,
-                                    LessThan = Convert.ToDouble(value)
+                                    LessThan = ToRangeBound(value, fieldName, op.Name)
                                 }));
                                 break;
                             case "$lte":
                                 mustClauses.Add(new QueryContainer(new NumericRangeQuery
                                 {
                                     Field = fieldName,
-                                    LessThanOrEqualTo = Convert.ToDouble(value)
+                                    LessThanOrEqualTo = ToRangeBound(value, fieldName, op.Name)
                                 }));
                                 break;
                             case "$ne":
@@ -249,6 +259,28 @@ namespace Birko.Data.Migrations.ElasticSearch.Context
                 JsonValueKind.Null => null,
                 _ => element.ToString()
             };
+        }
+
+        /// <summary>
+        /// Coerces a range-operator value to a double for a NumericRangeQuery, throwing a clear
+        /// <see cref="ArgumentException"/> on a null/non-numeric value (CR-L143). Convert.ToDouble(null)
+        /// silently returns 0, so a malformed filter like {"x":{"$gt":null}} used to become a range &gt; 0.
+        /// </summary>
+        internal static double ToRangeBound(object? value, string field, string op)
+        {
+            if (value == null)
+            {
+                throw new ArgumentException($"Range operator '{op}' on field '{field}' requires a non-null numeric value.");
+            }
+            try
+            {
+                return Convert.ToDouble(value);
+            }
+            catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException)
+            {
+                throw new ArgumentException(
+                    $"Range operator '{op}' on field '{field}' requires a numeric value, got '{value}'.", ex);
+            }
         }
     }
 }
