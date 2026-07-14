@@ -77,6 +77,26 @@ namespace Birko.Contracts.Tests
         }
 
         [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        [InlineData(-100)]
+        public void GetDelay_nonPositiveAttempt_ClampsToAttemptOne(int attempt)
+        {
+            // Regression for CR-L095: a 0/negative attemptNumber used to feed a negative exponent
+            // (BackoffMultiplier^(attempt-1)) and yield a sub-BaseDelay (~0) delay. It now clamps to 1.
+            var policy = new RetryPolicy
+            {
+                UseExponentialBackoff = true,
+                BaseDelay = TimeSpan.FromSeconds(5),
+                BackoffMultiplier = 2.0,
+                MaxDelay = TimeSpan.FromMinutes(5),
+                AddJitter = false,
+            };
+
+            policy.GetDelay(attempt).Should().Be(policy.GetDelay(1)).And.Be(TimeSpan.FromSeconds(5));
+        }
+
+        [Theory]
         [InlineData(53)]
         [InlineData(100)]
         [InlineData(1000)]
