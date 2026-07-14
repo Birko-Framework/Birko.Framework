@@ -12,7 +12,10 @@ Zero-dependency shared project with LLM provider interface, message models, tool
 ## Components
 
 ### Models/Message.cs
-- `Message` — Chat message model (role, content blocks)
+- `Message` — Chat message model (role, content). `Content` is `object?` — a `string` for user turns, a `List<ContentBlock>` for assistant turns. Use `message.GetText()` to read the text regardless of shape; do NOT cast `Content` to `string` (an assistant turn's block list would stringify to a CLR type name).
+
+### Models/MessageText.cs
+- `MessageText.From(object? content)` — canonical text extractor backing `Message.GetText()`: returns a string directly, concatenates the `Text` of `type == "text"` blocks for a block list (or single block), and yields `string.Empty` for null/unrecognized content.
 
 ### Models/ContentBlock.cs
 - `ContentBlock` — Typed content block (text, tool use, tool result)

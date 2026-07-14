@@ -12,6 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)AgentOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)LlmProviderFactory.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\Message.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\MessageText.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ContentBlock.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TokenUsage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\LlmResponse.cs" />
