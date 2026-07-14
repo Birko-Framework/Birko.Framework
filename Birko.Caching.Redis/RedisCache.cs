@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -155,11 +156,22 @@ public sealed class RedisCache : ICache
         var server = _connectionManager.GetServer();
         var fullPrefix = GetFullKey(prefix);
 
+        // Buffer matched keys and delete in batches via the array overload to cut the N individual
+        // KeyDeleteAsync round-trips inside the SCAN enumeration (CR-L040).
+        const int batchSize = 512;
+        var batch = new List<RedisKey>(batchSize);
         await foreach (var key in server.KeysAsync(pattern: $"{fullPrefix}*", database: _settings.Database))
         {
             ct.ThrowIfCancellationRequested();
-            await db.KeyDeleteAsync(key);
+            batch.Add(key);
+            if (batch.Count >= batchSize)
+            {
+                await db.KeyDeleteAsync(batch.ToArray());
+                batch.Clear();
+            }
         }
+        if (batch.Count > 0)
+            await db.KeyDeleteAsync(batch.ToArray());
     }
 
     public async Task ClearAsync(CancellationToken ct = default)
