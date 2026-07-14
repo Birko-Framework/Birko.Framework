@@ -6567,10 +6567,11 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L212 · ⚪ low · Birko.Data.Sync.ElasticSearch
 - **Title:** Unused RecordId / Id fields not in the ISyncKnowledgeItem contract
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.ElasticSearch\Models/ElasticSyncKnowledgeItem.cs:25-26`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — partial (STORY-027 Batch AF): RecordId dropped; Id retained (finding stale)
+- **Status:** done
 - **Detail:** RecordId (int, mapped recordId) and Id are not part of ISyncKnowledgeItem and are not consumed anywhere. RecordId is never assigned by CreateKnowledgeItem and never read; the MongoDB sibling (MongoSyncKnowledgeItem / AsyncMongoSyncKnowledgeStore) has neither field. These are dead fields that diverge this model from the sibling implementations for no functional reason.
 - **Fix:** Drop RecordId and Id to match the MongoDB sibling and the interface, unless there is a concrete consumer that needs them.
+- **Resolution (Batch AF):** `RecordId` dropped — genuinely dead (never assigned/read, always 0, not in the interface). `Id` **kept**: the finding's premise is stale — `Id` IS populated by `CreateKnowledgeItem` via `GenerateId` (deterministic `{EntityGuid}_{Scope}`, mapped to `docKey`) and was deliberately reworked under CR-H101 off the reserved `_id`; and the MongoDB sibling DOES carry an `Id` (its `[BsonId]` document id) plus an equally-dead `IdRecord`. Retained per the finding's own "concrete consumer / document why" escape hatch. Regression test locks in RecordId's removal.
 
 ### CR-L213 · ⚪ low · Birko.Data.Sync.Json
 - **Title:** Vestigial Id field on JsonSyncKnowledgeItem

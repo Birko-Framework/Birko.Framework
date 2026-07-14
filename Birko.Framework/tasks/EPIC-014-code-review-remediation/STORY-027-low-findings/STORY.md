@@ -13,7 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**211 / 418 triaged** as of 2026-07-14. Next open is CR-L212 (Birko.Data.Sync.ElasticSearch).
+**212 / 418 triaged** as of 2026-07-14. Next open is CR-L213 (Birko.Data.Sync.Json).
+
+**Batch AF — Data.Sync.ElasticSearch (CR-L212):** Birko.Data.Sync.ElasticSearch. Closed;
+**/code-review clean (no findings)**. **L212** (cleanup, verify-first — finding partly stale): the model
+declared two supposedly-dead fields, `RecordId` (int, mapped `recordId`) and `Id` (string). Verification
+split them: **`RecordId` dropped** — genuinely dead (never assigned by `CreateKnowledgeItem`, never read,
+always persisted as 0, not in `ISyncKnowledgeItem`; the `[Number]`/`NumberType` was its only use, but
+`using Nest;` stays for the other attributes). **`Id` kept** — the finding's claim that it is "not consumed"
+and "the Mongo sibling has neither field" is stale on both counts: `Id` IS populated by `CreateKnowledgeItem`
+via `GenerateId` (deterministic `{EntityGuid}_{Scope}` → `docKey`) and was deliberately reworked under
+CR-H101 off the reserved `_id`; and the MongoDB sibling DOES carry an `Id` (`[BsonId]`) plus an equally-dead
+`IdRecord`. Doc-comment now states why `Id` is retained. **Tests:** Sync.ElasticSearch.Tests 10 → 11
+(`RecordId_Removed_AsDeadField` — reflection asserts the property and its `recordId` mapping are both gone,
+catching a future reintroduction; the existing CR-H101 `docKey`/reserved-`_id` mapping tests stay green).
+Suite green: Sync.ElasticSearch.Tests 11.
 
 **Batch AE — Data.Sync.CosmosDB cluster (CR-L210, CR-L211):** Birko.Data.Sync.CosmosDB. Both closed;
 **/code-review clean (no findings)**. **L210** (cleanup, efficiency): `GetKnowledgeItem` / `GetKnowledgeItemAsync`
