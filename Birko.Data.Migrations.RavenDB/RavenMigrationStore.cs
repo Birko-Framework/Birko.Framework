@@ -20,7 +20,9 @@ namespace Birko.Data.Migrations.RavenDB
         private readonly IDocumentStore _store;
         private readonly RavenMigrationSettings _settings;
 
-        private MigrationsStateDocument? _cachedState;
+        // CR-L149: a plain init flag, not a data cache. Every read opens a fresh session and re-loads the
+        // state document, so there is nothing cached to serve — this only gates EnsureInitialized.
+        private bool _initialized;
 
         /// <summary>
         /// Initializes a new instance of the RavenMigrationStore class.
@@ -50,7 +52,7 @@ namespace Birko.Data.Migrations.RavenDB
                 session.SaveChanges();
             }
 
-            _cachedState = state;
+            _initialized = true;
         }
 
         /// <summary>
@@ -117,7 +119,6 @@ namespace Birko.Data.Migrations.RavenDB
             session.Store(state);
             session.SaveChanges();
 
-            _cachedState = state;
         }
 
         /// <summary>
@@ -145,7 +146,6 @@ namespace Birko.Data.Migrations.RavenDB
                 state.AppliedMigrations.Remove(migration.Version.ToString());
                 session.Store(state);
                 session.SaveChanges();
-                _cachedState = state;
             }
         }
 
@@ -179,7 +179,7 @@ namespace Birko.Data.Migrations.RavenDB
 
         private void EnsureInitialized()
         {
-            if (_cachedState == null)
+            if (!_initialized)
             {
                 Initialize();
             }
