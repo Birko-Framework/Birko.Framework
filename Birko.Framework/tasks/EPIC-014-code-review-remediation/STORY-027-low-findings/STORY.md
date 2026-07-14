@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**64 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–C + D1 done).
+**69 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–D2 done).
+
+**Sub-batch D2 (CR-L065 … CR-L069) — Modbus + Network:** **L065** (dropped the always-overwritten dead
+`expectedMinResponse` parameter of `SendWriteRequest` + the four `8` call-site args), **L066** (documented
+Modbus client as synchronous-by-design, no `CancellationToken` — inherent to the sync IPort contract),
+**L067** (response-wait loop exits early on a complete error frame via `IsCompleteErrorResponse()` instead
+of spinning the full timeout), **L068** (verify-first — exception-response + TCP tx-id mismatch already
+covered by CR-H025/CR-M052; chunked-buffer MockPort residual noted), **L069** (TcpIp/Udp `ReadWorker`
+capture local `_stream`/`_client` refs + `Close()` joins the read thread with a 500ms timeout — Udp closes
+the client first to unblock its blocking `Receive`). Also added `MockPort.Dispose()` in Modbus.Tests
+(ripple from the L043 `IPort : IDisposable` change). Suites green: Modbus 71, Network 25.
+
+Communication cluster remaining: NFC (L070–L073), OAuth + OAuth.Providers (L074–L077), and the web
+protocols REST/SOAP/SSE/WebSocket (L078 onward).
 
 **Sub-batch D1 (CR-L059 … CR-L064) — Hardware + IR:** **L059** (verify-first — Serial Read/HasReadData/
 RemoveReadData already guard size<0, "negative = all", CR-M049), **L060** (removed a no-op `catch(Exception){throw;}`

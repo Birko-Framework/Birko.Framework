@@ -5392,7 +5392,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** expectedMinResponse parameter of SendWriteRequest is dead — overwritten unconditionally
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Modbus\Protocols/ModbusClient.cs:178-201`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D2, 2026-07-14)
 - **Detail:** SendWriteRequest takes an int expectedMinResponse, and every caller passes 8 (lines 95, 104, 121, 137), but the method overwrites it in both the Tcp branch (line 190: 7+5) and the Rtu branch (line 195: 1+5+2) before it is ever used. The parameter and the magic '8' arguments at all four call sites are misleading dead code.
 - **Fix:** Drop the parameter and compute expectedMinResponse entirely inside the method (as it already does), or remove the redundant assignments and let callers supply the value — but not both.
 
@@ -5400,7 +5400,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Blocking sync-over-Thread.Sleep I/O with no CancellationToken support
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Modbus\Protocols/ModbusClient.cs:203-210`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D2, 2026-07-14) — documented as synchronous-by-design (inherent to the sync IPort contract): the class summary now notes the Thread.Sleep poll wait has no CancellationToken and steers hosted callers to a dedicated thread / Task.Run
 - **Detail:** All read/write operations are synchronous and the response wait spins on Thread.Sleep(PollIntervalMs) up to ResponseTimeoutMs with no way to cancel. The framework convention is that long-running operations observe a CancellationToken. A field-bus poll loop blocking a thread for up to 3s with no cancellation is awkward for hosted/background-service callers. This is partly inherent to the synchronous IPort contract, so noting rather than blocking.
 - **Fix:** Consider async overloads (e.g. SendReadRequestAsync(..., CancellationToken)) using Task.Delay and ct.ThrowIfCancellationRequested(), or at minimum accept a CancellationToken on the public read/write methods and check it inside the poll loop.
 
@@ -5408,7 +5408,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RTU error/short responses force a full timeout wait
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Modbus\Protocols/ModbusClient.cs:142-176, 206-210`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D2, 2026-07-14) — fixed: the response-wait loop now also exits early when IsCompleteErrorResponse() is true, so an exception frame no longer spins the full ResponseTimeoutMs before being parsed (correctness was already preserved by the post-loop error handling)
 - **Detail:** expectedMinResponse is sized for a successful response (e.g. 9 + dataBytes for TCP reads). A Modbus exception response is only 5 bytes (RTU) / 9 bytes (TCP) with a smaller payload, so when the device returns an error the HasReadData(expectedMinResponse) condition is never satisfied and the loop spins the entire ResponseTimeoutMs before finally reading and parsing the (already-arrived) error frame. Correctness is preserved but every error costs the full timeout in latency.
 - **Fix:** Detect the high-bit-set (error) function code as soon as 2 (RTU) / 8 (TCP) header bytes are available and stop waiting early.
 
@@ -5416,7 +5416,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gap: response parsing edge cases and RTU write/CRC paths
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.Modbus.Tests/ModbusClientTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D2, 2026-07-14) — verify-first: the exception-response end-to-end (ModbusException, CR-H025) and TCP transaction-id mismatch (CR-M052) paths are already covered; frame-level CRC is covered by ModbusFrameTests. The only residual is a chunked/partial-frame MockPort mode (test-infra) — noted, not blocking
 - **Detail:** Client tests are solid for the happy path, but the partial-frame timing bug above cannot be reached because MockPort.HasReadData/GetData return the whole buffer atomically; there is no test where the buffer grows incrementally (which is the real RTU serial behavior). No client-level test exercises a Modbus exception response (high-bit function code -> ModbusException) end-to-end, nor an RTU CRC-mismatch, nor transaction-ID mismatch on TCP. Note only — frame-level parsing is covered in ModbusFrameTests.
 - **Fix:** Add a MockPort mode that releases bytes in chunks across HasReadData polls to assert the wait-for-full-frame contract, plus client tests for exception-response propagation and (once added) TCP transaction-ID validation.
 
@@ -5424,7 +5424,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Close() does not join the background read thread (Udp also relies on exception-driven shutdown)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Network\Ports/TcpIp.cs:87-105 (also Ports/Udp.cs:89-101)`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster D2, 2026-07-14) — fixed: TcpIp/Udp ReadWorker capture local _stream/_client references (no NRE window between null-check and deref) and Close() joins the read thread with a 500ms timeout — TcpIp joins before teardown (DataAvailable-gated worker), Udp closes the client first to unblock the blocking Receive, then joins. Code-review verified (Network.Tests are hardware-free and never open a socket)
 - **Detail:** Close() sets _stopThread = true and closes/nulls the client/stream but never joins _readThread, and immediately nulls _stream/_client. The ReadWorker loop dereferences _stream/_client each iteration (TcpIp.cs:110,114,116; Udp.cs:105,112) — once Close() nulls them the loop condition guards against NRE, but there is still a window between the null check and the field becoming null. For Udp, Receive() is blocking and shutdown depends entirely on Close() disposing the client to force an exception; if that throw is anything other than the expected one it is silently swallowed (catch {} at Udp.cs:123). Not joining the thread means Close() can return while the worker is still mid-iteration.
 - **Fix:** Capture local references to _stream/_client in ReadWorker, and call _readThread?.Join() (with a short timeout) in Close() before nulling fields, so shutdown is deterministic.
 
