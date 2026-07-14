@@ -47,11 +47,14 @@
   <ControlTheme x:Key="{x:Type TabItem}" TargetType="TabItem">
     <Setter Property="FontFamily" Value="{DynamicResource BFont}" />
     <Setter Property="Foreground" Value="{DynamicResource BTextSecondaryBrush}" />
+    <Setter Property="Background" Value="Transparent" />
     <Setter Property="Padding" Value="12,8" />
     <Setter Property="Cursor" Value="Hand" />
     <Setter Property="Template">
       <ControlTemplate>
-        <Border x:Name="PART_Border" Background="Transparent"
+        <!-- Background bound to the property (default Transparent above) so a consumer's
+             TabItem:selected/:pointerover Background style actually paints the tab. -->
+        <Border x:Name="PART_Border" Background="{TemplateBinding Background}"
                 BorderBrush="Transparent" BorderThickness="0,0,0,2"
                 Padding="{TemplateBinding Padding}">
           <ContentPresenter Content="{TemplateBinding Header}"

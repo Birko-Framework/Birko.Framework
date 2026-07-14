@@ -70,7 +70,7 @@
           <Popup x:Name="PART_Popup" Grid.ColumnSpan="2"
                  IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}"
                  IsLightDismissEnabled="True"
-                 PlacementMode="Bottom" PlacementTarget="{TemplateBinding}">
+                 Placement="Bottom" PlacementTarget="{TemplateBinding}">
             <Border Background="{DynamicResource BBgElevatedBrush}"
                     BorderBrush="{DynamicResource BBorderBrush}"
                     BorderThickness="1" CornerRadius="{DynamicResource BRadius}"

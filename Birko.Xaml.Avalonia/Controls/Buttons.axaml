@@ -15,6 +15,8 @@
       <ControlTemplate>
         <ContentPresenter x:Name="PART_ContentPresenter"
                           Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
                           Foreground="{TemplateBinding Foreground}"
                           CornerRadius="{TemplateBinding CornerRadius}"
                           Padding="{TemplateBinding Padding}"
@@ -24,10 +26,14 @@
                           ContentTemplate="{TemplateBinding ContentTemplate}" />
       </ControlTemplate>
     </Setter>
-    <Style Selector="^:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <!-- Hover/pressed change the Button's own Background property (not the template part
+         directly), so the ContentPresenter re-resolves it via the TemplateBinding above and a
+         consumer's property-level style (e.g. a class + :pointerover setter) can override it
+         normally. Styling PART_ContentPresenter directly used to outrank every consumer style. -->
+    <Style Selector="^:pointerover">
       <Setter Property="Background" Value="{DynamicResource BColorPrimaryHoverBrush}" />
     </Style>
-    <Style Selector="^:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Style Selector="^:pressed">
       <Setter Property="Background" Value="{DynamicResource BColorPrimaryHoverBrush}" />
     </Style>
     <Style Selector="^:disabled /template/ ContentPresenter#PART_ContentPresenter">
