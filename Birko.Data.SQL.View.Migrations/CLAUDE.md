@@ -10,9 +10,9 @@ Integration layer connecting SQL View definitions (from Birko.Data.SQL.View attr
 
 ### ViewSqlGenerator
 Static class for generating DDL strings from view attributes:
-- `GenerateCreateViewSql<T>(quoteChar)` — reads `ViewAttribute`, `ViewColumnAttribute`, `ViewJoinAttribute`, and `ViewFilterAttribute` to produce a complete CREATE VIEW statement
-- `GenerateDropViewSql<T>()` — produces DROP VIEW IF EXISTS statement
-- `quoteChar` parameter — tuple `(string open, string close)` for provider-specific identifier quoting (e.g., `("\"","\"")` for PostgreSQL, `("[","]")` for MSSQL, `` ("`","`") `` for MySQL)
+- `GenerateCreateViewSql(viewType, viewName?, quoteChar)` — reads `ViewAttribute`/`ViewFieldAttribute` to produce a `CREATE OR REPLACE VIEW` statement
+- `GenerateDropViewSql(viewType, viewName?, quoteChar)` — produces a `DROP VIEW IF EXISTS` statement
+- `quoteChar` parameter — a single `char` (default `"`) applied **symmetrically** on both sides of an identifier. Supports ANSI/PostgreSQL (`"`) and MySQL (`` ` ``) symmetric quoting only. **Asymmetric bracket quoting (SQL Server `[ ]`) and T-SQL `CREATE OR ALTER VIEW` are out of scope** — use `Birko.Data.SQL.MSSql.View` for SQL Server view DDL.
 
 ### ViewMigrationExtensions
 Extension methods on `SqlMigration`:
