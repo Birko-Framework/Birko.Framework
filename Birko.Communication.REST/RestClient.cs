@@ -67,12 +67,14 @@ namespace Birko.Communication.REST
         public Dictionary<string, string> DefaultHeaders { get; set; } = new Dictionary<string, string>();
 
         /// <summary>
-        /// Event raised when a REST request is sent
+        /// Event raised when a REST request is sent. <b>Handlers must not throw</b> — they run inline on
+        /// the request path (OnRequest before the HTTP call, OnResponse after), so a throwing subscriber
+        /// aborts the request or masks the response (CR-L079).
         /// </summary>
         public event EventHandler<RestRequestEventArgs>? OnRequest;
 
         /// <summary>
-        /// Event raised when a REST response is received
+        /// Event raised when a REST response is received. Handlers must not throw — see <see cref="OnRequest"/>.
         /// </summary>
         public event EventHandler<RestResponseEventArgs>? OnResponse;
 
