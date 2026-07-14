@@ -60,6 +60,6 @@ public class RavenDBModelRepository<T> : AbstractBulkRepository<T>
 
     public bool IsHealthy()
     {
-        return RavenDBStore?.DatabaseExists() ?? false;
+        return RavenDBStore?.IsHealthy() ?? false;
     }
 }

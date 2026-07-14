@@ -24,10 +24,15 @@ public class RavenDBStore<T>
     , ISettingsStore<Settings>
     , ITransactionalStore<T, Raven.Client.Documents.Session.IDocumentSession>
     , IAggregatableStore<T>
+    , IDisposable
     where T : AbstractModel
 {
     private IDocumentStore? _documentStore;
     protected Settings? _settings;
+    // True when this store created the _documentStore (connection-string ctor or Settings.CreateDocumentStore)
+    // and is therefore responsible for disposing it. An externally-supplied store is not owned.
+    private bool _ownsStore;
+    private bool _disposed;
 
     /// <summary>
     /// Get the underlying RavenDB document store.
@@ -69,10 +74,12 @@ public class RavenDBStore<T>
         };
 
         _documentStore.Initialize();
+        _ownsStore = true;
     }
 
     /// <summary>
     /// Initializes a new instance with an existing document store.
+    /// The store is externally owned and will not be disposed by this class.
     /// </summary>
     /// <param name="documentStore">The RavenDB document store.</param>
     public RavenDBStore(IDocumentStore documentStore)
@@ -100,13 +107,28 @@ public class RavenDBStore<T>
         if (settings is Settings ravenSettings)
         {
             _settings = ravenSettings;
-            _documentStore = ravenSettings.CreateDocumentStore();
+            ReplaceDocumentStore(ravenSettings.CreateDocumentStore());
         }
         else if (settings is Birko.Configuration.RemoteSettings remote)
         {
             _settings = new Settings();
             _settings.LoadFrom(remote);
-            _documentStore = _settings.CreateDocumentStore();
+            ReplaceDocumentStore(_settings.CreateDocumentStore());
+        }
+    }
+
+    /// <summary>
+    /// Swaps in a newly-created (owned) document store, disposing the previously-owned one first so a
+    /// repeated SetSettings does not leak the store created by the prior call.
+    /// </summary>
+    private void ReplaceDocumentStore(IDocumentStore newStore)
+    {
+        var previous = _ownsStore ? _documentStore : null;
+        _documentStore = newStore;
+        _ownsStore = true;
+        if (!ReferenceEquals(previous, newStore))
+        {
+            previous?.Dispose();
         }
     }
 
@@ -537,4 +559,48 @@ public class RavenDBStore<T>
     }
 
     #endregion
+
+    #region Health
+
+    /// <summary>
+    /// Checks if the RavenDB server is reachable by issuing a real (empty) query, mirroring the async
+    /// store's IsHealthy. This is a genuine connectivity probe — unlike DatabaseExists(), which returns
+    /// true for an empty database name without touching the server.
+    /// </summary>
+    /// <returns>True if the server is reachable, false otherwise.</returns>
+    public bool IsHealthy()
+    {
+        if (_documentStore == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var session = _documentStore.OpenSession();
+            session.Query<T>().Take(0).ToList();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Disposes the underlying document store only when this store owns it (created from a connection
+    /// string or Settings.CreateDocumentStore). An externally-supplied store is left untouched.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (_ownsStore)
+        {
+            _documentStore?.Dispose();
+        }
+        GC.SuppressFinalize(this);
+    }
 }

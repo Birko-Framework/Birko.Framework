@@ -83,11 +83,13 @@ public class RavenDBRepository<TViewModel, TModel> : AbstractBulkViewModelReposi
     }
 
     /// <summary>
-    /// Checks if the RavenDB server is healthy.
+    /// Checks if the RavenDB server is healthy. Uses the store's real connectivity probe (an empty
+    /// query), matching the async repository — not DatabaseExists(), which returns true for an empty
+    /// database name without touching the server.
     /// </summary>
     /// <returns>True if the server is reachable, false otherwise.</returns>
     public bool IsHealthy()
     {
-        return RavenDBStore?.DatabaseExists() ?? false;
+        return RavenDBStore?.IsHealthy() ?? false;
     }
 }
