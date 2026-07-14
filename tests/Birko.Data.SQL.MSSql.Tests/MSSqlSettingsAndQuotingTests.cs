@@ -20,6 +20,19 @@ public class MSSqlSettingsAndQuotingTests
         connector.QuoteIdentifier("weird]name").Should().Be("[weird]]name]");
     }
 
+    // CR-L176: the missing-table seam recognizes SQL Server's "Invalid object name" wording (plus the
+    // inherited SQLite base match) so a reader over a missing table yields empty instead of faulting.
+    [Theory]
+    [InlineData("Invalid object name 'Widgets'.", true)]
+    [InlineData("no such table: Widgets", true)]
+    [InlineData("some other error", false)]
+    public void IsMissingTableException_matches_mssql_and_base_wording(string message, bool expected)
+    {
+        var connector = new MSSqlConnector(new MSSqlSettings("localhost", "db"));
+
+        connector.IsMissingTableException(new System.Exception(message)).Should().Be(expected);
+    }
+
     [Fact]
     public void GetConnectionString_IncludesServerCredentialsAndFlags()
     {
