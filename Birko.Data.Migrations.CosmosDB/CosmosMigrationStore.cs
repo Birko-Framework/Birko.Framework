@@ -20,7 +20,10 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
     private readonly Database _database;
     private readonly CosmosMigrationSettings _settings;
     private Container? _container;
-    private MigrationsStateDocument? _cachedState;
+    // CR-L141: a plain init flag, not a data cache. GetAppliedVersions/RecordMigration/RemoveMigration
+    // always re-read the state document from Cosmos for correctness under concurrency, so there is no
+    // cached state to consult — this only gates EnsureInitialized.
+    private bool _initialized;
 
     /// <summary>
     /// Initializes a new instance of the CosmosMigrationStore class.
@@ -42,22 +45,23 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
 
         try
         {
-            var response = _container.ReadItemAsync<MigrationsStateDocument>(
+            _container.ReadItemAsync<MigrationsStateDocument>(
                 _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey)
             ).GetAwaiter().GetResult();
-            _cachedState = response.Resource;
         }
         catch (CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
-            _cachedState = new MigrationsStateDocument
+            var initial = new MigrationsStateDocument
             {
                 Id = _settings.MigrationsDocumentId,
                 PartitionKey = _settings.MigrationsPartitionKey,
                 AppliedMigrations = new Dictionary<string, MigrationRecord>()
             };
-            _container.CreateItemAsync(_cachedState, new PartitionKey(_settings.MigrationsPartitionKey))
+            _container.CreateItemAsync(initial, new PartitionKey(_settings.MigrationsPartitionKey))
                 .GetAwaiter().GetResult();
         }
+
+        _initialized = true;
     }
 
     /// <summary>
@@ -132,7 +136,6 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
         _container.ReplaceItemAsync(state, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey))
             .GetAwaiter().GetResult();
 
-        _cachedState = state;
     }
 
     /// <summary>
@@ -162,7 +165,6 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
             state.AppliedMigrations.Remove(migration.Version.ToString());
             _container.ReplaceItemAsync(state, _settings.MigrationsDocumentId, new PartitionKey(_settings.MigrationsPartitionKey))
                 .GetAwaiter().GetResult();
-            _cachedState = state;
         }
     }
 
@@ -196,7 +198,7 @@ public class CosmosMigrationStore : Data.Migrations.IMigrationStore
 
     private void EnsureInitialized()
     {
-        if (_cachedState == null)
+        if (!_initialized)
         {
             Initialize();
         }
