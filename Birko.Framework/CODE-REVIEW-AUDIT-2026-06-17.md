@@ -4984,7 +4984,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RetryPolicy.GetDelay can overflow to a negative TimeSpan
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs\Core/RetryPolicy.cs:42`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** delay = TimeSpan.FromTicks(BaseDelay.Ticks * (long)Math.Pow(2, attemptNumber - 1)) multiplies ticks by 2^(attempt-1) before clamping to MaxDelay. With a large BaseDelay and/or a high attempt count the long multiplication overflows, producing a negative tick count. A negative delay is then < MaxDelay so the clamp does not catch it, and the method returns a negative TimeSpan (scheduling the retry in the past, i.e. immediate). In practice MaxRetries (default 3) keeps attemptNumber small, so the overflow is only reachable with an unusually large BaseDelay or a custom high MaxRetries, hence low severity.
 - **Fix:** Clamp before allocating the TimeSpan, e.g. compute the multiplier in a checked/saturating way (cap 2^(attempt-1) at MaxDelay.Ticks / BaseDelay.Ticks) or compare against MaxDelay.Ticks using a double and return MaxDelay on overflow.
 
@@ -4992,7 +4992,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JobStatus.Failed is never assigned (dead enum state)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs\Core/JobStatus.cs:31`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** JobStatus.Failed ('failed but will be retried') is defined but no code path ever sets it. InMemoryJobQueue.FailAsync sets Scheduled (retry remaining) or Dead (exhausted), never Failed. DequeueAsync only considers Pending/Scheduled, so even if a job were set to Failed it would never be re-dequeued. The status is documentation-only and a future store backend could legitimately use it, but as shipped it is unreachable and a potential trap for backend authors.
 - **Fix:** Either remove Failed, or document explicitly that retry-eligible failures use Scheduled and have new backends mirror the in-memory semantics so Failed stays unused consistently.
 
@@ -5000,7 +5000,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Processor shutdown marks the in-flight job as failed instead of re-enqueuing it
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs\Processing/BackgroundJobProcessor.cs:110`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14) — fixed the misleading comment; a true no-retry requeue is deferred (needs a dedicated IJobQueue.RequeueAsync — every backend's EnqueueAsync is an insert/CreateAsync, so re-enqueuing the same descriptor id would PK-conflict)
 - **Detail:** The catch for graceful shutdown is commented '// Graceful shutdown — re-enqueue' but actually calls _queue.FailAsync(descriptor.Id, "Job cancelled due to processor shutdown"). FailAsync treats this as a failed attempt: it consumes a retry (AttemptCount was already incremented at dequeue) and, if retries are exhausted, moves the job to Dead. A clean processor shutdown therefore can permanently kill a job that was simply mid-flight. The comment and the behavior disagree.
 - **Fix:** On shutdown, reset the descriptor to Pending/Scheduled without counting it as a failed attempt (a dedicated requeue path), or at minimum fix the misleading comment to reflect that it is recorded as a failure.
 
@@ -5008,7 +5008,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JobDescriptor.EnqueuedAt uses DateTime.UtcNow directly, bypassing IDateTimeProvider
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs\Core/JobDescriptor.cs:54`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** EnqueuedAt defaults to DateTime.UtcNow at construction. The rest of the library is carefully clock-injected via IDateTimeProvider (JobDispatcher, InMemoryJobQueue, RecurringJobScheduler all take a clock). Because descriptors are constructed before reaching the queue, EnqueuedAt escapes the injected clock, so TestDateTimeProvider-based tests cannot control or assert on enqueue time deterministically, and dequeue ordering (ThenBy EnqueuedAt) is driven by wall-clock rather than the test clock.
 - **Fix:** Leave EnqueuedAt unset on the descriptor and stamp it from the injected clock inside EnqueueAsync (the queue already has _clock), so all timestamps flow through IDateTimeProvider.
 
@@ -5016,7 +5016,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JobSerializationHelper appears unused (orphaned internal helper)
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs\Serialization/JobSerializationHelper.cs:10`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (verify-first) — NOT dead code: the backend models (Cosmos/ES/Mongo/Raven/SQL JobDescriptorModel) reference JobSerializationHelper. The finding was scoped to a core-only checkout; in the polyrepo the siblings use it (2026-07-14)
 - **Detail:** JobSerializationHelper is an internal static helper in namespace Birko.BackgroundJobs.Models intended for 'all job storage platforms', but this checkout contains only the core project (no .SQL/.MongoDB/etc. backends present here) and nothing in the core references it. As shipped in this repo it is dead code. It also instantiates its own SystemJsonSerializer with different options than JsonJobSerializer, duplicating serialization config.
 - **Fix:** If the storage-backend siblings live elsewhere, ignore; otherwise remove it or fold its config into a single shared serializer to avoid drift between the two CamelCase JSON setups.
 
@@ -5024,7 +5024,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JobExecutor reflection path returns null Task silently when method returns non-Task
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs\Processing/JobExecutor.cs:71`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** For typed jobs, executeMethod.Invoke(...) is cast to (Task?) and only awaited 'if (task != null)'. GetMethod matched by exact parameter types, but if a job's ExecuteAsync were declared returning ValueTask or void (signature mismatch would normally make GetMethod return null, but an async void or covariant return could slip through), the cast yields null and the job is silently reported as Succeeded without ever running/awaiting. The IJob<TInput> contract requires Task, so this is constrained, but the silent-success branch is a latent footgun versus the simpleJob path which is strongly typed.
 - **Fix:** When task is null after a successful method match, return JobResult.Failed rather than falling through to Succeeded, so a contract violation surfaces instead of masquerading as success.
 
@@ -5032,7 +5032,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync has no secondary sort tiebreaker, so equal-priority jobs are not FIFO
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.CosmosDB\CosmosDBJobQueue.cs:56-62`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** Ordering is Priority DESC only. Among equal-priority jobs the dequeue order is undefined, so jobs are not processed in enqueue order. The MongoDB backend uses OrderBy.ByDescending(Priority).ThenBy(EnqueuedAt). OrderBy<T>.ByName supports a follow-up ThenBy, so this is an omission rather than an API limitation.
 - **Fix:** Append a ThenBy on EnqueuedAt to make equal-priority dequeue FIFO and match the other backends.
 
@@ -5040,7 +5040,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DequeueAsync scheduled-job filter omits the ScheduledAt != null guard used by sibling backends
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.CosmosDB\CosmosDBJobQueue.cs:57`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** Filter is (Status == scheduledStatus && j.ScheduledAt <= now). The MongoDB backend guards with (j.ScheduledAt != null && j.ScheduledAt <= now). For an in-memory LINQ provider null <= now is false so this is safe, but a Scheduled row with a null ScheduledAt is a malformed state and the comparison semantics under the Cosmos SQL translation are not guaranteed to match in-memory nullable-DateTime comparison. Adding the explicit null guard removes the ambiguity and matches the other backends.
 - **Fix:** Add j.ScheduledAt != null && before the j.ScheduledAt <= now comparison.
 
@@ -5048,7 +5048,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FailAsync signature relaxes the interface's non-nullable error parameter
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.CosmosDB\CosmosDBJobQueue.cs:87`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** IJobQueue declares FailAsync(Guid jobId, string error, CancellationToken). The Cosmos override declares string? error = null, loosening the contract. It still satisfies the interface and compiles, but it diverges from the MongoDB backend (string error) and lets callers omit a required error message. Minor consistency issue.
 - **Fix:** Match the interface signature: FailAsync(Guid jobId, string error, CancellationToken ct = default).
 
@@ -5056,7 +5056,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ElasticJobDescriptorModel.IndexName constant is dead code
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.ElasticSearch\Models/ElasticJobDescriptorModel.cs:57`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** public const string IndexName = "background-jobs" is never read. AsyncElasticSearchStore.GetIndexName() (AsyncElasticSearchStore.cs:758-759) derives the index from Settings.IndexSettings or typeof(T).Name, never from a model constant — so the real index is {settings.Name}_elasticjobdescriptormodel, not 'background-jobs'. The constant is misleading (implies the job index is named 'background-jobs') and unused.
 - **Fix:** Remove the constant, or wire the desired index name through Settings.IndexSettings (TypeName = ElasticJobDescriptorModel full name, Name = "background-jobs") so the documented index name is actually used.
 
@@ -5064,7 +5064,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** EnsureCreatedAsync doc comment claims it is called automatically, but it never is
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.ElasticSearch\ElasticSearchJobQueueSchema.cs:13-14`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** The XML comment states 'Creates the jobs index. Called automatically by ElasticSearchJobQueue on first use.' ElasticSearchJobQueue never references ElasticSearchJobQueueSchema or EnsureCreatedAsync (verified by grep). Index creation actually happens via the store's lazy-init (InitCoreAsync on first CRUD), not via this helper. The comment is inaccurate and could mislead a maintainer into thinking removing/changing the queue affects this path.
 - **Fix:** Fix the comment to say the helper is an optional explicit pre-creation utility; index creation otherwise happens lazily on first store operation.
 
@@ -5072,7 +5072,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FailAsync ignores RetryPolicy.MaxRetries fallback; the injected RetryPolicy.MaxRetries is effectively dead
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.JSON\JsonJobQueue.cs:118`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** FailAsync decides retry-vs-dead with 'model.AttemptCount < model.MaxRetries'. The reference InMemoryJobQueue.FailAsync (InMemoryJobQueue.cs:82) instead computes 'maxRetries = descriptor.MaxRetries > 0 ? descriptor.MaxRetries : _retryPolicy.MaxRetries', i.e. it falls back to the policy's MaxRetries when the descriptor specifies 0. In the JSON backend a job created with MaxRetries == 0 (or via RetryPolicy.None semantics) is always sent straight to Dead, and the _retryPolicy.MaxRetries value the queue was constructed with is never read (only _retryPolicy.GetDelay is used). Behavioural divergence from the documented reference backend.
 - **Fix:** Match the reference: var maxRetries = model.MaxRetries > 0 ? model.MaxRetries : _retryPolicy.MaxRetries; then compare model.AttemptCount < maxRetries.
 
@@ -5080,7 +5080,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JsonJobDescriptorModel uses its own SystemJsonSerializer for metadata instead of the descriptor/store serializer
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.JSON\Models/JsonJobDescriptorModel.cs:57`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** Metadata is (de)serialized with a private static SystemJsonSerializer() configured differently from the store's serializer (AbstractAsyncJsonStore configures camelCase + indented). For the Dictionary<string,string> metadata this happens to be safe (System.Text.Json does not rename string dictionary keys by default), so there is no current data bug — but it is a second, divergent serializer instance embedded in a model and is brittle if Metadata ever becomes a richer type. ToDescriptor/LoadFrom already accept an optional ISerializer, yet FromDescriptor/the ILoadable path always pass null, so the configured pipeline is never actually used.
 - **Fix:** Either document that metadata is intentionally serialized with default options, or thread the store's ISerializer through so metadata serialization matches the rest of the file. Low priority given the current string-dictionary shape.
 
@@ -5088,7 +5088,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead and misleading CollectionName property on the model
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.MongoDB\Models\MongoJobDescriptorModel.cs:57-58`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** MongoJobDescriptorModel exposes [BsonIgnore] CollectionName => "BackgroundJobs", but AsyncMongoDBStore<T> resolves the collection via Client.GetCollection<T>() -> typeof(T).Name (= "MongoJobDescriptorModel") and DestroyAsync also uses typeof(T).Name. The property is never read by the store and is not persisted, so jobs actually land in a collection named 'MongoJobDescriptorModel', not 'BackgroundJobs'. The SQL sibling's model has no equivalent property. The property is dead code and actively misleads a reader about the physical collection name.
 - **Fix:** Remove the CollectionName property, or if a stable 'BackgroundJobs' collection name is desired, wire it through MongoDB Settings.CollectionName (which GetCollection<T>(name) already supports) so the intent is actually honored.
 
@@ -5096,7 +5096,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No MongoDB-specific test project
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.MongoDB`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (verify-first) — Birko.BackgroundJobs.MongoDB.Tests already exists (created under CR-M022): dequeue ordering + Fail retry/dead + lifecycle over an in-memory store double (2026-07-14)
 - **Detail:** There is a Birko.BackgroundJobs.SQL.Tests sibling but no Birko.BackgroundJobs.MongoDB.Tests. The public IJobQueue surface for the MongoDB backend (Enqueue/Dequeue ordering by priority+enqueue time, Complete/Fail retry-vs-dead transition, Cancel gating to pending/scheduled, GetByStatus, Purge cutoff) has no coverage. Noted only — MongoDB integration tests need a live/ephemeral server, so the omission may be intentional, but the dequeue ordering and Fail retry/dead branching are pure enough to test against an in-memory or mongo2go-backed store.
 - **Fix:** Add a Birko.BackgroundJobs.MongoDB.Tests project mirroring the SQL tests, or document why MongoDB is intentionally untested.
 
@@ -5104,7 +5104,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FailAsync does not fall back to RetryPolicy.MaxRetries when the job's MaxRetries is 0
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.RavenDB\RavenDBJobQueue.cs:114`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** FailAsync compares 'model.AttemptCount < model.MaxRetries' using the job's MaxRetries directly. The reference InMemoryJobQueue (InMemoryJobQueue.cs:82) computes 'var maxRetries = descriptor.MaxRetries > 0 ? descriptor.MaxRetries : _retryPolicy.MaxRetries;' so a job enqueued with MaxRetries == 0 falls back to the queue's RetryPolicy. Here a MaxRetries==0 job goes straight to Dead on first failure regardless of the configured RetryPolicy. Impact is limited because JobDescriptor.MaxRetries defaults to 3, so this only bites callers who explicitly set 0, but it is a behavioral divergence from the canonical backend and means the injected RetryPolicy's MaxRetries is effectively ignored.
 - **Fix:** Mirror the reference: 'var maxRetries = model.MaxRetries > 0 ? model.MaxRetries : _retryPolicy.MaxRetries;' and compare against that.
 
@@ -5112,7 +5112,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stale doc comment: schema EnsureCreatedAsync claims it is called automatically by the queue
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.RavenDB\RavenDBJobQueueSchema.cs:15`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** The summary says 'Initializes the jobs database. Called automatically by RavenDBJobQueue on first use.' RavenDBJobQueue never calls RavenDBJobQueueSchema.EnsureCreatedAsync; first-use initialization is handled by the base store's lazy InitAsync (EnsureInitializedAsync), not by this helper. The comment misleads a reader into thinking this method is part of the runtime path.
 - **Fix:** Reword to describe it as an explicit/optional pre-provisioning utility (the base store auto-inits on first CRUD), e.g. 'Optionally pre-initializes the jobs database; the queue otherwise lazy-initializes on first use.'
 
@@ -5120,7 +5120,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated safe-release Lua script across three call sites
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.Redis\RedisJobLockProvider.cs:89-95,118-124,154-160`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** The check-and-delete Lua script is copy-pasted verbatim in ReleaseAsync, DisposeAsync, and Dispose. Likewise the dispose bodies of DisposeAsync (108-142) and Dispose (144-178) are near-identical. Maintenance hazard if the release semantics ever change.
 - **Fix:** Extract the script to a private const field and factor the dispose body into a shared helper (e.g. Dispose calls the sync ScriptEvaluate path of a single ReleaseCore).
 
@@ -5128,7 +5128,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** PostgreSQL-specific advisory-lock SQL hardcoded in a provider-generic <DB> type
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.SQL\SqlJobLockProvider.cs:56,91`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (verify-first) — already resolved by CR-M027: SqlJobLockProvider dispatches per dialect (switch: Postgres pg_try_advisory_lock, MSSql sp_getapplock, MySQL GET_LOCK, else false) instead of hardcoding Postgres (2026-07-14)
 - **Detail:** SqlJobLockProvider<DB> is parameterized over any AbstractConnector and the README presents it as the cross-worker coordination primitive for 'any SQL provider', but the command text is unconditionally pg_try_advisory_lock / pg_advisory_unlock. This is the root cause of the misleading non-Postgres behavior above and breaks the framework's provider-agnostic store convention (other Birko.Data.SQL code dispatches provider-specific SQL via the connector, e.g. AbstractConnectorBase.GetSqlFunctionName).
 - **Fix:** Dispatch the lock statement per connector type (or expose a virtual hook the connector supplies), rather than emitting Postgres syntax for every DB.
 
@@ -5136,7 +5136,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JobDescriptor.Delay is silently dropped by the XML model
 - **Path:** `C:\Source\Birko\Framework\Birko.BackgroundJobs.XML\Models\XmlJobDescriptorModel.cs:103-124`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: BackgroundJobs low cluster, 2026-07-14)
 - **Detail:** JobDescriptor exposes Delay (TimeSpan?) documented as 'ScheduledAt = EnqueuedAt + Delay', but the XML model has no Delay field and LoadFrom only copies ScheduledAt verbatim. If an upstream caller sets Delay without pre-computing ScheduledAt and leaves Status=Pending, the job is dequeued immediately and the delay is lost. This appears to be by design at this layer (the JobProcessor/Scheduler is expected to resolve Delay->ScheduledAt+Status=Scheduled before enqueue, and the JSON reference behaves identically), so it is only a risk if a consumer enqueues a raw delayed descriptor directly. Noting for confirmation, not as a definite defect.
 - **Fix:** Confirm that the enqueue pipeline (JobProcessor/JobScheduler) resolves Delay into ScheduledAt+Scheduled before EnqueueAsync; if direct enqueue of a delayed descriptor is a supported path, compute ScheduledAt from EnqueuedAt+Delay in FromDescriptor/LoadFrom when ScheduledAt is null.
 

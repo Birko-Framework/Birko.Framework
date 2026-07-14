@@ -13,7 +13,28 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**13 / 418 triaged** (CR-L001 … CR-L013 — the Birko.AI cluster) as of 2026-07-14. First batch:
+**33 / 418 triaged** as of 2026-07-14 (batch 2 done).
+
+**Batch 2 (2026-07-14) — BackgroundJobs cluster (CR-L014 … CR-L033, 20 findings):** core + 8 backends.
+Verify-first. **Bugs fixed:** L014 (`RetryPolicy.GetDelay` overflow → compute in double, saturate at
+MaxDelay), L019 (`JobExecutor` typed path returned `JobResult.Failed` when the matched `ExecuteAsync`
+yields a null Task instead of masquerading as Succeeded), L025/L029 (JSON + RavenDB `FailAsync` fall back
+to `RetryPolicy.MaxRetries` when the job's own MaxRetries is 0, mirroring `InMemoryJobQueue`), L021 (Cosmos
+dequeue `ScheduledAt != null` guard), L020 (Cosmos FIFO tiebreaker `ThenBy(EnqueuedAt)`). **Convention/
+cleanup:** L017 (`InMemoryJobQueue.EnqueueAsync` stamps `EnqueuedAt` from the injected clock), L022 (Cosmos
+`FailAsync` signature matches the interface's non-nullable error), L023 (removed dead ES `IndexName` const),
+L027 (removed dead Mongo `CollectionName` prop), L031 (Redis lock-release Lua extracted to one const +
+shared sync/async helpers), L015 (documented `JobStatus.Failed` as reserved/unused), L024/L030 (corrected
+stale "called automatically" schema doc-comments), L026/L033 (documented the intentional JSON-metadata
+serializer + XML `Delay`-resolved-by-pipeline behavior). **Comment-only + deferred:** L016 (fixed the
+misleading "re-enqueue" comment; a true no-retry requeue needs a dedicated `IJobQueue.RequeueAsync` — every
+backend `EnqueueAsync` is an insert, so re-enqueuing the same id would PK-conflict). **Verify-first (already
+resolved / not-a-defect):** L018 (helper is used by backend models — finding scoped to a core-only checkout),
+L028 (`Birko.BackgroundJobs.MongoDB.Tests` already exists, CR-M022), L032 (SqlJobLockProvider already
+dispatches per dialect, CR-M027). Suites green: core 77, JSON 7, RavenDB 7, Cosmos 3, ES 6, Mongo 6,
+Redis 7, XML 7.
+
+**Batch 1 (2026-07-14) — Birko.AI cluster (CR-L001 … CR-L013):**
 `Birko.AI` / `.Agents` / `.Contracts` / `.Providers` / `.Resilience`. Verify-first (unverified reviewer
 claims). Closed: **L001** (snapshot conversation before the sync fallback so a partially-mutated
 streaming turn isn't resubmitted), **L002** (dead `Done ? conversation : conversation` ternary +
