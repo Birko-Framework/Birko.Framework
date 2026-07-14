@@ -59,6 +59,17 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// PostgreSQL phrases a missing table/relation as 'relation "x" does not exist' (SQLSTATE 42P01).
+        /// Adds that to the base SQLite match so the reader yields an empty result rather than faulting.
+        /// </summary>
+        public override bool IsMissingTableException(Exception ex)
+        {
+            if (base.IsMissingTableException(ex)) return true;
+            if (ex is PostgresException pgEx && pgEx.SqlState == "42P01") return true;
+            return ex.Message.Contains("does not exist", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void PostgreSQLConnector_OnException(Exception ex, string? commandText)
         {
             if (!IsInitializing && ex.Message.Contains("does not exist"))
