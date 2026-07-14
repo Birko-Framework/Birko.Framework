@@ -246,17 +246,12 @@ namespace Birko.Helpers
                 throw new ArgumentException("Directory path cannot be null or empty.", nameof(directoryPath));
             }
 
-            // Get invalid characters for file and directory names
-            var invalidChars = Path.GetInvalidPathChars();
-            var invalidFileNameChars = Path.GetInvalidFileNameChars();
-
-            // Combine and check for invalid characters
-            var allInvalidChars = new char[invalidChars.Length + invalidFileNameChars.Length];
-            Array.Copy(invalidChars, allInvalidChars, invalidChars.Length);
-            Array.Copy(invalidFileNameChars, 0, allInvalidChars, invalidChars.Length, invalidFileNameChars.Length);
-
-            // Check if the path contains invalid characters
-            if (directoryPath.IndexOfAny(allInvalidChars) >= 0)
+            // Validate against path-invalid characters ONLY. Path.GetInvalidFileNameChars() additionally
+            // includes the directory separators ('\', '/') and the drive-letter ':' on Windows, so checking
+            // the whole directory path against it rejected every absolute Windows path (e.g. "C:\Users\...").
+            // A directory path legitimately contains separators and a drive colon; only genuinely-invalid
+            // path characters (control chars, etc.) should be rejected here.
+            if (directoryPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
             {
                 throw new ArgumentException($"Directory path contains invalid characters: {directoryPath}", nameof(directoryPath));
             }
