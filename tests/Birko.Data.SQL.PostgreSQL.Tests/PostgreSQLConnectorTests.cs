@@ -64,14 +64,30 @@ public class PostgreSQLConnectorTests
     [Fact]
     public void GetConnectionString_ContainsHostAndCredentials()
     {
-        var settings = new PostgreSqlSettings("srv", "mydb", "u", "p", port: 5432, useSecure: true);
+        // CR-L189: composed via NpgsqlConnectionStringBuilder — a non-default port is emitted; the builder
+        // omits keys at their Npgsql default (e.g. Port 5432, Timeout 15), so assert via a round-trip.
+        var settings = new PostgreSqlSettings("srv", "mydb", "u", "p", port: 6000, useSecure: true);
+        var cs = settings.GetConnectionString();
+        var parsed = new Npgsql.NpgsqlConnectionStringBuilder(cs);
+
+        parsed.Host.Should().Be("srv");
+        parsed.Port.Should().Be(6000);
+        parsed.Username.Should().Be("u");
+        parsed.Password.Should().Be("p");
+        parsed.Database.Should().Be("mydb");
+        parsed.SslMode.Should().Be(Npgsql.SslMode.Require);
+    }
+
+    // CR-L189: a password containing ';' and '=' must survive the composition (builder quoting) rather
+    // than breaking the key=value parsing or injecting extra keywords.
+    [Fact]
+    public void GetConnectionString_EscapesSpecialCharactersInValues()
+    {
+        var settings = new PostgreSqlSettings("srv", "mydb", "u", "p;a=ss'w", port: 6000);
         var cs = settings.GetConnectionString();
 
-        cs.Should().Contain("Host=srv");
-        cs.Should().Contain("Port=5432");
-        cs.Should().Contain("Username=u");
-        cs.Should().Contain("Password=p");
-        cs.Should().Contain("Database=mydb");
-        cs.Should().Contain("SSL Mode=Require");
+        var parsed = new Npgsql.NpgsqlConnectionStringBuilder(cs);
+        parsed.Password.Should().Be("p;a=ss'w");
+        parsed.Database.Should().Be("mydb");
     }
 }
