@@ -75,6 +75,12 @@ namespace Birko.AI.Resilience.Services
 
         public async Task<BudgetStatus> CheckBudgetAsync(string? projectId = null)
         {
+            // When cost tracking is disabled, budget enforcement must not run either —
+            // otherwise CheckBudgetAsync could still return "Budget exceeded" and block calls,
+            // inconsistent with RecordUsageAsync's Enabled guard (CR-L012).
+            if (!_config.Enabled)
+                return new BudgetStatus(true, false, 0, 0, "none");
+
             var budget = _config.Budget;
             if (_repository == null)
                 return new BudgetStatus(true, false, 0, 0, "none");

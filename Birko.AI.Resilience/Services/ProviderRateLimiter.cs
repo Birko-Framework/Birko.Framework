@@ -20,8 +20,13 @@ namespace Birko.AI.Resilience.Services
         {
             _enabled = config.Enabled;
             _logger = logger;
-            _limits = config.ProviderLimits
-                .ToDictionary(l => l.Provider.ToLowerInvariant(), StringComparer.OrdinalIgnoreCase);
+            // Last-wins build: two config entries for the same provider differing only in case
+            // (e.g. "OpenAI" and "openai") lowercase to the same key, which would make ToDictionary
+            // throw ArgumentException at construction. Keys are already lowercased, so the
+            // OrdinalIgnoreCase comparer was redundant too (CR-L013).
+            _limits = new Dictionary<string, ProviderRateLimit>();
+            foreach (var limit in config.ProviderLimits)
+                _limits[limit.Provider.ToLowerInvariant()] = limit;
         }
 
         public bool CanMakeRequest(string provider)
