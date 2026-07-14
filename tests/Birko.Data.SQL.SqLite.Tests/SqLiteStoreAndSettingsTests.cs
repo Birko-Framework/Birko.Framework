@@ -179,6 +179,47 @@ public class SqLiteStoreCrudTests : IDisposable
         await Assert.ThrowsAsync<ObjectDisposedException>(() => uow.BeginAsync());
     }
 
+    // CR-L174: a bulk insert whose rows have differing column sets is rejected up-front (before any SQL),
+    // rather than silently mis-binding parameters row-to-row.
+    [Fact]
+    public void BulkInsert_WithHeterogeneousRowKeys_Throws()
+    {
+        var (_, connector) = NewStore();
+
+        var rows = new IDictionary<string, object>[]
+        {
+            new Dictionary<string, object> { { "Guid", Guid.NewGuid().ToString() }, { "Name", "a" }, { "Amount", 1 } },
+            new Dictionary<string, object> { { "Guid", Guid.NewGuid().ToString() }, { "Name", "b" } }, // missing Amount
+        };
+
+        connector.Invoking(c => c.Insert("Widgets", rows))
+            .Should().Throw<ArgumentException>();
+    }
+
+    // CR-L175: SqlUnitOfWork.FromStore resolves the connector settings via the public Settings property
+    // (no reflection over the private _settings field) — Begin/Commit must work end-to-end.
+    [Fact]
+    public async Task FromStore_BeginCommit_Persists_WithoutReflection()
+    {
+        var (store, _) = NewStore();
+        await store.CountAsync(); // force lazy-init so store.Connector is available
+
+        var settings = new SqLiteSettings(_root, "crud.db");
+        await using (var uow = SqlUnitOfWork.FromStore(store))
+        {
+            await uow.BeginAsync();
+            uow.IsActive.Should().BeTrue();
+            var cmd = uow.Context!.Connection.CreateCommand();
+            cmd.Transaction = uow.Context.Transaction;
+            cmd.CommandText = "INSERT INTO Widgets (Guid, Name, Amount) VALUES (@g, 'fromstore', 9)";
+            AddParam(cmd, "@g", Guid.NewGuid().ToString());
+            cmd.ExecuteNonQuery();
+            await uow.CommitAsync();
+        }
+
+        CountRows(settings).Should().Be(1);
+    }
+
     private static void AddParam(System.Data.Common.DbCommand cmd, string name, object value)
     {
         var p = cmd.CreateParameter();
