@@ -13,7 +13,29 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**134 / 418 triaged** as of 2026-07-14. Next open is CR-L135 (Birko.Data.JSON.ViewModel or next project).
+**140 / 418 triaged** as of 2026-07-14. Next open is CR-L141 (Birko.Data.Migrations.CosmosDB).
+
+**Batch L — Data.Localization cluster (CR-L135 … CR-L140):** all in Birko.Data.Localization.
+**Bugs fixed:** L135 (the filter-based `Update(filter, PropertyUpdate)` / `UpdateAsync` overrides in both
+bulk wrappers now detect — on a non-default culture — a PropertyUpdate that targets a **localizable**
+field and fall back to the `Action<T>` read-modify-write path so a translation row is persisted, instead
+of the native pass-through that mutated only the base column and wrote no translation; a new shared
+internal `LocalizedPropertyUpdateHelper` does the detect + `ToAction` (reusing `PropertyUpdate.ApplyTo`)),
+L138 (`ApplyInMemoryOrderBy` sorts through a defensive `SafeObjectComparer` — nulls-first, same-typed
+`IComparable` direct, else stable ordinal-string fallback — so a sort on a non-`IComparable` property
+degrades gracefully instead of throwing `InvalidOperationException` at sort time). **Provider-friendliness:**
+L136 (`BuildGuidFilter` builds the membership test over `List<Guid>.Contains` instead of
+`HashSet<Guid>.Contains` — more query providers translate it to SQL `IN`; documented best-effort + no
+chunking for very large sets). **Docs/verify-first:** L137 (documented the localized-filter operator/null
+semantics on `LocalizedExpressionAnalyzer` — `== null`/`!= null` are not localized (pass through to the
+base column) and `!=` only matches entities that HAVE a translation row; full `!=` correctness deferred),
+L139 (`EntityTranslationFilter.ByEntityType`/`ByEntityTypeAndCulture` are intended public API — covered by
+`EntityTranslationFilterTests` + documented in CLAUDE.md — so kept, per the finding's own criterion).
+**Tests:** Localization.Tests 70 → 79 — `LocalizedHelperTests` (ApplyInMemoryOrderBy multi-field ASC/DESC,
+ApplyInMemoryPaging offset/limit, the L138 non-comparable-no-throw, BuildGuidFilter empty/non-empty,
+CombineFilters param rebinding — the L140 gap) and `LocalizedPropertyUpdateFallbackTests` (the L135
+localizable-field fallback writes a translation; non-localizable field / default culture keep the native
+path). **/code-review: clean (no findings).**
 
 **Batch K — Data.JSON cluster (CR-L129 … CR-L134):** JSON + JSON.ViewModel.
 **Bugs fixed:** L129 (async bulk `UpdateCoreAsync` guards `ContainsKey` before writing + only saves when

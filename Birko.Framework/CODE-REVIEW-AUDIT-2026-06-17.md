@@ -5952,7 +5952,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** PropertyUpdate-based bulk update silently skips translation persistence for localized fields
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Decorators/LocalizedBulkStoreWrapper.cs:177 and Decorators/AsyncLocalizedBulkStoreWrapper.cs:186`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Update(filter, PropertyUpdate<T>) delegates straight to the inner store without any translation handling. If a PropertyUpdate targets a localizable field while on a non-default culture, it mutates the base column directly and never writes/updates an EntityTranslationModel row, so the localized value diverges from what the Action<T> overload would do. This is arguably an intentional native-path tradeoff but it is undocumented and is an easy data-consistency footgun.
 - **Fix:** At minimum document the limitation in the class XML doc; ideally detect when the PropertyUpdate touches a localizable field and fall back to the read-modify-write path (as the Action<T> overload already does).
 
@@ -5960,7 +5960,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** BuildGuidFilter embeds a HashSet.Contains over a captured constant, which may not translate on SQL/remote stores
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Expressions/LocalizedFilterHelper.cs:18-38`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The rewritten filter embeds `Expression.Constant(guids)` (a HashSet<Guid>) and an `Expression.Call(... Contains ...)`. This evaluates fine for LINQ-to-objects/in-memory stores, but providers that translate the expression tree to SQL/native queries may not support HashSet.Contains against a captured collection, and a large guid set produces an oversized IN-list. Since these wrappers are designed to decorate arbitrary IStore backends, behavior is provider-dependent.
 - **Fix:** Document that localized-field filtering is best-effort across providers, or build the membership test in a provider-friendly shape (e.g. List<Guid>.Contains, which more providers translate to IN). Consider chunking very large guid sets.
 
@@ -5968,7 +5968,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Localized != / null comparisons fall through to the base column instead of the translation store
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Expressions/LocalizedExpressionVisitor.cs:145-150`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** TryExtractLocalizedCondition requires constantValue != null (line 145), so `x.Name == null` / `x.Name != null` on a localized field is not extracted and is passed to the inner store as a base-column predicate. Additionally, the NotEqual predicate (`v => v != constantValue`, line 150) only matches entities that HAVE a translation row for that field+culture; entities lacking a translation are absent from the translation result set and are therefore silently excluded from a `!=` match. Both are semantic gaps for localized-field filtering.
 - **Fix:** Document the supported operator/null semantics on LocalizedExpressionAnalyzer, and if full correctness for != is needed, resolve it as the complement of matching guids over the full entity set rather than over present translation rows.
 
@@ -5976,7 +5976,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** In-memory order-by uses object? comparer that can throw on non-IComparable properties
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Expressions/LocalizedOrderByHelper.cs:98`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ApplyInMemoryOrderBy builds `Func<T, object?> selector = e => prop.GetValue(e)` and feeds it to OrderBy/ThenBy with the default comparer. For string/primitive localized fields this is fine, but if an OrderBy field resolves to a property whose runtime value is not IComparable, Enumerable.OrderBy throws InvalidOperationException at sort time rather than failing gracefully.
 - **Fix:** Either restrict in-memory sort fields to string/IComparable, or wrap the comparison with Comparer<object?> that handles nulls and non-comparable values defensively.
 
@@ -5984,7 +5984,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused factory methods and helper on EntityTranslationFilter
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Filters/EntityTranslationFilter.cs:39-44`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ByEntityType and ByEntityTypeAndCulture are not referenced by any wrapper or helper in the project. Minor dead surface (they are public, so may be intended as API, but worth confirming against tests).
 - **Fix:** Keep only if covered by tests / intended public API; otherwise remove to reduce surface.
 
@@ -5992,7 +5992,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gap: LocalizedOrderByHelper in-memory sort/paging and GetNonLocalizedOrderBy
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Localization\Birko.Data.Localization.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The .Tests sibling covers the wrappers, analyzer, filter, and model, and exercises bulk wrappers via integration tests, but there is no direct test for LocalizedOrderByHelper.ApplyInMemoryOrderBy / ApplyInMemoryPaging multi-field/descending behavior, nor for the localized-OrderBy-triggered in-memory sort+paginate path in the bulk wrappers (ReadAsync with an OrderBy on a localizable field). LocalizedFilterHelper.BuildGuidFilter empty-set (x => false) and CombineFilters are also not directly unit-tested.
 - **Fix:** Add focused tests for the localized-OrderBy in-memory path (multi-field ASC/DESC + offset/limit) and for BuildGuidFilter empty/non-empty + CombineFilters parameter rebinding.
 
