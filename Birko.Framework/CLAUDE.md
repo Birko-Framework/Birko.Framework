@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, MySQL cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch V: **CR-L183, CR-L184, CR-L185** — Birko.Data.SQL.MySQL. All closed; **/code-review clean** (dead-code + doc, no behavior change beyond removing dead code).
+- **Cleanup (L183)** — `MySQLConnector_OnException`'s table-missing guard was `A || (B && A)`; since `&&` binds tighter than `||`, the second operand could only be true when the first already was (entirely dead). Reduced to `!IsInitializing && ex.Message.Contains("doesn't exist")`.
+- **Convention (L184)** — the `IsTransientException` XML doc listed only 1213/1205/2006/2013/1040 but the switch also returns true for 1317/2002/2003; updated the doc to match the actual case labels.
+- **Other (L185)** — documented on the `#region Native Bulk Operations` that a first-run table-missing failure rolls back and auto-inits (DoInit) but does NOT re-run the bulk command (the payload is silently dropped) — inherited framework auto-init behavior; callers must ensure the schema exists (InitAsync / a prior single-row write / CreateTable) before the first bulk op.
+- No new tests (nothing observable changed — the removed clause was dead). Suite green: Birko.Data.SQL.MySQL.Tests 14. STORY-027 now **185/418**.
+
 ### Code-review remediation — low findings, MSSql cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch U: **CR-L179** (Birko.Data.SQL.MSSql) + **CR-L180 … CR-L182** (Birko.Data.SQL.MSSql.View). All closed; **/code-review clean**.
 - **Bug (L179)** — the six native bulk methods (`BulkInsert`/`BulkUpdate`/`BulkDelete`, sync + async) opened the connection (and began the transaction) **outside** the `try`, so an `Open`/transient failure bypassed `InitException`. Moved `Open`/`OpenAsync` (+ `BeginTransaction(Async)`) inside the `try`; the transaction methods declare a nullable `SqlTransaction? transaction` outside, roll back via a null-check in `catch`, and dispose in a `finally` (replacing the former `using var transaction`).

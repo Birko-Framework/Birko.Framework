@@ -6336,7 +6336,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant clause in OnException table-missing detection
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MySQL\Database\Connectors\MySQLConnector.cs:63`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The guard is `ex.Message.Contains("doesn't exist") || ex.Message.Contains("Table") && ex.Message.Contains("doesn't exist")`. Because && binds tighter than ||, this is `A || (B && A)`, and the second operand can only be true when A is already true, so it is entirely dead. The intent was likely `(ex.Message.Contains("Table") && ex.Message.Contains("doesn't exist"))` alone, or just the first clause.
 - **Fix:** Reduce to `if (!IsInitializing && ex.Message.Contains("doesn't exist"))`, or if a tighter match is wanted, drop the first clause and keep the parenthesized `Table ... doesn't exist` pair.
 
@@ -6344,7 +6344,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IsTransientException XML doc lists fewer codes than the switch handles
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MySQL\Database\Connectors\MySQLConnector.cs:36-59`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The summary comment enumerates 1213/1205/2006/2013/1040, but the switch also returns true for 1317 (query interrupted), 2002, and 2003. The doc is stale relative to the code. Not a behavior bug, but misleads readers maintaining the transient-retry policy.
 - **Fix:** Update the doc comment to match the actual case labels (or vice-versa if 1317/2002/2003 were added unintentionally).
 
@@ -6352,7 +6352,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk operations silently lose data on first-run table-missing error
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.MySQL\Database\Connectors\MySQLConnector.cs:314-318,398-402`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When a Bulk{Insert/Update/Delete} fails because the table doesn't exist, the transaction is rolled back and InitException -> MySQLConnector_OnException calls DoInit() (creating the table) but does NOT retry the operation. The bulk payload is silently dropped (no exception, no re-execution). This is the same auto-init pattern used by the other SQL dialects, so it is an inherited framework behavior rather than a MySQL-specific regression, but it is worth noting that the single-row CRUD path tolerates this (it re-runs via DoInit's caller) while the bulk path does not.
 - **Fix:** Consider retrying the bulk command once after DoInit() recreates the table, or document that callers must call CreateSchemaAsync()/InitAsync() before first bulk use.
 

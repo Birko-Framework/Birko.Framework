@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**182 / 418 triaged** as of 2026-07-14. Next open is CR-L183 (Birko.Data.SQL.MySQL).
+**185 / 418 triaged** as of 2026-07-14. Next open is CR-L186.
+
+**Batch V — MySQL cluster (CR-L183, CR-L184, CR-L185):** Birko.Data.SQL.MySQL. All closed;
+**/code-review clean** (dead-code + doc, no behavior change beyond removing dead code). **L183** (cleanup):
+the `MySQLConnector_OnException` table-missing guard was `A || (B && A)` — because `&&` binds tighter than
+`||`, the second operand could only be true when the first already was, so it was entirely dead; reduced to
+`!IsInitializing && ex.Message.Contains("doesn't exist")`. **L184** (convention): the `IsTransientException`
+XML doc listed only 1213/1205/2006/2013/1040 but the switch also returns true for 1317/2002/2003 — updated
+the doc to match the actual case labels. **L185** (other): documented on the `#region Native Bulk Operations`
+that a first-run table-missing failure rolls back and auto-inits (DoInit) but does **not** re-run the bulk
+command (the payload is silently dropped) — inherited framework auto-init behavior; callers must ensure the
+schema exists (InitAsync / a prior single-row write / CreateTable) before the first bulk op. No new tests
+(nothing observable changed — the removed clause was dead). Suite green: MySQL.Tests 14.
 
 **Batch U — MSSql cluster (CR-L179; CR-L180 … CR-L182):** Birko.Data.SQL.MSSql + .MSSql.View. All closed;
 **/code-review clean**. **L179** (bug): the six native bulk methods (`BulkInsert`/`Update`/`Delete` sync+async)
