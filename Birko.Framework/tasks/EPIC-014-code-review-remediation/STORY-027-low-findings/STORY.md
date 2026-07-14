@@ -13,7 +13,33 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**140 / 418 triaged** as of 2026-07-14. Next open is CR-L141 (Birko.Data.Migrations.CosmosDB).
+**152 / 418 triaged** as of 2026-07-14. Next open is CR-L153 (Birko.Data.MongoDB).
+
+**Batch M — Migrations backend cluster (CR-L141 … CR-L152):** CosmosDB, ElasticSearch, InfluxDB, MongoDB,
+RavenDB, SQL migration stores. **Bugs fixed:** L143 (ES `ElasticSearchDataMigrator` range operators
+`$gt/$gte/$lt/$lte` validate the value via a new internal `ToRangeBound` — `Convert.ToDouble(null)`
+silently returned 0, so `{"x":{"$gt":null}}` became a range > 0; now throws `ArgumentException`), L144 (ES
+`CopyData` throws `NotSupportedException` when a `transformJson` is supplied instead of silently dropping it
+— the server-side reindex applies no transform), L150 (SQL `SqlDataMigrator` routes identifier quoting
+through the connector dialect via a `QuoteIdentifier` helper + a quoter threaded into `ParseFilterToWhere`,
+instead of hardcoded ANSI double quotes that break on SQL Server `[brackets]`; `SqlMigrationContext` now
+passes the connector), L152 (SQL `SqlSchemaBuilder.CollectionExists` picks `sqlite_master` vs
+`INFORMATION_SCHEMA` from the connection provider — the unconditional INFORMATION_SCHEMA query threw on
+SQLite). **Convention:** L142 (ES migrations-index create honors the configured `NumberOfShards`/
+`NumberOfReplicas` — were hardcoded 1/0; `UseAliases` documented as reserved), L151 (SQL RemoteSettings
+ctor copies the whole chain via `SqlMigrationSettings.LoadFrom(remoteSettings)` — the manual field-copy
+dropped `UseSecure`). **Cleanup:** L141 (Cosmos) + L149 (Raven) replace the misleadingly-named
+`_cachedState` (only ever a null-check sentinel; every read re-fetches) with a `bool _initialized` flag,
+L147 (InfluxDB extracts the duplicated `if (_migrationsBucket == null) Initialize();` into one
+`EnsureInitialized()`), L148 (MongoDB drops the unused `IMongoClient _client` field + ctor param;
+`MongoMigrationRunner` updated). **Docs/verify-first:** L145 (InfluxDB `*Async` observe the token at entry;
+genuine SDK-async threading is the deferred CR-M108 work), L146 (InfluxDB broad `catch{}` narrowed to
+`InfluxException` so non-Influx exceptions surface — precisely distinguishing no-data from auth needs the
+live tier, deferred). **Tests:** SQL 24 → 29 (`ParseFilterToWhere` bracket-quoter, `CollectionExists` on
+real SQLite, `SqlMigrationSettings.LoadFrom` copies UseSecure), ES 2 → 8 (`ToRangeBound` null/non-numeric/
+numeric matrix + `CopyData` transform-throws). **/code-review: 2 PLAUSIBLE** (L148 Mongo ctor breaking
+change — documented/kept; L146 InfluxDB narrowing still swallows auth within InfluxException — deferred).
+Suites green: Migrations CosmosDB 11, ElasticSearch 8, InfluxDB 17, MongoDB 7, RavenDB 11, SQL 29.
 
 **Batch L — Data.Localization cluster (CR-L135 … CR-L140):** all in Birko.Data.Localization.
 **Bugs fixed:** L135 (the filter-based `Update(filter, PropertyUpdate)` / `UpdateAsync` overrides in both

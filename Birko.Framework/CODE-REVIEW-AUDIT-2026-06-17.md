@@ -6000,7 +6000,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CosmosMigrationStore caches state but RecordMigration ignores it (extra read every call)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.CosmosDB\CosmosMigrationStore.cs:113`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _cachedState is populated in Initialize and updated after writes, but GetAppliedVersions (line 80), RecordMigration (line 113), and RemoveMigration (line 151) always re-read the document from Cosmos rather than using the cache. The cache is effectively only a sentinel for EnsureInitialized's null-check. That's defensible for correctness under concurrency, but then the _cachedState field is misleadingly named/used — it's never read as data, only for the null check. Either use it as a real cache or replace it with a `bool _initialized` flag to make intent clear.
 - **Fix:** Replace the _cachedState data-cache with a `private bool _initialized` flag (set in Initialize) for the EnsureInitialized gate; keep always-fresh reads for correctness. Removes the impression that a stale cache is consulted.
 
@@ -6008,7 +6008,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Declared index settings (NumberOfShards/NumberOfReplicas/UseAliases) are never used
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.ElasticSearch\Settings/ElasticSearchMigrationSettings.cs:20-32`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ElasticSearchMigrationSettings exposes UseAliases (default true), NumberOfShards (default 1) and NumberOfReplicas (default 1), but Initialize() (ElasticSearchMigrationStore.cs:36-39) and ElasticSearchSchemaBuilder.CreateCollection (ElasticSearchSchemaBuilder.cs:23-28) both hardcode NumberOfShards(1)/NumberOfReplicas(0) and no alias logic exists. The settings are dead configuration that consumers will set expecting effect.
 - **Fix:** Either wire the settings into the index-create descriptors (the schema builder has no access to settings today — would need them threaded through), or remove the unused properties until alias/shard support lands.
 
@@ -6016,7 +6016,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Convert.ToDouble on a possibly-null range operator value
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.ElasticSearch\Context/ElasticSearchDataMigrator.cs:139-166`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ExtractValue can return null (JsonValueKind.Null and the default ToString path). For $gt/$gte/$lt/$lte the result is fed to Convert.ToDouble(value); Convert.ToDouble(null) returns 0 rather than throwing, so a malformed filter like {"x":{"$gt":null}} silently produces a range > 0 query instead of an error.
 - **Fix:** Validate value is non-null/numeric before building the NumericRangeQuery and throw a clear ArgumentException on a malformed filter.
 
@@ -6024,7 +6024,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CopyData silently ignores its transformJson parameter
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.ElasticSearch\Context/ElasticSearchDataMigrator.cs:87-96`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** CopyData accepts a transformJson parameter (the IDataMigrator contract uses it to transform documents during a copy) but the ElasticSearch implementation drops it entirely and does a plain ReindexOnServer. A migration that relies on the transform will compile and run but silently produce untransformed data.
 - **Fix:** Translate transformJson into a reindex Script, or throw NotSupportedException when transformJson is non-null so callers learn it is unimplemented rather than getting silently wrong results.
 
@@ -6032,7 +6032,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async methods ignore CancellationToken (convention)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.InfluxDB\InfluxMigrationStore.cs:54,106,135,170,188`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Framework convention: async methods should observe a CancellationToken. None of the *Async methods accept or pass a token (the IMigrationStore interface itself omits them). Even if the interface cannot change, the InfluxDB SDK QueryAsync/CreateBucketAsync accept cancellation that is currently unavailable to callers.
 - **Fix:** Where the interface permits, thread a CancellationToken through to the SDK async calls; otherwise note the limitation.
 
@@ -6040,7 +6040,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Broad catch{} swallows all exceptions in GetAppliedVersions and RemoveMigration
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.InfluxDB\InfluxMigrationStore.cs:95-98,161-164`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetAppliedVersions wraps the query in catch{} 'Bucket may not have data yet', but this also swallows auth failures, connectivity errors, and malformed-query errors, returning an empty set — which the runner interprets as 'no migrations applied', potentially re-running applied migrations. RemoveMigration similarly swallows all delete failures as 'already deleted'.
 - **Fix:** Catch only the specific not-found/empty case (or inspect the exception) and rethrow unexpected errors so genuine failures are visible.
 
@@ -6048,7 +6048,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** _migrationsBucket null-check pattern duplicated; not a guard-clause early return
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.InfluxDB\InfluxMigrationStore.cs:63-69,114-119,144-149`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The `if (_migrationsBucket == null) Initialize();` block is repeated in GetAppliedVersions, RecordMigration, and RemoveMigration. This lazy-init idiom is fine, but it is duplicated three times and is not protected against concurrent callers (no locking), unlike the double-checked locking the framework uses for store EnsureInitialized.
 - **Fix:** Extract a private EnsureInitialized() helper (optionally with locking) and call it once at the top of each public method.
 
@@ -6056,7 +6056,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused _client field in MongoMigrationStore
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.MongoDB\MongoMigrationStore.cs:16`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _client is assigned in the constructor (line 27) but never read — all store operations go through _database. Dead state that suggests the client was meant to be used (e.g. for sessions, which ties into the transaction bug above).
 - **Fix:** Remove the field and its constructor parameter, or wire it into session-aware operations if transaction support is added.
 
@@ -6064,7 +6064,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RavenMigrationStore caches state but reloads on every read; cache only guards init
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.RavenDB\RavenMigrationStore.cs:22,67-80,160-164`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _cachedState is set in Initialize/RecordMigration/RemoveMigration but GetAppliedVersions/GetCurrentVersion always open a fresh session and Load again, so the cache provides no read benefit and exists only to short-circuit EnsureInitialized. This is harmless but the field name implies caching that does not happen; GetCurrentVersion also loads the full state twice indirectly (via GetAppliedVersions).
 - **Fix:** Either serve reads from _cachedState (and invalidate appropriately) or drop the field and use a simple bool _initialized flag to match its actual role.
 
@@ -6072,7 +6072,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SqlDataMigrator hardcodes double-quote identifier quoting, ignoring the connector dialect
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.SQL\Context/SqlDataMigrator.cs:32,37,50,61,80,98,103,155,162`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Every table/column name is interpolated with literal double quotes ($"\"{collection}\""), unlike SqlSchemaBuilder which delegates to _connector.QuoteIdentifier(...) when a connector is present. On SQL Server (which uses [brackets]) these statements will fail or behave unexpectedly, and the migrator never receives the connector so it cannot adapt. Also column/table names come straight from the migration author with no validation, but values are correctly parameterized so injection risk is limited to identifiers.
 - **Fix:** Pass the AbstractConnector into SqlDataMigrator (the context already has it) and route identifier quoting through _connector.QuoteIdentifier, matching SqlSchemaBuilder.
 
@@ -6080,7 +6080,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RemoteSettings copied field-by-field into SqlMigrationSettings instead of via LoadFrom/base
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.SQL\SqlMigrationStore.cs:43-53`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The RemoteSettings convenience constructor builds a SqlMigrationSettings by manually copying Location/Port/Name/UserName/Password. SqlSettings already provides LoadFrom(RemoteSettings) (SqlSettings.cs:46-66) which copies the full chain; the manual copy will silently drop any RemoteSettings fields not enumerated here (e.g. UseSecure) and must be updated whenever the settings chain grows.
 - **Fix:** Construct a SqlMigrationSettings and call settings.LoadFrom(remoteSettings) so the whole inherited chain is copied, rather than hand-listing properties.
 
@@ -6088,7 +6088,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CollectionExists relies on INFORMATION_SCHEMA, which SQLite does not provide
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Migrations.SQL\Context/SqlSchemaBuilder.cs:43-52`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** CollectionExists always queries INFORMATION_SCHEMA.TABLES regardless of the connector. SQLite (a likely target given the framework's file-based reference stores) has no INFORMATION_SCHEMA and uses sqlite_master, so this throws there. Other dialect-specific methods in this class defer to _connector when available; CollectionExists does not.
 - **Fix:** When _connector is present, delegate existence checks to a connector method; otherwise document that the raw-SQL fallback assumes an INFORMATION_SCHEMA-compatible dialect.
 
