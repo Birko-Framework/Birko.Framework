@@ -72,7 +72,9 @@ public abstract class AsyncRavenDBRepository<TViewModel, TModel> : Data.Reposito
     }
 
     /// <summary>
-    /// Sets the connection settings.
+    /// Sets the connection settings by delegating to the underlying store. This is a no-op if the store
+    /// does not unwrap to a RavenDB store (never the case for the constructor-guaranteed backing store;
+    /// only a caller-supplied custom wrapper whose unwrap returns null would drop the settings silently).
     /// </summary>
     /// <param name="settings">The remote settings to use.</param>
     public void SetSettings(RemoteSettings settings)

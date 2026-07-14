@@ -71,7 +71,9 @@ public abstract class RavenDBRepository<TViewModel, TModel> : AbstractBulkViewMo
     }
 
     /// <summary>
-    /// Sets the connection settings.
+    /// Sets the connection settings by delegating to the underlying store. This is a no-op if the store
+    /// does not unwrap to a RavenDB store (never the case for the constructor-guaranteed backing store;
+    /// only a caller-supplied custom wrapper whose unwrap returns null would drop the settings silently).
     /// </summary>
     /// <param name="settings">The remote settings to use.</param>
     public void SetSettings(RemoteSettings settings)
@@ -83,11 +85,13 @@ public abstract class RavenDBRepository<TViewModel, TModel> : AbstractBulkViewMo
     }
 
     /// <summary>
-    /// Checks if the RavenDB server is healthy.
+    /// Checks if the RavenDB server is healthy. Uses the store's real connectivity probe (an empty
+    /// query) so the sync and async repositories mean the same thing — not DatabaseExists(), which
+    /// returns true for an empty database name without touching the server.
     /// </summary>
     /// <returns>True if the server is reachable, false otherwise.</returns>
     public bool IsHealthy()
     {
-        return RavenDBStore?.DatabaseExists() ?? false;
+        return RavenDBStore?.IsHealthy() ?? false;
     }
 }
