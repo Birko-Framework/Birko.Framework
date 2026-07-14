@@ -23,12 +23,25 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
 
         public override string GetConnectionString()
         {
-            var cs = $"Host={Location};Port={Port};Username={UserName};Password={Password};Database={Name};Timeout={ConnectionTimeout};Command Timeout={CommandTimeout};";
+            // Compose via NpgsqlConnectionStringBuilder so values (Host/Username/Password/Database)
+            // containing ';' or '=' are quoted/escaped correctly rather than breaking the key=value
+            // parsing or injecting extra keywords (CR-L189). Note: the builder omits keys whose value
+            // equals the Npgsql default (e.g. Port 5432, Timeout 15).
+            var builder = new Npgsql.NpgsqlConnectionStringBuilder
+            {
+                Host = Location,
+                Port = Port,
+                Username = UserName,
+                Password = Password,
+                Database = Name,
+                Timeout = ConnectionTimeout,
+                CommandTimeout = CommandTimeout,
+            };
             if (UseSecure)
             {
-                cs += "SSL Mode=Require;";
+                builder.SslMode = Npgsql.SslMode.Require;
             }
-            return cs;
+            return builder.ConnectionString;
         }
 
         public void LoadFrom(PostgreSqlSettings data)

@@ -39,7 +39,8 @@ namespace Birko.Data.SQL.Connectors
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;
-            if (ex is NpgsqlException npgsqlEx && npgsqlEx is PostgresException pgEx)
+            // PostgresException derives from NpgsqlException, so a single pattern-test suffices (CR-L188).
+            if (ex is PostgresException pgEx)
             {
                 var code = pgEx.SqlState;
                 if (code != null)
