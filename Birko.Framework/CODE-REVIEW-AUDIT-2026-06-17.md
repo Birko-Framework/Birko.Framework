@@ -6496,7 +6496,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AggregateMath.BucketByTime is dead code
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Stores\AggregateMath.cs:27-38`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The non-mutating BucketByTime<T> helper is public but has no callers anywhere in the framework (grep across C:\Source finds only its definition). It appears to be the intended-but-unused correct implementation that AggregateHelper.ApplyTimeBucket should have used instead of its in-place SetValue approach. Either wire it into AggregateHelper (which also fixes the mutation bug above) or remove it.
 - **Fix:** Use BucketByTime inside AggregateHelper to fix the mutation issue, which simultaneously removes the dead code.
 
@@ -6504,7 +6504,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async core CRUD calls omit ConfigureAwait(false) while the init gate uses it
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Stores\AbstractAsyncStore.cs:75,93,105,117,133`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** In AbstractAsyncStore the EnsureInitializedAsync(ct) awaits all use .ConfigureAwait(false), but the immediately following awaits of CreateCoreAsync/ReadCoreAsync/UpdateCoreAsync/DeleteCoreAsync/CountCoreAsync do not. The same inconsistency appears in AbstractAsyncBulkStore.cs (lines 38, 58, 91, 117, 121, 131, 147). For a base library that may run under a synchronization context (e.g. legacy ASP.NET / UI hosts), continuing on the captured context here is an avoidable deadlock/perf risk and is inconsistent with the surrounding code in the same methods.
 - **Fix:** Append .ConfigureAwait(false) to every await of the *CoreAsync calls in both abstract async store base classes for consistency with EnsureInitializedAsync.
 
@@ -6512,7 +6512,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async ReadAsync(Guid) uses an inline lambda instead of the shared ModelByGuid filter
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Stores\AbstractAsyncStore.cs:86`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The async ReadAsync(Guid) builds its filter inline as x => x.Guid == guid, whereas the sync AbstractStore.Read(Guid) (AbstractStore.cs:81) delegates to the shared Filters.ModelByGuid<T>(guid).Filter(). This is a minor divergence: the two paths produce equivalent predicates today, but if ModelByGuid ever encodes additional matching logic (e.g. soft-delete awareness) the async path would silently differ. Not a bug, just an inconsistency between the sync and async siblings.
 - **Fix:** Mirror the sync implementation: return ReadAsync((new Filters.ModelByGuid<T>(guid)).Filter(), ct);
 
@@ -6520,7 +6520,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No direct unit tests for shared helper classes (TimeIntervalParser, AggregateMath, OrderByHelper, PropertyUpdate, StoreLocator)
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Data.Tests\Stores`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The .Tests siblings only contain AsyncStoreTests and BulkStoreReadFirstTests for this project; aggregation is exercised only indirectly through Birko.Data.InMemory.Tests (which calls store.Aggregate but never exercises a TimeBucketInterval/TimeColumn query — InMemoryStoreTests.cs:242 is the only Aggregate call and is non-bucketed). As a result the time-bucket path (and its mutation bug above), TimeIntervalParser human-readable parsing/ToSqlInterval, AggregateMath Sum/Avg/Min/Max edge cases (empty groups, all-null values, non-numeric types), OrderByHelper multi-field ordering, PropertyUpdate.ApplyTo (UnaryExpression vs MemberExpression bodies), and StoreLocator caching/keying all lack direct coverage. Note only, per scope.
 - **Fix:** Add focused unit tests for the time-bucketed aggregation path (which would have caught the source-mutation bug) and for the standalone helper classes.
 

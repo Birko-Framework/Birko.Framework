@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**202 / 418 triaged** as of 2026-07-14. Next open is CR-L203 (Birko.Data.Stores).
+**206 / 418 triaged** as of 2026-07-14. Next open is CR-L207 (Birko.Data.Sync).
+
+**Batch AC — Data.Stores cluster (CR-L203 … CR-L206):** Birko.Data.Stores. All closed;
+**/code-review clean**. **L203** (cleanup): removed the dead `AggregateMath.BucketByTime<T>` (no callers;
+the mutation concern it was meant to address was already fixed differently under CR-H097 — `AggregateHelper`
+computes bucket time on-the-fly via `BucketTimeOf`/`TruncateToBucket`, no mutation). **L204** (convention):
+appended `.ConfigureAwait(false)` to every `*CoreAsync` / inner await in `AbstractAsyncStore` (5) and
+`AbstractAsyncBulkStore` (8), matching the `EnsureInitializedAsync` awaits — avoids a captured-context
+deadlock/perf risk in a base library that may run under a sync context. **L205** (convention): async
+`ReadAsync(Guid)` builds its filter via the shared `Filters.ModelByGuid<T>` (mirroring the sync
+`AbstractStore.Read(Guid)`) instead of an inline `x => x.Guid == guid`, so the two paths can't silently
+diverge. **L206** (test-gap): added `SharedHelperTests` covering `AggregateMath` (ComputeSum/Avg/Aggregate
+empty/all-null/Count/Min-Max edge cases + `TruncateToBucket`), `TimeIntervalParser.Parse` (human + TimeSpan
+forms), and `PropertyUpdate.ApplyTo`; the time-bucket path already had `AggregateHelperTimeBucketTests`.
+**Tests:** Birko.Data.Tests 193 → 205; InMemory 40 (downstream async-store consumer, no regression from the
+base changes). Suites green: Birko.Data.Tests 205, InMemory 40.
 
 **Batch AB — Data.SQL.Views cluster (CR-L201, CR-L202):** Birko.Data.SQL.Views. Both closed;
 **/code-review clean**. **L201** (bug): `SqlViewTranslator.Translate` replaces the nine silent `continue`s

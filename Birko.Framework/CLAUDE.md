@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.Stores cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch AC: **CR-L203 … CR-L206** — Birko.Data.Stores. All closed; **/code-review clean**.
+- **Cleanup (L203)** — removed the dead `AggregateMath.BucketByTime<T>` (no callers; the mutation concern it was meant to fix was already resolved under CR-H097 — `AggregateHelper` computes bucket time on-the-fly via `BucketTimeOf`/`TruncateToBucket`).
+- **Convention (L204)** — appended `.ConfigureAwait(false)` to every `*CoreAsync`/inner await in `AbstractAsyncStore` (5) and `AbstractAsyncBulkStore` (8), matching the `EnsureInitializedAsync` awaits — avoids a captured-context deadlock/perf risk in a base library that may run under a sync context.
+- **Convention (L205)** — async `ReadAsync(Guid)` builds its filter via the shared `Filters.ModelByGuid<T>` (mirroring sync `AbstractStore.Read(Guid)`) instead of an inline `x => x.Guid == guid`.
+- **Test-gap (L206)** — new `SharedHelperTests`: `AggregateMath` (ComputeSum/Avg/Aggregate empty/all-null/Count/Min-Max + `TruncateToBucket`), `TimeIntervalParser.Parse` (human + TimeSpan forms), `PropertyUpdate.ApplyTo`.
+- **Tests** — Birko.Data.Tests 193 → 205; InMemory 40 (downstream consumer — no regression from the base-class changes).
+- Suites green: Birko.Data.Tests 205, InMemory 40. STORY-027 now **206/418**.
+
 ### Code-review remediation — low findings, Data.SQL.Views cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch AB: **CR-L201, CR-L202** — Birko.Data.SQL.Views. Both closed; **/code-review clean**.
 - **Bug (L201)** — `SqlViewTranslator.Translate` replaces the nine silent `continue`s (failed table/field/view-property/join lookups) with descriptive `InvalidOperationException`s naming the unresolved `SourceType.SourceProperty`. A view referencing an unmapped table or a misspelled/unmapped property now fails loudly at translation time instead of silently producing a structurally-wrong SQL view.
