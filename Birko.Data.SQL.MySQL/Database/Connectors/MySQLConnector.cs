@@ -58,6 +58,17 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// MySQL phrases a missing table as "Table 'x' doesn't exist" (error 1146). Adds that to the base
+        /// SQLite match so the reader yields an empty result rather than faulting.
+        /// </summary>
+        public override bool IsMissingTableException(Exception ex)
+        {
+            if (base.IsMissingTableException(ex)) return true;
+            if (ex is MySqlException mysqlEx && (int)mysqlEx.ErrorCode == 1146) return true;
+            return ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase);
+        }
+
         private void MySQLConnector_OnException(Exception ex, string? commandText)
         {
             if (!IsInitializing && (ex.Message.Contains("doesn't exist") || ex.Message.Contains("Table") && ex.Message.Contains("doesn't exist")))
