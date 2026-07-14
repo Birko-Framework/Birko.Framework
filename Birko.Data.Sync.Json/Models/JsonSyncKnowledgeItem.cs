@@ -12,11 +12,11 @@ namespace Birko.Data.Sync.Json.Models;
 /// </summary>
 public class JsonSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
-    /// <summary>
-    /// Unique identifier for the sync knowledge record.
-    /// </summary>
-    [JsonPropertyName("id")]
-    public int Id { get; set; }
+    // CR-L213: the int Id field (serialized "id") was removed — it was dead state. The store keys
+    // entities exclusively by AbstractModel.Guid (AsyncJsonStore loads/saves by item.Guid;
+    // CreateKnowledgeItem sets Guid = Guid.NewGuid()), and neither ISyncKnowledgeItem nor the sync
+    // provider ever read or wrote it, so it defaulted to 0 in every persisted record. Identity is
+    // already covered by Guid / EntityGuid.
 
     /// <summary>
     /// GUID of the entity this knowledge refers to.
