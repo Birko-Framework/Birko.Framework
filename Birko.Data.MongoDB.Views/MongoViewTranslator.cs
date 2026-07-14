@@ -54,11 +54,11 @@ public static class MongoViewTranslator
         // 2. $group stage if aggregates are present
         if (definition.HasAggregates)
         {
+            // Group keys serve both as the _id composite and as $first-carried-forward fields;
+            // materialize once and reuse for both (they are the identical projection).
             var groupByPaths = definition.GroupBy
-                .Select(grp => (grp.PropertyName, ResolveFieldPath(grp.SourceType, grp.PropertyName, definition)));
-
-            var firstFieldPaths = definition.GroupBy
-                .Select(grp => (grp.PropertyName, ResolveFieldPath(grp.SourceType, grp.PropertyName, definition)));
+                .Select(grp => (grp.PropertyName, ResolveFieldPath(grp.SourceType, grp.PropertyName, definition)))
+                .ToList();
 
             var accumulators = definition.Aggregates
                 .Select(agg => (
@@ -69,7 +69,7 @@ public static class MongoViewTranslator
                         : ResolveFieldPath(agg.SourceType, agg.SourceProperty!, definition)));
 
             var groupDoc = Aggregation.StoreAggregationHelper.BuildGroupStageFromPaths(
-                groupByPaths, firstFieldPaths, accumulators);
+                groupByPaths, groupByPaths, accumulators);
 
             stages.Add(new BsonDocument("$group", groupDoc));
         }
