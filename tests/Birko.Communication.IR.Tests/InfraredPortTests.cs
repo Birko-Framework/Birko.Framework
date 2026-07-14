@@ -104,6 +104,26 @@ public class InfraredPortTests
     // ── HandleReceivedTiming: protocol match vs raw fallback ──
 
     [Fact]
+    public void HandleReceivedTiming_RawRegisteredFirst_StructuredProtocolStillWins()
+    {
+        // Regression for CR-L062: RawProtocol.Decode succeeds for any non-empty timing. If it were tried
+        // in registration order it would swallow every signal; the port now always tries it last.
+        var transport = new FakeIrTransport();
+        var port = CreatePort(transport);
+        port.RegisterProtocol(new RawProtocol()); // registered FIRST
+        port.RegisterProtocol(new NecProtocol());
+
+        IrCommand? received = null;
+        port.OnCommandReceived += (_, cmd) => received = cmd;
+
+        var timing = new NecProtocol().Encode(new IrCommand { Address = 0x04, Command = 0x08 });
+        transport.RaiseReceived(timing);
+
+        received.Should().NotBeNull();
+        received!.Protocol.Should().Be("NEC", "the structured protocol must win over the raw fallback");
+    }
+
+    [Fact]
     public void HandleReceivedTiming_ProtocolMatch_RaisesDecodedCommand()
     {
         var transport = new FakeIrTransport();
