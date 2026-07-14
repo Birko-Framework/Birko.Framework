@@ -52,6 +52,15 @@ namespace Birko.BackgroundJobs.Tests
         }
     }
 
+    // Contract violation used to regress CR-L019: a typed job whose ExecuteAsync returns a null Task.
+#pragma warning disable CS8603 // deliberate null Task return for the test
+    public class NullTaskJob : IJob<EmailInput>
+    {
+        public Task ExecuteAsync(EmailInput input, JobContext context, CancellationToken cancellationToken = default)
+            => null!;
+    }
+#pragma warning restore CS8603
+
     public class ContextCapturingJob : IJob
     {
         public static JobContext? LastContext { get; set; }

@@ -58,6 +58,29 @@ namespace Birko.BackgroundJobs.Tests.Core
             policy.GetDelay(4).Should().Be(TimeSpan.FromMinutes(30));   // capped
         }
 
+        [Theory]
+        [InlineData(53)]
+        [InlineData(100)]
+        [InlineData(1000)]
+        [InlineData(int.MaxValue)]
+        public void GetDelay_LargeAttempt_SaturatesAtMaxDelay_NeverNegative(int attempt)
+        {
+            // Regression for CR-L014: (long)Math.Pow(2, attempt-1) * BaseDelay.Ticks overflowed to a
+            // negative tick count, which is < MaxDelay so it slipped past the clamp and scheduled the
+            // retry in the past. The computation is now done in double and saturated at MaxDelay.
+            var policy = new RetryPolicy
+            {
+                BaseDelay = TimeSpan.FromMinutes(10),
+                MaxDelay = TimeSpan.FromHours(1),
+                UseExponentialBackoff = true
+            };
+
+            var delay = policy.GetDelay(attempt);
+
+            delay.Should().BeGreaterThan(TimeSpan.Zero);
+            delay.Should().Be(TimeSpan.FromHours(1));
+        }
+
         [Fact]
         public void GetDelay_FixedDelay_ReturnsSameValue()
         {

@@ -125,6 +125,26 @@ namespace Birko.BackgroundJobs.Tests.Processing
         }
 
         [Fact]
+        public async Task ExecuteAsync_TypedJobReturningNullTask_ReturnsFailure()
+        {
+            // Regression for CR-L019: a matched ExecuteAsync that returns a null Task was silently
+            // reported as Succeeded (the "if (task != null) await" branch fell through). It must fail.
+            var executor = CreateExecutor();
+            var descriptor = new JobDescriptor
+            {
+                JobType = typeof(NullTaskJob).AssemblyQualifiedName!,
+                InputType = typeof(EmailInput).AssemblyQualifiedName!,
+                SerializedInput = _serializer.Serialize(new EmailInput()),
+                AttemptCount = 1
+            };
+
+            var result = await executor.ExecuteAsync(descriptor);
+
+            result.Success.Should().BeFalse();
+            result.Error.Should().Contain("did not return a Task");
+        }
+
+        [Fact]
         public void Constructor_NullFactory_Throws()
         {
             var act = () => new JobExecutor(null!);

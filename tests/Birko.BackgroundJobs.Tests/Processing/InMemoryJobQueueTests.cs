@@ -40,6 +40,22 @@ namespace Birko.BackgroundJobs.Tests.Processing
         }
 
         [Fact]
+        public async Task EnqueueAsync_StampsEnqueuedAtFromInjectedClock()
+        {
+            // Regression for CR-L017: EnqueuedAt defaulted to DateTime.UtcNow at construction, escaping
+            // the injected clock. The queue now stamps it from IDateTimeProvider inside EnqueueAsync.
+            var fixedTime = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.Zero);
+            var clock = new TestDateTimeProvider(fixedTime);
+            var queue = new InMemoryJobQueue(clock);
+            var descriptor = new JobDescriptor { JobType = "t", EnqueuedAt = DateTime.UtcNow };
+
+            await queue.EnqueueAsync(descriptor);
+            var stored = await queue.GetAsync(descriptor.Id);
+
+            stored!.EnqueuedAt.Should().Be(fixedTime.UtcDateTime);
+        }
+
+        [Fact]
         public async Task DequeueAsync_ReturnsEnqueuedJob()
         {
             var descriptor = CreateDescriptor();
