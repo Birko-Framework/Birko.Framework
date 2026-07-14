@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**33 / 418 triaged** as of 2026-07-14 (batch 2 done).
+**40 / 418 triaged** as of 2026-07-14 (batch 3 done).
+
+**Batch 3 (2026-07-14) — Caching cluster (CR-L034 … CR-L040, 7 findings):** Birko.Caching + .Hybrid + .Redis.
+**Bugs fixed:** L036 (`MemoryCache.GetAsync` degrades a type-mismatch to a Miss via `is T` instead of the
+unchecked `(T)Value!` cast that threw `InvalidCastException`; a stored null is still a hit), L040
+(`RedisCache.RemoveByPrefixAsync` batches deletes via the `KeyDeleteAsync(RedisKey[])` array overload
+instead of one round-trip per key — ct was already checked under CR-M034). **Convention:** L034 (the six
+`MemoryCache` async CRUD methods now observe the `CancellationToken`). **Hardening:** L035 (largely resolved
+by CR-M030 — `EvictExpired` no longer sweeps `_locks`; added a `volatile _disposed` flag + guard as belt-and-
+suspenders). **Docs:** L038 (documented the intentional L2-hit L1-population staleness cap that differs from
+GetOrSet). **Test-gaps:** L037 (added sliding-expiration + CacheSerializer round-trip tests; stampede + L1Max
+already covered; NeverRemove-in-EvictExpired left uncovered — not observable without reflection), L039
+(`GetL1Options` made `internal` + a full matrix test: null / absolute-below/above-max / sliding-only / null-max).
+Suites green: Caching 40, Hybrid 39, Redis 12.
+
+**Batch 2 (2026-07-14) — BackgroundJobs cluster (CR-L014 … CR-L033, 20 findings):** core + 8 backends.
 
 **Batch 2 (2026-07-14) — BackgroundJobs cluster (CR-L014 … CR-L033, 20 findings):** core + 8 backends.
 Verify-first. **Bugs fixed:** L014 (`RetryPolicy.GetDelay` overflow → compute in double, saturate at

@@ -5144,7 +5144,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async CRUD methods ignore the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching\Memory\MemoryCache.cs:27-69,97-109`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Caching low cluster, 2026-07-14)
 - **Detail:** GetAsync, SetAsync, RemoveAsync, ExistsAsync, RemoveByPrefixAsync and ClearAsync all accept a CancellationToken ct but never observe it (no ct.ThrowIfCancellationRequested()). The Birko convention is that async methods should observe the CancellationToken; here a caller passing an already-cancelled token still gets a completed result. GetOrSetAsync does honor ct (via WaitAsync and the factory), so the behavior is inconsistent across the interface.
 - **Fix:** Add ct.ThrowIfCancellationRequested() at the top of each synchronous-bodied method (or return Task.FromCanceled when cancelled) so cancellation is observed uniformly.
 
@@ -5152,7 +5152,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dispose does not stop the cleanup timer before disposing locks, allowing a callback to touch disposed semaphores
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching\Memory\MemoryCache.cs:127-137`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Caching low cluster, 2026-07-14) — largely resolved by CR-M030 (EvictExpired no longer sweeps _locks, so it never touches semaphores that Dispose is racing to dispose); added a volatile _disposed flag + a guard at the top of EvictExpired as belt-and-suspenders hardening
 - **Detail:** Dispose() calls _cleanupTimer.Dispose() (line 131) which does not wait for an in-flight EvictExpired callback to finish. If the timer callback is mid-execution it can run EvictExpired's _locks loop while Dispose concurrently disposes the same SemaphoreSlim instances (lines 133-134), or after they are disposed. EvictExpired only reads CurrentCount/ContainsKey so the window is small, but accessing a disposed SemaphoreSlim.CurrentCount throws ObjectDisposedException on a background thread pool thread (unobserved).
 - **Fix:** Use the Timer.Dispose(WaitHandle) overload, or a volatile _disposed flag checked at the start of EvictExpired, to ensure no callback runs against disposed semaphores.
 
@@ -5160,7 +5160,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetAsync casts stored value with (T)entry.Value! — InvalidCastException on type mismatch instead of a miss
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching\Memory\MemoryCache.cs:38`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Caching low cluster, 2026-07-14)
 - **Detail:** Value is stored as object? and read back via the unchecked cast (T)entry.Value!. If a key is written with one type and read with an incompatible T (e.g. set as string, read as int), this throws InvalidCastException rather than returning a Miss; and the ! suppresses a legitimately-nullable value. While same-type usage is the contract, a single string key shared across call sites with differing T is a realistic foot-gun for a general-purpose cache.
 - **Fix:** Use entry.Value is T typed ? CacheResult<T>.Hit(typed) : CacheResult<T>.Miss() (handling the null-value-for-reference-type case explicitly) so a type mismatch degrades to a miss rather than throwing.
 
@@ -5168,7 +5168,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for sliding expiration, NeverRemove priority, GetOrSetAsync concurrency, or CacheSerializer
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Caching.Tests\Memory\MemoryCacheTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (partial) — added sliding-expiration + CacheSerializer round-trip tests, plus the CR-L034/L036 regressions; the GetOrSetAsync single-factory stampede (CR-M030) and L1Max capping were already covered. The NeverRemove-in-EvictExpired branch is left uncovered: a NeverRemove entry is still removed by any Get/Exists read (only the background sweep skips it), and there is no non-removing read API to observe it without reflecting into _entries (2026-07-14)
 - **Detail:** Tests cover absolute expiration, basic CRUD, prefix removal, clear, and the GetOrSetAsync hit/miss paths. Not covered: SlidingExpiration behavior (access resets the window; the LastAccessedAt update on GetAsync at line 37), the CachePriority.NeverRemove path in EvictExpired (lines 115-116), concurrent GetOrSetAsync calling the factory exactly once (the stampede guarantee), the background EvictExpired timer, and the entire CacheSerializer static class (Serialize/Deserialize round-trips, byte[] and string variants). CacheSerializer has zero tests in the sibling.
 - **Fix:** Add sliding-expiration + NeverRemove tests, a concurrent GetOrSetAsync test asserting a single factory invocation, and CacheSerializer round-trip tests.
 
@@ -5176,7 +5176,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetAsync L1-population discards the source entry's TTL/options
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching.Hybrid\HybridCache.cs:56`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — documented as intended: the L2-hit L1 population uses GetL1Options(null) (L1DefaultExpiration cap) to bound staleness, which differs from GetOrSetAsync threading the caller's options through; the divergence is now called out inline (2026-07-14)
 - **Detail:** On an L2 hit, L1 is populated via GetL1Options(null), which always yields CacheEntryOptions.Absolute(L1DefaultExpiration) (30s default) regardless of the entry's actual remaining lifetime in L2. This is a defensible design choice (capping staleness), but combined with L1MaxExpiration it means a freshly-read hot value only ever lives L1DefaultExpiration in L1 even when L1MaxExpiration permits longer. Worth confirming this is intended; the GetOrSetAsync path (line 146) does pass options through GetL1Options(options), so the two read paths populate L1 with different TTLs for the same key.
 - **Fix:** Consider passing the caller-relevant options consistently in both read paths, or document that L2-hit population always uses L1DefaultExpiration while GetOrSet honors requested options.
 
@@ -5184,7 +5184,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetL1Options sliding-expiration branch can produce an entry with no absolute cap
 - **Path:** `C:\Source\Birko\Framework\Birko.Caching.Hybrid\HybridCache.cs:224`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Caching low cluster, 2026-07-14)
 - **Detail:** When requested has SlidingExpiration set but AbsoluteExpiration null, the absolute is computed as min(L1MaxExpiration, L1DefaultExpiration) (good), but when requested has AbsoluteExpiration set the sliding is capped to maxExpiry too. The logic is mostly sound; however the intent 'cap L1 staleness to L1MaxExpiration' is only enforced on absolute. A sliding-only entry whose absolute falls back to L1DefaultExpiration (line 226) could be shorter than L1MaxExpiration, which is fine, but a sliding window longer than the absolute makes the sliding cap moot. Low impact, but the capping logic is hard to reason about and untested.
 - **Fix:** Add unit tests pinning the exact CacheEntryOptions produced by GetL1Options across the matrix (requested null / absolute-only / sliding-only / both; L1MaxExpiration null vs set) to lock down intended behavior.
 
@@ -5192,7 +5192,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RemoveByPrefixAsync enumerates and deletes keys one-by-one
 - **Path:** `C:/Source/Birko/Framework/Birko.Caching.Redis/RedisCache.cs:147-150`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Caching low cluster, 2026-07-14)
 - **Detail:** Each matched key is deleted with an individual KeyDeleteAsync round-trip inside the SCAN enumeration. For a large keyspace this is N round-trips and, combined with the ignored CancellationToken, an unbounded uninterruptible loop. Batching deletes (collect into a buffer and call the array overload of KeyDeleteAsync) reduces round-trips.
 - **Fix:** Buffer keys and flush via db.KeyDeleteAsync(RedisKey[]) in batches; check ct in the loop.
 
