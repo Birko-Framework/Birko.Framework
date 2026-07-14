@@ -95,6 +95,32 @@ public class AsyncJsonSyncKnowledgeStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task SetLastSyncTime_EmptyScope_IsANoOp_AndGetStaysNull()
+    {
+        // CR-L214: last-sync-time is derived from the scope's items. Stamping a scope with no items
+        // echoes the value back but persists nothing, so a subsequent Get still returns null (the
+        // documented, provider-safe limitation — the provider always writes items before stamping).
+        var store = NewStore();
+
+        var stamp = new DateTime(2026, 7, 14, 9, 0, 0, DateTimeKind.Utc);
+        var returned = await store.SetLastSyncTimeAsync("empty", stamp, CancellationToken.None);
+
+        returned.Should().Be(stamp, "the method echoes the requested stamp back");
+        (await store.GetLastSyncTimeAsync("empty", CancellationToken.None))
+            .Should().BeNull("an empty scope has no item to carry the derived timestamp");
+    }
+
+    [Fact]
+    public void Model_HasNoVestigialIdField()
+    {
+        // CR-L213: the dead int Id property (serialized "id") was removed; identity is covered by
+        // Guid / EntityGuid. Assert it stays gone so a reintroduction is caught.
+        typeof(JsonSyncKnowledgeItem)
+            .GetProperty("Id", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Should().BeNull("the vestigial int Id field was removed under CR-L213");
+    }
+
+    [Fact]
     public void CreateKnowledgeItem_DerivesDeletionFlagsFromHashes()
     {
         var store = NewStore();
