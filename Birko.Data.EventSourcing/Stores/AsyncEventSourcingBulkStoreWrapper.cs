@@ -1,7 +1,6 @@
 using Birko.Data.EventSourcing.Events;
 using Birko.Data.EventSourcing.Models;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using Birko.Time;
 using System;
 using System.Collections.Generic;
