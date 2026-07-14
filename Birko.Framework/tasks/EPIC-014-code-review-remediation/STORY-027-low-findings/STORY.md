@@ -13,7 +13,24 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**83 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–F1 done).
+**93 / 418 triaged** as of 2026-07-14. **The Communication cluster (CR-L041 … CR-L093) is complete**;
+next open is CR-L094 (Birko.Configuration).
+
+**Sub-batch F2 (CR-L084 … CR-L093) — SOAP + SSE + WebSocket:** **L084** (SOAP Send* helpers close the
+OutputStream in `finally`), **L085** (StreamReader honors `request.ContentEncoding`), **L086** (extracted a
+shared `SoapXml` Escape/BuildFault helper — 3 duplicated copies → 1, byte-identical output), **L087**
+(removed dead query-strip in GetServicePath), **L088** (token query-string splits on first `=`), **L089**
+(`SseEvent.ToString` emits explicit LF, not AppendLine's CRLF), **L090** (deferred — SendLoop Channel
+refactor is untestable-live cleanup; correctness fine), **L091** (removed unused usings in SseServer),
+**L092** (verify-first — WebSocketPort.Write no-op catch already gone, CR-M073), **L093** (WebSocketServer
+`BroadcastAsync` is best-effort — one failed client no longer aborts the whole broadcast). Suites green:
+SOAP 7, SSE 19, WebSocket 33.
+
+**Communication cluster summary (A–F2, CR-L041 … CR-L093, 53 findings):** 2 new test projects created
+(Birko.Communication.Tests, Birko.Communication.OAuth.Providers.Tests), `IPort : IDisposable` added,
+numerous bug fixes (query-string `=` handling ×3, OutputStream `finally` close ×2, NDEF big-endian, OAuth
+poll order + refresh retry, Modbus early-exit, Network thread-join, best-effort broadcast), and a batch of
+doc/verify-first closures.
 
 **Sub-batch F1 (CR-L078 … CR-L083) — REST + REST.Server:** **L078** (verify-first — `_clients` already a
 ConcurrentDictionary with GetOrAdd), **L079** (documented OnRequest/OnResponse handlers must not throw —

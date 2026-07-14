@@ -5544,7 +5544,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Response OutputStream not closed on the exception path
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\SoapServer.cs:184-233`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** Each Send*Async helper calls response.OutputStream.WriteAsync(...) then OutputStream.Close(). If WriteAsync throws (client disconnect, etc.), Close() is skipped and the connection/stream is leaked rather than reset. ProcessRequestAsync's catch then tries SendServerErrorAsync on a response whose body may already be partially written, which will also fail.
 - **Fix:** Wrap the write+close in try/finally (or 'await using var os = response.OutputStream;'), and guard the catch in ProcessRequestAsync against a response whose headers/body were already sent.
 
@@ -5552,7 +5552,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** StreamReader ignores request content encoding
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\SoapServer.cs:151-152`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** new StreamReader(request.InputStream) defaults to UTF-8 detection and ignores request.ContentEncoding declared by the client (SOAP requests commonly arrive as ISO-8859-x or UTF-16). A non-UTF-8 envelope will be mis-decoded before XDocument.Parse ever sees it.
 - **Fix:** Use new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8).
 
@@ -5560,7 +5560,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated EscapeXml / CreateFaultEnvelope across three types
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\SoapServer.cs:248-256, 331-339; Middleware/SoapAuthenticationService.cs:147-155`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14) — extracted a shared internal SoapXml (Escape + BuildFault); the 3 duplicated EscapeXml copies + fault templates (SoapServer, the SoapService class in the same file, SoapAuthenticationService) now delegate to it. Output is byte-identical (same manual escaping + template), so SOAP.Tests stay green
 - **Detail:** The identical EscapeXml helper is copy-pasted in SoapServer, SoapService, and SoapAuthenticationService, and the SOAP-fault envelope template is duplicated in SoapServer.CreateFaultEnvelope (235), SoapService.CreateFaultResponse (318), and SoapAuthenticationService.CreateAuthenticationFault (134). Manual string-replace XML escaping is also error-prone vs. SecurityElement.Escape / XmlConvert; CLAUDE.md flags 'duplicated logic that should reuse a shared helper'.
 - **Fix:** Extract one internal static SoapXml helper (Escape + BuildFault(code, message)) and have all three call it.
 
@@ -5568,7 +5568,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead query-string handling in GetServicePath
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\SoapServer.cs:172-182`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** GetServicePath is fed request.Url?.LocalPath (line 136). LocalPath never contains a '?' (the query is a separate Uri component), so the queryIndex > 0 branch is unreachable dead code.
 - **Fix:** Remove the query-stripping block, or feed it AbsolutePath/raw URL if query handling is actually intended.
 
@@ -5576,7 +5576,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ExtractTokenFromQueryString mishandles values containing '='
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SOAP\Middleware/SoapAuthenticationService.cs:98-106`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** param.Split('=') with the implicit unlimited count plus the parts.Length == 2 check rejects any token whose URL-encoded value still contains '=' (e.g. base64 padding 'abc=='), silently returning no token.
 - **Fix:** Use param.Split('=', 2) and check parts.Length >= 1 / index of the key, or parse via System.Web.HttpUtility.ParseQueryString / Microsoft.AspNetCore.WebUtilities.QueryHelpers.
 
@@ -5584,7 +5584,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SseEvent.ToString emits CRLF/Environment.NewLine instead of the spec-mandated LF
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\SseEvent.cs:36-68`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** ToString builds the wire format with StringBuilder.AppendLine, which appends Environment.NewLine — '\r\n' on Windows. The SSE wire format specifies LF ('\n') line terminators; stray CR can be tolerated by some clients but is non-conformant and platform-dependent (output differs between Windows and Linux hosts). Field-parsing on the client also strips '\r' (TrimEnd in line 61) only for data values, hinting the CR is unwanted.
 - **Fix:** Append explicit "\n" instead of AppendLine to make the wire output deterministic and spec-conformant across platforms.
 
@@ -5592,7 +5592,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SseClientConnection.SendLoop polls a queue with Task.Delay instead of signaling
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\SseServer.cs:324-360`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14) — deferred (documented): the SendLoop Queue+lock+Task.Delay(100ms) polling is a cleanup-category perf item; converting to System.Threading.Channels is a behavioral rewrite of a send loop with no live test here. Correctness is fine; left for a focused pass
 - **Detail:** The send loop dequeues under a SemaphoreSlim and, when empty, sleeps 100ms. This adds up to 100ms latency per event and burns a thread-pool slot spinning every 100ms per connected client (cost scales with ConnectedClientCount). A System.Threading.Channels.Channel<SseEvent> (or a SemaphoreSlim count signal) would deliver events immediately and idle without polling.
 - **Fix:** Replace the Queue + _queueLock + Task.Delay polling with a bounded Channel<SseEvent>; SendAsync writes, SendLoop awaits ReadAsync.
 
@@ -5600,7 +5600,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused usings / unreferenced serializer import across multiple files
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.SSE\SseServer.cs:5`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** SseServer.cs imports System.Text.Json and System.Linq but uses neither (serialization goes through SseEvent.FromJson). SseClient.cs:3 imports System.Text.Json unused. SseEvent.cs imports both Birko.Serialization and Birko.Serialization.Json though only the latter (SystemJsonSerializer) plus ISerializer are used. Minor dead-import noise.
 - **Fix:** Remove the unused using directives.
 
@@ -5608,7 +5608,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Empty try/catch that only rethrows is dead code
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.WebSocket\Ports/WebSocketPort.cs:41-49`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14) — verify-first / already resolved by CR-M073: WebSocketPort.Write no longer has the no-op try/catch (it's a clean ConfigureAwait(false).GetAwaiter().GetResult())
 - **Detail:** The Write method wraps SendAsync().Wait() in 'try { ... } catch (Exception) { throw; }', which is a no-op — it catches and immediately rethrows with no logging or cleanup, identical to having no try/catch. Same pattern at Open (line 93-97) at least flips _isOpen=false before rethrow, so that one has purpose; the Write one does not.
 - **Fix:** Remove the try/catch in Write (or add meaningful handling). Keep the Open one since it resets _isOpen.
 
@@ -5616,7 +5616,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** BroadcastAsync aborts entire broadcast if one client send fails
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.WebSocket\Servers/WebSocketServer.cs:110-121`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F2, 2026-07-14)
 - **Detail:** Task.WhenAll over per-client SendWithTimeoutAsync rethrows the first faulted task's exception, so one dead/slow client (timeout or WebSocketException) makes the whole BroadcastAsync throw and the caller cannot tell which clients did receive the message. A broadcast typically wants best-effort delivery with failures logged per-client, not all-or-nothing.
 - **Fix:** Wrap each send in a try/catch (log + remove dead client) inside the per-client lambda so WhenAll completes for healthy clients, or await WhenAll and inspect individual task faults.
 
