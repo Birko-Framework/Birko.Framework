@@ -25,12 +25,28 @@ SQL migration backend using AbstractConnector from Birko.Data.SQL. Implements pl
 ### Internal
 - `SchemaField` — Extends AbstractField with null PropertyInfo (DDL-only). Maps FieldType to DbType.
 
+### Migration bases
+- `CreateTablesMigration` — mapping-driven table provisioning from registered `IModelMapping<T>` (run with `UseTransaction = false`; drives the connector's own connection).
+- `SqlScriptMigration` — raw-SQL/DDL base. A subclass supplies `UpSql` (required) and optionally `DownSql` (null → base `NotImplementedException`); the base runs each script against the migration context's `Connection`/`Transaction` (one `ExecuteNonQuery`), so consumers no longer cast `IMigrationContext`→`SqlMigrationContext` or hand-roll connection/command plumbing. Runs cleanly under the default `UseTransaction = true`. SQLite executes multi-statement `;`-separated batches; some other providers execute only the first statement per command — split across migrations or override `Execute`.
+
 ## Usage
 
 ```csharp
 var runner = new SqlMigrationRunner(store.Connector);
 runner.Register(new CreateUsersTable());
 runner.Migrate();
+```
+
+Raw-SQL migration via `SqlScriptMigration`:
+
+```csharp
+public sealed class CreateUsers : SqlScriptMigration
+{
+    public override long Version => 1;
+    public override string Name => "CreateUsers";
+    protected override string UpSql => "CREATE TABLE Users (Id TEXT PRIMARY KEY, Name TEXT);";
+    protected override string? DownSql => "DROP TABLE Users;";
+}
 ```
 
 ## Dependencies
