@@ -10,6 +10,14 @@ namespace Birko.Data.Sync.MongoDb.Models;
 /// Extends AbstractModel for Birko.Data store compatibility.
 /// Optimized for MongoDB document storage.
 /// </summary>
+/// <remarks>
+/// CR-L216: <c>[BsonIgnoreExtraElements]</c> lets documents written before the dead <c>IdRecord</c>
+/// field was dropped — which carry a legacy <c>recordId</c> element — deserialize cleanly. The MongoDB
+/// driver throws on an unmapped element by default, and the Birko Mongo layer registers no
+/// IgnoreExtraElements convention, so removing a previously-persisted element without this attribute
+/// would break reads of existing data.
+/// </remarks>
+[BsonIgnoreExtraElements]
 public class MongoSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
     /// <summary>
@@ -19,11 +27,10 @@ public class MongoSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     [global::MongoDB.Bson.Serialization.Attributes.BsonRepresentation(global::MongoDB.Bson.BsonType.ObjectId)]
     public string Id { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Unique identifier for the sync knowledge record (for compatibility).
-    /// </summary>
-    [BsonElement("recordId")]
-    public int IdRecord { get; set; }
+    // CR-L216: the int IdRecord field (BsonElement "recordId", "for compatibility") was removed — dead
+    // surface never assigned by CreateKnowledgeItem and never queried, inflating every persisted document
+    // with a recordId:0. Identity is the AbstractModel.Guid (ModelByGuid filters on x.Guid) plus the
+    // Mongo-generated _id.
 
     /// <summary>
     /// GUID of the entity this knowledge refers to.
@@ -74,9 +81,11 @@ public class MongoSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
     [BsonElement("metadata")]
     public string? Metadata { get; set; }
 
-    /// <summary>
-    /// MongoDB index hint for optimized queries.
-    /// </summary>
-    [BsonIgnore]
-    public string CollectionName => "SyncKnowledge";
+    // CR-L215: the decorative `CollectionName => "SyncKnowledge"` property was removed. It never
+    // affected where documents live — the base store resolves the collection via
+    // MongoDBClient.GetCollection<T>() → `collectionName ?? typeof(T).Name`, so these documents live in
+    // a collection named "MongoSyncKnowledgeItem". The property was purely misleading (and the CLAUDE.md
+    // claim that it targets the collection was wrong). Wiring it through was deliberately not done: that
+    // would silently relocate existing data from "MongoSyncKnowledgeItem" to "SyncKnowledge". Contrast
+    // CosmosSyncKnowledgeItem.ContainerName, which IS honored because it is passed to the base ctor.
 }

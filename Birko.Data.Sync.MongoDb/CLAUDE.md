@@ -10,8 +10,10 @@ MongoDB-specific sync knowledge item implementation for the Birko.Data.Sync fram
 
 ### Models
 - `MongoSyncKnowledgeItem` - Extends `AbstractModel` (from Birko.Data.Models), implements `ISyncKnowledgeItem` with BSON attributes
-  - `CollectionName` property for MongoDB collection targeting
-  - `IdRecord` field for document identification
+  - Identity is `AbstractModel.Guid` plus the Mongo-generated `_id`. Documents live in the
+    `MongoSyncKnowledgeItem` collection (the base store resolves the name via `typeof(T).Name`).
+  - (CR-L215/L216: the decorative `CollectionName` property — which never affected the collection name —
+    and the dead `IdRecord` "compatibility" field were removed.)
 
 ## Dependencies
 - Birko.Data.Core (AbstractModel)
