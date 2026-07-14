@@ -33,7 +33,9 @@ namespace Birko.Data.SQL.Connectors
             bool exists = false;
             DoCommand((command) =>
             {
-                command.CommandText = "SELECT 1 FROM information_schema.views WHERE table_name = @viewName";
+                // Scope to the current schema (where a bare, single-part CREATE VIEW lands) so a
+                // same-named view in another schema on the search path isn't a false positive (CR-L191).
+                command.CommandText = "SELECT 1 FROM information_schema.views WHERE table_name = @viewName AND table_schema = current_schema()";
                 var param = command.CreateParameter();
                 param.ParameterName = "@viewName";
                 param.Value = viewName;
@@ -57,7 +59,7 @@ namespace Birko.Data.SQL.Connectors
             bool exists = false;
             DoCommand((command) =>
             {
-                command.CommandText = "SELECT 1 FROM pg_matviews WHERE matviewname = @viewName";
+                command.CommandText = "SELECT 1 FROM pg_matviews WHERE matviewname = @viewName AND schemaname = current_schema()";
                 var param = command.CreateParameter();
                 param.ParameterName = "@viewName";
                 param.Value = viewName;
@@ -234,7 +236,7 @@ namespace Birko.Data.SQL.Connectors
                 bool exists = false;
                 DoCommand((command) =>
                 {
-                    command.CommandText = "SELECT 1 FROM pg_matviews WHERE matviewname = @viewName";
+                    command.CommandText = "SELECT 1 FROM pg_matviews WHERE matviewname = @viewName AND schemaname = current_schema()";
                     var param = command.CreateParameter();
                     param.ParameterName = "@viewName";
                     param.Value = viewName;
