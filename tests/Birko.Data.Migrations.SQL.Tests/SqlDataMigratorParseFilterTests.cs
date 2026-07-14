@@ -74,4 +74,17 @@ public class SqlDataMigratorParseFilterTests
         where.Should().Be("\"name\" = @p0");
         parameters[0].Value.Should().Be("x'; DROP TABLE t;--");
     }
+
+    [Fact]
+    public void Identifiers_use_the_supplied_dialect_quoter()
+    {
+        // CR-L150: field identifiers are quoted via the caller's dialect-aware quoter (e.g. SQL Server
+        // [brackets]) instead of hardcoded ANSI double quotes.
+        var parameters = new List<(string Name, object? Value)>();
+        var idx = 0;
+        var where = SqlDataMigrator.ParseFilterToWhere(
+            "{\"status\":\"active\",\"age\":{\"$gte\":21}}", ref idx, parameters, id => $"[{id}]");
+
+        where.Should().Be("[status] = @p0 AND [age] >= @p1");
+    }
 }

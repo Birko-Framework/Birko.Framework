@@ -63,6 +63,25 @@ public class SqlSchemaBuilderTests
     }
 
     [Fact]
+    public void CollectionExists_WorksOnSqlite_WithoutInformationSchema()
+    {
+        // CR-L152: CollectionExists used to query INFORMATION_SCHEMA unconditionally, which SQLite does
+        // not provide (it uses sqlite_master) — so this threw on SQLite. It now picks the catalog query
+        // from the connection's provider.
+        using var conn = OpenConnection();
+        var schema = new SqlSchemaBuilder(conn, null, null);
+
+        schema.CollectionExists("Users").Should().BeFalse("no table yet");
+
+        schema.CreateCollection("Users")
+            .WithField("Id", FieldType.Guid, isPrimary: true)
+            .Build();
+
+        schema.CollectionExists("Users").Should().BeTrue();
+        schema.CollectionExists("Missing").Should().BeFalse();
+    }
+
+    [Fact]
     public void CreateIndex_Build_CreatesTheIndex()
     {
         using var conn = OpenConnection();
