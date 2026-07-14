@@ -46,6 +46,65 @@ public class HybridCacheTests : IDisposable
         act.Should().Throw<ArgumentNullException>().WithParameterName("l2");
     }
 
+    #region CR-L039: GetL1Options matrix
+
+    private static CacheEntryOptions L1Opts(CacheEntryOptions? requested, TimeSpan? l1Max)
+    {
+        using var l1 = new MemoryCache();
+        using var l2 = new MemoryCache();
+        using var cache = new HybridCache(l1, l2, new HybridCacheOptions
+        {
+            L1DefaultExpiration = TimeSpan.FromSeconds(30),
+            L1MaxExpiration = l1Max
+        });
+        return cache.GetL1Options(requested);
+    }
+
+    [Fact]
+    public void GetL1Options_NullRequested_UsesDefaultAbsolute()
+    {
+        var o = L1Opts(null, l1Max: TimeSpan.FromMinutes(5));
+        o.AbsoluteExpiration.Should().Be(TimeSpan.FromSeconds(30));
+        o.SlidingExpiration.Should().BeNull();
+    }
+
+    [Fact]
+    public void GetL1Options_NullMax_PassesRequestedThrough()
+    {
+        var requested = CacheEntryOptions.AbsoluteAndSliding(TimeSpan.FromHours(1), TimeSpan.FromMinutes(2));
+        var o = L1Opts(requested, l1Max: null);
+        o.Should().BeSameAs(requested);
+    }
+
+    [Fact]
+    public void GetL1Options_AbsoluteBelowMax_Kept()
+    {
+        var o = L1Opts(CacheEntryOptions.Absolute(TimeSpan.FromMinutes(1)), l1Max: TimeSpan.FromMinutes(5));
+        o.AbsoluteExpiration.Should().Be(TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public void GetL1Options_AbsoluteAboveMax_CappedToMax()
+    {
+        var o = L1Opts(CacheEntryOptions.Absolute(TimeSpan.FromMinutes(10)), l1Max: TimeSpan.FromMinutes(5));
+        o.AbsoluteExpiration.Should().Be(TimeSpan.FromMinutes(5));
+    }
+
+    [Fact]
+    public void GetL1Options_SlidingOnly_AbsoluteFallsBackAndSlidingCapped()
+    {
+        // sliding below max is kept; absolute (unset) falls back to min(max, default) = 30s.
+        var o = L1Opts(CacheEntryOptions.Sliding(TimeSpan.FromMinutes(1)), l1Max: TimeSpan.FromMinutes(5));
+        o.SlidingExpiration.Should().Be(TimeSpan.FromMinutes(1));
+        o.AbsoluteExpiration.Should().Be(TimeSpan.FromSeconds(30));
+
+        // sliding above max is capped to max.
+        var capped = L1Opts(CacheEntryOptions.Sliding(TimeSpan.FromMinutes(10)), l1Max: TimeSpan.FromMinutes(5));
+        capped.SlidingExpiration.Should().Be(TimeSpan.FromMinutes(5));
+    }
+
+    #endregion
+
     [Fact]
     public async Task GetAsync_ReturnsFromL1_WhenPresentInL1()
     {
