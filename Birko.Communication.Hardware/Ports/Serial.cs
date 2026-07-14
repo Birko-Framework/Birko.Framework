@@ -114,7 +114,7 @@ namespace Birko.Communication.Hardware.Ports
         /// Releases the underlying <see cref="SerialPort"/> (an IDisposable holding an unmanaged OS
         /// handle). Close() alone never disposed it, leaking handles across open/close cycles (CR-H023).
         /// </summary>
-        public void Dispose()
+        public override void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
