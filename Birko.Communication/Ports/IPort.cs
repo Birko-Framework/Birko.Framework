@@ -10,7 +10,7 @@ namespace Birko.Communication.Ports
     /// </summary>
     public delegate void ProcessDataDelegate();
 
-    public interface IPort
+    public interface IPort : IDisposable
     {
         /// <summary>
         /// Writes the specified data.

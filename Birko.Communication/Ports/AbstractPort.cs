@@ -11,7 +11,7 @@ namespace Birko.Communication.Ports
 
         public virtual string GetID()
         {
-            return string.Format("AbstratPort|{0}", Name);
+            return string.Format("AbstractPort|{0}", Name);
         }
     }
 
@@ -104,9 +104,25 @@ namespace Birko.Communication.Ports
             OnProcessData -= action;
         }
 
-        public void InvokeProcessData()
+        // protected (was public): the OnProcessData notification is fired internally by a derived port
+        // after it processes data — it is not part of the IPort contract for external callers (CR-L042).
+        protected void InvokeProcessData()
         {
             OnProcessData?.Invoke();
+        }
+
+        private bool _disposed;
+
+        /// <summary>
+        /// Closes the port and releases any OS handle held by the concrete implementation.
+        /// Satisfies the IPort : IDisposable contract so consumers can use `using` (CR-L043).
+        /// </summary>
+        public virtual void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            Close();
+            GC.SuppressFinalize(this);
         }
     }
 }
