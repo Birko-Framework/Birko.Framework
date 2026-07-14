@@ -56,26 +56,5 @@ namespace Birko.Data.SQL.Repositories
                 innerStore?.RemoveOnInit(onInit);
             }
         }
-
-        /*
-
-        public virtual void ReadView<TView>(Action<TView> readAction, IDictionary<Expression<Func<TModel, object>>, bool> orderByExpr = null)
-        {
-            ReadView(null, readAction, orderByExpr);
-        }
-
-        public virtual void ReadView<TView>(Expression<Func<TView, bool>> expr, Action<TView> readAction, IDictionary<Expression<Func<TModel, object>>, bool> orderByExpr = null)
-        {
-            var _store = Store;
-            if (_store != null && readAction != null)
-            {
-                var connector = GetConnector();
-                connector?.SelectView(typeof(TView), (data) =>
-                {
-                    readAction((TView)data);
-                }, expr, orderByExpr);
-            }
-        }
-        */
     }
 }

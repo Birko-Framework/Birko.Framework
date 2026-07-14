@@ -66,5 +66,28 @@ namespace Birko.Data.SQL.Repositories
                 Store = store;
             }
         }
+
+        /// <summary>
+        /// Registers an init hook on the underlying store, for parity with the sync
+        /// <c>DataBaseRepository.AddOnInit</c> (CR-L199). Works through wrappers via the unwrapping store.
+        /// </summary>
+        public virtual void AddOnInit(SQL.Connectors.InitConnector onInit)
+        {
+            if (onInit != null)
+            {
+                DataBaseStore?.AddOnInit(onInit);
+            }
+        }
+
+        /// <summary>
+        /// Removes an init hook from the underlying store (parity with the sync repository, CR-L199).
+        /// </summary>
+        public virtual void RemoveOnInit(SQL.Connectors.InitConnector onInit)
+        {
+            if (onInit != null)
+            {
+                DataBaseStore?.RemoveOnInit(onInit);
+            }
+        }
     }
 }
