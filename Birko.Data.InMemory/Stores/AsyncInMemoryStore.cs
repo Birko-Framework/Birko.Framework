@@ -46,6 +46,12 @@ namespace Birko.Data.InMemory.Stores
         /// <summary>
         /// Sets the store settings using the <see cref="ISettings"/> interface.
         /// </summary>
+        /// <remarks>
+        /// CR-L127: only an <see cref="ISettings"/> that is the concrete <see cref="Settings"/> type is
+        /// applied; any other implementation is a silent no-op. This is intentional and harmless — the
+        /// InMemory store holds everything in a <c>ConcurrentDictionary</c> and never reads settings, so
+        /// there is nothing to configure. Pass the concrete <see cref="Settings"/> if a value must stick.
+        /// </remarks>
         /// <param name="settings">The settings to apply.</param>
         public virtual void SetSettings(ISettings settings)
         {
