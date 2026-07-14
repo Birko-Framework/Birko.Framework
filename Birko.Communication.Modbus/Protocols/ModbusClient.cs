@@ -8,6 +8,10 @@ namespace Birko.Communication.Modbus.Protocols
     /// <summary>
     /// Modbus master client over any IPort (TCP via TcpIp, RTU via Serial).
     /// Thread-safe — one request at a time via lock.
+    /// <para><b>Synchronous by design (CR-L066):</b> read/write calls block, and the response wait polls
+    /// on <see cref="Thread.Sleep"/> (<see cref="PollIntervalMs"/>) up to <see cref="ResponseTimeoutMs"/>
+    /// with no <c>CancellationToken</c> — inherent to the synchronous <see cref="IPort"/> contract. For a
+    /// hosted/background-service caller, run these on a dedicated thread or wrap in <c>Task.Run</c>.</para>
     /// </summary>
     public class ModbusClient : IDisposable
     {
@@ -93,7 +97,7 @@ namespace Birko.Communication.Modbus.Protocols
         {
             ushort coilValue = value ? (ushort)0xFF00 : (ushort)0x0000;
             var pdu = ModbusFrame.BuildWriteSinglePdu(ModbusFunction.WriteSingleCoil, address, coilValue);
-            return SendWriteRequest(unitId, pdu, 8); // response: func(1) + addr(2) + value(2) = 5 PDU bytes
+            return SendWriteRequest(unitId, pdu); // response: func(1) + addr(2) + value(2) = 5 PDU bytes
         }
 
         /// <summary>
@@ -102,7 +106,7 @@ namespace Birko.Communication.Modbus.Protocols
         public ModbusResponse WriteSingleRegister(byte unitId, ushort address, ushort value)
         {
             var pdu = ModbusFrame.BuildWriteSinglePdu(ModbusFunction.WriteSingleRegister, address, value);
-            return SendWriteRequest(unitId, pdu, 8);
+            return SendWriteRequest(unitId, pdu);
         }
 
         /// <summary>
@@ -119,7 +123,7 @@ namespace Birko.Communication.Modbus.Protocols
             }
 
             var pdu = ModbusFrame.BuildWriteMultiplePdu(ModbusFunction.WriteMultipleCoils, startAddress, (ushort)values.Length, data);
-            return SendWriteRequest(unitId, pdu, 8); // response: func(1) + addr(2) + quantity(2) = 5 PDU bytes
+            return SendWriteRequest(unitId, pdu); // response: func(1) + addr(2) + quantity(2) = 5 PDU bytes
         }
 
         /// <summary>
@@ -135,7 +139,7 @@ namespace Birko.Communication.Modbus.Protocols
             }
 
             var pdu = ModbusFrame.BuildWriteMultiplePdu(ModbusFunction.WriteMultipleRegisters, startAddress, (ushort)values.Length, data);
-            return SendWriteRequest(unitId, pdu, 8);
+            return SendWriteRequest(unitId, pdu);
         }
 
         // ── Internal ──
@@ -177,7 +181,7 @@ namespace Birko.Communication.Modbus.Protocols
             }
         }
 
-        private ModbusResponse SendWriteRequest(byte unitId, byte[] pdu, int expectedMinResponse)
+        private ModbusResponse SendWriteRequest(byte unitId, byte[] pdu)
         {
             lock (_lock)
             {
@@ -186,6 +190,7 @@ namespace Birko.Communication.Modbus.Protocols
 
                 byte[] request;
                 ushort? txId = null;
+                int expectedMinResponse; // CR-L065: computed here, not taken as a (always-overwritten) parameter
                 if (_transport == ModbusTransport.Tcp)
                 {
                     txId = _transactionId++;
@@ -206,7 +211,10 @@ namespace Birko.Communication.Modbus.Protocols
         private ModbusResponse WaitAndParseResponse(byte unitId, int expectedMinResponse, ushort? expectedTransactionId = null)
         {
             var elapsed = 0;
-            while (!_port.HasReadData(expectedMinResponse) && elapsed < ResponseTimeoutMs)
+            // Also stop early once a COMPLETE (short) error response has arrived, instead of spinning
+            // the full ResponseTimeoutMs — an exception frame never satisfies HasReadData(expectedMinResponse),
+            // which is sized for a successful reply (CR-L067).
+            while (!_port.HasReadData(expectedMinResponse) && !IsCompleteErrorResponse() && elapsed < ResponseTimeoutMs)
             {
                 Thread.Sleep(PollIntervalMs);
                 elapsed += PollIntervalMs;
