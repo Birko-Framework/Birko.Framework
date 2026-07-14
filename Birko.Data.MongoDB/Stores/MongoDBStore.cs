@@ -292,9 +292,9 @@ namespace Birko.Data.MongoDB.Stores
 
             var combined = Builders<T>.Update.Combine(updateDefs);
             if (TransactionContext != null)
-                Collection.UpdateMany(TransactionContext, (Expression<Func<T, bool>>)filter, combined);
+                Collection.UpdateMany(TransactionContext, filter, combined);
             else
-                Collection.UpdateMany((Expression<Func<T, bool>>)filter, combined);
+                Collection.UpdateMany(filter, combined);
         }
 
         #endregion

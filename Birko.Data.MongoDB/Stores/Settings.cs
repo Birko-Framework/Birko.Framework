@@ -16,8 +16,9 @@ namespace Birko.Data.MongoDB.Stores
 
         /// <summary>
         /// Gets or sets the replica set name for replica set connections.
+        /// Optional — null/empty means no replica set is included in the connection string.
         /// </summary>
-        public string ReplicaSet { get; set; } = null!;
+        public string? ReplicaSet { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the Settings class.

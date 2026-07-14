@@ -395,9 +395,9 @@ namespace Birko.Data.MongoDB.Stores
 
             var combined = Builders<T>.Update.Combine(updateDefs);
             if (TransactionContext != null)
-                await Collection.UpdateManyAsync(TransactionContext, (Expression<Func<T, bool>>)filter, combined, cancellationToken: ct);
+                await Collection.UpdateManyAsync(TransactionContext, filter, combined, cancellationToken: ct);
             else
-                await Collection.UpdateManyAsync((Expression<Func<T, bool>>)filter, combined, cancellationToken: ct);
+                await Collection.UpdateManyAsync(filter, combined, cancellationToken: ct);
         }
 
         #endregion
