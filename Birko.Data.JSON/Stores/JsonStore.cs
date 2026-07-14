@@ -196,7 +196,12 @@ namespace Birko.Data.JSON.Stores
             {
                 foreach (var item in items)
                 {
-                    _items.Add(item.Guid!.Value, item);
+                    // CR-L131: guard against a JSON record with a missing/null guid (NRE on item.Guid!.Value),
+                    // matching the async LoadDataAsync and the separate/batch loaders.
+                    if (item?.Guid.HasValue == true)
+                    {
+                        _items.Add(item.Guid.Value, item);
+                    }
                 }
             }
         }

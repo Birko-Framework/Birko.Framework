@@ -76,7 +76,11 @@ namespace Birko.Data.JSON.Stores
                     var items = ReadFromStream<IEnumerable<T>>(fileStream);
                     foreach (var item in items ?? Enumerable.Empty<T>())
                     {
-                        _items.Add(item.Guid!.Value, item);
+                        // CR-L131: guard against a record with a missing/null guid (NRE on item.Guid!.Value).
+                        if (item?.Guid.HasValue == true)
+                        {
+                            _items.Add(item.Guid.Value, item);
+                        }
                     }
                     byte[] bytes = new byte[16];
                     BitConverter.GetBytes(batch).CopyTo(bytes, 0);

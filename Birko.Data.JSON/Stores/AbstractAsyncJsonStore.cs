@@ -255,13 +255,25 @@ namespace Birko.Data.JSON.Stores
             await EnsureDataLoadedAsync(ct);
             if (data == null) return;
 
+            // CR-L129: only update items that already exist — matching single-item UpdateCoreAsync and the
+            // sync bulk UpdateCore. Without the ContainsKey guard this silently upserted a non-existent
+            // entity, making async-bulk Update behave as an upsert (inconsistent with Update semantics).
+            var updated = false;
             foreach (var item in data.Where(x => x != null && x.Guid.HasValue))
             {
+                if (!(_items?.ContainsKey(item.Guid!.Value) ?? false))
+                {
+                    continue;
+                }
                 storeDelegate?.Invoke(item);
                 _items[item.Guid!.Value] = item;
+                updated = true;
             }
 
-            await SaveDataAsync(ct);
+            if (updated)
+            {
+                await SaveDataAsync(ct);
+            }
         }
 
         /// <inheritdoc />

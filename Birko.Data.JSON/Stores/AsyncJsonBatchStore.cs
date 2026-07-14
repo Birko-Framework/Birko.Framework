@@ -50,9 +50,17 @@ namespace Birko.Data.JSON.Stores
         /// Sets the store settings.
         /// </summary>
         /// <param name="settings">The settings to apply.</param>
+        /// <exception cref="InvalidDataException">Thrown when settings is not a BatchSettings instance.</exception>
         public override void SetSettings(Settings settings)
         {
-            SetSettings((BatchSettings)settings);
+            // CR-L130: a plain Settings (non-BatchSettings) now throws a clear InvalidDataException
+            // instead of an opaque InvalidCastException from the old (BatchSettings)settings cast,
+            // matching the sync JsonBatchStore / JsonBatchBulkStore.
+            if (settings is not BatchSettings batchSettings)
+            {
+                throw new InvalidDataException(nameof(settings));
+            }
+            SetSettings(batchSettings);
         }
 
         #endregion

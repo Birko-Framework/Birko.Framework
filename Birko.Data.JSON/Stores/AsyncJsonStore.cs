@@ -129,7 +129,9 @@ namespace Birko.Data.JSON.Stores
         /// <returns>The file path, or null if settings are not configured.</returns>
         public virtual string? GetPath()
         {
-            if (string.IsNullOrEmpty(_settings?.Name))
+            // CR-L132: guard both Location and Name, aligning with the sync JsonStore.GetPath (behavior
+            // already converged because GetDirectory() rejects an empty Location, but the two should match).
+            if (string.IsNullOrEmpty(_settings?.Location) || string.IsNullOrEmpty(_settings?.Name))
             {
                 return null;
             }
