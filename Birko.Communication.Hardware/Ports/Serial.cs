@@ -81,10 +81,7 @@ namespace Birko.Communication.Hardware.Ports
                 {
                     _isOpen = false;
                 }
-                catch (Exception)
-                {
-                    throw;
-                }
+                // CR-L060: removed a no-op `catch (Exception) { throw; }` — other exceptions propagate naturally.
             }
             // osetrenie ak hodi chyby ze niekto pouziva port vrati false
         }

@@ -1,73 +1,48 @@
 # Birko.Communication.Hardware
 
 ## Overview
-Hardware device communication implementation for Birko.Communication.
+Low-level hardware ports for Birko.Communication. Each port derives from `AbstractPort` (implements
+`IPort`) and is configured by a `PortSettings`-derived settings object.
 
 ## Project Location
-`C:\Source\Birko.Communication.Hardware\`
-
-## Purpose
-- Serial port communication
-- USB device communication
-- Hardware protocol implementation
-- Device discovery
+`C:\Source\Birko\Framework\Birko.Communication.Hardware\`
 
 ## Components
 
-### Serial Port
-- `SerialPortCommunicator` - Serial port communication
-- `AsyncSerialPortCommunicator` - Async serial port
+### Ports (all `: AbstractPort`)
+- `Serial` (`Ports/Serial.cs`) — RS-232 serial port over `System.IO.Ports.SerialPort`. Settings:
+  `SerialSettings : PortSettings` (Name = port name e.g. "COM1", BaudRate, Parity, DataBits, StopBits, …).
+- `Infraport` (`Ports/Infraport.cs`) — serial-attached infrared transceiver. Settings:
+  `InfraportSettings : SerialSettings`.
+- `LPT` (`Ports/LPT.cs`) — parallel port via inpout32 P/Invoke. Settings: `LPTSettings : PortSettings`.
 
-### USB
-- `UsbCommunicator` - USB device communication
-- `UsbDeviceFinder` - Device discovery
+### Base surface (from `Birko.Communication.Ports.AbstractPort`)
+`Open()` / `Close()` / `Write(byte[])` / `Read(int size)` / `HasReadData(int)` / `RemoveReadData(int)` /
+`Clear()` / `IsEmpty()` / `GetData()` / `IsOpen()`, the `SubscribeProcessData` / `UnSubscribeProcessData`
+event pair, and `PortSettings.GetID()`. `Read`/`HasReadData`/`RemoveReadData` treat a negative `size` as
+"all available". `IPort : IDisposable` — `Dispose()` closes the port (Serial also disposes the handle).
 
-### Models
-- `SerialPortSettings` - Port configuration
-- `HardwareDeviceInfo` - Device information
-
-## Serial Port Communication
-
-```csharp
-using Birko.Communication.Hardware;
-
-var settings = new SerialPortSettings
-{
-    PortName = "COM1",
-    BaudRate = 9600,
-    Parity = Parity.None,
-    DataBits = 8,
-    StopBits = StopBits.One
-};
-
-var communicator = new SerialPortCommunicator(settings);
-communicator.DataReceived += (sender, data) =>
-{
-    Console.WriteLine($"Received: {Encoding.UTF8.GetString(data)}");
-};
-
-communicator.Connect();
-communicator.Send(Encoding.UTF8.GetBytes("Hello Device"));
-```
-
-## USB Communication
+## Usage
 
 ```csharp
-var finder = new UsbDeviceFinder(vendorId: 0x1234, productId: 0x5678);
-var device = finder.FindDevice();
+using Birko.Communication.Hardware.Ports;
 
-if (device != null)
+var port = new Serial(new SerialSettings { Name = "COM1", BaudRate = 9600 });
+port.SubscribeProcessData(() =>
 {
-    var communicator = new UsbCommunicator(device);
-    communicator.Connect();
-    communicator.Send(data);
-}
+    var data = port.RemoveReadData(-1); // -1 = drain the whole buffer
+    Console.WriteLine($"Received: {System.Text.Encoding.UTF8.GetString(data)}");
+});
+
+port.Open();
+port.Write(System.Text.Encoding.UTF8.GetBytes("Hello Device"));
+// ...
+port.Close(); // or `using` — IPort : IDisposable
 ```
 
 ## Dependencies
 - Birko.Communication
-- System.IO.Ports
-- (Optional) device-specific USB libraries
+- System.IO.Ports (Serial / Infraport)
 
 ## Use Cases
 - Industrial automation
