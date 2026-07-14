@@ -13,9 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**47 / 418 triaged** as of 2026-07-14 (Communication sub-batch A done).
+**52 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–B done).
 
 **Batch 4 — Communication cluster (in progress).** Worked in sub-batches by project.
+- **Sub-batch B (CR-L048 … CR-L052) — Camera + GraphQL:** **L048** (`FfmpegCameraSettings.JpegQuality`
+  clamped to [1,31] in the setter, so an out-of-range value can't silently fail the ffmpeg capture),
+  **L049** (verify-first — settings/frame tests exist; happy path needs ffmpeg; added a JpegQuality clamp
+  Theory), **L050** (GraphQL subscription frames — connection_init/pong/subscribe — now use the shared
+  `_serializer` so variables are camelCased consistently with the HTTP path, instead of raw default-options
+  `System.Text.Json`), **L051** (`SchemaPath`/`SubscriptionProtocol`/`EnableAutoPersistedQueries` documented
+  as reserved/not-yet-implemented — kept, since removing them is breaking), **L052** (dropped an unused
+  `System.Text.Json` using). Suites green: Camera 21, GraphQL 58.
 - **Sub-batch A (CR-L041 … CR-L047) — core + Bluetooth:** **L041** (`PortSettings.GetID` typo
   `AbstratPort`→`AbstractPort`), **L042** (`AbstractPort.InvokeProcessData` public→protected — fired
   internally by derived ports, not part of the IPort contract), **L043** (`IPort : IDisposable` +

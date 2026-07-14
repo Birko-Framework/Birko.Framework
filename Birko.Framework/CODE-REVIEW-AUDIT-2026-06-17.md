@@ -5256,7 +5256,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** JpegQuality XML doc says default 5 but range comment is 1-31; no validation
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.Camera\Cameras/FfmpegCameraSource.cs:147-148`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster B, 2026-07-14)
 - **Detail:** FfmpegCameraSettings.JpegQuality is documented as `1=best, 31=worst` and passed straight into `-q:v {JpegQuality}`. There is no clamping/validation, so an out-of-range value (e.g. 0 or 100) is forwarded to ffmpeg and silently produces a failed capture (returns null via the ExitCode!=0 path). Minor, but worth a guard or documenting that invalid values fail the capture.
 - **Fix:** Optionally clamp JpegQuality to [1,31] or validate in the setter; at minimum keep behavior documented.
 
@@ -5264,7 +5264,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gap: no coverage of CapturedFrame or FfmpegCameraSettings defaults beyond Name
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.Camera.Tests/FfmpegCameraSourceTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster B, 2026-07-14) — verify-first: CapturedFrameTests + FfmpegCameraSettingsTests already exist; the CaptureFrameAsync happy path needs a real ffmpeg (out of scope). Added a JpegQuality clamp Theory covering the CR-L048 fix
 - **Detail:** Tests cover the open/close/dispose state machine and the not-open early return well. CapturedFrameTests.cs and FfmpegCameraSettingsTests.cs exist (not deeply reviewed here). The success path of CaptureFrameAsync (process spawn, stdout read, frame construction) is inherently hard to unit test without ffmpeg, which is acceptable; just noting the capture happy-path and the stderr-drain behavior are untested.
 - **Fix:** No action required for the happy path (requires ffmpeg). If the stderr-drain fix is applied, a fake-process or PATH-injected stub test could guard against regression.
 
@@ -5272,7 +5272,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Subscription send messages bypass the framework ISerializer and use raw System.Text.Json with default (non-camelCase) options
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.GraphQL\GraphQLClient.cs:227,256`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster B, 2026-07-14)
 - **Detail:** Queries/mutations and responses route through Birko.Serialization SystemJsonSerializer (_serializer), but the subscription init/start payloads are built with JsonSerializer.Serialize(...) using default options (no camelCase), while inbound parsing uses a third, separately-configured JsonSerializerOptions in GraphQLSubscription. Three different JSON configurations in one client. The outbound payloads happen to use lowercase literal property names so it works today, but it's an inconsistent and fragile pattern (e.g. the 'variables' object's properties won't be camelCased the way the HTTP path camelCases them).
 - **Fix:** Reuse the shared _serializer (or a single shared JsonSerializerOptions) for the subscription frames too, so variable serialization is consistent with the query/mutation path.
 
@@ -5280,7 +5280,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GraphQLSettings.SchemaPath / SubscriptionProtocol / EnableAutoPersistedQueries declared but never used
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.GraphQL\GraphQLSettings.cs:43,53,63`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster B, 2026-07-14) — documented as reserved / not-yet-implemented (SchemaPath / SubscriptionProtocol / EnableAutoPersistedQueries kept with a clear doc note; removing the settings would be a breaking API change)
 - **Detail:** SchemaPath (documented as appended to the base URL when Location is host-only) is never consulted — Endpoint is used verbatim as the POST/WS URL. SubscriptionProtocol is ignored; the client always uses WebSocket and hard-codes the subprotocol. EnableAutoPersistedQueries is never read despite GraphQLRequest having an Extensions slot for APQ. These are dead configuration surfaces that imply behavior the client doesn't implement.
 - **Fix:** Either wire them up (apply SchemaPath, branch on SubscriptionProtocol, implement APQ) or remove/mark them as not-yet-implemented to avoid misleading consumers.
 
@@ -5288,7 +5288,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused System.Text.Json using in GraphQLRequest.cs
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.GraphQL\GraphQLRequest.cs:2`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster B, 2026-07-14)
 - **Detail:** GraphQLRequest.cs imports System.Text.Json but uses no type from it (serialization goes through ISerializer). Minor dead using.
 - **Fix:** Remove the unused using.
 
