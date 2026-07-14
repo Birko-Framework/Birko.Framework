@@ -112,9 +112,21 @@ namespace Birko.Communication.WebSocket.Servers
             if (data == null) throw new ArgumentNullException(nameof(data));
 
             var segment = new ArraySegment<byte>(data);
+            // Best-effort delivery: isolate each client's send so one dead/slow client (timeout or
+            // WebSocketException) can't make the whole broadcast throw and skip the healthy clients (CR-L093).
             var tasks = _clients.Values
                 .Where(client => client.State == WebSocketState.Open)
-                .Select(client => SendWithTimeoutAsync(client, segment, TimeSpan.FromSeconds(30)))
+                .Select(async client =>
+                {
+                    try
+                    {
+                        await SendWithTimeoutAsync(client, segment, TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+                    }
+                    catch
+                    {
+                        // A failed send to one client must not abort delivery to the others.
+                    }
+                })
                 .ToList();
 
             await Task.WhenAll(tasks).ConfigureAwait(false);
