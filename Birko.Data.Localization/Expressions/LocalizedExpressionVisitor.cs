@@ -50,6 +50,22 @@ public class LocalizedFieldCondition
 /// Supports: ==, !=, Contains, StartsWith, EndsWith on localizable string properties.
 /// Combined with &amp;&amp; (AndAlso) at the top level.
 /// </summary>
+/// <remarks>
+/// CR-L137: two localized-filter semantics to be aware of:
+/// <list type="bullet">
+/// <item><description>
+/// <b>Null comparisons are not localized.</b> <c>x.Name == null</c> / <c>x.Name != null</c> on a
+/// localizable field are NOT extracted (the analyzer requires a non-null constant) — they pass through to
+/// the inner store as a base-column predicate, so they test the base value, not the translation.
+/// </description></item>
+/// <item><description>
+/// <b><c>!=</c> only matches entities that HAVE a translation row</b> for that field + culture. Entities
+/// lacking a translation are absent from the translation result set and are therefore silently excluded
+/// from a <c>!=</c> match, rather than being treated as "value differs". A fully correct <c>!=</c> would
+/// need the complement of the matching guids over the whole entity set.
+/// </description></item>
+/// </list>
+/// </remarks>
 public static class LocalizedExpressionAnalyzer
 {
     /// <summary>

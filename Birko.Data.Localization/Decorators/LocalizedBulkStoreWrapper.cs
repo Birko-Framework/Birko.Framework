@@ -178,7 +178,20 @@ public class LocalizedBulkStoreWrapper<TStore, T> : IBulkStore<T>, IStoreWrapper
         });
     }
 
-    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates) => _innerStore.Update(filter, updates);
+    public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
+    {
+        // CR-L135: a native PropertyUpdate mutates the base column directly. When it targets a localizable
+        // field on a non-default culture, that diverges from the value the Action<T> overload would persist
+        // (a translation row). Detect that case and fall back to the read-modify-write path so the
+        // translation is written; otherwise use the fast native PropertyUpdate.
+        if (IsNonDefaultCulture() &&
+            LocalizedPropertyUpdateHelper.TouchesLocalizableField(updates, GetLocalizableFieldsFromInstance()))
+        {
+            Update(filter, LocalizedPropertyUpdateHelper.ToAction(updates));
+            return;
+        }
+        _innerStore.Update(filter, updates);
+    }
 
     public void Delete(IEnumerable<T> data)
     {

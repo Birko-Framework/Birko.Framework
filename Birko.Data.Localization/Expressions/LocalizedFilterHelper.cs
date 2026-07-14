@@ -1,6 +1,7 @@
 using Birko.Data.Localization.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 
 namespace Birko.Data.Localization.Expressions;
@@ -15,6 +16,13 @@ public static class LocalizedFilterHelper
     /// Builds a filter expression that matches entities whose Guid is in the given set.
     /// Returns x => false if the set is empty.
     /// </summary>
+    /// <remarks>
+    /// CR-L136: the membership test is built over a <see cref="List{T}"/> rather than a
+    /// <see cref="HashSet{T}"/> because more query providers translate <c>List&lt;Guid&gt;.Contains</c>
+    /// to a SQL <c>IN</c> clause (in-memory evaluation works either way). Localized-field filtering is
+    /// still best-effort across providers — a very large guid set produces an oversized IN-list and is
+    /// not chunked here.
+    /// </remarks>
     public static Expression<Func<T, bool>> BuildGuidFilter<T>(HashSet<Guid> guids)
         where T : Data.Models.AbstractModel, ILocalizable
     {
@@ -27,9 +35,10 @@ public static class LocalizedFilterHelper
         }
 
         // Build: x.Guid != null && guids.Contains(x.Guid.Value)
+        var guidList = guids.ToList();
         var guidValue = Expression.Property(guidProp, "Value");
-        var guidsConstant = Expression.Constant(guids);
-        var containsMethod = typeof(HashSet<Guid>).GetMethod("Contains", new[] { typeof(Guid) })!;
+        var guidsConstant = Expression.Constant(guidList);
+        var containsMethod = typeof(List<Guid>).GetMethod("Contains", new[] { typeof(Guid) })!;
         var containsCall = Expression.Call(guidsConstant, containsMethod, guidValue);
         var nullCheck = Expression.NotEqual(guidProp, Expression.Constant(null, typeof(Guid?)));
         var combined = Expression.AndAlso(nullCheck, containsCall);

@@ -57,18 +57,44 @@ public static class LocalizedOrderByHelper
             if (i == 0)
             {
                 ordered = field.Descending
-                    ? entities.OrderByDescending(selector)
-                    : entities.OrderBy(selector);
+                    ? entities.OrderByDescending(selector, SafeObjectComparer.Instance)
+                    : entities.OrderBy(selector, SafeObjectComparer.Instance);
             }
             else
             {
                 ordered = field.Descending
-                    ? ordered!.ThenByDescending(selector)
-                    : ordered!.ThenBy(selector);
+                    ? ordered!.ThenByDescending(selector, SafeObjectComparer.Instance)
+                    : ordered!.ThenBy(selector, SafeObjectComparer.Instance);
             }
         }
 
         return ordered?.ToList() ?? entities;
+    }
+
+    /// <summary>
+    /// A defensive object comparer for the in-memory OrderBy path (CR-L138): the default comparer throws
+    /// <see cref="InvalidOperationException"/> at sort time if a value is not <see cref="IComparable"/> or
+    /// two values are different types. This handles nulls (sort first), compares same-typed
+    /// <see cref="IComparable"/> values directly, and falls back to a stable ordinal string comparison for
+    /// everything else — so a sort on an unexpected property type degrades gracefully instead of throwing.
+    /// </summary>
+    private sealed class SafeObjectComparer : IComparer<object?>
+    {
+        public static readonly SafeObjectComparer Instance = new();
+
+        public int Compare(object? x, object? y)
+        {
+            if (ReferenceEquals(x, y)) return 0;
+            if (x is null) return -1;
+            if (y is null) return 1;
+
+            if (x is IComparable comparable && x.GetType() == y.GetType())
+            {
+                return comparable.CompareTo(y);
+            }
+
+            return string.CompareOrdinal(x.ToString(), y.ToString());
+        }
     }
 
     /// <summary>
