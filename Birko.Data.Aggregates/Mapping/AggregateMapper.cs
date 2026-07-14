@@ -104,6 +104,13 @@ public class AggregateMapper<T> : IAggregateMapper<T> where T : AbstractModel
         return results;
     }
 
+    /// <summary>
+    /// Produces the sync operations to reconcile the desired aggregate against current state.
+    /// <para><b>Emits Insert/Delete only (CR-L100):</b> a OneToOne change is modeled as Delete+Insert and
+    /// collection diffing acts on Added/Removed; an in-place field change to a child present in both
+    /// current and desired produces <b>no</b> operation. <c>SyncOperationType.Update</c> is not emitted by
+    /// this mapper — callers that need field-level child updates must diff payloads themselves.</para>
+    /// </summary>
     public IEnumerable<SyncOperation> Expand(FlattenResult<T> aggregate, IRelatedDataProvider currentStateProvider)
     {
         if (aggregate == null) throw new ArgumentNullException(nameof(aggregate));
