@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.MongoDB cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch N: **CR-L153 … CR-L157** — Birko.Data.MongoDB (store) + .MongoDB.ViewModel + .MongoDB.Views. All closed; **/code-review clean**.
+- **Nullable (L153)** — `Settings.ReplicaSet` is now `string?` instead of `= null!;`. The suppression made a non-nullable property that could actually hold null (it's genuinely optional, read only via `IsNullOrEmpty`), violating the no-nullable-holes convention; the declared type now tells the truth.
+- **Cleanup (L154)** — dropped the no-op `(Expression<Func<T, bool>>)filter` self-cast in `MongoDBStore.Update` and `AsyncMongoDBStore.UpdateAsync` (the `filter` parameter already has that exact type; the driver's implicit `FilterDefinition<T>` conversion is unchanged).
+- **Cleanup (L155/L156)** — removed the `DestroyAsync`/`Destroy` overrides on both ViewModel repos. `base.DestroyAsync`/`base.Destroy` already destroys the store (`BulkStore`/`Store` is the same MongoDB store), so the override's extra `DropAsync`/`Drop` dropped the collection a **second** time — and that second call bypassed any wrapper by hitting the unwrapped `MongoDBStore`. `DropAsync`/`Drop` remain as explicit collection-drop helpers.
+- **Cleanup (L157)** — `MongoViewTranslator.TranslatePipeline` materializes the group-by projection **once** (`.ToList()`) and reuses it for both the `_id` composite and the `$first`-carried-forward fields, instead of building two identical `Select` enumerables (`groupByPaths` + `firstFieldPaths`). Output is byte-identical.
+- **Tests** — MongoDB.Tests 42 → 44 (`ReplicaSet` default-null + omitted from the connection string; `LoadFrom` round-trips a null value), ViewModel.Tests 4 → 6 (structural regression: the repos no longer re-declare `Destroy`/`DestroyAsync` while `Drop`/`DropAsync` stay declared), Views.Tests 6 → 7 (the `$group` stage carries the key in both `_id` and `$first`).
+- Suites green: Birko.Data.MongoDB.Tests 44, .ViewModel.Tests 6, .Views.Tests 7. STORY-027 now **157/418**.
+
 ### BardStudio consumer backports — SQL/Xaml/Migrations/AI fixes (2026-07-14)
 Backported seven framework fixes surfaced while building the BardStudio consumer (see `Consumers/BardStudio/docs/framework-backports-prompt.md`).
 - **SQL translator (`Birko.Data.SQL/SQL/DataBase.cs`)** — `string.Contains/StartsWith/EndsWith(value, StringComparison)` corrupted the LIKE pattern: the argument loop fed EVERY arg into the condition value, so the trailing `StringComparison` enum (e.g. 5) overwrote the search string → `Title LIKE '%5%'`. String-pattern methods now use only the first argument; culture/comparison args carry no SQL operand and are ignored (case-insensitivity delegated to DB collation — SQLite LIKE is already ASCII-insensitive).

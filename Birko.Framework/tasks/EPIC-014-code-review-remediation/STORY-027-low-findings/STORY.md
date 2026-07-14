@@ -13,7 +13,23 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**152 / 418 triaged** as of 2026-07-14. Next open is CR-L153 (Birko.Data.MongoDB).
+**157 / 418 triaged** as of 2026-07-14. Next open is CR-L158 (Birko.Data.Patterns).
+
+**Batch N — MongoDB cluster (CR-L153 … CR-L157):** Birko.Data.MongoDB (store), .MongoDB.ViewModel,
+.MongoDB.Views. All closed; **/code-review clean (no findings)**. **Nullable:** L153
+(`Settings.ReplicaSet` is now `string?` — the `= null!` suppression lied about the type; it is genuinely
+optional and only ever read via `IsNullOrEmpty`). **Cleanup:** L154 (dropped the no-op
+`(Expression<Func<T, bool>>)filter` self-cast in `MongoDBStore.Update`/`AsyncMongoDBStore.UpdateAsync` — the
+parameter already has that type; the driver's implicit `FilterDefinition<T>` conversion is unaffected),
+L155/L156 (removed the `DestroyAsync`/`Destroy` overrides on both ViewModel repos — the base already destroys
+the store via `BulkStore`/`Store`, so the override's extra `DropAsync`/`Drop` dropped the collection a second
+time, and that second call bypassed any wrapper by hitting the unwrapped store; `DropAsync`/`Drop` remain as
+explicit collection-drop helpers), L157 (`MongoViewTranslator` materializes the group-by projection once and
+reuses it for both the `_id` composite and the `$first`-carried-forward fields, instead of building two
+identical `Select` enumerables). **Tests:** MongoDB.Tests 42 → 44 (`ReplicaSet` default-null + omitted from
+the connection string, `LoadFrom` round-trips a null), ViewModel.Tests 4 → 6 (structural: the repos no
+longer re-declare `Destroy`/`DestroyAsync` while `Drop`/`DropAsync` stay), Views.Tests 6 → 7 (the `$group`
+stage carries the key in both `_id` and `$first`). Suites green: MongoDB 44, ViewModel 6, Views 7.
 
 **Batch M — Migrations backend cluster (CR-L141 … CR-L152):** CosmosDB, ElasticSearch, InfluxDB, MongoDB,
 RavenDB, SQL migration stores. **Bugs fixed:** L143 (ES `ElasticSearchDataMigrator` range operators

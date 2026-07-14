@@ -6096,7 +6096,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ReplicaSet initialized to null! (nullable-suppression on a public settable string)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB\Stores/Settings.cs:20`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** public string ReplicaSet { get; set; } = null!; suppresses CS8618 by assigning null! to a non-nullable string that is then read in GetConnectionString via string.IsNullOrEmpty(ReplicaSet). It works because IsNullOrEmpty tolerates null, but it violates the 'no unjustified ! / no nullable holes' convention: the property's declared type lies (it can be null). LoadFrom also copies data.ReplicaSet directly.
 - **Fix:** Declare it as string? ReplicaSet { get; set; } (it is genuinely optional) or default it to string.Empty, and drop the null! suppression.
 
@@ -6104,7 +6104,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant cast of filter to its own type in Update/UpdateAsync
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB\Stores/MongoDBStore.cs:306-308 and Stores/AsyncMongoDBStore.cs:401-403`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** UpdateMany((Expression<Func<T, bool>>)filter, combined) casts filter to the exact type it already has (the parameter is Expression<Func<T, bool>>). The cast is a no-op and just adds noise.
 - **Fix:** Pass filter directly without the cast.
 
@@ -6112,7 +6112,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DestroyAsync drops the collection twice
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB.ViewModel\Repositories/AsyncMongoDBRepository.cs:99-106`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The override calls base.DestroyAsync(ct) and then DropAsync(ct). The base AbstractAsyncBulkViewModelRepository.DestroyAsync already calls BulkStore.DestroyAsync(ct) (base line 172), and BulkStore is the same AsyncMongoDBStore (it implements IAsyncBulkStore<T>), whose DestroyAsync drops the collection. DropAsync then calls MongoDBStore.DestroyAsync again, so DropCollection runs twice. Harmless (drop is idempotent) but redundant work and a redundant async round-trip. Additionally, when Store is a wrapper, base.DestroyAsync goes through the wrapper while DropAsync bypasses it via the unwrapped MongoDBStore.
 - **Fix:** Drop the override entirely (base already destroys the store), or if a public DropAsync helper is desired keep it but do not re-invoke it from DestroyAsync.
 
@@ -6120,7 +6120,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Destroy drops the collection twice
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB.ViewModel\Repositories/MongoDBRepository.cs:79-83`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Destroy() calls base.Destroy() then Drop(). base goes up to AbstractViewModelRepository.Destroy() which calls Store?.Destroy() (drops the collection); Drop() then calls MongoDBStore?.Destroy() which drops it again. Same redundant double-drop as the async repo, and the second call targets the unwrapped store, bypassing any wrapper.
 - **Fix:** Remove the override or have Destroy() not re-call Drop() after base.Destroy().
 
@@ -6128,7 +6128,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GroupBy fields carried forward via $first are redundant with _id
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.MongoDB.Views\MongoViewTranslator.cs:57-74`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** groupByPaths and firstFieldPaths are built from the identical projection over definition.GroupBy. Group-by values already live in _id after $group; carrying every group key forward again via $first (firstFields) is redundant work. The $project for non-aggregate fields could instead read from $_id.<name> (the pattern StoreAggregationHelper.BuildGroupStage already uses for AggregateQuery). Minor allocation/stage-bloat, not a correctness issue.
 - **Fix:** Either drop firstFieldPaths and project group keys from $_id.<name>, or keep $first but stop building the duplicate enumerable — reuse one materialized list for both.
 
