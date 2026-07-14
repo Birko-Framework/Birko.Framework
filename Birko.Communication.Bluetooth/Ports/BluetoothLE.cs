@@ -250,7 +250,8 @@ namespace Birko.Communication.Bluetooth.Ports
                 };
 
                 // Set the connection timeout
-                int result = connect(_socket, ref sockaddr, sizeof(SockaddrL2));
+                // Marshal.SizeOf (sizeof on a user-defined struct requires an unsafe context) (CR-L047).
+                int result = connect(_socket, ref sockaddr, (uint)System.Runtime.InteropServices.Marshal.SizeOf<SockaddrL2>());
 
                 if (result < 0)
                 {
@@ -313,11 +314,14 @@ namespace Birko.Communication.Bluetooth.Ports
         [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
         private static extern int send(int sockfd, byte[] buf, int len, int flags);
 
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
         private struct BluetoothAddress
         {
             public byte b0, b1, b2, b3, b4, b5;
         }
 
+        // Sequential layout so the field order/packing matches the C sockaddr_l2 the P/Invoke expects (CR-L047).
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
         private struct SockaddrL2
         {
             public ushort _family;
@@ -493,6 +497,12 @@ namespace Birko.Communication.Bluetooth.Ports
         }
 
         /// <summary>
+        /// Raised when the background read loop terminates on an unhandled exception, so a silent
+        /// read-loop death is observable rather than swallowed by a bare catch (CR-L046).
+        /// </summary>
+        public event EventHandler<Exception>? ReadError;
+
+        /// <summary>
         /// Background thread worker for reading incoming data
         /// </summary>
         private void ReadWorker()
@@ -509,8 +519,10 @@ namespace Birko.Communication.Bluetooth.Ports
                     ReadLinuxWorker(buffer);
 #endif
                 }
-                catch
+                catch (Exception ex)
                 {
+                    // Surface the fault instead of silently terminating the read loop (CR-L046).
+                    ReadError?.Invoke(this, ex);
                     break;
                 }
 
@@ -606,7 +618,7 @@ namespace Birko.Communication.Bluetooth.Ports
         /// Deterministically closes the port and releases the platform device (CR-H017).
         /// Prefer this (or a <c>using</c>) over relying on the finalizer.
         /// </summary>
-        public void Dispose()
+        public override void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);

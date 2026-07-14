@@ -129,7 +129,9 @@ namespace Birko.Communication.Bluetooth.Ports
                             Address = GetDeviceAddress(args),
                             Rssi = GetSignalStrength(args)
                         };
-                        discoveredDevices.TryAdd(device.Address, device);
+                        // Key by args.Id (always present on both Added and Updated) rather than the
+                        // device address, which a DeviceInformationUpdate does not reliably carry (CR-L045).
+                        discoveredDevices.TryAdd(args.Id, device);
                     }
                 };
 
@@ -137,19 +139,15 @@ namespace Birko.Communication.Bluetooth.Ports
                 {
                     if (!cancellationToken.IsCancellationRequested)
                     {
-                        // DeviceInformationUpdate provides updated properties
-                        if (args.Properties.TryGetValue("System.Devices.Aep.DeviceAddress", out var addressObj))
+                        // Look the device up by the stable update Id, then apply the changed properties.
+                        if (discoveredDevices.TryGetValue(args.Id, out var device))
                         {
-                            var address = addressObj?.ToString();
-                            if (address != null && discoveredDevices.TryGetValue(address, out var device))
+                            if (args.Properties.TryGetValue("System.Devices.Aep.SignalStrength", out var rssiObj))
                             {
-                                if (args.Properties.TryGetValue("System.Devices.Aep.SignalStrength", out var rssiObj))
-                                {
-                                    if (rssiObj is int rssiInt)
-                                        device.Rssi = rssiInt;
-                                    else if (int.TryParse(rssiObj?.ToString(), out var parsedRssi))
-                                        device.Rssi = parsedRssi;
-                                }
+                                if (rssiObj is int rssiInt)
+                                    device.Rssi = rssiInt;
+                                else if (int.TryParse(rssiObj?.ToString(), out var parsedRssi))
+                                    device.Rssi = parsedRssi;
                             }
                         }
                     }
