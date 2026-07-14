@@ -72,6 +72,8 @@ namespace Birko.Data.MongoDB.Repositories
 
         /// <summary>
         /// Drops the MongoDB collection for this repository.
+        /// Equivalent to calling DestroyAsync (the base already destroys the store); provided as an
+        /// explicit collection-drop helper.
         /// </summary>
         /// <param name="ct">Cancellation token.</param>
         public async Task DropAsync(CancellationToken ct = default)
@@ -92,16 +94,6 @@ namespace Birko.Data.MongoDB.Repositories
             if (MongoDBStore?.Client != null)
             {
                 await Task.Run(() => MongoDBStore.Client.CreateIndex(indexKeysDefinition), ct);
-            }
-        }
-
-        /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
-        {
-            await base.DestroyAsync(ct);
-            if (MongoDBStore != null)
-            {
-                await DropAsync(ct);
             }
         }
     }

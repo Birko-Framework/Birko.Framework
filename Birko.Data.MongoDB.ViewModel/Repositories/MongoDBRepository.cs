@@ -69,17 +69,12 @@ namespace Birko.Data.MongoDB.Repositories
 
         /// <summary>
         /// Drops the MongoDB collection for this repository.
+        /// Equivalent to calling Destroy() (the base already destroys the store); provided as an
+        /// explicit collection-drop helper.
         /// </summary>
         public void Drop()
         {
             MongoDBStore?.Destroy();
-        }
-
-        /// <inheritdoc />
-        public override void Destroy()
-        {
-            base.Destroy();
-            Drop();
         }
     }
 }
