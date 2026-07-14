@@ -72,6 +72,23 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// SQL Server phrases a missing table as "Invalid object name 'x'" (error 208). Adds that to the
+        /// base SQLite match so the reader yields an empty result rather than faulting.
+        /// </summary>
+        public override bool IsMissingTableException(Exception ex)
+        {
+            if (base.IsMissingTableException(ex)) return true;
+            if (ex is SqlException sqlEx)
+            {
+                foreach (SqlError error in sqlEx.Errors)
+                {
+                    if (error.Number == 208) return true;
+                }
+            }
+            return ex.Message.Contains("Invalid object name", StringComparison.OrdinalIgnoreCase);
+        }
+
         public override string QuoteIdentifier(string identifier)
         {
             return "[" + identifier.Replace("]", "]]") + "]";
