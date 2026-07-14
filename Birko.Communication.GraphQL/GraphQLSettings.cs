@@ -38,7 +38,8 @@ public class GraphQLSettings : RemoteSettings
 
     /// <summary>
     /// Path component appended to the base URL (default "/graphql").
-    /// Used when Location contains only the host (e.g., "https://api.example.com").
+    /// <para><b>Reserved — not yet implemented (CR-L051):</b> the client uses <see cref="Endpoint"/>
+    /// verbatim as the POST/WS URL and does not currently append this path.</para>
     /// </summary>
     public string SchemaPath { get; set; } = "/graphql";
 
@@ -49,6 +50,8 @@ public class GraphQLSettings : RemoteSettings
 
     /// <summary>
     /// The transport protocol for subscriptions. Default is <see cref="GraphQLSubscriptionProtocol.WebSocket"/>.
+    /// <para><b>Reserved — not yet implemented (CR-L051):</b> the client always uses the WebSocket
+    /// (graphql-transport-ws) transport regardless of this value.</para>
     /// </summary>
     public GraphQLSubscriptionProtocol SubscriptionProtocol { get; set; } = GraphQLSubscriptionProtocol.WebSocket;
 
@@ -59,6 +62,8 @@ public class GraphQLSettings : RemoteSettings
 
     /// <summary>
     /// Whether to enable Automatic Persisted Queries (APQ).
+    /// <para><b>Reserved — not yet implemented (CR-L051):</b> the client does not currently populate the
+    /// request <c>extensions</c> for APQ; this flag is not read.</para>
     /// </summary>
     public bool EnableAutoPersistedQueries { get; set; }
 

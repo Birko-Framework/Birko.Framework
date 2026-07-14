@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text.Json;
 using Birko.Serialization;
 
 namespace Birko.Communication.GraphQL;

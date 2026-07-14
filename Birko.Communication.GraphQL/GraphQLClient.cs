@@ -219,7 +219,7 @@ public class GraphQLClient : IGraphQLClient
             await webSocket.ConnectAsync(new Uri(wsUri), ct).ConfigureAwait(false);
 
             // Send connection_init
-            var initMsg = JsonSerializer.Serialize(new { type = "connection_init" });
+            var initMsg = _serializer.Serialize(new { type = "connection_init" }); // shared serializer (camelCase), CR-L050
             var initBytes = Encoding.UTF8.GetBytes(initMsg);
             await webSocket.SendAsync(new ArraySegment<byte>(initBytes), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
 
@@ -240,7 +240,7 @@ public class GraphQLClient : IGraphQLClient
 
                 if (ackType == "ping")
                 {
-                    var pong = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { type = "pong" }));
+                    var pong = Encoding.UTF8.GetBytes(_serializer.Serialize(new { type = "pong" })); // CR-L050
                     await webSocket.SendAsync(new ArraySegment<byte>(pong), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
                     continue;
                 }
@@ -270,7 +270,7 @@ public class GraphQLClient : IGraphQLClient
                     operationName = operationName
                 }
             };
-            var startJson = JsonSerializer.Serialize(startPayload);
+            var startJson = _serializer.Serialize(startPayload); // CR-L050: variables camelCased consistently with the HTTP path
             var startBytes = Encoding.UTF8.GetBytes(startJson);
             await webSocket.SendAsync(new ArraySegment<byte>(startBytes), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
 
