@@ -85,4 +85,59 @@ public class GrpcServerAuthenticationInterceptorTests
 
         act.Should().Throw<ArgumentNullException>();
     }
+
+    // CR-L057: the three streaming handler overrides were untested — only Unary was covered. Each gates
+    // on EnsureAuthenticatedAsync before invoking the continuation, so the streams themselves aren't
+    // touched by the interceptor and can be null in these auth-gate tests.
+    private static GrpcServerAuthenticationInterceptor PassInterceptor() =>
+        new((headers, ctx) => Task.FromResult(headers.GetValue("authorization") == "Bearer good"));
+    private static GrpcServerAuthenticationInterceptor FailInterceptor() =>
+        new((headers, ctx) => Task.FromResult(false), "nope");
+    private static readonly Metadata GoodHeaders = new() { { "authorization", "Bearer good" } };
+
+    [Fact]
+    public async Task ClientStreamingServerHandler_GatesOnAuth()
+    {
+        var ok = false;
+        Task<string> Cont(IAsyncStreamReader<string> s, ServerCallContext c) { ok = true; return Task.FromResult("r"); }
+
+        (await PassInterceptor().ClientStreamingServerHandler<string, string>(null!, CreateContext(GoodHeaders), Cont))
+            .Should().Be("r");
+        ok.Should().BeTrue();
+
+        ok = false;
+        var act = async () => await FailInterceptor().ClientStreamingServerHandler<string, string>(null!, CreateContext(new Metadata()), Cont);
+        (await act.Should().ThrowAsync<RpcException>()).Which.StatusCode.Should().Be(StatusCode.Unauthenticated);
+        ok.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ServerStreamingServerHandler_GatesOnAuth()
+    {
+        var ok = false;
+        Task Cont(string req, IServerStreamWriter<string> s, ServerCallContext c) { ok = true; return Task.CompletedTask; }
+
+        await PassInterceptor().ServerStreamingServerHandler<string, string>("ping", null!, CreateContext(GoodHeaders), Cont);
+        ok.Should().BeTrue();
+
+        ok = false;
+        var act = async () => await FailInterceptor().ServerStreamingServerHandler<string, string>("ping", null!, CreateContext(new Metadata()), Cont);
+        (await act.Should().ThrowAsync<RpcException>()).Which.StatusCode.Should().Be(StatusCode.Unauthenticated);
+        ok.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DuplexStreamingServerHandler_GatesOnAuth()
+    {
+        var ok = false;
+        Task Cont(IAsyncStreamReader<string> rs, IServerStreamWriter<string> ws, ServerCallContext c) { ok = true; return Task.CompletedTask; }
+
+        await PassInterceptor().DuplexStreamingServerHandler<string, string>(null!, null!, CreateContext(GoodHeaders), Cont);
+        ok.Should().BeTrue();
+
+        ok = false;
+        var act = async () => await FailInterceptor().DuplexStreamingServerHandler<string, string>(null!, null!, CreateContext(new Metadata()), Cont);
+        (await act.Should().ThrowAsync<RpcException>()).Which.StatusCode.Should().Be(StatusCode.Unauthenticated);
+        ok.Should().BeFalse();
+    }
 }
