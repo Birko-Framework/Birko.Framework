@@ -4880,7 +4880,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RunWithHistoryStreamingAsync falls back to sync but does not re-run iterations already consumed
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Agents/Agent.cs:165-180`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** If streaming throws after the conversation has already been mutated (assistant/tool messages appended inside RunWithHistoryStreamingAsync before the failure), the catch in RunWithHistoryAsync calls RunWithHistorySyncAsync(conversation) with the partially-mutated conversation. Depending on where the exception fired, this can resubmit a conversation containing a dangling assistant turn with tool_use blocks but no matching tool_result, which most providers reject. The fallback assumes the streaming attempt left the conversation untouched, which is only true if it failed on the very first call.
 - **Fix:** Snapshot the conversation before attempting streaming and restore that snapshot before the sync fallback, or only fall back when the failure happened before any messages were appended.
 
@@ -4888,7 +4888,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead/no-op return expression in streaming loop
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Agents/Agent.cs:235-236`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** `if (result.HasValue) return result.Value.Done ? conversation : conversation;` returns the same value (conversation) on both branches of the ternary, so the Done flag is meaningless here. The (bool Done, bool Continue) tuple returned by HandleResponse is effectively unused for control flow (the sync variant at line 266 just returns conversation unconditionally too). The tuple machinery adds complexity with no behavioral effect.
 - **Fix:** Simplify to `if (result.HasValue) return conversation;` and consider replacing the (Done,Continue)? return type with a plain bool? (has-result) since neither field is consulted.
 
@@ -4896,7 +4896,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** toolResults built as anonymous objects then inspected via reflection
 - **Path:** `C:\Source\Birko\Framework\Birko.AI\Agents/Agent.cs:326-350`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (partial) — removed the redundant all-errors reflection in Agent.cs (now an errorCount tracked in the tool loop); the shared cross-file `ToolResult` record was deliberately NOT introduced: the anonymous `{type,tool_use_id,content}` shape is JSON-serialized to the Anthropic/OpenAI wire with those exact snake_case keys, so a record would change the serialized property names and risk breaking every provider — disproportionate for a low cleanup, no live-provider test to catch it (2026-07-14)
 - **Detail:** HandleToolUse adds anonymous-typed objects { type, tool_use_id, content } to toolResults, then on line 349-350 inspects them with r.GetType().GetProperty("content")?.GetValue(r) reflection to detect all-error results. LlmProviderBase.BuildOpenAiStyleMessages similarly reflects over these anonymous shapes (lines 270-279). Using a concrete type (e.g. a ToolResult record) would remove the per-call reflection allocations and the fragile string-keyed property lookups across two files.
 - **Fix:** Introduce a small ToolResult { string Type; string? ToolUseId; string Content } record and use it both here and in BuildOpenAiStyleMessages, replacing GetType().GetProperty(...) reflection with direct member access.
 
@@ -4904,7 +4904,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RegisterAll() check-and-set on _registered is not thread-safe
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Agents\Agents\AgentRegistration.cs:37-82`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** RegisterAll() reads `if (_registered) return;` and only sets `_registered = true` at the very end, with no lock or Interlocked guard. If two threads call RegisterAll() (or Create(), which funnels through EnsureRegistered -> RegisterAll) concurrently at startup before the flag is set, both will pass the guard and run the full body twice. Whether that is benign depends on AgentFactory.Register: if it throws on a duplicate agentType key (or overwrites), the second concurrent caller could throw or cause inconsistent state. The method's own doc-comment promises 'Safe to call multiple times' but that safety only holds for sequential calls, not concurrent first-calls.
 - **Fix:** Guard the body with a lock (private static readonly object) using double-checked locking, or use a Lazy<bool>/LazyInitializer so the registration block runs exactly once even under concurrent first invocation.
 
@@ -4912,7 +4912,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FromDictionary uses bool.Parse/int.Parse which throw on malformed input
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\AgentOptions.cs:121-136`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** Each TryGetValue branch feeds the raw string straight into bool.Parse / int.Parse. A malformed config value (e.g. maxIterations="ten") throws FormatException out of a factory method that otherwise looks tolerant (it skips absent keys). Either the method should be robust to bad values or it should document that it throws on invalid config.
 - **Fix:** Use bool.TryParse / int.TryParse and skip or default invalid entries, consistent with the missing-key tolerance already present.
 
@@ -4920,7 +4920,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** LlmProviderFactory mutable static registry is not thread-safe
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\LlmProviderFactory.cs:11-26`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** _factories is a plain Dictionary mutated by Register() and read by Create()/IsRegistered()/GetRegisteredProviders() with no synchronization. This is fine for the typical register-all-at-startup pattern, but concurrent registration (or registration racing with reads) is undefined behavior. Mirrors AgentFactory's registration pattern, so flagging only as low.
 - **Fix:** If concurrent registration is possible, use ConcurrentDictionary; otherwise document that registration must complete before first use.
 
@@ -4928,7 +4928,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for Birko.AI.Contracts
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Contracts\Birko.AI.Contracts`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** There is no Birko.AI.Contracts.Tests sibling. The non-trivial logic worth covering is AgentOptions (Clone/Merge field completeness, FromDictionary/ToDictionary round-trip, the parse paths) and LlmProviderFactory (Register/Create/IsRegistered, case-insensitivity, unknown-provider message). The Clone/Merge/round-trip bugs above would be caught by a field-completeness test. As a shared project these tests could live in Birko.AI.Tests.
 - **Fix:** Add a small test class for AgentOptions and LlmProviderFactory in the appropriate .Tests project (xUnit + FluentAssertions).
 
@@ -4936,7 +4936,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Streaming response is leaked when GetStreamAsync is never invoked
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Providers\Providers\OpenAiCompatibleProviderBase.cs:232`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (verify-first) — already resolved by CR-M003: `LlmStreamingResponse` implements `IDisposable`/`IAsyncDisposable` and captures the `HttpResponseMessage` (`.Resource`), and the Agent enumerates it under `await using`, so an abandoned stream disposes the connection. Covered by the existing `LlmStreamingResponseTests` (2026-07-14)
 - **Detail:** SendStreamingWithRetryAsync returns an undisposed HttpResponseMessage (correct, since the stream is read lazily in GetStreamAsync). But if a caller obtains the LlmStreamingResponse and never calls GetStreamAsync (early error, cancellation, or just inspects .Error), the underlying response/connection is never disposed. This pattern is repeated in every streaming provider (Claude, OpenAI, Gemini, Ollama, Azure, ZAi, GitHubCopilot, and this base). The lazily-read stream itself is disposed via the StreamReader's `using`, but only if the consumer actually enumerates it.
 - **Fix:** Have LlmStreamingResponse implement IDisposable/IAsyncDisposable and capture the HttpResponseMessage so it can be disposed if the stream is never consumed, or dispose the response inside GetStreamAsync's finally once enumeration completes/aborts.
 
@@ -4944,7 +4944,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RegisteredAll() check is not thread-safe
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Providers\ProviderRegistration.cs:13`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** `_registered` is a plain static bool guarded by a non-locked check-then-set (`if (_registered) return; ... _registered = true;`). If RegisterAll() is called concurrently from two threads during startup, both can pass the guard and double-register every provider with LlmProviderFactory. The XML doc explicitly claims 'Safe to call multiple times', which only holds for sequential calls.
 - **Fix:** Guard with a lock or use Interlocked/lazy initialization (e.g. `LazyInitializer` or a `static readonly` initializer) so concurrent startup paths register exactly once.
 
@@ -4952,7 +4952,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Default Claude model is a non-existent / retired id
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Providers\ProviderRegistration.cs:39`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** The claude provider registration defaults to `claude-3-5-sonnet-latest`. The `-latest` alias form is not a current Anthropic model id, and Claude 3.5 Sonnet snapshots have been retired (replaced by claude-sonnet-4-6 / claude-opus-4-8). A user who does not override the model will get a 404 from the API. Other providers default to plausibly-current ids; this one is stale.
 - **Fix:** Default to a current alias such as `claude-sonnet-4-6` (balanced) or `claude-opus-4-8`. Confirm the exact id against the Anthropic models list before changing.
 
@@ -4960,7 +4960,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Tool-call argument values are stringified, losing nested JSON structure
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Providers\Providers\ClaudeProvider.cs:147`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** In ClaudeProvider.ParseResponse (and identically in GeminiProvider.ParseResponse:264 and the Claude streaming tool-input parse:434), non-string tool_use input values are flattened via `prop.Value.ToString()`, which for objects/arrays yields the raw JSON text as a string rather than a structured value. When that Input dictionary is later re-serialized to send tool results back (BuildOpenAiStyleMessages / BuildClaudeMessages serialize b.Input), nested arguments become double-encoded strings instead of JSON objects/arrays, which can break tools that expect structured arguments. The base ParseOpenAiStyleResponse avoids this by deserializing arguments into Dictionary<string,object> directly.
 - **Fix:** Deserialize the whole `input` object once into Dictionary<string,object> (as the OpenAI-style helper does) instead of per-property ToString(), preserving nested structure for round-tripping.
 
@@ -4968,7 +4968,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CheckBudgetAsync ignores CostTrackingConfiguration.Enabled
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Resilience\Services\CostTrackingService.cs:76`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** RecordUsageAsync guards with 'if (!_config.Enabled) return;' but CheckBudgetAsync has no such guard. When cost tracking is disabled, budget enforcement still runs and TrackedLlmProvider can still return a 'Budget exceeded' error and block calls based on stale/partial data, which is inconsistent with the Enabled flag's apparent intent.
 - **Fix:** Add 'if (!_config.Enabled) return new BudgetStatus(true, false, 0, 0, "none");' at the top of CheckBudgetAsync.
 
@@ -4976,7 +4976,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Rate-limit dictionary build throws on duplicate provider entries
 - **Path:** `C:\Source\Birko\Framework\Birko.AI.Resilience\Services\ProviderRateLimiter.cs:23`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done — fixed + regression tests (batch: AI low cluster, 2026-07-14)
 - **Detail:** ProviderLimits is mapped with ToDictionary(l => l.Provider.ToLowerInvariant(), StringComparer.OrdinalIgnoreCase). Two config entries for the same provider differing only in case (e.g. "OpenAI" and "openai") produce the same lowercased key and ToDictionary throws ArgumentException at construction. Keys are already lowercased, so the OrdinalIgnoreCase comparer is also redundant.
 - **Fix:** Use a grouping/last-wins build (e.g. GroupBy then ToDictionary, or a foreach with indexer assignment) and drop the redundant comparer or the manual ToLowerInvariant.
 
