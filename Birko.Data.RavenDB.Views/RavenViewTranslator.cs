@@ -37,9 +37,6 @@ public static class RavenViewTranslator
         if (definition.HasJoins)
         {
             // Use LoadDocument pattern for joins
-            var firstJoin = definition.Joins[0];
-            var rightTypeName = firstJoin.RightType.Name;
-
             sb.Append($"from entity in docs.{collectionName}");
             sb.AppendLine();
 
@@ -165,7 +162,14 @@ public static class RavenViewTranslator
         sb.Append("from result in results");
         sb.AppendLine();
 
-        if (groupByFields.Count == 1)
+        if (groupByFields.Count == 0)
+        {
+            // Aggregate-only view with no GroupBy clauses and no regular fields: emit a global
+            // aggregate over a constant key rather than the invalid `group result by new {  }` an
+            // empty composite would produce (RavenDB would reject it at index-put with an opaque error).
+            sb.AppendLine("group result by 1 into g");
+        }
+        else if (groupByFields.Count == 1)
         {
             sb.AppendLine($"group result by {groupByFields[0]} into g");
         }

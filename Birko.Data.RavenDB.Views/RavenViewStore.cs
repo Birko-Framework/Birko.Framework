@@ -64,7 +64,17 @@ public class RavenViewStore<TView> : IViewStore<TView> where TView : class
             sorted = sorted.Take(limit.Value);
         }
 
-        return await ((IRavenQueryable<TView>)sorted).ToListAsync(ct);
+        // The pipeline (Where + OrderByHelper reflection + Skip/Take) preserves the Raven query
+        // provider, so `sorted` is an IRavenQueryable at runtime and ToListAsync is available. Guard
+        // the assumption with a clear message rather than a bare InvalidCastException, in case a future
+        // helper ever materializes to an in-memory IQueryable.
+        if (sorted is not IRavenQueryable<TView> ravenQuery)
+        {
+            throw new InvalidOperationException(
+                "RavenViewStore query pipeline produced a non-Raven IQueryable; ToListAsync requires a RavenDB query provider.");
+        }
+
+        return await ravenQuery.ToListAsync(ct);
     }
 
     /// <inheritdoc />
