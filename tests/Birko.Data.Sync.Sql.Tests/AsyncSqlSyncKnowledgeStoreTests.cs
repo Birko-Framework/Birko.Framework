@@ -11,16 +11,11 @@ using Xunit;
 namespace Birko.Data.Sync.Sql.Tests;
 
 /// <summary>
-/// CR-M166 (partial): first test project for Birko.Data.Sync.Sql. Covers the CRUD-free
-/// <see cref="AsyncSqlSyncKnowledgeStore{DB}.CreateKnowledgeItem"/> deletion-flag derivation.
-///
-/// The store's GetLastSyncTime/SetLastSyncTime CRUD paths can NOT run against the SQLite connector:
-/// <see cref="SqlSyncKnowledgeItem"/> carries a non-primary <c>[IncrementField] Id</c> alongside the
-/// <c>[PrimaryField] Guid</c>, and <c>SqLiteConnector.CreateTable</c> emits
-/// <c>Id INTEGER NOT NULL AUTOINCREMENT</c>, which is a SQLite syntax error (SQLite only allows
-/// AUTOINCREMENT on <c>INTEGER PRIMARY KEY</c>, and a table has one primary key). That is a
-/// SqLiteConnector DDL limitation for dual-key models — exercising the CRUD methods needs a real
-/// MSSql/PostgreSQL backend (Docker), so it's tracked there rather than forced onto SQLite.
+/// CR-M166: covers the CRUD-free <see cref="AsyncSqlSyncKnowledgeStore{DB}.CreateKnowledgeItem"/>
+/// deletion-flag derivation. The GetLastSyncTime/SetLastSyncTime CRUD paths — which used to be blocked
+/// on SQLite by a connector DDL bug (invalid <c>AUTOINCREMENT</c> on the dual-key model's non-PK
+/// <c>[IncrementField] Id</c>) — now run against a real SQLite database in
+/// <see cref="AsyncSqlSyncKnowledgeStoreCrudTests"/> after that bug was fixed under TASK-058.
 /// </summary>
 public class AsyncSqlSyncKnowledgeStoreTests
 {
