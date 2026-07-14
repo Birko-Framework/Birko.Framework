@@ -97,5 +97,44 @@ namespace Birko.AI.Tests
             var restored = AgentOptions.FromDictionary(new AgentOptions().ToDictionary());
             restored.AllowedExternalPaths.Should().BeEmpty();
         }
+
+        [Fact]
+        public void FromDictionary_MalformedValues_AreSkippedAndDefaultsKept()
+        {
+            // Regression for CR-L005: bool.Parse/int.Parse threw FormatException on a malformed value
+            // (e.g. maxIterations="ten"), breaking an otherwise-tolerant factory that skips absent keys.
+            // TryParse now skips bad values and keeps the defaults.
+            var defaults = new AgentOptions();
+
+            var restored = AgentOptions.FromDictionary(new Dictionary<string, string>
+            {
+                ["interactive"] = "notabool",
+                ["maxIterations"] = "ten",
+                ["promptTimeout"] = "soon",
+                ["enableStreaming"] = "maybe",
+                ["checkpointInterval"] = "-",
+            });
+
+            restored.Interactive.Should().Be(defaults.Interactive);
+            restored.MaxIterations.Should().Be(defaults.MaxIterations);
+            restored.PromptTimeout.Should().Be(defaults.PromptTimeout);
+            restored.EnableStreaming.Should().Be(defaults.EnableStreaming);
+            restored.CheckpointInterval.Should().Be(defaults.CheckpointInterval);
+        }
+
+        [Fact]
+        public void FromDictionary_ValidValues_StillApplied_AlongsideMalformedOnes()
+        {
+            var restored = AgentOptions.FromDictionary(new Dictionary<string, string>
+            {
+                ["maxIterations"] = "ten",   // malformed → skipped
+                ["modelDepth"] = "9",        // valid → applied
+                ["workingDirectory"] = "/w", // always applied (string)
+            });
+
+            restored.MaxIterations.Should().Be(new AgentOptions().MaxIterations); // default kept
+            restored.ModelDepth.Should().Be(9);
+            restored.WorkingDirectory.Should().Be("/w");
+        }
     }
 }
