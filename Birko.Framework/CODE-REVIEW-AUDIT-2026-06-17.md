@@ -6136,7 +6136,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RuleSpecification builds an unused expression and lacks null-safety in compiled-expression string ops
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Patterns\Specification/RuleSpecification.cs:78`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Line 78 computes `var memberAsObject = Expression.Convert(member, typeof(object));` which is never referenced — dead code. Separately, BuildStringMethod (line 131) calls string.Contains/StartsWith/EndsWith directly on `member` with no null check; when ToExpression()'s compiled delegate runs in-memory over an entity whose string property is null, the delegate throws NullReferenceException. BuildComparison/BuildBetween use Convert.ChangeType(value, member.Type) which throws for non-convertible or null values against non-nullable target types. These are latent runtime throws on the expression path (the path interface callers currently get for RuleSpecification due to the `new` bug above).
 - **Fix:** Remove the unused memberAsObject. Guard string methods with a null check on member, and handle null/invalid Convert.ChangeType inputs gracefully (e.g. return Expression.Constant(false)).
 
@@ -6144,7 +6144,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AsyncPagedRepositoryWrapper issues two concurrent operations on one repository instance
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Patterns\Paging/AsyncPagedRepositoryWrapper.cs:45`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ReadPagedAsync starts itemsTask (ReadAsync) and countTask (CountAsync) on the same `_repository` and awaits Task.WhenAll. As with the slug bulk wrapper, repositories backed by a non-thread-safe store/connection cannot service two in-flight calls on one instance concurrently. The sync PagedRepositoryWrapper is sequential and fine. Lower severity because the result is still functionally a paged read, but it can fault against connection-bound backends.
 - **Fix:** Await sequentially (count then items, or items then count) unless the wrapped repository explicitly documents concurrent-call safety.
 

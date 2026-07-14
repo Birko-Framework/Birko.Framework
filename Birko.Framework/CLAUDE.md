@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.Patterns cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch O: **CR-L158, CR-L159** — Birko.Data.Patterns. Both closed; **/code-review clean**.
+- **L158 (`RuleSpecification`)** — removed the dead `memberAsObject` local and hardened the compiled-expression (`ToExpression`) path, which is used both for store-query translation and in-memory `.Compile()` evaluation. `BuildStringMethod` now guards a null string member (`x.Name != null && x.Name.Contains(...)`) so a compiled delegate no longer NREs on a null property, and returns an unsatisfiable leaf for a non-string member (was a build-time `Expression.Call` type mismatch). `BuildComparison`/`BuildBetween` route values through a new `TryConvertConstant` — degrades to `Expression.Constant(false)` when the value is null against a non-nullable value type or is non-convertible (was `Convert.ChangeType` → `InvalidCastException`/`FormatException`/`ArgumentException` at build/run time), and accepts an already-correctly-typed value directly (covers enums, which `Convert.ChangeType` cannot target).
+- **L159 (`AsyncPagedRepositoryWrapper`)** — `ReadPagedAsync` awaits the page-read then the count **sequentially** instead of starting both on the same `_repository` and `Task.WhenAll`-ing them; a connection-bound backend cannot service two in-flight calls on one instance (matches the already-sequential sync `PagedRepositoryWrapper`).
+- **Tests** — Patterns.Tests 22 → 32: `RuleSpecificationExpressionTests` (compiled Contains/NotContains over a null string don't throw; non-convertible + null-vs-non-nullable → unsatisfiable; convertible values still match; Between valid bounds; enum value already-typed) + `AsyncPagedRepositoryWrapperTests` (an instrumented probe repository proves max observed concurrency == 1, plus result assembly + null-ctor guard).
+- Suite green: Birko.Data.Patterns.Tests 32. STORY-027 now **159/418**.
+
 ### Code-review remediation — low findings, Data.MongoDB cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch N: **CR-L153 … CR-L157** — Birko.Data.MongoDB (store) + .MongoDB.ViewModel + .MongoDB.Views. All closed; **/code-review clean**.
 - **Nullable (L153)** — `Settings.ReplicaSet` is now `string?` instead of `= null!;`. The suppression made a non-nullable property that could actually hold null (it's genuinely optional, read only via `IsNullOrEmpty`), violating the no-nullable-holes convention; the declared type now tells the truth.

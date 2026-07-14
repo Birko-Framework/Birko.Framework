@@ -13,7 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**157 / 418 triaged** as of 2026-07-14. Next open is CR-L158 (Birko.Data.Patterns).
+**159 / 418 triaged** as of 2026-07-14. Next open is CR-L160 (Birko.Data.Processors).
+
+**Batch O — Data.Patterns cluster (CR-L158, CR-L159):** Birko.Data.Patterns. Both closed;
+**/code-review clean**. **L158** (`RuleSpecification`): removed the dead `memberAsObject` local, and hardened
+the compiled-expression (`ToExpression`) path against runtime throws — `BuildStringMethod` now guards a
+null string member (`x.Name != null && x.Name.Contains(...)`, so an in-memory compiled delegate no longer
+NREs on a null property) and returns an unsatisfiable leaf for a non-string member; `BuildComparison`/
+`BuildBetween` route the value through a new `TryConvertConstant` helper that degrades to
+`Expression.Constant(false)` when the value is null against a non-nullable value type or is
+non-convertible (was `Convert.ChangeType` → `InvalidCastException`/`FormatException`/`ArgumentException`),
+and accepts an already-correctly-typed value directly (covers enums, which `Convert.ChangeType` can't
+target). **L159** (`AsyncPagedRepositoryWrapper.ReadPagedAsync`): awaits the page-read then the count
+**sequentially** instead of starting both on the same `_repository` and `Task.WhenAll`-ing — a
+connection-bound backend can't service two in-flight calls on one instance (matches the already-sequential
+sync `PagedRepositoryWrapper`). **Tests:** Patterns.Tests 22 → 32 — `RuleSpecificationExpressionTests`
+(compiled Contains/NotContains over a null string no-throw, non-convertible + null-vs-non-nullable →
+unsatisfiable, convertible values still match, Between with valid bounds, enum value already-typed) +
+`AsyncPagedRepositoryWrapperTests` (an instrumented probe repository asserts max observed concurrency == 1,
+result assembly, null-ctor guard). Suite green: Patterns.Tests 32.
 
 **Batch N — MongoDB cluster (CR-L153 … CR-L157):** Birko.Data.MongoDB (store), .MongoDB.ViewModel,
 .MongoDB.Views. All closed; **/code-review clean (no findings)**. **Nullable:** L153
