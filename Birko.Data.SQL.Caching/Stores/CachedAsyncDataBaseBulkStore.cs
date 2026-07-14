@@ -180,6 +180,9 @@ namespace Birko.Data.SQL.Stores
             return CacheEntryOptions.Absolute(_options.DefaultExpiration);
         }
 
+        // Resolved once at construction (see ctor): the table name depends only on T's mapping
+        // attributes, not on connection/settings state, and LoadTable is static/cached — so resolving
+        // it before SetSettings/Init is correct and cheap (CR-L177). It feeds the cache-key prefix only.
         private static string ResolveTableName()
         {
             var table = SQL.DataBase.LoadTable(typeof(T));

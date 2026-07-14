@@ -46,7 +46,7 @@ namespace Birko.Data.SQL.Caching
         {
             using var sha = SHA256.Create();
             var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
-            // Use first 12 bytes (16 hex chars) for a compact but collision-resistant key
+            // Use first 8 bytes (16 hex chars) for a compact but collision-resistant key
             var sb = new StringBuilder(16);
             for (int i = 0; i < 8; i++)
             {
