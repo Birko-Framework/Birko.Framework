@@ -121,6 +121,29 @@ namespace Birko.Data.SQL.Tests.Views
             sql.Should().Contain("SUM(");
         }
 
+        // CR-L195: aggregate columns are aliased by the unique view-property name (not the aggregate
+        // function name, which would collide across two same-function aggregates), and those aliases must
+        // be exactly the columns GetPersistentViewSelectFields queries back.
+        [Fact]
+        public void BuildViewSelectSql_AggregateAliases_UsePropertyNames_AndMatchPersistentSelect()
+        {
+            var view = SQL.DataBase.LoadView(typeof(CustomerOrderView));
+            var connector = new TestViewConnector(TestSettings);
+
+            var sql = connector.TestBuildViewSelectSql(view);
+
+            sql.Should().Contain("AS \"OrderCount\"");
+            sql.Should().Contain("AS \"TotalSpent\"");
+            sql.Should().NotContain("AS \"COUNT\"");
+            sql.Should().NotContain("AS \"SUM\"");
+
+            var cols = view!.GetPersistentViewSelectFields().Values;
+            cols.Should().Contain("OrderCount");
+            cols.Should().Contain("TotalSpent");
+            // The plain (non-aggregate) columns still use the source column names.
+            cols.Should().Contain("Name");
+        }
+
         [Fact]
         public void BuildViewSelectSql_NoJoins_ThrowsInvalidOperationException()
         {
