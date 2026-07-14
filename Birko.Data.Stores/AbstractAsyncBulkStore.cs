@@ -35,7 +35,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await CreateCoreAsync(data, storeDelegate, ct);
+            await CreateCoreAsync(data, storeDelegate, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            return await ReadCoreAsync(filter, orderBy, limit, offset, ct);
+            return await ReadCoreAsync(filter, orderBy, limit, offset, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -71,7 +71,7 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual async Task<IEnumerable<T>> ReadAsync(CancellationToken ct = default)
         {
-            return await ReadAsync(null, null, null, null, ct);
+            return await ReadAsync(null, null, null, null, ct).ConfigureAwait(false);
         }
 
         /// <inheritdoc />
@@ -88,7 +88,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await UpdateCoreAsync(data, storeDelegate, ct);
+            await UpdateCoreAsync(data, storeDelegate, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -114,11 +114,11 @@ namespace Birko.Data.Stores
             Action<T> updateAction,
             CancellationToken ct = default)
         {
-            var items = (await ReadAsync(filter, null, null, null, ct)).ToList();
+            var items = (await ReadAsync(filter, null, null, null, ct).ConfigureAwait(false)).ToList();
             foreach (var item in items)
             {
                 updateAction(item);
-                await UpdateAsync(item, ct: ct);
+                await UpdateAsync(item, ct: ct).ConfigureAwait(false);
             }
         }
 
@@ -128,7 +128,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await DeleteCoreAsync(data, ct);
+            await DeleteCoreAsync(data, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -143,8 +143,8 @@ namespace Birko.Data.Stores
             Expression<Func<T, bool>> filter,
             CancellationToken ct = default)
         {
-            var items = (await ReadAsync(filter, null, null, null, ct)).ToList();
-            await DeleteAsync(items, ct);
+            var items = (await ReadAsync(filter, null, null, null, ct).ConfigureAwait(false)).ToList();
+            await DeleteAsync(items, ct).ConfigureAwait(false);
         }
 
         #endregion

@@ -72,7 +72,7 @@ namespace Birko.Data.Stores
         public virtual async Task<Guid> CreateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            return await CreateCoreAsync(data, processDelegate, ct);
+            return await CreateCoreAsync(data, processDelegate, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -83,14 +83,16 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual Task<T?> ReadAsync(Guid guid, CancellationToken ct = default)
         {
-            return ReadAsync(x => x.Guid == guid, ct);
+            // Use the shared ModelByGuid filter (mirroring the sync AbstractStore.Read(Guid)) so both
+            // paths stay identical if the filter ever encodes extra matching logic (CR-L205).
+            return ReadAsync((new Birko.Data.Filters.ModelByGuid<T>(guid)).Filter(), ct);
         }
 
         /// <inheritdoc />
         public virtual async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            return await ReadCoreAsync(filter, ct);
+            return await ReadCoreAsync(filter, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -102,7 +104,7 @@ namespace Birko.Data.Stores
         public virtual async Task UpdateAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await UpdateCoreAsync(data, processDelegate, ct);
+            await UpdateCoreAsync(data, processDelegate, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -114,7 +116,7 @@ namespace Birko.Data.Stores
         public virtual async Task DeleteAsync(T data, CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            await DeleteCoreAsync(data, ct);
+            await DeleteCoreAsync(data, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -130,7 +132,7 @@ namespace Birko.Data.Stores
         public virtual async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
-            return await CountCoreAsync(filter, ct);
+            return await CountCoreAsync(filter, ct).ConfigureAwait(false);
         }
 
         /// <summary>

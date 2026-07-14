@@ -20,24 +20,6 @@ namespace Birko.Data.Stores
         }
 
         /// <summary>
-        /// Applies time-bucket truncation to a property on each item, returning new items
-        /// with the time property replaced by its bucketed value.
-        /// Does not mutate originals — creates shallow copies when bucketing is needed.
-        /// </summary>
-        public static IEnumerable<(T Item, DateTime BucketTime)> BucketByTime<T>(
-            IEnumerable<T> items,
-            Func<T, DateTime> timeAccessor,
-            long bucketTicks)
-        {
-            foreach (var item in items)
-            {
-                var dt = timeAccessor(item);
-                var bucketTime = TruncateToBucket(dt, bucketTicks);
-                yield return (item, bucketTime);
-            }
-        }
-
-        /// <summary>
         /// Computes Sum over a set of boxed values for a given numeric property type.
         /// Returns null if values is empty.
         /// </summary>
