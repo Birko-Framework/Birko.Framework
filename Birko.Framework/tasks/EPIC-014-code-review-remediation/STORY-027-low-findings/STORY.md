@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**185 / 418 triaged** as of 2026-07-14. Next open is CR-L186.
+**187 / 418 triaged** as of 2026-07-14. Next open is CR-L188 (Birko.Data.SQL.PostgreSQL).
+
+**Batch W — MySQL.View cluster (CR-L186, CR-L187):** Birko.Data.SQL.MySQL.View. Both closed;
+**/code-review clean**. **L186** (convention): added a public `ViewExistsAsync(string, CancellationToken)`
+override mirroring the sync `ViewExists` — runs the same parameterized `information_schema.VIEWS` query
+scoped to `DATABASE()` via `DoCommandAsync` (observing the token), instead of the base fallback's
+`SELECT 1 FROM <view> WHERE 1=0` in a try/catch that swallows connection/permission errors as
+"view does not exist" and isn't database-scoped; extracted the shared SQL into a `ViewExistsSql` const.
+**L187** (test-gap): new **Birko.Data.SQL.MySQL.View.Tests** project (git-init'd + registered in
+`.slnx`/`.code-workspace`) — the `ViewExists`/`ViewExistsAsync` null/empty/whitespace `ArgumentException`
+guards (both overloads) + a structural assert that the async override is declared on `MySQLConnector` (so
+async callers get the information_schema query, not the base probe). The catalog-query HasRows outcome needs
+a live MySQL (integration-tier). Suite green: MySQL.View.Tests 7.
 
 **Batch V — MySQL cluster (CR-L183, CR-L184, CR-L185):** Birko.Data.SQL.MySQL. All closed;
 **/code-review clean** (dead-code + doc, no behavior change beyond removing dead code). **L183** (cleanup):

@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, MySQL.View cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch W: **CR-L186, CR-L187** — Birko.Data.SQL.MySQL.View. Both closed; **/code-review clean**.
+- **Convention (L186)** — added a public `ViewExistsAsync(string, CancellationToken)` override mirroring the sync `ViewExists`: runs the same parameterized `information_schema.VIEWS` query scoped to `DATABASE()` via `DoCommandAsync` (observing the token), instead of the base fallback's `SELECT 1 FROM <view> WHERE 1=0` inside a try/catch that swallows connection/permission errors as "view does not exist" and isn't database-scoped. Extracted the shared SQL into a `ViewExistsSql` const.
+- **Test-gap (L187)** — new **Birko.Data.SQL.MySQL.View.Tests** (git-init'd + registered in `.slnx`/`.code-workspace`): the `ViewExists`/`ViewExistsAsync` null/empty/whitespace `ArgumentException` guards (both overloads) + a structural assert that the async override is declared on `MySQLConnector`. The catalog-query HasRows outcome needs a live MySQL (integration-tier).
+- Suite green: Birko.Data.SQL.MySQL.View.Tests 7. STORY-027 now **187/418**.
+
 ### Code-review remediation — low findings, MySQL cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch V: **CR-L183, CR-L184, CR-L185** — Birko.Data.SQL.MySQL. All closed; **/code-review clean** (dead-code + doc, no behavior change beyond removing dead code).
 - **Cleanup (L183)** — `MySQLConnector_OnException`'s table-missing guard was `A || (B && A)`; since `&&` binds tighter than `||`, the second operand could only be true when the first already was (entirely dead). Reduced to `!IsInitializing && ex.Message.Contains("doesn't exist")`.

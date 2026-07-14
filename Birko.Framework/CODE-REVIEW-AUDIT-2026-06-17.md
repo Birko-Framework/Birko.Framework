@@ -6360,7 +6360,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No async ViewExistsAsync override — async callers fall back to the slow base SELECT/catch path
 - **Path:** `C:/Source/Birko/Framework/Birko.Data.SQL.MySQL.View/Database/Connectors/MySQLConnector_View.cs:11`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The sync ViewExists is overridden with an efficient information_schema.VIEWS query scoped to DATABASE(), but ViewExistsAsync (declared virtual in AbstractAsyncConnector_CreateView.cs:128) is not overridden. Async callers therefore get the base fallback that issues 'SELECT 1 FROM <view> WHERE 1=0' inside a try/catch — slower, swallows all exceptions (catch returns false, masking connection/permission errors as 'view does not exist'), and is not scoped to the current database the same way the sync override is. This is consistent across all SQL.View providers (MSSql and PostgreSQL also omit the async ViewExists override), so it appears to be a framework-wide choice rather than a MySQL-specific regression; flagged as low because behavior diverges between the sync and async code paths.
 - **Fix:** If async parity matters, add a public override Task<bool> ViewExistsAsync(string, CancellationToken) that runs the same parameterized information_schema query via DoCommandAsync (observing the CancellationToken), matching the sync override. Otherwise document that async view-existence checks intentionally use the base probe.
 
@@ -6368,7 +6368,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project for the MySQL view override
 - **Path:** `C:/Source/Birko/Framework/Birko.Data.SQL.MySQL.View`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no Birko.Data.SQL.MySQL.View.Tests sibling. The framework convention requires every new public functionality to have corresponding tests. The public override ViewExists(viewName) — including its argument-validation branch (ArgumentException on null/whitespace) and the HasRows true/false outcomes — has no coverage. Note only, as requested; testing the catalog query itself requires a live MySQL instance, but at minimum the guard-clause throw is unit-testable.
 - **Fix:** Add a small xUnit + FluentAssertions test project asserting ViewExists throws ArgumentException for null/empty/whitespace input; gate the integration-level existence check behind a MySQL-available fixture if practical.
 

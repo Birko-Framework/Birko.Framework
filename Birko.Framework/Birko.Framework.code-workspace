@@ -937,6 +937,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.MySQL.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.MySQL.View.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.MySQL.View.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.PostgreSQL.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.PostgreSQL.Tests"
 		},
