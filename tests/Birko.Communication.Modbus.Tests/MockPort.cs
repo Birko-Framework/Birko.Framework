@@ -86,5 +86,6 @@ namespace Birko.Communication.Modbus.Tests
 
         public void SubscribeProcessData(ProcessDataDelegate action) { }
         public void UnSubscribeProcessData(ProcessDataDelegate action) { }
+        public void Dispose() { } // IPort : IDisposable (CR-L043)
     }
 }
