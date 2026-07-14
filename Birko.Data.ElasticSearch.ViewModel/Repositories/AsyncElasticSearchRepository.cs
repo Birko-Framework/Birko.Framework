@@ -1,7 +1,10 @@
 using Birko.Data.ElasticSearch.Stores;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Nest;
 
 namespace Birko.Data.ElasticSearch.Repositories
 {
@@ -44,6 +47,79 @@ namespace Birko.Data.ElasticSearch.Repositories
             if (store != null)
             {
                 Store = store;
+            }
+        }
+
+        #endregion
+
+        #region Query and Count Operations
+
+        /// <summary>
+        /// Asynchronously counts documents matching the specified query container.
+        /// Mirrors the sync repository's <c>Count(QueryContainer)</c> (CR-L115).
+        /// </summary>
+        /// <param name="query">The query container to match.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>The count of matching documents, or 0 when the store is unavailable.</returns>
+        public virtual async Task<long> CountAsync(QueryContainer? query, CancellationToken ct = default)
+        {
+            var store = ElasticSearchStore;
+            if (store == null)
+            {
+                return 0;
+            }
+
+            return await store.CountAsync(query, ct).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Index Management
+
+        /// <summary>
+        /// Asynchronously clears the cache for the ElasticSearch index.
+        /// Mirrors the sync repository's <c>ClearCache()</c> (CR-L115).
+        /// </summary>
+        /// <param name="ct">Cancellation token.</param>
+        public virtual async Task ClearCacheAsync(CancellationToken ct = default)
+        {
+            var store = ElasticSearchStore;
+            if (store == null)
+            {
+                return;
+            }
+
+            await store.ClearCacheAsync(ct).ConfigureAwait(false);
+        }
+
+        #endregion
+
+        #region Advanced Read Operations
+
+        /// <summary>
+        /// Reads documents using a custom search request, streaming the results.
+        /// Mirrors the sync repository's <c>Read(SearchRequest)</c> (CR-L115).
+        /// </summary>
+        /// <param name="request">The search request.</param>
+        /// <param name="ct">Cancellation token.</param>
+        /// <returns>An async stream of matching view models.</returns>
+        public virtual async IAsyncEnumerable<TViewModel> ReadAsync(
+            SearchRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+        {
+            var store = ElasticSearchStore;
+            if (store == null)
+            {
+                yield break;
+            }
+
+            await foreach (var item in store.ReadStreamAsync(request, ct).ConfigureAwait(false))
+            {
+                var instance = LoadInstance(item);
+                if (instance != null)
+                {
+                    yield return instance;
+                }
             }
         }
 
