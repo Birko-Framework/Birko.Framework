@@ -26,18 +26,9 @@ public static class GitHubOAuthProvider
     /// <param name="httpClient">Optional HttpClient to reuse.</param>
     public static IOAuthClient CreateDeviceFlowClient(string clientId, string scope = "read:user", HttpClient? httpClient = null)
     {
-        var settings = new OAuthSettings
-        {
-            GrantType = OAuthGrantType.DeviceCode,
-            ClientId = clientId,
-            TokenEndpoint = TokenEndpoint,
-            DeviceAuthorizationEndpoint = DeviceAuthorizationEndpoint,
-            Scope = scope,
-            DeviceCodePollingIntervalSeconds = 5,
-            DeviceCodeTimeoutSeconds = 600
-        };
-
-        return new OAuthClient(settings, httpClient);
+        // Delegate to CreateDeviceFlowSettings so the device-flow settings have a single source of
+        // truth and the two factory methods can't drift apart (CR-L076).
+        return new OAuthClient(CreateDeviceFlowSettings(clientId, scope), httpClient);
     }
 
     /// <summary>
