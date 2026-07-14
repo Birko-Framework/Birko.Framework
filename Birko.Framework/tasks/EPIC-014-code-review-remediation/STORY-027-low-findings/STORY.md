@@ -13,7 +13,30 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**110 / 418 triaged** as of 2026-07-14. Next open is CR-L111 (Birko.Data.ElasticSearch).
+**119 / 418 triaged** as of 2026-07-14. Next open is CR-L120 (Birko.Data.EventSourcing).
+
+**Batch I — Data.ElasticSearch cluster (CR-L111 … CR-L119):** ElasticSearch (store), .ViewModel, .Views.
+**Fixes:** L111 (filter-based `Delete`/`Update` overrides in both stores now call `EnsureInitialized`/
+`EnsureInitializedAsync` first — lazy-init + cancelled-token gate, matching every base CRUD method),
+L112 (`StoreAggregationHelper` composite-bucket `TryGetValue(out string keyValue)` → `out string?` ×2,
+clears the CS8600 risk), L113 (extracted a shared `ElasticSearchStoreHelper` — `ResolveIndexName`/
+`SanitizeIndexName` + `BuildUpdateScript<T>` — so the sync/async stores stop copy-pasting the index-name
+sanitization and the PropertyUpdate→Painless script builder), L114 (bulk per-item failures in an
+otherwise-valid response now **throw** with the offending items instead of a swallowed `// TODO` — matches
+the single-item paths + UnitOfWork; ES bulk is non-atomic so the successful items are already persisted,
+documented inline + flagged by /code-review as PLAUSIBLE, intended), L118 (`ExecuteSimpleQueryAsync`
+clamps Size via a new internal `ClampWindowSize` so `From + Size` stays within the ES default
+`max_result_window` of 10000 — a non-zero offset with the default size used to exceed it and get rejected),
+L119 (`SetPropertyValue` handles enum/Guid targets via a new internal `ConvertValue` — `Convert.ChangeType`
+silently dropped every enum/Guid group-by/aggregate column). **API asymmetry:** L115 (async repo gains
+`CountAsync(QueryContainer)`/`ClearCacheAsync`/`ReadAsync(SearchRequest)` delegating through the unwrapping
+`ElasticSearchStore` property, mirroring the sync repo). **Cleanup:** L117 (removed unused
+`using Birko.Configuration;` from both repo files). **Verify-first:** L116 (Birko.Data.ElasticSearch.
+ViewModel.Tests already exists — M092 — augmented with async-repo ctor guard + unwrap + CountAsync-zero).
+**Tests:** Views.Tests +12 (`ConvertValue` enum/Guid/int/fail matrix + `ClampWindowSize` boundaries),
+ViewModel.Tests +3 (async repo). L111/L114 are live-cluster paths (code-review verified). **/code-review:
+1 PLAUSIBLE (the sanctioned L114 partial-commit-then-throw semantics — documented, kept).** Suites green:
+ES.Tests 78, ViewModel.Tests 6, Views.Tests 19.
 
 **Batch H — Data.CosmosDB (CR-L103 … CR-L110):** **Fixes:** L103 (`IsHealthyAsync` observes the ct),
 L106 (removed `AsyncCosmosDBRepository.DestroyAsync` double-destroy override — base is sufficient), L109

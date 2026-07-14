@@ -5760,7 +5760,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DeleteAsync(filter) / UpdateAsync(filter, PropertyUpdate) overrides skip EnsureInitializedAsync
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\Stores/AsyncElasticSearchStore.cs:265`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** DeleteAsync(filter) (line 265) and UpdateAsync(filter, PropertyUpdate) (line 277) are overridden for native DeleteByQuery/UpdateByQuery performance — this is the documented native-override pattern and acceptable. However, unlike every base CRUD method they never call EnsureInitializedAsync(ct), so they neither lazy-init the index nor observe an already-cancelled token before issuing the request (the 2026-06-15 cancellation-gate convention). The sync equivalents Delete(filter)/Update(filter) (ElasticSearchStore.cs:274,286) have the same omission. Lower impact than the ReadAsync issue since ES auto-creates the index, but it diverges from the store contract.
 - **Fix:** Add `await EnsureInitializedAsync(ct)` (sync: `EnsureInitialized()`) as the first line of each filter-based Update/Delete override.
 
@@ -5768,7 +5768,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Composite-bucket key TryGetValue uses non-nullable out string (possible CS8600)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\Aggregation/StoreAggregationHelper.cs:225`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `bucket.Key.TryGetValue(field, out string keyValue)` (also line 292) declares the out var as non-nullable `string`, but a composite aggregation key value can be null, so this risks a CS8600 (the project mandates building clean of CS8600-CS8605). Same pattern appears twice.
 - **Fix:** Use `out string? keyValue` (and null-check before assigning into the row), or `out var keyValue`.
 
@@ -5776,7 +5776,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated bulk/stream/sanitize/aggregation logic between sync and async stores
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\Stores/ElasticSearchStore.cs:763`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetIndexName (sync 763 / async 746), the ReadStream scroll loop (sync 502 / async 490), the PropertyUpdate->Painless script builder (sync 286 / async 277), and the Bulk error-handling block (sync 347 / async 339) are near-identical copies across the two stores. The async aggregation method body (AsyncElasticSearchStore.cs:873) is also a copy of the sync one (ElasticSearchStore.cs:916). Aggregation already extracted a shared StoreAggregationHelper; the index-name sanitization and script-build logic are good further candidates for a shared static helper.
 - **Fix:** Extract GetIndexName sanitization and the PropertyUpdate->script builder into a shared static helper (alongside StoreAggregationHelper) to remove the copy-paste drift risk.
 
@@ -5784,7 +5784,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk partial-error path is swallowed with only a TODO
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch\Stores/AsyncElasticSearchStore.cs:373`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When bulkResponse.IsValid is true but bulkResponse.Errors is true with ItemsWithErrors (per-item failures in an otherwise-valid bulk response), the code computes errorCount and does nothing but `// TODO: Add logging here` (same in sync ElasticSearchStore.cs:381). Individual create/update/delete failures within a bulk are silently dropped — the caller believes the whole batch succeeded. The single-item paths correctly throw on failure, so bulk callers get weaker guarantees with no signal.
 - **Fix:** At minimum surface partial failures (throw, or invoke an injectable logger/callback) rather than discarding them; the UnitOfWork commit path already throws on response.Errors, so the stores should be consistent with that.
 
@@ -5792,7 +5792,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async repository missing async equivalents of Count / ClearCache / Read(SearchRequest)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch.ViewModel\Repositories/AsyncElasticSearchRepository.cs:14-51`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** AsyncElasticSearchRepository exposes only the ElasticSearchStore property and a constructor. The underlying AsyncElasticSearchStore<T> provides CountAsync(QueryContainer, ct), ClearCacheAsync(ct), and ReadStreamAsync(SearchRequest, ct), but the async repository surfaces none of them, while the sync ElasticSearchRepository surfaces Count, ClearCache, and Read(SearchRequest). This is an API asymmetry between the sync and async siblings rather than a defect, but it leaves async consumers without the custom-query/cache helpers their sync counterparts have.
 - **Fix:** Add CountAsync(QueryContainer, CancellationToken), ClearCacheAsync(CancellationToken), and an IAsyncEnumerable<TViewModel> ReadAsync(SearchRequest, CancellationToken) that delegate through the unwrapping ElasticSearchStore property, mirroring the sync class and observing the token.
 
@@ -5800,7 +5800,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for either repository
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch.ViewModel\Birko.Data.ElasticSearch.ViewModel (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no Birko.Data.ElasticSearch.ViewModel.Tests sibling directory at all. The project's own CLAUDE.md and the framework conventions require xUnit + FluentAssertions tests for new public functionality. Public surface with no coverage: the store-type validation in both constructors (the ArgumentException thrown when an incompatible store is passed, and the wrapped-store acceptance path), the ElasticSearchStore unwrapping property, and Count/ClearCache/Read(SearchRequest) — including the wrapped-store behavior called out above, which a test would have caught.
 - **Fix:** Add a .Tests project covering constructor validation (reject wrong store type, accept wrapped store), and Count/ClearCache/Read against a wrapped store to lock in correct unwrapping.
 
@@ -5808,7 +5808,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused using directive in both files
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch.ViewModel\Repositories/ElasticSearchRepository.cs:4 and Repositories/AsyncElasticSearchRepository.cs:3`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `using Birko.Configuration;` is imported in both files but nothing from that namespace is referenced.
 - **Fix:** Remove the unused `using Birko.Configuration;` from both files.
 
@@ -5816,7 +5816,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** From + Size can exceed ElasticSearch max_result_window (default 10000)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch.Views\ElasticSearchViewStore.cs:108-113`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ExecuteSimpleQueryAsync defaults Size to 10000 when limit is null and From to offset. Any non-zero offset with the default size (From=offset, Size=10000) makes From+Size exceed the cluster default max_result_window of 10000, which ES rejects with an error surfaced as the generic 'ElasticSearch view query failed'. Deep paging via from/size is also inefficient.
 - **Fix:** Cap or document the effective page size, or clamp Size so From+Size stays within max_result_window; for large result sets prefer search_after / scroll. At least note the limitation.
 
@@ -5824,7 +5824,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Convert.ChangeType failures are silently swallowed per-property
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ElasticSearch.Views\ElasticSearchViewStore.cs:369-388`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SetPropertyValue wraps Convert.ChangeType in a try/catch that silently discards all conversion errors. A mismatch between the view property type and the value ES returns (e.g. ES gives a numeric where the property is a Guid/enum, or a string for a numeric) leaves the property at its default with no signal. Combined with aggregate parsing this can produce view rows that look valid but have silently-dropped fields. Convert.ChangeType also does not handle enums or Guid targets, so those group-by/aggregate columns will always be dropped.
 - **Fix:** Handle enum/Guid targets explicitly (Enum.Parse / Guid.Parse) and consider surfacing or counting conversion failures rather than fully swallowing them, to aid debugging.
 
