@@ -89,8 +89,12 @@ namespace Birko.Communication.Network.Ports
         {
             if (!IsOpen()) return;
 
+            // Signal stop and join the read worker (DataAvailable-gated, ≤50ms iterations) before
+            // tearing down the stream/client, so Close returns deterministically rather than racing
+            // the worker's field dereferences (CR-L069).
             _stopThread = true;
-            // Wait for thread to finish? Or just close stream which will throw in thread
+            _readThread?.Join(TimeSpan.FromMilliseconds(500));
+            _readThread = null;
 
             if (_stream != null)
             {
@@ -108,13 +112,19 @@ namespace Birko.Communication.Network.Ports
         private void ReadWorker()
         {
             byte[] buffer = new byte[1024];
-            while (!_stopThread && _client != null && _client.Connected && _stream != null)
+            while (!_stopThread)
             {
+                // Capture local references so a concurrent Close() nulling the fields can't cause an
+                // NRE between the null check and the dereference (CR-L069).
+                var stream = _stream;
+                var client = _client;
+                if (client == null || !client.Connected || stream == null)
+                    break;
                 try
                 {
-                    if (_stream.DataAvailable)
+                    if (stream.DataAvailable)
                     {
-                        int bytesRead = _stream.Read(buffer, 0, buffer.Length);
+                        int bytesRead = stream.Read(buffer, 0, buffer.Length);
                         if (bytesRead > 0)
                         {
                             byte[] received = new byte[bytesRead];

@@ -95,26 +95,36 @@ namespace Birko.Communication.Network.Ports
         {
             if (IsOpen())
             {
+                // Close/dispose the client FIRST to unblock the worker's blocking Receive, THEN join it,
+                // so shutdown is deterministic (a join before closing would just wait out the timeout
+                // because Receive is still blocked) — CR-L069.
                 _stopThread = true;
                 if (_client != null)
                 {
                     _client.Close();
                     _client = null;
                 }
+                _readThread?.Join(TimeSpan.FromMilliseconds(500));
+                _readThread = null;
                 _isOpen = false;
             }
         }
 
         private void ReadWorker()
         {
-            while (!_stopThread && _client != null)
+            while (!_stopThread)
             {
+                // Capture a local reference so a concurrent Close() nulling _client can't NRE between
+                // the null check and Receive (CR-L069).
+                var client = _client;
+                if (client == null)
+                    break;
                 try
                 {
                     // UdpClient.Receive blocks, so this thread will wait.
                     // To shutdown cleanly, Close() disposes client which causes Receive to throw.
                     IPEndPoint remote = new IPEndPoint(IPAddress.Any, 0);
-                    byte[] received = _client.Receive(ref remote);
+                    byte[] received = client.Receive(ref remote);
 
                     if (received != null && received.Length > 0)
                     {
