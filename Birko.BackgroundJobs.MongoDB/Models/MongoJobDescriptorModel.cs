@@ -57,8 +57,9 @@ public class MongoJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [BsonElement("claimToken")]
     public Guid? ClaimToken { get; set; }
 
-    [BsonIgnore]
-    public string CollectionName => "BackgroundJobs";
+    // CR-L027: removed the dead, misleading `[BsonIgnore] CollectionName => "BackgroundJobs"` — the store
+    // resolves the collection via typeof(T).Name ("MongoJobDescriptorModel"), so the property was never
+    // read and actively misrepresented the physical collection name.
 
     public JobDescriptor ToDescriptor()
     {
