@@ -957,6 +957,10 @@
 			"path": "../../Framework.Tests/Birko.Data.SQL.SqLite.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.SQL.SqLite.View.Tests",
+			"path": "../../Framework.Tests/Birko.Data.SQL.SqLite.View.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.SQL.View.Migrations.Tests",
 			"path": "../../Framework.Tests/Birko.Data.SQL.View.Migrations.Tests"
 		},

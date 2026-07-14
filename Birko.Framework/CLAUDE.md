@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, SqLite cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch Y: **CR-L192** (Birko.Data.SQL.SqLite) + **CR-L193, CR-L194** (Birko.Data.SQL.SqLite.View). All closed; **/code-review clean**.
+- **Bug (L192)** — `SqLiteConnector_OnException` detects the missing-table auto-init case via the typed `SqliteException` + `SqliteErrorCode == 1` (SQLITE_ERROR) and a case-insensitive `"no such table"` match, instead of the brittle locale/version-dependent `"SQLite Error"` prefix substring (would break on a Microsoft.Data.Sqlite upgrade / non-English locale).
+- **Other (L193)** — documented on `BuildCreateViewSql` that `CreateView`/`CreateViewAsync` is a no-op on SQLite when the view already exists (`CREATE VIEW IF NOT EXISTS` doesn't update an outdated body, unlike the base `CREATE OR REPLACE VIEW`); use `RecreateView` to replace.
+- **Test-gap (L194)** — new **Birko.Data.SQL.SqLite.View.Tests** (git-init'd + registered in `.slnx`/`.code-workspace`): `ViewExists`/`ViewExistsAsync` null/empty/whitespace guards, the `CREATE VIEW IF NOT EXISTS` DDL string, and a **real** round-trip against an on-disk SQLite db (seeded view → true, missing → false, a same-named TABLE → false via the `type='view'` filter; async parity).
+- Suites green: Birko.Data.SQL.SqLite.Tests 26 (L192 build-verified, no regression), .SqLite.View.Tests 9. STORY-027 now **194/418**.
+
 ### Code-review remediation — low findings, PostgreSQL cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch X: **CR-L188 … CR-L190** (Birko.Data.SQL.PostgreSQL) + **CR-L191** (Birko.Data.SQL.PostgreSQL.View). All closed; **/code-review clean**.
 - **Cleanup (L188)** — `IsTransientException`'s `ex is NpgsqlException npgsqlEx && npgsqlEx is PostgresException pgEx` collapsed to `ex is PostgresException pgEx` (PostgresException derives from NpgsqlException; the outer binding was unused).

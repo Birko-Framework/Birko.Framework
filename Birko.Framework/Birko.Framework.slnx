@@ -186,6 +186,7 @@
     <Project Path="../../Framework.Tests/Birko.Data.ElasticSearch.Tests/Birko.Data.ElasticSearch.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Tests/Birko.Data.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.SqLite.Tests/Birko.Data.SQL.SqLite.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Data.SQL.SqLite.View.Tests/Birko.Data.SQL.SqLite.View.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.Providers.Tests/Birko.Data.SQL.Providers.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.MSSql.Tests/Birko.Data.SQL.MSSql.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.SQL.MSSql.View.Tests/Birko.Data.SQL.MSSql.View.Tests.csproj" />

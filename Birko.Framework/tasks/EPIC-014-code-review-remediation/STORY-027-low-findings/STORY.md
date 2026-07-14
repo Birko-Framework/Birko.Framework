@@ -13,7 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**191 / 418 triaged** as of 2026-07-14. Next open is CR-L192 (Birko.Data.SQL.SqLite).
+**194 / 418 triaged** as of 2026-07-14. Next open is CR-L195 (Birko.Data.SQL.View).
+
+**Batch Y — SqLite cluster (CR-L192; CR-L193, CR-L194):** Birko.Data.SQL.SqLite + .SqLite.View.
+All closed; **/code-review clean**. **L192** (bug): `SqLiteConnector_OnException` detects the missing-table
+case via the typed `SqliteException` + `SqliteErrorCode == 1` (SQLITE_ERROR) and a case-insensitive
+`"no such table"` match, instead of the brittle locale/version-dependent `"SQLite Error"` prefix substring
+(which would break on a Microsoft.Data.Sqlite upgrade or non-English locale). **L193** (other): documented on
+`BuildCreateViewSql` that `CreateView`/`CreateViewAsync` is a no-op on SQLite when the view already exists
+(`CREATE VIEW IF NOT EXISTS` doesn't update an outdated body, unlike the base `CREATE OR REPLACE VIEW`) — use
+`RecreateView` to replace. **L194** (test-gap): new **Birko.Data.SQL.SqLite.View.Tests** project
+(git-init'd + registered) — `ViewExists`/`ViewExistsAsync` null/empty/whitespace guards, the
+`CREATE VIEW IF NOT EXISTS` DDL string (via `BuildCreateViewSql`), and a **real** round-trip against an
+on-disk SQLite db (a seeded view → `ViewExists` true, a missing name → false, a same-named TABLE → false via
+the `type='view'` filter; async parity). **Tests:** SqLite.Tests 26 (L192 build-verified, no regression),
+SqLite.View.Tests 9 (new). Suites green: SqLite.Tests 26, SqLite.View.Tests 9.
 
 **Batch X — PostgreSQL cluster (CR-L188 … CR-L190; CR-L191):** Birko.Data.SQL.PostgreSQL + .PostgreSQL.View.
 All closed; **/code-review clean**. **L188** (cleanup): `IsTransientException`'s

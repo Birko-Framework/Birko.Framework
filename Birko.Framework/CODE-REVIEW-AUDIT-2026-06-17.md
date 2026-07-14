@@ -6408,7 +6408,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** OnException matches Sqlite errors by message substring instead of error code
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.SqLite\Database\Connectors\SqLiteConnector.cs:45`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SqLiteConnector_OnException decides whether to auto-create the schema by checking ex.Message.Contains("SQLite Error") && ex.Message.Contains("no such table"). Message text is locale-/version-dependent and brittle; SqliteException exposes SqliteErrorCode (used correctly in IsTransientException just above). A 'no such table' condition is SQLITE_ERROR (1) with a specific message, but relying on the English substring is fragile and may break on a Microsoft.Data.Sqlite upgrade. The branch also only runs for `ex is SqliteException` yet re-checks the message rather than the typed code.
 - **Fix:** Detect the no-such-table case via the typed SqliteErrorCode / message on the strongly-typed SqliteException, or at least case-insensitive matching, rather than an exact English substring.
 
@@ -6416,7 +6416,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CREATE VIEW IF NOT EXISTS silently retains a stale view definition
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.SqLite.View\Database\Connectors\SqLiteConnector_View.cs:11`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The base BuildCreateViewSql (AbstractConnectorBase_View.cs:134) emits CREATE OR REPLACE VIEW, so on PostgreSQL/MySQL a second CreateView with a changed body updates the definition. The SQLite override emits CREATE VIEW IF NOT EXISTS, which is a no-op when the name already exists — meaning CreateView()/CreateViewAsync() will NOT update an outdated view body on SQLite and gives no error. This is a documented design choice (CLAUDE.md: 'To replace an existing view in SQLite, use RecreateView'), so it is a behavior caveat to be aware of rather than a defect; flagged so callers that assume replace-semantics across providers know they must call RecreateView on SQLite.
 - **Fix:** No code change required; the caveat is documented. Optionally make it more discoverable by noting in the XML doc on BuildCreateViewSql that CreateView is non-replacing on SQLite and RecreateView is required to update a definition.
 
@@ -6424,7 +6424,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test sibling for the SQLite view overrides
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.SqLite.View`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no Birko.Data.SQL.SqLite.View.Tests project. The two public/protected surfaces — ViewExists (including its ArgumentException guard on null/whitespace at lines 19-20, the sqlite_master query shape, and HasRows result for present/absent views) and the CREATE VIEW IF NOT EXISTS string produced by BuildCreateViewSql — have no coverage. Framework convention is that every new public functionality has tests in Birko.{Project}.Tests.
 - **Fix:** Add an xUnit + FluentAssertions test project covering: ViewExists returns true/false against an in-memory SQLite db with a real view vs. a non-existent name, ViewExists throws ArgumentException on null/empty/whitespace, and an end-to-end CreateView/ViewExists/DropView round-trip asserting the IF NOT EXISTS DDL is emitted.
 
