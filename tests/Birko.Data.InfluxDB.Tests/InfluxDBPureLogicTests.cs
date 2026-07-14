@@ -93,6 +93,26 @@ public class InfluxDBPureLogicTests
     }
 
     [Fact]
+    public void Settings_accessor_exposes_the_configured_settings()
+    {
+        // CR-L123: FromStore reads Bucket/Organization via this public accessor instead of reflecting the
+        // private _settings field. Configuring the store must surface those values through Settings.
+        var store = new AsyncInfluxDBStore<TestModel>();
+        store.Settings.Should().BeNull("no settings applied yet");
+
+        store.SetSettings(NewSettings());
+
+        store.Settings.Should().NotBeNull();
+        store.Settings!.Bucket.Should().Be("bucket");
+        store.Settings.Organization.Should().Be("org");
+
+        // FromStore succeeds off the accessor (no reflection) and yields a usable UoW.
+        var uow = InfluxDbUnitOfWork.FromStore(store);
+        uow.Should().NotBeNull();
+        store.Dispose();
+    }
+
+    [Fact]
     public async Task Begin_activates_and_Rollback_clears_without_io()
     {
         var (store, uow) = NewUoW();
