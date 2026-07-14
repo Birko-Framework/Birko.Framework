@@ -30,6 +30,13 @@ public class SqlViewTranslatorTests
         public string? Name { get; set; }
     }
 
+    // Intentionally NOT registered in the ModelMapRegistry — LoadTable returns null for it, used to
+    // trigger the unmapped-table guard (CR-L201).
+    public class TransRogue : AbstractModel
+    {
+        public string? Foo { get; set; }
+    }
+
     public class TransView
     {
         public Guid? OrderId { get; set; }
@@ -155,5 +162,20 @@ public class SqlViewTranslatorTests
 
         view.Should().NotBeNull();
         view.Name.Should().Be("Counted");
+    }
+
+    // CR-L201: a view referencing an unmapped source type must fail loudly (naming it) instead of
+    // silently dropping the column/aggregate and producing a structurally-wrong view.
+    [Fact]
+    public void Translate_UnmappedSourceType_ThrowsNamingIt()
+    {
+        var def = new ViewDefinitionBuilder<TransView>()
+            .HasName("Rogue")
+            .From<TransRogue>()
+            .Count<TransRogue>(v => v.OrderCount)
+            .Build();
+
+        Action act = () => SqlViewTranslator.Translate(def);
+        act.Should().Throw<InvalidOperationException>().WithMessage("*TransRogue*");
     }
 }
