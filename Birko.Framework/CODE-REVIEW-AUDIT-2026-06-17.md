@@ -5832,7 +5832,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused Birko.Configuration using directives
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.EventSourcing\Stores/EventSourcingStoreWrapper.cs:5`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `using Birko.Configuration;` is present in all five files under Stores/ (EventSourcingStoreWrapper.cs:5, AsyncEventSourcingStoreWrapper.cs:5, EventSourcingBulkStoreWrapper.cs:4, AsyncEventSourcingBulkStoreWrapper.cs:4, EventSourcingStoreExtensions.cs:4) but nothing from the Birko.Configuration namespace is referenced in any of them. Likewise System.Linq.Expressions is imported in EventSourcingStoreExtensions.cs but unused. Dead imports.
 - **Fix:** Remove the unused using directives.
 
@@ -5840,7 +5840,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Settings does not descend the documented RemoteSettings chain
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB\Stores/Settings.cs:11`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Per CLAUDE.md the settings chain for remote/server stores is Settings -> PasswordSettings -> RemoteSettings -> ... (CosmosDB/RavenDB extend RemoteSettings directly). InfluxDB.Stores.Settings extends Birko.Configuration.Settings directly, adding Token/Organization itself. This is defensible because InfluxDB uses token auth rather than user/password/port, but it diverges from the sibling remote-store convention and means Location/credential handling is reimplemented rather than inherited from RemoteSettings.
 - **Fix:** Either document why InfluxDB intentionally skips RemoteSettings (token-only auth), or extend RemoteSettings and map Token onto an existing credential slot for consistency with CosmosDB/RavenDB.
 
@@ -5848,7 +5848,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** MapRecordToModel swallows all exceptions returning default, hiding mapping bugs
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB\Stores/AsyncInfluxDBStore.cs:757-768 and Stores/InfluxDBStore.cs:680-691`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Both the per-property inner try/catch and the outer try/catch are empty: a failed conversion silently skips the property and a constructor/reflection failure silently returns default(T) (null). Combined with the bulk read's Where(model != null) this means corrupt or schema-mismatched rows vanish with no signal, which can mask real round-trip bugs (e.g. the decimal->double write at line 641 vs Convert.ToDecimal read, or DateTime stored as 'o' string).
 - **Fix:** At minimum keep the per-property skip but let the outer failure surface (or log) rather than returning null silently; consider not catching at the outer level.
 
@@ -5856,7 +5856,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FromStore reads private _settings field via reflection
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB\UnitOfWork/InfluxDbUnitOfWork.cs:83-87`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** InfluxDbUnitOfWork.FromStore reflects the non-public _settings field of AsyncInfluxDBStore<T> to obtain Bucket/Organization. This is brittle (breaks silently if the field is renamed) and bypasses encapsulation. The store already exposes Client publicly; it does not expose settings.
 - **Fix:** Add a public/protected accessor (e.g. public Settings? Settings or a Bucket/Organization getter) on the store and use it instead of reflection.
 
@@ -5864,7 +5864,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk Update/Delete(filter) native overrides not provided
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB\Stores/AsyncInfluxDBStore.cs:342-535`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Per CLAUDE.md, new platform bulk stores should override Update(filter, PropertyUpdate<T>) and Delete(filter) for native performance. This store only implements the entity-collection Core overrides; filter-based bulk update/delete fall back to the base in-memory path. InfluxDB's delete API does support predicate-based deletes (already used in DeleteCoreAsync), so a native Delete(filter) is feasible. Noting as a gap, not a bug.
 - **Fix:** Consider overriding the filter-based Delete to build a Flux/predicate delete; Update-by-filter has no native equivalent in InfluxDB and can stay on the fallback.
 
@@ -5872,7 +5872,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead using directives
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB.ViewModel\Repositories/AsyncInfluxDBRepository.cs:1-2 (and InfluxDBRepository.cs:1-2)`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Both files import 'using Birko.Data.Stores;' and 'using Birko.Configuration;' but every Stores type is referenced fully qualified as Stores.X (Stores.AsyncInfluxDBStore, Stores.Settings, etc.), and no Birko.Configuration type is used at all (the Settings parameter is Stores.Settings, the InfluxDB one). Both usings are unused.
 - **Fix:** Remove the two unused using directives from both files.
 
@@ -5880,7 +5880,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Repository files are a near-verbatim copy of Birko.Data.InfluxDB's repositories
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InfluxDB.ViewModel\Repositories/AsyncInfluxDBRepository.cs / InfluxDBRepository.cs`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** These two files are byte-for-byte identical to Birko.Data.InfluxDB/Repositories/AsyncInfluxDBRepository.cs and InfluxDBRepository.cs except that here the classes are 'abstract' and the TModel constraint drops 'Data.Models.ILoadable<TViewModel>'. The InfluxDBStore property, SetSettings, IsHealthy, Drop/DropAsync, and the (buggy) Destroy override are duplicated. Any fix to one (e.g. the double-destroy) must be remembered in both. Worth noting because the duplication means the medium bug above exists in the sibling project too.
 - **Fix:** Consider whether the InfluxDB-specific helpers (InfluxDBStore unwrap, IsHealthy, Drop, the store-type guard) can live in a shared base so the ViewModel and non-ViewModel repositories don't drift; at minimum fix the double-destroy in both places together.
 
@@ -5888,7 +5888,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SetSettings(ISettings) silently no-ops on non-Settings input
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InMemory\Stores\InMemoryStore.cs:50`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SetSettings(ISettings settings) only applies the value when it is castable to the concrete Settings type ('if (settings is Settings concrete)'); any other ISettings implementation is silently discarded with no effect and no error. Same code in AsyncInMemoryStore.cs:50. Because settings are intentionally unused for storage this is harmless in practice, but a caller passing a valid ISettings that is not a Settings will get a silent no-op rather than the stored value.
 - **Fix:** Acceptable given settings are unused; if stricter behavior is desired, store the ISettings reference (or document the cast requirement on the method) rather than dropping it.
 
@@ -5896,7 +5896,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated _settings field and SetSettings boilerplate across sync/async stores
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.InMemory\Stores\AsyncInMemoryStore.cs:19`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** wontfix
 - **Detail:** The _settings field and both SetSettings overloads are duplicated verbatim between InMemoryStore<T> and AsyncInMemoryStore<T> (lines 19-56 in each). The two classes have no shared base (one extends the sync abstract store, the other the async), so extracting a common base is not straightforward and the duplication is small.
 - **Fix:** Leave as-is, or consider a shared static helper for the cast in SetSettings(ISettings) if the pattern spreads. Not worth a refactor for ~20 lines.
 

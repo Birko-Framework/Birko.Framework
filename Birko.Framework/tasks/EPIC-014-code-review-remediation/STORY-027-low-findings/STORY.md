@@ -13,7 +13,31 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**119 / 418 triaged** as of 2026-07-14. Next open is CR-L120 (Birko.Data.EventSourcing).
+**128 / 418 triaged** as of 2026-07-14. Next open is CR-L129 (Birko.Data.JSON).
+
+**Batch J — EventSourcing + InfluxDB + InfluxDB.ViewModel + InMemory (CR-L120 … CR-L128):**
+**Fixes:** L122 (InfluxDB `MapRecordToModel` outer catch now rethrows `InvalidOperationException` with
+the target type instead of silently `return default` — the per-property inner catch still skips a single
+bad field, but a structural/constructor failure no longer vanishes via the bulk read's `Where(m != null)`
+and mask round-trip bugs; sync + async), L123 (added a public `AsyncInfluxDBStore.Settings` accessor;
+`InfluxDbUnitOfWork.FromStore` reads Bucket/Organization through it instead of **reflecting** the private
+`_settings` field). **Cleanup:** L120 (removed the unused `using Birko.Configuration;` from all 5
+EventSourcing `Stores/` files — `System.Linq.Expressions` is actually *used* by the 4 wrappers, so kept;
+the finding's claim it was unused in the Extensions file was stale — that file never imported it), L125
+(removed the unused `using Birko.Configuration;` from both InfluxDB.ViewModel repo files — the finding also
+named `using Birko.Data.Stores;` but that's **required** for the `GetUnwrappedStore`/`IsStoreOfType`
+extension methods, so kept). **Docs/verify-first:** L121 (documented InfluxDB `Settings` intentionally
+extends `Configuration.Settings` directly, not RemoteSettings — token+org auth, no user/password/port),
+L124 (documented the accepted bulk filter-override gap — InfluxDB has no native update-by-predicate;
+native filter-Delete is feasible but live-only, deferred; base fallback correct), L126 (the double-destroy
+this finding worried about is already fixed in both repos under CR-M096; shared-base extraction deferred —
+parallel sync/async hierarchies), L127 (documented InMemory `SetSettings(ISettings)` cast-or-no-op is
+intentional — the store never reads settings). **wontfix:** L128 (InMemory `_settings`/`SetSettings`
+duplication — the finding itself says leave as-is; no shared base across the sync/async abstract stores,
+~20 lines). **Tests:** InfluxDB.Tests +1 (`Settings` accessor + `FromStore`-without-reflection). L122 is a
+live-cluster read path (code-review verified — same sanctioned surfacing as ES L114). **/code-review: 1
+PLAUSIBLE** (L122 read-now-throws on a structurally-corrupt row — documented, kept). Suites green:
+EventSourcing 5, InfluxDB 26, InfluxDB.ViewModel 5, InMemory 40.
 
 **Batch I — Data.ElasticSearch cluster (CR-L111 … CR-L119):** ElasticSearch (store), .ViewModel, .Views.
 **Fixes:** L111 (filter-based `Delete`/`Update` overrides in both stores now call `EnsureInitialized`/
