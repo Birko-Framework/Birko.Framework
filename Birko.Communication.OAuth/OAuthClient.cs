@@ -69,15 +69,17 @@ public class OAuthClient : IOAuthClient
                 }
                 catch (OAuthException)
                 {
-                    // Refresh token may be expired, fall through to normal flow
+                    // For the RefreshToken grant the switch below would just re-issue the exact same
+                    // (already-failed) refresh request, so surface the failure directly. Other grants
+                    // fall through to acquire a fresh token (CR-L074).
+                    if (_settings.GrantType == OAuthGrantType.RefreshToken)
+                        throw;
                 }
             }
 
             return _settings.GrantType switch
             {
                 OAuthGrantType.ClientCredentials => _cachedToken = await RequestTokenAsync(BuildClientCredentialsParameters(), ct).ConfigureAwait(false),
-                OAuthGrantType.RefreshToken when _cachedToken?.RefreshToken != null =>
-                    _cachedToken = await RequestTokenAsync(BuildRefreshTokenParameters(_cachedToken.RefreshToken), ct).ConfigureAwait(false),
                 _ => throw new OAuthException(
                     $"Cannot automatically obtain a token for grant type {_settings.GrantType}. " +
                     "Use ExchangeCodeAsync, PollDeviceTokenAsync, or provide a refresh token.")
@@ -215,8 +217,9 @@ public class OAuthClient : IOAuthClient
         {
             ct.ThrowIfCancellationRequested();
 
-            await Task.Delay(TimeSpan.FromSeconds(interval), ct).ConfigureAwait(false);
-
+            // RFC 8628: poll immediately, then wait `interval` only between subsequent polls (after an
+            // authorization_pending / slow_down). The delay used to sit here, adding an unnecessary
+            // ~interval wait before the very first request (CR-L075).
             using var content = new FormUrlEncodedContent(parameters);
             using var response = await _httpClient.PostAsync(_settings.TokenEndpoint, content, ct).ConfigureAwait(false);
             var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
@@ -242,9 +245,11 @@ public class OAuthClient : IOAuthClient
             switch (error)
             {
                 case "authorization_pending":
+                    await Task.Delay(TimeSpan.FromSeconds(interval), ct).ConfigureAwait(false);
                     continue;
                 case "slow_down":
                     interval += 5;
+                    await Task.Delay(TimeSpan.FromSeconds(interval), ct).ConfigureAwait(false);
                     continue;
                 default:
                     var errorDescription = GetStringProperty(errorDoc.RootElement, "error_description");
