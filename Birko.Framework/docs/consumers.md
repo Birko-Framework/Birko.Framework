@@ -347,6 +347,31 @@ TypeScript SPA bundled by esbuild; copies `Birko.Web.Components/css/tokens.css` 
 
 ---
 
+## Latent
+
+**Location:** `C:\Source\Birko\Consumers\Latent`
+**Description:** RAW photo auto-correction — parallel batch CLI + Avalonia desktop UI over a Magick.NET decode/correct/encode pipeline. No data store; works directly on the filesystem.
+**Birko projects referenced:** 3 (1 shared projitems + 2 Xaml assemblies)
+
+### Latent.Birko (1 project)
+Single lean aggregator consumed by `Latent.Core`.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Helpers | `PathValidator.CombineAndValidateUnchecked` for traversal-safe batch output paths |
+
+### Latent.Ui (2 projects)
+Avalonia desktop app; references the Xaml assemblies directly via `$(BirkoSrc)` `ProjectReference` (not projitems), registered in `Latent.slnx` under `/birko-xaml/`.
+
+| Project | Purpose |
+|---------|---------|
+| Birko.Xaml.Core | `IThemeManager`/`BirkoThemes` metadata, platform-neutral MVVM core |
+| Birko.Xaml.Avalonia | Design tokens (`BirkoTheme.axaml`), restyled controls, runtime theme switching (light/dark/neon/finstat) |
+
+> Deliberately skipped: `Birko.Xaml.Shell` (CRUD list/detail shell — wrong shape for a single-workspace tool) and all `Birko.Data.*` (no entity store). The imaging pipeline itself (Magick.NET, planned LibRaw P/Invoke) has no framework counterpart and stays app-local.
+
+---
+
 ## Summary
 
 | Consumer | Birko Projects | Primary Data Store | Key Features Used |
@@ -357,4 +382,5 @@ TypeScript SPA bundled by esbuild; copies `Birko.Web.Components/css/tokens.css` 
 | Presenter | 20 | SQLite | Markdown slide rendering, YAML deck metadata, Birko.Web SPA |
 | Gameshow | 15 | *(in-memory + REST proxy)* | Authoritative WebSocket state, Birko.Web.Shell operator UI |
 | WebFinstatApiTester | 11 | *(none — calls public APIs)* | Vault-backed secrets, health checks, Birko.Web.Shell test harness |
+| Latent | 3 | *(none — filesystem batch tool)* | Birko.Xaml Avalonia UI (tokens/themes), Helpers path safety |
 | FisData.Stock | 0 | *(inactive)* | Models extracted to Birko.Models.* |
