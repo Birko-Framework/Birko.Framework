@@ -105,6 +105,10 @@ public class XmlJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
         LoadFrom(data, null);
     }
 
+    // CR-L033: JobDescriptor.Delay ("ScheduledAt = EnqueuedAt + Delay") is intentionally not persisted
+    // here — the enqueue pipeline (JobProcessor/JobScheduler) resolves Delay into ScheduledAt +
+    // Status=Scheduled before EnqueueAsync, and only ScheduledAt is copied below (the JSON reference
+    // behaves identically). Directly enqueuing a raw Delay-only descriptor is not a supported path.
     public void LoadFrom(JobDescriptor data, ISerializer? serializer)
     {
         var s = serializer ?? DefaultSerializer;
