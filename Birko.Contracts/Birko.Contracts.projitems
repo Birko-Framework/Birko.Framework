@@ -4,6 +4,10 @@
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
     <HasSharedItems>true</HasSharedItems>
     <SharedGUID>d5e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f9a</SharedGUID>
+    <!-- Include-guard sentinel: parents that nest-import this file condition their import on
+         this NOT being set, so an aggregator listing the full closure doesn't double-import
+         (MSB4011). Set by any import of this file. -->
+    <BirkoContractsProjitemsImported>true</BirkoContractsProjitemsImported>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
