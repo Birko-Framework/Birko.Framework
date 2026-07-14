@@ -699,9 +699,14 @@ namespace Birko.Data.InfluxDB.Stores
 
                 return model;
             }
-            catch
+            catch (Exception ex)
             {
-                return default;
+                // CR-L122: the per-property inner catch above still skips an individual field that fails to
+                // convert, but a structural failure (constructor/reflection) is surfaced instead of silently
+                // returning null — otherwise, combined with the bulk read's Where(model != null), corrupt or
+                // schema-mismatched rows vanished with no signal and masked real round-trip bugs.
+                throw new InvalidOperationException(
+                    $"Failed to map InfluxDB record to {typeof(T).Name}.", ex);
             }
         }
 

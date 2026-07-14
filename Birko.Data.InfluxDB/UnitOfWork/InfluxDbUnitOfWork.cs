@@ -80,9 +80,9 @@ public sealed class InfluxDbUnitOfWork : IUnitOfWork<BatchPointContext>
     {
         var client = store.Client
             ?? throw new InvalidOperationException("Store client is not initialized. Call SetSettings() first.");
-        var settings = (Stores.Settings?)typeof(Stores.AsyncInfluxDBStore<T>)
-            .GetField("_settings", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?.GetValue(store)
+        // CR-L123: read the bucket/organization via the public Settings accessor rather than reflecting
+        // the private _settings field (brittle — broke silently if the field was renamed).
+        var settings = store.Settings
             ?? throw new InvalidOperationException("Store settings are not initialized.");
         return new InfluxDbUnitOfWork(client.Client, settings.Bucket, settings.Organization);
     }

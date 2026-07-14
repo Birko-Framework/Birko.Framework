@@ -14,6 +14,15 @@ namespace Birko.Data.InfluxDB.Stores
     /// Async InfluxDB data store for CRUD and bulk operations.
     /// </summary>
     /// <typeparam name="T">The type of entity, must inherit from <see cref="Models.AbstractModel"/>.</typeparam>
+    /// <remarks>
+    /// CR-L124: this store implements the entity-collection <c>*Core</c> overrides only; the filter-based
+    /// bulk <c>Update(filter, PropertyUpdate)</c>/<c>Delete(filter)</c> fall back to the base in-memory path.
+    /// InfluxDB has no native update-by-predicate (points are immutable; an "update" is a re-write of the
+    /// whole point), so filter-based Update must stay on the fallback. A native filter-based Delete is
+    /// feasible via the InfluxDB delete-predicate API (already used by <c>DeleteCoreAsync</c>), but requires
+    /// translating an arbitrary expression tree into an InfluxDB delete predicate and can only be verified
+    /// against a live server — deferred as an enhancement; the base fallback is correct meanwhile.
+    /// </remarks>
     public class AsyncInfluxDBStore<T> : Data.Stores.AbstractAsyncBulkStore<T>, Data.Stores.ISettingsStore<Settings>, Data.Stores.IAsyncAggregatableStore<T>, System.IDisposable
         where T : Data.Models.AbstractModel
     {
@@ -26,6 +35,13 @@ namespace Birko.Data.InfluxDB.Stores
         /// The settings for this store.
         /// </summary>
         protected Settings? _settings = null;
+
+        /// <summary>
+        /// Gets the settings this store was configured with (Bucket/Organization/Token).
+        /// Exposed so collaborators (e.g. <see cref="UnitOfWork.InfluxDbUnitOfWork"/>) can read the
+        /// bucket/organization without reflecting the private field (CR-L123).
+        /// </summary>
+        public Settings? Settings => _settings;
 
         /// <summary>
         /// Gets the measurement name for this entity type.
@@ -778,9 +794,14 @@ namespace Birko.Data.InfluxDB.Stores
 
                 return model;
             }
-            catch
+            catch (Exception ex)
             {
-                return default;
+                // CR-L122: the per-property inner catch above still skips an individual field that fails to
+                // convert, but a structural failure (constructor/reflection) is surfaced instead of silently
+                // returning null — otherwise, combined with the bulk read's Where(model != null), corrupt or
+                // schema-mismatched rows vanished with no signal and masked real round-trip bugs.
+                throw new InvalidOperationException(
+                    $"Failed to map InfluxDB record to {typeof(T).Name}.", ex);
             }
         }
 

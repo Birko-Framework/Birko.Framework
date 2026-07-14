@@ -8,6 +8,13 @@ namespace Birko.Data.InfluxDB.Stores
     /// <summary>
     /// InfluxDB-specific settings for database connection.
     /// </summary>
+    /// <remarks>
+    /// CR-L121: this intentionally extends <see cref="Birko.Configuration.Settings"/> directly rather than
+    /// the RemoteSettings chain that user/password/port backends (CosmosDB/RavenDB) descend. InfluxDB v2
+    /// authenticates with a token + organization, not a username/password/port, so RemoteSettings' credential
+    /// slots (UserName/Password/Port/UseSecure) do not apply — the server URL is carried by the base
+    /// <c>Location</c> and auth is the InfluxDB-specific <see cref="Token"/>/<see cref="Organization"/> pair.
+    /// </remarks>
     public class Settings : Birko.Configuration.Settings, Data.Models.ILoadable<Settings>
     {
         /// <summary>
