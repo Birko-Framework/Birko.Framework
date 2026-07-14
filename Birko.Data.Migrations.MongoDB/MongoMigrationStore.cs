@@ -14,7 +14,6 @@ namespace Birko.Data.Migrations.MongoDB
     /// </summary>
     public class MongoMigrationStore : Data.Migrations.IMigrationStore
     {
-        private readonly IMongoClient _client;
         private readonly IMongoDatabase _database;
         private readonly Settings.MongoMigrationSettings _settings;
 
@@ -23,9 +22,13 @@ namespace Birko.Data.Migrations.MongoDB
         /// <summary>
         /// Initializes a new instance of the MongoMigrationStore class.
         /// </summary>
-        public MongoMigrationStore(IMongoClient client, IMongoDatabase database, Settings.MongoMigrationSettings? settings = null)
+        /// <remarks>
+        /// CR-L148: the store operates entirely through <paramref name="database"/>. The previously-held
+        /// <c>IMongoClient</c> field was never read (dead state), so the constructor no longer takes it.
+        /// If session-aware transaction support is added later, thread the client back in then.
+        /// </remarks>
+        public MongoMigrationStore(IMongoDatabase database, Settings.MongoMigrationSettings? settings = null)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
             _database = database ?? throw new ArgumentNullException(nameof(database));
             _settings = settings ?? new Settings.MongoMigrationSettings();
         }

@@ -31,7 +31,7 @@ namespace Birko.Data.Migrations.MongoDB
         /// <param name="mongoClient">MongoDB client wrapper from the store. Use <c>store.Client</c> to pass it.</param>
         /// <param name="settings">Migration settings.</param>
         public MongoMigrationRunner(global::Birko.Data.MongoDB.MongoDBClient mongoClient, Settings.MongoMigrationSettings? settings = null)
-            : base(new MongoMigrationStore(mongoClient.Client, mongoClient.Database, settings))
+            : base(new MongoMigrationStore(mongoClient.Database, settings))
         {
             _client = mongoClient.Client ?? throw new ArgumentNullException(nameof(mongoClient));
             _database = mongoClient.Database ?? throw new ArgumentNullException(nameof(mongoClient));
