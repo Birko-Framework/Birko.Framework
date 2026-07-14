@@ -73,4 +73,14 @@ public class SettingsTests
 
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void PasswordSettings_WithoutPassword_DefaultsToEmptyNotNull()
+    {
+        // Regression for CR-L094: the ctor laundered null through `password ?? null!`, leaving a null
+        // Password the type system claimed was non-null. It now defaults to string.Empty.
+        new PasswordSettings("srv", "db").Password.Should().NotBeNull().And.BeEmpty();
+        new PasswordSettings().Password.Should().NotBeNull().And.BeEmpty();
+        new PasswordSettings("srv", "db", "pw").Password.Should().Be("pw");
+    }
 }
