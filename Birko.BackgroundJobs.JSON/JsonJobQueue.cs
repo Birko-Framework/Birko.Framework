@@ -128,7 +128,11 @@ namespace Birko.BackgroundJobs.JSON
 
             model.LastError = error;
 
-            if (model.AttemptCount < model.MaxRetries)
+            // Fall back to the queue's RetryPolicy.MaxRetries when the job's own MaxRetries is 0,
+            // mirroring the reference InMemoryJobQueue — otherwise a MaxRetries==0 job always went
+            // straight to Dead and the injected RetryPolicy.MaxRetries was never read (CR-L025).
+            var maxRetries = model.MaxRetries > 0 ? model.MaxRetries : _retryPolicy.MaxRetries;
+            if (model.AttemptCount < maxRetries)
             {
                 var delay = _retryPolicy.GetDelay(model.AttemptCount);
                 model.Status = (int)JobStatus.Scheduled;

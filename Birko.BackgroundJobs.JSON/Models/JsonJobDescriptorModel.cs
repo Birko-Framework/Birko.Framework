@@ -54,6 +54,10 @@ public class JsonJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [JsonPropertyName("metadataJson")]
     public string? MetadataJson { get; set; }
 
+    // CR-L026: the ILoadable path passes null, so metadata is (de)serialized with these default options
+    // rather than the store's camelCase/indented serializer. This is intentional and safe for the current
+    // Dictionary<string,string> metadata (System.Text.Json does not rename string dictionary keys); thread
+    // the store's ISerializer through the overloads below if Metadata ever becomes a richer type.
     private static readonly ISerializer DefaultSerializer = new SystemJsonSerializer();
 
     public JobDescriptor ToDescriptor(ISerializer? serializer = null)
