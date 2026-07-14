@@ -13,19 +13,20 @@ namespace Birko.Data.Sync.ElasticSearch.Models;
 public class ElasticSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
     /// <summary>
-    /// Deterministic application-level key (format: {EntityGuid}_{Scope}). NOT the Elasticsearch
-    /// document id — the base store keys documents off <see cref="AbstractModel.Guid"/>. Mapped to a
-    /// non-reserved "docKey" field: the previous [Text(Name = "_id")] made AutoMap emit a mapping for
-    /// the reserved `_id` metadata field, which Elasticsearch rejects, so index creation threw (CR-H101).
+    /// Deterministic application-level key (format: {EntityGuid}_{Scope}), assigned by
+    /// <see cref="Stores.AsyncElasticSyncKnowledgeStore.CreateKnowledgeItem"/> via <see cref="GenerateId"/>.
+    /// NOT the Elasticsearch document id — the base store keys documents off
+    /// <see cref="AbstractModel.Guid"/>. Mapped to a non-reserved "docKey" field: the previous
+    /// [Text(Name = "_id")] made AutoMap emit a mapping for the reserved `_id` metadata field, which
+    /// Elasticsearch rejects, so index creation threw (CR-H101). Retained (unlike the dead RecordId
+    /// removed under CR-L212) because it is a deliberately-persisted, populated document field.
     /// </summary>
     [Keyword(Name = "docKey")]
     public string Id { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Unique identifier for the sync knowledge record.
-    /// </summary>
-    [Number(NumberType.Integer, Name = "recordId")]
-    public int RecordId { get; set; }
+    // CR-L212: the int RecordId field (mapped "recordId") was removed — it was never assigned by
+    // CreateKnowledgeItem, never read, always persisted as 0, and is not part of ISyncKnowledgeItem.
+    // (The MongoDB sibling carries an equally-dead IdRecord "for compatibility".)
 
     /// <summary>
     /// GUID of the entity this knowledge refers to.
