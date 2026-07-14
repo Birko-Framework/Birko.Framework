@@ -91,6 +91,23 @@ public class JsonJobQueueTests : IDisposable
     }
 
     [Fact]
+    public async Task FailAsync_JobMaxRetriesZero_FallsBackToPolicyMaxRetries()
+    {
+        // Regression for CR-L025: a job with MaxRetries == 0 went straight to Dead on first failure,
+        // ignoring the queue's RetryPolicy.MaxRetries. It must now fall back to the policy (mirroring
+        // the reference InMemoryJobQueue), so the job reschedules while the policy has retries left.
+        var queue = NewQueue(new RetryPolicy { MaxRetries = 3, BaseDelay = TimeSpan.FromMinutes(1) });
+        var id = await queue.EnqueueAsync(new JobDescriptor { JobType = "t", MaxRetries = 0 });
+
+        await queue.DequeueAsync(); // AttemptCount -> 1, below the policy's 3
+        await queue.FailAsync(id, "boom");
+
+        var job = await queue.GetAsync(id);
+        job!.Status.Should().Be(JobStatus.Scheduled);
+        job.ScheduledAt.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task PurgeAsync_RemovesTerminalJobsOlderThanCutoff()
     {
         var queue = NewQueue();
