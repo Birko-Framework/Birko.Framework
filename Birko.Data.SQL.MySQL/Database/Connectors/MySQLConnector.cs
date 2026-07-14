@@ -34,8 +34,9 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
-        /// Detects MySQL transient errors: deadlocks (1213), lock wait timeout (1205),
-        /// server gone (2006), lost connection (2013), too many connections (1040).
+        /// Detects MySQL transient errors: too many connections (1040), lock wait timeout (1205),
+        /// deadlock (1213), query interrupted (1317), can't-connect (2002/2003), server gone (2006),
+        /// lost connection (2013).
         /// </summary>
         public override bool IsTransientException(Exception ex)
         {
@@ -71,7 +72,10 @@ namespace Birko.Data.SQL.Connectors
 
         private void MySQLConnector_OnException(Exception ex, string? commandText)
         {
-            if (!IsInitializing && (ex.Message.Contains("doesn't exist") || ex.Message.Contains("Table") && ex.Message.Contains("doesn't exist")))
+            // The second operand — `Message.Contains("Table") && Message.Contains("doesn't exist")` — was
+            // dead: && binds tighter than ||, so it can only be true when the first operand is already
+            // true. Reduced to the single meaningful check (CR-L183).
+            if (!IsInitializing && ex.Message.Contains("doesn't exist"))
             {
                 DoInit();
             }
@@ -251,6 +255,13 @@ namespace Birko.Data.SQL.Connectors
         }
 
         #region Native Bulk Operations
+
+        // NOTE (CR-L185): if a bulk operation fails because the table does not yet exist, the transaction
+        // is rolled back and InitException -> MySQLConnector_OnException creates the table (DoInit) but does
+        // NOT re-run the bulk command, so the bulk payload is silently dropped (no exception, no retry).
+        // This is the inherited framework auto-init behavior shared by the other SQL dialects — the
+        // single-row CRUD path tolerates it, the bulk path does not. Callers must ensure the schema exists
+        // (InitAsync / a prior single-row write / CreateTable) before the first bulk operation.
 
         public void BulkInsert(Type type, IEnumerable<object> models)
         {
