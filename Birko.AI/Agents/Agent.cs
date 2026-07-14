@@ -166,6 +166,11 @@ Reasoning approach: Balanced
         {
             if (_options.EnableStreaming)
             {
+                // Snapshot the conversation before the streaming attempt. The streaming loop appends
+                // assistant/tool messages as it runs, so a failure part-way through can leave the list
+                // with a dangling assistant turn (tool_use blocks but no matching tool_result) that most
+                // providers reject. Restore the pre-streaming state before the sync fallback (CR-L001).
+                var snapshot = new List<Message>(conversation);
                 try
                 {
                     return await RunWithHistoryStreamingAsync(conversation, maxIterations, cancellationToken);
@@ -173,6 +178,7 @@ Reasoning approach: Balanced
                 catch (Exception ex) when (ex is not OperationCanceledException && _options.StreamingFallbackToSync)
                 {
                     SendMessage("warning", $"Streaming failed: {ex.Message}. Falling back to synchronous mode.");
+                    conversation = snapshot;
                 }
             }
 
@@ -238,7 +244,7 @@ Reasoning approach: Balanced
 
                 var result = await HandleResponse(response, conversation, iteration, maxIter, cancellationToken);
                 if (result.HasValue)
-                    return result.Value.Done ? conversation : conversation;
+                    return conversation;
 
                 iteration++;
             }
@@ -279,7 +285,10 @@ Reasoning approach: Balanced
             return conversation;
         }
 
-        private async Task<(bool Done, bool Continue)?> HandleResponse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, CancellationToken cancellationToken = default)
+        // Returns non-null (true) when the iteration loop should stop, null to continue. Neither the
+        // Done nor Continue flags of the former tuple were ever consulted by the callers, so the tuple
+        // machinery was pure complexity (CR-L002).
+        private async Task<bool?> HandleResponse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, CancellationToken cancellationToken = default)
         {
             switch (response.StopReason)
             {
@@ -289,30 +298,30 @@ Reasoning approach: Balanced
                 case "end_turn":
                     foreach (var block in (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "text"))
                         SendMessage("assistant_final", block.Text ?? "");
-                    return (Done: true, Continue: false);
+                    return true;
 
                 case "error":
                     var actualError = response.ErrorMessage ?? "Unknown LLM error";
                     SendMessage("error", $"LLM request failed: {actualError}");
                     EnsureErrorContent(response, conversation, $"Error: LLM request failed: {actualError}");
-                    return (Done: true, Continue: false);
+                    return true;
 
                 case "NotConfigured":
                     SendMessage("error", $"Provider '{_llmProvider.Name}' is not properly configured.");
                     EnsureErrorContent(response, conversation, $"Error: Provider '{_llmProvider.Name}' is not properly configured.");
-                    return (Done: true, Continue: false);
+                    return true;
 
                 default:
                     if (_options.Verbose)
                         SendMessage("warning", $"Unexpected stop reason: {response.StopReason ?? "unknown"}. Stopping.");
-                    return (Done: true, Continue: false);
+                    return true;
             }
         }
 
-        private async Task<(bool Done, bool Continue)?> HandleToolUse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, CancellationToken cancellationToken = default)
+        private async Task<bool?> HandleToolUse(LlmResponse response, List<Message> conversation, int iteration, int maxIter, CancellationToken cancellationToken = default)
         {
             var toolResults = new List<object>();
-            var hasErrors = false;
+            var errorCount = 0;
 
             foreach (var block in (response.Content ?? Enumerable.Empty<ContentBlock>()).Where(b => b.Type == "tool_use"))
             {
@@ -327,7 +336,7 @@ Reasoning approach: Balanced
                     : $"Error: Unknown tool '{block.Name}'";
 
                 if (result.StartsWith("Error:", StringComparison.OrdinalIgnoreCase))
-                    hasErrors = true;
+                    errorCount++;
 
                 var preview = result.Length > 500 ? string.Concat(result.AsSpan(0, 500), "...") : result;
                 SendMessage("tool_result", $"Result from {block.Name}:\n{preview}");
@@ -352,15 +361,13 @@ Reasoning approach: Balanced
             if (iteration >= maxIter)
             {
                 SendMessage("warning", $"Maximum iterations ({maxIter}) reached. Task may be incomplete.");
-                return (Done: true, Continue: false);
+                return true;
             }
 
-            if (hasErrors && toolResults.Count > 0 && toolResults.All(r =>
-                r.GetType().GetProperty("content")?.GetValue(r)?.ToString()?.StartsWith("Error:", StringComparison.OrdinalIgnoreCase) ?? false))
-            {
-                if (_options.Verbose)
-                    SendMessage("warning", "All tool executions failed. Giving agent one final response...");
-            }
+            // "All tool executions failed" — derived from the error counter tracked in the loop
+            // above rather than reflecting over the anonymous toolResults objects (CR-L003).
+            if (toolResults.Count > 0 && errorCount == toolResults.Count && _options.Verbose)
+                SendMessage("warning", "All tool executions failed. Giving agent one final response...");
 
             return null; // continue loop
         }
