@@ -5696,7 +5696,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IsHealthyAsync / ReadAccountAsync ignore the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB\Stores/AsyncCosmosDBStore.cs:474`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14)
 - **Detail:** IsHealthyAsync(CancellationToken ct) accepts a token but calls `await _cosmosClient.ReadAccountAsync()` without passing it. (ReadAccountAsync has no ct overload in some SDK versions, but the method signature advertises cancellation it cannot honor.) Convention: async methods should observe the CancellationToken.
 - **Fix:** If the SDK ReadAccountAsync overload truly lacks ct, drop the ct parameter or guard with ct.ThrowIfCancellationRequested() at the top; otherwise pass ct through.
 
@@ -5704,7 +5704,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk filter Update(filter,...)/Delete(filter) not overridden for native Cosmos performance
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB\Stores/AsyncCosmosDBStore.cs (whole), Stores/CosmosDBStore.cs (whole)`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14) — documented/accepted: neither Cosmos store overrides the filter-based Update(filter,PropertyUpdate)/Delete(filter); they use the correct base read-then-write fallback. A native Cosmos bulk override is an optional future optimization, not a bug
 - **Detail:** CLAUDE.md: new platform stores should override Update(filter, PropertyUpdate<T>) and Delete(filter) for native performance. Neither Cosmos store does, so they fall back to the base read-then-write/read-then-delete loop (round-trips every matched doc). Not a bug — the base default is correct — but a missed optimization noted in the conventions.
 - **Fix:** Optionally override the filter-based Delete(filter)/Update(filter, PropertyUpdate<T>) using a Cosmos bulk query + batch delete; otherwise leave as-is and accept the fallback.
 
@@ -5712,7 +5712,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No integration tests for real CRUD round-trip / aggregation / index management
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB\Birko.Data.CosmosDB.Tests (AsyncCosmosDBStoreTests.cs, CosmosDBStoreTests.cs)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14) — partially addressed: the offline-testable surface (constructor guards, unwrap) is covered by the new CR-L108 project; CosmosDbUnitOfWork/CRUD/aggregation/index round-trips need the Cosmos emulator and stay integration-tier (STORY-028-style)
 - **Detail:** The .Tests sibling covers constructor guards and null/empty-input early returns with Moq, but never exercises a live container, so the id/partition-key bug, lazy-init bypass, aggregation SQL, and the CosmosDBIndexManager are entirely untested behaviorally. CosmosDBIndexManager, CosmosDbUnitOfWork, and the repository classes appear to have no tests at all.
 - **Fix:** Add Cosmos-emulator-gated integration tests for Create/Read(Guid)/Update/Delete round-trips, aggregation, and index create/exists/drop; add unit tests for CosmosDbUnitOfWork begin/commit/rollback state transitions.
 
@@ -5720,7 +5720,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AsyncCosmosDBRepository.DestroyAsync destroys the store twice
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB.ViewModel\Repositories\AsyncCosmosDBRepository.cs:96-103`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14)
 - **Detail:** The override calls base.DestroyAsync(ct) and then CosmosStore.DestroyAsync(ct). The base class AbstractAsyncBulkViewModelRepository.DestroyAsync (Birko.Data.ViewModel/Repositories/AbstractAsyncBulkViewModelRepository.cs:167-174) already calls BulkStore.DestroyAsync(ct), and BulkStore (Store as IAsyncBulkStore<TModel>) is the same underlying instance that CosmosStore unwraps to. So the store's DestroyAsync runs twice. It is harmless in practice only because AsyncCosmosDBStore.DestroyAsync guards on `if (_container != null)` and nulls the container after the first call, so the second call is a no-op. The override is unnecessary and should be removed (the sync CosmosDBRepository correctly has no such override, relying on the base).
 - **Fix:** Delete the DestroyAsync override entirely and rely on the base class, matching CosmosDBRepository (sync) which has no override. If a CosmosDB-specific teardown step is ever needed, add only that step rather than re-invoking DestroyAsync on the same store the base already destroyed.
 
@@ -5728,7 +5728,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SetSettings takes RemoteSettings instead of the CosmosDB-specific Settings type
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB.ViewModel\Repositories\AsyncCosmosDBRepository.cs:78 (and CosmosDBRepository.cs:77)`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14) — documented: SetSettings(RemoteSettings) already accepts the CosmosDB Settings type via upcast (Settings : RemoteSettings), and the store resolves it through its `is Settings` branch — a caller passes `new Settings{...}` to the RemoteSettings parameter. Narrowing the signature to Settings would break callers passing a plain RemoteSettings, so kept
 - **Detail:** Both repositories expose SetSettings(RemoteSettings). The MongoDB sibling (Birko.Data.MongoDB.ViewModel/Repositories/AsyncMongoDBRepository.cs:56) exposes SetSettings(MongoDB.Stores.Settings) — the platform-specific settings type. CosmosDB has its own Settings : RemoteSettings carrying PartitionKeyPath/RequestTimeout/AllowBulkExecution/GetCosmosClientOptions. Passing RemoteSettings still works correctly at runtime because the store's SetSettings(ISettings) resolves a passed-in Settings instance via the `is Settings` branch (AsyncCosmosDBStore.cs:113-127), but the repository signature advertises only the base type, so a caller holding a RemoteSettings reference cannot supply Cosmos-specific config and gets a degraded LoadFrom path. Widening to accept the Cosmos Settings type would match the sibling convention and surface the full config.
 - **Fix:** Change the parameter to the CosmosDB Settings type (Birko.Data.CosmosDB.Stores.Settings) to match the MongoDB sibling, or keep RemoteSettings but document that Cosmos-specific facets require constructing a Settings instance.
 
@@ -5736,7 +5736,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test project for the ViewModel repositories
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB.ViewModel`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14) — created **Birko.Data.CosmosDB.ViewModel.Tests** (git-init'd + registered): repo ctor store-type guard (accept plain/wrapped AsyncCosmosDBStore, reject foreign), unwrapping CosmosStore getter, null-store IsHealthy no-op. 5 tests
 - **Detail:** There is no Birko.Data.CosmosDB.ViewModel.Tests sibling, so the public surface (the four constructor overloads, the store-type guard in the IStore/IAsyncStore constructor that throws ArgumentException, SetSettings, IsHealthy, and the DestroyAsync override) is untested. Note: this is consistent with the framework norm — no other Birko.Data.*.ViewModel project has a .Tests sibling either — so it is a gap rather than a convention deviation. Worth a small suite at least for the constructor type-guard (valid store, wrapped store, wrong-type store throwing) since that is the only non-trivial logic in the project.
 - **Fix:** Add a minimal Birko.Data.CosmosDB.ViewModel.Tests project (xUnit + FluentAssertions) covering the IStore<TModel> constructor's IsStoreOfType guard (accept correct/wrapped, reject wrong type) using an InMemory or fake store, and verifying SetSettings/IsHealthy null-store no-op behavior.
 
@@ -5744,7 +5744,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DropAsync surfaces CosmosException when the container does not exist
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB.Views\CosmosViewManager.cs:47-56`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14)
 - **Detail:** DropAsync calls DeleteContainerAsync with no NotFound handling, so dropping a non-existent 'view' container throws CosmosException(NotFound). ExistsAsync already swallows NotFound; Drop being non-idempotent is inconsistent and a footgun for teardown/idempotent-migration callers.
 - **Fix:** Catch CosmosException with StatusCode == HttpStatusCode.NotFound and treat the drop as a no-op (idempotent), matching ExistsAsync's NotFound handling.
 
@@ -5752,7 +5752,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GROUP BY without aggregates silently falls through to ungrouped LINQ
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.CosmosDB.Views\CosmosViewStore.cs:46-52`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Data.CosmosDB low cluster H, 2026-07-14)
 - **Detail:** QueryAsync branches solely on HasAggregates. A view with HasGroupBy == true but HasAggregates == false (a distinct/grouping-only view) takes the LINQ path and returns raw, ungrouped documents — the GROUP BY is ignored. Whether this is reachable depends on the builder, but ViewDefinition.HasGroupBy exists independently of HasAggregates, so the case is representable.
 - **Fix:** Branch on (HasAggregates || HasGroupBy) for the SQL path, or document/enforce that group-by always implies at least one aggregate.
 

@@ -13,7 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**102 / 418 triaged** as of 2026-07-14. Communication cluster complete; next open is CR-L103 (Birko.Data.CosmosDB).
+**110 / 418 triaged** as of 2026-07-14. Next open is CR-L111 (Birko.Data.ElasticSearch).
+
+**Batch H — Data.CosmosDB (CR-L103 … CR-L110):** **Fixes:** L103 (`IsHealthyAsync` observes the ct),
+L106 (removed `AsyncCosmosDBRepository.DestroyAsync` double-destroy override — base is sufficient), L109
+(`CosmosViewManager.DropAsync` idempotent on NotFound), L110 (`CosmosViewStore` takes the SQL path for
+group-by-only views, not just aggregate views — was returning ungrouped docs via LINQ). **New project:**
+L108 (**Birko.Data.CosmosDB.ViewModel.Tests** — repo ctor guard + unwrap, 5 tests). **Docs/verify:** L104
+(bulk filter override = accepted base fallback), L105 (CRUD/UnitOfWork need the emulator — deferred), L107
+(SetSettings(RemoteSettings) already accepts Cosmos Settings via upcast). **/code-review: clean** (verified
+the group-by SQL builder handles zero-aggregate views). Suites green: CosmosDB 43, CosmosDB.Views 7,
+CosmosDB.ViewModel 5.
 
 **Batch G — core foundation (CR-L094 … CR-L102):** Configuration, Contracts, CQRS, Data.Aggregates,
 Data.Core. **Fixes:** L094 (`PasswordSettings.Password` defaults to `string.Empty` not `null!` — no

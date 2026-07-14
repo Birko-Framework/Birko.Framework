@@ -709,6 +709,10 @@
 			"path": "../../Framework.Tests/Birko.Data.CosmosDB.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.CosmosDB.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.CosmosDB.ViewModel.Tests"
+		},
+		{
 			"name": "Tests / Birko.Data.ElasticSearch.Tests",
 			"path": "../../Framework.Tests/Birko.Data.ElasticSearch.Tests"
 		},
