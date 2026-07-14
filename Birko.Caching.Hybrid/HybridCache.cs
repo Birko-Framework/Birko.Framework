@@ -64,7 +64,11 @@ public sealed class HybridCache : ICache
         if (!l2Result.HasValue)
             return CacheResult<T>.Miss();
 
-        // Populate L1 from L2 hit
+        // Populate L1 from an L2 hit. This intentionally uses GetL1Options(null) → the L1DefaultExpiration
+        // cap (not the entry's remaining L2 lifetime, which this read path doesn't know), to bound how
+        // stale an L1 copy can be. Note this differs from GetOrSetAsync, which threads the caller's options
+        // through GetL1Options(options); the two read paths can therefore give the same key different L1
+        // TTLs (CR-L038, documented as intended).
         var l1Options = GetL1Options(null);
         await _l1.SetAsync(key, l2Result.Value, l1Options, ct);
 
@@ -245,7 +249,8 @@ public sealed class HybridCache : ICache
     /// <summary>
     /// Builds L1 cache entry options capped by <see cref="HybridCacheOptions.L1MaxExpiration"/>.
     /// </summary>
-    private CacheEntryOptions GetL1Options(CacheEntryOptions? requested)
+    // internal (was private) so the CR-L039 matrix test can pin the exact CacheEntryOptions produced.
+    internal CacheEntryOptions GetL1Options(CacheEntryOptions? requested)
     {
         var maxExpiry = _options.L1MaxExpiration;
 
