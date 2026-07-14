@@ -139,6 +139,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Communication cluster sub-batch C (EPIC-014 / STORY-027) (2026-07-14)
+Communication **sub-batch C: CR-L053 … CR-L058** — gRPC + gRPC.Server. All closed.
+- **gRPC (client)** — **L053**: `GrpcSettings.Credentials` doc corrected to attribute scheme-based credential inference to `GrpcChannel.ForAddress` (the channel pool does no extra inference), rather than implying the settings/pool implement it. **L054/L055**: `DeadlineSeconds` and `ExtraMetadata` documented as reserved / not-auto-applied (no code reads them; kept rather than removed, since removal is a breaking API change — the docs now point to `CallOptions.Deadline` and the interceptor's `extraMetadata` ctor param respectively). **L056**: verify-first — the client `GrpcAuthenticationInterceptor` overrides only the unary calls, so there are no streaming overrides to test; the `GrpcSettings`-based `CreateClient` path uses the channel pool and is integration-tier.
+- **gRPC.Server** — **L057**: added the three streaming server-handler auth-gate tests (Client/Server/Duplex streaming) — each asserts the continuation runs when authenticated and throws `Unauthenticated` (continuation not invoked) otherwise, reusing the fake `ServerCallContext` (gRPC.Server.Tests 5 → 11). **L058**: verify-first / no code change — `EnableReflection` is a host-honored intent signal (documented on the property; reflection requires the host to add the package + map the service), already round-tripped by `GrpcServerSettingsTests`.
+- Suites green: gRPC 25, gRPC.Server 11. STORY-027 now **58/418**.
+
 ### Code-review remediation — low findings, Communication cluster sub-batch B (EPIC-014 / STORY-027) (2026-07-14)
 Communication **sub-batch B: CR-L048 … CR-L052** — Camera + GraphQL. All closed.
 - **Camera** — **L048**: `FfmpegCameraSettings.JpegQuality` is now clamped to [1,31] in the setter (an out-of-range value was forwarded to `ffmpeg -q:v` and silently failed the capture). **L049**: verify-first — the settings/frame tests exist and the `CaptureFrameAsync` happy path needs a real ffmpeg; added a `JpegQuality` clamp Theory.

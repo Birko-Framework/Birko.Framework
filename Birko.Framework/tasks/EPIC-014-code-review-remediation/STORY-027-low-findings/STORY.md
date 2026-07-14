@@ -13,7 +13,16 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**52 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–B done).
+**58 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–C done).
+
+**Sub-batch C (CR-L053 … CR-L058) — gRPC + gRPC.Server:** **L053** (Credentials doc corrected to
+attribute scheme-based inference to `GrpcChannel.ForAddress`, not the pool), **L054/L055** (`DeadlineSeconds`
++ `ExtraMetadata` documented as reserved/not-auto-applied — kept, removing is breaking), **L056**
+(verify-first: the client interceptor overrides only unary calls — no streaming overrides exist to test;
+the settings-based CreateClient path is integration-tier), **L057** (added the three streaming server-handler
+auth-gate tests — Client/Server/Duplex — gRPC.Server.Tests 5→11), **L058** (verify-first: `EnableReflection`
+is a host-honored intent signal, already round-tripped by GrpcServerSettingsTests). Suites green: gRPC 25,
+gRPC.Server 11.
 
 **Batch 4 — Communication cluster (in progress).** Worked in sub-batches by project.
 - **Sub-batch B (CR-L048 … CR-L052) — Camera + GraphQL:** **L048** (`FfmpegCameraSettings.JpegQuality`

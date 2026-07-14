@@ -5296,7 +5296,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Credentials scheme-inference documented but not implemented
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.gRPC\GrpcSettings.cs:40-44`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster C, 2026-07-14) — doc corrected: credentials default to GrpcChannel.ForAddress's scheme-based behavior (the pool does no extra inference); attributed to the library rather than implying the settings/pool do it
 - **Detail:** The XML doc on Credentials states that when null, credentials are inferred from the endpoint scheme (https -> ChannelCredentials.SecureSsl, http -> ChannelCredentials.Insecure). GrpcChannelPool.CreateChannel (GrpcChannelPool.cs:39-40) only assigns options.Credentials when settings.Credentials != null and otherwise performs no inference, relying on GrpcChannel.ForAddress defaults. The documented contract is not enforced by code; behavior depends entirely on the library default.
 - **Fix:** Either implement explicit scheme-based inference in CreateChannel when Credentials is null, or correct the doc comment to say credentials default to GrpcChannel.ForAddress's scheme-based behavior.
 
@@ -5304,7 +5304,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DeadlineSeconds setting is never consumed
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.gRPC\GrpcSettings.cs:35-38`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster C, 2026-07-14) — documented as reserved / not-yet-consumed (kept; removing is breaking). No code reads DeadlineSeconds; the doc now says to set CallOptions.Deadline
 - **Detail:** GrpcSettings.DeadlineSeconds exists and its doc says it is 'applied by interceptors that honor it', but no code in the project reads it. The authentication interceptor does not set a deadline, and the channel pool ignores it. It is currently dead configuration that gives a false impression of having an effect.
 - **Fix:** Either wire DeadlineSeconds into an interceptor/CallOptions (e.g. set context.Options.Deadline when the option flows through), or remove it until a consumer exists.
 
@@ -5312,7 +5312,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GrpcSettings.ExtraMetadata is never wired to the interceptor
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.gRPC\GrpcSettings.cs:46-49`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster C, 2026-07-14) — documented as reserved / not auto-applied (kept; removing is breaking). ExtraMetadata must be passed to GrpcAuthenticationInterceptor explicitly; the doc now says so
 - **Detail:** GrpcSettings.ExtraMetadata duplicates the concept of the GrpcAuthenticationInterceptor's extraMetadata constructor parameter, but the settings property is never read anywhere — the interceptor only receives extraMetadata when a caller passes it explicitly. The settings field therefore has no effect on calls, which is misleading given the doc ('attached to every outgoing call by the authentication interceptor').
 - **Fix:** Have GrpcClientFactory.CreateClient(GrpcSettings, ...) construct/augment an interceptor from settings.ExtraMetadata (and Credentials/Deadline), or drop the property if interceptor-level config is the intended single source of truth.
 
@@ -5320,7 +5320,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for GrpcClientFactory(GrpcSettings) overload, ExtraMetadata/Deadline application, or streaming interceptor paths
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.gRPC.Tests\GrpcClientFactoryTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster C, 2026-07-14) — the client GrpcAuthenticationInterceptor overrides only the unary calls (BlockingUnaryCall/AsyncUnaryCall) — there are no streaming overrides to test (auth isn't applied to client streaming). The GrpcSettings-based CreateClient path uses the channel pool and is integration-tier. Unary + factory paths already covered
 - **Detail:** Interceptor tests cover BlockingUnaryCall and AsyncUnaryCall but not the server/client/duplex streaming overrides (AsyncServerStreamingCall, AsyncClientStreamingCall, AsyncDuplexStreamingCall). There is also no test asserting that settings-level ExtraMetadata/Credentials/DeadlineSeconds actually affect a created client (consistent with finding that they are unwired). Note only.
 - **Fix:** Add a test covering at least one streaming override and a test that exercises the GrpcSettings-based CreateClient path end to end.
 
@@ -5328,7 +5328,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Streaming interceptor handler overrides have no direct tests
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.gRPC.Server.Tests\GrpcServerAuthenticationInterceptorTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster C, 2026-07-14) — added the three streaming server-handler tests (Client/Server/Duplex) — each asserts the auth gate passes the continuation when authenticated and throws Unauthenticated (continuation not invoked) when not. gRPC.Server.Tests 5 → 11
 - **Detail:** GrpcServerAuthenticationInterceptor overrides four handler kinds (UnaryServerHandler, ClientStreamingServerHandler, ServerStreamingServerHandler, DuplexStreamingServerHandler), each gated by EnsureAuthenticatedAsync. The tests only exercise UnaryServerHandler (success + Unauthenticated-on-failure). The three streaming overrides (interceptor lines 47-76) are untested, so a regression in the auth gate or continuation invocation on any streaming path would go undetected. The CLAUDE.md Recent Updates entry claims the interceptor is tested 'against an in-memory ServerCallContext' but only the unary kind is covered.
 - **Fix:** Add one authenticated-pass and one Unauthenticated-throw test per streaming handler (client/server/duplex), reusing the same fake ServerCallContext + validate delegate.
 
@@ -5336,7 +5336,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** EnableReflection setting is never consumed
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.gRPC.Server\GrpcServiceExtensions.cs:26`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster C, 2026-07-14) — verify-first / no code change: EnableReflection is an intent signal honored by the host (documented on the property); GrpcServerSettingsTests already round-trips it
 - **Detail:** AddBirkoGrpc reads EnableDetailedErrors, MaxReceiveMessageSizeBytes, and MaxSendMessageSizeBytes from settings but ignores EnableReflection. This is intentional and documented (the flag is an 'intent signal honored by the host', since reflection requires the host to add Grpc.AspNetCore.Server.Reflection and map the service), so it is not a bug. Noting only so a future reader does not mistake the unused property for an oversight; the XML doc on the property already explains this.
 - **Fix:** No code change needed. Optionally a test asserting the flag round-trips already exists (GrpcServerSettingsTests), which is sufficient.
 
