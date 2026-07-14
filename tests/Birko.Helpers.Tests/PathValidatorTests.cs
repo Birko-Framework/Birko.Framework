@@ -247,4 +247,43 @@ public class PathValidatorTests
             Directory.Delete(baseDir, recursive: true);
         }
     }
+
+    // Regression: ValidateDirectory checked the whole path against Path.GetInvalidFileNameChars(), which
+    // includes the directory separators and the drive-letter ':' on Windows — so it threw on every
+    // absolute Windows path. A directory path legitimately contains separators and a drive colon.
+    [Fact]
+    public void ValidateDirectory_AcceptsAnAbsolutePath()
+    {
+        var abs = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "birko-validate-dir"));
+
+        PathValidator.ValidateDirectory(abs).Should().Be(Path.GetFullPath(abs));
+    }
+
+    [Fact]
+    public void ValidateDirectory_AcceptsAPathWithSeparatorsAndDriveColon()
+    {
+        // A representative absolute path shape; on non-Windows the drive colon simply becomes part of a
+        // relative segment, which GetFullPath still resolves without a GetInvalidPathChars() match.
+        var path = Path.Combine("sub", "dir", "leaf");
+
+        var act = () => PathValidator.ValidateDirectory(path);
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void ValidateDirectory_RejectsGenuinelyInvalidPathChars()
+    {
+        // A NUL control char is in Path.GetInvalidPathChars() on every platform.
+        var bad = "some" + '\0' + "dir";
+
+        var act = () => PathValidator.ValidateDirectory(bad);
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void ValidateDirectory_RejectsNullOrEmpty()
+    {
+        ((Action)(() => PathValidator.ValidateDirectory(null!))).Should().Throw<ArgumentException>();
+        ((Action)(() => PathValidator.ValidateDirectory("   "))).Should().Throw<ArgumentException>();
+    }
 }
