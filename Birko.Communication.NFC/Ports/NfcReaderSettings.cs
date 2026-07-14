@@ -4,6 +4,10 @@ namespace Birko.Communication.NFC.Ports
 {
     /// <summary>
     /// Settings for NFC/RFID reader communication.
+    /// <para>Intentionally extends <see cref="PortSettings"/> (the communication-ports base), not the
+    /// Birko.Configuration <c>Settings → RemoteSettings</c> chain — consistent with the rest of
+    /// Birko.Communication.Ports where every port is configured by a <see cref="PortSettings"/>. Network
+    /// transports carry their target in <c>ConnectionString</c> rather than composing RemoteSettings (CR-L072).</para>
     /// </summary>
     public class NfcReaderSettings : PortSettings
     {

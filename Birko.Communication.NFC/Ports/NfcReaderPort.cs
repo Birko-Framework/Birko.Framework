@@ -120,9 +120,15 @@ namespace Birko.Communication.NFC.Ports
             return _transport.IsConnected;
         }
 
+        /// <summary>
+        /// Sends a raw APDU. This is the synchronous <see cref="IPort"/> surface: it blocks on the
+        /// transport's async transceive and <b>discards the APDU response</b> (CR-L071). To read the
+        /// reply — or to drive a network transport without blocking — use
+        /// <see cref="TransceiveApduAsync"/> (or <see cref="ReadTagAsync"/>) instead.
+        /// </summary>
         public override void Write(byte[] data)
         {
-            // Send raw APDU
+            // Send raw APDU (response is dropped — use TransceiveApduAsync to get the reply).
             _transport.TransceiveAsync(data).GetAwaiter().GetResult();
         }
 

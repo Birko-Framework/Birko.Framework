@@ -93,8 +93,26 @@ namespace Birko.Communication.NFC.Models
             }
 
             var language = Encoding.ASCII.GetString(Payload, 1, langLen);
-            var encoding = isUtf16 ? Encoding.Unicode : Encoding.UTF8;
-            var text = encoding.GetString(Payload, 1 + langLen, Payload.Length - 1 - langLen);
+            int textStart = 1 + langLen;
+            int textLen = Payload.Length - textStart;
+
+            Encoding encoding;
+            if (!isUtf16)
+            {
+                encoding = Encoding.UTF8;
+            }
+            else if (textLen >= 2 && Payload[textStart] == 0xFF && Payload[textStart + 1] == 0xFE)
+            {
+                encoding = Encoding.Unicode; // explicit little-endian BOM
+            }
+            else
+            {
+                // NFC Forum Text Record spec: UTF-16 is big-endian unless a LE BOM is present. The
+                // previous code used Encoding.Unicode (UTF-16LE) unconditionally, mojibaking BE payloads
+                // (CR-L073). Encoding.BigEndianUnicode consumes a BE BOM if present.
+                encoding = Encoding.BigEndianUnicode;
+            }
+            var text = encoding.GetString(Payload, textStart, textLen);
 
             return (language, text);
         }

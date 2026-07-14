@@ -173,19 +173,26 @@ namespace Birko.Communication.NFC.Transports
                 throw new InvalidOperationException("Transport is not connected.");
             }
 
-            // Wrap APDU in PN532 InDataExchange frame
-            _port.Write(apdu, 0, apdu.Length);
-
-            var buffer = new byte[256];
-            int bytesRead = _port.Read(buffer, 0, buffer.Length);
-            if (bytesRead > 0)
+            // Run the blocking serial Write/Read (up to the SerialPort ReadTimeout) off the caller's
+            // thread and observe the cancellation token, mirroring ReadTagAsync — TransceiveAsync used
+            // to block the caller and ignore the token entirely (CR-L070).
+            return Task.Run<byte[]?>(() =>
             {
-                var response = new byte[bytesRead];
-                Array.Copy(buffer, response, bytesRead);
-                return Task.FromResult<byte[]?>(response);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                _port.Write(apdu, 0, apdu.Length);
 
-            return Task.FromResult<byte[]?>(null);
+                var buffer = new byte[256];
+                int bytesRead = _port.Read(buffer, 0, buffer.Length);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (bytesRead > 0)
+                {
+                    var response = new byte[bytesRead];
+                    Array.Copy(buffer, response, bytesRead);
+                    return response;
+                }
+
+                return null;
+            }, cancellationToken);
         }
 
         private static NfcTagData? ParseResponse(byte[] buffer, int length)
