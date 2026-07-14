@@ -144,13 +144,11 @@ namespace Birko.AI.Providers
                     }
                     else if (blockType == "tool_use")
                     {
-                        var inputDict = new Dictionary<string, object>();
-                        foreach (var prop in block.GetProperty("input").EnumerateObject())
-                        {
-                            inputDict[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
-                                ? prop.Value.GetString() ?? string.Empty
-                                : prop.Value.ToString();
-                        }
+                        // Deserialize the whole input object so nested objects/arrays are preserved
+                        // as structured JsonElement values instead of being flattened to raw JSON
+                        // strings via per-property ToString() (CR-L011).
+                        var inputDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                            block.GetProperty("input").GetRawText()) ?? new Dictionary<string, object>();
                         llmResponse.Content.Add(new ContentBlock
                         {
                             Type = "tool_use",
@@ -434,15 +432,10 @@ namespace Birko.AI.Providers
                             {
                                 try
                                 {
-                                    var inputElement = JsonSerializer.Deserialize<JsonElement>(inputJson);
-                                    var inputDict = new Dictionary<string, object>();
-                                    foreach (var prop in inputElement.EnumerateObject())
-                                    {
-                                        inputDict[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
-                                            ? prop.Value.GetString() ?? string.Empty
-                                            : prop.Value.ToString();
-                                    }
-                                    currentToolUseBlock.Input = inputDict;
+                                    // Preserve nested structure by deserializing the whole object
+                                    // rather than per-property ToString() (CR-L011).
+                                    currentToolUseBlock.Input = JsonSerializer.Deserialize<Dictionary<string, object>>(inputJson)
+                                        ?? new Dictionary<string, object>();
                                 }
                                 catch
                                 {

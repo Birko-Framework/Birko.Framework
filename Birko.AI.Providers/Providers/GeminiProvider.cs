@@ -262,12 +262,9 @@ namespace Birko.AI.Providers
                                 var args = new Dictionary<string, object>();
                                 if (functionCall.TryGetProperty("args", out var argsElement))
                                 {
-                                    foreach (var prop in argsElement.EnumerateObject())
-                                    {
-                                        args[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
-                                            ? prop.Value.GetString() ?? string.Empty
-                                            : prop.Value.ToString();
-                                    }
+                                    // Preserve nested structure instead of per-property ToString() (CR-L011).
+                                    args = JsonSerializer.Deserialize<Dictionary<string, object>>(argsElement.GetRawText())
+                                        ?? new Dictionary<string, object>();
                                 }
                                 llmResponse.Content.Add(new ContentBlock
                                 {

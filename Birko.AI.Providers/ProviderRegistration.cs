@@ -11,15 +11,21 @@ namespace Birko.AI.Providers
     public static class ProviderRegistration
     {
         private static bool _registered;
+        private static readonly object _lock = new();
 
         /// <summary>
         /// Register all built-in providers with LlmProviderFactory.
-        /// Safe to call multiple times — subsequent calls are no-ops.
+        /// Safe to call multiple times, including concurrently — the body runs exactly once (CR-L009).
         /// </summary>
         public static void RegisterAll()
         {
             if (_registered)
                 return;
+
+            lock (_lock)
+            {
+                if (_registered)
+                    return;
 
             LlmProviderFactory.Register("openai", config =>
             {
@@ -36,7 +42,7 @@ namespace Birko.AI.Providers
             LlmProviderFactory.Register("claude", config =>
             {
                 var c = new ConfigHelper(config);
-                return new ClaudeProvider(c.Get("apiKey"), c.Get("model", "claude-3-5-sonnet-latest"), c.Get("baseUrl", "https://api.anthropic.com/v1/messages"));
+                return new ClaudeProvider(c.Get("apiKey"), c.Get("model", "claude-sonnet-4-6"), c.Get("baseUrl", "https://api.anthropic.com/v1/messages"));
             });
 
             LlmProviderFactory.Register("gemini", config =>
@@ -123,7 +129,8 @@ namespace Birko.AI.Providers
             LlmProviderFactory.Register("zhipu", config => LlmProviderFactory.Create("zai", config));
             LlmProviderFactory.Register("zhipuai", config => LlmProviderFactory.Create("zai", config));
 
-            _registered = true;
+                _registered = true;
+            }
         }
 
         /// <summary>
