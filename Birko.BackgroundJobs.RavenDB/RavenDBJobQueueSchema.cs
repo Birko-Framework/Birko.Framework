@@ -12,7 +12,8 @@ namespace Birko.BackgroundJobs.RavenDB
     public static class RavenDBJobQueueSchema
     {
         /// <summary>
-        /// Initializes the jobs database. Called automatically by RavenDBJobQueue on first use.
+        /// Optionally pre-initializes the jobs database. Not part of the runtime path: RavenDBJobQueue
+        /// does not call it — the base store otherwise lazy-initializes on first CRUD operation (CR-L030).
         /// </summary>
         public static async Task EnsureCreatedAsync(Settings settings, CancellationToken cancellationToken = default)
         {
