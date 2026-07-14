@@ -3,8 +3,10 @@ using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.Repositories;
 using Birko.Data.SQL.SqLite.Stores;
 using Birko.Data.Stores;
+using Birko.Models.SQL.Mapping;
 using FluentAssertions;
 using System;
+using System.IO;
 using Xunit;
 
 namespace Birko.Data.SQL.ViewModel.Tests;
@@ -67,5 +69,49 @@ public class AsyncDataBaseRepositoryTests
         var wrongStore = new Birko.Data.InMemory.Stores.AsyncInMemoryStore<TestModel>();
         Action act = () => new TestRepo(wrongStore);
         act.Should().Throw<ArgumentException>();
+    }
+
+    private sealed class TestMapping : IModelMapping<TestModel>
+    {
+        public void Configure(ModelMap<TestModel> map)
+        {
+            map.ToTable("TestModels").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
+            map.Property(x => x.Name).HasPrecision(100);
+        }
+    }
+
+    // CR-L199: the async repo now exposes AddOnInit/RemoveOnInit for parity with the sync repo, delegating
+    // to the (unwrapping) DataBaseStore's connector.
+    [Fact]
+    public void AddOnInit_And_RemoveOnInit_WireTheInnerConnector()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"birko-sqlvm-async-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var registry = new ModelMapRegistry();
+            registry.Register(new TestMapping());
+            registry.ApplyToDatabase();
+
+            var store = new AsyncSQLiteStore<TestModel>();
+            store.SetSettings(new SqLiteSettings(root, "async-oninit.db"));
+            var repo = new TestRepo(store);
+
+            bool fired = false;
+            InitConnector handler = _ => fired = true;
+
+            repo.AddOnInit(handler);
+            repo.Connector!.DoInit();
+            fired.Should().BeTrue("AddOnInit must register the handler on the inner connector's OnInit");
+
+            fired = false;
+            repo.RemoveOnInit(handler);
+            repo.Connector!.DoInit();
+            fired.Should().BeFalse("RemoveOnInit must unregister the handler");
+        }
+        finally
+        {
+            try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+        }
     }
 }
