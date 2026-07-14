@@ -57,7 +57,9 @@ public class ElasticJobDescriptorModel : AbstractModel, ILoadable<JobDescriptor>
     [Text(Name = "metadataJson", Index = false)]
     public string? MetadataJson { get; set; }
 
-    public const string IndexName = "background-jobs";
+    // CR-L023: removed the unused, misleading `IndexName = "background-jobs"` const — the real index is
+    // derived by AsyncElasticSearchStore.GetIndexName() from Settings.IndexSettings / typeof(T).Name,
+    // never from a model constant.
 
     public JobDescriptor ToDescriptor()
     {

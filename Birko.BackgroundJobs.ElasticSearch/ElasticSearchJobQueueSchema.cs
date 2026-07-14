@@ -11,7 +11,9 @@ namespace Birko.BackgroundJobs.ElasticSearch
     public static class ElasticSearchJobQueueSchema
     {
         /// <summary>
-        /// Creates the jobs index. Called automatically by ElasticSearchJobQueue on first use.
+        /// Optional explicit pre-creation utility for the jobs index. Not part of the runtime path:
+        /// ElasticSearchJobQueue does not call it — the index is otherwise created lazily by the store's
+        /// init on first CRUD operation (CR-L024).
         /// </summary>
         public static async Task EnsureCreatedAsync(Birko.Data.ElasticSearch.Stores.Settings settings, CancellationToken cancellationToken = default)
         {
