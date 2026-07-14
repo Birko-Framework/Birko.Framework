@@ -105,10 +105,14 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
     {
         var filterQuery = BuildFilterQuery(filter);
 
+        var from = offset ?? 0;
         var searchRequest = new SearchRequest(_indexName)
         {
-            Size = limit ?? 10000,
-            From = offset ?? 0,
+            // CR-L118: clamp Size so From + Size stays within the ES default max_result_window (10000);
+            // otherwise a non-zero offset with the default size makes the request exceed the window and
+            // ES rejects it. For result sets deeper than the window, use search_after / scroll instead.
+            Size = ClampWindowSize(from, limit),
+            From = from,
             Query = filterQuery
         };
 
@@ -375,17 +379,70 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             return;
         }
 
+        var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        // CR-L119: Convert.ChangeType does not handle enum or Guid targets, so those group-by/aggregate
+        // columns were always silently dropped; ConvertValue handles them explicitly. Non-convertible
+        // values are still left at their default (a mismatch between the property type and the value ES
+        // returns), but enum/Guid now round-trip.
+        if (ConvertValue(targetType, value, out var convertedValue))
+        {
+            property.SetValue(instance, convertedValue);
+        }
+    }
+
+    /// <summary>
+    /// Converts an ElasticSearch-returned value to <paramref name="targetType"/>, handling enum and Guid
+    /// targets that <see cref="Convert.ChangeType(object, Type)"/> cannot. Returns <c>false</c> (and leaves
+    /// <paramref name="converted"/> null) when the value cannot be converted.
+    /// </summary>
+    internal static bool ConvertValue(Type targetType, object value, out object? converted)
+    {
+        converted = null;
         try
         {
-            var targetType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
-            var convertedValue = Convert.ChangeType(value, targetType);
-            property.SetValue(instance, convertedValue);
+            if (targetType.IsEnum)
+            {
+                converted = value is string enumName
+                    ? Enum.Parse(targetType, enumName, ignoreCase: true)
+                    : Enum.ToObject(targetType, Convert.ChangeType(value, Enum.GetUnderlyingType(targetType)));
+                return true;
+            }
+
+            if (targetType == typeof(Guid))
+            {
+                converted = value is Guid g ? g : Guid.Parse(value.ToString()!);
+                return true;
+            }
+
+            converted = Convert.ChangeType(value, targetType);
+            return true;
         }
         catch
         {
-            // Silently ignore type conversion failures for individual properties.
-            // This can happen when ES returns unexpected types (e.g., string for a numeric field).
+            // Value shape does not match the property type — leave the property at its default.
+            return false;
         }
+    }
+
+    /// <summary>
+    /// Clamps the effective page size so that <c>From + Size</c> stays within the ElasticSearch default
+    /// <c>max_result_window</c> (10000). Returns 0 once the offset is at or past the window (CR-L118).
+    /// </summary>
+    internal static int ClampWindowSize(int from, int? limit)
+    {
+        const int maxResultWindow = 10000;
+        var size = limit ?? maxResultWindow;
+        if (from < 0)
+        {
+            from = 0;
+        }
+
+        if (from + size > maxResultWindow)
+        {
+            size = Math.Max(0, maxResultWindow - from);
+        }
+
+        return size;
     }
 
     #endregion
