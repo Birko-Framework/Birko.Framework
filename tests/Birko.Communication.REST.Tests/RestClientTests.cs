@@ -174,4 +174,52 @@ public class RestClientTests
     }
 
     #endregion
+
+    #region Static client cache (CR-L080)
+
+    [Fact]
+    public void GetClient_SameUri_ReturnsCachedInstance()
+    {
+        var uri = "https://cache-l080-a.example.com";
+        try
+        {
+            var a = RestClient.GetClient(uri);
+            var b = RestClient.GetClient(uri);
+            a.Should().BeSameAs(b, "GetClient must cache by base URI");
+            RestClient.GetClient("https://cache-l080-b.example.com").Should().NotBeSameAs(a);
+        }
+        finally
+        {
+            RestClient.RemoveClient(uri);
+            RestClient.RemoveClient("https://cache-l080-b.example.com");
+        }
+    }
+
+    [Fact]
+    public void RemoveClient_EvictsAndReturnsFreshInstanceNextTime()
+    {
+        var uri = "https://cache-l080-remove.example.com";
+        var first = RestClient.GetClient(uri);
+
+        RestClient.RemoveClient(uri).Should().BeTrue();
+        RestClient.RemoveClient(uri).Should().BeFalse("already removed");
+
+        var second = RestClient.GetClient(uri);
+        second.Should().NotBeSameAs(first, "a removed client must not be handed out again");
+        RestClient.RemoveClient(uri);
+    }
+
+    [Fact]
+    public void ClearCache_EvictsAllEntries()
+    {
+        var uri = "https://cache-l080-clear.example.com";
+        var first = RestClient.GetClient(uri);
+
+        RestClient.ClearCache();
+
+        RestClient.GetClient(uri).Should().NotBeSameAs(first);
+        RestClient.RemoveClient(uri);
+    }
+
+    #endregion
 }
