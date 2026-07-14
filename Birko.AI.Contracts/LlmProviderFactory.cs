@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Birko.AI.Providers;
 
 namespace Birko.AI.Factories
@@ -8,7 +9,9 @@ namespace Birko.AI.Factories
     /// </summary>
     public static class LlmProviderFactory
     {
-        private static readonly Dictionary<string, Func<Dictionary<string, string>?, ILlmProvider>> _factories = new(StringComparer.OrdinalIgnoreCase);
+        // ConcurrentDictionary so registration racing with reads (or concurrent registration) is
+        // well-defined rather than undefined behavior on a plain Dictionary (CR-L006).
+        private static readonly ConcurrentDictionary<string, Func<Dictionary<string, string>?, ILlmProvider>> _factories = new(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Register a provider factory delegate.

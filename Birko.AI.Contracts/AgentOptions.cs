@@ -121,32 +121,35 @@ namespace Birko.AI
         {
             var options = new AgentOptions();
 
-            if (config.TryGetValue("interactive", out var interactive))
-                options.Interactive = bool.Parse(interactive);
-            if (config.TryGetValue("maxIterations", out var maxIterations))
-                options.MaxIterations = int.Parse(maxIterations);
-            if (config.TryGetValue("maxIterationsPerStep", out var maxIterationsPerStep))
-                options.MaxIterationsPerStep = int.Parse(maxIterationsPerStep);
-            if (config.TryGetValue("verbose", out var verbose))
-                options.Verbose = bool.Parse(verbose);
+            // Use TryParse throughout so a malformed config value (e.g. maxIterations="ten")
+            // is skipped rather than throwing FormatException out of this otherwise-tolerant
+            // factory (it already skips absent keys) (CR-L005).
+            if (config.TryGetValue("interactive", out var interactive) && bool.TryParse(interactive, out var interactiveVal))
+                options.Interactive = interactiveVal;
+            if (config.TryGetValue("maxIterations", out var maxIterations) && int.TryParse(maxIterations, out var maxIterationsVal))
+                options.MaxIterations = maxIterationsVal;
+            if (config.TryGetValue("maxIterationsPerStep", out var maxIterationsPerStep) && int.TryParse(maxIterationsPerStep, out var maxIterationsPerStepVal))
+                options.MaxIterationsPerStep = maxIterationsPerStepVal;
+            if (config.TryGetValue("verbose", out var verbose) && bool.TryParse(verbose, out var verboseVal))
+                options.Verbose = verboseVal;
             if (config.TryGetValue("workingDirectory", out var workingDirectory))
                 options.WorkingDirectory = workingDirectory;
-            if (config.TryGetValue("promptTimeout", out var promptTimeout))
-                options.PromptTimeout = int.Parse(promptTimeout);
+            if (config.TryGetValue("promptTimeout", out var promptTimeout) && int.TryParse(promptTimeout, out var promptTimeoutVal))
+                options.PromptTimeout = promptTimeoutVal;
             if (config.TryGetValue("defaultPromptResponse", out var defaultPromptResponse))
                 options.DefaultPromptResponse = defaultPromptResponse;
-            if (config.TryGetValue("modelDepth", out var modelDepth))
-                options.ModelDepth = int.Parse(modelDepth);
+            if (config.TryGetValue("modelDepth", out var modelDepth) && int.TryParse(modelDepth, out var modelDepthVal))
+                options.ModelDepth = modelDepthVal;
             if (config.TryGetValue("allowedExternalPaths", out var allowedExternalPaths))
                 options.AllowedExternalPaths = allowedExternalPaths.Length == 0
                     ? new List<string>()
                     : new List<string>(allowedExternalPaths.Split('\n'));
-            if (config.TryGetValue("enableStreaming", out var enableStreaming))
-                options.EnableStreaming = bool.Parse(enableStreaming);
-            if (config.TryGetValue("streamingFallbackToSync", out var streamingFallbackToSync))
-                options.StreamingFallbackToSync = bool.Parse(streamingFallbackToSync);
-            if (config.TryGetValue("checkpointInterval", out var checkpointInterval))
-                options.CheckpointInterval = int.Parse(checkpointInterval);
+            if (config.TryGetValue("enableStreaming", out var enableStreaming) && bool.TryParse(enableStreaming, out var enableStreamingVal))
+                options.EnableStreaming = enableStreamingVal;
+            if (config.TryGetValue("streamingFallbackToSync", out var streamingFallbackToSync) && bool.TryParse(streamingFallbackToSync, out var streamingFallbackToSyncVal))
+                options.StreamingFallbackToSync = streamingFallbackToSyncVal;
+            if (config.TryGetValue("checkpointInterval", out var checkpointInterval) && int.TryParse(checkpointInterval, out var checkpointIntervalVal))
+                options.CheckpointInterval = checkpointIntervalVal;
 
             return options;
         }
