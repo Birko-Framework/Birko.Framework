@@ -91,4 +91,28 @@ public class RavenViewTranslatorTests
         reduce!.Should().Contain("Total = g.Sum(x => x.Total)");
         reduce.Should().Contain("Count = g.Sum(x => x.Count)");
     }
+
+    private class GlobalCountView
+    {
+        public long Count { get; set; }
+    }
+
+    // CR-L168: an aggregate-only view with neither GroupBy clauses nor regular Fields must emit a valid
+    // global aggregate (`group result by 1 into g`), not the malformed `group result by new {  } into g`
+    // that an empty composite key would produce.
+    [Fact]
+    public void Aggregate_only_view_with_no_groupby_or_fields_groups_by_constant()
+    {
+        var def = new ViewDefinitionBuilder<GlobalCountView>()
+            .From<Sale>()
+            .Count<Sale>(v => v.Count)
+            .Build();
+
+        var (_, reduce) = RavenViewTranslator.TranslateToMapReduce(def);
+
+        reduce.Should().NotBeNull();
+        reduce!.Should().Contain("group result by 1 into g");
+        reduce.Should().NotContain("group result by new {  }");
+        reduce.Should().Contain("Count = g.Sum(x => x.Count)");
+    }
 }
