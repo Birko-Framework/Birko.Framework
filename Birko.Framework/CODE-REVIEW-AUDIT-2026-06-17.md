@@ -5496,7 +5496,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetClient does a redundant double lookup (ContainsKey + indexer + Add)
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST\RestClient.cs:67-74`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F1, 2026-07-14) — verify-first / already resolved: _clients is a ConcurrentDictionary and GetClient already uses GetOrAdd (one lookup, no race)
 - **Detail:** GetClient calls ContainsKey, then Add, then re-indexes _clients[baseUri] — three hash lookups for one logical get-or-create. Beyond being wasteful it is also the window where the race in the previous finding lives.
 - **Fix:** Replace the body with `return _clients.GetOrAdd(baseUri, k => new RestClient(k));` once _clients is a ConcurrentDictionary.
 
@@ -5504,7 +5504,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** OnRequest/OnResponse handlers run inline on the request path
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST\RestClient.cs:290,295`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F1, 2026-07-14) — documented: OnRequest/OnResponse run inline on the request path, so handlers must not throw (a throwing subscriber aborts the request / masks the response)
 - **Detail:** OnRequest is invoked before the send and OnResponse after. An exception thrown by a subscriber will propagate out of SendRequestAsync (OnRequest before the HTTP call is made; OnResponse after the response/content are already read). This is standard EventHandler behavior, but worth noting that a faulty subscriber can abort the request or mask the response. Not necessarily a bug, but undocumented coupling.
 - **Fix:** If subscriber isolation is desired, wrap the Invoke calls in try/catch; otherwise document that handlers must not throw.
 
@@ -5512,7 +5512,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests exercise the HTTP send path, default-header injection, or the static cache
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Communication.REST.Tests/RestClientTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F1, 2026-07-14) — added static-cache behavior tests (GetClient identity, RemoveClient evict+fresh, ClearCache) to REST.Tests. The SendRequestAsync HTTP path still needs an injectable HttpMessageHandler seam to test header-merge/body-gating — noted as a residual (the HttpClient is created internally)
 - **Detail:** Tests cover the constructor, defaults, BuildUri, event-args POCOs and DefaultHeaders mutation, but there is no coverage of SendRequestAsync (header merge of DefaultHeaders + per-call headers, body-only-for-POST/PUT/PATCH gating, OnRequest/OnResponse firing), nor of the static GetClient/RemoveClient/ClearCache cache (caching identity, removal, dispose-on-remove). The send path can be tested with a stub HttpMessageHandler, but the HttpClient is created internally and not injectable, so it is currently untestable without exposing a handler/HttpClient seam.
 - **Fix:** Add a constructor (or protected hook) that accepts an HttpMessageHandler/HttpClient so SendRequestAsync can be tested against a fake handler, then add cache-behavior tests for GetClient/RemoveClient/ClearCache.
 
@@ -5520,7 +5520,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IsRouteMatch invoked twice; first call's out parameter is dead
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST.Server\RestServer.cs:230-239`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F1, 2026-07-14)
 - **Detail:** ExecutePipelineAsync calls _routes.FirstOrDefault with a predicate that runs IsRouteMatch and captures 'out var pathParameters' which is never used, then on line 236 calls IsRouteMatch again on the matched route to actually extract parameters. The route pattern is matched (and a parameters dictionary allocated) twice per non-exact-match request. Using a side-effecting predicate inside FirstOrDefault is also fragile.
 - **Fix:** Iterate _routes once, break on first IsRouteMatch success, and reuse the parameters dictionary it produced.
 
@@ -5528,7 +5528,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Query-string parser drops parameters whose value contains '='
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST.Server\RestServer.cs:310-315`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F1, 2026-07-14)
 - **Detail:** param.Split('=') with the guard 'if (parts.Length == 2)' silently discards any query parameter whose value contains an '=' (e.g. base64 tokens, JWTs, continuation cursors). Since AllowQueryToken passes tokens via query string, a padded base64 token in ?token=... would be dropped and auth would fail.
 - **Fix:** Split on the first '=' only: var idx = param.IndexOf('='); key = idx<0?param:param[..idx]; value = idx<0?"":param[(idx+1)..]; then UnescapeDataString each.
 
@@ -5536,7 +5536,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Response OutputStream not closed in a finally block
 - **Path:** `C:\Source\Birko\Framework\Birko.Communication.REST.Server\RestServer.cs:366-387`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done (batch: Communication low cluster F1, 2026-07-14)
 - **Detail:** In SendResponseAsync and SendServerErrorAsync, response.OutputStream.Close() runs after WriteAsync. If WriteAsync throws (client disconnect mid-write), the stream is not closed and the connection may be left half-open. ProcessRequestAsync's catch then calls SendServerErrorAsync on the same response, which can throw again on an already-partially-written response.
 - **Fix:** Wrap the write+close in try/finally so Close() always runs, or use 'using' on the response output stream.
 

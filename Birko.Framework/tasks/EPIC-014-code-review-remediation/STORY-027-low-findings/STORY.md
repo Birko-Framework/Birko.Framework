@@ -13,7 +13,16 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**77 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–E done).
+**83 / 418 triaged** as of 2026-07-14 (Communication sub-batches A–F1 done).
+
+**Sub-batch F1 (CR-L078 … CR-L083) — REST + REST.Server:** **L078** (verify-first — `_clients` already a
+ConcurrentDictionary with GetOrAdd), **L079** (documented OnRequest/OnResponse handlers must not throw —
+they run inline), **L080** (added static-cache tests; SendRequestAsync HTTP-path seam noted as residual),
+**L081** (RestServer route match iterates once + reuses the parameters dict instead of running IsRouteMatch
+twice), **L082** (query-string parser splits on the first `=` so token/JWT values containing `=` aren't
+dropped), **L083** (response `OutputStream.Close()` moved into a `finally` in both SendResponseAsync and
+SendServerErrorAsync so a mid-write client disconnect doesn't leave the connection half-open). Suites green:
+REST 22, REST.Server 7.
 
 **Sub-batch E (CR-L070 … CR-L077) — NFC + OAuth + OAuth.Providers:** **L070** (`SerialNfcTransport.TransceiveAsync`
 wraps the blocking serial Write/Read in `Task.Run` + observes the token, mirroring ReadTagAsync), **L071**
