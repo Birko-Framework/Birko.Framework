@@ -13,7 +13,24 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**170 / 418 triaged** as of 2026-07-14. Next open is CR-L171 (Birko.Data.Repositories).
+**172 / 418 triaged** as of 2026-07-14. Next open is CR-L173 (Birko.Data.SQL).
+
+**Batch R — Data.Repositories cluster (CR-L171, CR-L172):** Birko.Data.Repositories. Both closed;
+**/code-review clean**. **L171** (convention): the bulk repository layer now surfaces `ReadFirst(filter)` /
+`ReadFirstAsync(filter, ct)` for parity with the store contract (where the inherited bulk `Read(filter)`
+returns the collection, not a single entity). Added to `IBulkReadRepository<T>` /
+`IAsyncBulkReadRepository<T>` and implemented in `AbstractBulkRepository` / `AbstractAsyncBulkRepository`,
+delegating to the store's `ReadFirst`/`ReadFirstAsync` and mirroring each sibling read's null-store behavior
+(sync throws `InvalidOperationException` when the store isn't an `IBulkStore`, async returns null). Every
+concrete repo inherits the base impl — no direct interface implementers, so nothing breaks. **L172** (other):
+`RepositoryLocator.GetRepository<TRepository, TSettings>` constructs the repo parameterlessly and uses the
+settings only as a cache key — it has no store/model type to build a configured store. A repo whose only
+ctor takes a store previously threw a raw `MissingMethodException`; a new `CreateParameterless` helper now
+converts that to a clear `InvalidOperationException` naming the parameterless-ctor requirement, and the XML
+doc states the settings-only-for-key contract (use a store-injecting overload to apply settings). **Tests:**
+Repositories.Tests 10 → 16 — `BulkRepositoryReadFirstTests` (sync/async ReadFirst over a real InMemory
+store: match / no-match) + `RepositoryLocatorSettingsOverloadTests` (store-only repo → clear error;
+parameterless repo created + cached by settings id). Suite green: Repositories.Tests 16.
 
 **Batch Q — RavenDB cluster (CR-L164 … CR-L170):** Birko.Data.RavenDB (store + repos), .ViewModel,
 .Views. All closed; **/code-review clean**. **L164** (bug): both `RavenDBStore`/`AsyncRavenDBStore` now

@@ -139,6 +139,13 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, Data.Repositories cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch R: **CR-L171, CR-L172** — Birko.Data.Repositories. Both closed; **/code-review clean**.
+- **Convention (L171)** — the bulk repository layer now surfaces `ReadFirst(filter)` / `ReadFirstAsync(filter, ct)` for parity with the store contract (the framework added these to `IBulkReadStore`/`IAsyncBulkReadStore` to resolve the overload-shadowing footgun where a bulk `Read(filter)` returns the collection, not a single entity). Added to `IBulkReadRepository<T>` / `IAsyncBulkReadRepository<T>` and implemented in `AbstractBulkRepository` / `AbstractAsyncBulkRepository`, delegating to the store's `ReadFirst`/`ReadFirstAsync` and mirroring each sibling read's null-store behavior (sync throws when the store isn't an `IBulkStore`, async returns null). No class implements the bulk interfaces directly, so every concrete repo picks up the base impl.
+- **Other (L172)** — `RepositoryLocator.GetRepository<TRepository, TSettings>` constructs the repo parameterlessly and uses the settings only as a cache key (it has no store/model type to build a configured store). A repo whose only ctor takes a store previously surfaced a raw `MissingMethodException`; a new `CreateParameterless` helper converts it to a clear `InvalidOperationException` naming the parameterless-ctor requirement, and the XML doc now states the settings-only-for-key contract (use a store-injecting overload — or call the repo's SetSettings — to apply settings).
+- **Tests** — Repositories.Tests 10 → 16: `BulkRepositoryReadFirstTests` (sync/async ReadFirst over a real InMemory store, match + no-match) + `RepositoryLocatorSettingsOverloadTests` (store-only repo → clear error; parameterless repo created + cached by settings id).
+- Suite green: Birko.Data.Repositories.Tests 16. STORY-027 now **172/418**.
+
 ### Code-review remediation — low findings, Data.RavenDB cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch Q: **CR-L164 … CR-L170** — Birko.Data.RavenDB (store + repos), .RavenDB.ViewModel, .RavenDB.Views. All closed; **/code-review clean**.
 - **Bug (L164)** — `RavenDBStore`/`AsyncRavenDBStore` now implement `IDisposable` + track `_ownsStore`. The connection-string ctor and `Settings.CreateDocumentStore` paths mark the `IDocumentStore` owned (disposed on `Dispose`); an externally-supplied store (the `IDocumentStore` ctor) is never disposed. A repeat `SetSettings` disposes the previously-owned store via a shared `ReplaceDocumentStore` helper (was silently leaking the prior store).

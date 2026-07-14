@@ -6240,7 +6240,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Bulk repositories omit ReadFirst/ReadFirstAsync despite framework convention
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Repositories\IBulkRepository.cs:14,IAsyncBulkRepository.cs:15`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The framework recently added ReadFirst/ReadFirstAsync to IBulkReadStore<T>/IAsyncBulkReadStore<T> specifically to resolve the overload-shadowing footgun where Read(filter) on a bulk type returns the collection, not a single entity. The repository layer mirrors the store hierarchy but does not surface ReadFirst/ReadFirstAsync. IBulkReadRepository<T> inherits IReadRepository<T> whose Read(filter) returns T?, so the single-result path technically exists, but a caller working off the store knows ReadFirst as the single-result accessor; the missing parity is an API-completeness gap, not a bug.
 - **Fix:** Consider adding ReadFirst(filter) / ReadFirstAsync(filter, ct) to the bulk repository interfaces and base classes, delegating to the store's ReadFirst/ReadFirstAsync, for parity with the store contract.
 
@@ -6248,7 +6248,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetRepository<TRepository,TSettings> uses a default constructor, inconsistent with store-injected overloads
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Repositories\RepositoryLocator.cs:89-109`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Unlike the other two GetRepository overloads which pass a store to Activator.CreateInstance(type, store), this settings-keyed overload calls Activator.CreateInstance(type) with no arguments (line 105). Since all repository base classes only declare a constructor taking a store (AbstractRepository(IStore<T>? store), etc.), this will throw MissingMethodException for any repository derived from the supplied base classes unless the concrete repo adds its own parameterless constructor. The settings argument is used only for the cache key, never to build a store — so the created repository has a null Store and every operation silently no-ops (Read returns null, Create returns Guid.Empty).
 - **Fix:** Either remove this overload, or have it construct the store from settings (e.g. via StoreLocator) and pass it in, so the cached repository is actually functional rather than a null-store no-op.
 
