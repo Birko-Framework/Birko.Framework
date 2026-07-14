@@ -22,6 +22,28 @@ namespace Birko.BackgroundJobs.Redis
 
         private string KeyPrefix => _settings.KeyPrefix ?? "birko:jobs";
 
+        // Atomic check-and-delete: only delete the key if it still holds our token, so we never release
+        // someone else's lock. Single definition shared by ReleaseAsync/DisposeAsync/Dispose (CR-L031).
+        private const string SafeReleaseScript = @"
+                if redis.call('GET', KEYS[1]) == ARGV[1] then
+                    return redis.call('DEL', KEYS[1])
+                else
+                    return 0
+                end
+            ";
+
+        private Task SafeReleaseAsync()
+        {
+            var db = _connectionManager.GetDatabase();
+            return db.ScriptEvaluateAsync(SafeReleaseScript, new RedisKey[] { _lockKey! }, new RedisValue[] { _lockToken! });
+        }
+
+        private void SafeReleaseSync()
+        {
+            var db = _connectionManager.GetDatabase();
+            db.ScriptEvaluate(SafeReleaseScript, new RedisKey[] { _lockKey! }, new RedisValue[] { _lockToken! });
+        }
+
         /// <summary>
         /// Whether a lock is currently held.
         /// </summary>
@@ -87,22 +109,7 @@ namespace Birko.BackgroundJobs.Redis
                 return;
             }
 
-            var db = _connectionManager.GetDatabase();
-
-            // Atomic check-and-delete via Lua to avoid releasing someone else's lock
-            const string script = @"
-                if redis.call('GET', KEYS[1]) == ARGV[1] then
-                    return redis.call('DEL', KEYS[1])
-                else
-                    return 0
-                end
-            ";
-
-            await db.ScriptEvaluateAsync(
-                script,
-                new RedisKey[] { _lockKey },
-                new RedisValue[] { _lockToken }
-            ).ConfigureAwait(false);
+            await SafeReleaseAsync().ConfigureAwait(false);
 
             IsLocked = false;
             _lockKey = null;
@@ -118,19 +125,7 @@ namespace Birko.BackgroundJobs.Redis
                 {
                     try
                     {
-                        var db = _connectionManager.GetDatabase();
-                        const string script = @"
-                            if redis.call('GET', KEYS[1]) == ARGV[1] then
-                                return redis.call('DEL', KEYS[1])
-                            else
-                                return 0
-                            end
-                        ";
-                        await db.ScriptEvaluateAsync(
-                            script,
-                            new RedisKey[] { _lockKey },
-                            new RedisValue[] { _lockToken }
-                        ).ConfigureAwait(false);
+                        await SafeReleaseAsync().ConfigureAwait(false);
                     }
                     catch
                     {
@@ -154,19 +149,7 @@ namespace Birko.BackgroundJobs.Redis
                 {
                     try
                     {
-                        var db = _connectionManager.GetDatabase();
-                        const string script = @"
-                            if redis.call('GET', KEYS[1]) == ARGV[1] then
-                                return redis.call('DEL', KEYS[1])
-                            else
-                                return 0
-                            end
-                        ";
-                        db.ScriptEvaluate(
-                            script,
-                            new RedisKey[] { _lockKey },
-                            new RedisValue[] { _lockToken }
-                        );
+                        SafeReleaseSync();
                     }
                     catch
                     {
