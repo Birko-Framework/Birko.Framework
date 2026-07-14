@@ -13,7 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**187 / 418 triaged** as of 2026-07-14. Next open is CR-L188 (Birko.Data.SQL.PostgreSQL).
+**191 / 418 triaged** as of 2026-07-14. Next open is CR-L192 (Birko.Data.SQL.SqLite).
+
+**Batch X — PostgreSQL cluster (CR-L188 … CR-L190; CR-L191):** Birko.Data.SQL.PostgreSQL + .PostgreSQL.View.
+All closed; **/code-review clean**. **L188** (cleanup): `IsTransientException`'s
+`ex is NpgsqlException npgsqlEx && npgsqlEx is PostgresException pgEx` collapsed to `ex is PostgresException
+pgEx` (PostgresException derives from NpgsqlException; the outer binding was unused). **L189** (other):
+`PostgreSqlSettings.GetConnectionString` composes via `NpgsqlConnectionStringBuilder` so
+Host/UserName/Password/Database values containing `;`/`=`/`'` are quoted/escaped correctly instead of
+breaking the key=value parsing or injecting keywords (the builder omits keys at their Npgsql default —
+e.g. Port 5432 — documented). **L190** (convention): documented on both `CreateCore`/`CreateCoreAsync` that
+bulk create intentionally assigns a fresh Guid to every row (discarding a caller-supplied Guid), matching the
+MSSql sibling's bulk convention — changing one provider alone would diverge cross-provider; callers needing a
+known id use the single-item path. **L191** (bug): `ViewExists`/`MaterializedViewExists`(+async) add
+`AND table_schema = current_schema()` / `AND schemaname = current_schema()` so a same-named object in another
+schema on the search path isn't a false positive (the bare single-part CREATE lands in the current schema).
+**Tests:** PostgreSQL.Tests 17 → 18 (connection-string round-trip via NpgsqlConnectionStringBuilder incl. a
+`;`/`=`/`'`-in-password escaping case; the old literal-Port assertion replaced — the builder omits the
+default port). L188 is behavior-preserving (build-verified), L191 HasRows is a live-PG path (code-review
+verified). Suites green: PostgreSQL.Tests 18, PostgreSQL.View.Tests 7.
 
 **Batch W — MySQL.View cluster (CR-L186, CR-L187):** Birko.Data.SQL.MySQL.View. Both closed;
 **/code-review clean**. **L186** (convention): added a public `ViewExistsAsync(string, CancellationToken)`

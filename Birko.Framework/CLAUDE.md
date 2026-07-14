@@ -139,6 +139,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 
 For older entries, see [CHANGELOG.md](CHANGELOG.md).
 
+### Code-review remediation — low findings, PostgreSQL cluster (EPIC-014 / STORY-027) (2026-07-14)
+Batch X: **CR-L188 … CR-L190** (Birko.Data.SQL.PostgreSQL) + **CR-L191** (Birko.Data.SQL.PostgreSQL.View). All closed; **/code-review clean**.
+- **Cleanup (L188)** — `IsTransientException`'s `ex is NpgsqlException npgsqlEx && npgsqlEx is PostgresException pgEx` collapsed to `ex is PostgresException pgEx` (PostgresException derives from NpgsqlException; the outer binding was unused).
+- **Other (L189)** — `PostgreSqlSettings.GetConnectionString` composes via `NpgsqlConnectionStringBuilder` so Host/UserName/Password/Database values containing `;`/`=`/`'` are quoted/escaped correctly instead of breaking key=value parsing or injecting keywords. (The builder omits keys at their Npgsql default — e.g. Port 5432, Timeout 15 — documented; functionally identical.)
+- **Convention (L190)** — documented on both `CreateCore`/`CreateCoreAsync` that bulk create intentionally assigns a fresh Guid to every row (discarding a caller-supplied Guid), matching the MSSql sibling's bulk convention; changing one provider alone would diverge cross-provider. Callers needing a known id use the single-item create path.
+- **Bug (L191)** — `ViewExists`/`MaterializedViewExists` (+async) now add `AND table_schema = current_schema()` / `AND schemaname = current_schema()`, so a same-named view/matview in another schema on the search path is no longer a false positive (a bare single-part CREATE lands in the current schema).
+- **Tests** — PostgreSQL.Tests 17 → 18 (connection-string round-trip via NpgsqlConnectionStringBuilder + a `;`/`=`/`'`-in-password escaping case; the literal default-Port assertion replaced). L188 build-verified (behavior-preserving); L191 HasRows is a live-PG path (code-review verified).
+- Suites green: Birko.Data.SQL.PostgreSQL.Tests 18, .PostgreSQL.View.Tests 7. STORY-027 now **191/418**.
+
 ### Code-review remediation — low findings, MySQL.View cluster (EPIC-014 / STORY-027) (2026-07-14)
 Batch W: **CR-L186, CR-L187** — Birko.Data.SQL.MySQL.View. Both closed; **/code-review clean**.
 - **Convention (L186)** — added a public `ViewExistsAsync(string, CancellationToken)` override mirroring the sync `ViewExists`: runs the same parameterized `information_schema.VIEWS` query scoped to `DATABASE()` via `DoCommandAsync` (observing the token), instead of the base fallback's `SELECT 1 FROM <view> WHERE 1=0` inside a try/catch that swallows connection/permission errors as "view does not exist" and isn't database-scoped. Extracted the shared SQL into a `ViewExistsSql` const.

@@ -6376,7 +6376,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant type test in IsTransientException
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.PostgreSQL\Database\Connectors\PostgreSQLConnector.cs:42`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The condition 'ex is NpgsqlException npgsqlEx && npgsqlEx is PostgresException pgEx' is redundant: PostgresException derives from NpgsqlException, so the first pattern's binding npgsqlEx is never used and the outer check is implied by the inner one. It can be simplified to 'if (ex is PostgresException pgEx)'.
 - **Fix:** Replace with: if (ex is PostgresException pgEx) { ... }
 
@@ -6384,7 +6384,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** PostgreSqlSettings.GetConnectionString does not URL/connection-string-escape values
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.PostgreSQL\Stores\PostgreSqlSettings.cs:24-32`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetConnectionString interpolates Location/UserName/Password/Name directly into a key=value;... string. A password (or name) containing ';' or '=' would break parsing or could inject extra keywords. Npgsql values containing special characters should be wrapped/escaped (Npgsql supports quoting with single quotes and doubling embedded quotes). Same shape as other SqlSettings siblings, so this may be an accepted framework-wide limitation rather than PostgreSQL-specific, but worth noting since GetConnectionString is the override that diverges from the RemoteSettings inline path in CreateConnection.
 - **Fix:** Prefer NpgsqlConnectionStringBuilder to compose the string so values are escaped correctly, or document that settings values must not contain ';'/'='.
 
@@ -6392,7 +6392,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CreateCore/CreateCoreAsync unconditionally overwrite caller-supplied Guid
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.PostgreSQL\Stores\PostgreSQLStore.cs:61, Stores\AsyncPostgreSQLStore.cs:98`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Both CreateCore paths assign item.Guid = Guid.NewGuid() for every item, discarding any Guid the caller already set (e.g. when re-inserting a known-id entity or seeding deterministic ids). This is identical to the MSSql sibling (MSSqlStore.cs:70 / AsyncMSSqlStore.cs:99), so it is a consistent framework convention rather than a defect introduced here — flagging only so the behavior is intentional and documented. Note non-bulk DataBaseStore.Create paths may handle Guid differently, so bulk vs single create could differ.
 - **Fix:** If parity with single-create Guid handling matters, only assign when item.Guid == Guid.Empty; otherwise leave as-is to match the MSSql convention.
 
@@ -6400,7 +6400,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ViewExists / MaterializedViewExists match by name only, ignoring schema
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.SQL.PostgreSQL.View\Database/Connectors/PostgreSQLConnector_View.cs:23, :47, :226`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The existence checks filter solely on table_name = @viewName (information_schema.views) and matviewname = @viewName (pg_matviews) with no schema/table_schema predicate. If a view or matview with the same name exists in another schema on the search path (or any schema), reader.HasRows is true and the method reports a false positive for the current schema. Combined with CreateMaterializedView using a bare, single-part QuoteIdentifier(name) (assuming the default schema), a same-named object in a different schema can make Auto/exists logic believe the object already exists when it does not in the target schema. This mirrors the MSSql.View sibling (sys.views WHERE name = ...), so it is a shared design limitation, not a regression; flagging at low severity because the framework's view DDL is single-schema throughout.
 - **Fix:** If multi-schema support is in scope, add an AND table_schema = current_schema() (or pg_matviews schemaname) predicate, or document the single-schema assumption.
 
