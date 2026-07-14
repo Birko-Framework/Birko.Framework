@@ -156,8 +156,9 @@ namespace Birko.Communication.SOAP
                     return;
                 }
 
-                // Read SOAP request
-                using var reader = new StreamReader(request.InputStream);
+                // Read SOAP request honoring the client-declared content encoding (SOAP envelopes are
+                // commonly ISO-8859-x or UTF-16, not always UTF-8) — CR-L085.
+                using var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8);
                 var soapEnvelope = await reader.ReadToEndAsync().ConfigureAwait(false);
 
                 _logger?.LogDebug("Received SOAP request for {Path}", path);
@@ -180,14 +181,9 @@ namespace Birko.Communication.SOAP
 
         private static string GetServicePath(string localPath)
         {
-            // Remove leading slash and extract service name
-            var path = localPath.TrimStart('/');
-            var queryIndex = path.IndexOf('?');
-            if (queryIndex > 0)
-            {
-                path = path.Substring(0, queryIndex);
-            }
-            return path;
+            // Remove leading slash and extract service name. (CR-L087: the old '?' query-stripping block
+            // was dead — this is fed request.Url.LocalPath, which never contains the query component.)
+            return localPath.TrimStart('/');
         }
 
         private static async Task SendSoapResponseAsync(HttpListenerResponse response, string soapResponse)
@@ -199,8 +195,14 @@ namespace Birko.Communication.SOAP
             var bytes = Encoding.UTF8.GetBytes(soapResponse);
             response.ContentLength64 = bytes.Length;
 
-            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            response.OutputStream.Close();
+            try
+            {
+                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            }
+            finally
+            {
+                response.OutputStream.Close(); // CR-L084: always close, even if the write throws mid-body
+            }
         }
 
         private static async Task SendNotFoundAsync(HttpListenerResponse response, string message)
@@ -211,8 +213,14 @@ namespace Birko.Communication.SOAP
             var bytes = Encoding.UTF8.GetBytes(message);
             response.ContentLength64 = bytes.Length;
 
-            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            response.OutputStream.Close();
+            try
+            {
+                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            }
+            finally
+            {
+                response.OutputStream.Close(); // CR-L084: always close, even if the write throws mid-body
+            }
         }
 
         private static async Task SendMethodNotAllowedAsync(HttpListenerResponse response)
@@ -224,8 +232,14 @@ namespace Birko.Communication.SOAP
             var bytes = Encoding.UTF8.GetBytes(message);
             response.ContentLength64 = bytes.Length;
 
-            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            response.OutputStream.Close();
+            try
+            {
+                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            }
+            finally
+            {
+                response.OutputStream.Close(); // CR-L084: always close, even if the write throws mid-body
+            }
         }
 
         private static async Task SendServerErrorAsync(HttpListenerResponse response, string errorMessage)
@@ -237,32 +251,18 @@ namespace Birko.Communication.SOAP
             var bytes = Encoding.UTF8.GetBytes(faultXml);
             response.ContentLength64 = bytes.Length;
 
-            await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
-            response.OutputStream.Close();
+            try
+            {
+                await response.OutputStream.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+            }
+            finally
+            {
+                response.OutputStream.Close(); // CR-L084: always close, even if the write throws mid-body
+            }
         }
 
         private static string CreateFaultEnvelope(string code, string message)
-        {
-            return $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soap:Envelope xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
-  <soap:Body>
-    <soap:Fault>
-      <faultcode>soap:{code}</faultcode>
-      <faultstring>{EscapeXml(message)}</faultstring>
-    </soap:Fault>
-  </soap:Body>
-</soap:Envelope>";
-        }
-
-        private static string EscapeXml(string text)
-        {
-            return text
-                .Replace("&", "&amp;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;")
-                .Replace("\"", "&quot;")
-                .Replace("'", "&apos;");
-        }
+            => SoapXml.BuildFault(code, message); // CR-L086: shared helper
 
         public void Dispose()
         {
@@ -325,27 +325,7 @@ namespace Birko.Communication.SOAP
         /// <param name="message">The fault message</param>
         /// <returns>The SOAP fault envelope</returns>
         protected static string CreateFaultResponse(string code, string message)
-        {
-            return $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soap:Envelope xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
-  <soap:Body>
-    <soap:Fault>
-      <faultcode>soap:{code}</faultcode>
-      <faultstring>{EscapeXml(message)}</faultstring>
-    </soap:Fault>
-  </soap:Body>
-</soap:Envelope>";
-        }
-
-        private static string EscapeXml(string text)
-        {
-            return text
-                .Replace("&", "&amp;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;")
-                .Replace("\"", "&quot;")
-                .Replace("'", "&apos;");
-        }
+            => SoapXml.BuildFault(code, message); // CR-L086: shared helper
     }
 
     /// <summary>

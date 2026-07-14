@@ -13,5 +13,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\SoapAuthenticationService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SoapClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SoapServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SoapXml.cs" />
   </ItemGroup>
 </Project>

@@ -98,10 +98,12 @@ namespace Birko.Communication.SOAP.Middleware
                 var parameters = queryString.TrimStart('?').Split('&');
                 foreach (var param in parameters)
                 {
-                    var parts = param.Split('=');
-                    if (parts.Length == 2 && parts[0] == _config.QueryTokenName)
+                    // Split on the first '=' only so a token whose value contains '=' (base64 padding
+                    // like "abc==") isn't rejected by the old parts.Length == 2 guard (CR-L088).
+                    var idx = param.IndexOf('=');
+                    if (idx > 0 && param[..idx] == _config.QueryTokenName)
                     {
-                        return Uri.UnescapeDataString(parts[1]);
+                        return Uri.UnescapeDataString(param[(idx + 1)..]);
                     }
                 }
             }
@@ -132,27 +134,7 @@ namespace Birko.Communication.SOAP.Middleware
         /// <param name="message">The error message</param>
         /// <returns>A SOAP fault envelope</returns>
         public static string CreateAuthenticationFault(string message)
-        {
-            return $@"<?xml version=""1.0"" encoding=""utf-8""?>
-<soap:Envelope xmlns:soap=""http://schemas.xmlsoap.org/soap/envelope/"">
-  <soap:Body>
-    <soap:Fault>
-      <faultcode>soap:Client</faultcode>
-      <faultstring>{EscapeXml(message)}</faultstring>
-    </soap:Fault>
-  </soap:Body>
-</soap:Envelope>";
-        }
-
-        private static string EscapeXml(string text)
-        {
-            return text
-                .Replace("&", "&amp;")
-                .Replace("<", "&lt;")
-                .Replace(">", "&gt;")
-                .Replace("\"", "&quot;")
-                .Replace("'", "&apos;");
-        }
+            => SoapXml.BuildFault("Client", message); // CR-L086: shared helper
 
         /// <summary>
         /// Disposes the service
