@@ -71,6 +71,22 @@ public class RavenDBJobQueueTests
     }
 
     [Fact]
+    public async Task FailAsync_JobMaxRetriesZero_FallsBackToDefaultPolicy()
+    {
+        // Regression for CR-L029: a job with MaxRetries == 0 went straight to Dead, ignoring the
+        // queue's RetryPolicy. NewQueue() uses the default policy (MaxRetries = 3), so a first failure
+        // must reschedule rather than die.
+        var queue = NewQueue();
+        var id = await EnqueueAndDequeue(queue, maxRetries: 0); // AttemptCount -> 1, below default policy's 3
+
+        await queue.FailAsync(id, "boom");
+
+        var job = await queue.GetAsync(id);
+        job!.Status.Should().Be(JobStatus.Scheduled);
+        job.ScheduledAt.Should().NotBeNull();
+    }
+
+    [Fact]
     public async Task FailAsync_WithRetriesRemaining_ReschedulesWithBackoff()
     {
         var queue = NewQueue();
