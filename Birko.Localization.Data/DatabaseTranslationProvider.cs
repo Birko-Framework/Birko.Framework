@@ -155,7 +155,10 @@ public class DatabaseTranslationProvider : ITranslationProvider
         {
             if (!string.IsNullOrEmpty(model.Key))
             {
-                dict[model.Key] = model.Value;
+                // CR-L279: coalesce a null Value so the IReadOnlyDictionary<string,string> contract stays
+                // honest — a persisted/deserialized record with a null Value must not surface as a null
+                // dictionary value and NRE a downstream consumer.
+                dict[model.Key] = model.Value ?? string.Empty;
             }
         }
 
