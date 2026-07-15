@@ -87,6 +87,23 @@ public class AsyncSqlSyncKnowledgeStoreCrudTests : IDisposable
     }
 
     [Fact]
+    public async Task SetLastSyncTime_EmptyScope_IsANoOp_AndGetStaysNull()
+    {
+        // CR-L220: last-sync-time is derived from the scope's rows (max LastSyncedAt), and Set only
+        // refreshes existing rows. Stamping a scope with no rows echoes the value back but persists
+        // nothing, so a subsequent Get still returns null — the documented, provider-safe limitation
+        // shared with the JSON reference store.
+        var store = NewStore();
+
+        var stamp = new DateTime(2026, 7, 15, 9, 0, 0, DateTimeKind.Utc);
+        var returned = await store.SetLastSyncTimeAsync("empty", stamp, CancellationToken.None);
+
+        returned.Should().Be(stamp, "the method echoes the requested stamp back");
+        (await store.GetLastSyncTimeAsync("empty", CancellationToken.None))
+            .Should().BeNull("an empty scope has no row to carry the derived timestamp");
+    }
+
+    [Fact]
     public async Task SetLastSyncTime_NullTime_IsNoOp()
     {
         var store = NewStore();
