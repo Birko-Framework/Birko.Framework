@@ -33,9 +33,15 @@ namespace Birko.MessageQueue.InMemory
         }
 
         /// <summary>
-        /// Reads the next message from a destination's channel.
+        /// Reads the next message from a destination's channel (pull-based consumption).
         /// Returns null if no message is available within the timeout.
         /// </summary>
+        /// <remarks>
+        /// CR-L286: a destination is either <b>pull-consumed</b> (this method) or <b>push-consumed</b>
+        /// (<see cref="AddSubscriber"/>), not both. Once a subscriber is added, the dispatch loop drains the
+        /// destination's channel via <c>ReadAllAsync</c>, so messages would be stolen from a concurrent
+        /// <see cref="ReadAsync"/> caller (and vice versa). Don't mix the two modes on one destination.
+        /// </remarks>
         public async Task<QueueMessage?> ReadAsync(string destination, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
         {
             var state = GetOrCreateDestination(destination);
@@ -63,19 +69,31 @@ namespace Birko.MessageQueue.InMemory
         }
 
         /// <summary>
-        /// Adds a subscriber callback for a destination.
+        /// Adds a subscriber callback for a destination (push-based consumption).
         /// Returns a registration ID that can be used to remove the subscriber.
         /// </summary>
+        /// <remarks>
+        /// CR-L286: pushing (subscribers) and pulling (<see cref="ReadAsync"/>) are mutually exclusive per
+        /// destination — the dispatch loop drains the channel, so a pull caller on the same destination
+        /// would see its messages consumed by the loop.
+        /// </remarks>
         public Guid AddSubscriber(string destination, Func<QueueMessage, CancellationToken, Task> handler)
         {
             var state = GetOrCreateDestination(destination);
             var id = Guid.NewGuid();
-            state.Subscribers.TryAdd(id, handler);
 
-            // Start dispatching if this is the first subscriber
-            if (state.Subscribers.Count == 1 && state.DispatchCts == null)
+            // CR-L285: make the "first subscriber starts the dispatch loop" decision atomic with respect to
+            // the subscriber count. ConcurrentDictionary makes membership thread-safe but not this lifecycle
+            // transition — two concurrent adds (or an add racing the last remove) could otherwise start two
+            // loops or leave none running. Under the lock, start a loop whenever there isn't one and at least
+            // one subscriber exists (which is true right after this TryAdd).
+            lock (state.SyncRoot)
             {
-                StartDispatching(destination, state);
+                state.Subscribers.TryAdd(id, handler);
+                if (state.DispatchCts == null)
+                {
+                    StartDispatching(destination, state);
+                }
             }
 
             return id;
@@ -88,15 +106,16 @@ namespace Birko.MessageQueue.InMemory
         {
             if (_destinations.TryGetValue(destination, out var state))
             {
-                state.Subscribers.TryRemove(subscriberId, out _);
-
-                // Stop dispatching if no more subscribers
-                if (state.Subscribers.IsEmpty)
+                // CR-L285: stop the dispatch loop atomically when the last subscriber leaves, under the same
+                // lock as AddSubscriber so start/stop can't interleave.
+                lock (state.SyncRoot)
                 {
-                    var cts = state.DispatchCts;
-                    state.DispatchCts = null;
-                    if (cts != null)
+                    state.Subscribers.TryRemove(subscriberId, out _);
+
+                    if (state.Subscribers.IsEmpty && state.DispatchCts != null)
                     {
+                        var cts = state.DispatchCts;
+                        state.DispatchCts = null;
                         cts.Cancel();
                         cts.Dispose();
                     }
@@ -157,16 +176,20 @@ namespace Birko.MessageQueue.InMemory
 
             foreach (var state in _destinations.Values)
             {
-                var cts = state.DispatchCts;
-                state.DispatchCts = null;
-                if (cts != null)
+                // CR-L285: take the per-state lock so teardown can't race a concurrent Add/RemoveSubscriber.
+                lock (state.SyncRoot)
                 {
-                    cts.Cancel();
-                    cts.Dispose();
-                }
+                    var cts = state.DispatchCts;
+                    state.DispatchCts = null;
+                    if (cts != null)
+                    {
+                        cts.Cancel();
+                        cts.Dispose();
+                    }
 
-                state.Channel.Writer.TryComplete();
-                state.Subscribers.Clear();
+                    state.Channel.Writer.TryComplete();
+                    state.Subscribers.Clear();
+                }
             }
 
             _destinations.Clear();
@@ -177,6 +200,9 @@ namespace Birko.MessageQueue.InMemory
             public Channel<QueueMessage> Channel { get; }
             public ConcurrentDictionary<Guid, Func<QueueMessage, CancellationToken, Task>> Subscribers { get; } = new();
             public CancellationTokenSource? DispatchCts { get; set; }
+
+            /// <summary>CR-L285: guards the dispatch-loop start/stop transition against the subscriber count.</summary>
+            public object SyncRoot { get; } = new();
 
             public DestinationState(int capacity)
             {
