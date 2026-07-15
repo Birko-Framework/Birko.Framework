@@ -88,6 +88,16 @@ public class StringTemplateEngineTests
     }
 
     [Fact]
+    public async Task RenderAsync_NullIntermediateInPath_ReplacesWithEmpty()
+    {
+        // CR-L297: a null object mid-path (Customer is null) resolves to empty — distinct from a missing
+        // property (which throws) and from a null leaf value.
+        var result = await _engine.RenderAsync("Hi {{Customer.Name}}!", new { Customer = (object?)null });
+
+        result.Should().Be("Hi !");
+    }
+
+    [Fact]
     public async Task RenderAsync_MessageTemplate_RendersBodyTemplate()
     {
         var template = new TestTemplate

@@ -110,6 +110,68 @@ public class SmtpEmailSenderTests
     }
 
     [Fact]
+    public async Task SendBatchAsync_NullElement_CapturedAsFailed_OthersSucceed()
+    {
+        // CR-L295: a null element must yield a Failed result, not abort the batch and discard the rest.
+        var settings = new EmailSettings("localhost", 25) { DefaultFrom = new MessageAddress("from@test.com") };
+        using var sender = new SmtpEmailSender(settings, (m, ct) => Task.CompletedTask);
+        var good = new EmailMessage
+        {
+            From = new MessageAddress("from@test.com"),
+            Recipients = new[] { new MessageAddress("to@test.com") },
+            Subject = "s",
+            Body = "b"
+        };
+
+        var results = await sender.SendBatchAsync(new[] { good, null!, good });
+
+        results.Should().HaveCount(3);
+        results[0].Success.Should().BeTrue();
+        results[1].Success.Should().BeFalse();
+        results[1].Error.Should().Contain("Null message");
+        results[2].Success.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SendAsync_EmptyRecipientAddress_ReturnsInvalidRecipientFailure()
+    {
+        // CR-L296: an empty address value surfaces the dedicated InvalidRecipient reason, not the generic one.
+        var settings = new EmailSettings("localhost", 25);
+        using var sender = new SmtpEmailSender(settings, (m, ct) => Task.CompletedTask);
+        var message = new EmailMessage
+        {
+            From = new MessageAddress("from@test.com"),
+            Recipients = new[] { new MessageAddress("") },
+            Subject = "s",
+            Body = "b"
+        };
+
+        var result = await sender.SendAsync(message);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("Invalid recipient");
+    }
+
+    [Fact]
+    public async Task SendAsync_MalformedRecipientAddress_ReturnsInvalidRecipientFailure()
+    {
+        var settings = new EmailSettings("localhost", 25);
+        using var sender = new SmtpEmailSender(settings, (m, ct) => Task.CompletedTask);
+        var message = new EmailMessage
+        {
+            From = new MessageAddress("from@test.com"),
+            Recipients = new[] { new MessageAddress("not-an-email") },
+            Subject = "s",
+            Body = "b"
+        };
+
+        var result = await sender.SendAsync(message);
+
+        result.Success.Should().BeFalse();
+        result.Error.Should().Contain("Invalid recipient");
+    }
+
+    [Fact]
     public void Dispose_DoesNotThrow()
     {
         var sender = CreateSender();
