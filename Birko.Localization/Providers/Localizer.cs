@@ -46,14 +46,18 @@ public sealed class Localizer : ILocalizer
 
     public string Get(string key, IDictionary<string, object?> args, CultureInfo? culture = null)
     {
-        var template = Get(key, culture);
-        return StringInterpolator.Interpolate(template, args);
+        // CR-L276: format interpolated values in the resolved culture, not the ambient thread culture.
+        var resolvedCulture = culture ?? _cultureResolver.GetCurrentCulture();
+        var template = Get(key, resolvedCulture);
+        return StringInterpolator.Interpolate(template, args, resolvedCulture);
     }
 
     public string Get(string key, object[] args, CultureInfo? culture = null)
     {
-        var template = Get(key, culture);
-        return StringInterpolator.Interpolate(template, args);
+        // CR-L276: format positional args in the resolved culture, not the ambient thread culture.
+        var resolvedCulture = culture ?? _cultureResolver.GetCurrentCulture();
+        var template = Get(key, resolvedCulture);
+        return StringInterpolator.Interpolate(template, args, resolvedCulture);
     }
 
     public bool HasTranslation(string key, CultureInfo? culture = null)
@@ -73,6 +77,11 @@ public sealed class Localizer : ILocalizer
             return result;
         }
 
+        // CR-L274: track whether the default culture is queried in steps 1–2 so step 3 doesn't query it a
+        // second time (e.g. default "sk" reached as the parent of the requested "sk-SK"). The old guard
+        // compared only the ORIGINAL culture to the default, so a default-as-parent slipped through.
+        var defaultAttempted = culture.Equals(_settings.DefaultCulture);
+
         // 2. Try parent culture chain (e.g., sk-SK → sk)
         if (_settings.FallbackToParentCulture)
         {
@@ -84,12 +93,16 @@ public sealed class Localizer : ILocalizer
                 {
                     return result;
                 }
+                if (parent.Equals(_settings.DefaultCulture))
+                {
+                    defaultAttempted = true;
+                }
                 parent = parent.Parent;
             }
         }
 
-        // 3. Try default culture
-        if (!culture.Equals(_settings.DefaultCulture))
+        // 3. Try default culture (only if it wasn't already queried above)
+        if (!defaultAttempted)
         {
             result = _provider.GetTranslation(key, _settings.DefaultCulture);
             if (result != null)

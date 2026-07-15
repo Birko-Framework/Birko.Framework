@@ -27,6 +27,16 @@ public sealed class DateFormatter : IDateFormatter
         return value.ToString(format, ResolveCulture(culture));
     }
 
+    /// <summary>
+    /// Returns a relative-time phrase (e.g. "just now", "3 minutes ago", "yesterday").
+    /// </summary>
+    /// <remarks>
+    /// CR-L275: the relative phrasing is <b>English-only</b> by design — the <paramref name="culture"/>
+    /// parameter is accepted for signature symmetry with the other formatters but does not affect the
+    /// wording here (it governs numeric/date formatting in <see cref="Format(DateTime, CultureInfo?)"/> and
+    /// the format-string overload). Localized relative phrasing (via a pluralizer-aware key set) is out of
+    /// scope for this version; callers needing translated relative time should build it from ILocalizer.
+    /// </remarks>
     public string FormatRelative(DateTime value, DateTime relativeTo, CultureInfo? culture = null)
     {
         var diff = relativeTo - value;

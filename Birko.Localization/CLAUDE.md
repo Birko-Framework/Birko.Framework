@@ -21,14 +21,14 @@ Translations and culture support for the Birko Framework. Provides a pluggable l
 - **MissingKeyBehavior** — Enum: ReturnKey, ReturnEmpty, ThrowException
 
 ### Formatting (`Formatting/`)
-- **StringInterpolator** — Internal utility for named `{placeholder}` and positional `{0}` interpolation
+- **StringInterpolator** — Internal utility for named `{placeholder}` and positional `{0}` interpolation. Takes an `IFormatProvider` so values format in the resolved translation culture, not the ambient thread culture (CR-L276); `Localizer` passes the resolved culture.
 
 ### Providers (`Providers/`)
 - **Localizer** — Default ILocalizer with fallback chain: exact culture → parent culture → default culture → missing-key behavior
 - **ThreadCultureResolver** — Resolves culture from CultureInfo.CurrentUICulture
 - **CldrPluralizer** — CLDR plural rules for 30+ languages (including Slovak/Czech 3-form, Polish, Russian, Arabic 6-form)
 - **NumberFormatter** — Wraps .NET CultureInfo number formatting
-- **DateFormatter** — Short date, custom format, relative time ("5 minutes ago", "yesterday", "in 3 hours")
+- **DateFormatter** — Short date, custom format, relative time ("5 minutes ago", "yesterday", "in 3 hours"). Relative phrasing is **English-only** by design — the culture param affects only the numeric/date formatting paths, not the relative wording (CR-L275).
 
 ### Translation Providers (`Translation/`)
 - **InMemoryTranslationProvider** — Dictionary-based, with fluent builder. For testing.

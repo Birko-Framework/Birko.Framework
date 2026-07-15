@@ -34,12 +34,14 @@ public sealed class JsonTranslationProvider : ITranslationProvider
     {
         return Directory.GetFiles(_basePath, "*.json")
             .Select(f => Path.GetFileNameWithoutExtension(f))
+            // CR-L273: empty file names (e.g. a bare ".json") are skipped here, so the Select below no
+            // longer needs a dead IsNullOrEmpty→InvariantCulture branch — every name reaching it is non-empty.
             .Where(name => !string.IsNullOrEmpty(name))
             .Select(name =>
             {
                 try
                 {
-                    return string.IsNullOrEmpty(name) ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(name);
+                    return CultureInfo.GetCultureInfo(name);
                 }
                 catch (CultureNotFoundException)
                 {
