@@ -6716,7 +6716,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** BelongsToCurrentTenant grants full access when no tenant is set, including in bulk delete/update
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tenant\Stores/TenantStoreWrapper.cs:142-151 (also AsyncTenantStoreWrapper.cs:140-149; used by bulk wrappers)`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When !_tenantContext.HasTenant the method returns true, so Update/Delete (single and bulk) operate on items of ANY tenant. This is documented as intentional 'non-tenant (admin) mode', but combined with the silent static-singleton fallback above it means a mis-wired context (HasTenant==false) opens cross-tenant writes rather than failing closed. Worth a deliberate decision/test rather than an implicit default.
 - **Fix:** Confirm fail-open is intended; if so, cover it with an explicit test. Otherwise consider a 'strict' option that requires a tenant for mutating operations.
 
@@ -6724,7 +6724,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Middleware uses LINQ FirstOrDefault without 'using System.Linq'
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tenant\Middleware/TenantMiddleware.cs:88,100,138 (no `using System.Linq` in file header lines 1-11)`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** headerValue.FirstOrDefault() / queryValue.FirstOrDefault() are LINQ extension methods over StringValues (IEnumerable<string?>); the file imports System, System.Net, System.Threading.Tasks but not System.Linq. As a shared .projitems project this compiles only because current consumers enable ImplicitUsings; a consumer csproj with ImplicitUsings disabled would fail to build this file.
 - **Fix:** Add `using System.Linq;` to TenantMiddleware.cs so the shared source compiles regardless of consumer ImplicitUsings setting.
 
@@ -6732,7 +6732,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused 'using Birko.Configuration' across store files
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tenant\Stores/TenantStoreWrapper.cs:3, AsyncTenantStoreWrapper.cs:3, TenantBulkStoreWrapper.cs:2, AsyncTenantBulkStoreWrapper.cs:2, TenantStoreExtensions.cs:2`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Every store file imports Birko.Configuration but none reference any type from it (no Settings usage anywhere in the wrappers). Dead using directives.
 - **Fix:** Remove the unused `using Birko.Configuration;` directives.
 

@@ -13,7 +13,7 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**228 / 418 triaged** as of 2026-07-15. Next open is CR-L229 (Birko.Data.Tenant cluster, L229–L231).
+**231 / 418 triaged** as of 2026-07-15. Next open is CR-L232 (Birko.Data.TimescaleDB cluster, L232–L233).
 
 > **⚠ Deferred, needs user authorization — shared-project GUID sweep (surfaced by Batch AM's
 > /code-review):** the CR-L227 fake-GUID pattern is much wider than the one tracked finding. (a) Five
@@ -29,6 +29,27 @@ finding-ids: CR-L001 …
 > all slnx/workspace/test references are by path, so nothing else changes). The mechanical 13-repo sweep
 > was prepared but the permission layer declined it as out-of-batch-scope — ask the user, then run it as
 > its own batch.
+
+**Batch AN — Data.Tenant cluster (CR-L229, CR-L230, CR-L231):** Birko.Data.Tenant. All closed;
+**/code-review: 4 findings, all fixed in-batch**. **L229** (other — "confirm fail-open + test" option
+taken): `BelongsToCurrentTenant`'s no-tenant behavior is confirmed as a deliberate FAIL-OPEN
+("non-tenant/admin mode") and documented with a `<remarks>` on both wrappers naming the flip side (a
+mis-wired context falling back to the static `Models.Tenant.Current` singleton opens cross-tenant
+writes rather than failing closed) — and, from /code-review: the remark's "derive and override" escape
+hatch was impossible (the method was non-virtual, and the bulk wrappers bind
+`items.All(BelongsToCurrentTenant)` as a method group), so the method is now `protected virtual` on
+both wrappers, with an override test proving dispatch from single-item AND bulk call sites. The
+project CLAUDE.md (×2 lines) + README claimed the UnauthorizedAccessException guard unconditionally —
+now state the no-tenant fail-open explicitly. **L230** (bug): added `using System.Linq;` to
+`TenantMiddleware.cs` — `FirstOrDefault()` over `StringValues` is a LINQ extension, and shared
+.projitems source must compile in consumers with ImplicitUsings disabled (swept the project: no other
+file has the latent defect). **L231** (cleanup): removed the dead `using Birko.Configuration;` from all
+five store files (no Settings usage anywhere, incl. crefs). **Tests:** Tenant.Tests 16 → 23 —
+`TenantFailOpenTests`: fail-open pinned by actual writes (foreign rows seeded via the inner store;
+update mutation + delete removal asserted by read-back — /code-review caught that NotThrow-only
+assertions couldn't distinguish fail-open from silently-skipped), fail-closed matrix (foreign item →
+throw; one foreign item poisons a bulk batch; sync + async), and the virtual-override fail-closed
+escape hatch. Also created the missing Birko.Data.Tenant.Tests CLAUDE.md. Suite green: Tenant.Tests 23.
 
 **Batch AM — Data.Tagging cluster (CR-L226, CR-L227, CR-L228):** Birko.Data.Tagging. All closed;
 **/code-review: 4 actionable findings — 3 fixed in-batch, 1 declined, plus the deferred GUID sweep
