@@ -54,3 +54,16 @@ public class TemplateRenderException : MessagingException
         TemplateName = templateName;
     }
 }
+
+/// <summary>
+/// Raised when a named template cannot be located (e.g. no matching file). A <see cref="TemplateRenderException"/>
+/// subtype so callers can distinguish "not found" (which may fall back to another source) from other render
+/// failures such as a path-traversal rejection, which must not be silently swallowed (CR-L299).
+/// </summary>
+public class TemplateNotFoundException : TemplateRenderException
+{
+    public TemplateNotFoundException(string templateName, string message)
+        : base(templateName, message)
+    {
+    }
+}
