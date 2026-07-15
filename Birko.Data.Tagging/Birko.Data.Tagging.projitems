@@ -3,7 +3,7 @@
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
     <HasSharedItems>true</HasSharedItems>
-    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-tag000000001</SharedGUID>
+    <SharedGUID>eff6b1e6-6154-48b4-a7ff-55ada89d4635</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data.Tagging</Import_RootNamespace>

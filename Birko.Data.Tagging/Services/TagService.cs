@@ -7,6 +7,11 @@ namespace Birko.Data.Tagging;
 public abstract class TagServiceBase : ITagService
 {
     // ── Abstract data access (implemented by platform) ───────────────────
+    //
+    // TENANT-SCOPING CONTRACT: this base class stamps TenantGuid = GetCurrentTenantId() on every
+    // insert, but the read/delete hooks below receive NO tenant parameter — implementations MUST
+    // scope every one of them (including GetTagByIdAsync) to the ambient tenant themselves.
+    // A hook that skips the filter returns/deletes other tenants' data; the base class has no guard.
 
     protected abstract Task<Tag> CreateTagInternalAsync(Tag tag, CancellationToken ct);
     protected abstract Task<Tag?> GetTagByIdAsync(Guid tagId, CancellationToken ct);
@@ -146,6 +151,11 @@ public abstract class TagServiceBase : ITagService
         var tag = await FindTagByNameAsync(tagName.Trim(), ct);
         if (tag is null)
         {
+            // Deliberately routes through CreateTagAsync, which re-runs FindTagByNameAsync before
+            // inserting. The repeated lookup narrows the TOCTOU window: if a concurrent request
+            // created the same tag between our miss above and this call, CreateTagAsync returns the
+            // existing tag instead of inserting a duplicate (this layer has no unique-name constraint
+            // to fall back on). Don't "optimize" this to CreateTagInternalAsync.
             var dto = await CreateTagAsync(tagName, color, ct: ct);
             await AttachTagAsync(entityType, entityId, dto.Id, ct);
             return dto;

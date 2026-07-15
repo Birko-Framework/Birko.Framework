@@ -36,6 +36,10 @@ public class SqlTagService : TagServiceBase
 }
 ```
 
+> **Tenant-scoping contract:** `TagServiceBase` stamps `TenantGuid` on every insert, but the abstract
+> read/delete hooks receive no tenant parameter — your implementation **must scope every hook**
+> (including `GetTagByIdAsync`) to the ambient tenant, or it will return/delete other tenants' data.
+
 ## Registration
 
 ```csharp

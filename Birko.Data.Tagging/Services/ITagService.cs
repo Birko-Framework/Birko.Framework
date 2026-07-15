@@ -7,7 +7,11 @@ public sealed record TagDto(Guid Id, string Name, string? Color, string? TagGrou
 
 /// <summary>
 /// Service for managing tags and attaching/detaching them to/from entities.
-/// All operations are tenant-scoped.
+/// All operations are tenant-scoped. Note the division of labor: <see cref="TagServiceBase"/> stamps
+/// <c>TenantGuid</c> on every insert, but tenant isolation on READS is not enforceable at this layer —
+/// the abstract read hooks carry no tenant parameter, so each platform implementation MUST filter every
+/// read (by-id lookups included) to the ambient tenant. An implementation that forgets to filter leaks
+/// other tenants' tags. See the "Abstract data access" region in <see cref="TagServiceBase"/>.
 /// </summary>
 public interface ITagService
 {
