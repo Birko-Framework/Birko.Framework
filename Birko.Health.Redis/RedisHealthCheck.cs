@@ -35,9 +35,22 @@ public sealed class RedisHealthCheck : IHealthCheck
 
     public async Task<HealthCheckResult> CheckAsync(CancellationToken ct = default)
     {
+        // CR-L269: StackExchange.Redis PingAsync has no CancellationToken overload, but honor an
+        // already-cancelled token before doing any work. Placed before the try so the cancellation
+        // propagates to HealthCheckRunner's timeout handling (which honors TimeoutStatus) rather than
+        // being masked as a generic Unhealthy by the catch below (cf. CR-M191).
+        ct.ThrowIfCancellationRequested();
+
         try
         {
             var connection = _connectionFactory();
+            if (connection == null)
+            {
+                // CR-L270: the Func<IConnectionMultiplexer> overload can legally return null; report an
+                // explicit reason instead of an obscure NullReferenceException-as-Unhealthy.
+                return HealthCheckResult.Unhealthy("Redis connection factory returned null.");
+            }
+
             var db = connection.GetDatabase();
             var latency = await db.PingAsync().ConfigureAwait(false);
 
