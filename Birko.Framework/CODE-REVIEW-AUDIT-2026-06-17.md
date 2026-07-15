@@ -6740,7 +6740,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Possible NullReferenceException in TimescaleDBConnector(RemoteSettings) when settings is null
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.TimescaleDB\Database\Connectors\TimescaleDBConnector.cs:43`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** If settings is null, the 'settings is TimescaleDBSettings' check is false and the else branch dereferences settings.Location / settings.Name / etc. unconditionally, throwing NullReferenceException. The base(settings) call does not guard either. Minor edge case, but the framework's no-nullable-warnings convention favors an explicit guard clause.
 - **Fix:** Add an early guard (if (settings == null) throw new ArgumentNullException(nameof(settings));) or null-check before reading settings.Location.
 
@@ -6748,7 +6748,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** InvalidOperationException guards duplicated across store and both repositories
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.TimescaleDB\Repositories\AsyncTimescaleDBRepository.cs:96`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The 'if (Connector == null) throw new InvalidOperationException(...)' guard plus the Task.Run(() => Connector.DoInit())/DropTable/CreateTable bodies are copy-pasted verbatim across AsyncTimescaleDBStore (CreateSchemaAsync/DropAsync), AsyncTimescaleDBRepository, and AsyncTimescaleDBModelRepository (InitAsync/CreateSchemaAsync/DropAsync/CreateHypertableAsync). Not a bug, but it is duplicated logic that could live in one helper.
 - **Fix:** Extract a small protected helper (e.g. RequireConnector()) and/or share the schema/init/drop bodies, or have the repositories delegate to the store's methods rather than reaching into Connector independently.
 

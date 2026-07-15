@@ -13,7 +13,7 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**231 / 418 triaged** as of 2026-07-15. Next open is CR-L232 (Birko.Data.TimescaleDB cluster, L232–L233).
+**233 / 418 triaged** as of 2026-07-15. Next open is CR-L234 (Birko.Data.TimescaleDB.ViewModel cluster, L234–L236).
 
 > **⚠ Deferred, needs user authorization — shared-project GUID sweep (surfaced by Batch AM's
 > /code-review):** the CR-L227 fake-GUID pattern is much wider than the one tracked finding. (a) Five
@@ -29,6 +29,31 @@ finding-ids: CR-L001 …
 > all slnx/workspace/test references are by path, so nothing else changes). The mechanical 13-repo sweep
 > was prepared but the permission layer declined it as out-of-batch-scope — ask the user, then run it as
 > its own batch.
+
+**Batch AO — Data.TimescaleDB cluster (CR-L232, CR-L233):** Birko.Data.TimescaleDB. Both closed;
+**/code-review: 4 findings — 3 fixed in-batch, 1 deferred**. **L232** (nullable): both
+`TimescaleDBConnector` constructors now throw a clear `ArgumentNullException` on null settings — the
+typed ctor via a throw-expression in the `base(...)` call, the RemoteSettings path via a guard at the
+top of `AsTimescaleSettings` (which used to NRE on `settings.Location`). **L233** (cleanup,
+verify-first — the finding was partly stale): the copy-pasted `if (Connector == null) throw ...`
+guards are consolidated into a private `RequireConnector()` per class (AsyncTimescaleDBStore 3 sites,
+AsyncTimescaleDBModelRepository 4 sites; messages unified to "…Call SetSettings() first."). The
+audit's third site — `Repositories\AsyncTimescaleDBRepository.cs` — turned out to be a **never-compiled
+bit-rotted copy**: absent from the `.projitems`, no longer implementing the base's abstract
+`MapToModel`, superseded by the abstract ViewModel repositories in Birko.Data.TimescaleDB.ViewModel;
+both dead copies (sync + async) were DELETED rather than registered (registering them broke the build
+— CS0534). From /code-review: fixed the stale project CLAUDE.md/README (both still advertised the
+deleted repos + never-existing `*BulkStore`/`*BulkRepository` types; CLAUDE.md's example used a
+nonexistent `base(settings)` ctor and the wrong `TimeColumn` default), and dropped the initially-written
+reflection pin for the deletion (the legitimate ViewModel classes share name+namespace — it would
+false-fail under aggregator imports). **Deferred (altitude, needs its own pass):** the same
+`Connector == null` throw is copy-pasted in AsyncMySQLStore/AsyncMSSqlStore/AsyncPostgreSQLStore/
+AsyncSQLiteStore — a `protected DB RequireConnector()` on `AsyncDataBaseStore<DB,T>` would fix all
+five backends once; spans four already-closed clusters, so record-and-defer. **Tests:**
+TimescaleDB.Tests 14 → 18 (`TimescaleDBGuardTests`: both ctor null-guards ArgumentNullException-not-NRE;
+unconfigured store + model-repo schema methods fail fast with the "Call SetSettings" message). Updated
+the test project CLAUDE.md (was a 10-line stub with a wrong path; now documents scope per suite).
+Suite green: TimescaleDB.Tests 18.
 
 **Batch AN — Data.Tenant cluster (CR-L229, CR-L230, CR-L231):** Birko.Data.Tenant. All closed;
 **/code-review: 4 findings, all fixed in-batch**. **L229** (other — "confirm fail-open + test" option
