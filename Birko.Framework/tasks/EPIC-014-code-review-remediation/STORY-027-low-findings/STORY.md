@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**314 / 418 triaged** as of 2026-07-15. Next open is CR-L315 (Birko.Models.Product cluster, L315…).
+**316 / 418 triaged** as of 2026-07-15. Next open is CR-L317 (Birko.Models.Product.SQL cluster, L317…).
+
+**Batch BU — Birko.Models.Product cluster (CR-L315, CR-L316):** Birko.Models.Product. Both closed;
+**/code-review clean (no findings)**. **L315** (other): the VM→VM `Product.LoadFrom` kept the *longer*
+Description (`data.Description.Length > Description.Length`) while every other field — and the model→VM
+overload — straight-copied. Made it a straight `Description = data.Description` (the "longest-wins" merge
+was an undocumented, surprising heuristic that left stale data when the source description was shorter).
+**L316** (cleanup): model-side `IProductProperties.LoadProperties` / `IProductTags.LoadTags` filtered
+`x.Value != null` (null-only) while the viewmodel-side `AddProperty`/`AddTag` drop null AND empty — aligned
+both model-side filters to `!string.IsNullOrEmpty(x.Value)`. **Tests:** Product.Tests 9 → 11 —
+`LoadProperties_DropsEmptyValues` and `LoadFrom_ViewModel_StraightCopiesDescription_EvenWhenShorter`. Suite
+green: Product.Tests 11.
 
 **Batch BT — Birko.Models.Pricing.SQL (CR-L314):** Birko.Models.Pricing.SQL. Closed;
 **/code-review clean (no findings)**. **L314** (test-gap): created a new **Birko.Models.Pricing.SQL.Tests**

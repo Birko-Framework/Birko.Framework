@@ -7421,7 +7421,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ViewModels.Product.LoadFrom(Product) silently keeps the longer Description
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Product\ViewModels/Product.cs:162-168`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The viewmodel-to-viewmodel LoadFrom does not assign Description unconditionally: it only overwrites when the current Description is empty OR the incoming one is strictly longer (data.Description.Length > Description.Length). Every other field is copied verbatim. This 'longest wins' merge heuristic is surprising for a method named LoadFrom and is undocumented, so a caller expecting a straight copy will get stale data when the source description is shorter. If intentional (merge semantics) it should be documented; if not, it is a latent data bug.
 - **Fix:** Either assign Description = data.Description like the other fields, or add an XML-doc comment explaining the deliberate longest-description merge so callers aren't surprised.
 
@@ -7429,7 +7429,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IProductProperties.LoadProperties filters on Value != null but AddProperty also drops empties — Where clause is misleading dead-ish guard
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Product\Models/IProductProperties.cs:19`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The model-side LoadProperties (and IProductTags.LoadTags at line 19) filters .Where(x => x.Value != null) on the projected SourceValue, but SourceValue.Value comes from the source list and is only checked for null, not empty, whereas the viewmodel-side AddProperty/AddTag drops both null AND empty. The two sides disagree on what a valid value is, and the null-only Where is a weak guard that overlaps inconsistently with the conditional-access chain. Minor, but the property/tag normalization rules differ between the model and viewmodel paths.
 - **Fix:** Align the validity predicate (use string.IsNullOrEmpty consistently) on both model and viewmodel sides, or extract a single shared normalization helper.
 
