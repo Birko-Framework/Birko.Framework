@@ -7165,7 +7165,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** InMemoryMessageQueueOptions is dead code — never consumed
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryMessageQueueOptions.cs:6`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The class defines ChannelCapacity but InMemoryMessageQueue's only constructor takes a raw int channelCapacity (InMemoryMessageQueue.cs:26) and nothing references the options type (grep finds only the projitems and CLAUDE.md). It is documented in CLAUDE.md as the configuration surface but is not wired in.
 - **Fix:** Either add a constructor overload InMemoryMessageQueue(InMemoryMessageQueueOptions options, IMessageSerializer? serializer = null) that reads ChannelCapacity, or delete the class.
 
@@ -7173,7 +7173,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant ContentType assignment in typed SendAsync
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryProducer.cs:48`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Headers is initialized with ContentType = _serializer.ContentType in the object initializer (line 48), then lines 51-53 set message.Headers.ContentType = _serializer.ContentType again when headers != null. The net effect is just 'always set ContentType to the serializer's content type', so the extra branch is dead/duplicated logic.
 - **Fix:** Drop the object-initializer ContentType and unconditionally set message.Headers.ContentType = _serializer.ContentType after assigning Headers, or vice versa — one assignment covers both cases.
 

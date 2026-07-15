@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**282 / 418 triaged** as of 2026-07-15. Next open is CR-L283 (Birko.MessageQueue.InMemory cluster, L283…).
+**284 / 418 triaged** as of 2026-07-15. Next open is CR-L285 (next cluster after Birko.MessageQueue.InMemory).
+
+**Batch BF — Birko.MessageQueue.InMemory cluster (CR-L283, CR-L284):** Birko.MessageQueue.InMemory. Both
+closed; **/code-review clean (no findings)**. **L283** (cleanup — "wire it in" option): `InMemoryMessageQueueOptions`
+(documented as the config surface but never consumed) is now wired in via a new
+`InMemoryMessageQueue(InMemoryMessageQueueOptions options, IMessageSerializer? serializer = null)` ctor that
+delegates to the raw-capacity ctor (`?? throw` null-guard on options). Additive, no ambiguity with the
+existing ctor (distinct first-param types). **L284** (cleanup): `InMemoryProducer.SendAsync<T>` set
+`ContentType` twice (object-initializer + a conditional re-set) — collapsed to a single unconditional
+`message.Headers.ContentType = _serializer.ContentType` after `Headers = headers ?? new MessageHeaders()`;
+net behavior identical. **Tests:** MessageQueue.Tests → 82 — `SendTyped` stamps the serializer content type
+both without caller headers and overriding caller headers (CR-L284); options ctor yields a working queue +
+null-options `ArgumentNullException` (CR-L283). Suite green: MessageQueue.Tests 82.
 
 **Batch BE — Birko.MessageQueue core cluster (CR-L280, CR-L281, CR-L282):** Birko.MessageQueue. All closed;
 **/code-review clean (no findings)**. **L280** (bug — **already fixed, verify-first**): the
