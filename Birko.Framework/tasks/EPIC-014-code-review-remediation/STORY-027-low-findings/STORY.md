@@ -15,20 +15,23 @@ finding-ids: CR-L001 …
 
 **233 / 418 triaged** as of 2026-07-15. Next open is CR-L234 (Birko.Data.TimescaleDB.ViewModel cluster, L234–L236).
 
-> **⚠ Deferred, needs user authorization — shared-project GUID sweep (surfaced by Batch AM's
-> /code-review):** the CR-L227 fake-GUID pattern is much wider than the one tracked finding. (a) Five
-> Views projects still carry non-hex GUIDs (`…-view00000001` Birko.Data.Views, `…-sqlview00001`
-> Birko.Data.SQL.Views, `…-esview00001` Birko.Data.ElasticSearch.Views, `…-rvnview0001`
-> Birko.Data.RavenDB.Views, `…-cdbview0001` Birko.Data.CosmosDB.Views). (b) Worse, EIGHT valid-hex GUIDs
-> are each shared by TWO different projects (Security.Vault.Configuration↔Security.AzureKeyVault,
-> Data.Sync.RavenDB↔Communication.WebSocket, Data.Aggregates↔Time, Data.Sync.MongoDb↔Communication.Bluetooth,
-> Data.Sync.Sql↔Communication.Hardware, Models.Customers↔Communication.REST.Server,
-> Telemetry.OpenTelemetry↔Data.CosmosDB, Data.Sync.Tenant↔Communication.Network) — GUID-keyed tooling can
-> bind the wrong project; `Birko.Framework.slnx` pins four Communication entries by `Id=`, so the fix is
-> to regenerate the OTHER side of each pair (projitems `SharedGUID` + shproj `ProjectGuid` in lockstep;
-> all slnx/workspace/test references are by path, so nothing else changes). The mechanical 13-repo sweep
-> was prepared but the permission layer declined it as out-of-batch-scope — ask the user, then run it as
-> its own batch.
+**Batch AM-bis — repo-wide shared-project GUID sweep (user-authorized follow-up to CR-L227):** DONE.
+The Batch AM /code-review found the fake-GUID pattern was much wider than the one tracked finding:
+five Views projects carried non-hex GUIDs (`…-view00000001`, `…-sqlview00001`, `…-esview00001`,
+`…-rvnview0001`, `…-cdbview0001`) and EIGHT valid-hex GUIDs were each shared by TWO different projects
+(Security.Vault.Configuration↔Security.AzureKeyVault, Data.Sync.RavenDB↔Communication.WebSocket,
+Data.Aggregates↔Time, Data.Sync.MongoDb↔Communication.Bluetooth, Data.Sync.Sql↔Communication.Hardware,
+Models.Customers↔Communication.REST.Server, Telemetry.OpenTelemetry↔Data.CosmosDB,
+Data.Sync.Tenant↔Communication.Network) — GUID-keyed tooling could bind the wrong project. With user
+authorization, 13 projects were regenerated (`projitems SharedGUID` + `shproj ProjectGuid` in
+lockstep; for each collision pair the side NOT pinned by `Id=` in `Birko.Framework.slnx` was changed —
+the four pinned Communication entries kept theirs). Verified post-sweep: every GUID now appears
+exactly twice (its own pair), all are shape-valid hex, no stale old-GUID references anywhere in
+framework/tests/slnx/workspace/aggregator, and all pairs match. One commit per repo (13 repos).
+GUIDs are VS-project-system metadata only — MSBuild imports .projitems by path — so no build impact.
+(A planned smoke build was skipped: the machine's .NET 10 host/runtime disappeared mid-session —
+hostfxr max 8.0.29 with 10.x SDKs orphaned on disk — an environment issue unrelated to this change;
+reported to the user.)
 
 **Batch AO — Data.TimescaleDB cluster (CR-L232, CR-L233):** Birko.Data.TimescaleDB. Both closed;
 **/code-review: 4 findings — 3 fixed in-batch, 1 deferred**. **L232** (nullable): both
