@@ -33,6 +33,15 @@ public class CosmosSyncTenantScopingTests
     }
 
     [Fact]
+    public void Model_HasNoDeadInternalRecordId()
+    {
+        // Audit-gap extra alongside CR-L225: the dead int InternalRecordId ("for database
+        // compatibility") was removed — never set/read, serialized InternalRecordId:0 into every
+        // document (the Cosmos analogue of RavenDB's CR-L219). Guards against reintroduction.
+        typeof(CosmosSyncKnowledgeItem).GetProperty("InternalRecordId").Should().BeNull();
+    }
+
+    [Fact]
     public void Model_CarriesTenantId()
     {
         var tenant = Guid.NewGuid();
