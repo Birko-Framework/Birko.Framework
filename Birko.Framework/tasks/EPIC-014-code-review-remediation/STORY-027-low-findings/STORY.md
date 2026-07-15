@@ -13,7 +13,31 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**221 / 418 triaged** as of 2026-07-15. Next open is CR-L222 (Birko.Data.Sync.Tenant).
+**224 / 418 triaged** as of 2026-07-15. Next open is CR-L225 (Birko.Data.Sync.Xml).
+
+**Batch AK — Data.Sync.Tenant cluster (CR-L222, CR-L223, CR-L224):** Birko.Data.Sync.Tenant. All closed;
+**/code-review clean (no findings)**. **L222** (bug — cancellation): in `ExecuteSyncAsync` the
+`IsCancellationRequested` check only `break`s the inner item `foreach`; the outer batch `for` kept iterating
+(firing `OnBatchCompleted` for every remaining batch), so cancellation didn't stop the sync promptly. Added a
+cancellation break at the top of the outer `for` (graceful-partial semantics preserved — the post-loop
+knowledge-persist still runs on the processed set). Additionally `ApplyConflictResolutionAsync` didn't receive
+the token, so its two `UpdateAsync` calls ran uncancellable during conflict resolution — added an optional
+`CancellationToken` param (source-compatible with the existing test call), forwarded from the call site and
+into both writes. **L223** (efficiency): `GetUpdatedAt` called `typeof(T).GetProperty("UpdatedAt")` on every
+invocation (twice per `GetVersionHash`, plus the conflict/newest paths) — a per-item hot-path reflection
+lookup. Cached the resolved PropertyInfo in a `private static readonly PropertyInfo? _updatedAtProperty` (the
+static-method equivalent of the ctor-cached `_guidProperty`, since these methods are static + called
+statically by tests); the DateTime/DateTime? guard is baked into the one-time resolver, so a non-matching
+property caches as null. **L224** (cleanup): removed the redundant `new EnqueueAsync(scope, op, ct)` shadow on
+`TenantSyncQueue` — it re-declared the inherited `SyncQueue.EnqueueAsync`, which already keys via the virtual
+`GetQueueKey(scope)` this class overrides, so it added no behavior and introduced a member-hiding footgun.
+Verified safe: no caller uses the 3-arg form on a `TenantSyncQueue` reference, and the context case is
+equivalently expressed via the tenant-explicit overload with `tenantGuid: null` (identical `"{scope}_{tenant}"`
+key). **Tests:** Sync.Tenant.Tests 12 → 17 — `Cancellation_StopsOuterBatchLoop_NotJustInnerLoop` (exactly 1
+`OnBatchCompleted` after cancelling in the first batch, was 3), `ConflictResolution_ForwardsCancellationToken_ToUpdate`
+(a cancelled token makes the conflict write throw `OperationCanceledException`), a direct `GetUpdatedAt`
+DateTime/DateTime?/null/absent matrix, and a new `TenantSyncQueueTests` (reflection-asserts the `new` overload
+is gone + the null-tenant context enqueue runs). Suite green: Sync.Tenant.Tests 17.
 
 **Batch AJ — Data.Sync.Sql cluster (CR-L220, CR-L221):** Birko.Data.Sync.Sql. Both closed;
 **/code-review clean (no findings)**. **L220** (other, docs — SQL analogue of JSON CR-L214): documented the

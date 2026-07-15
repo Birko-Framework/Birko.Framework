@@ -6656,26 +6656,29 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L222 · ⚪ low · Birko.Data.Sync.Tenant
 - **Title:** Cancellation only breaks the inner loop and is not passed to conflict-resolution store calls
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:400`
-- **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Category:** bug · **Verification:** verified — fixed (STORY-027 Batch AK)
+- **Status:** done
 - **Detail:** Inside ExecuteSyncAsync the IsCancellationRequested check (line 400) only breaks the inner foreach; the outer batch `for` loop continues to the next batch, so cancellation does not stop the sync promptly. Additionally, the UpdateAsync calls inside ApplyConflictResolutionAsync (lines 764, 772) do not receive options.CancellationToken, so cancellation is not observed during conflict resolution.
 - **Fix:** Break/return out of the outer batch loop on cancellation (or use ThrowIfCancellationRequested), and forward options.CancellationToken into the conflict-resolution UpdateAsync calls.
+- **Resolution (Batch AK):** added an `IsCancellationRequested` break at the top of the outer batch `for` loop (keeps the graceful-partial semantics — the post-loop knowledge-persist still runs on the processed set, unchanged), and threaded `options.CancellationToken` into `ApplyConflictResolutionAsync` (new optional param) so both conflict-resolution `UpdateAsync` calls observe it. Two regression tests: one asserts the outer loop stops after the first cancelled batch (exactly 1 OnBatchCompleted, was 3); one asserts a cancelled token makes the conflict write throw OperationCanceledException.
 
 ### CR-L223 · ⚪ low · Birko.Data.Sync.Tenant
 - **Title:** GetUpdatedAt performs uncached reflection on every call in the per-item hot path
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\Providers/TenantSyncProvider.cs:817`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AK)
+- **Status:** done
 - **Detail:** GetUpdatedAt calls typeof(T).GetProperty("UpdatedAt") on every invocation, and it is called repeatedly per item (twice per GetVersionHash, plus in GetNewest/GetNewestConflictResolution). The Guid property is cached in the constructor (_guidProperty); UpdatedAt should be too. Needless reflection allocation across potentially large item sets.
 - **Fix:** Cache the UpdatedAt PropertyInfo (and a flag for its presence/type) in the constructor like _guidProperty / _tenantGuidProperty.
+- **Resolution (Batch AK):** cached the resolved PropertyInfo in a `private static readonly PropertyInfo? _updatedAtProperty` (the static-method equivalent of the ctor-cached `_guidProperty` — GetUpdatedAt/GetVersionHash are static and called statically by tests, so an instance field wasn't viable); the DateTime/DateTime? type guard is baked into the one-time resolver, so a non-matching property caches as null. GetUpdatedAt is now a single `_updatedAtProperty?.GetValue(entity) as DateTime?` with no per-call reflection.
 
 ### CR-L224 · ⚪ low · Birko.Data.Sync.Tenant
 - **Title:** TenantSyncQueue redundantly shadows base EnqueueAsync with `new`
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Tenant\TenantSyncQueue.cs:82`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AK)
+- **Status:** done
 - **Detail:** The `new` EnqueueAsync(scope, op, ct) override duplicates the base SyncQueue.EnqueueAsync, which already calls the virtual GetQueueKey(scope) that this class overrides to add tenant scoping. The shadowing method does exactly what the inherited one does, so it adds no behavior and introduces a member-hiding footgun (base-typed references silently call the base version, which is equivalent here but the `new` invites confusion).
 - **Fix:** Remove the `new` EnqueueAsync overload; the virtual GetQueueKey override already applies tenant scoping to the inherited method.
+- **Resolution (Batch AK):** removed the `new` overload. Verified safe: no code calls the 3-arg form on a `TenantSyncQueue` reference (all `.EnqueueAsync(scope, op, ct)` call sites are on the base `SyncQueue`), and the context-based case is equivalently expressed via the tenant-explicit overload with `tenantGuid: null` — `GetEffectiveTenantGuid(null)` resolves the context tenant and the base `GetQueueKey(scope, tenant)` yields the identical `"{scope}_{tenant}"` key as the overridden 1-arg `GetQueueKey`. (One nuance the finding omitted: the sibling 4-param overload already hides the base name, so the `new` was the only thing re-exposing the 3-arg form on the derived type — but with no such callers and the null-tenant equivalent, removal is clean.)
 
 ### CR-L225 · ⚪ low · Birko.Data.Sync.Xml
 - **Title:** Unused Id property carried over from the SQL model
