@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Birko.Models.Contracts;
 using FluentAssertions;
 using Xunit;
@@ -6,6 +7,52 @@ using CategoryModel = Birko.Models.Category.Category;
 using CategoryViewModel = Birko.Models.Category.ViewModels.Category;
 
 namespace Birko.Models.Category.Tests;
+
+/// <summary>
+/// CR-L303/L304: ViewModel setter change-notification guards and null-safe LoadFrom ordering.
+/// </summary>
+public class CategoryViewModelTests
+{
+    [Fact]
+    public void PathSetter_SameValue_DoesNotRaisePropertyChanged()
+    {
+        // CR-L304: setting Path to its current value must not fire PropertyChanged (or the cascaded
+        // "Category" object notification).
+        var vm = new CategoryViewModel { Path = "/a/b" };
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.Path = "/a/b";
+
+        raised.Should().NotContain(CategoryViewModel.PathProperty);
+        raised.Should().NotContain(CategoryViewModel.CategoryObjectProperty);
+    }
+
+    [Fact]
+    public void PathSetter_NewValue_RaisesPropertyChanged()
+    {
+        var vm = new CategoryViewModel { Path = "/a" };
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.Path = "/a/b";
+
+        raised.Should().Contain(CategoryViewModel.PathProperty);
+        raised.Should().Contain(CategoryViewModel.CategoryObjectProperty);
+    }
+
+    [Fact]
+    public void LoadFrom_Null_DoesNotThrow()
+    {
+        // CR-L303: the null guard now runs before base.LoadFrom, so all overloads short-circuit safely.
+        var model = new CategoryModel();
+        var vm = new CategoryViewModel();
+
+        ((Action)(() => model.LoadFrom((CategoryViewModel)null!))).Should().NotThrow();
+        ((Action)(() => vm.LoadFrom((CategoryModel)null!))).Should().NotThrow();
+        ((Action)(() => vm.LoadFrom((CategoryViewModel)null!))).Should().NotThrow();
+    }
+}
 
 /// <summary>
 /// CR-H125: a Category edited through the ViewModel layer must not lose its hierarchy position.
