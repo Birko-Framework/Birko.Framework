@@ -10,12 +10,13 @@ Azure-specific health checks for the Birko.Health framework. Covers Azure Blob S
 
 - **AzureBlobHealthCheck.cs** — `IHealthCheck` for Azure Blob Storage. Lists blobs (maxResults=1) as connectivity probe. Reports latency, degrades above 2000ms.
 - **AzureKeyVaultHealthCheck.cs** — `IHealthCheck` for Azure Key Vault. Lists secrets as connectivity probe. Reports latency, degrades above 2000ms.
+- **AzureHealthCheckHelper.cs** — internal `MeasureAsync(label, probe, ct, slowThreshold?)` holding the shared timing/threshold/result + cancellation-rethrow boilerplate (CR-L264). Both checks delegate to it; new Azure checks should too.
 
 ## Pattern
 
 Both checks follow the standard Birko.Health pattern:
 - Dual constructors: factory function `Func<T>` or singleton instance
-- Try/catch wrapping all logic
+- Timing/status logic delegated to `AzureHealthCheckHelper.MeasureAsync` (the try/catch, cancellation-rethrow, and threshold live there — not copied per check)
 - Three-level status: Healthy (OK), Degraded (slow > 2s), Unhealthy (exception)
 - Latency reported in `data["latencyMs"]`
 

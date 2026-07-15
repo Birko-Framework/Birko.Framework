@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Security.AzureKeyVault;
@@ -32,37 +30,11 @@ public sealed class AzureKeyVaultHealthCheck : IHealthCheck
         _providerFactory = () => provider;
     }
 
-    public async Task<HealthCheckResult> CheckAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            var sw = Stopwatch.StartNew();
-            var provider = _providerFactory();
-
-            // List secrets is a lightweight connectivity check
-            await provider.ListSecretsAsync(ct: ct).ConfigureAwait(false);
-
-            sw.Stop();
-            var data = new Dictionary<string, object>
-            {
-                ["latencyMs"] = Math.Round(sw.Elapsed.TotalMilliseconds, 2)
-            };
-
-            if (sw.Elapsed.TotalMilliseconds > 2000)
-                return HealthCheckResult.Degraded($"Azure Key Vault responding slowly: {sw.Elapsed.TotalMilliseconds:F0}ms.", data: data);
-
-            return HealthCheckResult.Healthy($"Azure Key Vault OK ({sw.Elapsed.TotalMilliseconds:F0}ms).", data);
-        }
-        catch (OperationCanceledException)
-        {
-            // CR-M191: let cancellation/timeout bubble so HealthCheckRunner's timeout handling applies
-            // (honoring the registration's TimeoutStatus, which may be Degraded) instead of masking it
-            // as a generic Unhealthy.
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return HealthCheckResult.Unhealthy($"Azure Key Vault failed: {ex.Message}", ex);
-        }
-    }
+    public Task<HealthCheckResult> CheckAsync(CancellationToken ct = default)
+        // CR-L264: timing/threshold/result boilerplate lives in the shared helper.
+        // List secrets is a lightweight connectivity check.
+        => AzureHealthCheckHelper.MeasureAsync(
+            "Azure Key Vault",
+            c => _providerFactory().ListSecretsAsync(ct: c),
+            ct);
 }

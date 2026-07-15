@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AzureBlobHealthCheck.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AzureHealthCheckHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)AzureKeyVaultHealthCheck.cs" />
   </ItemGroup>
 </Project>
