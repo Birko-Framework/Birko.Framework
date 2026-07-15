@@ -70,6 +70,13 @@ namespace Birko.Data.SQL.Repositories
         /// Returns the connector or throws a clear error when settings were never applied.
         /// CR-L233: one guard instead of the copy-pasted null-check in every schema method.
         /// </summary>
+        /// <remarks>
+        /// CR-L236 (accepted): InitAsync/DropAsync/CreateSchemaAsync wrap the connector's synchronous
+        /// DoInit/DropTable/CreateTable in Task.Run — the CancellationToken only cancels the work
+        /// before it starts; an in-flight DB call is not interrupted. CreateHypertableAsync flows the
+        /// token into a genuinely async connector method. If the connector grows async overloads,
+        /// prefer those over Task.Run.
+        /// </remarks>
         private TimescaleDBConnector RequireConnector()
             => Connector ?? throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
 
@@ -96,10 +103,9 @@ namespace Birko.Data.SQL.Repositories
             await RequireConnector().CreateHypertableAsync(typeof(T), timeColumn, chunkTimeInterval, ct).ConfigureAwait(false);
         }
 
-        public override async Task DestroyAsync(CancellationToken ct = default)
-        {
-            await base.DestroyAsync(ct);
-            await DropAsync(ct);
-        }
+        // CR-L234 (same-defect extra): the DestroyAsync override (base.DestroyAsync + DropAsync) was
+        // removed — the base already destroys through the store, and AsyncDataBaseStore.DestroyAsync
+        // IS a table drop, so the override dropped the table a second time via the unwrapped
+        // connector (bypassing any wrapper). DropAsync stays as the explicit schema-drop helper.
     }
 }
