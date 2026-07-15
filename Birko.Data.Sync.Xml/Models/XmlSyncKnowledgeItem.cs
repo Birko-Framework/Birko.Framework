@@ -14,12 +14,6 @@ namespace Birko.Data.Sync.Xml.Models;
 public class XmlSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
     /// <summary>
-    /// Unique identifier for the sync knowledge record.
-    /// </summary>
-    [XmlElement("Id")]
-    public int Id { get; set; }
-
-    /// <summary>
     /// GUID of the entity this knowledge refers to.
     /// </summary>
     [XmlElement("EntityGuid")]

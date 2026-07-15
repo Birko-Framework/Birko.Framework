@@ -3,8 +3,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.XML.Stores;
-using Birko.Data.Stores;
-using Birko.Configuration;
 using Birko.Data.Sync.Xml.Models;
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.Stores;
