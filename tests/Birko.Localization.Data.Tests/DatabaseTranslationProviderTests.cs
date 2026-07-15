@@ -1,3 +1,4 @@
+using System.Threading;
 using Xunit;
 using System.Globalization;
 using FluentAssertions;
@@ -103,5 +104,31 @@ public class DatabaseTranslationProviderTests
     {
         var act = () => new DatabaseTranslationProvider(null!);
         act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public async Task GetTranslationAsync_CancelledToken_ThrowsOperationCanceled()
+    {
+        // CR-L277: the token is forwarded to the store, whose EnsureInitializedAsync throws on a
+        // pre-cancelled token — so cancellation must surface rather than be silently ignored.
+        var provider = new DatabaseTranslationProvider(CreateSeededStore());
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = async () => await provider.GetTranslationAsync("greeting", CultureInfo.GetCultureInfo("en"), cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_CancelledToken_ThrowsOperationCanceled()
+    {
+        var provider = new DatabaseTranslationProvider(CreateSeededStore());
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = async () => await provider.GetAllAsync(CultureInfo.GetCultureInfo("en"), cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 }
