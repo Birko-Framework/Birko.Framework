@@ -7357,7 +7357,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling project for the mappings
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Customers.SQL\`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** There is no Birko.Models.Customers.SQL.Tests sibling. Pricing.SQL-style mapping projects are testable with xUnit + FluentAssertions by running each IModelMapping<T>.Configure against a fresh ModelMap<T> and asserting on map.TableName, the primary/unique flags, and per-column precision in map.Properties. Such a test would have caught the precision-omission inconsistencies above (e.g. assert every string property has a non-null precision). Note only per the brief.
 - **Fix:** Add a small test project asserting table names, PK/unique on Guid, and that each declared string column carries an explicit precision — also guards against future drift.
 
@@ -7365,7 +7365,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Missing .gitignore in project root
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Customers.SQL\`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The project directory has CLAUDE.md, README.md, License.md, .shproj and .projitems but no .gitignore, which the framework new-project checklist (verify-birko-conventions) lists as a required file for every project directory. bin/obj are at risk of being committed.
 - **Fix:** Add a standard .gitignore (bin/, obj/, .vs/) matching the other Birko.* sibling projects.
 

@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**306 / 418 triaged** as of 2026-07-15. Next open is CR-L307 (Birko.Models.Customers.SQL cluster, L307…).
+**308 / 418 triaged** as of 2026-07-15. Next open is CR-L309 (Birko.Models.Inventory cluster, L309…).
+
+**Batch BP — Birko.Models.Customers.SQL cluster (CR-L307, CR-L308):** Birko.Models.Customers.SQL. Both
+closed; **/code-review clean (no findings)**. **L307** (test-gap — **partly pre-existing**): a
+`Birko.Models.Customers.SQL.Tests` project already existed (created for CR-M219/M220, git-init'd + registered
+in `.slnx`/`.code-workspace`) with the string-column precision asserts — verify-first confirmed the project +
+precision coverage. The audit's remaining unmet asks (table names + PK/unique on Guid) were added:
+`Mappings_HaveExpectedTableNames` (Customers/Addresses/InvoiceAddresses/ContactPersons) and
+`Mappings_MarkGuidAsPrimaryAndUnique` across all 4 mappings, via `ModelMap<T>` directly. **L308** (cleanup):
+the source project was missing the framework-required `.gitignore` — copied the standard 325-line VS template
+from a sibling (`Birko.Models.Customers`), so `bin/obj/.vs` aren't committed. **Tests:** Customers.SQL.Tests
+22 → 24. Suite green: Customers.SQL.Tests 24.
 
 **Batch BO — Birko.Models.Customers (CR-L306):** Birko.Models.Customers. Closed;
 **/code-review clean (no findings)**. **L306** (cleanup): 5 ViewModels (Address, BaseCustomer, Customer,
