@@ -6949,7 +6949,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Manual Subscribe<TEvent> handlers do nothing unless SubscribeToTransportAsync is also called
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.MessageQueue\DistributedEventBus.cs:101-119`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Subscribe<TEvent> registers a handler into _subscriptions, but those handlers are only ever read by GetHandlers<TEvent>(), which is only invoked from inside the SubscribeToTransportAsync callback. So a caller who only calls Subscribe (the IEventBus contract method) and never SubscribeToTransportAsync will silently receive no events. This is a non-obvious coupling for an IEventBus implementation where Subscribe is the primary API; at minimum it warrants a doc remark, ideally Subscribe should lazily ensure a transport subscription exists for TEvent.
 - **Fix:** Document the requirement clearly on Subscribe, or have Subscribe<TEvent> auto-create the transport subscription (guarding against duplicates) so the IEventBus contract behaves as callers expect.
 
@@ -6957,7 +6957,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AutoSubscriber reflection invoke not resilient to null event-type filtering edge
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.MessageQueue\AutoSubscriber.cs:53-91`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** DiscoverEventTypes scans every assembly in AppDomain on each call (potentially expensive) and, for each candidate, calls GetService to verify DI registration. SubscribeToTransportAsync constrains TEvent to 'class, IEvent', and the filter only checks eventType.IsClass — it does not verify the discovered event type actually implements IEvent. A non-IEvent class implementing some unrelated IEventHandler<T> (T not IEvent) would fail the generic constraint at MakeGenericMethod with an ArgumentException rather than being skipped. Low risk in practice but the guard is incomplete.
 - **Fix:** Add typeof(IEvent).IsAssignableFrom(eventType) to the filter alongside eventType.IsClass so only valid event types are passed to MakeGenericMethod.
 
@@ -6965,7 +6965,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for AutoSubscriber, DistributedEventBusHostedService, or AddDistributedEventBus
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.EventBus.Tests/MessageQueue/`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The .Tests sibling covers DistributedEventBus publish/subscribe/context and envelope round-trip, but there are no tests for AutoSubscriber.SubscribeAllAsync (DI discovery via reflection), DistributedEventBusHostedService.StartAsync (including the AutoSubscribe=false short-circuit and the IEventBus->DistributedEventBus cast failure path), or the DI extension AddDistributedEventBus (singleton wiring, conditional IHostedService registration). The error-isolation/retry behavior is also untested.
 - **Fix:** Add coverage for AutoSubscriber discovery (registered vs unregistered handlers), the hosted service start paths, the DI registration, and handler-failure behavior once the swallowed-exception decision is made.
 

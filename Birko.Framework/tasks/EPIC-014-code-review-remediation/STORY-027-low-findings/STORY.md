@@ -13,7 +13,32 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**255 / 418 triaged** as of 2026-07-15. Next open is CR-L256 (Birko.EventBus.MessageQueue cluster, L256…).
+**258 / 418 triaged** as of 2026-07-15. Next open is CR-L259 (Birko.EventBus.Outbox cluster, L259…).
+
+**Batch AV — Birko.EventBus.MessageQueue cluster (CR-L256, CR-L257, CR-L258):** Birko.EventBus.MessageQueue.
+All closed; **/code-review clean (no findings)**. **L256** (other — "document the requirement" option taken):
+added a `<remarks>` on `DistributedEventBus.Subscribe<TEvent>` stating the non-obvious coupling — a manually
+subscribed handler is only ever invoked from inside the `SubscribeToTransportAsync<TEvent>` delivery callback
+(via `GetHandlers`), so `Subscribe` alone silently receives nothing until a matching transport subscription
+exists (call it, or let `AutoSubscriber`/`DistributedEventBusHostedService` create it from DI). Auto-wiring
+the transport from `Subscribe` was deliberately NOT done: `Subscribe` is sync and the transport subscribe is
+network-bound async, and CR-M188 removed sync-over-async from this class to avoid deadlocks. **L257**
+(cleanup — **defensive-only, premise narrowed by verification**): added
+`typeof(IEvent).IsAssignableFrom(eventType)` alongside `eventType.IsClass` in `AutoSubscriber.DiscoverEventTypes`
+before `MakeGenericMethod`. The audit's failure scenario (a class implementing `IEventHandler<T>` with T not
+IEvent → `ArgumentException` at `MakeGenericMethod`) is actually **unreachable**: `IEventHandler<in TEvent>`
+already constrains `where TEvent : IEvent`, so no closed handler type can carry a non-IEvent T — a direct
+negative test can't even be declared. Kept the guard as belt-and-suspenders (robust if that interface
+constraint ever loosens; documents the `class, IEvent` requirement the reflection path enforces). **L258**
+(test-gap): three new test files + one error-isolation test. `AutoSubscriberTests` (SubscribeAllAsync
+subscribes a DI-registered handler type so a published event is dispatched; a handler type NOT registered in
+DI yields no subscription — which also demonstrates L256: a manual `Subscribe` alone is inert).
+`DistributedEventBusHostedServiceTests` (AutoSubscribe=false short-circuits — no subscription; AutoSubscribe=true
+auto-subscribes; the `IEventBus`→`DistributedEventBus` cast-failure throws `InvalidOperationException` via a
+`NotADistributedEventBus` stub; StopAsync no-op). `AddDistributedEventBusTests` (singleton `IEventBus` +
+options wiring; `IHostedService` registered only when AutoSubscribe=true). Error isolation: a throwing handler
+doesn't stop delivery to the other handlers (CR-H114 semantics). **Tests:** EventBus.Tests 93 → 102. Suite
+green: EventBus.Tests 102.
 
 **Batch AU — Birko.EventBus.EventSourcing cluster (CR-L254, CR-L255):** Birko.EventBus.EventSourcing.
 Both closed; **/code-review clean (no findings)**. Both findings were **partly pre-addressed by CR-M186**
