@@ -35,17 +35,22 @@ namespace Birko.Data.JSON.Repositories
         public JsonRepository(IStore<TModel>? store)
                 : base(null)
         {
+            // CR-L246 (same-defect sweep, flagged on the XML.ViewModel sibling): base(null) is required —
+            // the bulk base ctor takes IBulkStore<TModel>? but this ctor accepts any IStore (incl. a
+            // tenant wrapper), so we validate then assign through the IStore-typed Store property. The
+            // base never creates a default (the old comment was wrong); a null store leaves Store unset.
+            Store = ValidateStore(store);
+        }
+
+        private static IStore<TModel>? ValidateStore(IStore<TModel>? store)
+        {
             if (store != null && !store.IsStoreOfType<TModel, JsonStore<TModel>>())
             {
                 throw new ArgumentException(
                     "Store must be of type JsonStore<TModel> or a wrapper around it (e.g., TenantStoreWrapper).",
                     nameof(store));
             }
-            // Set the store after validation - base constructor handles null by creating default
-            if (store != null)
-            {
-                Store = store;
-            }
+            return store;
         }
 
         #endregion

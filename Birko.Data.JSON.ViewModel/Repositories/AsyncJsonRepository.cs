@@ -31,7 +31,15 @@ namespace Birko.Data.JSON.Repositories
         /// </summary>
         /// <param name="store">The async JSON store to use. Can be wrapped (e.g., by tenant wrappers).</param>
         public AsyncJsonRepository(Birko.Data.Stores.IAsyncStore<TModel>? store)
-            : base(null)
+            : base(ValidateStore(store))
+        {
+        }
+
+        // CR-L246 (same-defect sweep, flagged on the XML.ViewModel sibling): validate before the base
+        // assigns Store (the base just does Store = store; it never creates a default — the old
+        // base(null) + conditional-assign dance plus its "creates default" comment were misleading).
+        // A null store is allowed (leaves Store unset).
+        private static Birko.Data.Stores.IAsyncStore<TModel>? ValidateStore(Birko.Data.Stores.IAsyncStore<TModel>? store)
         {
             if (store != null && !store.IsStoreOfType<TModel, AsyncJsonStore<TModel>>())
             {
@@ -39,11 +47,7 @@ namespace Birko.Data.JSON.Repositories
                     "Store must be of type AsyncJsonStore<TModel> or a wrapper around it (e.g., AsyncTenantStoreWrapper).",
                     nameof(store));
             }
-            // Set the store after validation - base constructor handles null by creating default
-            if (store != null)
-            {
-                Store = store;
-            }
+            return store;
         }
 
         #endregion
