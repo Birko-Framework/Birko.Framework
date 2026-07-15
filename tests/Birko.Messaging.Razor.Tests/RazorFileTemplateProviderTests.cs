@@ -60,21 +60,25 @@ public class RazorFileTemplateProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task GetTemplateAsync_NonExistentFile_ThrowsTemplateRenderException()
+    public async Task GetTemplateAsync_NonExistentFile_ThrowsTemplateNotFoundException()
     {
+        // CR-L299: not-found is the distinct TemplateNotFoundException subtype (which the engine's
+        // file->inline fallback catches).
         var act = () => _provider.GetTemplateAsync("DoesNotExist");
 
-        await act.Should().ThrowAsync<TemplateRenderException>()
+        await act.Should().ThrowAsync<TemplateNotFoundException>()
             .WithMessage("*not found*");
     }
 
     [Fact]
-    public async Task GetTemplateAsync_DirectoryTraversal_ThrowsTemplateRenderException()
+    public async Task GetTemplateAsync_DirectoryTraversal_ThrowsTemplateRenderException_NotNotFound()
     {
+        // CR-L299: a traversal-escape is a TemplateRenderException but NOT a TemplateNotFoundException, so
+        // the engine won't silently swallow it as "file missing".
         var act = () => _provider.GetTemplateAsync("../../etc/passwd");
 
-        await act.Should().ThrowAsync<TemplateRenderException>()
-            .WithMessage("*escapes*");
+        (await act.Should().ThrowAsync<TemplateRenderException>()
+            .WithMessage("*escapes*")).Which.Should().NotBeOfType<TemplateNotFoundException>();
     }
 
     [Fact]

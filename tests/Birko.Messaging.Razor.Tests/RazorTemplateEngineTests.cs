@@ -178,6 +178,43 @@ public class RazorTemplateEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task RenderAsync_MessageTemplate_TraversalName_PropagatesInsteadOfFallingBack()
+    {
+        // CR-L299: a path-traversal template Name must NOT be silently swallowed as "file missing" and
+        // fall back to the inline BodyTemplate — the security rejection must surface.
+        using var engine = new RazorTemplateEngine(new RazorTemplateOptions
+        {
+            TemplateBasePath = _tempDir
+        });
+
+        var template = new TestTemplate
+        {
+            Name = "../../etc/passwd",
+            Subject = "Test",
+            BodyTemplate = "SHOULD-NOT-RENDER @Model.Value",
+            IsHtml = false
+        };
+
+        var act = () => engine.RenderAsync(template, new { Value = "x" });
+
+        await act.Should().ThrowAsync<TemplateRenderException>().WithMessage("*escapes*");
+    }
+
+    [Fact]
+    public async Task RenderAsync_SameInlineTemplateTwice_ProducesConsistentResults()
+    {
+        // CR-L298: the content-hash cache key lets identical inline templates reuse the compiled entry
+        // (no unbounded per-template dictionary); distinct models still render correctly.
+        using var engine = new RazorTemplateEngine();
+
+        var r1 = await engine.RenderAsync("Hello @Model.Name", new { Name = "A" });
+        var r2 = await engine.RenderAsync("Hello @Model.Name", new { Name = "B" });
+
+        r1.Should().Be("Hello A");
+        r2.Should().Be("Hello B");
+    }
+
+    [Fact]
     public async Task RenderFileAsync_ExistingFile_RendersContent()
     {
         File.WriteAllText(
