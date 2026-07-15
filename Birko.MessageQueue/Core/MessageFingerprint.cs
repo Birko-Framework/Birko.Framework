@@ -1,3 +1,4 @@
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -15,6 +16,9 @@ namespace Birko.MessageQueue
         /// </summary>
         public static string Compute(string body)
         {
+            // CR-L282: explicit guard gives a meaningful ArgumentNullException naming 'body' rather than the
+            // opaque one Encoding.UTF8.GetBytes(null) would throw.
+            ArgumentNullException.ThrowIfNull(body);
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(body));
             return Convert.ToHexString(bytes).ToLowerInvariant();
         }
@@ -24,6 +28,9 @@ namespace Birko.MessageQueue
         /// </summary>
         public static string Compute(QueueMessage message)
         {
+            // CR-L282: guard the argument before dereferencing message.Body — a null message previously
+            // threw NullReferenceException instead of a meaningful ArgumentNullException.
+            ArgumentNullException.ThrowIfNull(message);
             return Compute(message.Body);
         }
 
@@ -33,6 +40,8 @@ namespace Birko.MessageQueue
         /// </summary>
         public static string Compute(string destination, string body)
         {
+            ArgumentNullException.ThrowIfNull(destination);
+            ArgumentNullException.ThrowIfNull(body);
             var combined = destination + "\0" + body;
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(combined));
             return Convert.ToHexString(bytes).ToLowerInvariant();
