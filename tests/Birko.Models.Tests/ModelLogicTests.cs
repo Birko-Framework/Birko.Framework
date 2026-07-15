@@ -173,4 +173,50 @@ public class ModelLogicTests
 
         result.Should().BeSameAs(values);
     }
+
+    [Fact]
+    public void GetValue_EnumeratesSourceExactlyOnce()
+    {
+        // CR-L300: the old Any()+FirstOrDefault() enumerated the sequence twice. Prove a single pass.
+        var enumerations = 0;
+        System.Collections.Generic.IEnumerable<SourceValue<int>> Lazy()
+        {
+            enumerations++;
+            yield return new SourceValue<int> { Source = "a", Value = 1 };
+            yield return new SourceValue<int> { Source = "b", Value = 2 };
+        }
+
+        var result = Lazy().GetValue("b");
+
+        result.Should().Be(2);
+        enumerations.Should().Be(1, "the sequence must be enumerated only once (CR-L300)");
+    }
+
+    // ── AbstractPercentage.CopyTo (CR-L301) ──────────────
+
+    [Fact]
+    public void AbstractPercentage_CopyTo_NullClone_ThrowsArgumentNullException()
+    {
+        var source = new TestPercentage { Percentage = 12.5m };
+
+        var act = () => source.CopyTo(null!);
+
+        act.Should().Throw<ArgumentNullException>().WithParameterName("clone");
+    }
+
+    [Fact]
+    public void AbstractPercentage_CopyTo_CopiesPercentageIntoClone()
+    {
+        var source = new TestPercentage { Percentage = 12.5m };
+        var clone = new TestPercentage();
+
+        var result = source.CopyTo(clone);
+
+        result.Should().BeSameAs(clone);
+        clone.Percentage.Should().Be(12.5m);
+    }
+
+    private sealed class TestPercentage : AbstractPercentage
+    {
+    }
 }
