@@ -21,8 +21,10 @@ namespace Birko.Models.Category
 
         public void LoadFrom(Birko.Models.Category.ViewModels.Category data)
         {
-            base.LoadFrom(data);
+            // CR-L303: guard first — early-return before forwarding the parameter to base (guard-clause
+            // convention). The base is null-safe today, so this is a no-op ordering fix, not a behavior change.
             if (data == null) return;
+            base.LoadFrom(data);
 
             Title = data.Title;
             Slug = data.Slug;

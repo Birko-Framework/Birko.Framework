@@ -50,8 +50,13 @@ namespace Birko.Models.Category.ViewModels
             get { return _path; }
             set
             {
-                _path = value;
-                RaisePropertyChanged(PathProperty);
+                // CR-L304: guard like the other setters — setting Path to its current value must not fire a
+                // spurious PropertyChanged (which cascades to the "Category" object notification).
+                if (_path != value)
+                {
+                    _path = value;
+                    RaisePropertyChanged(PathProperty);
+                }
             }
         }
 
@@ -85,8 +90,9 @@ namespace Birko.Models.Category.ViewModels
 
         public void LoadFrom(Birko.Models.Category.Category data)
         {
-            base.LoadFrom(data);
+            // CR-L303: guard first (guard-clause convention) — base is null-safe, so this is an ordering fix.
             if (data == null) return;
+            base.LoadFrom(data);
 
             Title = data.Title;
             Slug = data.Slug;
@@ -96,8 +102,9 @@ namespace Birko.Models.Category.ViewModels
 
         public virtual void LoadFrom(Category data)
         {
-            base.LoadFrom(data);
+            // CR-L303: guard first (guard-clause convention) — base is null-safe, so this is an ordering fix.
             if (data == null) return;
+            base.LoadFrom(data);
 
             Title = data.Title;
             Slug = data.Slug;
