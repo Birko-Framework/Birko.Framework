@@ -3,7 +3,7 @@
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
     <HasSharedItems>true</HasSharedItems>
-    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-cdbview0001</SharedGUID>
+    <SharedGUID>aa5b755e-97f3-4d70-b5c3-258ea8c772bc</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data.CosmosDB.Views</Import_RootNamespace>
