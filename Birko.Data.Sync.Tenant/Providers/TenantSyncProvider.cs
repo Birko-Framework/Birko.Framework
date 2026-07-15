@@ -401,6 +401,13 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             var totalProcessed = 0;
             for (var i = 0; i < allGuids.Count; i += options.BatchSize)
             {
+                // CR-L222: stop the OUTER batch loop on cancellation, not only the inner item loop.
+                // Previously the inner `break` left this `for` running, so cancellation only paused the
+                // current batch's items and the sync kept iterating (and firing OnBatchCompleted for)
+                // every remaining batch instead of stopping promptly.
+                if (options.CancellationToken.IsCancellationRequested)
+                    break;
+
                 var batchGuids = allGuids.Skip(i).Take(options.BatchSize).ToList();
 
                 foreach (var guid in batchGuids)
@@ -486,7 +493,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
                                 progress.Conflicts++;
                                 // Apply conflict resolution
                                 var resolution = ResolveConflict(action.Conflict!, options);
-                                await ApplyConflictResolutionAsync(resolution, guid, localItem, remoteItem, filterOptions, progress);
+                                await ApplyConflictResolutionAsync(resolution, guid, localItem, remoteItem, filterOptions, progress, options.CancellationToken);
                                 break;
                         }
 
@@ -760,7 +767,8 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         T? localItem,
         T? remoteItem,
         SyncFilterOptions<T> filterOptions,
-        SyncProgress progress)
+        SyncProgress progress,
+        CancellationToken cancellationToken = default)
     {
         // No catch here (CR-H106): a failed conflict-resolution write must propagate to the caller's
         // per-item try/catch (which records a SyncError and increments progress.Errors), exactly like
@@ -772,7 +780,8 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             case ConflictResolution.UseLocal when localItem != null:
                 if (filterOptions.CanSaveToRemote?.Invoke(localItem) != false)
                 {
-                    await _remoteStore.UpdateAsync(localItem);
+                    // CR-L222: forward the token so cancellation is observed during conflict resolution.
+                    await _remoteStore.UpdateAsync(localItem, ct: cancellationToken);
                     progress.UpdatedItems++;
                 }
                 break;
@@ -780,7 +789,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             case ConflictResolution.UseRemote when remoteItem != null:
                 if (filterOptions.CanSaveToLocal?.Invoke(remoteItem) != false)
                 {
-                    await _localStore.UpdateAsync(remoteItem);
+                    await _localStore.UpdateAsync(remoteItem, ct: cancellationToken);
                     progress.UpdatedItems++;
                 }
                 break;
@@ -824,16 +833,25 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// <summary>
     /// Get UpdatedAt from entity
     /// </summary>
-    internal static DateTime? GetUpdatedAt(T entity)
+    // CR-L223: resolve the UpdatedAt PropertyInfo ONCE per closed generic type instead of calling
+    // typeof(T).GetProperty on every GetUpdatedAt invocation (which runs twice per GetVersionHash, plus
+    // in the conflict/newest paths — an uncached reflection lookup across potentially large item sets).
+    // A static readonly field is the static-method equivalent of the ctor-cached _guidProperty; the type
+    // guard (DateTime or DateTime?) is baked in, so a non-matching property caches as null.
+    private static readonly PropertyInfo? _updatedAtProperty = ResolveUpdatedAtProperty();
+
+    private static PropertyInfo? ResolveUpdatedAtProperty()
     {
         var prop = typeof(T).GetProperty("UpdatedAt");
         // Match both DateTime and DateTime? — the exact-DateTime guard missed nullable timestamps.
-        if (prop != null && (prop.PropertyType == typeof(DateTime) || Nullable.GetUnderlyingType(prop.PropertyType) == typeof(DateTime)))
-        {
-            var value = prop.GetValue(entity);
-            return value as DateTime?;
-        }
-        return null;
+        return prop != null && (prop.PropertyType == typeof(DateTime) || Nullable.GetUnderlyingType(prop.PropertyType) == typeof(DateTime))
+            ? prop
+            : null;
+    }
+
+    internal static DateTime? GetUpdatedAt(T entity)
+    {
+        return _updatedAtProperty?.GetValue(entity) as DateTime?;
     }
 
     /// <summary>

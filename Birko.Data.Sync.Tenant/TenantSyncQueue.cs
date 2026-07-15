@@ -76,15 +76,11 @@ public class TenantSyncQueue : SyncQueue
         }
     }
 
-    /// <summary>
-    /// Enqueue and execute a sync operation using tenant from context
-    /// </summary>
-    public new async Task<T> EnqueueAsync<T>(
-        string scope,
-        Func<Task<T>> syncOperation,
-        CancellationToken cancellationToken = default)
-    {
-        var key = GetQueueKey(scope);
-        return await EnqueueWithKeyAsync(key, syncOperation, cancellationToken);
-    }
+    // CR-L224: removed the redundant `new EnqueueAsync(scope, op, ct)` shadow. It only re-declared the
+    // inherited SyncQueue.EnqueueAsync — which already computes its key via the virtual GetQueueKey(scope)
+    // this class overrides, so tenant scoping applies to the base method automatically. The `new` shadow
+    // added no behavior and introduced a member-hiding footgun. Context-based enqueue on a
+    // TenantSyncQueue-typed reference is available via the tenant-explicit overload above with a null
+    // tenantGuid — GetEffectiveTenantGuid(null) resolves the context tenant and GetQueueKey(scope, tenant)
+    // yields the identical "{scope}_{tenant}" key; base-typed references call the inherited method directly.
 }
