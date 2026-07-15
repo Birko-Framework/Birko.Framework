@@ -130,6 +130,26 @@ public class TagServiceBaseTests
     }
 
     [Fact]
+    public async Task AttachTagByName_ConcurrentCreateBetweenMissAndInsert_ReusesRacedTag()
+    {
+        // CR-L226: the create path deliberately routes through CreateTagAsync, whose second
+        // FindTagByNameAsync narrows the TOCTOU window — a tag created concurrently between the
+        // outer miss and the insert is reused instead of duplicated. Pins the double lookup so it
+        // isn't "optimized" into a direct CreateTagInternalAsync.
+        var svc = new InMemoryTagService();
+        var raced = new Tag { Guid = Guid.NewGuid(), Name = "Race" };
+        var finds = 0;
+        svc.AfterFindTagByName = _ => { if (++finds == 1) svc.SeedTag(raced); };
+
+        var dto = await svc.AttachTagByNameAsync("Doc", Guid.NewGuid(), "Race");
+
+        dto.Id.Should().Be(raced.Guid!.Value, "the concurrently-created tag is reused");
+        svc.CreateTagCalls.Should().Be(0, "no duplicate tag row is inserted");
+        svc.TagCount.Should().Be(1);
+        svc.LinkCount.Should().Be(1, "the attach itself still happens");
+    }
+
+    [Fact]
     public async Task GetEntityTagsBatch_GroupsAndBackfillsEmpty()
     {
         var svc = new InMemoryTagService();

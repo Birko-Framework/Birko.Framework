@@ -22,6 +22,20 @@ public sealed class InMemoryTagService : TagServiceBase
     /// <summary>Counts calls to the single-entity link query (CR-M172 N+1 regression).</summary>
     public int GetEntityTagLinksCalls { get; private set; }
 
+    /// <summary>
+    /// Invoked after every <see cref="FindTagByNameAsync"/> lookup (with the queried name) — lets a
+    /// test inject a concurrently-created tag between AttachTagByNameAsync's miss and CreateTagAsync's
+    /// re-check (the CR-L226 TOCTOU-narrowing double lookup).
+    /// </summary>
+    public Action<string>? AfterFindTagByName { get; set; }
+
+    /// <summary>Inserts a tag directly, bypassing the service (simulates a concurrent writer).</summary>
+    public void SeedTag(Tag tag)
+    {
+        tag.Guid ??= Guid.NewGuid();
+        _tags.Add(tag);
+    }
+
     protected override Task<Tag> CreateTagInternalAsync(Tag tag, CancellationToken ct)
     {
         CreateTagCalls++;
@@ -34,7 +48,11 @@ public sealed class InMemoryTagService : TagServiceBase
         => Task.FromResult(_tags.FirstOrDefault(t => t.Guid == tagId));
 
     protected override Task<Tag?> FindTagByNameAsync(string name, CancellationToken ct)
-        => Task.FromResult(_tags.FirstOrDefault(t => t.Name == name));
+    {
+        var result = _tags.FirstOrDefault(t => t.Name == name);
+        AfterFindTagByName?.Invoke(name);
+        return Task.FromResult(result);
+    }
 
     protected override Task<IReadOnlyList<Tag>> ListAllTagsAsync(CancellationToken ct)
         => Task.FromResult<IReadOnlyList<Tag>>(_tags.ToList());
