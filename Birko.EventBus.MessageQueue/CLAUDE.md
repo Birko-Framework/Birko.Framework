@@ -35,7 +35,8 @@ Consumer callback:
 ## Important Notes
 - **Topic routing:** Both publish and subscribe use `ITopicConvention.GetTopic(Type)` (type-based) for consistent routing
 - **Type resolution:** EventType is stored as AssemblyQualifiedName — consumer must have the event type's assembly loaded
-- **Error isolation:** Handler exceptions are caught in the consumer callback — one handler failure doesn't affect others
+- **Subscribe is not enough to receive (CR-L256):** `Subscribe<T>` only registers a handler into the manual map; handlers are read solely inside the `SubscribeToTransportAsync<T>` delivery callback. A caller who only calls `Subscribe` and never establishes a transport subscription silently receives nothing. Call `SubscribeToTransportAsync<T>` for each event type, or use `AutoSubscriber`/`DistributedEventBusHostedService` (AutoSubscribe) to wire them from DI on startup. `Subscribe` does not auto-wire the transport by design — it is sync and the transport subscribe is network-bound async (CR-M188 removed sync-over-async here).
+- **Error isolation (CR-H114):** handler exceptions are caught per-handler so one failure doesn't stop the others, but they are then re-thrown after the loop (single exception, or an `AggregateException`) so the delivery callback faults and the transport drives retry / dead-letter. Swallowing them would ack-and-lose failed messages.
 - The InMemoryChannel dispatches in a background Task.Run — tests need polling/delay for assertions
 
 ## Dependencies

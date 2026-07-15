@@ -74,7 +74,13 @@ namespace Birko.EventBus.MessageQueue
                         if (iface.IsGenericType && iface.GetGenericTypeDefinition() == handlerOpenType)
                         {
                             var eventType = iface.GetGenericArguments()[0];
-                            if (eventType.IsClass)
+                            // CR-L257: align the discovery filter with SubscribeToTransportAsync<TEvent>'s
+                            // `class, IEvent` constraint before MakeGenericMethod(eventType), so a bad type
+                            // is skipped rather than throwing an ArgumentException at reflection time. The
+                            // IEvent check is defensive: IEventHandler<T> already constrains `T : IEvent`, so
+                            // a closed handler type can't carry a non-IEvent T today — but it makes the guard
+                            // robust if that interface constraint ever loosens, and documents the requirement.
+                            if (eventType.IsClass && typeof(IEvent).IsAssignableFrom(eventType))
                             {
                                 // Verify it's actually registered in DI
                                 var handlerServiceType = typeof(IEnumerable<>).MakeGenericType(

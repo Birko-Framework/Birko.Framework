@@ -98,6 +98,17 @@ namespace Birko.EventBus.MessageQueue
         }
 
         /// <inheritdoc />
+        /// <remarks>
+        /// CR-L256: registering a handler here is <b>necessary but not sufficient</b> to receive events over
+        /// the distributed bus. Manually-subscribed handlers are only ever invoked from inside the
+        /// <see cref="SubscribeToTransportAsync{TEvent}"/> delivery callback (via <c>GetHandlers</c>), so
+        /// events of <typeparamref name="TEvent"/> only reach this handler once a matching transport
+        /// subscription exists — call <see cref="SubscribeToTransportAsync{TEvent}"/> for that type (or let
+        /// <see cref="AutoSubscriber"/>/<see cref="DistributedEventBusHostedService"/> create it from DI on
+        /// startup). Calling <c>Subscribe</c> alone silently receives nothing. Auto-wiring the transport here
+        /// is intentionally not done: <c>Subscribe</c> is synchronous and the transport subscribe is
+        /// network-bound async, and CR-M188 removed sync-over-async from this class to avoid deadlocks.
+        /// </remarks>
         public IEventSubscription Subscribe<TEvent>(IEventHandler<TEvent> handler) where TEvent : IEvent
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
