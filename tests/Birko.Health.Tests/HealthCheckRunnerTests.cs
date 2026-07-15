@@ -75,6 +75,30 @@ public class HealthCheckRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_CheckTimesOut_WithDegradedTimeoutStatus_ReportsDegraded()
+    {
+        // CR-L263: a registration with TimeoutStatus = Degraded must report Degraded on timeout, not the
+        // default Unhealthy.
+        var runner = new HealthCheckRunner();
+        var registration = new HealthCheckRegistration(
+            "slow",
+            new LambdaCheck(async ct =>
+            {
+                await Task.Delay(5000, ct);
+                return HealthCheckResult.Healthy();
+            }),
+            timeout: TimeSpan.FromMilliseconds(50),
+            timeoutStatus: HealthStatus.Degraded);
+        runner.Register(registration);
+
+        var report = await runner.RunAsync();
+
+        report.Entries["slow"].Status.Should().Be(HealthStatus.Degraded);
+        report.Entries["slow"].Description.Should().Contain("Timed out");
+        report.Status.Should().Be(HealthStatus.Degraded);
+    }
+
+    [Fact]
     public async Task RunAsync_TagFilter_OnlyRunsMatchingChecks()
     {
         var runner = new HealthCheckRunner();
