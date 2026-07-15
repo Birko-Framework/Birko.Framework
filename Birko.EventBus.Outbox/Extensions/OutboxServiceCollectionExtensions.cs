@@ -14,9 +14,17 @@ namespace Birko.EventBus.Outbox.Extensions
     {
         /// <summary>
         /// Registers the outbox pattern with a custom outbox store.
-        /// Wraps the existing IEventBus registration with <see cref="OutboxEventBus"/>.
         /// Registers <see cref="OutboxProcessor"/> and <see cref="OutboxProcessorHostedService"/>.
         /// </summary>
+        /// <remarks>
+        /// Pair this with <see cref="AddOutboxEventBus"/> (which decorates <see cref="IEventBus"/> so
+        /// <c>PublishAsync</c> writes to the store instead of publishing directly). The order of the two
+        /// calls does not matter: the processor factory resolves <see cref="IEventBus"/> lazily and unwraps
+        /// the <see cref="OutboxEventBus"/> decorator to its inner bus, so the processor always publishes
+        /// through the real transport — never back through the outbox (which would loop entries into the
+        /// store). If <see cref="AddOutboxEventBus"/> is not registered at all, nothing writes to the outbox
+        /// and the processor simply has no pending entries to publish.
+        /// </remarks>
         /// <typeparam name="TStore">The outbox store implementation type.</typeparam>
         /// <param name="services">The service collection.</param>
         /// <param name="configure">Optional options configuration.</param>
@@ -31,9 +39,11 @@ namespace Birko.EventBus.Outbox.Extensions
             services.AddSingleton<IOutboxStore, TStore>();
             services.AddSingleton<OutboxProcessor>(sp =>
             {
-                // The publisher is the inner bus (unwrapped from OutboxEventBus)
-                var outboxBus = sp.GetRequiredService<IEventBus>() as OutboxEventBus;
-                var innerBus = outboxBus?.Inner ?? sp.GetRequiredService<IEventBus>();
+                // Resolve the registered bus once, then unwrap the OutboxEventBus decorator (if present) so
+                // the processor publishes through the real inner transport rather than looping back into the
+                // outbox store (CR-L260).
+                var bus = sp.GetRequiredService<IEventBus>();
+                var innerBus = bus is OutboxEventBus outboxBus ? outboxBus.Inner : bus;
                 var store = sp.GetRequiredService<IOutboxStore>();
                 return new OutboxProcessor(store, innerBus, options);
             });

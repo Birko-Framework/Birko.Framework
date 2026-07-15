@@ -28,7 +28,9 @@ namespace Birko.EventBus.Outbox.Hosting
                 try
                 {
                     await _processor.ProcessBatchAsync(stoppingToken).ConfigureAwait(false);
-                    await _processor.CleanupAsync(stoppingToken).ConfigureAwait(false);
+                    // CR-L259: throttle the retention prune to OutboxOptions.CleanupInterval instead of
+                    // running a full scan/delete every PollingInterval.
+                    await _processor.CleanupIfDueAsync(stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {

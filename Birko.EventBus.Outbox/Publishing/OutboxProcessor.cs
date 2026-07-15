@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.MessageQueue.Serialization;
+using Birko.Time;
 
 namespace Birko.EventBus.Outbox.Publishing
 {
@@ -15,6 +16,12 @@ namespace Birko.EventBus.Outbox.Publishing
         private readonly IEventBus _publisher;
         private readonly IMessageSerializer _serializer;
         private readonly OutboxOptions _options;
+        private readonly IDateTimeProvider _clock;
+
+        // CR-L259: last time the retention cleanup actually ran, so CleanupIfDueAsync can throttle it to
+        // OutboxOptions.CleanupInterval instead of every poll. Only touched from the single background loop
+        // (OutboxProcessorHostedService), so it needs no synchronization.
+        private DateTime _lastCleanupUtc = DateTime.MinValue;
 
         /// <summary>
         /// Creates a new outbox processor.
@@ -23,16 +30,19 @@ namespace Birko.EventBus.Outbox.Publishing
         /// <param name="publisher">The event bus to publish events through (the inner bus, not the OutboxEventBus).</param>
         /// <param name="options">Processor options.</param>
         /// <param name="serializer">Serializer for deserializing event payloads. Defaults to JsonMessageSerializer.</param>
+        /// <param name="clock">Clock used for cleanup scheduling. Defaults to <see cref="SystemDateTimeProvider"/>.</param>
         public OutboxProcessor(
             IOutboxStore store,
             IEventBus publisher,
             OutboxOptions? options = null,
-            IMessageSerializer? serializer = null)
+            IMessageSerializer? serializer = null,
+            IDateTimeProvider? clock = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
             _options = options ?? new OutboxOptions();
             _serializer = serializer ?? new JsonMessageSerializer();
+            _clock = clock ?? new SystemDateTimeProvider();
         }
 
         /// <summary>
@@ -90,12 +100,32 @@ namespace Birko.EventBus.Outbox.Publishing
         }
 
         /// <summary>
-        /// Cleans up old published/failed entries based on retention period.
+        /// Cleans up old published/failed entries based on retention period. Runs unconditionally — the
+        /// background loop uses <see cref="CleanupIfDueAsync"/> to throttle it (CR-L259).
         /// </summary>
         public Task CleanupAsync(CancellationToken cancellationToken = default)
         {
-            var cutoff = DateTime.UtcNow - _options.RetentionPeriod;
+            var cutoff = _clock.UtcNow - _options.RetentionPeriod;
             return _store.CleanupAsync(cutoff, cancellationToken);
+        }
+
+        /// <summary>
+        /// Runs <see cref="CleanupAsync"/> only if at least <see cref="OutboxOptions.CleanupInterval"/> has
+        /// elapsed since the last cleanup (CR-L259) — so the background loop can call it on every poll
+        /// without triggering a full retention scan/delete each time. The first call always runs. Returns
+        /// <c>true</c> when cleanup was performed.
+        /// </summary>
+        public async Task<bool> CleanupIfDueAsync(CancellationToken cancellationToken = default)
+        {
+            var now = _clock.UtcNow;
+            if (now - _lastCleanupUtc < _options.CleanupInterval)
+            {
+                return false;
+            }
+
+            await CleanupAsync(cancellationToken).ConfigureAwait(false);
+            _lastCleanupUtc = now;
+            return true;
         }
 
         private Task PublishEventAsync(IEvent @event, CancellationToken cancellationToken)
