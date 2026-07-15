@@ -13,7 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**265 / 418 triaged** as of 2026-07-15. Next open is CR-L266 (Birko.Health.Data cluster, L266…).
+**268 / 418 triaged** as of 2026-07-15. Next open is CR-L269 (Birko.Health.Redis cluster, L269…).
+
+**Batch AZ — Birko.Health.Data cluster (CR-L266, CR-L267, CR-L268):** Birko.Health.Data. All closed;
+**/code-review clean (no findings)**. **L266** (other — "document" option taken): documented on the three
+`TcpClient.Connected` reads (TcpHealthCheck, MqttHealthCheck TCP path, MongoDbHealthCheck's TCP-based
+pingFunc) that after a successful `ConnectAsync` the socket is essentially always connected (a failed connect
+throws into the catch), so the `!isConnected` branch only guards a rare post-connect drop — while noting the
+branch stays meaningful for the custom-ping ctors (a ping may legitimately return false). No behavior change.
+**L267** (other): `ElasticSearchHealthCheck` now reads the top-level `status` via `System.Text.Json`
+(`JsonDocument`, `TryGetProperty`) in a new private `ReadClusterStatus` instead of substring-matching
+`"status":"red"`/`"yellow"` — the old check depended on exact whitespace/field-order and could be fooled by a
+nested object's status field. Tier mapping unchanged (red→Unhealthy, yellow→Degraded, else→Healthy); a
+non-JSON/missing-status 200 still reads Healthy (parity with the old fall-through); adds `clusterStatus` to
+the result data. **L268** (test-gap): added the empty-input + invalid-endpoint coverage that the sibling
+checks had but CosmosDb/TimescaleDb lacked, plus TimescaleDb's untested port-range guard. **Tests:**
+Health.Tests 82 → 91 — ES parsing via an offline `StubHttpMessageHandler` (spaced-JSON yellow → Degraded —
+the case the old substring missed; red → Unhealthy; green → Healthy, each asserting `data["clusterStatus"]`),
+`CosmosDbHealthCheck` empty-url guard + invalid-url Unhealthy, `TimescaleDbHealthCheck` empty-host guard +
+port-too-low/too-high `ArgumentOutOfRangeException` + invalid-host Unhealthy. Suite green: Health.Tests 91.
 
 **Batch AY — Birko.Health.Azure cluster (CR-L264, CR-L265):** Birko.Health.Azure. Both closed;
 **/code-review clean (no findings)**. **L264** (cleanup): the near-identical `CheckAsync` bodies of

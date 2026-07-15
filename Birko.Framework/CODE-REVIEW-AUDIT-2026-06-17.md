@@ -7029,7 +7029,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** TcpClient.Connected check is effectively always true after a successful ConnectAsync
 - **Path:** `C:\Source\Birko\Framework\Birko.Health.Data\MqttHealthCheck.cs:65 (also TcpHealthCheck.cs:48, MongoDbHealthCheck.cs:48)`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** After `await client.ConnectAsync(...)` completes without throwing, `client.Connected` is essentially always true (it reflects the last I/O result, and a failed connect would have thrown). The `if (!isConnected)` branch is therefore practically dead — connectivity failures surface only via the catch block. Not a correctness bug (the catch path handles real failures), but the not-connected branch gives a false sense of an extra check.
 - **Fix:** Either drop the redundant Connected check and rely on ConnectAsync throwing, or document that the not-connected branch only guards the (rare) post-connect race. Low priority.
 
@@ -7037,7 +7037,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Fragile substring matching for Elasticsearch cluster status
 - **Path:** `C:\Source\Birko\Framework\Birko.Health.Data\ElasticSearchHealthCheck.cs:52`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Cluster status is detected with `body.Contains("\"status\":\"red\"")` / yellow. This depends on exact JSON formatting (no spaces after the colon) and will silently mis-detect if the field ordering or whitespace differs, or if another nested object also contains a `status` field. It happens to match the default ES response shape, but is brittle.
 - **Fix:** Parse the body with System.Text.Json and read the top-level `status` property rather than substring matching.
 
@@ -7045,7 +7045,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for CosmosDbHealthCheck or TimescaleDbHealthCheck
 - **Path:** `C:\Source\Birko\Framework\Birko.Health.Data\CosmosDbHealthCheck.cs, TimescaleDbHealthCheck.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** DataHealthCheckTests.cs (in the Birko.Health.Tests sibling) covers the other 11 checks with at least a guard-clause and an invalid-host/url Unhealthy test each, but CosmosDbHealthCheck and TimescaleDbHealthCheck have no tests at all — neither the empty-baseUrl/host ArgumentException guard nor the unreachable-endpoint Unhealthy path. TimescaleDb also has an untested port-range guard (matching TcpHealthCheck's tested one).
 - **Fix:** Add the same empty-input guard + invalid-endpoint Unhealthy tests for both, plus the TimescaleDb port-range ArgumentOutOfRangeException test, to match the coverage of the sibling checks.
 
