@@ -7437,7 +7437,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** UnitConversion.Factor decimal precision diverges from sibling pricing convention
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Product.SQL\Mappings\MeasureUnitMapping.cs:28`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** UnitConversion.Factor is mapped HasPrecision(18).HasScale(6) (12 integer digits). The sibling decimal-valued domain mappings (Birko.Models.Pricing.SQL: Tax.Percentage, PriceGroup.Percentage) standardize on precision 22 / scale 6 via shared DecimalPrecision/DecimalScale constants. The two projects use different precision for conceptually similar decimal quantities. Not a bug (precision 18 is more than adequate for a conversion factor and no truncation results), purely a cross-project consistency point.
 - **Fix:** If a framework-wide decimal convention is intended, align Factor to precision 22 (and consider extracting the constants the way Pricing.SQL does) — or leave as-is if a smaller column is deliberate for conversion factors.
 
@@ -7445,7 +7445,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test sibling for the SQL mappings (consistent with all domain .SQL projects)
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Product.SQL`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** There is no Birko.Models.Product.SQL.Tests project, so the three IModelMapping<T> configurations (table names, primary/unique on Guid, precision/scale, Code uniqueness) are unverified by tests. This matches the framework-wide state — no *.SQL.Tests project exists for any domain SQL mapping sibling — so it is a documented gap, not a regression specific to this project. A lightweight test could materialize each ModelMap and assert TableName, the primary/unique Guid descriptor, and per-field Precision/Scale/IsUnique without needing a database.
 - **Fix:** Optionally add a small unit test that runs each Configure() against a fresh ModelMap<T> and asserts the resulting FieldDescriptor list (table name, Guid primary+unique, MeasureUnit.Code IsUnique+precision 50, Factor precision/scale).
 

@@ -13,7 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**316 / 418 triaged** as of 2026-07-15. Next open is CR-L317 (Birko.Models.Product.SQL cluster, L317…).
+**318 / 418 triaged** as of 2026-07-15. Next open is CR-L319 (Birko.Models.SEO cluster, L319…).
+
+**Batch BV — Birko.Models.Product.SQL cluster (CR-L317, CR-L318):** Birko.Models.Product.SQL. Both closed;
+**/code-review clean (no findings)**. **L317** (convention): `UnitConversion.Factor` was `HasPrecision(18)`
+while the sibling SQL mappings (Pricing.SQL Percentage, Inventory.SQL amounts) standardize on 22/6 via
+shared constants. Aligned Factor to precision 22/scale 6 with extracted `DecimalPrecision`/`DecimalScale`
+constants — a non-destructive widening. **L318** (test-gap): created a new **Birko.Models.Product.SQL.Tests**
+project (git-init'd + registered) — `ProductMappingTests` asserts table names
+(MeasureUnits/UnitConversions/ProductPartnerCodes), Guid primary+unique, `MeasureUnit.Code` unique+precision
+50, the aligned `Factor` 22/6, and string precisions. **Tests:** new Product.SQL.Tests 6. Suite green:
+Product.SQL.Tests 6.
 
 **Batch BU — Birko.Models.Product cluster (CR-L315, CR-L316):** Birko.Models.Product. Both closed;
 **/code-review clean (no findings)**. **L315** (other): the VM→VM `Product.LoadFrom` kept the *longer*
