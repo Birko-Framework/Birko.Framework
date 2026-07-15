@@ -13,7 +13,7 @@ In-memory message queue implementation using `System.Threading.Channels`. For te
 | File | Description |
 |------|-------------|
 | InMemoryMessageQueue.cs | IMessageQueue implementation — creates producer, consumer, manages connection state |
-| InMemoryMessageQueueOptions.cs | Configuration (channel capacity) |
+| InMemoryMessageQueueOptions.cs | Configuration (channel capacity); consumed via the `InMemoryMessageQueue(InMemoryMessageQueueOptions, …)` ctor (CR-L283) |
 | InMemoryChannel.cs | Internal channel manager — bounded channels per destination, subscriber dispatch loop |
 | InMemoryProducer.cs | IMessageProducer — writes to channels, supports delayed delivery via Task.Delay |
 | InMemoryConsumer.cs | IMessageConsumer — subscribes to channels, typed deserialization, ack/reject tracking |

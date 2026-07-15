@@ -31,6 +31,18 @@ namespace Birko.MessageQueue.InMemory
             Consumer = new InMemoryConsumer(_channel, ser);
         }
 
+        /// <summary>
+        /// Creates a new in-memory message queue from <see cref="InMemoryMessageQueueOptions"/>.
+        /// </summary>
+        /// <param name="options">Options supplying the channel capacity.</param>
+        /// <param name="serializer">Message serializer. Defaults to JsonMessageSerializer.</param>
+        // CR-L283: wire InMemoryMessageQueueOptions in (it was documented as the config surface but never
+        // consumed) by delegating to the raw-capacity ctor.
+        public InMemoryMessageQueue(InMemoryMessageQueueOptions options, IMessageSerializer? serializer = null)
+            : this(serializer, (options ?? throw new ArgumentNullException(nameof(options))).ChannelCapacity)
+        {
+        }
+
         public Task ConnectAsync(CancellationToken cancellationToken = default)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);

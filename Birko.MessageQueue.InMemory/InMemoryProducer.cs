@@ -55,13 +55,13 @@ namespace Birko.MessageQueue.InMemory
             {
                 Body = _serializer.Serialize(payload),
                 PayloadType = typeof(T).AssemblyQualifiedName,
-                Headers = headers ?? new MessageHeaders { ContentType = _serializer.ContentType }
+                Headers = headers ?? new MessageHeaders()
             };
 
-            if (headers != null)
-            {
-                message.Headers.ContentType = _serializer.ContentType;
-            }
+            // CR-L284: always stamp the serializer's content type — one assignment covers both the
+            // new-headers and caller-supplied-headers cases (was an object-initializer set plus a
+            // duplicate conditional set).
+            message.Headers.ContentType = _serializer.ContentType;
 
             await SendAsync(destination, message, cancellationToken).ConfigureAwait(false);
         }
