@@ -13,7 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**279 / 418 triaged** as of 2026-07-15. Next open is CR-L280 (Birko.MessageQueue core cluster, L280…).
+**282 / 418 triaged** as of 2026-07-15. Next open is CR-L283 (Birko.MessageQueue.InMemory cluster, L283…).
+
+**Batch BE — Birko.MessageQueue core cluster (CR-L280, CR-L281, CR-L282):** Birko.MessageQueue. All closed;
+**/code-review clean (no findings)**. **L280** (bug — **already fixed, verify-first**): the
+`RetryPolicy.GetDelay` `(long)Math.Pow(2, n-1)` overflow the audit describes was **already remediated under
+CR-M199** (a medium finding) — the code computes `BaseDelay.Ticks * Math.Pow(...)` in double and saturates at
+`MaxDelay` before the tick cast, and `RetryPolicyTests` already pins it (incl. an `int.MaxValue` attempt →
+MaxDelay, never negative). No code change; closed as superseded. **L281** (test-gap): new
+`DeadLetterOptionsTests` — default suffix appends `.dlq`, a custom suffix is used, an explicit `Destination`
+overrides the suffix, and the defaults (Enabled/`.dlq`/null Destination). **L282** (nullable):
+`MessageFingerprint.Compute(QueueMessage)` now guards the argument with `ArgumentNullException.ThrowIfNull`
+before dereferencing `message.Body` (was an NRE on null); also guarded the two `string` overloads so a null
+body/destination throws a clearly-named `ArgumentNullException` instead of the opaque one from
+`Encoding.UTF8.GetBytes(null)`. **Tests:** MessageQueue.Tests → 78 — `MessageFingerprintTests` +3 null-guard
+(message/body/destination), `DeadLetterOptionsTests` +4 (new file). Suite green: MessageQueue.Tests 78.
 
 **Batch BD — Birko.Localization.Data cluster (CR-L277, CR-L278, CR-L279):** Birko.Localization.Data. All
 closed; **/code-review clean (no findings)**. **L279** (nullable): `GetCultureTranslationsAsync` now writes

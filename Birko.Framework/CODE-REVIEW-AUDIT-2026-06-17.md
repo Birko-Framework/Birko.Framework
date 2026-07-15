@@ -7141,7 +7141,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RetryPolicy.GetDelay overflows long for large attempt numbers, can return a negative delay
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue (core)\Retry/RetryPolicy.cs:41`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** delay = BaseDelay.Ticks * (long)Math.Pow(2, attemptNumber - 1). With the default BaseDelay of 5s (50,000,000 ticks), 2^(n-1) overflows Int64 around attemptNumber ~38, producing a wrapped/negative tick count. A negative TimeSpan then fails the 'delay > MaxDelay' check (returns false), so GetDelay returns the negative value instead of clamping to MaxDelay. Math.Pow also loses integer precision at high exponents. The default MaxRetries is 3 so this is unlikely in practice, but a caller raising MaxRetries (or calling GetDelay with a large attemptNumber) hits it.
 - **Fix:** Clamp before multiplying, e.g. compute the shift in double and compare against MaxDelay.TotalMilliseconds, or cap the exponent: 'if (attemptNumber > 30) return MaxDelay;' then multiply. Alternatively compute candidate = BaseDelay.TotalMilliseconds * Math.Pow(2, attemptNumber-1) and return TimeSpan.FromMilliseconds(Math.Min(candidate, MaxDelay.TotalMilliseconds)).
 
@@ -7149,7 +7149,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DeadLetterOptions.GetDeadLetterDestination has no tests
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue (core)\Retry/DeadLetterOptions.cs:28`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** GetDeadLetterDestination (suffix-based vs explicit Destination override) is untested. Small surface, but it is real logic with a branch.
 - **Fix:** Add a couple of asserts: default suffix appends '.dlq'; explicit Destination overrides the suffix path.
 
@@ -7157,7 +7157,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** MessageFingerprint.Compute(QueueMessage) does not null-check the argument
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue (core)\Core/MessageFingerprint.cs:25`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Compute(QueueMessage message) dereferences message.Body with no null guard, so a null message throws NullReferenceException rather than a meaningful ArgumentNullException. The string overloads also assume non-null body. Minor, since QueueMessage.Body defaults to string.Empty, but Body is a public settable string and could be assigned null.
 - **Fix:** Add a guard clause: 'if (message is null) throw new ArgumentNullException(nameof(message));' (early return style per conventions), and consider guarding the string overloads.
 
