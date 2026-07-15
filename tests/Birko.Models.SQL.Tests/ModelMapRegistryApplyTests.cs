@@ -76,4 +76,18 @@ public class ModelMapRegistryApplyTests
 
         registry.GetTableNames().Should().Contain(kvp => kvp.Key == typeof(Widget) && kvp.Value == "test_widgets");
     }
+
+    [Fact]
+    public void RegisterFromAssembly_DiscoversMappings_AndGetMapReturnsConfigured()
+    {
+        // CR-L322: exercises the assembly-scan registration + GetMap<T> cast paths (now via IModelMap).
+        var registry = new ModelMapRegistry();
+        registry.RegisterFromAssembly(typeof(WidgetMap).Assembly);
+
+        registry.HasMap<Widget>().Should().BeTrue();
+        var map = registry.GetMap<Widget>();
+        map.Should().NotBeNull();
+        map!.TableName.Should().Be("test_widgets");
+        map.Properties.Should().Contain(p => p.Name == "Code");
+    }
 }
