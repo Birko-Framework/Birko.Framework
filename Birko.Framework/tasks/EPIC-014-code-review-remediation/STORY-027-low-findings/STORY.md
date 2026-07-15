@@ -13,7 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**253 / 418 triaged** as of 2026-07-15. Next open is CR-L254 (Birko.EventBus.EventSourcing cluster, L254…).
+**255 / 418 triaged** as of 2026-07-15. Next open is CR-L256 (Birko.EventBus.MessageQueue cluster, L256…).
+
+**Batch AU — Birko.EventBus.EventSourcing cluster (CR-L254, CR-L255):** Birko.EventBus.EventSourcing.
+Both closed; **/code-review clean (no findings)**. Both findings were **partly pre-addressed by CR-M186**
+(which had already fixed the OccurredAt/EventId drop the audit detail still described as open and shipped a
+`DomainEventPublishedTests.cs` covering the field mapping) — verify-first narrowed the remaining gaps.
+**L254** (nullable): added the missing `if (domainEvent is null) throw new ArgumentNullException(nameof(domainEvent))`
+guard clause as the first line of `DomainEventPublished(DomainEvent)` — the ctor dereferences `domainEvent`
+immediately, and it's reachable via `EventStoreEventBus.PublishDomainEventAsync` if an inner store's
+`AppendRange`/replay `IEnumerable` ever yields a null element; now matches the project's own null-guard
+convention (EventStoreEventBus/EventReplayService both `?? throw`). **L255** (test-gap): the CR-M186 test
+already asserted AggregateId/Version/type/data/Metadata/UserId + OccurredAt/EventId, so the remaining gaps
+were the `Source == "event-sourcing"` field (added an assertion to the existing mapping test) and the
+null-argument behavior (new `Constructor_NullDomainEvent_ThrowsArgumentNullException` pinning the L254 guard
+with `WithParameterName("domainEvent")`). **Tests:** EventBus.Tests 92 → 93. Suite green: EventBus.Tests 93.
 
 **Batch AT — Birko.EventBus core cluster (CR-L248 … CR-L253):** Birko.EventBus. All closed;
 **/code-review clean (no correctness bugs; one deliberate documented semantic change)**. **L248** (bug,

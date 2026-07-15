@@ -6933,7 +6933,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DomainEventPublished constructor does not null-check its argument
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.EventSourcing\DomainEventPublished.cs:48-56`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The constructor `DomainEventPublished(DomainEvent domainEvent)` immediately dereferences `domainEvent.AggregateId` etc. without a null check, so passing null throws NullReferenceException. Both other types in the project (EventStoreEventBus, EventReplayService) consistently guard their dependencies with `?? throw new ArgumentNullException(...)`, so this is an inconsistency with the project's own null-guard convention. It is reachable from PublishDomainEventAsync / the replay loops if an inner store ever yields a null element in the returned IEnumerable.
 - **Fix:** Add `if (domainEvent is null) throw new ArgumentNullException(nameof(domainEvent));` as the first line of the constructor (early-return-style guard clause).
 
@@ -6941,7 +6941,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DomainEventPublished field-copy correctness has no direct unit test
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.EventBus.Tests/EventSourcing (no DomainEventPublishedTests.cs)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The EventSourcing tests in the Birko.EventBus.Tests sibling cover EventStoreEventBus (append/publish/delegation) and EventReplayService (the three replay paths) well, and indirectly assert a few mapped fields (AggregateId, DomainEventType, EventData). However there is no direct test for DomainEventPublished's full field mapping (Version, Metadata, UserId, Source == "event-sourcing") nor for the null-argument behavior, and no test documents the OccurredAt/EventId drop noted above. Note only — coverage of the main service paths is otherwise adequate for the project size.
 - **Fix:** Add a small DomainEventPublishedTests.cs asserting every field is copied from a source IEvent (including Metadata/UserId/Version and Source), pinning the intended behavior for OccurredAt.
 
