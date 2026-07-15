@@ -7373,7 +7373,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Inconsistent ICopyable implementation across the model set
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Inventory\Models/StockItem.cs:15`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Only StockItem implements ICopyable<StockItem> (with a CopyTo override). StockItemVariant declares ICopyable<StockItemVariant> and implements CopyTo too, but StockMovement, InventoryDocument, InventoryDocumentLine, and StorageLocation implement only ILoadable and not ICopyable, so they inherit just the base AbstractLogModel.CopyTo(AbstractLogModel) which does not copy any of their own fields. Cloning any of those four via the inherited CopyTo produces a copy missing all domain properties. This is likely an oversight given the sibling models do provide typed CopyTo.
 - **Fix:** Decide deliberately: either implement ICopyable<T> + a typed CopyTo on all six models (consistent with StockItem/StockItemVariant), or document that only catalog-style models support cloning. Leaving it half-done is a footgun for callers who clone documents/movements.
 

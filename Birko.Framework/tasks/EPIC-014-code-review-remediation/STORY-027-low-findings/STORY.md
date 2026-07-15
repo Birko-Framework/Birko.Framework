@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**308 / 418 triaged** as of 2026-07-15. Next open is CR-L309 (Birko.Models.Inventory cluster, L309…).
+**309 / 418 triaged** as of 2026-07-15. Next open is CR-L310 (Birko.Models.Inventory.SQL cluster, L310…).
+
+**Batch BQ — Birko.Models.Inventory (CR-L309):** Birko.Models.Inventory. Closed;
+**/code-review clean (no findings)**. **L309** (convention — "implement on all" option): only StockItem /
+StockItemVariant implemented `ICopyable<T>` with a typed `CopyTo`; StockMovement, InventoryDocument,
+InventoryDocumentLine and StorageLocation implemented only `ILoadable`, so cloning them via the inherited
+`AbstractLogModel.CopyTo` silently dropped every domain field. Implemented `ICopyable<T>` + a typed `CopyTo`
+on all four (instantiate-if-null, `base.CopyTo`, copy own fields — matching the concrete StockItem pattern);
+`InventoryDocument` deep-copies its `Lines` (each via the new `InventoryDocumentLine.CopyTo`) so the clone
+doesn't alias the original's line objects. **Tests:** Inventory.Tests 3 → 8 — field-copy for each of the
+four + null-clone-instantiates + Lines deep-copy (clone lines `NotBeSameAs` originals). Suite green:
+Inventory.Tests 8.
 
 **Batch BP — Birko.Models.Customers.SQL cluster (CR-L307, CR-L308):** Birko.Models.Customers.SQL. Both
 closed; **/code-review clean (no findings)**. **L307** (test-gap — **partly pre-existing**): a
