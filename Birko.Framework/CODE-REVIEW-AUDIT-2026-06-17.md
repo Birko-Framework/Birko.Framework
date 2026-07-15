@@ -6684,7 +6684,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Unused Id property carried over from the SQL model
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Xml\Models\XmlSyncKnowledgeItem.cs:20`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The int Id property (with [XmlElement("Id")]) was copied from SqlSyncKnowledgeItem, where it is a DB auto-increment ([IncrementField]). In the XML backend there is no auto-increment source: it is never assigned by CreateKnowledgeItem or anything else, so it always serializes as 0 and carries no meaning. Harmless, but it is dead state that will mislead readers into thinking it is a meaningful key.
 - **Fix:** Drop the Id property from the XML model (the JSON sibling's JsonSyncKnowledgeItem is worth comparing — if it also has no real use for Id, remove it there too), or add a comment noting it is unused in XML.
 

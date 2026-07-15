@@ -13,7 +13,29 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**224 / 418 triaged** as of 2026-07-15. Next open is CR-L225 (Birko.Data.Sync.Xml).
+**225 / 418 triaged** as of 2026-07-15. Next open is CR-L226 (Birko.Data.Tagging).
+
+**Batch AL — Data.Sync.Xml (CR-L225 + a Cosmos audit-gap extra):** Birko.Data.Sync.Xml (+
+Birko.Data.Sync.CosmosDB). Closed; **/code-review: 4 findings, all fixed in-batch**. **L225** (cleanup):
+removed the dead `int Id` property (`[XmlElement("Id")]`) from `XmlSyncKnowledgeItem` — copied from
+`SqlSyncKnowledgeItem` where it is a DB auto-increment (`[IncrementField]`), but XML has no increment
+source: never assigned by `CreateKnowledgeItem`, never read anywhere (framework + tests grep-clean),
+not in `ISyncKnowledgeItem`; identity is Guid/EntityGuid (same removal as JSON CR-L213 / Mongo CR-L216 /
+ES CR-L212 / Raven CR-L219). Legacy files carrying `<Id>0</Id>` still load — XmlSerializer ignores
+unknown elements — pinned by a test that injects `<Id>7</Id>` into a real store file and re-reads it.
+**Audit-gap extra (Cosmos):** the /code-review altitude pass found `CosmosSyncKnowledgeItem.InternalRecordId`
+("for database compatibility") is the same dead pattern — never set/read, serialized `InternalRecordId:0`
+into every document — and NOT tracked by any audit finding (all Cosmos entries closed); removed it too
+(the Cosmos analogue of Raven's L219; unmapped JSON members are ignored on read, so existing docs stay
+readable — no Mongo-style guard needed). Also from /code-review: the legacy-file test now locates the
+store file via the public `GetPath()` (as the JSON sibling tests do) instead of an over-broad
+`EnumerateFiles(...).Single()` glob; removed two dead usings (`Birko.Data.Stores`, `Birko.Configuration`)
+from `AsyncXmlSyncKnowledgeStore` (JSON-copied, same as L221); fixed the stale Sync.Xml.Tests CLAUDE.md
+scope bullet (wrong class name `AsyncJsonSyncKnowledgeStoreTests` + missing new coverage) and created the
+missing Sync.CosmosDB.Tests CLAUDE.md (convention requires one per test project). **Tests:** Sync.Xml.Tests
+5 → 7 (`Model_HasNoVestigialIdField` reflection guard; `LoadData_LegacyFileWithIdElement_StillDeserializes`),
+Sync.CosmosDB.Tests 7 → 8 (`Model_HasNoDeadInternalRecordId`). Suites green: Sync.Xml.Tests 7,
+Sync.CosmosDB.Tests 8.
 
 **Batch AK — Data.Sync.Tenant cluster (CR-L222, CR-L223, CR-L224):** Birko.Data.Sync.Tenant. All closed;
 **/code-review clean (no findings)**. **L222** (bug — cancellation): in `ExecuteSyncAsync` the
