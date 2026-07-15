@@ -90,6 +90,33 @@ public class AsyncXmlSyncKnowledgeStoreTests : IDisposable
     }
 
     [Fact]
+    public void Model_HasNoVestigialIdField()
+    {
+        // CR-L225: the int Id (copied from SqlSyncKnowledgeItem's [IncrementField]) had no
+        // auto-increment source in XML — never assigned, always serialized as 0. Identity is
+        // covered by AbstractModel.Guid / EntityGuid (same removal as the JSON sibling, CR-L213).
+        typeof(XmlSyncKnowledgeItem).GetProperty("Id").Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LoadData_LegacyFileWithIdElement_StillDeserializes()
+    {
+        // CR-L225 backward-compat: files written before the Id removal carry <Id>0</Id>;
+        // XmlSerializer ignores unknown elements, so legacy files must still load.
+        var entityGuid = Guid.NewGuid();
+        var writer = NewStore("legacy");
+        await writer.CreateAsync(new XmlSyncKnowledgeItem { EntityGuid = entityGuid, Scope = "S", LastSyncedAt = DateTime.UtcNow });
+
+        var path = writer.GetPath()!;
+        var xml = File.ReadAllText(path);
+        xml.Should().Contain("<EntityGuid>");
+        File.WriteAllText(path, xml.Replace("<EntityGuid>", "<Id>7</Id><EntityGuid>"));
+
+        var items = (await NewStore("legacy").ReadAsync(x => x.Scope == "S", ct: CancellationToken.None)).ToList();
+        items.Should().ContainSingle().Which.EntityGuid.Should().Be(entityGuid);
+    }
+
+    [Fact]
     public void CreateKnowledgeItem_DerivesDeletionFlagsFromHashes()
     {
         var store = NewStore();
