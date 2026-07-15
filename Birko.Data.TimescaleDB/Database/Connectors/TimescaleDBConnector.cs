@@ -20,7 +20,8 @@ namespace Birko.Data.SQL.Connectors
         /// Initializes a new instance of the TimescaleDBConnector class.
         /// </summary>
         /// <param name="settings">The TimescaleDB settings for connection.</param>
-        public TimescaleDBConnector(TimescaleDBSettings settings) : base(settings)
+        public TimescaleDBConnector(TimescaleDBSettings settings)
+            : base(settings ?? throw new ArgumentNullException(nameof(settings)))
         {
             _timescaleSettings = settings;
         }
@@ -48,6 +49,12 @@ namespace Birko.Data.SQL.Connectors
         /// </summary>
         private static TimescaleDBSettings AsTimescaleSettings(RemoteSettings settings)
         {
+            // CR-L232: fail with a clear ArgumentNullException instead of NRE-ing on settings.Location.
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
             if (settings is TimescaleDBSettings timescaleSettings)
             {
                 return timescaleSettings;

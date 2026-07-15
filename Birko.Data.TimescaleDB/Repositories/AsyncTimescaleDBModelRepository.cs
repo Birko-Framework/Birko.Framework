@@ -66,32 +66,34 @@ namespace Birko.Data.SQL.Repositories
             }
         }
 
+        /// <summary>
+        /// Returns the connector or throws a clear error when settings were never applied.
+        /// CR-L233: one guard instead of the copy-pasted null-check in every schema method.
+        /// </summary>
+        private TimescaleDBConnector RequireConnector()
+            => Connector ?? throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
+
         public async Task InitAsync(CancellationToken ct = default)
         {
-            if (Connector == null)
-                throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
-            await Task.Run(() => Connector.DoInit(), ct).ConfigureAwait(false);
+            var connector = RequireConnector();
+            await Task.Run(() => connector.DoInit(), ct).ConfigureAwait(false);
         }
 
         public async Task DropAsync(CancellationToken ct = default)
         {
-            if (Connector == null)
-                throw new InvalidOperationException("Connector not initialized.");
-            await Task.Run(() => Connector.DropTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
+            var connector = RequireConnector();
+            await Task.Run(() => connector.DropTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
         }
 
         public async Task CreateSchemaAsync(CancellationToken ct = default)
         {
-            if (Connector == null)
-                throw new InvalidOperationException("Connector not initialized.");
-            await Task.Run(() => Connector.CreateTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
+            var connector = RequireConnector();
+            await Task.Run(() => connector.CreateTable(new[] { typeof(T) }), ct).ConfigureAwait(false);
         }
 
         public async Task CreateHypertableAsync(string timeColumn, string chunkTimeInterval = "7 days", CancellationToken ct = default)
         {
-            if (Connector == null)
-                throw new InvalidOperationException("Connector not initialized.");
-            await Connector.CreateHypertableAsync(typeof(T), timeColumn, chunkTimeInterval, ct).ConfigureAwait(false);
+            await RequireConnector().CreateHypertableAsync(typeof(T), timeColumn, chunkTimeInterval, ct).ConfigureAwait(false);
         }
 
         public override async Task DestroyAsync(CancellationToken ct = default)

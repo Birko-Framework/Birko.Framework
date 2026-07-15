@@ -57,15 +57,15 @@ FROM metrics GROUP BY bucket, device_id;
 
 ### Stores
 
-- **TimescaleDBStore\<T\>** - Sync store
-- **TimescaleDBBulkStore\<T\>** - Bulk operations
-- **AsyncTimescaleDBStore\<T\>** - Async store
-- **AsyncTimescaleDBBulkStore\<T\>** - Async bulk store
+- **TimescaleDBStore\<T\>** - Sync store with bulk operations (extends `DataBaseBulkStore`)
+- **AsyncTimescaleDBStore\<T\>** - Async store with bulk operations (extends `AsyncDataBaseBulkStore`)
 
 ### Repositories
 
-- **TimescaleDBRepository\<T\>** / **TimescaleDBBulkRepository\<T\>**
-- **AsyncTimescaleDBRepository\<T\>** / **AsyncTimescaleDBBulkRepository\<T\>**
+- **TimescaleDBModelRepository\<T\>** / **AsyncTimescaleDBModelRepository\<T\>** - model repositories
+  with schema/hypertable helpers (`InitAsync`, `CreateSchemaAsync`, `CreateHypertableAsync`, `DropAsync`)
+- ViewModel repositories live in [Birko.Data.TimescaleDB.ViewModel](../Birko.Data.TimescaleDB.ViewModel/)
+  (`TimescaleDBRepository<TViewModel, TModel>` / `AsyncTimescaleDBRepository<TViewModel, TModel>`)
 
 ## Related Projects
 

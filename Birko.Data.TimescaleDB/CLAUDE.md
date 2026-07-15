@@ -4,7 +4,7 @@
 TimescaleDB implementation for the Birko data layer providing time-series database storage built on PostgreSQL.
 
 ## Project Location
-`C:\Source\Birko.Data.TimescaleDB\`
+`C:\Source\Birko\Framework\Birko.Data.TimescaleDB\`
 
 ## Purpose
 - Time-series data storage
@@ -14,24 +14,29 @@ TimescaleDB implementation for the Birko data layer providing time-series databa
 
 ## Components
 
+### Connector
+- `TimescaleDBConnector` - extends `PostgreSQLConnector` with hypertable support
+  (`CreateHypertable`/`CreateHypertableAsync`); both constructors guard null settings (CR-L232)
+
 ### Stores
-- `TimescaleDBStore<T>` - Synchronous TimescaleDB store
-- `TimescaleDBBulkStore<T>` - Bulk operations store
-- `AsyncTimescaleDBStore<T>` - Asynchronous TimescaleDB store
-- `AsyncTimescaleDBBulkStore<T>` - Async bulk operations store
+- `TimescaleDBStore<T>` - sync store, bulk operations included (extends `DataBaseBulkStore<TimescaleDBConnector, T>`)
+- `AsyncTimescaleDBStore<T>` - async store, bulk operations included (extends `AsyncDataBaseBulkStore<TimescaleDBConnector, T>`)
 
 ### Repositories
-- `TimescaleDBRepository<T>` - TimescaleDB repository
-- `TimescaleDBBulkRepository<T>` - Bulk repository
-- `AsyncTimescaleDBRepository<T>` - Async repository
-- `AsyncTimescaleDBBulkRepository<T>` - Async bulk repository
+- `TimescaleDBModelRepository<T>` / `AsyncTimescaleDBModelRepository<T>` - model repositories with
+  schema/hypertable helpers; the async schema methods fail fast via a shared `RequireConnector()`
+  guard (CR-L233)
+- The ViewModel repositories (`TimescaleDBRepository<TViewModel, TModel>` /
+  `AsyncTimescaleDBRepository<TViewModel, TModel>`) live in **Birko.Data.TimescaleDB.ViewModel** —
+  two bit-rotted, never-compiled copies of them in this project's `Repositories/` folder were
+  deleted under CR-L233
 
 ## Connection
 
 ### Settings (Birko.Data.TimescaleDB.Stores.Settings)
 Typed settings extending `SqlSettings` (from Birko.Data.SQL):
 - Inherits `CommandTimeout`, `ConnectionTimeout`, abstract `GetConnectionString()` from `SqlSettings`
-- `TimeColumn` (default: "time") — column used for hypertable time partitioning
+- `TimeColumn` (default: "timestamp") — column used for hypertable time partitioning
 - `ChunkTimeInterval` — chunk time interval for hypertables
 - Overrides `GetConnectionString()` with PostgreSQL connection string format
 
@@ -57,30 +62,19 @@ SELECT create_hypertable('metrics', 'time');
 ## Implementation
 
 ```csharp
-using Birko.Data.TimescaleDB.Stores;
-using Npgsql;
+using Birko.Data.SQL.Stores;
+using Birko.Data.SQL.TimescaleDB.Stores;
 
-public class MetricStore : TimescaleDBStore<Metric>
+var store = new AsyncTimescaleDBStore<Metric>();
+store.SetSettings(new TimescaleDBSettings("localhost", "metrics", "user", "pass", 5432)
 {
-    public MetricStore(TimescaleDBSettings settings) : base(settings)
-    {
-    }
+    TimeColumn = "timestamp",
+    ChunkTimeInterval = "7 days",
+});
 
-    public override Guid Create(Metric item)
-    {
-        var cmd = Connector.CreateCommand();
-        cmd.CommandText = @"
-            INSERT INTO metrics (time, device_id, value)
-            VALUES ($1, $2, $3)";
-
-        cmd.Parameters.AddWithValue(item.Timestamp);
-        cmd.Parameters.AddWithValue(item.DeviceId);
-        cmd.Parameters.AddWithValue(item.Value);
-
-        cmd.ExecuteNonQuery();
-        return item.Id;
-    }
-}
+await store.CreateSchemaAsync();               // CREATE TABLE from the model mapping
+await store.CreateHypertableAsync("timestamp"); // convert to a hypertable
+var id = await store.CreateAsync(new Metric { /* … */ });
 ```
 
 ## Time Buckets
