@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**305 / 418 triaged** as of 2026-07-15. Next open is CR-L306 (Birko.Models.Customers cluster, L306…).
+**306 / 418 triaged** as of 2026-07-15. Next open is CR-L307 (Birko.Models.Customers.SQL cluster, L307…).
+
+**Batch BO — Birko.Models.Customers (CR-L306):** Birko.Models.Customers. Closed;
+**/code-review clean (no findings)**. **L306** (cleanup): 5 ViewModels (Address, BaseCustomer, Customer,
+CustomerAddress, InvoiceAddress) allocated a fresh `new[] { … }` array + ran a LINQ `Contains` on **every**
+PropertyChanged event to decide whether to raise the aggregate object notification. Hoisted each watched-set
+to a `private static readonly HashSet<string>` (allocated once) and test membership against it with a
+null-narrowing guard (`e.PropertyName != null && set.Contains(...)`). Behavior-preserving (same ordinal
+equality, same null→no-raise); swapped the now-unused `using System.Linq` for `System.Collections.Generic`.
+(ContactPerson/CustomerBankAccount have no such dispatch — untouched.) **Tests:** Customers.Tests 4 → 5 —
+`Address_WatchedPropertyChange_RaisesAddressObjectNotification` pins the preserved aggregate notification.
+Suite green: Customers.Tests 5.
 
 **Batch BN — Birko.Models.Contracts (CR-L305):** Birko.Models.Contracts. Closed;
 **/code-review clean (no findings)**. **L305** (nullable): `HierarchyHelper.IsDescendantOf` dereferenced

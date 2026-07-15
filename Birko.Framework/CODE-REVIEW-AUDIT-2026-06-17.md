@@ -7349,7 +7349,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Repeated PropertyChanged dispatch logic duplicated across seven view models
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Customers\ViewModels/Address.cs:165-171`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Each view model allocates a fresh `new[] { ... }` array on every PropertyChanged event and runs LINQ Contains (Address, BaseCustomer, Customer, CustomerAddress, InvoiceAddress all follow the same shape). This is a minor needless per-event allocation and duplicated boilerplate. Not a correctness issue, but if these view models are bound in hot UI paths the array allocation per property change is avoidable.
 - **Fix:** Hoist the watched-property name sets to static readonly HashSet<string> fields (one per view model) and test membership against the cached set, avoiding the per-event array allocation.
 
