@@ -7325,7 +7325,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** LoadFrom calls base.LoadFrom(data) before the null guard
 - **Path:** `C:/Source/Birko/Framework/Birko.Models.Category/Models/Category.cs:24-25; ViewModels/Category.cs:88-89,99-100`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Each LoadFrom does base.LoadFrom(data) then if (data == null) return;. The base methods (AbstractModel/AbstractLogModel/LogViewModel) are internally null-safe, so this does not throw today, but the ordering is illogical: the guard runs after the value has already been forwarded to base. It matches the inherited base-class style, so it is not a regression, just worth noting that the guard is placed after the first use of the parameter rather than as a true early-return.
 - **Fix:** Move if (data == null) return; to the top of each LoadFrom so the guard actually short-circuits before any use of data, consistent with the framework's guard-clause convention.
 
@@ -7333,7 +7333,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ViewModels.Category.Path setter lacks the equality guard the other setters have
 - **Path:** `C:/Source/Birko/Framework/Birko.Models.Category/ViewModels/Category.cs:47-56`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Title, Slug, and Description setters all guard with if (_field != value) before raising PropertyChanged, but the Path setter (lines 50-55) assigns and raises unconditionally. Setting Path to its current value still fires PropertyChanged(PathProperty), which in turn triggers Category_PropertyChanged -> RaisePropertyChanged(CategoryObjectProperty), producing a spurious change notification / potential re-render or dirty-flag churn in any UI bound to this ViewModel.
 - **Fix:** Add the same if (_path != value) guard to the Path setter for consistency and to avoid redundant change notifications.
 

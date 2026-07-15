@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**302 / 418 triaged** as of 2026-07-15. Next open is CR-L303 (Birko.Models.Category cluster, L303…).
+**304 / 418 triaged** as of 2026-07-15. Next open is CR-L305 (Birko.Models.Contracts cluster, L305…).
+
+**Batch BM — Birko.Models.Category cluster (CR-L303, CR-L304):** Birko.Models.Category. Both closed;
+**/code-review clean (no findings)**. **L303** (convention): all three `LoadFrom` methods (Model +
+ViewModel ×2) called `base.LoadFrom(data)` **before** the `if (data == null) return;` guard — illogical
+ordering (guard after the parameter's first use). Moved the guard to the top; base is null-safe so this is a
+no-op ordering fix, now honoring the guard-clause convention. **L304** (bug): the ViewModel `Path` setter
+assigned + raised `PropertyChanged` unconditionally, unlike the `Title`/`Slug`/`Description` setters (which
+guard `if (_field != value)`) — setting `Path` to its current value fired a spurious change that cascaded to
+the `Category` object notification (dirty-flag/re-render churn). Added the `if (_path != value)` guard.
+**Tests:** Category.Tests 9 → 12 — `PathSetter_SameValue_DoesNotRaisePropertyChanged`,
+`PathSetter_NewValue_RaisesPropertyChanged`, `LoadFrom_Null_DoesNotThrow` (all three overloads). Suite
+green: Category.Tests 12.
 
 **Batch BL — Birko.Models cluster (CR-L300, CR-L301, CR-L302):** Birko.Models. All closed;
 **/code-review clean (no findings)**. **L300** (cleanup): `SourceValueExtensions.GetValue` ran
