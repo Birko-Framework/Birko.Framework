@@ -39,6 +39,21 @@ namespace Birko.EventBus.Tests.EventSourcing
             wrapper.EventData.Should().Be("{\"x\":1}");
             wrapper.Metadata.Should().Be("{\"m\":true}");
             wrapper.UserId.Should().Be(domainEvent.UserId);
+            wrapper.Source.Should().Be("event-sourcing", "the wrapper is stamped with the event-sourcing source (CR-L255)");
+        }
+
+        /// <summary>
+        /// CR-L254: the constructor dereferences its argument immediately, so it must guard against
+        /// null with an ArgumentNullException — matching the null-guard convention used by the
+        /// project's other types (EventStoreEventBus, EventReplayService).
+        /// </summary>
+        [Fact]
+        public void Constructor_NullDomainEvent_ThrowsArgumentNullException()
+        {
+            Action act = () => new DomainEventPublished(null!);
+
+            act.Should().Throw<ArgumentNullException>()
+                .WithParameterName("domainEvent");
         }
     }
 }
