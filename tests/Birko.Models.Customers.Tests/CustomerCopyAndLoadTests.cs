@@ -112,3 +112,23 @@ public class CustomerCopyAndLoadTests
         model.Street.Should().BeEmpty();
     }
 }
+
+/// <summary>
+/// CR-L306: the watched-property → object-notification dispatch (now backed by a cached HashSet) must
+/// still raise the aggregate "Address" notification when a watched property changes.
+/// </summary>
+public class CustomerViewModelNotificationTests
+{
+    [Fact]
+    public void Address_WatchedPropertyChange_RaisesAddressObjectNotification()
+    {
+        var vm = new AddressViewModel();
+        var raised = new System.Collections.Generic.List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.Name = "Acme";
+
+        raised.Should().Contain(AddressViewModel.NameProperty);
+        raised.Should().Contain(AddressViewModel.AddressObjectProperty);
+    }
+}
