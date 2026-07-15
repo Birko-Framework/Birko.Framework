@@ -1109,6 +1109,10 @@
 			"path": "../../Framework.Tests/Birko.Models.Pricing.Tests"
 		},
 		{
+			"name": "Tests / Birko.Models.Pricing.SQL.Tests",
+			"path": "../../Framework.Tests/Birko.Models.Pricing.SQL.Tests"
+		},
+		{
 			"name": "Tests / Birko.Models.Product.Tests",
 			"path": "../../Framework.Tests/Birko.Models.Product.Tests"
 		},

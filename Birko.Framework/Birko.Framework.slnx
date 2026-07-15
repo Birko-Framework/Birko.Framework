@@ -217,6 +217,7 @@
     <Project Path="../../Framework.Tests/Birko.Models.Inventory.Tests/Birko.Models.Inventory.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Models.Inventory.SQL.Tests/Birko.Models.Inventory.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Models.Pricing.Tests/Birko.Models.Pricing.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Models.Pricing.SQL.Tests/Birko.Models.Pricing.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Models.Product.Tests/Birko.Models.Product.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Models.SEO.Tests/Birko.Models.SEO.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Models.SQL.Tests/Birko.Models.SQL.Tests.csproj" />

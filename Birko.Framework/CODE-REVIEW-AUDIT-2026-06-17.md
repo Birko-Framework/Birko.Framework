@@ -7413,7 +7413,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling for the three IModelMapping<T> mappings
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Pricing.SQL\Mappings\CurrencyMapping.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The project ships three public IModelMapping<T> implementations (CurrencyMapping, TaxMapping, PriceGroupMapping) but has no Birko.Models.Pricing.SQL.Tests sibling. The framework convention is that every new public functionality has corresponding tests. A configured ModelMap could be asserted (table name, primary/unique on Guid, Code uniqueness, decimal precision/scale on Percentage, string precisions) to catch regressions if model property names change. Noted only — the parallel domain SQL projects (Users.SQL etc.) also appear untested, so this is a framework-wide gap rather than a regression specific to this project.
 - **Fix:** Optionally add a small test project that runs each Configure() against a fresh ModelMap<T> and asserts the resulting FieldDescriptor set (Properties names, IsPrimary/IsUnique flags, Precision/Scale values).
 

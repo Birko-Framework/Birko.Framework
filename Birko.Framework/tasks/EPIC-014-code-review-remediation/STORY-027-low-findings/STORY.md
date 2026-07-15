@@ -13,7 +13,15 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**313 / 418 triaged** as of 2026-07-15. Next open is CR-L314 (Birko.Models.Pricing.SQL cluster, L314…).
+**314 / 418 triaged** as of 2026-07-15. Next open is CR-L315 (Birko.Models.Product cluster, L315…).
+
+**Batch BT — Birko.Models.Pricing.SQL (CR-L314):** Birko.Models.Pricing.SQL. Closed;
+**/code-review clean (no findings)**. **L314** (test-gap): created a new **Birko.Models.Pricing.SQL.Tests**
+project (git-init'd + registered in `.slnx`/`.code-workspace`; mirrors Inventory.SQL.Tests) —
+`PricingMappingTests` runs each `Configure()` against a fresh `ModelMap<T>` and asserts the three table names
+(Currencies/Taxes/PriceGroups), Guid primary+unique, `Currency.Code` unique + precision 8, the Tax/PriceGroup
+`Percentage` decimal precision 22/scale 6, and the string-column precisions. **Tests:** new
+Pricing.SQL.Tests 5. Suite green: Pricing.SQL.Tests 5.
 
 **Batch BS — Birko.Models.Pricing cluster (CR-L312, CR-L313):** Birko.Models.Pricing. Both closed;
 **/code-review clean (no findings)**. Both are "confirm/document" findings — resolved via the audit's
