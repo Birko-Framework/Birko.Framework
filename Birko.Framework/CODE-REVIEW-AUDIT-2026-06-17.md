@@ -6756,7 +6756,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DestroyAsync re-accesses Connector after the store has already been destroyed
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.TimescaleDB.ViewModel\Repositories\AsyncTimescaleDBRepository.cs:151-155`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** DestroyAsync calls base.DestroyAsync(ct) first (which calls BulkStore.DestroyAsync, tearing down the store) and then DropAsync(ct), which re-reads the Connector via the store-unwrap chain and runs DropTable. If store teardown disposes/clears the connection, DropAsync's `if (Connector == null) throw InvalidOperationException` could fire, turning a Destroy into a thrown exception; if it doesn't, the DropTable may be redundant with what the store destroy already did. This mirrors the approved sibling (Birko.Data.TimescaleDB\Repositories\AsyncTimescaleDBModelRepository.cs:97-101), so it is a pre-existing pattern rather than a regression, but the ordering is worth confirming against what BulkStore.DestroyAsync actually does.
 - **Fix:** Drop the schema before tearing down the store (call DropAsync(ct) before base.DestroyAsync(ct)), or guard DropAsync so a null connector during teardown is a no-op rather than an exception.
 
@@ -6764,7 +6764,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Connector property is evaluated twice per lifecycle call (re-walks the unwrap chain)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.TimescaleDB.ViewModel\Repositories\AsyncTimescaleDBRepository.cs:95-148`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** InitAsync, DropAsync, CreateSchemaAsync, and CreateHypertableAsync each access the Connector property twice (once for the null check, once for the actual call). Connector is not a cached field — each access does Store?.GetUnwrappedStore<TModel, AsyncTimescaleDBStore<TModel>>()?.Connector, walking the (possibly wrapped) store chain twice. Functionally correct and matches the sibling, but it is a needless repeated traversal.
 - **Fix:** Capture once: `var connector = Connector; if (connector == null) throw ...; await ...connector...`. This also makes the methods robust to a connector that could change between the two reads.
 
@@ -6772,7 +6772,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Cancellation token does not cancel the running DB operation for the Task.Run-wrapped methods
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.TimescaleDB.ViewModel\Repositories\AsyncTimescaleDBRepository.cs:102,116,130`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** InitAsync/DropAsync/CreateSchemaAsync wrap synchronous connector calls (DoInit, DropTable, CreateTable) in Task.Run(() => ..., ct). The ct passed to Task.Run only cancels the work before it starts executing on the thread pool; once DoInit/DropTable/CreateTable begins its blocking DB call, the token has no effect. CreateHypertableAsync (line 147) correctly flows ct into a genuinely async connector method. This is a sync-over-async wrapper and mirrors the approved sibling, so it is pre-existing, but callers passing a CancellationToken get weaker cancellation semantics than the signature implies.
 - **Fix:** Acceptable to leave as-is for parity with the sibling; if the connector grows async DoInit/DropTable/CreateTable overloads, prefer those over Task.Run so cancellation reaches the in-flight DB command.
 

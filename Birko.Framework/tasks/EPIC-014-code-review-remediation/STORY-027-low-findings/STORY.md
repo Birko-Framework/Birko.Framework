@@ -13,7 +13,33 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**233 / 418 triaged** as of 2026-07-15. Next open is CR-L234 (Birko.Data.TimescaleDB.ViewModel cluster, L234–L236).
+**236 / 418 triaged** as of 2026-07-15. Next open is CR-L237 (Birko.Data.ViewModel cluster, L237–L239).
+
+**Batch AP — Data.TimescaleDB.ViewModel cluster (CR-L234, CR-L235, CR-L236):** Birko.Data.TimescaleDB.ViewModel
+(+ same-defect extras in Birko.Data.TimescaleDB and Birko.Data.ViewModel). All closed; **/code-review:
+4 findings, all fixed in-batch — including one significant base-layer bug**. **L234** (bug): removed the
+`DestroyAsync` override (`base.DestroyAsync` + `DropAsync`) from the ViewModel `AsyncTimescaleDBRepository`
+AND its model-repo sibling `AsyncTimescaleDBModelRepository` (Batch AO had left it) — the repo base already
+destroys through the store and `AsyncDataBaseStore.DestroyAsync` IS a table drop, so the override dropped
+the table a second time via the unwrapped connector, bypassing wrappers (Mongo CR-L155/L156 precedent);
+`DropAsync` stays as the explicit helper. Behavioral change: `DestroyAsync` on an unconfigured repo no
+longer throws (the trailing `DropAsync` used to). **The /code-review cross-file trace then found the
+deeper instance:** `AbstractAsyncBulkViewModelRepository.DestroyAsync` (Birko.Data.ViewModel) still had
+the CR-H080 double-destroy shape — `base.DestroyAsync` → `Store.DestroyAsync`, then `BulkStore.DestroyAsync`
+where `BulkStore` is `Store as IAsyncBulkStore` (the SAME instance) — CR-H080 had fixed only the
+model-side `AbstractAsyncBulkRepository`. Removed that override too (so ViewModel-repo destroys went
+3→1 drops, not 3→2; unsafe for non-idempotent stores: double-dispose/double-close). Sync siblings
+verified clean (no overrides). **L235** (cleanup): the ViewModel repo gets the same `RequireConnector()`
+capture-once helper as Batch AO — each `Connector` read re-walks the wrapped-store unwrap chain, and the
+guard-then-use pattern traversed it twice per call. **L236** (other — accepted as-is per the audit):
+Task.Run-wrapped sync connector calls give the token cancel-before-start semantics only; documented on
+both repos' `RequireConnector()` AND in the public methods' `<param name="ct">` docs (IntelliSense-visible,
+per /code-review). **Tests:** TimescaleDB.ViewModel.Tests 5 → 7 (structural no-override pin + the
+unconfigured-Destroy behavioral change), TimescaleDB.Tests 19 (model-repo pin), Data.ViewModel.Tests
+9 → 11 (`BulkViewModelRepositoryDestroyTests` — a counting store proves exactly ONE `DestroyAsync` per
+repository destroy + structural pin; new CLAUDE.md for the project, was missing). Downstream
+SQL.ViewModel.Tests 11 green (consumer of the fixed base). Suites green: TimescaleDB.ViewModel 7,
+TimescaleDB 19, Data.ViewModel 11, SQL.ViewModel 11.
 
 **Batch AM-bis — repo-wide shared-project GUID sweep (user-authorized follow-up to CR-L227):** DONE.
 The Batch AM /code-review found the fake-GUID pattern was much wider than the one tracked finding:
