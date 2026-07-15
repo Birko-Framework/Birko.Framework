@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Xunit;
 using System.Globalization;
 using FluentAssertions;
@@ -142,5 +145,50 @@ public class LocalizerTests
         var localizer = new Localizer(CreateProvider());
         var act = () => localizer.Get(null!);
         act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Get_PositionalArgs_FormatInResolvedCulture()
+    {
+        // CR-L276: a decimal positional arg formats in the resolved (de) culture — comma separator.
+        var provider = InMemoryTranslationProvider.Create()
+            .AddTranslation("de", "price", "Preis: {0}")
+            .Build();
+        var localizer = new Localizer(provider);
+
+        var result = localizer.Get("price", new object[] { 1.5m }, CultureInfo.GetCultureInfo("de"));
+
+        result.Should().Be("Preis: 1,5");
+    }
+
+    [Fact]
+    public void Resolve_DefaultCultureReachedAsParent_NotQueriedTwice()
+    {
+        // CR-L274: with default "sk" and requested "sk-SK", the default is reached as a parent in step 2;
+        // step 3 must not query it again.
+        var provider = new CountingProvider();
+        var settings = LocalizationSettings.Default.WithDefaultCulture(CultureInfo.GetCultureInfo("sk"));
+        var localizer = new Localizer(provider, settings);
+
+        localizer.Get("missing", CultureInfo.GetCultureInfo("sk-SK"));
+
+        provider.Queried.Should().Equal("sk-SK", "sk");
+        provider.Queried.Count(x => x == "sk").Should().Be(1);
+    }
+
+    /// <summary>Records every culture the localizer queries; always misses so the full fallback chain runs.</summary>
+    private sealed class CountingProvider : ITranslationProvider
+    {
+        public List<string> Queried { get; } = new();
+
+        public string? GetTranslation(string key, CultureInfo culture)
+        {
+            Queried.Add(culture.Name);
+            return null;
+        }
+
+        public IReadOnlyList<CultureInfo> GetSupportedCultures() => Array.Empty<CultureInfo>();
+
+        public IReadOnlyDictionary<string, string> GetAll(CultureInfo culture) => new Dictionary<string, string>();
     }
 }

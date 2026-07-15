@@ -111,4 +111,16 @@ public class DateFormatterTests
         var act = () => formatter.Format(DateTime.UtcNow, (string)null!);
         act.Should().Throw<ArgumentException>();
     }
+
+    [Fact]
+    public void FormatRelative_IsEnglishOnly_RegardlessOfCulture()
+    {
+        // CR-L275: relative phrasing is English-only by design; the culture parameter doesn't change it.
+        var formatter = new DateFormatter();
+        var now = new DateTime(2026, 1, 1, 12, 0, 0);
+
+        var result = formatter.FormatRelative(now.AddMinutes(-5), now, CultureInfo.GetCultureInfo("sk-SK"));
+
+        result.Should().Be("5 minutes ago");
+    }
 }

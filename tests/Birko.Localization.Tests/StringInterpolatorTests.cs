@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Globalization;
 using Xunit;
 using FluentAssertions;
 
@@ -5,6 +7,29 @@ namespace Birko.Localization.Tests;
 
 public class StringInterpolatorTests
 {
+    [Fact]
+    public void Interpolate_Positional_FormatsWithProvidedCulture()
+    {
+        // CR-L276: a decimal arg must format in the supplied culture (de-DE uses a comma separator),
+        // not the ambient thread culture.
+        var result = StringInterpolator.Interpolate(
+            "Price: {0}", new object[] { 1.5m }, CultureInfo.GetCultureInfo("de-DE"));
+
+        result.Should().Be("Price: 1,5");
+    }
+
+    [Fact]
+    public void Interpolate_Named_FormatsIFormattableWithProvidedCulture()
+    {
+        // CR-L276: named-placeholder IFormattable values also honor the supplied culture.
+        var result = StringInterpolator.Interpolate(
+            "Price: {amount}",
+            new Dictionary<string, object?> { ["amount"] = 1.5m },
+            CultureInfo.GetCultureInfo("de-DE"));
+
+        result.Should().Be("Price: 1,5");
+    }
+
     [Fact]
     public void Interpolate_Named_ReplacesPlaceholders()
     {

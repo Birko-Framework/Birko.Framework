@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Linq;
 using Xunit;
 using System.Globalization;
 using FluentAssertions;
@@ -9,6 +12,30 @@ public class JsonTranslationProviderTests
     private static string GetTestResourcesPath()
     {
         return Path.Combine(AppContext.BaseDirectory, "TestResources");
+    }
+
+    [Fact]
+    public void GetSupportedCultures_SkipsEmptyAndInvalidFileNames()
+    {
+        // CR-L273: a bare ".json" (empty base name) is skipped by the Where filter; the removed dead
+        // ternary never mapped it to InvariantCulture. Valid culture files are still returned.
+        var dir = Path.Combine(Path.GetTempPath(), "birko-loc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "en.json"), "{}");
+            File.WriteAllText(Path.Combine(dir, ".json"), "{}");
+
+            var provider = new JsonTranslationProvider(dir);
+            var cultures = provider.GetSupportedCultures();
+
+            cultures.Select(c => c.Name).Should().Contain("en");
+            cultures.Should().NotContain(c => c.Equals(CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]
