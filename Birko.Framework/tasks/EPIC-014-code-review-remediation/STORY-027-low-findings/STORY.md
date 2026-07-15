@@ -13,7 +13,29 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**272 / 418 triaged** as of 2026-07-15. Next open is CR-L273 (Birko.Localization cluster, L273…).
+**276 / 418 triaged** as of 2026-07-15. Next open is CR-L277 (Birko.Localization.Data cluster, L277…).
+
+**Batch BC — Birko.Localization cluster (CR-L273, CR-L274, CR-L275, CR-L276):** Birko.Localization. All
+closed; **/code-review clean (no findings)**. **L273** (cleanup): dropped the dead
+`string.IsNullOrEmpty(name) ? InvariantCulture : GetCultureInfo(name)` ternary in
+`JsonTranslationProvider.GetSupportedCultures` — the preceding `.Where(!IsNullOrEmpty)` already filters empty
+names, so the InvariantCulture branch was unreachable; empty file names (a bare `.json`) are skipped, not
+mapped to Invariant. (Left `InMemoryTranslationProvider`'s equivalent ternary alone — it has no pre-filter,
+so there it's live, CR-M197.) **L274** (cleanup): `Localizer.Resolve` now tracks `defaultAttempted` across
+steps 1–2 so step 3 doesn't query the default culture a second time when it was reached as a parent (default
+"sk" as parent of requested "sk-SK") — the old guard compared only the original culture to the default and
+missed the default-as-parent case. **L275** (other — "document as English-only" option): `DateFormatter.FormatRelative`
+now carries a `<remarks>` stating the relative phrasing is English-only by design; the culture param governs
+only numeric/date formatting in the other overloads. **L276** (bug): the positional `StringInterpolator.Interpolate`
+used `string.Format(template, args)` with the ambient thread culture, not the resolved translation culture —
+threaded an `IFormatProvider` into both interpolator overloads (positional → `string.Format(provider,…)`;
+named → format `IFormattable` values via the provider) and wired `Localizer.Get(args)` overloads to resolve
+the culture once and pass it, so e.g. a decimal renders with the translation culture's separator. The
+interpolator is internal + the params optional, so no caller breaks. **Tests:** Localization.Tests +6
+(→ 146) — StringInterpolator positional+named de-DE decimal → comma; `Localizer` positional-args-in-resolved-culture
++ `Resolve_DefaultCultureReachedAsParent_NotQueriedTwice` (counting provider asserts exactly `["sk-SK","sk"]`);
+Json `GetSupportedCultures` skips a bare `.json`; DateFormatter FormatRelative English regardless of culture.
+Suite green: Localization.Tests 146.
 
 **Batch BB — Birko.Helpers cluster (CR-L271, CR-L272):** Birko.Helpers. Both closed;
 **/code-review clean (no findings)**. **L271** (bug): `CsvParser.Parse`'s trailing-row block (no final

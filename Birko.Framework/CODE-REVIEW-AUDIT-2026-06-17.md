@@ -7085,7 +7085,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead duplicate null/empty check in JsonTranslationProvider.GetSupportedCultures
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization\Translation/JsonTranslationProvider.cs:37-42`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Line 37 filters with .Where(name => !string.IsNullOrEmpty(name)), then line 42 re-tests string.IsNullOrEmpty(name) inside the Select to decide between CultureInfo.InvariantCulture and GetCultureInfo(name). Because the empty names were already filtered out, the InvariantCulture branch is unreachable — the ternary is dead code. (Contrast Resx, which has no such pre-filter.)
 - **Fix:** Drop either the line 37 Where or the line 42 ternary so the intent (do empty file names map to InvariantCulture, or are they skipped?) is unambiguous.
 
@@ -7093,7 +7093,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Localizer may query the default culture twice during fallback
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization\Providers/Localizer.cs:77-99`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Resolve walks the parent-culture chain (step 2) and then separately tries _settings.DefaultCulture (step 3) guarded only by culture.Equals(_settings.DefaultCulture) against the ORIGINAL culture. If the default culture is reached as a parent in step 2 (e.g. default is 'sk' and the requested culture is 'sk-SK'), the provider is queried for the default culture once in the parent loop and again in step 3. Harmless for correctness (provider lookups are idempotent) but a redundant call, and the equality guard does not actually prevent the double-query it appears intended to.
 - **Fix:** Track whether the default culture was already attempted in the parent loop and skip step 3 if so, or compare against the last parent rather than the original culture.
 
@@ -7101,7 +7101,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Relative-time strings are hard-coded English, bypassing the localization system
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization\Providers/DateFormatter.cs:30-81`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** FormatRelative returns literal English strings ('just now', '{n} minutes ago', 'yesterday', etc.) regardless of the resolved culture. In a localization library this is surprising — the culture parameter only affects the numeric/date formatting paths, never the relative phrasing. There are no tests asserting localized relative output, so the limitation is silent. Likely intentional for v1 but worth noting since it's the one place the formatter produces user-facing text that ignores culture.
 - **Fix:** Either document FormatRelative as English-only, or route the unit strings through ILocalizer / a pluralizer-aware key set so they can be translated.
 
@@ -7109,7 +7109,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Positional Interpolate uses thread culture, not the resolved culture
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization\Formatting/StringInterpolator.cs:43`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The object[] overload calls string.Format(template, args) with no IFormatProvider, so numeric/date args are formatted using Thread.CurrentCulture, which may differ from the CultureInfo the Localizer resolved for the translation (Localizer.cs:53-57 passes culture for key lookup but not into interpolation). A localized template like '{0}' with a decimal arg can render with the wrong decimal separator relative to the chosen translation culture.
 - **Fix:** Thread the resolved culture into the interpolator (add an IFormatProvider parameter) and call string.Format(culture, template, args) so formatting matches the translation culture.
 
