@@ -7301,7 +7301,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SourceValueExtensions.GetValue double-enumerates the sequence
 - **Path:** `C:\Source\Birko\Framework\Birko.Models\Extensions\SourceValueExtensions.cs:11-15`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** GetValue runs values.Any(x => x.Source == source) and then values.FirstOrDefault(x => x.Source == source), enumerating the IEnumerable twice and re-running the predicate. For a lazy/expensive or non-idempotent sequence this is wasteful and can even yield a different element between the two passes. SetValue has the same Any-then-FirstOrDefault pattern (lines 25-27), though it operates on a materialized array so it's only the redundant scan.
 - **Fix:** Single pass: var match = values?.FirstOrDefault(x => x.Source == source); return match != null ? match.Value : default; (guard source first).
 
@@ -7309,7 +7309,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AbstractPercentage.CopyTo returns null (as clone!) when clone is null
 - **Path:** `C:\Source\Birko\Framework\Birko.Models\Models\AbstractPercentage.cs:22-31`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** When clone == null the method skips the body and returns clone! — i.e. returns null while the signature/usage of CopyTo implies a non-null result, and the ! suppresses the warning over a value that is provably null here. This diverges from ValueData.CopyTo (ValueData.cs:32-44), which instantiates a new ValueData when clone is null. A caller relying on the returned clone gets a surprise NRE. (Note: AbstractPercentage is abstract so it cannot self-instantiate, but the contract mismatch + the unjustified ! on a known-null path are the issue.)
 - **Fix:** Either document/guard that clone must be non-null (throw ArgumentNullException), or have callers/derived types follow the ValueData pattern. Avoid clone! over a value the method just proved can be null.
 
@@ -7317,7 +7317,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AbstractTree.BuildPath: ternary placement makes the empty/null branch yield a lone separator
 - **Path:** `C:\Source\Birko\Framework\Birko.Models\Models\AbstractTree.cs:36-41`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** BuildPath returns PathSeparator + (hasItems ? join : null). For a null/empty path this evaluates to "/" + null == "/" (string concat treats null as empty), so an empty path collapses to the bare separator "/" rather than null/empty. That may be intended as a root marker, but the shape (prefixing the separator unconditionally, then ternary-ing the body to null) is easy to misread and is untested. The Distinct() also runs after Select(ToString("B")) so it dedups string forms, which is fine but worth a test to pin the contract.
 - **Fix:** If "/" is the intended root sentinel, keep it but add a test asserting BuildPath(null)/BuildPath(empty) == "/"; otherwise restructure to return null/empty for the empty case explicitly.
 

@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**299 / 418 triaged** as of 2026-07-15. Next open is CR-L300 (Birko.Models cluster, L300…).
+**302 / 418 triaged** as of 2026-07-15. Next open is CR-L303 (Birko.Models.Category cluster, L303…).
+
+**Batch BL — Birko.Models cluster (CR-L300, CR-L301, CR-L302):** Birko.Models. All closed;
+**/code-review clean (no findings)**. **L300** (cleanup): `SourceValueExtensions.GetValue` ran
+`Any()`+`FirstOrDefault()` — two enumerations of a possibly-lazy sequence (can even yield different elements
+between passes). Now a single `FirstOrDefault` with a guard; `SetValue` likewise single-scans. **L301**
+(nullable): `AbstractPercentage.CopyTo` returned `clone!` when `clone` was null — a provably-null value with
+a suppressed warning, NRE-ing the caller. It's abstract (can't self-instantiate like `ValueData.CopyTo`), so
+it now throws `ArgumentNullException` on a null clone (the only subclass, `AbstractDatabasePercentage`,
+doesn't override `CopyTo` and has no null-clone callers). **L302** (other): `AbstractTree.BuildPath` returned
+`string?` but never actually returned null (`"/" + null == "/"`), making `LoadFrom`'s `?? string.Empty` dead;
+rewrote it to return non-null `string`, enumerate the sequence once, and documented "/" as the root sentinel;
+dropped the dead coalesce. **Tests:** Models.Tests 35 → 38 — `GetValue_EnumeratesSourceExactlyOnce` (a
+counting iterator proves the single pass), `AbstractPercentage_CopyTo_NullClone_ThrowsArgumentNullException`
++ `AbstractPercentage_CopyTo_CopiesPercentageIntoClone` (via a concrete `TestPercentage`). BuildPath and
+GetValue/SetValue happy paths were already covered (behavior preserved). Suite green: Models.Tests 38.
 
 **Batch BK — Birko.Messaging.Razor cluster (CR-L298, CR-L299):** Birko.Messaging.Razor (+ new
 `TemplateNotFoundException` in Birko.Messaging). Both closed; **/code-review clean (no findings)**. **L298**
