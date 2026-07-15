@@ -1,3 +1,4 @@
+using System;
 using FluentAssertions;
 using Xunit;
 
@@ -5,6 +6,31 @@ namespace Birko.MessageQueue.Tests.Core
 {
     public class MessageFingerprintTests
     {
+        [Fact]
+        public void Compute_NullQueueMessage_ThrowsArgumentNullException()
+        {
+            // CR-L282: a null message must throw ArgumentNullException, not NullReferenceException.
+            var act = () => MessageFingerprint.Compute((QueueMessage)null!);
+
+            act.Should().Throw<ArgumentNullException>().WithParameterName("message");
+        }
+
+        [Fact]
+        public void Compute_NullBody_ThrowsArgumentNullException()
+        {
+            var act = () => MessageFingerprint.Compute((string)null!);
+
+            act.Should().Throw<ArgumentNullException>().WithParameterName("body");
+        }
+
+        [Fact]
+        public void Compute_NullDestination_ThrowsArgumentNullException()
+        {
+            var act = () => MessageFingerprint.Compute(null!, "body");
+
+            act.Should().Throw<ArgumentNullException>().WithParameterName("destination");
+        }
+
         [Fact]
         public void Compute_SameBody_SameFingerprint()
         {
