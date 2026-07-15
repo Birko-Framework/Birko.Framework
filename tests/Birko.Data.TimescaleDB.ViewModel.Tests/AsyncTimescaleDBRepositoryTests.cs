@@ -85,4 +85,30 @@ public class AsyncTimescaleDBRepositoryTests
         await repo.Invoking(r => r.CreateSchemaAsync()).Should().ThrowAsync<InvalidOperationException>();
         await repo.Invoking(r => r.CreateHypertableAsync("ts")).Should().ThrowAsync<InvalidOperationException>();
     }
+
+    [Fact]
+    public void DestroyAsync_IsNotOverridden_NoDoubleDrop()
+    {
+        // CR-L234: the DestroyAsync override (base.DestroyAsync + DropAsync) dropped the table a
+        // second time via the unwrapped connector, bypassing any wrapper. The override is gone —
+        // destruction flows only through the store; DropAsync stays as the explicit helper.
+        var destroy = typeof(AsyncTimescaleDBRepository<MetricVm, Metric>)
+            .GetMethod("DestroyAsync")!;
+        destroy.DeclaringType.Should().NotBe(
+            typeof(AsyncTimescaleDBRepository<MetricVm, Metric>),
+            "the CR-L234 double-drop override was removed; the base repository's DestroyAsync suffices");
+        typeof(AsyncTimescaleDBRepository<MetricVm, Metric>)
+            .GetMethod("DropAsync")!.DeclaringType.Should().Be(
+            typeof(AsyncTimescaleDBRepository<MetricVm, Metric>), "the explicit schema-drop helper stays");
+    }
+
+    [Fact]
+    public async Task DestroyAsync_UnconfiguredRepo_NoLongerThrows()
+    {
+        // Behavioral consequence of CR-L234: pre-fix, DestroyAsync on an unconfigured repo threw
+        // InvalidOperationException from the trailing DropAsync (the store's own DestroyAsync is a
+        // quiet no-op with no connector). Now it completes quietly, like every other repository.
+        var repo = new MetricRepository();
+        await repo.Awaiting(r => r.DestroyAsync()).Should().NotThrowAsync();
+    }
 }
