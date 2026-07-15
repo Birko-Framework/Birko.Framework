@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**322 / 418 triaged** as of 2026-07-15. Next open is CR-L323 (Birko.Models.Users cluster, L323…).
+**323 / 418 triaged** as of 2026-07-15. Next open is CR-L324 (Birko.Models.Users.SQL cluster, L324…).
+
+**Batch BY — Birko.Models.Users (CR-L323):** Birko.Models.Users. Closed;
+**/code-review clean (no findings)**. **L323** (cleanup): all 8 filters duplicated an identical
+`private static Combine(...) => ExpressionParameterReplacer.AndAlso(...)` wrapper, and all 8 ViewModels
+allocated a fresh `new[] { … }` array per PropertyChanged event for a `.Contains` membership test.
+Extracted a single shared generic `FilterExpressions.Combine<T>` (referenced via `using static`, so filter
+call sites are unchanged) and dropped the 8 local copies; replaced each VM's per-event array with a
+`static readonly HashSet<string> _watchedProperties` + null-narrowing guard. Removed the now-unused
+`using Birko.Data.Expressions` (filters) / `using System.Linq` (VMs). Behavior-preserving across all 16
+files. **Tests:** Users.Tests 7 → 9 — `RoleFilter_CombinesConditionsWithAnd` (AND-composition survives the
+dedup) and `RoleViewModel_WatchedPropertyChange_RaisesRoleObjectNotification`. Suite green: Users.Tests 9.
 
 **Batch BX — Birko.Models.SQL (CR-L322):** Birko.Models.SQL. Closed;
 **/code-review clean (no findings)**. **L322** (cleanup): `ModelMapRegistry.GetTableNames`/`GetPropertyMaps`

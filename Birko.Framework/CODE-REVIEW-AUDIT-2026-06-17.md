@@ -7485,7 +7485,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Repeated per-class Combine helper and new[]{...}.Contains allocation
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Users\Filters/*.cs (private static Combine in all 8) and ViewModels/*.cs (PropertyChanged handlers)`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** All 8 filters duplicate an identical `private static Combine(...) => ExpressionParameterReplacer.AndAlso(left, right)` helper — pure boilerplate that could call ExpressionParameterReplacer.AndAlso directly or share one generic helper. Separately, every ViewModel's PropertyChanged handler allocates a fresh `new[] { ... }` array on each property change just to call `.Contains(e.PropertyName)`; a static readonly HashSet (or a switch) avoids the per-notification allocation. Minor, but it is duplicated across all 8 view models.
 - **Fix:** Drop the per-class Combine wrapper (call AndAlso inline) and replace the per-event `new[]{...}.Contains` with a static readonly set or switch. Cosmetic/perf only.
 
