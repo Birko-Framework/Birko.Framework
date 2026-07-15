@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace Birko.Helpers;
 
@@ -32,7 +33,11 @@ public class CsvParser
     /// <summary>
     /// Parse the stream lazily, yielding one row at a time.
     /// </summary>
-    public IEnumerable<IList<string>> Parse()
+    /// <param name="ct">
+    /// CR-L271: observed in the read loop so a long parse over a slow stream can be cancelled, matching the
+    /// token-observing convention of other helpers (e.g. BatchHelper).
+    /// </param>
+    public IEnumerable<IList<string>> Parse(CancellationToken ct = default)
     {
         using var reader = new StreamReader(_stream, _encoding, detectEncodingFromByteOrderMarks: true, leaveOpen: true);
         var state = ReadState.NewLine;
@@ -43,6 +48,7 @@ public class CsvParser
         int ch;
         while ((ch = reader.Read()) != -1)
         {
+            ct.ThrowIfCancellationRequested();
             var c = (char)ch;
 
             switch (state)
@@ -120,7 +126,9 @@ public class CsvParser
         // Last row if no trailing newline
         if (field.Length > 0 || row.Count > 0)
         {
-            row.Add(field.ToString());
+            // CR-L271: apply the same TrimEnd('\r') the in-loop newline branches use, so a file whose last
+            // line ends in a bare '\r' (or '\r' with no following '\n') doesn't emit a stray carriage return.
+            row.Add(field.ToString().TrimEnd('\r'));
             Line++;
             yield return row;
         }

@@ -10,6 +10,10 @@ namespace Birko.Helpers
 {
     public static class EnumerableHelper
     {
+        // CR-L272: intentionally left O(n*m) rather than optimized. It compares via an equality
+        // Func<T,T,bool>, from which no hash key can be derived — the O(n) HashSet approach requires a key
+        // selector, which is exactly why DiffByKey<T> exists as the replacement. Callers wanting O(n) should
+        // migrate to DiffByKey; this obsolete overload is kept only for source compatibility.
         [Obsolete("Use DiffByKey<T> instead for O(n) key-based comparison with DiffResult<T> return type.")]
         public static (IEnumerable<T>? added, IEnumerable<T>? removed, IEnumerable<T>? same) Diff<T>(
             IEnumerable<T>? source,
