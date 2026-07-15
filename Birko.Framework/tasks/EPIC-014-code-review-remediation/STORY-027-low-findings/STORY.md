@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**321 / 418 triaged** as of 2026-07-15. Next open is CR-L322 (Birko.Models.SQL cluster, L322…).
+**322 / 418 triaged** as of 2026-07-15. Next open is CR-L323 (Birko.Models.Users cluster, L323…).
+
+**Batch BX — Birko.Models.SQL (CR-L322):** Birko.Models.SQL. Closed;
+**/code-review clean (no findings)**. **L322** (cleanup): `ModelMapRegistry.GetTableNames`/`GetPropertyMaps`
+read `TableName`/`Properties` off the boxed `ModelMap<T>` via `GetType().GetProperty("...").GetValue(...)` —
+string-keyed reflection on every call (a property rename would silently break it). Introduced a non-generic
+`IModelMap` (TableName + `IReadOnlyList<FieldDescriptor> Properties`) that `ModelMap<T>` implements; `_maps`
+is now `Dictionary<Type, IModelMap>`, and the two methods (plus `RegisterFromAssembly`'s cast and `GetMap<T>`)
+read/cast directly — faster, allocation-free, refactor-safe. Behavior-preserving; public API unchanged
+(`IModelMap` is additive). **Tests:** Models.SQL.Tests 3 → 4 (`RegisterFromAssembly_DiscoversMappings_AndGetMapReturnsConfigured`);
+existing GetTableNames/GetPropertyMaps/ApplyToDatabase tests + all five `.SQL.Tests` mapping consumers
+(Users/Customers/Inventory/Pricing/Product) stay green. Suite green: Models.SQL.Tests 4.
 
 **Batch BW — Birko.Models.SEO cluster (CR-L319, CR-L320, CR-L321):** Birko.Models.SEO. All closed;
 **/code-review clean (no findings)**. **L319** (nullable): `SEOByPath<T>.Filter`'s prefix branch

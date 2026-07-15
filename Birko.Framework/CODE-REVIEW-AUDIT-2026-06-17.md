@@ -7477,7 +7477,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetTableNames and GetPropertyMaps use reflection to read strongly-typed ModelMap<T> properties
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.SQL\Mapping\ModelMapRegistry.cs:63-75`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** _maps stores ModelMap<T> instances boxed as object (no non-generic base/interface). GetTableNames does map.GetType().GetProperty("TableName").GetValue(map) and GetPropertyMaps does the same for "Properties" on every call. These are reflection round-trips (and string-keyed, so a property rename silently breaks them with no compile error) for data that is always a ModelMap<>. Introducing a non-generic abstract base (e.g. ModelMapBase exposing string? TableName and IReadOnlyList<FieldDescriptor> Properties) that ModelMap<T> inherits would let both methods cast and read directly — faster, allocation-free, and refactor-safe.
 - **Fix:** Add a non-generic ModelMapBase (or IModelMap) with TableName + Properties; cast the boxed value instead of reflecting by string name.
 
