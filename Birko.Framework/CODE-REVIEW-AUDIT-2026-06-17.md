@@ -7205,7 +7205,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ConnectionTimeout / KeepAlive (and others) not copied by LoadFrom — partial; actually they are, but base RemoteSettings fields risk being missed
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.MQTT\MqttSettings.cs:120-137`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** LoadFrom(MqttSettings) calls base.LoadFrom(data) which resolves to RemoteSettings.LoadFrom(RemoteSettings) and copies Location/Name/Password/UserName/Port/UseSecure — that is correct. However ClientCertificate and LastWill are copied as shared reference aliases (shallow copy), so a loaded settings instance shares the same X509Certificate2 / MqttLastWill object as the source; mutating or disposing one affects the other. For X509Certificate2 (IDisposable) this is a latent ownership/double-dispose hazard.
 - **Fix:** Document the shallow-copy semantics, or deep-copy ClientCertificate (new X509Certificate2(data.ClientCertificate)) and LastWill in LoadFrom.
 
@@ -7213,7 +7213,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** OnMessageReceivedAsync swallows all handler exceptions with no logging hook
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.MQTT\MqttConsumer.cs:120-128`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Handler exceptions are caught and discarded in an empty catch with only a comment. There is no logging delegate, error event, or rethrow, so a consistently failing handler fails completely silently. The class has no ILogger/error-event seam at all.
 - **Fix:** Expose an error callback / event (e.g. Func<Exception, QueueMessage, Task> OnHandlerError) so callers can observe handler failures instead of losing them.
 
@@ -7221,7 +7221,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Reconnect token field reassigned/disposed without synchronization vs. Dispose and overlapping disconnects
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.MQTT\MqttMessageQueue.cs:141-142,180-181`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** _reconnectCts is read, Cancel()'d, reassigned and Dispose()'d from OnDisconnectedAsync (broker callback thread), DisconnectAsync, and Dispose() with no lock. Concurrent disconnect callbacks (or Dispose racing a reconnect) can dispose a CTS another path is about to use, risking ObjectDisposedException, or leak a CTS (the old one is replaced at line 142 without disposing it — minor IDisposable leak each reconnect cycle).
 - **Fix:** Serialize access to _reconnectCts (lock) and dispose the previous CTS before replacing it at line 142.
 
@@ -7229,7 +7229,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** MqttTopic.Matches does not exclude $-prefixed system topics from wildcard matches
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.MQTT\MqttTopic.cs:78-119`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Per MQTT spec, a subscription whose first level is '#' or '+' must NOT match topics beginning with '$' (e.g. $SYS/...). Matches('#','$SYS/broker') currently returns true at line 93, and Matches('+/x','$SYS/x') would match the first level. This over-matches broker system topics.
 - **Fix:** If the filter's first level is '#' or '+' and the topic's first level starts with '$', return false.
 

@@ -13,7 +13,27 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**287 / 418 triaged** as of 2026-07-15. Next open is CR-L288 (Birko.MessageQueue.MQTT cluster, L288…).
+**291 / 418 triaged** as of 2026-07-15. Next open is CR-L292 (Birko.MessageQueue.Redis cluster, L292…).
+
+**Batch BH — Birko.MessageQueue.MQTT cluster (CR-L288, CR-L289, CR-L290, CR-L291):** Birko.MessageQueue.MQTT.
+All closed; **/code-review clean (no findings)**. **L288** (bug — "document" option): documented on
+`MqttSettings.LoadFrom` that `ClientCertificate` (an `IDisposable` `X509Certificate2`) and `LastWill` are
+copied by **reference** — ownership stays with the source, don't dispose one side's cert while the other is
+in use. **L289** (bug): `MqttConsumer` now exposes an `OnHandlerError` (`Func<Exception, QueueMessage, Task>`)
+callback invoked when a message handler throws (was a silent empty catch); other handlers still run and an
+exception from the hook itself is swallowed so it can't break dispatch. **L290** (bug, concurrency):
+`_reconnectCts` was read/cancelled/reassigned/disposed from three paths (broker `OnDisconnectedAsync`,
+`DisconnectAsync`, `Dispose`) without synchronization — could dispose a CTS another path was using or leak
+the previous one on reassign. Serialized all access behind a `_reconnectLock` via `StartNewReconnectCts`
+(cancel+dispose old, create new — closes the per-cycle leak) and `CancelReconnect`; cancel-before-dispose
+keeps the reconnect loop's captured token safe post-dispose. **L291** (bug): `MqttTopic.Matches` now excludes
+`$`-prefixed system topics from a leading `#`/`+` wildcard (per the MQTT spec) — an exact first level
+(`$SYS/#`) still matches. **Tests:** MQTT.Tests → 32 — `Matches` +4 cases (`#`/`+/x` don't match `$SYS/…`,
+`$SYS/#` does, `#` matches a normal topic), `LoadFrom_SharesLastWillReference` (pins the L288 shallow-copy),
+`OnHandlerError_InvokedWhenHandlerThrows` + `OnHandlerError_HookThatThrows_DoesNotBreakDispatch`. **L290's
+reconnect path is code-review-verified** — `MqttMessageQueue` creates its `IMqttClient` internally and the
+reconnect loop is broker-event-driven, so it isn't deterministically unit-testable without a live broker.
+Suite green: MQTT.Tests 32.
 
 **Batch BG — Birko.MessageQueue.InMemory cluster #2 (CR-L285, CR-L286, CR-L287):** Birko.MessageQueue.InMemory.
 All closed; **/code-review clean (no findings)**. **L285** (bug, concurrency): `InMemoryChannel`'s dispatch-loop
