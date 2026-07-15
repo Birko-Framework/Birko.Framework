@@ -13,7 +13,26 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**260 / 418 triaged** as of 2026-07-15. Next open is CR-L261 (Birko.Health cluster, L261…).
+**263 / 418 triaged** as of 2026-07-15. Next open is CR-L264 (Birko.Health.Azure cluster, L264…).
+
+**Batch AX — Birko.Health cluster (CR-L261, CR-L262, CR-L263):** Birko.Health. All closed;
+**/code-review clean (no findings)**. **L261** (nullable): `DiskSpaceHealthCheck.CheckAsync` replaced
+`new DriveInfo(Path.GetPathRoot(_drivePath)!)` — which masked a genuinely-nullable value — with capturing
+the root and a `string.IsNullOrEmpty` guard that returns a clear `Unhealthy("Invalid drive path: … has no
+root.")` (a rootless bare relative path previously surfaced as a generic "Failed to check disk space" via
+the outer catch; both Unhealthy, now clearer). Serves the no-nullable-warnings convention. **L262** (other,
+config-validation): both checks now guard threshold ordering in the ctor (mirroring the existing drivePath
+guard) — `DiskSpaceHealthCheck` throws `ArgumentException` when `critical >= warning` (disk Unhealthy must
+trigger at *less* free space than Degraded), `MemoryHealthCheck` when `critical <= warning` (memory Unhealthy
+at *higher* usage). An inverted config used to silently make the Degraded tier unreachable. Traced all
+constructions (framework + tests + README): every existing caller uses the valid defaults or valid explicit
+values, so the guards break nothing. **L263** (test-gap): the runner tests only covered the default
+Unhealthy-on-timeout path; added `RunAsync_CheckTimesOut_WithDegradedTimeoutStatus_ReportsDegraded` — a slow
+check registered with `timeoutStatus: HealthStatus.Degraded` + a 50ms timeout comes back Degraded (entry +
+aggregate report). **Tests:** Health.Tests 78 → 82 — `DiskSpaceHealthCheck_RootlessPath_ReturnsUnhealthy`,
+`DiskSpaceHealthCheck_CriticalNotBelowWarning_ThrowsArgumentException`,
+`MemoryHealthCheck_CriticalNotAboveWarning_ThrowsArgumentException`, and the Degraded-timeout runner test.
+Suite green: Health.Tests 82.
 
 **Batch AW — Birko.EventBus.Outbox cluster (CR-L259, CR-L260):** Birko.EventBus.Outbox. Both closed;
 **/code-review clean (no findings)**. **L259** (cleanup, efficiency): the background loop ran a full retention

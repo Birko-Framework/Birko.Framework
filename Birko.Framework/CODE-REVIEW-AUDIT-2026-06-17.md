@@ -6989,7 +6989,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Null-forgiving operator on Path.GetPathRoot result
 - **Path:** `C:\Source\Birko\Framework\Birko.Health\System\DiskSpaceHealthCheck.cs:40`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Path.GetPathRoot(_drivePath)! suppresses a possible null. GetPathRoot returns null/empty for a path with no root information (e.g. a bare relative path or invalid input), and `new DriveInfo(null)` would throw. The throw is caught by the surrounding try/catch (lines 75-78) and surfaced as Unhealthy, so behavior is acceptable, but the `!` is masking a genuinely-nullable value rather than proving it non-null, which is the pattern the framework's no-nullable-warnings convention discourages.
 - **Fix:** Capture the root into a local, guard for null/empty, and report Unhealthy with a clear 'invalid drive path' message instead of relying on the generic catch and the `!` suppression.
 
@@ -6997,7 +6997,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No validation that critical/warning thresholds are ordered consistently
 - **Path:** `C:\Source\Birko\Framework\Birko.Health\System\DiskSpaceHealthCheck.cs:24`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** DiskSpaceHealthCheck (critical should be < warning) and MemoryHealthCheck (critical should be > warning) accept the two thresholds without checking their relative order. A misconfigured caller (e.g. criticalThresholdMb > warningThresholdMb for disk) silently produces a tier ordering where the Degraded branch can never be reached, with no error. This is a config-validation gap, not a runtime bug.
 - **Fix:** Optionally throw ArgumentException in the constructor when the thresholds are inverted, mirroring the existing drivePath guard clause.
 
@@ -7005,7 +7005,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Timeout-with-Degraded-status branch has no test
 - **Path:** `C:\Source\Birko\Framework\Birko.Health\Core\HealthCheckRunner.cs:98`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** When a registration sets TimeoutStatus = HealthStatus.Degraded, a timed-out check reports Degraded instead of Unhealthy (lines 97-100). The .Tests sibling only exercises the default Unhealthy timeout path (HealthCheckRunnerTests.cs:64) and asserts the default TimeoutStatus value (HealthCheckRegistrationTests.cs:20); the Degraded-on-timeout branch is never executed by a test.
 - **Fix:** Add a test registering a slow check with timeoutStatus: HealthStatus.Degraded and a short timeout, asserting the entry comes back Degraded.
 
