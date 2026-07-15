@@ -17,6 +17,8 @@ namespace Birko.Data.ViewModel.Tests;
 /// still mutated the store through its bulk overloads. Every bulk Create/Update/Delete must reject.
 /// CR-M179: the async bulk ReadAsync inlined CreateInstance()+LoadFrom (skipping StoreHash), so
 /// change-tracking was never primed for bulk-read entities — it now routes through LoadInstance.
+/// CR-L239: the ReadMode guard now throws <see cref="InvalidOperationException"/> (was the CLR
+/// corrupted-state <c>AccessViolationException</c>, which host policy can make uncatchable).
 /// </summary>
 public class BulkViewModelRepositoryReadModeTests
 {
@@ -56,24 +58,24 @@ public class BulkViewModelRepositoryReadModeTests
     {
         var repo = new SyncRepo(new InMemoryStore<Model>()) { ReadMode = true };
         Action act = () => repo.Create(new[] { new Vm { Name = "x" } });
-        act.Should().Throw<AccessViolationException>();
+        act.Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
     public void ReadMode_blocks_sync_bulk_update_and_filter_overloads()
     {
         var repo = new SyncRepo(new InMemoryStore<Model>()) { ReadMode = true };
-        ((Action)(() => repo.Update(new[] { new Vm() }))).Should().Throw<AccessViolationException>();
-        ((Action)(() => repo.Update(_ => true, m => m.Name = "y"))).Should().Throw<AccessViolationException>();
-        ((Action)(() => repo.Update(_ => true, new PropertyUpdate<Model>()))).Should().Throw<AccessViolationException>();
+        ((Action)(() => repo.Update(new[] { new Vm() }))).Should().Throw<InvalidOperationException>();
+        ((Action)(() => repo.Update(_ => true, m => m.Name = "y"))).Should().Throw<InvalidOperationException>();
+        ((Action)(() => repo.Update(_ => true, new PropertyUpdate<Model>()))).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
     public void ReadMode_blocks_sync_bulk_delete_and_filter_overload()
     {
         var repo = new SyncRepo(new InMemoryStore<Model>()) { ReadMode = true };
-        ((Action)(() => repo.Delete(new[] { new Vm() }))).Should().Throw<AccessViolationException>();
-        ((Action)(() => repo.Delete(_ => true))).Should().Throw<AccessViolationException>();
+        ((Action)(() => repo.Delete(new[] { new Vm() }))).Should().Throw<InvalidOperationException>();
+        ((Action)(() => repo.Delete(_ => true))).Should().Throw<InvalidOperationException>();
     }
 
     [Fact]
@@ -91,12 +93,12 @@ public class BulkViewModelRepositoryReadModeTests
     public async Task ReadMode_blocks_async_bulk_writes()
     {
         var repo = new AsyncRepo(new AsyncInMemoryStore<Model>()) { ReadMode = true };
-        await FluentActions.Awaiting(() => repo.CreateAsync(new[] { new Vm() })).Should().ThrowAsync<AccessViolationException>();
-        await FluentActions.Awaiting(() => repo.UpdateAsync(new[] { new Vm() })).Should().ThrowAsync<AccessViolationException>();
-        await FluentActions.Awaiting(() => repo.UpdateAsync(_ => true, m => m.Name = "y")).Should().ThrowAsync<AccessViolationException>();
-        await FluentActions.Awaiting(() => repo.UpdateAsync(_ => true, new PropertyUpdate<Model>())).Should().ThrowAsync<AccessViolationException>();
-        await FluentActions.Awaiting(() => repo.DeleteAsync(_ => true)).Should().ThrowAsync<AccessViolationException>();
-        await FluentActions.Awaiting(() => repo.DeleteAsync(new[] { new Vm() })).Should().ThrowAsync<AccessViolationException>();
+        await FluentActions.Awaiting(() => repo.CreateAsync(new[] { new Vm() })).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => repo.UpdateAsync(new[] { new Vm() })).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => repo.UpdateAsync(_ => true, m => m.Name = "y")).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => repo.UpdateAsync(_ => true, new PropertyUpdate<Model>())).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => repo.DeleteAsync(_ => true)).Should().ThrowAsync<InvalidOperationException>();
+        await FluentActions.Awaiting(() => repo.DeleteAsync(new[] { new Vm() })).Should().ThrowAsync<InvalidOperationException>();
     }
 
     // ---- CR-M179: async bulk ReadAsync primes change-tracking ----
