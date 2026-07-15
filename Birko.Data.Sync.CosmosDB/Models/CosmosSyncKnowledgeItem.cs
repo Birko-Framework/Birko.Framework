@@ -10,10 +10,10 @@ namespace Birko.Data.Sync.CosmosDB.Models;
 /// </summary>
 public class CosmosSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem
 {
-    /// <summary>
-    /// Internal record ID for database compatibility.
-    /// </summary>
-    public int InternalRecordId { get; set; }
+    // The int InternalRecordId field ("for database compatibility") was removed — never set, never
+    // read, serialized a meaningless InternalRecordId:0 into every document (the Cosmos analogue of
+    // RavenDB's CR-L219). Existing documents carrying the property still deserialize: unmapped JSON
+    // members are ignored by the Cosmos serializer.
 
     /// <summary>
     /// GUID of the entity this knowledge refers to.
