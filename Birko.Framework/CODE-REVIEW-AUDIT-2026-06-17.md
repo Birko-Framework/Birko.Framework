@@ -6638,18 +6638,20 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L220 · ⚪ low · Birko.Data.Sync.Sql
 - **Title:** SetLastSyncTime silently no-ops (no upsert) when no item exists for the scope
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Sql\Stores\AsyncSqlSyncKnowledgeStore.cs:28`
-- **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Category:** other · **Verification:** verified — documented as acceptable-as-is (STORY-027 Batch AJ)
+- **Status:** done
 - **Detail:** SetLastSyncTimeAsync / SetLastSyncTime read existing items for the scope and update each; if the scope has no items, the loop body never runs yet the method returns lastSyncTime as though it succeeded. A first-ever sync for a scope therefore records nothing, but GetLastSyncTime will keep returning null. This is consistent with the JSON reference (AsyncJsonSyncKnowledgeStore.cs:25), so it is a shared design choice rather than a SQL-specific regression - flagging so it is a conscious decision and so any future fix lands across all backends. Note the abstract ISyncKnowledgeStore.SetLastSyncTimeAsync takes a non-nullable syncTime, whereas this per-item interface takes DateTime? and short-circuits on null.
 - **Fix:** If a scope-level last-sync timestamp must persist even with zero items, create a scope marker row when the result set is empty; otherwise document that SetLastSyncTime only refreshes existing knowledge rows.
+- **Resolution (Batch AJ):** documented the derived-timestamp / empty-scope-no-op contract on both `Get`/`SetLastSyncTime(Async)` (the same closure as JSON CR-L214) — kept the shared cross-backend design, since the provider always persists the round's rows before stamping. Live-SQLite regression test pins the empty-scope no-op.
 
 ### CR-L221 · ⚪ low · Birko.Data.Sync.Sql
 - **Title:** Unused using directives in both store files
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.Sql\Stores\AsyncSqlSyncKnowledgeStore.cs:7-8`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AJ)
+- **Status:** done
 - **Detail:** Both AsyncSqlSyncKnowledgeStore.cs and SqlSyncKnowledgeStore.cs import Birko.Data.Stores and Birko.Configuration, neither of which is referenced (the base classes come from Birko.Data.SQL.Stores, and no Settings/Store types from those namespaces are used). The JSON reference store carries the same dead Birko.Configuration import, so this was copied along. Harmless but dead.
 - **Fix:** Remove the unused 'using Birko.Data.Stores;' and 'using Birko.Configuration;' from both files.
+- **Resolution (Batch AJ):** removed both unused usings from both store files (build-verified: base classes come from Birko.Data.SQL.Stores; nothing from those namespaces is referenced).
 
 ### CR-L222 · ⚪ low · Birko.Data.Sync.Tenant
 - **Title:** Cancellation only breaks the inner loop and is not passed to conflict-resolution store calls

@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**219 / 418 triaged** as of 2026-07-15. Next open is CR-L220 (Birko.Data.Sync.Sql).
+**221 / 418 triaged** as of 2026-07-15. Next open is CR-L222 (Birko.Data.Sync.Tenant).
+
+**Batch AJ — Data.Sync.Sql cluster (CR-L220, CR-L221):** Birko.Data.Sync.Sql. Both closed;
+**/code-review clean (no findings)**. **L220** (other, docs — SQL analogue of JSON CR-L214): documented the
+derived-timestamp / empty-scope-no-op contract on both the async `Get`/`SetLastSyncTimeAsync` and the sync
+`Get`/`SetLastSyncTime` — last-sync-time is the max `LastSyncedAt` over a scope's rows, and Set only
+refreshes existing rows, so stamping an **empty** scope persists nothing (Set echoes the value; a later Get
+stays null → initial-sync). Kept the deliberate cross-backend design (shared with the JSON reference): the
+sync provider always persists the round's rows before stamping, so a stamp only ever lands on a populated
+scope; the doc also notes the abstract `ISyncKnowledgeStore.SetLastSyncTimeAsync` takes a non-nullable time
+whereas this per-item overload takes `DateTime?` and short-circuits on null. **L221** (cleanup): removed the
+unused `using Birko.Data.Stores;` and `using Birko.Configuration;` from both store files (build-verified —
+the base classes come from `Birko.Data.SQL.Stores`; nothing from those namespaces is referenced; the dead
+imports were copied from the JSON reference). **Tests:** Sync.Sql.Tests 6 → 7
+(`SetLastSyncTime_EmptyScope_IsANoOp_AndGetStaysNull` — a live on-disk SQLite store proves an empty-scope
+stamp is echoed back but a subsequent Get returns null). Suite green: Sync.Sql.Tests 7.
 
 **Batch AI — Data.Sync.RavenDB cluster (CR-L217, CR-L218, CR-L219):** Birko.Data.Sync.RavenDB. All closed;
 **/code-review clean (no findings)**. **L217** (convention): the synchronous `RavenSyncKnowledgeStore`
