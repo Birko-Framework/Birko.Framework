@@ -13,7 +13,48 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**225 / 418 triaged** as of 2026-07-15. Next open is CR-L226 (Birko.Data.Tagging).
+**228 / 418 triaged** as of 2026-07-15. Next open is CR-L229 (Birko.Data.Tenant cluster, L229–L231).
+
+> **⚠ Deferred, needs user authorization — shared-project GUID sweep (surfaced by Batch AM's
+> /code-review):** the CR-L227 fake-GUID pattern is much wider than the one tracked finding. (a) Five
+> Views projects still carry non-hex GUIDs (`…-view00000001` Birko.Data.Views, `…-sqlview00001`
+> Birko.Data.SQL.Views, `…-esview00001` Birko.Data.ElasticSearch.Views, `…-rvnview0001`
+> Birko.Data.RavenDB.Views, `…-cdbview0001` Birko.Data.CosmosDB.Views). (b) Worse, EIGHT valid-hex GUIDs
+> are each shared by TWO different projects (Security.Vault.Configuration↔Security.AzureKeyVault,
+> Data.Sync.RavenDB↔Communication.WebSocket, Data.Aggregates↔Time, Data.Sync.MongoDb↔Communication.Bluetooth,
+> Data.Sync.Sql↔Communication.Hardware, Models.Customers↔Communication.REST.Server,
+> Telemetry.OpenTelemetry↔Data.CosmosDB, Data.Sync.Tenant↔Communication.Network) — GUID-keyed tooling can
+> bind the wrong project; `Birko.Framework.slnx` pins four Communication entries by `Id=`, so the fix is
+> to regenerate the OTHER side of each pair (projitems `SharedGUID` + shproj `ProjectGuid` in lockstep;
+> all slnx/workspace/test references are by path, so nothing else changes). The mechanical 13-repo sweep
+> was prepared but the permission layer declined it as out-of-batch-scope — ask the user, then run it as
+> its own batch.
+
+**Batch AM — Data.Tagging cluster (CR-L226, CR-L227, CR-L228):** Birko.Data.Tagging. All closed;
+**/code-review: 4 actionable findings — 3 fixed in-batch, 1 declined, plus the deferred GUID sweep
+above**. **L226** (cleanup — "accept as deliberate" option taken): `AttachTagByNameAsync`'s create path
+keeps routing through `CreateTagAsync` (whose second `FindTagByNameAsync` narrows the TOCTOU window —
+a concurrently created same-name tag is returned instead of inserted twice; this layer has no
+unique-name constraint to fall back on) and now carries a comment saying so ("don't optimize this to
+`CreateTagInternalAsync`"). Pinned by a deterministic race test: `InMemoryTagService` gains an
+`AfterFindTagByName` callback + `SeedTag` helper, and the new
+`AttachTagByName_ConcurrentCreateBetweenMissAndInsert_ReusesRacedTag` injects a raced tag between the
+miss and the re-check (raced tag reused, `CreateTagCalls == 0`, link still created). **L227**
+(convention): replaced the unparseable `SharedGUID`/`ProjectGuid`
+`a1b2c3d4-e5f6-4a7b-8c9d-tag000000001` ('tag' is not hex) with a real GUID
+`eff6b1e6-…` in `.projitems` + `.shproj` (lockstep; slnx/workspace reference by path — grep-verified no
+other reference to the old string). The /code-review sweep found the pattern is repo-wide (5 more
+non-hex + 8 cross-project duplicates) — deferred, see the authorization note above. **L228** (other,
+docs): the "All operations are tenant-scoped" claim now states the real division of labor in all the
+places an implementor looks — `ITagService` XML doc, a TENANT-SCOPING CONTRACT comment on the abstract
+hooks region in `TagServiceBase`, CLAUDE.md Patterns, README — the base stamps `TenantGuid` on inserts,
+but the read/delete hooks carry no tenant parameter, so **implementations MUST tenant-filter every
+hook** (incl. `GetTagByIdAsync`); enforcement-by-signature was declined as breaking (the hooks are
+implemented by external consumers, e.g. Symbio). The four-place restatement was flagged by /code-review
+as duplication and deliberately kept (audit's own fix option; different audiences). Also from
+/code-review: fixed stale Tagging CLAUDE.md model claims (`Tag`/`EntityTag` derive from
+`AbstractLogModel`, `Group` renamed `TagGroup` long ago) and created the missing
+Birko.Data.Tagging.Tests CLAUDE.md. **Tests:** Tagging.Tests 11 → 12. Suite green: Tagging.Tests 12.
 
 **Batch AL — Data.Sync.Xml (CR-L225 + a Cosmos audit-gap extra):** Birko.Data.Sync.Xml (+
 Birko.Data.Sync.CosmosDB). Closed; **/code-review: 4 findings, all fixed in-batch**. **L225** (cleanup):

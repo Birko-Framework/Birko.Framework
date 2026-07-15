@@ -6692,7 +6692,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AttachTagByNameAsync create-path double-checks the tag name
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tagging\Services\TagService.cs:136-142`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** AttachTagByNameAsync calls FindTagByNameAsync(tagName.Trim()) at line 136; when null it calls CreateTagAsync (line 139), which internally calls FindTagByNameAsync(name.Trim()) again at line 31 before inserting. The name lookup runs twice on the create path. Functionally correct (and the second lookup narrows a TOCTOU window), but it's a redundant round-trip that could be elided by calling the internal create directly.
 - **Fix:** Either accept the redundancy as deliberate race-narrowing (then leave a comment), or build the Tag and call CreateTagInternalAsync directly in this branch.
 
@@ -6700,7 +6700,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** projitems SharedGUID is not a valid hex GUID
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tagging\Birko.Data.Tagging.projitems:6`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SharedGUID is 'a1b2c3d4-e5f6-4a7b-8c9d-tag000000001' — the final segment contains 'tag', which are not hex digits, so it is not a parseable GUID. The new-birko-subproject convention is to use proper hex GUIDs. Tooling that parses the shared project GUID (or a strict solution loader) may reject or mishandle it.
 - **Fix:** Replace with a real generated GUID (e.g. via [guid]::NewGuid()) and update any matching reference in Birko.Framework.slnx / .code-workspace / aggregator.
 
@@ -6708,7 +6708,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Tenant scoping is documented as enforced but is entirely delegated to implementors
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Tagging\Services\ITagService.cs:10`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The interface doc states 'All operations are tenant-scoped', and TagServiceBase stamps TenantGuid = GetCurrentTenantId() on inserts (lines 36, 105). But none of the abstract read hooks (FindTagByNameAsync, ListAllTagsAsync, SearchTagsByNameAsync, GetTagByIdAsync, GetEntityTagLinksAsync, the batch variants) receive a tenant id, so cross-tenant isolation on reads is unenforceable at this layer and relies wholly on each platform implementation filtering by the ambient tenant. This is a design choice, not a bug, but it means GetTagByIdAsync(tagId) could return another tenant's tag if an implementation forgets to filter, and the base class has no guard.
 - **Fix:** Either pass the tenant id into the read hooks (or document explicitly in CLAUDE.md/README that implementations MUST tenant-filter all reads), so the 'tenant-scoped' guarantee isn't silently dependent on each backend.
 
