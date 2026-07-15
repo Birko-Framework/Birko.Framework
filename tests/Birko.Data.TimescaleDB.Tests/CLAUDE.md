@@ -16,9 +16,11 @@ configuration. Offline only; live-TimescaleDB paths are integration-tier.
   formatting, RemoteSettings→TimescaleDBSettings chaining.
 - `TimescaleDBGuardTests` — CR-L232 (both connector constructors throw `ArgumentNullException` on
   null settings instead of NRE-ing) + CR-L233 (unconfigured store/model-repository schema methods
-  fail fast through the shared `RequireConnector()` with the "Call SetSettings" message). Also
-  documents why the CR-L233 dead-repository-copy deletion has no reflection pin (the maintained
-  same-named classes live in Birko.Data.TimescaleDB.ViewModel).
+  fail fast through the shared `RequireConnector()` with the "Call SetSettings" message) + CR-L234
+  same-defect extra (the model repository no longer overrides `DestroyAsync` — the override
+  double-dropped the table via the unwrapped connector; an unconfigured repo's `DestroyAsync` now
+  completes quietly). Also documents why the CR-L233 dead-repository-copy deletion has no
+  reflection pin (the maintained same-named classes live in Birko.Data.TimescaleDB.ViewModel).
 
 ## Test Framework
 xUnit + FluentAssertions (+ Moq referenced)

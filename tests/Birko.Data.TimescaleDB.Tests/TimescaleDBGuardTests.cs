@@ -62,6 +62,20 @@ public class TimescaleDBGuardTests
             .WithMessage("*Call SetSettings*");
     }
 
+    [Fact]
+    public async Task ModelRepository_DestroyAsync_IsNotOverridden_AndUnconfiguredDoesNotThrow()
+    {
+        // CR-L234 (same-defect extra): the model repository's DestroyAsync override
+        // (base.DestroyAsync + DropAsync) dropped the table a second time via the unwrapped
+        // connector; removed — destruction flows only through the store.
+        typeof(AsyncTimescaleDBModelRepository<TestModel>).GetMethod("DestroyAsync")!
+            .DeclaringType.Should().NotBe(typeof(AsyncTimescaleDBModelRepository<TestModel>));
+
+        var repo = new AsyncTimescaleDBModelRepository<TestModel>();
+        await repo.Awaiting(r => r.DestroyAsync()).Should().NotThrowAsync(
+            "pre-fix the trailing DropAsync threw InvalidOperationException on an unconfigured repo");
+    }
+
     // Note (CR-L233, verify-first): the audit's AsyncTimescaleDBRepository.cs pointer referred to a
     // never-compiled, bit-rotted copy (absent from the .projitems, no longer implementing the base's
     // abstract MapToModel). Both dead copies were DELETED — the maintained
