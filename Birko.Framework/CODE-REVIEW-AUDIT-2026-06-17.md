@@ -7453,7 +7453,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SEOByPath.Filter() can null-deref on Path in LINQ-to-objects
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.SEO\Filters\SEOByPath.cs:26`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The non-exact branch returns `x => x.Path.StartsWith(Path)`. SEO.Path is declared `null!` (Models/SEO.cs:11), so a default-constructed or partially-loaded entity can have a null Path. When this predicate is evaluated against an in-memory collection (LINQ-to-objects, e.g. the InMemory store or JSON/XML backends), `x.Path.StartsWith(...)` throws NullReferenceException. SQL/NoSQL providers translate it instead, so the failure is backend-dependent and easy to miss.
 - **Fix:** Guard the member access in the predicate, e.g. `x => x.Path != null && x.Path.StartsWith(Path)`, mirroring the `IsNullOrEmpty(Path)` guard already applied to the filter argument.
 
@@ -7461,7 +7461,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ViewModel Path setter missing equality guard
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.SEO\ViewModels\SEO.cs:33-42`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The `Path` setter raises PropertyChanged unconditionally, while the sibling `Title` (line 25) and `Description` (line 51) setters — and every setter in the base LogViewModel — only raise when `_field != value`. This is inconsistent and causes spurious PropertyChanged/SEOObjectProperty notifications when Path is reassigned to the same value.
 - **Fix:** Wrap the assignment in `if (_path != value) { _path = value; RaisePropertyChanged(PathProperty); }` to match the other two properties.
 
@@ -7469,7 +7469,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** base.LoadFrom called before null guard (redundant, not a bug)
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.SEO\Models\SEO.cs:16-17`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Both Model.LoadFrom (lines 16-17) and ViewModel.LoadFrom (lines 73-74, 83-84) call `base.LoadFrom(data)` before checking `if (data == null) return;`. No NRE results because the base AbstractLogModel/LogViewModel/AbstractLogViewModel LoadFrom methods null-check internally, but the ordering is illogical — the local guard runs after the work it was meant to short-circuit.
 - **Fix:** Move `if (data == null) return;` above the `base.LoadFrom(data)` call so the guard actually short-circuits, matching guard-clause intent.
 

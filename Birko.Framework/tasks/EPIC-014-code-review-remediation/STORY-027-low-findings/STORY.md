@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**318 / 418 triaged** as of 2026-07-15. Next open is CR-L319 (Birko.Models.SEO cluster, L319…).
+**321 / 418 triaged** as of 2026-07-15. Next open is CR-L322 (Birko.Models.SQL cluster, L322…).
+
+**Batch BW — Birko.Models.SEO cluster (CR-L319, CR-L320, CR-L321):** Birko.Models.SEO. All closed;
+**/code-review clean (no findings)**. **L319** (nullable): `SEOByPath<T>.Filter`'s prefix branch
+(`x => x.Path.StartsWith(Path)`) NRE'd under LINQ-to-objects when an entity's `Path` was null (SEO.Path is
+`null!`) — guarded to `x => x.Path != null && x.Path.StartsWith(Path)` (translates fine for SQL/NoSQL too).
+**L320** (convention): the VM `Path` setter raised PropertyChanged unconditionally unlike the sibling
+Title/Description setters — added the `if (_path != value)` guard. **L321** (cleanup): moved the
+`if (data == null) return;` guard before `base.LoadFrom` in all three LoadFrom overloads (Model + VM ×2) —
+base is null-safe so it's an ordering fix. **Tests:** SEO.Tests 6 → 11 — filter tolerates a null entity Path,
+Path setter same-value/new-value notification behavior, and null-safe LoadFrom across all overloads. Suite
+green: SEO.Tests 11.
 
 **Batch BV — Birko.Models.Product.SQL cluster (CR-L317, CR-L318):** Birko.Models.Product.SQL. Both closed;
 **/code-review clean (no findings)**. **L317** (convention): `UnitConversion.Factor` was `HasPrecision(18)`
