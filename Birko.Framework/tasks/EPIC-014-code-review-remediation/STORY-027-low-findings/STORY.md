@@ -13,7 +13,34 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**247 / 418 triaged** as of 2026-07-15. Next open is CR-L248 (Birko.EventBus cluster, L248…).
+**253 / 418 triaged** as of 2026-07-15. Next open is CR-L254 (Birko.EventBus.EventSourcing cluster, L254…).
+
+**Batch AT — Birko.EventBus core cluster (CR-L248 … CR-L253):** Birko.EventBus. All closed;
+**/code-review clean (no correctness bugs; one deliberate documented semantic change)**. **L248** (bug,
+concurrency): added `TryMarkProcessedAsync` to `IDeduplicationStore` as a **default interface method**
+(non-breaking; DIM fallback = Exists+Mark for existing implementers), overridden atomically in
+`InMemoryDeduplicationStore` (`ConcurrentDictionary.TryAdd`). `DeduplicationBehavior` reserves the EventId
+**before** running handlers — chose **mark-before / at-most-once** (dedup = skip-duplicates guard): fixes
+the two-concurrent-publishes lost-update race and the throw-before-mark reprocess window; documented that a
+throwing handler won't be reprocessed. **L249** (bug, thread-safety): `InMemoryDeduplicationStore` cleanup
+bookkeeping moved from an unsynchronized `DateTime _lastCleanup` to a `long _lastCleanupTicks` with
+`Interlocked.Read` + `CompareExchange` slot-claim, so only one thread sweeps per interval. **L250** (bug,
+thread-safety): `InProcessEventSubscription` dispose guard is now an atomic `Interlocked.Exchange` on an
+`int _isActive` (+ `Volatile.Read` for `IsActive`), so concurrent/repeat disposes call `_unsubscribe`
+exactly once. **L251** (convention — **premise corrected by verification**): the audit claimed
+DefaultTopicConvention's `GetTopic(IEvent)` didn't implement the interface DIM, but a probe proved it DOES
+(implicit implementation), so there's no split there. The real gap was `AttributeTopicConvention` (only
+implemented `GetTopic(Type)`, so its event-based path ignored `Source` for attribute-less events) — gave it
+a `GetTopic(IEvent)` (explicit `[Topic]` wins; else source-aware fallback), the finding's "uniform
+participation" intent. Zero blast radius (the distributed bus routes via `GetTopic(Type)`). **L252** (bug):
+`RuleFilterBehavior.BuildDefaultContext` now skips indexer properties and try/catches each getter, so an
+event with an indexer or a throwing getter can't fail the whole publish pipeline. **L253** (cleanup):
+`DefaultTopicConvention` kebab-case regex is now a `static readonly Regex` (Compiled) built once instead of
+a per-call inline `Regex.Replace`. **Tests:** EventBus.Tests 84 → 92 — dedup (TryMark atomic reserve,
+mark-before dedups a throwing handler, cleanup eviction via TestDateTimeProvider), topic conventions
+(Default via interface is source-aware; AttributeConvention event-based source-aware + attribute-wins),
+robustness (idempotent double-dispose stops delivery; rule filter tolerates indexer + throwing getter).
+Suite green: EventBus.Tests 92.
 
 **Batch AS — Data.XML + XML.ViewModel cluster (CR-L244, CR-L245, CR-L246, CR-L247):** Birko.Data.XML,
 Birko.Data.XML.ViewModel (+ Birko.Data.JSON.ViewModel same-defect sweep). All closed;

@@ -6879,49 +6879,55 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Deduplication check-then-mark is racy and skips marking on handler failure
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Deduplication\DeduplicationBehavior.cs:21-30`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ExistsAsync and MarkProcessedAsync are two separate awaited operations with the handler chain (next()) running between them. Two concurrent publishes of the same EventId can both observe ExistsAsync==false and both run the handlers (lost-update race). Additionally, MarkProcessedAsync runs only after next() returns normally — if a downstream handler throws in Stop mode, the exception propagates and the event is never marked, so a retry/republish would reprocess it. For an at-most-once dedup guarantee these timing windows matter.
 - **Fix:** Consider an atomic 'TryMark' (check-and-set) on IDeduplicationStore, and decide deliberately whether to mark before or after handler execution (mark-before for at-most-once, mark-after for at-least-once).
+- **Resolution (Batch AT):** Added `TryMarkProcessedAsync` to `IDeduplicationStore` as a **default interface method** (non-breaking; fallback composes Exists+Mark for existing implementers), overridden atomically in `InMemoryDeduplicationStore` via `ConcurrentDictionary.TryAdd`. `DeduplicationBehavior` now reserves the EventId with TryMark **before** running handlers — chose **mark-before = at-most-once** (dedup is a skip-duplicates guard): concurrent double-publishes are dropped exactly once, and a throwing handler does not un-mark (documented; at-least-once callers should mark after success elsewhere). Cross-file trace: no external callers of MarkProcessed. Pinned by `InMemoryStore_TryMarkProcessedAsync_ReservesAtomically` + `DeduplicationBehavior_MarksBeforeHandler_SoAThrowingHandlerStillDedups`.
 
 ### CR-L249 · ⚪ low · Birko.EventBus
 - **Title:** InMemoryDeduplicationStore cleanup bookkeeping is not thread-safe
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Deduplication\InMemoryDeduplicationStore.cs:45-62`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** CleanupIfNeeded reads and writes the plain DateTime field _lastCleanup without synchronization while ExistsAsync may be called concurrently from multiple threads. Concurrent callers can both pass the interval check and run the full-dictionary sweep simultaneously. The ConcurrentDictionary mutation itself is safe, so this is benign (at worst duplicate sweeps / a slightly stale _lastCleanup), but the class is documented for concurrent single-process use and the field should be treated atomically.
 - **Fix:** Use Interlocked / a lock around the _lastCleanup read-modify-write, or accept and document that occasional redundant sweeps can occur.
+- **Resolution (Batch AT):** Changed `_lastCleanup` to a `long _lastCleanupTicks` and made the check-and-claim lock-free: `Interlocked.Read` for the interval check, then `Interlocked.CompareExchange` to claim the slot — only the thread that swaps in `now` runs the sweep, so concurrent callers can't all sweep at once. Functional pin: `InMemoryStore_CleanupEvictsExpiredEntries_AfterInterval` (via `TestDateTimeProvider`, an entry past TTL + interval is swept on next access).
 
 ### CR-L250 · ⚪ low · Birko.EventBus
 - **Title:** InProcessEventSubscription.Dispose / IsActive not thread-safe
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Local\InProcessEventBus.cs:177-201`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _isActive is a plain bool guarded only by a non-atomic check-then-set in Dispose(). Two threads disposing the same subscription concurrently could both pass the !_isActive guard and invoke _unsubscribe() twice. The underlying handlers.Remove is lock-guarded and idempotent so the impact is minimal, but the double-dispose guard itself is not reliable.
 - **Fix:** Use Interlocked.Exchange(ref _isActive...) (as an int) to make the dispose guard atomic.
+- **Resolution (Batch AT):** `_isActive` is now an `int` (1/0); `Dispose` uses `Interlocked.Exchange(ref _isActive, 0) == 0` so only the caller that flips 1→0 runs `_unsubscribe`, and `IsActive` reads via `Volatile.Read`. Pinned by `Subscription_DoubleDispose_IsIdempotentAndStopsDelivery` (repeat dispose is a safe no-op, IsActive false, delivery stops).
 
 ### CR-L251 · ⚪ low · Birko.EventBus
 - **Title:** DefaultTopicConvention.GetTopic(IEvent) is not part of ITopicConvention and shadows the default interface method
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Routing\DefaultTopicConvention.cs:24-33`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ITopicConvention declares a default interface method GetTopic(IEvent) that delegates to GetTopic(Type). DefaultTopicConvention adds its own public GetTopic(IEvent) overload (source-prefixed, different behavior) but does NOT mark it 'override' (DIMs can't be overridden) — it is a separate class-level method. Callers holding an ITopicConvention reference get the type-based default (events.* prefix), while callers holding a concrete DefaultTopicConvention get the source-prefixed behavior. AttributeTopicConvention only implements the Type overload, so its instance-based topic also ignores Source. This split behavior is surprising and easy to get wrong.
 - **Fix:** Either move the GetTopic(IEvent) declaration to the interface (no default body, or a richer default) so all implementations participate uniformly, or remove the instance overload from DefaultTopicConvention to keep one consistent topic mapping.
+- **Resolution (Batch AT):** **Premise corrected by verification** (the finding was unverified): a class's public `GetTopic(IEvent)` DOES implicitly implement the interface's default method, so `((ITopicConvention)new DefaultTopicConvention()).GetTopic(evt)` returns the source-aware mapping — there is NO split for DefaultTopicConvention (pinned by `DefaultConvention_ViaInterfaceReference_IsSourceAware`). The genuine inconsistency was `AttributeTopicConvention`, which only implemented `GetTopic(Type)`, so its `GetTopic(IEvent)` fell to the DIM and ignored `IEvent.Source` for attribute-less events — disagreeing with DefaultTopicConvention. Fixed by giving AttributeTopicConvention a `GetTopic(IEvent)` (explicit `[Topic]` wins; otherwise defer to the fallback's source-aware mapping), achieving the finding's "uniform participation" intent. Zero blast radius: the distributed bus routes via `GetTopic(Type)`, not the IEvent overload. Pinned by two AttributeConvention event-based tests.
 
 ### CR-L252 · ⚪ low · Birko.EventBus
 - **Title:** Reflection-based rule context can throw when reading indexer/throwing properties
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Pipeline\RuleFilterBehavior.cs:78-82`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** BuildDefaultContext enumerates all public instance properties and calls prop.GetValue(@event). Indexer properties (Item) require index args and will throw TargetParameterCountException; any property with a throwing getter will surface its exception here. Since this runs inside the publish pipeline, a single awkward event shape can fail the whole publish.
 - **Fix:** Skip properties where GetIndexParameters().Length > 0, and optionally wrap GetValue in a try/catch to keep filtering resilient.
+- **Resolution (Batch AT):** BuildDefaultContext now `continue`s on indexer properties (`GetIndexParameters().Length > 0`) and wraps `GetValue` in try/catch (a throwing getter is treated as absent), so no single awkward event shape fails the publish pipeline. Pinned by `RuleFilter_BuildDefaultContext_ToleratesIndexerAndThrowingGetter` (an event with both an indexer and a throwing getter filters without throwing).
 
 ### CR-L253 · ⚪ low · Birko.EventBus
 - **Title:** DefaultTopicConvention allocates a compiled Regex per call
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus\Routing\DefaultTopicConvention.cs:43`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ToKebabCase calls Regex.Replace with an inline pattern on every invocation, recompiling/caching via the static Regex cache each time. For a routing helper that may run per-publish this is a needless allocation. AttributeTopicConvention caches results in a ConcurrentDictionary but DefaultTopicConvention (used directly, e.g. by its fallback) does not.
 - **Fix:** Use a static compiled Regex field (or a [GeneratedRegex] source-generated method on .NET 7+), and/or cache name->topic results.
+- **Resolution (Batch AT):** Replaced the per-call inline `Regex.Replace` with a `private static readonly Regex KebabBoundary` (RegexOptions.Compiled | CultureInvariant) built once. Behavior-preserving (existing kebab tests + the topic-convention tests stay green). Chose a static field over `[GeneratedRegex]` for maximum portability across the shared-project consumers.
 
 ### CR-L254 · ⚪ low · Birko.EventBus.EventSourcing
 - **Title:** DomainEventPublished constructor does not null-check its argument
