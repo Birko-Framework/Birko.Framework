@@ -114,4 +114,22 @@ public class PricingModelTests
 
         raised.FindAll(p => p == TaxVm.TaxObjectProperty).Should().HaveCount(2);
     }
+
+    [Fact]
+    public void PriceList_LoadFrom_IsHeaderOnly_DoesNotPopulateEntries()
+    {
+        // CR-L312: the PriceList VM is header-only — Entries are managed separately, so a VM->model load
+        // leaves Entries as its default empty collection (not populated from the VM).
+        var vm = new Birko.Models.Pricing.ViewModels.PriceList
+        {
+            Name = "Retail",
+            IsActive = true
+        };
+        var model = new PriceList();
+
+        model.LoadFrom(vm);
+
+        model.Name.Should().Be("Retail");
+        model.Entries.Should().BeEmpty("PriceList VM mapping is header-only (CR-L312)");
+    }
 }
