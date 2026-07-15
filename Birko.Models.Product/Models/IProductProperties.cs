@@ -16,7 +16,9 @@ namespace Birko.Models.Product
                         Source = x.Key,
                         Value = y
                     }))
-                    ?.Where(x => x.Value != null)
+                    // CR-L316: drop null AND empty, matching the viewmodel-side AddProperty normalization
+                    // (the two sides disagreed — model-side filtered null-only).
+                    ?.Where(x => !string.IsNullOrEmpty(x.Value))
                     ?.ToArray()
                     ?? Array.Empty<SourceValue<string>>();
         }

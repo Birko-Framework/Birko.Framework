@@ -159,13 +159,11 @@ namespace Birko.Models.Product.ViewModels
             BarCode = data.BarCode;
             Name = data.Name;
             Slug = data.Slug;
-            if (
-                string.IsNullOrEmpty(Description)
-                || (!string.IsNullOrEmpty(data.Description) && data.Description.Length > Description.Length)
-            )
-            {
-                Description = data.Description;
-            }
+            // CR-L315: straight-copy Description like every other field (and like the model→VM LoadFrom
+            // overload above). The previous "keep the longer Description" merge was an undocumented,
+            // surprising heuristic for a method named LoadFrom that left stale data when the source
+            // description was shorter.
+            Description = data.Description;
             Category = data.Category;
             if (this is IProductManufacturer pm && data is IProductManufacturer dpm)
             {
