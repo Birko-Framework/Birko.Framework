@@ -185,7 +185,7 @@ namespace Birko.Data.Repositories
         {
             if (ReadMode)
             {
-                throw new AccessViolationException("Repository is in Read Mode");
+                throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             }
             if (Store == null || data == null)
             {
@@ -208,7 +208,7 @@ namespace Birko.Data.Repositories
         {
             if (ReadMode)
             {
-                throw new AccessViolationException("Repository is in Read Mode");
+                throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             }
             if (Store == null || data == null)
             {
@@ -233,7 +233,7 @@ namespace Birko.Data.Repositories
         {
             if (ReadMode)
             {
-                throw new AccessViolationException("Repository is in Read Mode");
+                throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             }
             if (Store == null)
             {

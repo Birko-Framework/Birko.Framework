@@ -201,7 +201,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task<Guid> CreateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
-            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
+            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             if (Store == null || data == null) return Guid.Empty;
 
             TModel item = LoadModelInstance(data);
@@ -218,7 +218,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task UpdateAsync(TViewModel data, ProcessDataDelegate<TModel>? processDelegate = null, CancellationToken ct = default)
         {
-            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
+            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             if (Store == null || data == null) return;
 
             TModel item = LoadModelInstance(data);
@@ -237,7 +237,7 @@ namespace Birko.Data.Repositories
         /// <inheritdoc />
         public virtual async Task DeleteAsync(TViewModel data, CancellationToken ct = default)
         {
-            if (ReadMode) throw new AccessViolationException("Repository is in Read Mode");
+            if (ReadMode) throw new InvalidOperationException("Repository is in Read Mode"); // CR-L239
             if (Store == null) return;
             TModel item = CreateModelInstance();
             MapToModel(data, item);

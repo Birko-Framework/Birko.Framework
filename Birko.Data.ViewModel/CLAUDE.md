@@ -4,18 +4,25 @@ ViewModel support for the Birko data layer.
 
 ## Overview
 
-This project provides ViewModel pattern implementation for the Birko data layer, enabling separation between presentation models (ViewModels) and data persistence models (Models).
+This project provides the **repository abstractions** for the Birko ViewModel pattern, enabling
+separation between presentation models (ViewModels) and data persistence models (Models). It ships
+the abstract repositories + interfaces **only** — the ViewModel base classes themselves live in
+`Birko.Data.Core` (namespace `Birko.Data.ViewModels`).
 
 ## Features
 
-- **ViewModel Base Classes**: `ViewModel<T>`, `ModelViewModel<TViewModel, TModel>`
-- **ViewModel Repositories**: Abstract and interface definitions for ViewModel-based data access
-- **Change Tracking**: Built-in support for detecting model changes
-- **Async Support**: Full async/await pattern support
+- **ViewModel Repositories**: abstract sync/async (+ bulk) repositories and their interfaces
+- **ViewModel↔Model mapping**: `MapToModel` (abstract) + `LoadInstance` / `LoadModelInstance`
+- **Change Tracking**: SHA-256 model hash so a no-op update is skipped
+- **ReadMode guard**: write methods throw `InvalidOperationException` when the repository is read-only (CR-L239)
+- **Async Support**: full async/await pattern support
+
+> The `ViewModel`, `ModelViewModel`, `AbstractLogViewModel`, `LogViewModel` base classes are **not**
+> in this project — they live in `Birko.Data.Core` (`Birko.Data.ViewModels`) and are non-generic.
 
 ## Dependencies
 
-- **Birko.Data.Core** - Models (AbstractModel, ILoadable, ICopyable)
+- **Birko.Data.Core** - Models (AbstractModel, ILoadable, ICopyable) and the `Birko.Data.ViewModels` base classes
 - **Birko.Data.Stores** - Store interfaces and settings
 - **Birko.Data.Repositories** - Repository interfaces and abstractions
 - **Birko.Serialization** — ISerializer for ViewModel hash calculation (optional, defaults to SystemJsonSerializer)
@@ -23,21 +30,25 @@ This project provides ViewModel pattern implementation for the Birko data layer,
 ## Usage
 
 ```csharp
-// Define your ViewModel
-public class ProductViewModel : ModelViewModel<ProductViewModel, Product>
+// A ViewModel is any type implementing ILoadable<TModel>; the Core base classes are a convenient start.
+public class ProductViewModel : Birko.Data.ViewModels.ModelViewModel, ILoadable<Product>
 {
-    public Guid? Id { get; set; }
-    public string Name { get; set; }
-    public decimal Price { get; set; }
-    
-    // Override Load methods for conversion
+    public string? Name { get; set; }
+    public void LoadFrom(Product data) => Name = data.Name;
 }
 
-// Use ViewModel Repository
-IViewModelRepository<ProductViewModel, Product> repository;
-var viewModel = await repository.LoadAsync(productId);
-viewModel.Name = "Updated Name";
-await repository.SaveAsync(viewModel);
+// A concrete repository derives from an abstract base here and supplies MapToModel.
+public class ProductRepository : AbstractAsyncViewModelRepository<ProductViewModel, Product>
+{
+    public ProductRepository(IAsyncStore<Product> store) : base(store) { }
+    protected override void MapToModel(ProductViewModel src, Product dst) => dst.Name = src.Name;
+}
+
+// Use it via the repository API (CreateAsync / ReadAsync / UpdateAsync / DeleteAsync).
+IAsyncViewModelRepository<ProductViewModel, Product> repository = new ProductRepository(store);
+var vm = repository.CreateInstance();
+vm.Name = "Widget";
+await repository.CreateAsync(vm);
 ```
 
 ## Platform Implementations
@@ -55,17 +66,18 @@ Platform-specific ViewModel repositories are available in:
 
 ```
 Birko.Data.ViewModel/
-├── ViewModels/
-│   ├── ViewModel.cs                    - Base ViewModel class
-│   ├── ModelViewModel.cs               - ViewModel with Model mapping
-│   ├── AbstractLogViewModel.cs         - Base for audit/log ViewModels
-│   └── LogViewModel.cs                 - Concrete log ViewModel
-└── Repositories/
-    ├── IViewModelRepository.cs         - Sync repository interface
-    ├── IAsyncViewModelRepository.cs    - Async repository interface
-    ├── IBulkViewModelRepository.cs     - Bulk operations interface
-    ├── IAsyncBulkViewModelRepository.cs - Async bulk operations
-    └── Abstract implementations...
+└── Repositories/                          (the only compiled folder — 8 files)
+    ├── IViewModelRepository.cs            - Sync repository interface
+    ├── IAsyncViewModelRepository.cs       - Async repository interface
+    ├── IBulkViewModelRepository.cs        - Bulk operations interface
+    ├── IAsyncBulkViewModelRepository.cs   - Async bulk operations interface
+    ├── AbstractViewModelRepository.cs     - Sync single-item base
+    ├── AbstractAsyncViewModelRepository.cs - Async single-item base
+    ├── AbstractBulkViewModelRepository.cs - Sync bulk base
+    └── AbstractAsyncBulkViewModelRepository.cs - Async bulk base
+
+(The ViewModel base classes — ViewModel / ModelViewModel / AbstractLogViewModel / LogViewModel —
+ live in Birko.Data.Core under the Birko.Data.ViewModels namespace, NOT here.)
 ```
 
 ## Notes
