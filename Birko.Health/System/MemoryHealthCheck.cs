@@ -20,6 +20,15 @@ public sealed class MemoryHealthCheck : IHealthCheck
     /// <param name="criticalThresholdMb">Working set above this triggers Unhealthy. Default: 2048 MB.</param>
     public MemoryHealthCheck(long warningThresholdMb = 1024, long criticalThresholdMb = 2048)
     {
+        // CR-L262: critical (Unhealthy) must trigger at higher usage than warning (Degraded); if
+        // critical <= warning the Degraded tier can never be reached.
+        if (criticalThresholdMb <= warningThresholdMb)
+        {
+            throw new ArgumentException(
+                $"Critical threshold ({criticalThresholdMb} MB) must be greater than the warning threshold ({warningThresholdMb} MB).",
+                nameof(criticalThresholdMb));
+        }
+
         _warningThresholdBytes = warningThresholdMb * 1024 * 1024;
         _criticalThresholdBytes = criticalThresholdMb * 1024 * 1024;
     }

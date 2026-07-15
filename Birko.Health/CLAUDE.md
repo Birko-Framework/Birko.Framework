@@ -39,10 +39,12 @@ Core health check framework for monitoring application components. Provides `IHe
 
 ### System/DiskSpaceHealthCheck.cs (namespace: Birko.Health.Checks)
 - Monitors available disk space with warning/critical thresholds (MB)
+- Ctor throws ArgumentException if `critical >= warning` (critical fires at *less* free space, so it must be the smaller MB value) or if the drive path is null/empty; a rootless path reports Unhealthy at check time (CR-L261/L262)
 - Returns data: drive, freeSpaceMb, totalSpaceMb, freePercent
 
 ### System/MemoryHealthCheck.cs (namespace: Birko.Health.Checks)
 - Monitors process working set with warning/critical thresholds (MB)
+- Ctor throws ArgumentException if `critical <= warning` (critical fires at *higher* usage, so it must be the larger MB value) (CR-L262)
 - Returns data: workingSetMb, gcHeapMb, totalAvailableMemoryMb, GC collection counts
 
 ## Dependencies

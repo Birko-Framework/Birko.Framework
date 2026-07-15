@@ -28,6 +28,15 @@ public sealed class DiskSpaceHealthCheck : IHealthCheck
             throw new ArgumentException("Drive path cannot be null or empty.", nameof(drivePath));
         }
 
+        // CR-L262: critical (Unhealthy) must trigger at less free space than warning (Degraded); if
+        // critical >= warning the Degraded tier can never be reached. Guard it like the drivePath check.
+        if (criticalThresholdMb >= warningThresholdMb)
+        {
+            throw new ArgumentException(
+                $"Critical threshold ({criticalThresholdMb} MB) must be less than the warning threshold ({warningThresholdMb} MB).",
+                nameof(criticalThresholdMb));
+        }
+
         _drivePath = drivePath;
         _warningThresholdBytes = warningThresholdMb * 1024 * 1024;
         _criticalThresholdBytes = criticalThresholdMb * 1024 * 1024;
@@ -37,7 +46,16 @@ public sealed class DiskSpaceHealthCheck : IHealthCheck
     {
         try
         {
-            var driveInfo = new DriveInfo(Path.GetPathRoot(_drivePath)!);
+            // CR-L261: GetPathRoot returns null/empty for a rootless path (e.g. a bare relative path);
+            // report a clear Unhealthy instead of masking the null with `!` and letting new DriveInfo throw.
+            var root = Path.GetPathRoot(_drivePath);
+            if (string.IsNullOrEmpty(root))
+            {
+                return Task.FromResult(HealthCheckResult.Unhealthy(
+                    $"Invalid drive path: '{_drivePath}' has no root."));
+            }
+
+            var driveInfo = new DriveInfo(root);
 
             if (!driveInfo.IsReady)
             {
