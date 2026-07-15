@@ -160,7 +160,14 @@ namespace Birko.Models.Contracts
         /// </summary>
         public static bool IsDescendantOf(IHierarchical potentialDescendant, IHierarchical potentialAncestor)
         {
-            return potentialDescendant.Path.StartsWith(potentialAncestor.Path + Separator);
+            // CR-L305: a null argument or an un-materialized (null/empty) Path can't establish a descendant
+            // relationship — return false rather than NRE (guard-clause convention). Ordinal comparison
+            // matches RewriteDescendantPaths' path handling.
+            if (string.IsNullOrEmpty(potentialDescendant?.Path) || string.IsNullOrEmpty(potentialAncestor?.Path))
+            {
+                return false;
+            }
+            return potentialDescendant.Path.StartsWith(potentialAncestor.Path + Separator, StringComparison.Ordinal);
         }
 
         /// <summary>
