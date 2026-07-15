@@ -8,7 +8,9 @@ namespace Birko.Models.SQL.Mapping
 {
     public class ModelMapRegistry
     {
-        private readonly Dictionary<Type, object> _maps = new Dictionary<Type, object>();
+        // CR-L322: store the non-generic IModelMap view so TableName/Properties are read by a direct cast
+        // rather than string-keyed reflection.
+        private readonly Dictionary<Type, IModelMap> _maps = new Dictionary<Type, IModelMap>();
 
         public void Register<T>(IModelMapping<T> mapping) where T : class
         {
@@ -32,12 +34,12 @@ namespace Birko.Models.SQL.Mapping
 
                 var mapType = typeof(ModelMap<>).MakeGenericType(entry.ModelType);
                 var map = Activator.CreateInstance(mapType);
-                if (map == null) continue;
+                if (map is not IModelMap modelMap) continue;
 
                 var configureMethod = entry.Interface.GetMethod("Configure");
                 configureMethod?.Invoke(instance, new[] { map });
 
-                _maps[entry.ModelType] = map;
+                _maps[entry.ModelType] = modelMap;
             }
         }
 
@@ -60,8 +62,8 @@ namespace Birko.Models.SQL.Mapping
         {
             foreach (var (type, map) in _maps)
             {
-                var tableNameProp = map.GetType().GetProperty("TableName");
-                var tableName = tableNameProp?.GetValue(map) as string;
+                // CR-L322: direct property read via IModelMap (was GetType().GetProperty("TableName")).
+                var tableName = map.TableName;
                 if (!string.IsNullOrEmpty(tableName))
                     yield return new KeyValuePair<Type, string>(type, tableName);
             }
@@ -71,8 +73,8 @@ namespace Birko.Models.SQL.Mapping
         {
             if (!_maps.TryGetValue(modelType, out var map))
                 return Array.Empty<FieldDescriptor>();
-            var propsProp = map.GetType().GetProperty("Properties");
-            return propsProp?.GetValue(map) as IReadOnlyList<FieldDescriptor> ?? Array.Empty<FieldDescriptor>();
+            // CR-L322: direct property read via IModelMap (was GetType().GetProperty("Properties")).
+            return map.Properties;
         }
 
         /// <summary>

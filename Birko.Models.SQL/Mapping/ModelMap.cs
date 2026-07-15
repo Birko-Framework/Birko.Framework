@@ -5,10 +5,22 @@ using Birko.Data.Patterns.Schema;
 
 namespace Birko.Models.SQL.Mapping
 {
-    public class ModelMap<T> where T : class
+    /// <summary>
+    /// CR-L322: non-generic view over a configured <see cref="ModelMap{T}"/> so the registry can read
+    /// TableName/Properties by a typed cast instead of string-keyed reflection.
+    /// </summary>
+    public interface IModelMap
+    {
+        string? TableName { get; }
+        IReadOnlyList<FieldDescriptor> Properties { get; }
+    }
+
+    public class ModelMap<T> : IModelMap where T : class
     {
         public string? TableName { get; private set; }
         public List<FieldDescriptor> Properties { get; } = new List<FieldDescriptor>();
+
+        IReadOnlyList<FieldDescriptor> IModelMap.Properties => Properties;
 
         public ModelMap<T> ToTable(string tableName)
         {
