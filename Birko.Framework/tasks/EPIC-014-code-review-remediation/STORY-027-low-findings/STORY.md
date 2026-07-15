@@ -13,7 +13,30 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**239 / 418 triaged** as of 2026-07-15. Next open is CR-L240 (Birko.Data.Views cluster, L240–L243).
+**243 / 418 triaged** as of 2026-07-15. Next open is CR-L244 (Birko.Data.XML cluster, L244…).
+
+**Batch AR — Data.Views cluster (CR-L240, CR-L241, CR-L242, CR-L243):** Birko.Data.Views. All closed;
+**/code-review clean (no correctness bugs; 1 low docs note + 1 out-of-cluster analogue, both handled)**.
+**L240** (other, robustness): `RegisterFromAssembly` now routes `assembly.GetTypes` through a new
+`internal static IEnumerable<Type> GetLoadableTypes(Func<Type[]>)` seam that catches
+`ReflectionTypeLoadException` and falls back to `ex.Types.Where(t => t != null).Select(t => t!)`, so one
+unloadable type (missing optional dependency) can't hard-fail startup discovery. Exposed as an injectable
+seam — the Views shared project compiles into the test assembly, so the internal is testable without a
+purpose-built broken assembly. **L241** (other, consistency): removed the `AggregateFunction.Count`
+short-circuit in the aggregate validator so the target-property existence check now runs for **every**
+aggregate (Count included, was skipped — inconsistent vs Min/Max); the numeric-type constraint stays gated
+to Sum/Avg. Renamed `ValidateNumericAggregates` → `ValidateAggregates` (single private caller). Via the
+type-safe fluent API a Count's ViewProperty always resolves from a real member expression, so the negative
+path isn't reachable publicly — defensive-consistency, valid Count builds stay green. **L242** (nullable):
+`new[] { builder }` → `new object[] { builder }` (builder is guarded non-null) — explicit element type,
+nullable-strict clean. **L243** (test-gap): new `ViewMapRegistryEdgeCaseTests` pins the silent last-wins
+overwrite on duplicate `TView` registration and the L240 RTLE fallback deterministically via the
+`GetLoadableTypes` seam (throwing delegate with a null slot → only loaded types; no-exception passthrough;
+happy-path RegisterFromAssembly regression). From /code-review: added a CLAUDE.md note on the
+last-wins + RTLE-tolerant behaviors. **Deferred analogue (record-and-defer, out of cluster):**
+`Birko.Models.SQL/Mapping/ModelMapRegistry.cs:22` has the identical bare `assembly.GetTypes()` (same gap
+the audit flagged) — different project/cluster, no open CR-L; noted for a future pass. **Tests:**
+Views.Tests 32 → 36 (`ViewMapRegistryEdgeCaseTests` ×4). Suite green: Views.Tests 36.
 
 **Batch AQ — Data.ViewModel cluster (CR-L237, CR-L238, CR-L239):** Birko.Data.ViewModel. All closed;
 **/code-review: 1 real finding (a CR-id mislabel), fixed in-batch; no correctness bugs**. **L237**

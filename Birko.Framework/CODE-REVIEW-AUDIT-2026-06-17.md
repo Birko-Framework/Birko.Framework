@@ -6807,33 +6807,37 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RegisterFromAssembly can throw ReflectionTypeLoadException on assemblies with unloadable types
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Views\ViewMapRegistry.cs:27`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** assembly.GetTypes() throws ReflectionTypeLoadException if any type in the scanned assembly cannot be loaded (e.g. a missing optional dependency). For a public assembly-scanning API this can surface as a hard failure during startup discovery. The ModelMapRegistry.RegisterFromAssembly this mirrors may have the same characteristic, but it is still a real robustness gap worth noting.
 - **Fix:** Wrap in try/catch ReflectionTypeLoadException and fall back to ex.Types.Where(t => t != null), or document that the caller must pass a fully-loadable assembly.
+- **Resolution (Batch AR):** `RegisterFromAssembly` now routes `assembly.GetTypes` through a new `internal static IEnumerable<Type> GetLoadableTypes(Func<Type[]>)` seam that catches `ReflectionTypeLoadException` and falls back to `ex.Types.Where(t => t != null).Select(t => t!)`. Exposed as an injectable seam (shared project → visible to tests) so the fallback is deterministically tested without a purpose-built broken assembly. **Deferred analogue (record-and-defer, out of cluster):** `Birko.Models.SQL/Mapping/ModelMapRegistry.cs:22` has the identical bare `assembly.GetTypes()` — same gap, different project/cluster, no open CR-L; noted for a future pass.
 
 ### CR-L241 · ⚪ low · Birko.Data.Views
 - **Title:** Count aggregate's ViewProperty is never validated for existence on TView
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Views\ViewDefinitionBuilder.cs:222`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ValidateNumericAggregates() short-circuits with 'continue' for AggregateFunction.Count before the typeof(TView).GetProperty(agg.ViewProperty) existence check (lines 227-232). So a Count<TSource>(...) targeting a view property is never checked to actually exist on TView, while Sum/Avg/Min/Max are. The Count overloads are strongly-typed via Expression<Func<TView,int/long>> so a bad name is unlikely, but the validation is inconsistent: a Min/Max view property gets existence-checked, a Count one does not.
 - **Fix:** Perform the GetProperty existence check for all aggregate functions, then apply the numeric-type check only to Sum/Avg (and skip it for Count).
+- **Resolution (Batch AR):** Removed the `Count` short-circuit so the `GetProperty` existence check now runs for every aggregate (Count included); the numeric-type constraint stays gated to Sum/Avg (Count/Min/Max may target any type). Renamed `ValidateNumericAggregates` → `ValidateAggregates` (single private caller) since it now validates existence for all. Note: via the type-safe fluent API a Count's ViewProperty always resolves from a real member expression (GetMemberName throws otherwise), so the negative path isn't reachable through the public API — the change is defensive-consistency; valid Count builds stay green (existing Count-bearing mappings in Views.Tests).
 
 ### CR-L242 · ⚪ low · Birko.Data.Views
 - **Title:** new[] { builder } infers object?[] passed to MethodInfo.Invoke (possible CS8620 in nullable consumers)
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Views\ViewMapRegistry.cs:49`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** builder is the result of Activator.CreateInstance (object?). Although null-checked at line 43, the array literal new[] { builder } still infers object?[], and MethodInfo.Invoke expects object?[]? so this is typically fine, but flow analysis does not always narrow the element type. Worth a quick compile check with nullable warnings-as-errors given the framework's no-CS8600-CS8625 rule.
 - **Fix:** Use new object[] { builder } (builder is provably non-null here) to make the element type explicit.
+- **Resolution (Batch AR):** Changed `new[] { builder }` → `new object[] { builder }` (builder is guarded non-null just above). Build-clean under the framework's nullable-strict compile (Views.Tests compiles the shared source).
 
 ### CR-L243 · ⚪ low · Birko.Data.Views
 - **Title:** Test gap: duplicate/overwriting view registration and RegisterFromAssembly failure modes
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Data.Views.Tests\ViewMapRegistryTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Register/RegisterFromAssembly are well covered for the happy path, but there is no test for registering two mappings for the same TView (silent last-wins overwrite of _definitions[typeof(TView)]) nor for the ReflectionTypeLoadException path. The silent overwrite in particular is a behavior worth pinning with a test so a future change does not accidentally make it throw or merge.
 - **Fix:** Add a test asserting the documented overwrite-vs-throw behavior for duplicate TView registration.
+- **Resolution (Batch AR):** New `ViewMapRegistryEdgeCaseTests`: `Register_DuplicateTView_LastRegistrationWins` (a 2-field then a 1-field mapping for CustomerView → definition reflects the last, and exactly one GetAll entry for that key), plus the RTLE fallback pinned deterministically via the `GetLoadableTypes(Func<Type[]>)` seam (a delegate throwing `ReflectionTypeLoadException` with a null slot → only the loaded types returned; no-exception passthrough; happy-path RegisterFromAssembly regression through the new wrapper).
 
 ### CR-L244 · ⚪ low · Birko.Data.XML
 - **Title:** Sync bulk CreateCore uses Dictionary.Add — throws on Guid collision
