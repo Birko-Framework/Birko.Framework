@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**311 / 418 triaged** as of 2026-07-15. Next open is CR-L312 (Birko.Models.Pricing cluster, L312…).
+**313 / 418 triaged** as of 2026-07-15. Next open is CR-L314 (Birko.Models.Pricing.SQL cluster, L314…).
+
+**Batch BS — Birko.Models.Pricing cluster (CR-L312, CR-L313):** Birko.Models.Pricing. Both closed;
+**/code-review clean (no findings)**. Both are "confirm/document" findings — resolved via the audit's
+explicit document-the-intent option (adding speculative unused API would be over-engineering for low
+consistency findings). **L312** (other): `PriceList.LoadFrom` doesn't map `Entries` (the VM has no Entries
+by design) — documented on `LoadFrom` as intentionally header-only (entries managed via the PriceListEntry
+store, same convention as InventoryDocument.Lines/CR-M221), pinned by a test asserting `Entries` stays empty
+after a VM→model load. **L313** (cleanup): filters ship only for the reference/lookup entities
+(Currency/PriceGroup/Tax) queried in UIs; the transactional entities (Discount/PriceList/PriceListEntry/
+CurrencyRate) query via their stores/relations and deliberately have no filter DTO — documented in the
+project CLAUDE.md (add one only when a concrete query surface needs it). **Tests:** Pricing.Tests 7 → 8
+(`PriceList_LoadFrom_IsHeaderOnly_DoesNotPopulateEntries`). Suite green: Pricing.Tests 8.
 
 **Batch BR — Birko.Models.Inventory.SQL cluster (CR-L310, CR-L311):** Birko.Models.Inventory.SQL. Both
 closed; **/code-review clean (no findings)**. **L310** (test-gap): created a new

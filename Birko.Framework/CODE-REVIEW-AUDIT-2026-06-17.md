@@ -7397,7 +7397,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** PriceList.Entries is silently dropped on LoadFrom
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Pricing\Models\PriceList.cs:19`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** PriceList.Entries (ICollection<PriceListEntry>) is a model property, but PriceList.LoadFrom(ViewModels.PriceList) does not map it, and ViewModels.PriceList has no Entries property at all. A round-trip through the view model loses the entries collection. This may be intentional shallow mapping, but it is an asymmetry worth confirming.
 - **Fix:** If entries are meant to round-trip, add an Entries projection to ViewModels.PriceList and map it; otherwise document that PriceList view-model mapping is intentionally header-only.
 
@@ -7405,7 +7405,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Filter coverage is inconsistent across the domain
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Pricing\Filters`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Filters exist only for Currency, PriceGroup, and Tax. Discount, PriceList, PriceListEntry, and CurrencyRate have no Filters/* class, despite carrying obvious queryable fields (Discount.IsActive/Type/Value/date range; PriceListEntry.PriceListGuid/ItemGuid; CurrencyRate.FromCurrencyCode/ToCurrencyCode/date range). This is a consistency/completeness gap, not a bug.
 - **Fix:** Either add the missing filter classes for symmetry with the rest of the domain, or confirm those entities are not intended to be queried by filter.
 
