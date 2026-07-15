@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**268 / 418 triaged** as of 2026-07-15. Next open is CR-L269 (Birko.Health.Redis cluster, L269…).
+**270 / 418 triaged** as of 2026-07-15. Next open is CR-L271 (Birko.Helpers cluster, L271…).
+
+**Batch BA — Birko.Health.Redis cluster (CR-L269, CR-L270):** Birko.Health.Redis. Both closed;
+**/code-review clean (no findings)**. **L269** (convention): `RedisHealthCheck.CheckAsync` now calls
+`ct.ThrowIfCancellationRequested()` as its first line — StackExchange.Redis `PingAsync` has no
+`CancellationToken` overload, but an already-cancelled token is honored before any work. Placed **before**
+the `try` so the cancellation propagates to `HealthCheckRunner`'s timeout handling (which honors the
+registration's `TimeoutStatus`) instead of being masked as a generic Unhealthy by the catch (cf. the CR-M191
+Azure fix). **L270** (nullable/robustness): the `Func<IConnectionMultiplexer>` overload can legally return
+null; added a `connection == null` guard returning `Unhealthy("Redis connection factory returned null.")`
+instead of the obscure `NullReferenceException`-as-Unhealthy from dereferencing it. **Tests:**
+Health.Redis.Tests 8 → 10 — `CheckAsync_AlreadyCancelledToken_ThrowsOperationCanceled` (also asserts the
+factory is never invoked, proving the guard runs first) and `CheckAsync_FactoryReturnsNull_ReturnsUnhealthyWithClearReason`.
+Suite green: Health.Redis.Tests 10.
 
 **Batch AZ — Birko.Health.Data cluster (CR-L266, CR-L267, CR-L268):** Birko.Health.Data. All closed;
 **/code-review clean (no findings)**. **L266** (other — "document" option taken): documented on the three

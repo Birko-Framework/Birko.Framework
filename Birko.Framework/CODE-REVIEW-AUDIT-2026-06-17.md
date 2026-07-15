@@ -7053,7 +7053,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CheckAsync ignores the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Health.Redis\RedisHealthCheck.cs:36`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The framework convention states async methods should observe the CancellationToken, but ct is never inspected. StackExchange.Redis's PingAsync() has no CancellationToken overload (it uses CommandFlags), so the token cannot be threaded into the PING itself; however a cheap ct.ThrowIfCancellationRequested() before invoking the factory would at least honor an already-cancelled token. This is consistent with the existing reference DiskSpaceHealthCheck, which also ignores ct, so it is a pre-existing family-wide pattern rather than a regression.
 - **Fix:** Add ct.ThrowIfCancellationRequested() at the top of CheckAsync (the surrounding try/catch will translate a cancelled token into an Unhealthy result, or let it propagate if preferred).
 
@@ -7061,7 +7061,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Factory may return null, yielding an obscured Unhealthy via NullReferenceException
 - **Path:** `C:\Source\Birko\Framework\Birko.Health.Redis\RedisHealthCheck.cs:40`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** When constructed with the Func<IConnectionMultiplexer> overload, _connectionFactory() can legally return null; line 41 then dereferences it (connection.GetDatabase()). It is inside the try/catch, so it surfaces as Unhealthy with message 'Redis connection failed: Object reference not set...' rather than crashing, but the diagnostic is misleading. No CS86xx warning is produced because IConnectionMultiplexer is non-nullable in the factory signature, so this is a runtime robustness nit, not a compile-time nullable violation.
 - **Fix:** After var connection = _connectionFactory(); add a guard returning HealthCheckResult.Unhealthy("Redis connection factory returned null.") so the failure reason is explicit.
 
