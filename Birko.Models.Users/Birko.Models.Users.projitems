@@ -9,6 +9,7 @@
     <Import_RootNamespace>Birko.Models.Users</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Filters\FilterExpressions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Role.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\RolePermission.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\Tenant.cs" />

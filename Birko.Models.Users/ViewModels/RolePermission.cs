@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 
 namespace Birko.Models.Users.ViewModels
 {
@@ -42,9 +41,12 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
+        // CR-L323: cached watched-property set — avoids a per-event array allocation + LINQ scan.
+        private static readonly System.Collections.Generic.HashSet<string> _watchedProperties = new() { PermissionCodeProperty, GrantedAtProperty };
+
         private void RolePermission_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { PermissionCodeProperty, GrantedAtProperty }.Contains(e.PropertyName))
+            if (e.PropertyName != null && _watchedProperties.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(RolePermissionObjectProperty);
             }

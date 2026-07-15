@@ -1,7 +1,7 @@
 using System;
 using System.Linq.Expressions;
-using Birko.Data.Expressions;
 using Birko.Data.Filters;
+using static Birko.Models.Users.Filters.FilterExpressions;
 
 namespace Birko.Models.Users.Filters
 {
@@ -38,11 +38,5 @@ namespace Birko.Models.Users.Filters
             return result;
         }
 
-        private static Expression<Func<Models.Users.RolePermission, bool>> Combine(
-            Expression<Func<Models.Users.RolePermission, bool>>? left,
-            Expression<Func<Models.Users.RolePermission, bool>> right)
-        {
-            return ExpressionParameterReplacer.AndAlso(left, right);
-        }
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 
 namespace Birko.Models.Users.ViewModels
 {
@@ -87,9 +86,12 @@ namespace Birko.Models.Users.ViewModels
             }
         }
 
+        // CR-L323: cached watched-property set — avoids a per-event array allocation + LINQ scan.
+        private static readonly System.Collections.Generic.HashSet<string> _watchedProperties = new() { UserNameProperty, EmailProperty, IsActiveProperty, LastLoginAtProperty, EmailVerifiedProperty };
+
         private void User_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { UserNameProperty, EmailProperty, IsActiveProperty, LastLoginAtProperty, EmailVerifiedProperty }.Contains(e.PropertyName))
+            if (e.PropertyName != null && _watchedProperties.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(UserObjectProperty);
             }
