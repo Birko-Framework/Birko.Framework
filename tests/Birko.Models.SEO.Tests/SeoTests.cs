@@ -88,4 +88,54 @@ public class SeoTests
         filter(new SeoModel { Guid = guid }).Should().BeTrue();
         filter(new SeoModel { Guid = Guid.NewGuid() }).Should().BeFalse();
     }
+
+    [Fact]
+    public void SEOByPath_Prefix_NullEntityPath_DoesNotThrow_AndReturnsFalse()
+    {
+        // CR-L319: an entity with a null Path (default/partially-loaded) must not NRE under LINQ-to-objects.
+        var filter = new SEOByPath<SeoModel>("/blog").Filter()!.Compile();
+
+        System.Action act = () => filter(new SeoModel { Path = null! });
+
+        act.Should().NotThrow();
+        filter(new SeoModel { Path = null! }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void ViewModel_PathSetter_SameValue_DoesNotRaisePropertyChanged()
+    {
+        // CR-L320.
+        var vm = new SeoVm { Path = "/a" };
+        var raised = new System.Collections.Generic.List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.Path = "/a";
+
+        raised.Should().NotContain(SeoVm.PathProperty);
+        raised.Should().NotContain(SeoVm.SEOObjectProperty);
+    }
+
+    [Fact]
+    public void ViewModel_PathSetter_NewValue_RaisesPropertyChanged()
+    {
+        var vm = new SeoVm { Path = "/a" };
+        var raised = new System.Collections.Generic.List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+
+        vm.Path = "/b";
+
+        raised.Should().Contain(SeoVm.PathProperty);
+    }
+
+    [Fact]
+    public void LoadFrom_Null_DoesNotThrow()
+    {
+        // CR-L321: the null guard runs before base.LoadFrom in all overloads.
+        var model = new SeoModel();
+        var vm = new SeoVm();
+
+        ((System.Action)(() => model.LoadFrom((SeoVm)null!))).Should().NotThrow();
+        ((System.Action)(() => vm.LoadFrom((SeoModel)null!))).Should().NotThrow();
+        ((System.Action)(() => vm.LoadFrom((SeoVm)null!))).Should().NotThrow();
+    }
 }
