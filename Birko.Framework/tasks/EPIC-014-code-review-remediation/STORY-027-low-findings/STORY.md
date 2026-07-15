@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**276 / 418 triaged** as of 2026-07-15. Next open is CR-L277 (Birko.Localization.Data cluster, L277…).
+**279 / 418 triaged** as of 2026-07-15. Next open is CR-L280 (Birko.MessageQueue core cluster, L280…).
+
+**Batch BD — Birko.Localization.Data cluster (CR-L277, CR-L278, CR-L279):** Birko.Localization.Data. All
+closed; **/code-review clean (no findings)**. **L279** (nullable): `GetCultureTranslationsAsync` now writes
+`dict[model.Key] = model.Value ?? string.Empty` — a persisted/deserialized `TranslationModel` with a null
+`Value` no longer surfaces as a null value in the `IReadOnlyDictionary<string,string>` (which could NRE a
+downstream consumer); the key was already null/empty-guarded, the value wasn't. **L278** (test-gap): the
+existing cache tests never mutated the store between reads, so they couldn't distinguish a cache hit from a
+fresh read (their own comments admitted it). Rewrote them to mutate a seeded model's `Value` behind the cache
+(the cache copies string values, so a stale read proves a hit): cached value survives a store mutation until
+`InvalidateCache`; `InvalidateCache()` reloads every culture; a new `Cache_ExpiresAfterTtl` (50ms TTL +
+150ms delay) proves TTL expiry; `NoCaching` now mutates + asserts a fresh read each call. **L277** (test-gap):
+added `GetTranslationAsync`/`GetAllAsync` pre-cancelled-token tests asserting `OperationCanceledException`
+surfaces (the token is forwarded to the store, whose `EnsureInitializedAsync` throws on a cancelled token —
+confirmed by the passing tests). **Tests:** Localization.Data.Tests → 28 (cache tests rewritten;
++2 cancellation). Suite green: Localization.Data.Tests 28.
 
 **Batch BC — Birko.Localization cluster (CR-L273, CR-L274, CR-L275, CR-L276):** Birko.Localization. All
 closed; **/code-review clean (no findings)**. **L273** (cleanup): dropped the dead

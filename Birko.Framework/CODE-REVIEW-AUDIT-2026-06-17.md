@@ -7117,7 +7117,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async cancellation paths are untested
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Localization.Data.Tests\DatabaseTranslationProviderTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** GetTranslationAsync/GetAllAsync accept a CancellationToken and forward it to the store, but no test passes an already-cancelled token to assert OperationCanceledException surfaces. Given the framework recently tightened async cancellation observance on stores (EnsureInitializedAsync throwing on a cancelled token), a regression here would go uncaught.
 - **Fix:** Add a test passing a pre-cancelled CancellationToken to GetTranslationAsync/GetAllAsync and assert it throws OperationCanceledException (the in-memory test store routes through EnsureInitializedAsync).
 
@@ -7125,7 +7125,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** InvalidateCache reload behavior is not actually verified by tests
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Localization.Data.Tests\CacheTests.cs:27,47`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** CachedResult_IsReturnedOnSecondCall, InvalidateCache_ForcesReload, and InvalidateCache_All_ClearsEverything never mutate the store between calls, so they cannot distinguish a cache hit from a fresh store read. As the comments admit ('still returns Hello since store hasn't changed'), the assertions pass identically whether or not caching/invalidation works. The cache and invalidation logic are effectively unverified.
 - **Fix:** Mutate the seeded store (or add/update a TranslationModel) after the first read, then assert: with caching the stale value is returned on the second read, and after InvalidateCache the new value is returned. Add a TTL-expiry test using a very short cacheDuration.
 
@@ -7133,7 +7133,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stored Value set to null would yield a null dictionary value
 - **Path:** `C:\Source\Birko\Framework\Birko.Localization.Data\DatabaseTranslationProvider.cs:134`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** dict[model.Key] = model.Value assigns into a Dictionary<string,string>. TranslationModel.Value is a non-nullable string defaulting to empty, but the setter does not prevent a persisted record (or a deserialized one) from having a null Value, in which case the returned IReadOnlyDictionary<string,string> would contain a null value and a downstream consumer treating values as non-null could NRE. Low likelihood given the default and typical persistence, but the key is guarded for null/empty while the value is not.
 - **Fix:** Skip or coalesce null values, e.g. dict[model.Key] = model.Value ?? string.Empty, to keep the non-null dictionary contract honest.
 
