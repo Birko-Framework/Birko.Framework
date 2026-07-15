@@ -13,7 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**294 / 418 triaged** as of 2026-07-15. Next open is CR-L295 (Birko.Messaging cluster, L295…).
+**297 / 418 triaged** as of 2026-07-15. Next open is CR-L298 (Birko.Messaging.Razor cluster, L298…).
+
+**Batch BJ — Birko.Messaging cluster (CR-L295, CR-L296, CR-L297):** Birko.Messaging. All closed;
+**/code-review clean (no findings)**. **L295** (bug): `SmtpEmailSender.SendBatchAsync` delegated each element
+to `SendAsync`, which throws `ArgumentNullException` on a null message — so a single null element aborted the
+whole batch and discarded results already collected, breaking the result-collecting contract. Null elements
+are now captured as `MessageResult.Failed("Null message.")` and the batch continues (result count matches
+input). **L296** (nullable): `ToMailAddress` passed `address.Value` straight to `new MailAddress(...)`;
+`MessageAddress` only guards null (not empty/whitespace/malformed), so a `Value=""` or bad address threw a
+generic exception surfaced as "Failed to send email". Now it guards empty/whitespace and converts a
+`FormatException` to the dedicated (previously-unused) `InvalidRecipientException`, which `SendAsync` catches
+(before the generic catch) → a clear "Invalid recipient" Failed reason. **L297** (test-gap — mostly
+pre-covered): verify-first found `StringTemplateEngineTests` already covers the missing-property throw,
+multi-segment path, and null-leaf → empty; the one gap was a **null intermediate** mid-path (distinct from a
+missing property) — added a test for it. SMS/Push have DTOs only (no senders yet), so no sender tests.
+**Tests:** Messaging.Tests → 52 — `SendBatchAsync_NullElement_CapturedAsFailed_OthersSucceed`,
+`SendAsync_EmptyRecipientAddress_ReturnsInvalidRecipientFailure`,
+`SendAsync_MalformedRecipientAddress_ReturnsInvalidRecipientFailure`,
+`RenderAsync_NullIntermediateInPath_ReplacesWithEmpty`. Suite green: Messaging.Tests 52.
 
 **Batch BI — Birko.MessageQueue.Redis cluster (CR-L292, CR-L293, CR-L294):** Birko.MessageQueue.Redis. All
 closed; **/code-review clean (no findings)**. **L292** (other — reword doc): `RedisStreamSettings.BlockMilliseconds`

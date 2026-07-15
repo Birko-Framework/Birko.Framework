@@ -7261,7 +7261,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Null message inside a batch throws instead of producing a Failed result
 - **Path:** `C:\Source\Birko\Framework\Birko.Messaging\Email\SmtpEmailSender.cs:83-88`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** SendBatchAsync collects a MessageResult per message, but SendAsync throws ArgumentNullException for a null message (line 36-39). A single null element in the messages enumerable therefore aborts the whole batch with an exception and discards all results already collected, which is inconsistent with the otherwise result-collecting (non-throwing) batch contract — e.g. an SMTP failure on one message yields MessageResult.Failed and the batch continues, but a null message does not.
 - **Fix:** Skip nulls or capture them as MessageResult.Failed("Null message.") so one bad element does not lose the results of the others.
 
@@ -7269,7 +7269,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Recipients/From validation only covers count, not empty/invalid address values
 - **Path:** `C:\Source\Birko\Framework\Birko.Messaging\Email\SmtpEmailSender.cs:170-173`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** ToMailAddress passes address.Value straight to new MailAddress(...). MessageAddress only guards against null Value (MessageAddress.cs:12), not empty/whitespace/malformed, so a recipient with Value="" reaches new MailAddress("") which throws ArgumentException. It is caught by the generic catch and turned into a Failed result, so not a crash, but the failure surfaces as a generic "Failed to send email" rather than an InvalidRecipientException (which already exists in MessagingException.cs:30 for exactly this purpose and is unused).
 - **Fix:** Validate recipient/from address values up front and surface InvalidRecipientException (or a clear Failed reason) rather than relying on the generic catch.
 
@@ -7277,7 +7277,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for SMS/Push message types or StringTemplateEngine error/path-resolution edge cases beyond happy path
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Messaging.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** SmsMessage and PushMessage have no senders yet (only DTOs), so the gap is minor. More notable: StringTemplateEngine resolves nested property paths and throws TemplateRenderException for missing properties (StringTemplateEngine.cs:60-64) — confirm the .Tests sibling covers the missing-property throw, nested path traversal, and null-intermediate (returns null/empty) cases, not just simple substitution. Note only; did not deep-dive.
 - **Fix:** Add tests for TemplateRenderException on unknown property, multi-segment path resolution, and null mid-path behavior if not already present.
 
