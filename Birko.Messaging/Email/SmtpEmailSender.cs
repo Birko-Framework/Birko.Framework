@@ -93,6 +93,11 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         {
             throw;
         }
+        catch (InvalidRecipientException ex)
+        {
+            // CR-L296: a bad address surfaces with its dedicated reason, not the generic failure message.
+            return MessageResult.Failed(ex.Message, ex);
+        }
         catch (Exception ex)
         {
             return MessageResult.Failed($"Failed to send email: {ex.Message}", ex);
@@ -111,6 +116,13 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         foreach (var message in messages)
         {
             ct.ThrowIfCancellationRequested();
+            // CR-L295: a null element must not abort the batch (which would discard results already
+            // collected) — the batch contract is result-collecting, so capture it as a Failed result.
+            if (message == null)
+            {
+                results.Add(MessageResult.Failed("Null message."));
+                continue;
+            }
             var result = await SendAsync(message, ct).ConfigureAwait(false);
             results.Add(result);
         }
@@ -199,10 +211,28 @@ public sealed class SmtpEmailSender : IEmailSender, IDisposable
         return mail;
     }
 
-    private static MailAddress ToMailAddress(MessageAddress address) =>
-        string.IsNullOrEmpty(address.DisplayName)
-            ? new MailAddress(address.Value)
-            : new MailAddress(address.Value, address.DisplayName);
+    private static MailAddress ToMailAddress(MessageAddress address)
+    {
+        // CR-L296: MessageAddress only guards a null Value, so an empty/whitespace or malformed value
+        // reaches new MailAddress(...) and throws a generic ArgumentException/FormatException. Surface the
+        // dedicated InvalidRecipientException so the caller gets a clear reason (SendAsync maps it to a
+        // Failed result) instead of the generic "Failed to send email".
+        if (string.IsNullOrWhiteSpace(address.Value))
+        {
+            throw new InvalidRecipientException(address.Value ?? string.Empty);
+        }
+
+        try
+        {
+            return string.IsNullOrEmpty(address.DisplayName)
+                ? new MailAddress(address.Value)
+                : new MailAddress(address.Value, address.DisplayName);
+        }
+        catch (FormatException)
+        {
+            throw new InvalidRecipientException(address.Value);
+        }
+    }
 
     private static MailPriority MapPriority(MessagePriority priority) => priority switch
     {
