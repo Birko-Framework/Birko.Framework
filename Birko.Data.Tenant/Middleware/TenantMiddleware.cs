@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+// System.Linq is required explicitly (CR-L230): FirstOrDefault over StringValues is a LINQ extension,
+// and this shared .projitems source must compile in consumers that disable ImplicitUsings.
+using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 

@@ -1,6 +1,5 @@
 using Birko.Data.Filters;
 using Birko.Data.Stores;
-using Birko.Configuration;
 using Birko.Data.Tenant.Models;
 using System;
 using System.Linq.Expressions;
@@ -135,9 +134,19 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     }
 
     /// <summary>
-    /// Check if an item belongs to the current tenant
+    /// Check if an item belongs to the current tenant.
     /// </summary>
-    protected bool BelongsToCurrentTenant(T item)
+    /// <remarks>
+    /// DELIBERATE FAIL-OPEN (CR-L229): with no tenant set (<c>HasTenant == false</c>) this returns
+    /// true — "non-tenant (admin) mode" — so single and bulk Update/Delete operate across ALL
+    /// tenants. Intended for back-office/maintenance flows, but note the flip side: a mis-wired
+    /// context (e.g. falling back to the static <c>Models.Tenant.Current</c> singleton in the ctor
+    /// with no tenant ever set) opens cross-tenant writes rather than failing closed. Callers that
+    /// need fail-closed semantics must supply an <see cref="ITenantContext"/> with a tenant set, or
+    /// derive and override this check (virtual for exactly that reason). Behavior is pinned by
+    /// explicit tests.
+    /// </remarks>
+    protected virtual bool BelongsToCurrentTenant(T item)
     {
         // If no tenant is set, allow access (non-tenant mode)
         if (!_tenantContext.HasTenant)

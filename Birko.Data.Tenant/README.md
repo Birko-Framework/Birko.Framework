@@ -6,7 +6,9 @@ Multi-tenancy support for the Birko Framework providing tenant-aware data access
 
 - Thread-safe tenant context via AsyncLocal (supports async/await and nested scopes)
 - Store wrappers that transparently filter reads and assign tenant on create
-- Authorization checks — throws UnauthorizedAccessException on cross-tenant update/delete
+- Authorization checks — throws UnauthorizedAccessException on cross-tenant update/delete (only when a
+  tenant is set: with no tenant on the context the wrappers deliberately fail open, "admin mode" —
+  override the virtual `BelongsToCurrentTenant` for fail-closed semantics)
 - ASP.NET Core middleware for tenant resolution (header, query string, route, custom delegate)
 - DI extensions for registering tenant-aware repositories
 - Filter composition combining base filters with tenant predicates
