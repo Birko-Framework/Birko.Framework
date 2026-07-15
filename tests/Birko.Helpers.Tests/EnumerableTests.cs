@@ -71,5 +71,37 @@ namespace Birko.Helpers.Tests
             Assert.Equal(string.Join(",", new[] { "a" }), string.Join(",", removed));
             Assert.Equal(string.Join(",", new[] { "b" }), string.Join(",", same));
         }
+
+        // CR-L272: pin the obsolete Diff's null-input behavior (previously untested) so the accept-as-is
+        // decision — and any future removal — is safe.
+        [Fact]
+        public void ParseBothNull_AllNull()
+        {
+            var (added, removed, same) = EnumerableHelper.Diff<int>(null, null);
+            Assert.Null(added);
+            Assert.Null(removed);
+            Assert.Null(same);
+        }
+
+        [Fact]
+        public void ParseNullSource_EverythingAdded()
+        {
+            int[] dest = new[] { 1, 2 };
+            var (added, removed, same) = EnumerableHelper.Diff(null, dest);
+            Assert.Equal(2, added?.Count() ?? 0);
+            Assert.Null(removed);
+            Assert.Null(same);
+        }
+
+        [Fact]
+        public void ParseNullDestination_EverythingRemoved()
+        {
+            int[] source = new[] { 1, 2 };
+            var (added, removed, same) = EnumerableHelper.Diff(source, null);
+            Assert.Null(added);
+            Assert.Equal(2, removed?.Count() ?? 0);
+            // same is non-null here (source is non-null, so the Where projection runs) — everything was removed.
+            Assert.Empty(same!);
+        }
     }
 }

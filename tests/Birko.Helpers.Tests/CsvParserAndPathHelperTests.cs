@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using FluentAssertions;
 using Xunit;
 
@@ -67,6 +69,31 @@ public class CsvParserAndPathHelperTests
     {
         var rows = ParseCsv("a;b;c", delimiter: ';');
         rows[0].Should().Equal("a", "b", "c");
+    }
+
+    [Fact]
+    public void Parse_TrailingRowEndingInBareCarriageReturn_TrimsIt()
+    {
+        // CR-L271: the last field (no trailing newline) must get the same TrimEnd('\r') the in-loop
+        // newline branches apply, so a bare trailing '\r' isn't emitted as a stray carriage return.
+        var rows = ParseCsv("a,b\r");
+
+        rows.Should().HaveCount(1);
+        rows[0].Should().Equal("a", "b");
+    }
+
+    [Fact]
+    public void Parse_CancelledToken_ThrowsOperationCanceled()
+    {
+        // CR-L271: the read loop observes the token so a parse over a slow stream can be cancelled.
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes("a,b\nc,d\ne,f"));
+        var parser = new CsvParser(stream);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = () => parser.Parse(cts.Token).ToList();
+
+        act.Should().Throw<OperationCanceledException>();
     }
 
     // ── PathHelper.IsUnderDirectory ─────────────────────────
