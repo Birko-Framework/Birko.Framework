@@ -7237,7 +7237,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** BlockMilliseconds setting does not produce a blocking read
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.Redis\RedisStreamSettings.cs:29-33; RedisConsumer.cs:145-162, 233`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** BlockMilliseconds is documented as 'the block timeout for XREAD/XREADGROUP'. StackExchange.Redis's StreamReadAsync/StreamReadGroupAsync do not expose the BLOCK option, so the implementation does a non-blocking count-limited read and falls back to `Task.Delay(BlockMilliseconds ?? 1000)` only when empty. The effective behavior is a polling delay, not a server-side blocking read, so the setting's documented semantics are misleading and latency is bounded below by the poll interval.
 - **Fix:** Reword the XML doc to describe it as the empty-poll back-off interval, or implement true blocking via db.Execute("XREAD"/"XREADGROUP", ... "BLOCK", ms ...).
 
@@ -7245,7 +7245,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicate Serialize of headers / redundant full-message duplication in stream entry
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.Redis\RedisProducer.cs:39-50`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Each XADD writes both individual fields (id/body/payload_type/headers/created_at/priority) AND a full serialized 'message' field that already contains all of them. The consumer's ParseStreamEntry prefers the 'message' field and only falls back to fields on deserialization failure, so the per-field set is dead weight on the happy path — roughly doubling payload size and serializing Headers twice (once standalone, once inside the message). Pick one representation (the full 'message' blob) and drop the redundant fields, or keep fields only as a fallback contract and document it.
 - **Fix:** Write only the full 'message' field (plus ttl_ms for the consumer's expiry check), removing the duplicated per-field entries.
 
@@ -7253,7 +7253,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RedisProducer.SendAsync<T> sets ContentType redundantly
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.Redis\RedisProducer.cs:73-83`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The MessageHeaders default already sets ContentType = _serializer.ContentType when headers is null (line 77). The subsequent `if (headers != null) message.Headers.ContentType = _serializer.ContentType;` overwrites a caller-supplied ContentType unconditionally, which may not be intended (a caller passing headers with a deliberate ContentType has it clobbered). Either always overwrite (then the null-branch default is redundant) or never overwrite a caller value.
 - **Fix:** Decide one policy: set ContentType once after building headers, independent of the null check, and only if not already set by the caller.
 

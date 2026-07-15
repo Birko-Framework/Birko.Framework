@@ -13,7 +13,24 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**291 / 418 triaged** as of 2026-07-15. Next open is CR-L292 (Birko.MessageQueue.Redis cluster, L292…).
+**294 / 418 triaged** as of 2026-07-15. Next open is CR-L295 (Birko.Messaging cluster, L295…).
+
+**Batch BI — Birko.MessageQueue.Redis cluster (CR-L292, CR-L293, CR-L294):** Birko.MessageQueue.Redis. All
+closed; **/code-review clean (no findings)**. **L292** (other — reword doc): `RedisStreamSettings.BlockMilliseconds`
+is documented accurately now — it's an **empty-poll back-off interval** (`Task.Delay`), not a server-side
+XREAD `BLOCK` (StackExchange.Redis doesn't expose BLOCK), so newly-arrived-message latency is bounded below
+by this interval. **L293** (cleanup): `RedisProducer` XADD wrote both a full serialized `message` field AND
+duplicate per-field entries (id/body/payload_type/headers/created_at/priority) — the consumer prefers
+`message` and only uses per-field parsing as a fallback, so the per-fields were dead weight (≈2× payload,
+Headers serialized twice). Now writes only `message` (+ `ttl_ms`, which the consumer reads for its expiry
+check); the consumer's per-field fallback is retained for entries written by other producers. **L294**
+(cleanup): `SendAsync<T>` set `ContentType` twice (initializer + conditional re-set that clobbered a
+caller value); collapsed to a single unconditional stamp of the serializer's content type — correct because
+the typed body is serialized by `_serializer`, and consistent with the InMemory sibling (CR-L284). To make
+L293/L294 testable without live Redis, added a `Func<IDatabase>` test-seam ctor to `RedisProducer` (mirrors
+the consumer's existing seam). **Tests:** Redis.Tests 45 → 49 — XADD writes only `message` (and `message`+`ttl_ms`
+with a TTL), the `message` blob round-trips id/body/payload_type/priority, and the typed send stamps the
+serializer content type (over caller headers). Suite green: Redis.Tests 49.
 
 **Batch BH — Birko.MessageQueue.MQTT cluster (CR-L288, CR-L289, CR-L290, CR-L291):** Birko.MessageQueue.MQTT.
 All closed; **/code-review clean (no findings)**. **L288** (bug — "document" option): documented on
