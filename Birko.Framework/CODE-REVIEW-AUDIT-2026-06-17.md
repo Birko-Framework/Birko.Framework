@@ -7069,7 +7069,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CsvParser appends a final row without trimming a trailing CR and ignores cancellation
 - **Path:** `C:\Source\Birko\Framework\Birko.Helpers\CsvParser.cs:121`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The trailing-row block (no final newline) does row.Add(field.ToString()) without the TrimEnd('\r') that the in-loop newline branches apply, so a file whose last line ends in a bare '\r' (or '\r' with no following '\n') emits a field with a stray carriage return, unlike every other row. Also Parse() takes no CancellationToken, so a long parse over a slow stream cannot be cancelled (other helpers in this project, e.g. BatchHelper, consistently observe a token).
 - **Fix:** Apply the same TrimEnd('\r') to the final field; consider an overload accepting CancellationToken and checking it in the read loop.
 
@@ -7077,7 +7077,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** EnumerableHelper.Diff 'same' result recomputed via O(n) scan and obsolete API still untested for null inputs
 - **Path:** `C:\Source\Birko\Framework\Birko.Helpers\EnumerableHelper.cs:47`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The obsolete Diff builds the 'same' set by re-scanning source with removed.Any(...) inside a Where, an O(n*m) pass on top of the already O(n*m) added/removed computation. It is marked [Obsolete] in favor of DiffByKey, so this is low priority, but if kept it is the kind of needless quadratic work DiffByKey was created to replace.
 - **Fix:** Leave as-is given the [Obsolete] marker, or have it delegate to DiffByKey; not worth optimizing dead-ish code.
 

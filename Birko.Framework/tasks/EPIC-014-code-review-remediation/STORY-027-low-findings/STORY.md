@@ -13,7 +13,23 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**270 / 418 triaged** as of 2026-07-15. Next open is CR-L271 (Birko.Helpers cluster, L271…).
+**272 / 418 triaged** as of 2026-07-15. Next open is CR-L273 (Birko.Localization cluster, L273…).
+
+**Batch BB — Birko.Helpers cluster (CR-L271, CR-L272):** Birko.Helpers. Both closed;
+**/code-review clean (no findings)**. **L271** (bug): `CsvParser.Parse`'s trailing-row block (no final
+newline) now applies the same `TrimEnd('\r')` the in-loop newline branches use, so a file whose last line
+ends in a bare `\r` no longer emits a stray carriage return in the last field — the no-newline case is now
+consistent with the CRLF case (verified the in-loop path already trims `\r`, incl. quoted fields, so this is
+alignment not a new behavior). Also added a `CancellationToken ct = default` parameter observed via
+`ct.ThrowIfCancellationRequested()` in the read loop, so a long parse over a slow stream can be cancelled
+(matching BatchHelper's token convention); the optional param keeps all existing `Parse()` callers
+(CsvProcessor, tests) source-compatible. **L272** (cleanup — accept-as-is per the audit): the obsolete
+`EnumerableHelper.Diff` stays O(n*m) — it compares via an equality `Func<T,T,bool>` from which no hash key
+can be derived, which is exactly why the O(n) `DiffByKey<T>` (key-selector based) exists as the replacement;
+delegating is not feasible. Documented that on the method and pinned the previously-untested null-input
+behavior. **Tests:** Helpers.Tests +5 (→ 97) — `Parse_TrailingRowEndingInBareCarriageReturn_TrimsIt`,
+`Parse_CancelledToken_ThrowsOperationCanceled`, and `Diff` null-input matrix (both-null → all null;
+null-source → all added; null-destination → all removed). Suite green: Helpers.Tests 97.
 
 **Batch BA — Birko.Health.Redis cluster (CR-L269, CR-L270):** Birko.Health.Redis. Both closed;
 **/code-review clean (no findings)**. **L269** (convention): `RedisHealthCheck.CheckAsync` now calls
