@@ -100,6 +100,63 @@ namespace Birko.MessageQueue.Tests.InMemory
         }
 
         [Fact]
+        public async Task SendTyped_StampsSerializerContentType_WithoutCallerHeaders()
+        {
+            // CR-L284: the typed send always stamps the serializer's content type.
+            using var queue = new InMemoryMessageQueue();
+            await queue.ConnectAsync();
+            var tcs = new TaskCompletionSource<QueueMessage>();
+            await queue.Consumer.SubscribeAsync("orders", async (msg, ct) => { tcs.TrySetResult(msg); await Task.CompletedTask; });
+
+            await queue.Producer.SendAsync("orders", new OrderPayload { OrderId = "X", Total = 1m });
+
+            var received = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            received.Headers.Should().NotBeNull();
+            received.Headers!.ContentType.Should().Be(new JsonMessageSerializer().ContentType);
+        }
+
+        [Fact]
+        public async Task SendTyped_StampsSerializerContentType_OverridingCallerHeaders()
+        {
+            // CR-L284: caller-supplied headers still get the serializer's content type stamped.
+            using var queue = new InMemoryMessageQueue();
+            await queue.ConnectAsync();
+            var tcs = new TaskCompletionSource<QueueMessage>();
+            await queue.Consumer.SubscribeAsync("orders", async (msg, ct) => { tcs.TrySetResult(msg); await Task.CompletedTask; });
+
+            await queue.Producer.SendAsync("orders", new OrderPayload { OrderId = "X", Total = 1m },
+                new MessageHeaders { ContentType = "text/plain" });
+
+            var received = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            received.Headers.Should().NotBeNull();
+            received.Headers!.ContentType.Should().Be(new JsonMessageSerializer().ContentType,
+                "the serializer's content type is stamped even when the caller passes headers");
+        }
+
+        [Fact]
+        public async Task OptionsConstructor_ProducesWorkingQueue()
+        {
+            // CR-L283: the options ctor is wired in and yields a functional queue.
+            using var queue = new InMemoryMessageQueue(new InMemoryMessageQueueOptions { ChannelCapacity = 8 });
+            await queue.ConnectAsync();
+            var tcs = new TaskCompletionSource<QueueMessage>();
+            await queue.Consumer.SubscribeAsync("t", async (msg, ct) => { tcs.TrySetResult(msg); await Task.CompletedTask; });
+
+            await queue.Producer.SendAsync("t", new QueueMessage { Body = "hi" }, CancellationToken.None);
+
+            var received = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            received.Body.Should().Be("hi");
+        }
+
+        [Fact]
+        public void OptionsConstructor_NullOptions_ThrowsArgumentNullException()
+        {
+            var act = () => new InMemoryMessageQueue((InMemoryMessageQueueOptions)null!);
+
+            act.Should().Throw<ArgumentNullException>().WithParameterName("options");
+        }
+
+        [Fact]
         public async Task MultipleSubscribers_AllReceiveMessage()
         {
             using var queue = new InMemoryMessageQueue();
