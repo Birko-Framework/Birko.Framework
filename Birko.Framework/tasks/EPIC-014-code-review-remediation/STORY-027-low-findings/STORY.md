@@ -13,7 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**297 / 418 triaged** as of 2026-07-15. Next open is CR-L298 (Birko.Messaging.Razor cluster, L298…).
+**299 / 418 triaged** as of 2026-07-15. Next open is CR-L300 (Birko.Models cluster, L300…).
+
+**Batch BK — Birko.Messaging.Razor cluster (CR-L298, CR-L299):** Birko.Messaging.Razor (+ new
+`TemplateNotFoundException` in Birko.Messaging). Both closed; **/code-review clean (no findings)**. **L298**
+(other): `RazorTemplateEngine` keyed inline templates by a `ConcurrentDictionary<fullTemplateString,
+guidKey>` that never evicted — a slow leak for a long-lived engine rendering many one-off inline templates.
+Replaced it with a **content-hash cache key** (`"inline_" + SHA256(template)`), so identical content still
+reuses the compiled entry (RazorLight compiles once) without storing every template string; dropped the
+dictionary field + its Dispose clear. **L299** (other, security): the file→inline fallback caught
+`TemplateRenderException`, which also swallowed the **path-traversal rejection** `ResolveFilePath` throws —
+a malicious template Name silently fell back to inline instead of surfacing the rejection. Added a
+`TemplateNotFoundException : TemplateRenderException` subtype (in Birko.Messaging, alongside
+`TemplateRenderException`); the provider throws it only for genuine not-found, and the engine's fallback now
+catches **only** that subtype, so a traversal `TemplateRenderException` propagates. Since the subtype IS-A
+`TemplateRenderException`, all existing `catch` sites are unaffected. **Tests:** Razor.Tests → 39 — provider
+not-found now asserts `TemplateNotFoundException`, traversal asserts `TemplateRenderException` but NOT the
+not-found subtype, engine propagates a traversal Name instead of falling back, and identical inline templates
+render consistently (hash-key path). Downstream Messaging.Tests 52 green (new type is additive). Suites
+green: Razor.Tests 39, Messaging.Tests 52.
 
 **Batch BJ — Birko.Messaging cluster (CR-L295, CR-L296, CR-L297):** Birko.Messaging. All closed;
 **/code-review clean (no findings)**. **L295** (bug): `SmtpEmailSender.SendBatchAsync` delegated each element

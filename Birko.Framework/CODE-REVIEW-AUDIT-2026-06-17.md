@@ -7285,7 +7285,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Inline template cache key dictionary grows unbounded
 - **Path:** `C:\Source\Birko\Framework\Birko.Messaging.Razor\RazorTemplateEngine.cs:22,85`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** _inlineTemplateKeys is keyed by the full template string and grows once per distinct inline template, never evicting (only cleared on Dispose). For a long-lived engine rendering many one-off inline templates (e.g. user-authored content), this is a slow memory leak, and it also pins compiled templates in RazorLight's cache under those keys.
 - **Fix:** If inline templates are expected to be a small fixed set, document it. Otherwise hash the template content to derive a deterministic key (so identical content reuses the same key without storing every string) or bound/evict the dictionary.
 
@@ -7293,7 +7293,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** File-fallback catch swallows traversal-escape error, not just file-not-found
 - **Path:** `C:\Source\Birko\Framework\Birko.Messaging.Razor\RazorTemplateEngine.cs:122-133`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** In RenderAsync(IMessageTemplate,...), the inner catch (TemplateRenderException) is documented as handling 'file not found' to fall through to inline rendering. But ResolveFilePath also throws TemplateRenderException for a path that escapes the base directory, so a malicious/misconfigured template Name silently falls back to inline rather than surfacing the security rejection.
 - **Fix:** Distinguish 'not found' (fall through) from other TemplateRenderException causes (rethrow), e.g. by checking the message or introducing a TemplateNotFoundException subtype, so traversal rejections are not masked.
 
