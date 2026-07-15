@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**284 / 418 triaged** as of 2026-07-15. Next open is CR-L285 (next cluster after Birko.MessageQueue.InMemory).
+**287 / 418 triaged** as of 2026-07-15. Next open is CR-L288 (Birko.MessageQueue.MQTT cluster, L288…).
+
+**Batch BG — Birko.MessageQueue.InMemory cluster #2 (CR-L285, CR-L286, CR-L287):** Birko.MessageQueue.InMemory.
+All closed; **/code-review clean (no findings)**. **L285** (bug, concurrency): `InMemoryChannel`'s dispatch-loop
+lifecycle (start on first subscriber, stop on last) was decided non-atomically over a `ConcurrentDictionary`
+count + a nullable `DispatchCts`, so concurrent `AddSubscriber` calls (or an add racing the last remove) could
+start two loops or leave none running. Added a per-`DestinationState` `SyncRoot` lock and moved the
+TryAdd+start and TryRemove+stop transitions (and the `Dispose` teardown) inside it; start now keys on
+`DispatchCts == null` (a loop runs whenever there's ≥1 subscriber and none running). No behavioral change
+besides the race fix; `Task.Run` in `StartDispatching` never takes the lock, so handlers can't deadlock.
+**L286** (other — document): a destination is either pull-consumed (`ReadAsync`) or push-consumed
+(`AddSubscriber`), never both — the dispatch loop drains the channel and would steal a pull caller's
+messages. Documented on both methods. **L287** (test-gap): added the previously-missing delayed-send,
+use-after-dispose, and handler-failure-isolation coverage. **Tests:** MessageQueue.Tests 82 → 85 —
+`DelayedSend_DeliversAfterDelay` (deferred then delivered), `Producer_SendAfterDispose_ThrowsObjectDisposedException`,
+`Dispatch_OneSubscriberThrows_OthersStillReceive`. Suite green: MessageQueue.Tests 85.
 
 **Batch BF — Birko.MessageQueue.InMemory cluster (CR-L283, CR-L284):** Birko.MessageQueue.InMemory. Both
 closed; **/code-review clean (no findings)**. **L283** (cleanup — "wire it in" option): `InMemoryMessageQueueOptions`

@@ -7181,7 +7181,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Non-atomic check when starting the dispatch loop
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryChannel.cs:75`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** AddSubscriber checks 'if (state.Subscribers.Count == 1 && state.DispatchCts == null)' after a TryAdd, and RemoveSubscriber separately cancels+nulls DispatchCts. These two paths race: two concurrent AddSubscriber calls (or an Add concurrent with the last Remove) can each observe a state that leads to either two dispatch loops being started or no loop running while subscribers exist. ConcurrentDictionary makes the membership thread-safe but not the dispatch-lifecycle decision.
 - **Fix:** Guard the DispatchCts start/stop transition with a per-DestinationState lock (or Interlocked) so 'first subscriber starts dispatch / last subscriber stops dispatch' is atomic with respect to the subscriber count.
 
@@ -7189,7 +7189,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Pull-based ReadAsync and push-based subscribers contend for the same channel
 - **Path:** `C:\Source\Birko\Framework\Birko.MessageQueue.InMemory\InMemoryChannel.cs:106`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** StartDispatching consumes the destination's channel via ReadAllAsync, while ReadAsync (lines 38-62, used for pull-style consumption) also reads the same channel. Once any subscriber is added, the dispatch loop drains all messages, so a caller polling ReadAsync on the same destination will see them stolen by the dispatch loop (and vice versa). This pull/push duality on one channel is a latent footgun, though no current consumer mixes both modes.
 - **Fix:** Document that a destination is either pull-consumed (ReadAsync) or push-consumed (SubscribeAsync), not both; or split the buffered-read path from the subscriber-dispatch path.
 
@@ -7197,7 +7197,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gaps: delayed send, reject/requeue, capacity backpressure, channel disposal
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.MessageQueue.Tests\InMemory\InMemoryMessageQueueTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The 10 existing facts cover connect/disconnect/dispose, producer/consumer presence, send+subscribe, typed send, multi-subscriber fan-out, unsubscribe, and manual-ack tracking. Not covered: message.Delay path (InMemoryProducer.cs:27-35), RejectAsync with requeue true/false (InMemoryConsumer.cs:83), bounded-channel backpressure (FullMode.Wait at capacity), handler-throws isolation (InMemoryChannel.cs:124 swallow), and ObjectDisposedException on use-after-dispose. Note only.
 - **Fix:** Add facts for delayed delivery timing, reject/requeue behavior (will surface the requeue no-op bug above), and use-after-dispose throwing.
 
