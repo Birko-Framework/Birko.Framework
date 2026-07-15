@@ -12,7 +12,8 @@ namespace Birko.Models.Inventory.SQL.Mappings
                 .HasUnique(x => x.Guid);
 
             map.Property(x => x.Title).HasPrecision(256);
-            map.Property(x => x.SortOrder).HasColumnName("SortOrder");
+            // CR-L311: dropped a redundant HasColumnName("SortOrder") — the column name already defaults to
+            // the property name, and SortOrder (an int) needs no facet, so it maps by default.
         }
     }
 }
