@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Birko.Health;
 using Birko.Health.Redis;
@@ -94,6 +95,38 @@ public class RedisHealthCheckTests
         result.Status.Should().Be(HealthStatus.Unhealthy);
         result.Description.Should().Contain("failed");
         result.Exception.Should().BeSameAs(ex);
+    }
+
+    [Fact]
+    public async Task CheckAsync_AlreadyCancelledToken_ThrowsOperationCanceled()
+    {
+        // CR-L269: an already-cancelled token is honored before any work (the factory is never invoked),
+        // and the cancellation propagates instead of being masked as Unhealthy.
+        var factoryInvoked = false;
+        var check = new RedisHealthCheck(() =>
+        {
+            factoryInvoked = true;
+            return new Mock<IConnectionMultiplexer>().Object;
+        });
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = async () => await check.CheckAsync(cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        factoryInvoked.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CheckAsync_FactoryReturnsNull_ReturnsUnhealthyWithClearReason()
+    {
+        // CR-L270: a null-returning factory yields an explicit reason, not an obscure NRE-as-Unhealthy.
+        var check = new RedisHealthCheck(() => null!);
+
+        var result = await check.CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+        result.Description.Should().Contain("factory returned null");
     }
 
     [Fact]
