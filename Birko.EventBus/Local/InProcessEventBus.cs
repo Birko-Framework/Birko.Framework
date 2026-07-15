@@ -214,10 +214,13 @@ namespace Birko.EventBus.Local
         private sealed class InProcessEventSubscription : IEventSubscription
         {
             private readonly Action _unsubscribe;
-            private bool _isActive = true;
+            // CR-L250: int (1 = active, 0 = disposed) so the dispose guard can be an atomic
+            // Interlocked check-and-clear; a plain bool check-then-set let two concurrent Dispose
+            // calls both pass the guard and invoke _unsubscribe twice.
+            private int _isActive = 1;
 
             public Type EventType { get; }
-            public bool IsActive => _isActive;
+            public bool IsActive => Volatile.Read(ref _isActive) == 1;
 
             public InProcessEventSubscription(Type eventType, Action unsubscribe)
             {
@@ -227,12 +230,13 @@ namespace Birko.EventBus.Local
 
             public void Dispose()
             {
-                if (!_isActive)
+                // Only the caller that flips 1 → 0 runs _unsubscribe; a concurrent (or repeat) Dispose
+                // sees the prior value 0 and returns.
+                if (Interlocked.Exchange(ref _isActive, 0) == 0)
                 {
                     return;
                 }
 
-                _isActive = false;
                 _unsubscribe();
             }
         }

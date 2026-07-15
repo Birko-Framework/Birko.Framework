@@ -13,6 +13,12 @@ namespace Birko.EventBus.Routing
     {
         private const string Prefix = "events";
 
+        // CR-L253: compile the kebab-case pattern once instead of re-parsing it (via the static Regex
+        // cache) on every call — GetTopic can run per-publish. Inserts a hyphen before each uppercase
+        // letter that isn't at the start.
+        private static readonly Regex KebabBoundary =
+            new("(?<!^)([A-Z])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
         /// <inheritdoc />
         public string GetTopic(Type eventType)
         {
@@ -40,7 +46,7 @@ namespace Birko.EventBus.Routing
             }
 
             // Insert hyphen before each uppercase letter (except the first)
-            var result = Regex.Replace(input, "(?<!^)([A-Z])", "-$1");
+            var result = KebabBoundary.Replace(input, "-$1");
             return result.ToLowerInvariant();
         }
     }

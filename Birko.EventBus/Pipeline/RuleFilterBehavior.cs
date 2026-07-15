@@ -74,11 +74,25 @@ public class RuleFilterBehavior : IEventPipelineBehavior
         if (context.CorrelationId.HasValue)
             dict["CorrelationId"] = context.CorrelationId.Value;
 
-        // Add event-specific properties via reflection
+        // Add event-specific properties via reflection.
         foreach (var prop in @event.GetType().GetProperties(
             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
         {
-            dict.TryAdd(prop.Name, prop.GetValue(@event));
+            // CR-L252: indexer properties (e.g. this[int]) require index args — GetValue throws
+            // TargetParameterCountException — and any property with a throwing getter would otherwise
+            // fail the whole publish pipeline. Skip indexers and treat a throwing getter as "absent".
+            if (prop.GetIndexParameters().Length > 0)
+            {
+                continue;
+            }
+            try
+            {
+                dict.TryAdd(prop.Name, prop.GetValue(@event));
+            }
+            catch (Exception)
+            {
+                // A property whose getter throws must not break rule-context construction; omit it.
+            }
         }
 
         // Add metadata

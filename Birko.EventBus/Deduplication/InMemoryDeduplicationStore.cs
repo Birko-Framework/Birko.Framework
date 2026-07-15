@@ -15,7 +15,9 @@ namespace Birko.EventBus.Deduplication
         private readonly ConcurrentDictionary<Guid, DateTime> _processed = new();
         private readonly TimeSpan _ttl;
         private readonly IDateTimeProvider _clock;
-        private DateTime _lastCleanup;
+        // CR-L249: stored as ticks so the interval check + claim can be done atomically via Interlocked
+        // (a plain DateTime field was read-modify-written without synchronization).
+        private long _lastCleanupTicks;
         private readonly TimeSpan _cleanupInterval = TimeSpan.FromMinutes(5);
 
         /// <summary>
@@ -27,7 +29,7 @@ namespace Birko.EventBus.Deduplication
         {
             _ttl = ttl ?? TimeSpan.FromHours(1);
             _clock = clock ?? new SystemDateTimeProvider();
-            _lastCleanup = _clock.UtcNow;
+            _lastCleanupTicks = _clock.UtcNow.Ticks;
         }
 
         public Task<bool> ExistsAsync(Guid eventId, CancellationToken cancellationToken = default)
@@ -42,15 +44,32 @@ namespace Birko.EventBus.Deduplication
             return Task.CompletedTask;
         }
 
+        /// <summary>
+        /// CR-L248: race-free reserve via <see cref="ConcurrentDictionary{TKey,TValue}.TryAdd"/> — only
+        /// the first caller for a given event id succeeds, so concurrent duplicates are dropped.
+        /// </summary>
+        public Task<bool> TryMarkProcessedAsync(Guid eventId, CancellationToken cancellationToken = default)
+        {
+            CleanupIfNeeded();
+            return Task.FromResult(_processed.TryAdd(eventId, _clock.UtcNow));
+        }
+
         private void CleanupIfNeeded()
         {
             var now = _clock.UtcNow;
-            if (now - _lastCleanup < _cleanupInterval)
+            var last = Interlocked.Read(ref _lastCleanupTicks);
+            if (now.Ticks - last < _cleanupInterval.Ticks)
             {
                 return;
             }
 
-            _lastCleanup = now;
+            // CR-L249: claim the cleanup slot atomically — only the thread that swaps in `now` runs the
+            // sweep this interval, so concurrent callers can't all pass the check and sweep at once.
+            if (Interlocked.CompareExchange(ref _lastCleanupTicks, now.Ticks, last) != last)
+            {
+                return;
+            }
+
             var cutoff = now - _ttl;
             foreach (var kvp in _processed)
             {
