@@ -6973,7 +6973,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** CleanupAsync runs on every poll iteration (every PollingInterval)
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.Outbox\Hosting/OutboxProcessorHostedService.cs:30-31`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The background loop calls CleanupAsync immediately after every ProcessBatchAsync — i.e. a full retention scan/delete every PollingInterval (default 5s). Cleanup is a retention-window prune (default 7 days) and does not need to run at processing cadence; for a real SQL store this is a needless repeated table scan/delete every few seconds.
 - **Fix:** Run cleanup on a much coarser schedule (e.g. track lastCleanup and only invoke once per hour/day, or use a separate timer), rather than once per poll.
 
@@ -6981,7 +6981,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** OutboxProcessor DI factory resolves IEventBus twice and relies on internal Inner
 - **Path:** `C:\Source\Birko\Framework\Birko.EventBus.Outbox\Extensions/OutboxServiceCollectionExtensions.cs:32-39`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The factory does `sp.GetRequiredService<IEventBus>() as OutboxEventBus` then `outboxBus?.Inner ?? sp.GetRequiredService<IEventBus>()`, resolving the singleton twice in the un-decorated path. More importantly it depends on registration order: AddOutbox must be called after AddOutboxEventBus for Inner to be available, otherwise the processor publishes through the same OutboxEventBus that only writes to the store (publishing would loop back into the outbox rather than the real bus). This ordering coupling is not enforced or documented in the extension XML docs (AddOutboxEventBus says it must run after AddEventBus, but nothing states AddOutbox must run after AddOutboxEventBus).
 - **Fix:** Resolve IEventBus once into a local, and document/guard the required call order (or capture the inner bus at decoration time rather than re-resolving).
 

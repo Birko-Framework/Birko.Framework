@@ -13,7 +13,30 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**258 / 418 triaged** as of 2026-07-15. Next open is CR-L259 (Birko.EventBus.Outbox cluster, L259…).
+**260 / 418 triaged** as of 2026-07-15. Next open is CR-L261 (Birko.Health cluster, L261…).
+
+**Batch AW — Birko.EventBus.Outbox cluster (CR-L259, CR-L260):** Birko.EventBus.Outbox. Both closed;
+**/code-review clean (no findings)**. **L259** (cleanup, efficiency): the background loop ran a full retention
+`CleanupAsync` scan/delete on **every** poll (default PollingInterval 5s), though cleanup is a coarse
+retention prune (default 7 days). Added `OutboxOptions.CleanupInterval` (default 1 hour) and a new
+`OutboxProcessor.CleanupIfDueAsync` that throttles the prune to that cadence (first call always runs; tracks
+`_lastCleanupUtc`); the hosted loop now calls `CleanupIfDueAsync` instead of `CleanupAsync`. The processor
+takes an optional `IDateTimeProvider clock` (defaults to `SystemDateTimeProvider`, reusing the framework's
+established clock pattern — same as `InMemoryDeduplicationStore`) so the cadence is deterministically
+testable; `CleanupAsync`'s cutoff now uses the injected clock too. Cadence state lives in the singleton
+processor, touched only by the single background loop (documented — no synchronization needed). **L260**
+(cleanup — **ordering premise corrected by verification**): the DI factory resolved `IEventBus` **twice** in
+the un-decorated path (`… as OutboxEventBus` then `?? sp.GetRequiredService<IEventBus>()`); resolve it once
+into a local and unwrap via `bus is OutboxEventBus ob ? ob.Inner : bus`. The audit's "AddOutbox must be
+called after AddOutboxEventBus, otherwise the processor loops back into the outbox" concern is **overstated**:
+the processor factory is a **lazy** `sp => …`, so it resolves `IEventBus` at runtime after all registrations
+— `Decorate` has already replaced the descriptor regardless of call order, so the unwrap always finds the
+decorator and publishes through the real inner bus. Documented the true (order-independent) behavior on
+`AddOutbox` via `<remarks>` and fixed its inaccurate summary (it does NOT wrap the bus — that's
+`AddOutboxEventBus`). **Tests:** EventBus.Tests 102 → 108 — `OutboxProcessorCleanupCadenceTests` (first-call
+runs; within-interval skips; after-interval re-runs; 20 polls over 100s clean up once — pinned via
+`TestDateTimeProvider`), `OutboxDiRegistrationTests` (both registration orders → processor publishes through
+the inner bus exactly once, no new pending entry, entry ends Published). Suite green: EventBus.Tests 108.
 
 **Batch AV — Birko.EventBus.MessageQueue cluster (CR-L256, CR-L257, CR-L258):** Birko.EventBus.MessageQueue.
 All closed; **/code-review clean (no findings)**. **L256** (other — "document the requirement" option taken):
