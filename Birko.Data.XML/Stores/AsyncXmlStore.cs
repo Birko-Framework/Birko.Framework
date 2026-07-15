@@ -62,6 +62,15 @@ namespace Birko.Data.XML.Stores
         /// Sets the store settings.
         /// </summary>
         /// <param name="settings">The settings to apply.</param>
+        /// <remarks>
+        /// CR-L245: this async store initializes LAZILY — it records the settings only; the backing
+        /// file and the in-memory <c>_items</c> are created/loaded on the first CRUD call (each
+        /// <c>*CoreAsync</c> awaits <c>InitCoreAsync</c>/<c>EnsureDataLoadedAsync</c>). This differs from
+        /// the sync <see cref="XmlStore{T}"/>, whose SetSettings loads eagerly (its <c>*Core</c> methods
+        /// read <c>_items</c> directly). The divergence is intentional: SetSettings is synchronous, so
+        /// the async store deliberately avoids blocking on file I/O here (no sync-over-async). <c>Path</c>
+        /// is available immediately either way (it derives from the settings, not from load state).
+        /// </remarks>
         public virtual void SetSettings(Settings settings)
         {
             _settings = settings;

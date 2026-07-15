@@ -173,12 +173,18 @@ namespace Birko.Data.XML.Stores
         /// <inheritdoc />
         protected override void CreateCore(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
         {
+            if (data == null) return;
+
             bool save = false;
             foreach (var item in data.Where(x => x != null))
             {
-                item.Guid = Guid.NewGuid();
+                // CR-L244: align with the async bulk sibling (AbstractAsyncXmlStore.CreateCoreAsync) —
+                // preserve a caller-supplied Guid (only assign when null) and use the indexer instead of
+                // _items.Add, which threw ArgumentException on a duplicate key. The sync path previously
+                // discarded caller Guids AND could throw; both stores now upsert by Guid.
+                item.Guid ??= Guid.NewGuid();
                 storeDelegate?.Invoke(item);
-                _items.Add(item.Guid.Value, item);
+                _items[item.Guid.Value] = item;
                 save = true;
             }
             if (save)
