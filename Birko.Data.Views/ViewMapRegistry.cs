@@ -24,7 +24,10 @@ public class ViewMapRegistry
     /// <summary>Scan an assembly for all IViewMapping implementations and register them.</summary>
     public void RegisterFromAssembly(Assembly assembly)
     {
-        var mappingTypes = assembly.GetTypes()
+        // CR-L240: Assembly.GetTypes() throws ReflectionTypeLoadException if any type in the assembly
+        // fails to load (e.g. a missing optional dependency). Fall back to the types that DID load so a
+        // single unloadable type doesn't hard-fail startup discovery.
+        var mappingTypes = GetLoadableTypes(assembly.GetTypes)
             .Where(t => !t.IsAbstract && !t.IsInterface)
             .SelectMany(t => t.GetInterfaces()
                 .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IViewMapping<>))
@@ -46,7 +49,9 @@ public class ViewMapRegistry
             }
 
             var configureMethod = entry.Interface.GetMethod("Configure");
-            configureMethod?.Invoke(instance, new[] { builder });
+            // CR-L242: builder is provably non-null here (checked above); use object[] so the element
+            // type is explicit object, not the inferred object?[] (keeps nullable-strict consumers clean).
+            configureMethod?.Invoke(instance, new object[] { builder });
 
             var buildMethod = builderType.GetMethod("Build");
             if (buildMethod?.Invoke(builder, null) is ViewDefinition definition)
@@ -84,5 +89,23 @@ public class ViewMapRegistry
     public IEnumerable<KeyValuePair<Type, ViewDefinition>> GetAll()
     {
         return _definitions;
+    }
+
+    /// <summary>
+    /// Invokes <paramref name="getTypes"/> (typically <see cref="Assembly.GetTypes"/>) and, on a
+    /// <see cref="ReflectionTypeLoadException"/>, falls back to the types that loaded successfully.
+    /// Exposed as an injectable seam so the fallback can be tested without a purpose-built broken
+    /// assembly (CR-L240 / CR-L243).
+    /// </summary>
+    internal static IEnumerable<Type> GetLoadableTypes(Func<Type[]> getTypes)
+    {
+        try
+        {
+            return getTypes();
+        }
+        catch (ReflectionTypeLoadException ex)
+        {
+            return ex.Types.Where(t => t != null).Select(t => t!);
+        }
     }
 }

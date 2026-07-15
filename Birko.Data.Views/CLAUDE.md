@@ -21,7 +21,10 @@ Unified fluent view builder for defining cross-platform views/projections/aggreg
 
 ### Configuration (follows IModelMapping pattern)
 - **IViewMapping\<TView\>** — Configure(ViewDefinitionBuilder\<TView\>)
-- **ViewMapRegistry** — Register\<T\>(), RegisterFromAssembly(), GetDefinition\<T\>()
+- **ViewMapRegistry** — Register\<T\>(), RegisterFromAssembly(), GetDefinition\<T\>(). `Register<T>` is
+  last-wins for a repeated `TView`; `RegisterFromAssembly` tolerates unloadable types (a
+  `ReflectionTypeLoadException` falls back to the types that loaded — CR-L240) so one bad optional
+  dependency can't hard-fail discovery.
 
 ### Interfaces
 - **IViewStore\<TView\>** — QueryAsync, QueryFirstAsync, CountAsync (read-only)

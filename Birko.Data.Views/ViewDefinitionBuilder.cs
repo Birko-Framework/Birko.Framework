@@ -187,7 +187,7 @@ public class ViewDefinitionBuilder<TView> where TView : class
             }
         }
 
-        ValidateNumericAggregates();
+        ValidateAggregates();
 
         var hints = _hints != null
             ? new Dictionary<string, object>(_hints)
@@ -205,7 +205,7 @@ public class ViewDefinitionBuilder<TView> where TView : class
             hints);
     }
 
-    private void ValidateNumericAggregates()
+    private void ValidateAggregates()
     {
         var numericTypes = new HashSet<Type>
         {
@@ -219,11 +219,8 @@ public class ViewDefinitionBuilder<TView> where TView : class
 
         foreach (var agg in _aggregates)
         {
-            if (agg.Function is AggregateFunction.Count)
-            {
-                continue;
-            }
-
+            // CR-L241: validate the target property EXISTS for every aggregate (Count included) — the
+            // Count short-circuit used to skip this, so a Count was validated inconsistently vs Min/Max.
             var viewProp = typeof(TView).GetProperty(agg.ViewProperty);
             if (viewProp == null)
             {
@@ -231,6 +228,7 @@ public class ViewDefinitionBuilder<TView> where TView : class
                     $"View property '{agg.ViewProperty}' not found on '{typeof(TView).Name}'.");
             }
 
+            // The numeric-type constraint applies only to Sum/Avg (Count/Min/Max may target any type).
             if (agg.Function is AggregateFunction.Sum or AggregateFunction.Avg
                 && !numericTypes.Contains(viewProp.PropertyType))
             {
