@@ -7493,7 +7493,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Relationship/FK columns have no indexes
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Users.SQL\Mappings\UserRoleMapping.cs:8-13`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** UserRole (UserGuid, RoleGuid, TenantGuid), UserTenant (UserGuid, TenantGuid), RolePermission (RoleGuid), UserLogin (UserGuid) and UserProfile (UserGuid besides its unique) are all foreign-key lookup columns that will be filtered/joined on, but none are mapped with HasIndex. The FieldBuilder.HasIndex API exists for exactly this. Membership lookups (a user's roles, a role's permissions) will table-scan. Advisory, not a correctness bug.
 - **Fix:** Add HasIndex on the FK columns of the junction tables (UserRole.UserGuid, UserRole.RoleGuid, UserTenant.UserGuid, RolePermission.RoleGuid, UserLogin.UserGuid).
 
@@ -7501,7 +7501,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests sibling for the mappings
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Users.SQL (no .Tests sibling exists)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** There is no Birko.Models.Users.SQL.Tests project. The generic ModelMap/FieldBuilder/Registry mechanics are covered in Birko.Models.SQL.Tests, but the 8 concrete mappings here are unverified: a typo'd property name, wrong table name, or wrong precision would not be caught (the property expressions are checked at compile time, but precision/unique/table values and the intended uniqueness semantics are not). A lightweight test that runs each Configure against a ModelMap and asserts table name, primary/unique flags, and key precisions would lock the contract.
 - **Fix:** Add Birko.Models.Users.SQL.Tests with one xUnit+FluentAssertions test per mapping asserting TableName, the Guid primary/unique, UserProfile's UserGuid unique, and at least one HasPrecision value.
 

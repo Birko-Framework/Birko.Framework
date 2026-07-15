@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**323 / 418 triaged** as of 2026-07-15. Next open is CR-L324 (Birko.Models.Users.SQL cluster, L324…).
+**325 / 418 triaged** as of 2026-07-15. Next open is CR-L326 (Birko.Random cluster, L326…).
+
+**Batch BZ — Birko.Models.Users.SQL cluster (CR-L324, CR-L325):** Birko.Models.Users.SQL. Both closed;
+**/code-review clean (no findings)**. **L324** (other): the junction/FK lookup columns had no indexes
+(membership lookups would table-scan). Added `HasIndex` on `UserRole.UserGuid`/`RoleGuid`,
+`UserTenant.UserGuid`, `RolePermission.RoleGuid`, `UserLogin.UserGuid` (`IX_{Table}_{Column}` naming). Index
+metadata is advisory (not emitted by `ApplyToDatabase`, consumed by migrations — same as the existing
+UserLogin composite index); UserProfile.UserGuid is already unique (indexed) so left as-is. **L325**
+(test-gap — **project already existed**): the `Birko.Models.Users.SQL.Tests` project existed with the
+CR-M229 UserLogin composite-index tests; added `UserMappingTests` covering all 8 mappings' table names, Guid
+primary/unique, UserProfile.UserGuid uniqueness, and the L324 FK indexes. **Tests:** Users.SQL.Tests 3 → 9.
+Suite green: Users.SQL.Tests 9.
 
 **Batch BY — Birko.Models.Users (CR-L323):** Birko.Models.Users. Closed;
 **/code-review clean (no findings)**. **L323** (cleanup): all 8 filters duplicated an identical
