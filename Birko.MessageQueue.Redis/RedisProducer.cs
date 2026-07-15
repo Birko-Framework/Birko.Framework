@@ -12,14 +12,23 @@ namespace Birko.MessageQueue.Redis
     /// </summary>
     public class RedisProducer : IMessageProducer
     {
-        private readonly RedisConnectionManager _connectionManager;
+        private readonly Func<IDatabase> _databaseFactory;
         private readonly IMessageSerializer _serializer;
         private readonly RedisStreamSettings _settings;
         private bool _disposed;
 
         internal RedisProducer(RedisConnectionManager connectionManager, IMessageSerializer serializer, RedisStreamSettings settings)
         {
-            _connectionManager = connectionManager ?? throw new ArgumentNullException(nameof(connectionManager));
+            if (connectionManager == null) throw new ArgumentNullException(nameof(connectionManager));
+            _databaseFactory = connectionManager.GetDatabase;
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+            _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        }
+
+        /// <summary>Test seam: drives XADD over a supplied database factory (mirrors the consumer's seam).</summary>
+        internal RedisProducer(Func<IDatabase> databaseFactory, IMessageSerializer serializer, RedisStreamSettings settings)
+        {
+            _databaseFactory = databaseFactory ?? throw new ArgumentNullException(nameof(databaseFactory));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         }
@@ -34,19 +43,18 @@ namespace Birko.MessageQueue.Redis
                 throw new ArgumentException("Destination cannot be null or empty.", nameof(destination));
             }
 
-            var db = _connectionManager.GetDatabase();
+            var db = _databaseFactory();
             var streamKey = _settings.GetStreamKey(destination);
 
             var serializedMessage = _serializer.Serialize(message);
 
+            // CR-L293: write only the full serialized 'message' (which already contains id/body/payload_type/
+            // headers/created_at/priority) plus the standalone 'ttl_ms' the consumer reads for its expiry
+            // check. The old per-field entries duplicated the whole message and serialized Headers twice;
+            // the consumer prefers 'message' and only uses per-field parsing as a fallback for entries
+            // written by other producers, which it retains.
             var entries = new NameValueEntry[]
             {
-                new("id", message.Id.ToString()),
-                new("body", message.Body),
-                new("payload_type", message.PayloadType ?? string.Empty),
-                new("headers", _serializer.Serialize(message.Headers)),
-                new("created_at", message.CreatedAt.ToUnixTimeMilliseconds().ToString()),
-                new("priority", message.Priority.ToString()),
                 new("message", serializedMessage)
             };
 
@@ -75,13 +83,13 @@ namespace Birko.MessageQueue.Redis
             {
                 Body = body,
                 PayloadType = typeof(T).AssemblyQualifiedName,
-                Headers = headers ?? new MessageHeaders { ContentType = _serializer.ContentType }
+                Headers = headers ?? new MessageHeaders()
             };
 
-            if (headers != null)
-            {
-                message.Headers.ContentType = _serializer.ContentType;
-            }
+            // CR-L294: always stamp the serializer's content type — the typed body is serialized by
+            // _serializer, so ContentType must reflect that (one assignment covers both the new-headers and
+            // caller-supplied-headers cases). Matches the InMemory producer (CR-L284).
+            message.Headers.ContentType = _serializer.ContentType;
 
             await SendAsync(destination, message, cancellationToken).ConfigureAwait(false);
         }

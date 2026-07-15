@@ -27,9 +27,15 @@ namespace Birko.MessageQueue.Redis
         public int ReadCount { get; set; } = 10;
 
         /// <summary>
-        /// Gets or sets the block timeout for XREAD/XREADGROUP.
-        /// Null means non-blocking. Default is 5 seconds.
+        /// Empty-poll back-off interval in milliseconds. Null falls back to 1000ms.
         /// </summary>
+        /// <remarks>
+        /// CR-L292: this is NOT a server-side blocking read. StackExchange.Redis's
+        /// <c>StreamReadAsync</c>/<c>StreamReadGroupAsync</c> don't expose the XREAD <c>BLOCK</c> option, so
+        /// the consumer does a non-blocking count-limited read and, when the stream is empty, waits this long
+        /// via <c>Task.Delay</c> before polling again. Delivery latency for a newly-arrived message is
+        /// therefore bounded below by this interval; lower it for lower latency at the cost of more polls.
+        /// </remarks>
         public int? BlockMilliseconds { get; set; } = 5000;
 
         /// <summary>

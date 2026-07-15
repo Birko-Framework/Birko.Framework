@@ -17,9 +17,9 @@ Redis Streams implementation of Birko.MessageQueue interfaces. Provides persiste
 ### RedisProducer.cs
 - Implements `IMessageProducer`
 - Uses `XADD` to append messages to streams
-- Stores message fields: id, body, payload_type, headers, created_at, priority, message (full serialized)
+- Stores a single `message` field (full serialized QueueMessage) plus `ttl_ms` when a TTL is set (CR-L293). The consumer reads `message` first and falls back to per-field parsing (id/body/payload_type/headers/created_at/priority) only for entries written by other producers
 - Supports `MAXLEN ~` approximate trimming
-- TTL stored as field for consumer-side expiry check
+- TTL stored as the `ttl_ms` field for consumer-side expiry check
 
 ### RedisConsumer.cs
 - Implements `IMessageConsumer`
@@ -39,7 +39,7 @@ Redis Streams implementation of Birko.MessageQueue interfaces. Provides persiste
 - Extends `RedisSettings` with stream-specific options
 - `ConsumerGroup`, `ConsumerName` — consumer group configuration
 - `ReadCount` — messages per XREAD call (default 10)
-- `BlockMilliseconds` — poll interval (default 5000ms)
+- `BlockMilliseconds` — empty-poll back-off interval, NOT a server-side XREAD BLOCK (default 5000ms; CR-L292)
 - `MaxStreamLength` — MAXLEN trimming threshold
 - `AutoCreateConsumerGroup` — auto XGROUP CREATE (default true)
 - `StreamPrefix` — key prefix for stream keys (default "birko:mq:stream")
