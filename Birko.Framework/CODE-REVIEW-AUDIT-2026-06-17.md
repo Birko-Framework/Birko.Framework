@@ -6611,26 +6611,29 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 ### CR-L217 · ⚪ low · Birko.Data.Sync.RavenDB
 - **Title:** Sync store methods named *Async but are synchronous and return void/value
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.RavenDB\Stores\RavenSyncKnowledgeStore.cs:39,63,76,94,104,131,143`
-- **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Category:** convention · **Verification:** verified — fixed (STORY-027 Batch AI)
+- **Status:** done
 - **Detail:** GetKnowledgeAsync returns Dictionary (not Task), UpdateKnowledgeAsync/DeleteKnowledgeAsync/SetLastSyncTimeAsync return void, GetLastSyncTimeAsync returns DateTime?. The Async suffix is misleading on a synchronous RavenDBStore-based class and the CancellationToken parameters are accepted but never observed.
 - **Fix:** Drop the Async suffix on the sync store (or move these to the async store), and either honor or remove the unused CancellationToken parameters.
+- **Resolution (Batch AI):** renamed the seven sync-store methods to their true synchronous names (`GetKnowledge`, `GetKnowledgeItem`, `UpdateKnowledge`, `UpdateKnowledgeItem`, `DeleteKnowledge`, `GetLastSyncTime`, `SetLastSyncTime`) — mirroring the CosmosDB sync sibling; no external callers (framework + tests grep-clean). The CancellationToken is now honored via `ThrowIfCancellationRequested()` at each session-opening entry point.
 
 ### CR-L218 · ⚪ low · Birko.Data.Sync.RavenDB
 - **Title:** Dead code: ConvertToRavenItemAsync, GenerateDocumentId, CollectionName never referenced
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.RavenDB\Stores\AsyncRavenSyncKnowledgeStore.cs:197 and RavenSyncKnowledgeItem.cs:66,72`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AI)
+- **Status:** done
 - **Detail:** ConvertToRavenItemAsync (line 197) just wraps the sync version in Task.FromResult and is never called. RavenSyncKnowledgeItem.CollectionName and GenerateDocumentId are defined but unused anywhere (the latter is the fix for the duplicate-doc bug above). Several usings are also unused (System.Linq.Expressions, Birko.Configuration, Birko.Data.Stores in both files; Birko.Data.Repositories/Birko.Data.Models in the sync store).
 - **Fix:** Remove ConvertToRavenItemAsync and unused usings; wire GenerateDocumentId into the store path (then it stops being dead).
+- **Resolution (Batch AI):** removed the dead `ConvertToRavenItemAsync`, the `CollectionName` const, and `GenerateDocumentId` (the latter two are truly dead — the duplicate-doc bug was already fixed differently via `DeterministicGuid`/CR-H103, so wiring GenerateDocumentId in is moot). Pared both store files' usings to only those referenced (dropped `System.Linq.Expressions`, `Birko.Configuration`, `Birko.Data.Stores`, `Birko.Data.Sync.Stores`, `Birko.Data.Repositories`, `Birko.Data.Models`, and the unused `Raven.Client.Documents.Session`).
 
 ### CR-L219 · ⚪ low · Birko.Data.Sync.RavenDB
 - **Title:** InternalRecordId on the model is unmapped and unused
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.Sync.RavenDB\Models\RavenSyncKnowledgeItem.cs:15`
-- **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Category:** cleanup · **Verification:** verified — fixed (STORY-027 Batch AI)
+- **Status:** done
 - **Detail:** InternalRecordId ('for database compatibility') is never set, read, or used by either store. It adds a meaningless int column to every RavenDB document.
 - **Fix:** Remove it unless a concrete consumer needs it.
+- **Resolution (Batch AI):** removed. RavenDB (Newtonsoft-based) ignores unmapped JSON properties on load, so an existing document carrying `internalRecordId` deserializes cleanly without a guard.
 
 ### CR-L220 · ⚪ low · Birko.Data.Sync.Sql
 - **Title:** SetLastSyncTime silently no-ops (no upsert) when no item exists for the scope

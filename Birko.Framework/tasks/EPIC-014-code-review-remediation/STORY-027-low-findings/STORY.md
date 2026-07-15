@@ -13,7 +13,29 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**216 / 418 triaged** as of 2026-07-14. Next open is CR-L217 (Birko.Data.Sync.RavenDB).
+**219 / 418 triaged** as of 2026-07-15. Next open is CR-L220 (Birko.Data.Sync.Sql).
+
+**Batch AI — Data.Sync.RavenDB cluster (CR-L217, CR-L218, CR-L219):** Birko.Data.Sync.RavenDB. All closed;
+**/code-review clean (no findings)**. **L217** (convention): the synchronous `RavenSyncKnowledgeStore`
+returned `Dictionary`/`void`/`DateTime?` from seven methods misleadingly named `*Async`. Renamed to their
+true synchronous names (`GetKnowledge`, `GetKnowledgeItem`, `UpdateKnowledge`, `UpdateKnowledgeItem`,
+`DeleteKnowledge`, `GetLastSyncTime`, `SetLastSyncTime`) — mirroring the CosmosDB sync sibling; no external
+callers (framework + tests grep-clean, only internal delegation). The accepted `CancellationToken` is now
+honored via `ThrowIfCancellationRequested()` at each session-opening entry point (was accepted-but-ignored).
+The async store keeps its (correct) `*Async` names. **L218** (cleanup): removed the dead private
+`ConvertToRavenItemAsync` (only wrapped the sync `ConvertToRavenItem` in `Task.FromResult`, never called),
+the dead `RavenSyncKnowledgeItem.CollectionName` const, and the dead `GenerateDocumentId` helper — the latter
+two are genuinely superseded, since the duplicate-document bug was fixed via `DeterministicGuid` (CR-H103),
+not `GenerateDocumentId`; RavenDB resolves the collection from the type name (no CollectionName convention).
+Pared both store files' usings to only those referenced (dropped `System.Linq.Expressions`,
+`Birko.Configuration`, `Birko.Data.Stores`, `Birko.Data.Sync.Stores`, `Birko.Data.Repositories`,
+`Birko.Data.Models`, `Raven.Client.Documents.Session`; kept `Birko.Data.Tenant.Models` — `ITenant` is used).
+**L219** (cleanup): removed the dead `int InternalRecordId` field ("for database compatibility") — never
+set/read; RavenDB ignores the unmapped `internalRecordId` on existing docs, so no guard is needed (unlike
+Batch AH's Mongo removal). **Tests:** Sync.RavenDB.Tests 8 → 9 (dropped `GenerateDocumentId_UsesEntityAndScope`
+for the removed helper; added `Model_HasNoDeadMembers` — reflection-asserts all three model members gone —
+and `SyncStore_MethodsDropTheMisleadingAsyncSuffix` — the sync store exposes the plain names, no `*Async`).
+The `ConvertToRavenItem`/`DeterministicGuid` upsert tests stay green. Suite green: Sync.RavenDB.Tests 9.
 
 **Batch AH — Data.Sync.MongoDb cluster (CR-L215, CR-L216):** Birko.Data.Sync.MongoDb. Both closed;
 **/code-review clean (no findings)**. **L215** (cleanup): removed the decorative
