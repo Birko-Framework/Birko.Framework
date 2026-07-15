@@ -13,7 +13,32 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**243 / 418 triaged** as of 2026-07-15. Next open is CR-L244 (Birko.Data.XML cluster, L244…).
+**247 / 418 triaged** as of 2026-07-15. Next open is CR-L248 (Birko.EventBus cluster, L248…).
+
+**Batch AS — Data.XML + XML.ViewModel cluster (CR-L244, CR-L245, CR-L246, CR-L247):** Birko.Data.XML,
+Birko.Data.XML.ViewModel (+ Birko.Data.JSON.ViewModel same-defect sweep). All closed;
+**/code-review clean (no correctness bugs)**. **L244** (bug): aligned the sync single-file bulk
+`AbstractXmlStore.CreateCore(IEnumerable)` with the async sibling — `item.Guid ??= Guid.NewGuid()`
+(preserve caller Guid, was discarded), `_items[…] = item` (indexer upsert, was `_items.Add` which threw
+`ArgumentException` on a duplicate key), + a `data == null` guard for parity. Cross-file trace confirmed
+scope: `XmlBatchStore.CreateCore` already used preserve+indexer, `XmlSeparateStore.CreateCore` delegates
+per-item to the single-item path (preserve + `.Add`, the framework's single-item convention) — only the
+single-file base store was defective. **L245** (convention): documented the deliberate sync-eager vs
+async-lazy `SetSettings` divergence (accept-as-is) — the sync `*Core` methods read `_items` directly (no
+lazy data-load hook) so it must load eagerly; the async `*CoreAsync` all await `EnsureDataLoadedAsync`, so
+SetSettings defers (a sync SetSettings shouldn't block on I/O). Unifying would mean reworking the whole
+sync CRUD path to lazy — disproportionate for a low finding; both `SetSettings` now carry a `<remarks>`.
+**L246** (convention): replaced the misleading `base(null)` + conditional-assign + "creates default"
+comment with a private static `ValidateStore` helper. Async repos use `base(ValidateStore(store))`
+(base param is `IAsyncStore`, matches); sync repos keep `base(null)` then `Store = ValidateStore(store)`
+— required because the sync bulk base ctor takes `IBulkStore<TModel>?` while the ctor accepts any `IStore`
+(incl. a wrapper), which can't be passed to that base. **Swept the JSON.ViewModel sibling** the audit
+explicitly flagged (identical defect). **L247** (test-gap): created **Birko.Data.XML.ViewModel.Tests**
+(git-init'd + registered in `.slnx`/`.code-workspace`; mirrors JSON.ViewModel.Tests from CR-L133) —
+`XmlRepositoryUnwrapTests` covers accept-raw / resolve-through-wrapper / reject-foreign / accept-null for
+sync + async. **Tests:** XML.Tests 16 → 18 (`XmlBulkCreateGuidTests`: caller-Guid preserved on round-trip,
+duplicate-Guid upsert doesn't throw), XML.ViewModel.Tests 7 (new), JSON.ViewModel.Tests 5 (sweep regression,
+unchanged). Suites green: XML.Tests 18, XML.ViewModel.Tests 7, JSON.ViewModel.Tests 5.
 
 **Batch AR — Data.Views cluster (CR-L240, CR-L241, CR-L242, CR-L243):** Birko.Data.Views. All closed;
 **/code-review clean (no correctness bugs; 1 low docs note + 1 out-of-cluster analogue, both handled)**.

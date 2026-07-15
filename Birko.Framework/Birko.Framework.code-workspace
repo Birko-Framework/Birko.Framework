@@ -1017,6 +1017,10 @@
 			"path": "../../Framework.Tests/Birko.Data.XML.Tests"
 		},
 		{
+			"name": "Tests / Birko.Data.XML.ViewModel.Tests",
+			"path": "../../Framework.Tests/Birko.Data.XML.ViewModel.Tests"
+		},
+		{
 			"name": "Tests / Birko.EventBus.Tests",
 			"path": "../../Framework.Tests/Birko.EventBus.Tests"
 		},

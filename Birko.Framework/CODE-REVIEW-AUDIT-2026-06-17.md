@@ -6843,33 +6843,37 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Sync bulk CreateCore uses Dictionary.Add — throws on Guid collision
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.XML\Stores\AbstractXmlStore.cs:181`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Sync bulk CreateCore assigns item.Guid = Guid.NewGuid() unconditionally (overwriting any caller-supplied Guid) and uses `_items.Add` which throws ArgumentException on a duplicate key. The async bulk CreateCoreAsync (AbstractAsyncXmlStore.cs:240-245) is inconsistent: it preserves an existing Guid (`if (!item.Guid.HasValue)`) and uses the indexer (`_items[...] = item`, no throw). The sync version both discards caller Guids and can throw; the two should behave the same.
 - **Fix:** Align sync bulk CreateCore with the async version: only assign a Guid when null, and use the indexer (or document the divergence).
+- **Resolution (Batch AS):** Aligned `AbstractXmlStore.CreateCore(IEnumerable)` with the async sibling — `item.Guid ??= Guid.NewGuid()` (preserve caller Guid), `_items[item.Guid.Value] = item` (indexer upsert, no throw), plus a `if (data == null) return;` guard for parity. Cross-file trace confirmed the fix is complete: `XmlBatchStore.CreateCore` already used preserve+indexer, and `XmlSeparateStore.CreateCore` delegates per-item to the single-item path (preserve + `.Add`, matching the framework's single-item convention) — so only the single-file base store carried the defect. Pinned by `XmlBulkCreateGuidTests` (caller Guid preserved on round-trip; duplicate-Guid re-create upserts instead of throwing).
 
 ### CR-L245 · ⚪ low · Birko.Data.XML
 - **Title:** Async store SetSettings does not initialize, unlike sync — inconsistent and not via base.SetSettings
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.XML\Stores\AsyncXmlStore.cs:65`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Sync XmlStore.SetSettings calls Init() + LoadData() eagerly (XmlStore.cs:68-73); AsyncXmlStore.SetSettings only stores _settings and relies on lazy InitCoreAsync/EnsureDataLoadedAsync. The two stores have different post-SetSettings invariants (sync Path/items are ready immediately, async are not). This is a behavioral inconsistency between the sync and async siblings rather than a hard bug, but it can surprise callers. The framework convention notes RemoteSettings should flow via base.SetSettings(); these stores take a Settings (not RemoteSettings) and store it directly, which is acceptable for a file store, but the sync/async asymmetry is worth flagging.
 - **Fix:** Decide on one initialization model (lazy is fine) and make sync and async match.
+- **Resolution (Batch AS):** Documented the divergence as deliberate (accept-as-is) on both `SetSettings` methods rather than change behavior. The asymmetry is architectural, not incidental: the sync store's `*Core` methods read `_items` directly and it has no lazy data-load hook, so it MUST load eagerly in SetSettings; every async `*CoreAsync` awaits `EnsureDataLoadedAsync`, so it can defer (and a synchronous SetSettings should not block on file I/O — no sync-over-async). Unifying would require reworking the whole sync CRUD path to lazy-load — disproportionate for a low finding. Each `SetSettings` now carries a `<remarks>` stating its init model and why it differs from the sibling.
 
 ### CR-L246 · ⚪ low · Birko.Data.XML.ViewModel
 - **Title:** Misleading XML doc comment: base constructor does not create a default store
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.XML.ViewModel\Repositories/AsyncXmlRepository.cs:43 (and XmlRepository.cs:45)`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Both constructors pass base(null) and then conditionally set Store = store, with the comment "base constructor handles null by creating default". The base AbstractAsyncViewModelRepository / AbstractViewModelRepository constructor just does Store = store; it never creates a default store. So the comment is inaccurate and the base(null)+conditional-assign dance is functionally equivalent to validating then calling base(store) directly. Not a bug (no leak — no default object is constructed), but the comment will mislead a future reader. This is copied verbatim from the JSON.ViewModel sibling, so the same stale comment exists there too.
 - **Fix:** Either pass base(store) after the IsStoreOfType guard (the validation can run before the base call via a static helper, or just keep the guard and assign in body) and drop the misleading comment, or correct the comment to "base assigns Store directly; null leaves Store unset".
+- **Resolution (Batch AS):** Introduced a private static `ValidateStore` helper in both XML.ViewModel repos (and swept the JSON.ViewModel sibling the audit flagged) and dropped the misleading comment. The **async** repos pass `base(ValidateStore(store))` — the audit's "validate-before-base" via static helper (the base param is `IAsyncStore`, matching the ctor). The **sync** repos keep `base(null)` then `Store = ValidateStore(store)`: base(null) is *required* there because the sync bulk base ctor takes `IBulkStore<TModel>?` while the ctor accepts any `IStore` (incl. a tenant wrapper), so a wrapper can't be passed to the base and must be assigned through the IStore-typed `Store` property. Comments now state this accurately. Pinned by the new `XmlRepositoryUnwrapTests` (CR-L247).
 
 ### CR-L247 · ⚪ low · Birko.Data.XML.ViewModel
 - **Title:** No .Tests sibling — store-type validation guard is untested
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.XML.ViewModel\Birko.Data.XML.ViewModel (whole project)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no Birko.Data.XML.ViewModel.Tests sibling. The only behavior these classes add over the base is the constructor guard: throw ArgumentException when the passed store is not an XmlStore<T>/AsyncXmlStore<T> (or a wrapper around one), and accept it (including tenant-wrapped) when it is. Per the framework testing convention (every new public functionality must have tests), the accept-valid / accept-wrapped / reject-wrong-type / accept-null paths have no coverage. Note only — the logic is trivial and delegates to the well-tested StoreExtensions.IsStoreOfType.
 - **Fix:** Add a small xUnit + FluentAssertions test project asserting: valid AsyncXmlStore/XmlStore is accepted, a tenant-wrapped XML store is accepted, a non-XML store throws ArgumentException, and null is accepted (Store stays unset).
+- **Resolution (Batch AS):** Created **Birko.Data.XML.ViewModel.Tests** (git-init'd + registered in `.slnx` and `.code-workspace`; mirrors the JSON.ViewModel.Tests sibling from CR-L133). `XmlRepositoryUnwrapTests` (7 tests) covers all four paths for both sync + async repos: raw store accepted + resolved via the unwrap property, resolved through a wrapper (where a plain cast is null), foreign store → ArgumentException, and null → Store stays unset. Added the project CLAUDE.md. Suite green: 7.
 
 ### CR-L248 · ⚪ low · Birko.EventBus
 - **Title:** Deduplication check-then-mark is racy and skips marking on handler failure
