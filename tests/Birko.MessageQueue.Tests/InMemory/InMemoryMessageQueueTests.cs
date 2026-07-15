@@ -157,6 +157,54 @@ namespace Birko.MessageQueue.Tests.InMemory
         }
 
         [Fact]
+        public async Task DelayedSend_DeliversAfterDelay()
+        {
+            // CR-L287: the message.Delay path was untested.
+            using var queue = new InMemoryMessageQueue();
+            await queue.ConnectAsync();
+            var tcs = new TaskCompletionSource<QueueMessage>();
+            await queue.Consumer.SubscribeAsync("t", async (msg, ct) => { tcs.TrySetResult(msg); await Task.CompletedTask; });
+
+            await queue.Producer.SendAsync("t",
+                new QueueMessage { Body = "later", Delay = TimeSpan.FromMilliseconds(200) }, CancellationToken.None);
+
+            tcs.Task.IsCompleted.Should().BeFalse("delivery is deferred until the delay elapses");
+
+            var received = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            received.Body.Should().Be("later");
+        }
+
+        [Fact]
+        public async Task Producer_SendAfterDispose_ThrowsObjectDisposedException()
+        {
+            // CR-L287: use-after-dispose was untested (queue.Dispose disposes the producer).
+            var queue = new InMemoryMessageQueue();
+            await queue.ConnectAsync();
+            queue.Dispose();
+
+            var act = async () => await queue.Producer.SendAsync("t", new QueueMessage { Body = "x" }, CancellationToken.None);
+
+            await act.Should().ThrowAsync<ObjectDisposedException>();
+        }
+
+        [Fact]
+        public async Task Dispatch_OneSubscriberThrows_OthersStillReceive()
+        {
+            // CR-L287: handler-failure isolation in the dispatch loop was untested.
+            using var queue = new InMemoryMessageQueue();
+            await queue.ConnectAsync();
+            var tcs = new TaskCompletionSource<QueueMessage>();
+
+            await queue.Consumer.SubscribeAsync("t", (msg, ct) => throw new InvalidOperationException("boom"));
+            await queue.Consumer.SubscribeAsync("t", async (msg, ct) => { tcs.TrySetResult(msg); await Task.CompletedTask; });
+
+            await queue.Producer.SendAsync("t", new QueueMessage { Body = "ok" }, CancellationToken.None);
+
+            var received = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            received.Body.Should().Be("ok");
+        }
+
+        [Fact]
         public async Task MultipleSubscribers_AllReceiveMessage()
         {
             using var queue = new InMemoryMessageQueue();
