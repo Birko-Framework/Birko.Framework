@@ -45,6 +45,8 @@ public sealed class MongoDbHealthCheck : IHealthCheck
         {
             using var client = new System.Net.Sockets.TcpClient();
             await client.ConnectAsync(host, port, ct).ConfigureAwait(false);
+            // CR-L266: after a successful ConnectAsync, Connected is essentially always true (a failed
+            // connect throws); this reflects reachability. The custom-ping ctor can return false meaningfully.
             return client.Connected;
         };
     }

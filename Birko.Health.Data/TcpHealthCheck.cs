@@ -45,6 +45,9 @@ public sealed class TcpHealthCheck : IHealthCheck
 
             using var client = new TcpClient();
             await client.ConnectAsync(_host, _port, ct).ConfigureAwait(false);
+            // CR-L266: after ConnectAsync returns without throwing, Connected is essentially always true
+            // (a failed connect would have thrown into the catch below). The !isConnected branch therefore
+            // only guards the rare case where the socket drops between the successful connect and this read.
             var isConnected = client.Connected;
 
             sw.Stop();

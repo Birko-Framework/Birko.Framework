@@ -62,6 +62,10 @@ public sealed class MqttHealthCheck : IHealthCheck
             {
                 using var client = new TcpClient();
                 await client.ConnectAsync(_host, _port, ct).ConfigureAwait(false);
+                // CR-L266: after a successful ConnectAsync, Connected is essentially always true (a failed
+                // connect throws into the catch). In the TCP path the !isConnected branch only guards the
+                // rare post-connect drop; in the custom-ping path below it is meaningful (a ping may
+                // legitimately return false).
                 isConnected = client.Connected;
             }
 
