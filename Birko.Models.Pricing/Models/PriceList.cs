@@ -18,6 +18,13 @@ namespace Birko.Models.Pricing
         public bool IsActive { get; set; } = true;
         public ICollection<PriceListEntry> Entries { get; set; } = new List<PriceListEntry>();
 
+        /// <summary>
+        /// Hydrates the header fields from the view model. CR-L312: <see cref="Entries"/> is intentionally
+        /// <b>not</b> mapped — the view model is header-only (it carries no Entries collection by design),
+        /// so entries are loaded and persisted separately via the PriceListEntry store. A VM→model load
+        /// therefore leaves <see cref="Entries"/> as its default empty collection rather than round-tripping
+        /// children (same convention as InventoryDocument.Lines / CR-M221).
+        /// </summary>
         public virtual void LoadFrom(ViewModels.PriceList data)
         {
             base.LoadFrom(data);

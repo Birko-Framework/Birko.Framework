@@ -20,6 +20,14 @@ Clean pricing domain models for the Birko Framework. Consolidates pricing from W
 ### ViewModels (`Birko.Models.Pricing.ViewModels`)
 Parallel ViewModels with INotifyPropertyChanged for all models.
 
+### Filters (`Birko.Models.Pricing.Filters`)
+Filter DTOs ship **only** for the reference/lookup entities commonly filtered in UIs — `Currency`,
+`PriceGroup`, `Tax`. The transactional entities (`Discount`, `PriceList`, `PriceListEntry`, `CurrencyRate`)
+are queried through their stores / parent relations and deliberately have no filter DTO (CR-L313). Add one
+here only when a concrete query surface needs it. Note also (CR-L312): `PriceList` VM mapping is header-only
+— `PriceList.Entries` is not round-tripped through the view model (entries are managed via the
+PriceListEntry store).
+
 ## File Structure
 ```
 Models/
