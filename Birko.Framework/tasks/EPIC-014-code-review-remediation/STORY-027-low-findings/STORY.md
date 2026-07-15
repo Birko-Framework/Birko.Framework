@@ -13,7 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**309 / 418 triaged** as of 2026-07-15. Next open is CR-L310 (Birko.Models.Inventory.SQL cluster, L310…).
+**311 / 418 triaged** as of 2026-07-15. Next open is CR-L312 (Birko.Models.Pricing cluster, L312…).
+
+**Batch BR — Birko.Models.Inventory.SQL cluster (CR-L310, CR-L311):** Birko.Models.Inventory.SQL. Both
+closed; **/code-review clean (no findings)**. **L310** (test-gap): created a new
+**Birko.Models.Inventory.SQL.Tests** project (git-init'd + registered in `.slnx`/`.code-workspace`;
+mirrors Customers.SQL.Tests) — `InventoryMappingTests` runs each `Configure()` against a fresh `ModelMap<T>`
+and asserts the three table names (Items/Repositories/WareHouseDocumentItems), Guid primary+unique, the
+InventoryDocumentLine decimal columns' precision 22/scale 6, and StockItem's bounded string columns.
+**L311** (cleanup): dropped the redundant `map.Property(x => x.SortOrder).HasColumnName("SortOrder")` in
+StorageLocationMapping — the column name already defaults to the property name and the int needs no facet,
+so SortOrder maps by default (framework auto-discovers unmapped properties; explicit `Property()` only adds
+facets — StockItemMapping already relies on this). **Tests:** new Inventory.SQL.Tests 13. Suite green:
+Inventory.SQL.Tests 13.
 
 **Batch BQ — Birko.Models.Inventory (CR-L309):** Birko.Models.Inventory. Closed;
 **/code-review clean (no findings)**. **L309** (convention — "implement on all" option): only StockItem /

@@ -7381,7 +7381,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No .Tests sibling for the mapping project
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Inventory.SQL`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The project ships three public IModelMapping<T> implementations (StockItemMapping, StorageLocationMapping, InventoryDocumentLineMapping) but there is no Birko.Models.Inventory.SQL.Tests sibling. The framework convention states every new public functionality must have corresponding tests. A mapping test would assert table names (Items / Repositories / WareHouseDocumentItems), primary/unique on Guid, and precision/scale on the decimal columns, catching silent drift if a model property is renamed (the GetMemberName expression would still compile but the test would catch a wrong column). Note only; this mirrors the other domain .SQL siblings (e.g. Pricing.SQL also has no test sibling), so it is a framework-wide gap rather than specific to this project.
 - **Fix:** Add a small xUnit + FluentAssertions test project that runs each Configure() against a fresh ModelMap<T> and asserts TableName, the primary/unique Guid field, and the Precision/Scale on the decimal columns.
 
@@ -7389,7 +7389,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Redundant HasColumnName("SortOrder") on SortOrder property
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Inventory.SQL\Mappings\StorageLocationMapping.cs:15`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** map.Property(x => x.SortOrder).HasColumnName("SortOrder") sets the column name to a value identical to the property name, which is already the default (FieldDescriptor is constructed with the member name). It is a no-op and inconsistent with the sibling Pricing.SQL mappings, which never set a column name when it equals the property name. Harmless, but it suggests an intended alias was either dropped or never needed.
 - **Fix:** Drop the .HasColumnName("SortOrder") call (leaving map.Property(x => x.SortOrder) with no further configuration, or remove the line entirely if no precision/scale is needed), unless the underlying table actually uses a differently-cased/named column.
 
