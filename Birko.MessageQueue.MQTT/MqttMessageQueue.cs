@@ -20,6 +20,10 @@ namespace Birko.MessageQueue.Mqtt
         private readonly MqttProducer _producer;
         private readonly MqttConsumer _consumer;
         private CancellationTokenSource? _reconnectCts;
+        // CR-L290: serializes all _reconnectCts access — OnDisconnectedAsync (broker callback thread),
+        // DisconnectAsync, and Dispose can otherwise race, disposing a CTS another path is using or leaking
+        // the previous one when it's replaced.
+        private readonly object _reconnectLock = new();
         private bool _disposed;
 
         public IMessageProducer Producer => _producer;
@@ -105,8 +109,7 @@ namespace Birko.MessageQueue.Mqtt
 
         public async Task DisconnectAsync(CancellationToken cancellationToken = default)
         {
-            _reconnectCts?.Cancel();
-            _reconnectCts = null;
+            CancelReconnect();
 
             if (_client.IsConnected)
             {
@@ -138,9 +141,7 @@ namespace Birko.MessageQueue.Mqtt
                 return;
             }
 
-            _reconnectCts?.Cancel();
-            _reconnectCts = new CancellationTokenSource();
-            var ct = _reconnectCts.Token;
+            var ct = StartNewReconnectCts();
 
             _ = Task.Run(async () =>
             {
@@ -169,6 +170,32 @@ namespace Birko.MessageQueue.Mqtt
             }, ct);
         }
 
+        // CR-L290: cancel + dispose the current reconnect CTS and start a fresh one, atomically. Disposing
+        // the previous CTS here (rather than orphaning it) closes the per-reconnect-cycle handle leak.
+        private CancellationToken StartNewReconnectCts()
+        {
+            lock (_reconnectLock)
+            {
+                _reconnectCts?.Cancel();
+                _reconnectCts?.Dispose();
+                _reconnectCts = new CancellationTokenSource();
+                return _reconnectCts.Token;
+            }
+        }
+
+        // CR-L290: cancel + dispose + clear the reconnect CTS under the lock (used by DisconnectAsync and
+        // Dispose). Cancel runs the token's callbacks synchronously before Dispose, so no in-flight
+        // Task.Delay registration is disposed mid-wait.
+        private void CancelReconnect()
+        {
+            lock (_reconnectLock)
+            {
+                _reconnectCts?.Cancel();
+                _reconnectCts?.Dispose();
+                _reconnectCts = null;
+            }
+        }
+
         public void Dispose()
         {
             if (_disposed)
@@ -177,8 +204,7 @@ namespace Birko.MessageQueue.Mqtt
             }
 
             _disposed = true;
-            _reconnectCts?.Cancel();
-            _reconnectCts?.Dispose();
+            CancelReconnect();
 
             _client.DisconnectedAsync -= OnDisconnectedAsync;
             _client.ConnectedAsync -= OnConnectedAsync;

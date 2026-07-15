@@ -24,6 +24,13 @@ namespace Birko.MessageQueue.Mqtt
         private bool _eventAttached;
         private readonly object _eventAttachLock = new(); // CR-M203: guards the _eventAttached check-and-set
 
+        /// <summary>
+        /// CR-L289: optional callback invoked when a message handler throws, so callers can observe/log
+        /// failures instead of losing them silently. Other handlers still run, and exceptions thrown by the
+        /// callback itself are swallowed (it must not break dispatch). Set it before subscribing.
+        /// </summary>
+        public Func<Exception, QueueMessage, Task>? OnHandlerError { get; set; }
+
         internal MqttConsumer(IMqttClient client, IMessageSerializer serializer, MqttSettings options, IDateTimeProvider? clock = null)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
@@ -200,11 +207,31 @@ namespace Birko.MessageQueue.Mqtt
                     {
                         await handler(message, CancellationToken.None).ConfigureAwait(false);
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        // Individual handler failure should not affect other handlers
+                        // Individual handler failure should not affect other handlers. CR-L289: surface it
+                        // through the optional OnHandlerError hook instead of losing it silently.
+                        await InvokeHandlerErrorAsync(ex, message).ConfigureAwait(false);
                     }
                 }
+            }
+        }
+
+        private async Task InvokeHandlerErrorAsync(Exception ex, QueueMessage message)
+        {
+            var hook = OnHandlerError;
+            if (hook == null)
+            {
+                return;
+            }
+
+            try
+            {
+                await hook(ex, message).ConfigureAwait(false);
+            }
+            catch
+            {
+                // The error hook must never break dispatch of the remaining handlers.
             }
         }
 

@@ -33,9 +33,11 @@ MqttMessageQueue
 ```
 
 - `MqttConsumer` attaches to `ApplicationMessageReceivedAsync` event once, routes messages to matching handlers
-- Wildcard matching uses `MqttTopic.Matches()` for `+` and `#` patterns
+- Handler exceptions don't stop other handlers; set `MqttConsumer.OnHandlerError` to observe/log them instead of losing them silently (CR-L289)
+- Wildcard matching uses `MqttTopic.Matches()` for `+` and `#` patterns; a leading `#`/`+` does **not** match `$`-prefixed system topics (e.g. `$SYS/…`), per the MQTT spec (CR-L291)
 - `AcknowledgeAsync`/`RejectAsync` are no-ops — MQTT handles ack at protocol level (QoS 1/2)
-- Auto-reconnect runs in background task with configurable delay and max attempts
+- Auto-reconnect runs in background task with configurable delay and max attempts; the reconnect CTS is swapped under a lock so overlapping disconnects/Dispose don't race (CR-L290)
+- `MqttSettings.LoadFrom` copies `ClientCertificate` and `LastWill` by reference (shallow) — ownership stays with the source (CR-L288)
 
 ## Dependencies
 - **Birko.Data.Stores** — Settings hierarchy (RemoteSettings base class for MqttSettings)

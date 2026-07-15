@@ -85,6 +85,16 @@ namespace Birko.MessageQueue.Mqtt
             var filterLevels = filter.Split(Separator);
             var topicLevels = topic.Split(Separator);
 
+            // CR-L291: per the MQTT spec, a subscription whose first level is '#' or '+' must NOT match a
+            // topic whose first level starts with '$' (e.g. $SYS/...). An exact first level like "$SYS/#"
+            // still matches — only a leading wildcard is excluded.
+            if (topicLevels[0].StartsWith('$')
+                && filterLevels[0].Length == 1
+                && (filterLevels[0][0] == MultiLevelWildcard || filterLevels[0][0] == SingleLevelWildcard))
+            {
+                return false;
+            }
+
             for (int i = 0; i < filterLevels.Length; i++)
             {
                 var filterLevel = filterLevels[i];

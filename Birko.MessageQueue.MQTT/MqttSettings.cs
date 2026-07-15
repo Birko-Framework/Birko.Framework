@@ -117,6 +117,13 @@ namespace Birko.MessageQueue.Mqtt
         /// Loads settings from another MqttSettings instance.
         /// </summary>
         /// <param name="data">The settings to load from.</param>
+        /// <remarks>
+        /// CR-L288: <see cref="ClientCertificate"/> (an <see cref="System.Security.Cryptography.X509Certificates.X509Certificate2"/>,
+        /// which is <see cref="IDisposable"/>) and <see cref="LastWill"/> are copied by <b>reference</b> —
+        /// the loaded instance shares the source's objects. Ownership stays with the original: do not dispose
+        /// the source's <see cref="ClientCertificate"/> while a settings instance loaded from it is still in
+        /// use, and vice versa. Clone the certificate yourself if you need independent lifetimes.
+        /// </remarks>
         public void LoadFrom(MqttSettings data)
         {
             base.LoadFrom(data);
