@@ -115,4 +115,35 @@ public class TenantSyncBugsTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("read failed");
     }
+
+    // ---- CR-L222: cancellation must stop the OUTER batch loop, not only the inner item loop ----
+
+    [Fact]
+    public async Task Cancellation_StopsOuterBatchLoop_NotJustInnerLoop()
+    {
+        var local = new AsyncInMemoryStore<Item>();
+        var remote = new AsyncInMemoryStore<Item>();
+        // Three remote-only items at BatchSize 1 ⇒ three batches on an initial Download sync.
+        for (var i = 0; i < 3; i++)
+            await remote.CreateAsync(new Item { Guid = Guid.NewGuid(), Name = $"r{i}" });
+
+        var provider = new TenantSyncProvider<AsyncInMemoryStore<Item>, Item>(local, remote, new FakeKnowledgeStore());
+
+        using var cts = new CancellationTokenSource();
+        var batchCallbacks = 0;
+        var options = new TenantSyncOptions
+        {
+            Scope = "S",
+            Direction = SyncDirection.Download,
+            BatchSize = 1,
+            CancellationToken = cts.Token,
+            OnBatchCompleted = _ => { batchCallbacks++; cts.Cancel(); }
+        };
+
+        await provider.SyncAsync(options);
+
+        // Fixed: the outer loop breaks after the first (now-cancelled) batch ⇒ exactly one callback.
+        // Before the fix the inner break left the outer `for` running, firing a callback per batch (3).
+        batchCallbacks.Should().Be(1, "cancellation must stop the outer batch loop promptly");
+    }
 }

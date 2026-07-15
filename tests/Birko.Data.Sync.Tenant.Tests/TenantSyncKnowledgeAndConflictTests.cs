@@ -46,6 +46,15 @@ public class TenantSyncKnowledgeAndConflictTests
             => throw new InvalidOperationException("update failed");
     }
 
+    private sealed class CancelObservingUpdateStore : AsyncInMemoryStore<Item>
+    {
+        protected override Task UpdateCoreAsync(Item data, StoreDataDelegate<Item>? processDelegate = null, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            return base.UpdateCoreAsync(data, processDelegate, ct);
+        }
+    }
+
     // ---- CR-H105 ----
 
     [Fact]
@@ -93,6 +102,29 @@ public class TenantSyncKnowledgeAndConflictTests
             new SyncFilterOptions<Item>(), progress);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
+        progress.UpdatedItems.Should().Be(0);
+    }
+
+    // ---- CR-L222: the conflict-resolution write must observe the forwarded CancellationToken ----
+
+    [Fact]
+    public async Task ConflictResolution_ForwardsCancellationToken_ToUpdate()
+    {
+        var provider = new TenantSyncProvider<CancelObservingUpdateStore, Item>(
+            new CancelObservingUpdateStore(), new CancelObservingUpdateStore(), new FakeKnowledgeStore());
+
+        var remoteItem = new Item { Guid = Guid.NewGuid(), Name = "remote" };
+        var progress = new SyncProgress();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Before the fix the internal UpdateAsync got the default token, so the store never observed the
+        // cancellation and the write succeeded. Now the token flows through and the update throws.
+        Func<Task> act = () => provider.ApplyConflictResolutionAsync(
+            ConflictResolution.UseRemote, remoteItem.Guid!.Value, null, remoteItem,
+            new SyncFilterOptions<Item>(), progress, cts.Token);
+
+        await act.Should().ThrowAsync<OperationCanceledException>();
         progress.UpdatedItems.Should().Be(0);
     }
 }

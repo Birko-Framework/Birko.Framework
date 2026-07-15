@@ -78,4 +78,26 @@ public class TenantSyncVersionHashTests
         var hash = Hash(new NoTimestamp { Guid = Guid.NewGuid(), Name = "x" });
         Guid.TryParse(hash, out _).Should().BeFalse("the fallback must be a content hash, not a GUID");
     }
+
+    // ---- CR-L223: UpdatedAt PropertyInfo is now resolved once (static cache) instead of per-call
+    // reflection. These pin GetUpdatedAt's behavior across the caching refactor. ----
+
+    [Fact]
+    public void GetUpdatedAt_ReturnsValue_ForDateTimeAndNullableAndNull_AndNullWhenAbsent()
+    {
+        var ts = new DateTime(2026, 7, 15, 1, 2, 3, DateTimeKind.Utc);
+
+        TenantSyncProvider<AsyncInMemoryStore<Timestamped>, Timestamped>
+            .GetUpdatedAt(new Timestamped { UpdatedAt = ts }).Should().Be(ts);
+
+        TenantSyncProvider<AsyncInMemoryStore<NullableTimestamped>, NullableTimestamped>
+            .GetUpdatedAt(new NullableTimestamped { UpdatedAt = ts }).Should().Be(ts);
+
+        TenantSyncProvider<AsyncInMemoryStore<NullableTimestamped>, NullableTimestamped>
+            .GetUpdatedAt(new NullableTimestamped { UpdatedAt = null }).Should().BeNull();
+
+        // A type without a DateTime UpdatedAt caches as null and always returns null.
+        TenantSyncProvider<AsyncInMemoryStore<NoTimestamp>, NoTimestamp>
+            .GetUpdatedAt(new NoTimestamp { Value = 5 }).Should().BeNull();
+    }
 }
