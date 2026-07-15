@@ -140,6 +140,27 @@ namespace Birko.EventBus.Tests.MessageQueue
         }
 
         [Fact]
+        public async Task Dispatch_OneHandlerThrows_OtherHandlersStillReceiveEvent()
+        {
+            // CR-L258 / CR-H114: error isolation — a throwing handler must not stop delivery to the others.
+            using var queue = new InMemoryMessageQueue();
+            var throwing = new ThrowingHandler();
+            var good = new OrderPlacedHandler();
+
+            using var bus = new DistributedEventBus(queue);
+            bus.Subscribe(throwing);
+            bus.Subscribe(good);
+            await bus.SubscribeToTransportAsync<OrderPlaced>();
+
+            await bus.PublishAsync(new OrderPlaced(Guid.NewGuid(), 1m));
+
+            await WaitUntilAsync(() => good.ReceivedEvents.Count > 0);
+
+            good.ReceivedEvents.Should().ContainSingle(
+                "the good handler must still run even though another handler threw");
+        }
+
+        [Fact]
         public void Subscribe_ReturnsActiveSubscription()
         {
             using var queue = new InMemoryMessageQueue();
