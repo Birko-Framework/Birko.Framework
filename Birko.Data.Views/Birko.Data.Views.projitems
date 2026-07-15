@@ -3,7 +3,7 @@
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
     <HasSharedItems>true</HasSharedItems>
-    <SharedGUID>a1b2c3d4-e5f6-4a7b-8c9d-view00000001</SharedGUID>
+    <SharedGUID>055978e4-11f5-453c-b5dd-44f7e2aaad14</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data.Views</Import_RootNamespace>
