@@ -13,6 +13,7 @@ namespace Birko.Models.Inventory
         : AbstractLogModel
         , IHierarchical
         , ILoadable<ViewModels.StorageLocation>
+        , ICopyable<StorageLocation>
     {
         public string Title { get; set; } = null!;
         public int SortOrder { get; set; }
@@ -20,6 +21,24 @@ namespace Birko.Models.Inventory
         public string Path { get; set; } = null!;
         public int Depth { get; set; }
         public Guid TenantGuid { get; set; }
+
+        // CR-L309: typed CopyTo so cloning copies this model's own fields, consistent with
+        // StockItem/StockItemVariant (the base CopyTo only handles AbstractLogModel fields).
+        public virtual StorageLocation CopyTo(StorageLocation clone)
+        {
+            if (clone == null)
+            {
+                clone = new StorageLocation();
+            }
+            base.CopyTo(clone);
+            clone.Title = Title;
+            clone.SortOrder = SortOrder;
+            clone.ParentGuid = ParentGuid;
+            clone.Path = Path;
+            clone.Depth = Depth;
+            clone.TenantGuid = TenantGuid;
+            return clone;
+        }
 
         public virtual void LoadFrom(ViewModels.StorageLocation data)
         {
