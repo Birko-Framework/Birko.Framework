@@ -19,6 +19,8 @@ namespace Birko.Models.Users.SQL.Mappings
             // this pair at the DB via a migration; this mapping records the intent/natural key.
             map.Property(x => x.Provider).HasPrecision(50).HasIndex("UX_UserLogin_Provider_ProviderKey", order: 0);
             map.Property(x => x.ProviderKey).HasPrecision(256).HasIndex("UX_UserLogin_Provider_ProviderKey", order: 1);
+            // CR-L324: index the FK lookup column (a user's logins). Index metadata is advisory.
+            map.Property(x => x.UserGuid).HasIndex("IX_UserLogins_UserGuid");
             map.Property(x => x.PasswordHash).HasPrecision(256);
             map.Property(x => x.RefreshToken).HasPrecision(512);
             map.Property(x => x.DisplayName).HasPrecision(256);
