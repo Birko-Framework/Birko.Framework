@@ -16,8 +16,8 @@ Razor template engine for the Birko Messaging framework. Implements `ITemplateEn
 ### RazorTemplateEngine.cs
 - Implements `ITemplateEngine` and `IDisposable`
 - Uses `RazorLightEngine` for Razor compilation and rendering
-- `RenderAsync(string, object, CancellationToken)` — inline Razor string rendering with stable cache keys
-- `RenderAsync(IMessageTemplate, object, CancellationToken)` — file lookup by `Name`, fallback to `BodyTemplate` inline
+- `RenderAsync(string, object, CancellationToken)` — inline Razor string rendering; cache key is a content hash (CR-L298)
+- `RenderAsync(IMessageTemplate, object, CancellationToken)` — file lookup by `Name`, falls back to `BodyTemplate` inline ONLY on a genuine `TemplateNotFoundException`; other failures (e.g. path-traversal rejection) propagate (CR-L299)
 - `RenderFileAsync(string, object, CancellationToken)` — explicit file-based template rendering
 - `InvalidateFileCache(string)` — invalidate cached file template
 - Wraps `RazorLightException` and `InvalidOperationException` into `TemplateRenderException`
@@ -34,9 +34,9 @@ Razor template engine for the Birko Messaging framework. Implements `ITemplateEn
 ### RazorFileTemplateProvider.cs
 - Loads `.cshtml` template content from disk
 - In-memory caching with `ConcurrentDictionary`
-- Directory traversal protection (validates resolved path stays within base)
+- Directory traversal protection (validates resolved path stays within base; throws `TemplateRenderException` "escapes")
 - Path normalization (forward/back slashes, auto-append extension)
-- `GetTemplateAsync(string, CancellationToken)` — resolve and read template file
+- `GetTemplateAsync(string, CancellationToken)` — resolve and read template file; throws `TemplateNotFoundException` when the file is missing, plain `TemplateRenderException` on a traversal escape (CR-L299)
 - `InvalidateCache(string)` / `ClearCache()` — cache management
 
 ## Dependencies
@@ -48,8 +48,8 @@ Razor template engine for the Birko Messaging framework. Implements `ITemplateEn
 
 - **Shared project** — code compiles into consuming project, no separate assembly
 - **RazorLight** — chosen over raw `Microsoft.AspNetCore.Razor.Language` for simplicity; consuming project adds NuGet
-- **File + inline dual mode** — `IMessageTemplate` rendering tries file first (by Name), falls back to BodyTemplate
-- **Stable inline cache keys** — inline templates get a stable GUID key per unique content string to avoid recompilation
+- **File + inline dual mode** — `IMessageTemplate` rendering tries file first (by Name), falls back to BodyTemplate only on a genuine `TemplateNotFoundException` (traversal/other failures propagate — CR-L299)
+- **Content-hash inline cache keys** — inline templates key their RazorLight cache entry off a SHA256 of the content, so identical templates reuse the compiled entry without an unbounded per-template dictionary (CR-L298)
 - **Directory traversal protection** — `Path.GetFullPath` + prefix check prevents escaping base directory
 
 ## Conventions

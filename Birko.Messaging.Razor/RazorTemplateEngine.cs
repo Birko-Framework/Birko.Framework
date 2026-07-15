@@ -1,5 +1,6 @@
 using System;
-using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Birko.Messaging.Templates;
@@ -19,7 +20,6 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
 {
     private readonly RazorLightEngine _engine;
     private readonly RazorFileTemplateProvider? _fileProvider;
-    private readonly ConcurrentDictionary<string, string> _inlineTemplateKeys = new();
     private bool _disposed;
 
     /// <summary>
@@ -88,8 +88,10 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
 
         try
         {
-            // Generate a stable cache key for the template content
-            var cacheKey = _inlineTemplateKeys.GetOrAdd(template, _ => $"inline_{Guid.NewGuid():N}");
+            // CR-L298: derive the cache key from a hash of the template content instead of storing every
+            // distinct template string in an ever-growing dictionary. Identical content still maps to the
+            // same key (so RazorLight compiles it once) without an unbounded per-template map to leak.
+            var cacheKey = "inline_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(template)));
 
             ct.ThrowIfCancellationRequested();
             var result = await _engine.CompileRenderStringAsync(cacheKey, template, model).ConfigureAwait(false);
@@ -138,9 +140,11 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
                     ct.ThrowIfCancellationRequested();
                     return await _engine.CompileRenderStringAsync(cacheKey, fileContent, model).ConfigureAwait(false);
                 }
-                catch (TemplateRenderException)
+                catch (TemplateNotFoundException)
                 {
-                    // File not found — fall through to inline rendering
+                    // CR-L299: fall through to inline rendering ONLY for a genuine not-found. Other
+                    // TemplateRenderExceptions (e.g. a path-traversal rejection from ResolveFilePath) must
+                    // NOT be masked — they propagate to the outer catch/caller.
                 }
             }
 
@@ -214,7 +218,6 @@ public sealed class RazorTemplateEngine : ITemplateEngine, IDisposable
     {
         if (!_disposed)
         {
-            _inlineTemplateKeys.Clear();
             _fileProvider?.ClearCache();
             _disposed = true;
         }

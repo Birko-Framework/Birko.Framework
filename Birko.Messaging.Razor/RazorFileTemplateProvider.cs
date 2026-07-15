@@ -57,7 +57,9 @@ public class RazorFileTemplateProvider
 
         if (!File.Exists(filePath))
         {
-            throw new TemplateRenderException(templateName, $"Template file not found: {filePath}");
+            // CR-L299: a distinct not-found subtype so the engine's file→inline fallback catches only this,
+            // not the path-traversal rejection thrown by ResolveFilePath (which must surface).
+            throw new TemplateNotFoundException(templateName, $"Template file not found: {filePath}");
         }
 
         var content = await ReadFileAsync(filePath, ct).ConfigureAwait(false);
