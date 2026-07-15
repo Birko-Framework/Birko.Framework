@@ -12,10 +12,10 @@ namespace Birko.Data.Sync.RavenDB.Models;
 /// </summary>
 public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem, ITenant
 {
-    /// <summary>
-    /// Internal record ID for database compatibility
-    /// </summary>
-    public int InternalRecordId { get; set; }
+    // CR-L219: the int InternalRecordId field ("for database compatibility") was removed — never set,
+    // read, or used by either store; it only added a meaningless int to every RavenDB document.
+    // Identity is AbstractModel.Guid (the base store keys documents off it; re-syncs derive a
+    // deterministic Guid via AsyncRavenSyncKnowledgeStore.DeterministicGuid).
 
     /// <summary>
     /// GUID of the entity this knowledge refers to
@@ -76,19 +76,10 @@ public class RavenSyncKnowledgeItem : AbstractModel, ISyncKnowledgeItem, ITenant
     /// </summary>
     public string? Metadata { get; set; }
 
-    /// <summary>
-    /// RavenDB collection name for this document type
-    /// </summary>
-    public const string CollectionName = "RavenSyncKnowledgeItems";
-
-    /// <summary>
-    /// Generates the document ID for RavenDB
-    /// Format: SyncKnowledge/{EntityGuid}/{Scope}
-    /// </summary>
-    public static string GenerateDocumentId(Guid entityGuid, string scope)
-    {
-        return $"SyncKnowledge/{entityGuid:N}/{scope}";
-    }
+    // CR-L218: the CollectionName const and GenerateDocumentId helper were removed — both dead. RavenDB
+    // resolves the collection from the type name (the base store registers no CollectionName convention),
+    // and document identity comes from AbstractModel.Guid (deterministic on re-sync via
+    // AsyncRavenSyncKnowledgeStore.DeterministicGuid), not a string id built here.
 
     /// <summary>
     /// Returns a string representation for debugging

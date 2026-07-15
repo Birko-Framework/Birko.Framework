@@ -1,15 +1,10 @@
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.RavenDB.Models;
-using Birko.Data.Sync.Stores;
 using Birko.Data.RavenDB.Stores;
-using Birko.Data.Stores;
 using Birko.Data.Tenant.Models;
-using Birko.Configuration;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Linq;
-using Raven.Client.Documents.Session;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -220,14 +215,6 @@ public class AsyncRavenSyncKnowledgeStore : AsyncRavenDBStore<RavenSyncKnowledge
         using var md5 = System.Security.Cryptography.MD5.Create();
         return new Guid(md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key)));
     }
-
-    /// <summary>
-    /// Convert ISyncKnowledgeItem to RavenSyncKnowledgeItem (async version)
-    /// </summary>
-    private async Task<RavenSyncKnowledgeItem> ConvertToRavenItemAsync(
-        ISyncKnowledgeItem item,
-        CancellationToken cancellationToken)
-    {
-        return await System.Threading.Tasks.Task.FromResult(ConvertToRavenItem(item));
-    }
+    // CR-L218: removed the dead private ConvertToRavenItemAsync — it only wrapped the sync
+    // ConvertToRavenItem in Task.FromResult and was never called.
 }

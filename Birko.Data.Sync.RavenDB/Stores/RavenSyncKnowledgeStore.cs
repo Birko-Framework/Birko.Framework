@@ -1,14 +1,7 @@
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.RavenDB.Models;
-using Birko.Data.Sync.Stores;
 using Birko.Data.RavenDB.Stores;
-using Birko.Data.Stores;
-using Birko.Data.Tenant.Models;
-using Birko.Configuration;
 using System.Linq;
-using System.Linq.Expressions;
-using Birko.Data.Models;
-using Birko.Data.Repositories;
 
 namespace Birko.Data.Sync.RavenDB.Stores;
 
@@ -37,11 +30,12 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
     /// <summary>
     /// Get sync knowledge for a specific scope and optional tenant
     /// </summary>
-    public Dictionary<Guid, ISyncKnowledgeItem> GetKnowledgeAsync(
+    public Dictionary<Guid, ISyncKnowledgeItem> GetKnowledge(
         string scope,
         Guid? tenantId,
         System.Threading.CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var session = DocumentStore!.OpenSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
@@ -60,23 +54,24 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
     /// <summary>
     /// Get a specific sync knowledge item
     /// </summary>
-    public ISyncKnowledgeItem? GetKnowledgeItemAsync(
+    public ISyncKnowledgeItem? GetKnowledgeItem(
         Guid entityGuid,
         string scope,
         Guid? tenantId,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        var knowledge = GetKnowledgeAsync(scope, tenantId, cancellationToken);
+        var knowledge = GetKnowledge(scope, tenantId, cancellationToken);
         return knowledge.TryGetValue(entityGuid, out var item) ? item : null;
     }
 
     /// <summary>
     /// Update or create sync knowledge items
     /// </summary>
-    public void UpdateKnowledgeAsync(
+    public void UpdateKnowledge(
         IEnumerable<ISyncKnowledgeItem> items,
         System.Threading.CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var session = DocumentStore!.OpenSession();
 
         foreach (var item in items)
@@ -91,21 +86,22 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
     /// <summary>
     /// Update or create a single sync knowledge item
     /// </summary>
-    public void UpdateKnowledgeItemAsync(
+    public void UpdateKnowledgeItem(
         ISyncKnowledgeItem item,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        UpdateKnowledgeAsync(new[] { item }, cancellationToken);
+        UpdateKnowledge(new[] { item }, cancellationToken);
     }
 
     /// <summary>
     /// Delete sync knowledge for a specific scope and optional tenant
     /// </summary>
-    public void DeleteKnowledgeAsync(
+    public void DeleteKnowledge(
         string scope,
         Guid? tenantId,
         System.Threading.CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var session = DocumentStore!.OpenSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
@@ -128,24 +124,25 @@ public class RavenSyncKnowledgeStore : RavenDBStore<RavenSyncKnowledgeItem>
     /// <summary>
     /// Get the last sync time for a scope and optional tenant
     /// </summary>
-    public System.DateTime? GetLastSyncTimeAsync(
+    public System.DateTime? GetLastSyncTime(
         string scope,
         Guid? tenantId,
         System.Threading.CancellationToken cancellationToken = default)
     {
-        var knowledge = GetKnowledgeAsync(scope, tenantId, cancellationToken);
+        var knowledge = GetKnowledge(scope, tenantId, cancellationToken);
         return knowledge.Values.Any() ? knowledge.Values.Max(x => (System.DateTime?)x.LastSyncedAt) : null;
     }
 
     /// <summary>
     /// Set the last sync time for a scope and optional tenant
     /// </summary>
-    public void SetLastSyncTimeAsync(
+    public void SetLastSyncTime(
         string scope,
         Guid? tenantId,
         System.DateTime syncTime,
         System.Threading.CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         using var session = DocumentStore!.OpenSession();
 
         var query = session.Query<RavenSyncKnowledgeItem>()
