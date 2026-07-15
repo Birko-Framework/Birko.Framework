@@ -68,4 +68,38 @@ public class CustomerMappingPrecisionTests
     {
         Map(new InvoiceAddressMapping()).Precision(column).Should().HaveValue($"{column} must be bounded (CR-M220)");
     }
+
+    // ── CR-L307: table names + PK/unique on Guid ─────────
+
+    private static ModelMap<T> Configure<T>(IModelMapping<T> mapping) where T : class
+    {
+        var map = new ModelMap<T>();
+        mapping.Configure(map);
+        return map;
+    }
+
+    [Fact]
+    public void Mappings_HaveExpectedTableNames()
+    {
+        Configure(new CustomerMapping()).TableName.Should().Be("Customers");
+        Configure(new AddressMapping()).TableName.Should().Be("Addresses");
+        Configure(new InvoiceAddressMapping()).TableName.Should().Be("InvoiceAddresses");
+        Configure(new ContactPersonMapping()).TableName.Should().Be("ContactPersons");
+    }
+
+    [Fact]
+    public void Mappings_MarkGuidAsPrimaryAndUnique()
+    {
+        AssertGuidKey(Configure(new CustomerMapping()));
+        AssertGuidKey(Configure(new AddressMapping()));
+        AssertGuidKey(Configure(new InvoiceAddressMapping()));
+        AssertGuidKey(Configure(new ContactPersonMapping()));
+
+        static void AssertGuidKey<T>(ModelMap<T> map) where T : class
+        {
+            var guid = map.Properties.Single(p => p.Name == "Guid");
+            guid.IsPrimary.Should().BeTrue("Guid must be the primary key");
+            guid.IsUnique.Should().BeTrue("Guid must be unique");
+        }
+    }
 }
