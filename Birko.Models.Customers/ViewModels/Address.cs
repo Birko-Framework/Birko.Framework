@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace Birko.Models.Customers.ViewModels
 {
@@ -162,9 +162,17 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
+        // CR-L306: cached watched-property set — avoids allocating a fresh array (and a LINQ scan) on
+        // every PropertyChanged event.
+        private static readonly HashSet<string> _watchedProperties = new()
+        {
+            NameProperty, StreetProperty, StreetNumberProperty, CityProperty, ZIPProperty,
+            DistrictProperty, RegionProperty, CountryProperty, PhoneProperty, EmailProperty
+        };
+
         private void Address_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { NameProperty, StreetProperty, StreetNumberProperty, CityProperty, ZIPProperty, DistrictProperty, RegionProperty, CountryProperty, PhoneProperty, EmailProperty }.Contains(e.PropertyName))
+            if (e.PropertyName != null && _watchedProperties.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(AddressObjectProperty);
             }

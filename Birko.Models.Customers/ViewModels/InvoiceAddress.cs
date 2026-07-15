@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace Birko.Models.Customers.ViewModels
 {
@@ -72,9 +72,15 @@ namespace Birko.Models.Customers.ViewModels
             }
         }
 
+        // CR-L306: cached watched-property set — avoids per-event array allocation + LINQ scan.
+        private static readonly HashSet<string> _watchedProperties = new()
+        {
+            BINProperty, TINProperty, VATINProperty, BankAccountProperty
+        };
+
         private void InvoiceAddress_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (new[] { BINProperty, TINProperty, VATINProperty, BankAccountProperty }.Contains(e.PropertyName))
+            if (e.PropertyName != null && _watchedProperties.Contains(e.PropertyName))
             {
                 RaisePropertyChanged(InvoiceAddressObjectProperty);
             }
