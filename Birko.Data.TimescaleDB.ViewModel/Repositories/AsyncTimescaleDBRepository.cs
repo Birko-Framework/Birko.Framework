@@ -89,45 +89,51 @@ namespace Birko.Data.SQL.Repositories
         }
 
         /// <summary>
+        /// Returns the connector or throws a clear error when settings were never applied.
+        /// CR-L235: captures the property ONCE per call — each Connector read re-walks the (possibly
+        /// wrapped) store unwrap chain, so the old guard-then-use pattern traversed it twice.
+        /// </summary>
+        /// <remarks>
+        /// CR-L236 (accepted): InitAsync/DropAsync/CreateSchemaAsync wrap the connector's synchronous
+        /// DoInit/DropTable/CreateTable in Task.Run — the CancellationToken only cancels the work
+        /// before it starts; an in-flight DB call is not interrupted. CreateHypertableAsync flows the
+        /// token into a genuinely async connector method. If the connector grows async overloads,
+        /// prefer those over Task.Run.
+        /// </remarks>
+        private TimescaleDBConnector RequireConnector()
+            => Connector ?? throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
+
+        /// <summary>
         /// Initializes the repository and creates the database schema if needed.
         /// </summary>
-        /// <param name="ct">Cancellation token.</param>
+        /// <param name="ct">Cancellation token — observed only before the operation starts; the
+        /// underlying connector call is synchronous (CR-L236).</param>
         public async Task InitAsync(CancellationToken ct = default)
         {
-            if (Connector == null)
-            {
-                throw new InvalidOperationException("Connector not initialized. Call SetSettings() first.");
-            }
-
-            await Task.Run(() => Connector.DoInit(), ct).ConfigureAwait(false);
+            var connector = RequireConnector();
+            await Task.Run(() => connector.DoInit(), ct).ConfigureAwait(false);
         }
 
         /// <summary>
         /// Drops the database schema.
         /// </summary>
-        /// <param name="ct">Cancellation token.</param>
+        /// <param name="ct">Cancellation token — observed only before the operation starts; the
+        /// underlying connector call is synchronous (CR-L236).</param>
         public async Task DropAsync(CancellationToken ct = default)
         {
-            if (Connector == null)
-            {
-                throw new InvalidOperationException("Connector not initialized.");
-            }
-
-            await Task.Run(() => Connector.DropTable(new[] { typeof(TModel) }), ct).ConfigureAwait(false);
+            var connector = RequireConnector();
+            await Task.Run(() => connector.DropTable(new[] { typeof(TModel) }), ct).ConfigureAwait(false);
         }
 
         /// <summary>
         /// Creates the database schema for the model type.
         /// </summary>
-        /// <param name="ct">Cancellation token.</param>
+        /// <param name="ct">Cancellation token — observed only before the operation starts; the
+        /// underlying connector call is synchronous (CR-L236).</param>
         public async Task CreateSchemaAsync(CancellationToken ct = default)
         {
-            if (Connector == null)
-            {
-                throw new InvalidOperationException("Connector not initialized.");
-            }
-
-            await Task.Run(() => Connector.CreateTable(new[] { typeof(TModel) }), ct).ConfigureAwait(false);
+            var connector = RequireConnector();
+            await Task.Run(() => connector.CreateTable(new[] { typeof(TModel) }), ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -139,19 +145,13 @@ namespace Birko.Data.SQL.Repositories
         /// <param name="ct">Cancellation token.</param>
         public async Task CreateHypertableAsync(string timeColumn, string chunkTimeInterval = "7 days", CancellationToken ct = default)
         {
-            if (Connector == null)
-            {
-                throw new InvalidOperationException("Connector not initialized.");
-            }
-
-            await Connector.CreateHypertableAsync(typeof(TModel), timeColumn, chunkTimeInterval, ct).ConfigureAwait(false);
+            await RequireConnector().CreateHypertableAsync(typeof(TModel), timeColumn, chunkTimeInterval, ct).ConfigureAwait(false);
         }
 
-        /// <inheritdoc />
-        public override async Task DestroyAsync(CancellationToken ct = default)
-        {
-            await base.DestroyAsync(ct);
-            await DropAsync(ct);
-        }
+        // CR-L234: the DestroyAsync override (base.DestroyAsync + DropAsync) was removed — the base
+        // already destroys through the store, and AsyncDataBaseStore.DestroyAsync IS a table drop, so
+        // the override dropped the table a second time via the unwrapped connector (bypassing any
+        // wrapper). Same double-destroy pattern removed from the MongoDB.ViewModel repos (CR-L155/L156).
+        // DropAsync stays as the explicit schema-drop helper.
     }
 }
