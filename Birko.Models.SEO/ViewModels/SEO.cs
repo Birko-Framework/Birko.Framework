@@ -36,8 +36,13 @@ namespace Birko.Models.SEO.ViewModels
             get { return _path; }
             set
             {
-                _path = value;
-                RaisePropertyChanged(PathProperty);
+                // CR-L320: guard like the sibling Title/Description setters — a same-value set must not fire
+                // a spurious PropertyChanged (and the cascaded SEO object notification).
+                if (_path != value)
+                {
+                    _path = value;
+                    RaisePropertyChanged(PathProperty);
+                }
             }
         }
 
@@ -70,8 +75,9 @@ namespace Birko.Models.SEO.ViewModels
 
         public void LoadFrom(Birko.Models.SEO.SEO data)
         {
-            base.LoadFrom(data);
+            // CR-L321: guard first (guard-clause convention) — base is null-safe, so this is an ordering fix.
             if (data == null) return;
+            base.LoadFrom(data);
 
             Title = data.Title;
             Path = data.Path;
@@ -80,8 +86,9 @@ namespace Birko.Models.SEO.ViewModels
 
         public virtual void LoadFrom(SEO data)
         {
-            base.LoadFrom(data);
+            // CR-L321: guard first (guard-clause convention) — base is null-safe, so this is an ordering fix.
             if (data == null) return;
+            base.LoadFrom(data);
 
             Title = data.Title;
             Path = data.Path;

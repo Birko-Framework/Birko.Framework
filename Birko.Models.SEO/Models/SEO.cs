@@ -13,8 +13,9 @@ namespace Birko.Models.SEO
 
         public void LoadFrom(Birko.Models.SEO.ViewModels.SEO data)
         {
-            base.LoadFrom(data);
+            // CR-L321: guard first (guard-clause convention) — base is null-safe, so this is an ordering fix.
             if (data == null) return;
+            base.LoadFrom(data);
 
             Title = data.Title;
             Path = data.Path;

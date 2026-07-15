@@ -21,9 +21,12 @@ namespace Birko.Models.SEO.Filters
             {
                 return null;
             }
+            // CR-L319: SEO.Path is declared null!, so a default/partially-loaded entity can have a null
+            // Path. Guard the member access so the predicate can't NRE under LINQ-to-objects (InMemory/
+            // JSON/XML backends) — SQL/NoSQL providers translate it, but in-memory evaluation would throw.
             return Exact
                 ? (x) => x.Path == Path
-                : (x) => x.Path.StartsWith(Path);
+                : (x) => x.Path != null && x.Path.StartsWith(Path);
         }
     }
 }
