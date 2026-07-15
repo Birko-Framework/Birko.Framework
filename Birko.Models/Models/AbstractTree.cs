@@ -29,15 +29,22 @@ namespace Birko.Models
             base.LoadFrom(data);
             if (data != null)
             {
-                Path = BuildPath(data.Path) ?? string.Empty;
+                Path = BuildPath(data.Path);
             }
         }
 
-        public static string? BuildPath(IEnumerable<Guid> path)
+        /// <summary>
+        /// Builds the slash-separated materialized path from an ancestor Guid sequence. A null/empty
+        /// sequence yields the root sentinel <see cref="PathSeparator"/> ("/") — every path is rooted at
+        /// the separator, so this never returns null (CR-L302). Guids are formatted "B" and de-duplicated.
+        /// </summary>
+        public static string BuildPath(IEnumerable<Guid> path)
         {
-            return PathSeparator + ((path?.Any() ?? false)
-                ? string.Join(PathSeparator, path.Select(x => x.ToString("B")).Distinct())
-                : null);
+            // Enumerate once (the old Any()+Select double-enumerated the sequence).
+            var segments = path?.Select(x => x.ToString("B")).Distinct().ToList();
+            return segments is { Count: > 0 }
+                ? PathSeparator + string.Join(PathSeparator, segments)
+                : PathSeparator;
         }
     }
 }

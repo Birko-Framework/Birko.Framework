@@ -8,11 +8,15 @@ namespace Birko.Extensions
     {
         public static T? GetValue<T>(this IEnumerable<SourceValue<T>> values, string source)
         {
-            if (!string.IsNullOrEmpty(source) && (values?.Any(x => x.Source == source) ?? false))
+            // CR-L300: single pass — the old Any()+FirstOrDefault() enumerated the sequence twice (and
+            // re-ran the predicate), which is wasteful for a lazy source and can even see a different
+            // element between the two passes.
+            if (string.IsNullOrEmpty(source) || values == null)
             {
-                return values.FirstOrDefault(x => x.Source == source)!.Value;
+                return default;
             }
-            return default;
+            var match = values.FirstOrDefault(x => x.Source == source);
+            return match != null ? match.Value : default;
         }
 
         public static SourceValue<T>[] SetValue<T>(this SourceValue<T>[] values, string source, T value)
@@ -22,10 +26,15 @@ namespace Birko.Extensions
                 return values;
             }
 
-            if (values != null && values.Any(x => x.Source == source))
+            // CR-L300: single scan instead of Any()+FirstOrDefault().
+            if (values != null)
             {
-                values.FirstOrDefault(x => x.Source == source)!.Value = value;
-                return values;
+                var existing = values.FirstOrDefault(x => x.Source == source);
+                if (existing != null)
+                {
+                    existing.Value = value;
+                    return values;
+                }
             }
 
             var add = new[] {

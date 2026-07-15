@@ -21,13 +21,17 @@ namespace Birko.Models
 
         public virtual AbstractPercentage CopyTo(AbstractPercentage clone)
         {
-            if (clone != null)
+            // CR-L301: AbstractPercentage is abstract (can't self-instantiate like ValueData.CopyTo does),
+            // so a null clone can't be satisfied — fail fast instead of returning `clone!` (a provably-null
+            // value with a suppressed warning) and NRE-ing the caller downstream.
+            if (clone == null)
             {
-                base.CopyTo(clone);
-                clone.Percentage = Percentage;
+                throw new ArgumentNullException(nameof(clone));
             }
 
-            return clone!;
+            base.CopyTo(clone);
+            clone.Percentage = Percentage;
+            return clone;
         }
     }
 }
