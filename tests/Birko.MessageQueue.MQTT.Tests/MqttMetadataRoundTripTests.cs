@@ -58,6 +58,44 @@ public class MqttMetadataRoundTripTests
     }
 
     [Fact]
+    public async Task OnHandlerError_InvokedWhenHandlerThrows()
+    {
+        // CR-L289: a throwing handler no longer fails silently — the OnHandlerError hook observes it.
+        var (mock, _) = MockClient();
+        var serializer = new JsonMessageSerializer();
+        var consumer = new MqttConsumer(mock.Object, serializer, new MqttSettings());
+
+        Exception? seen = null;
+        QueueMessage? seenMessage = null;
+        consumer.OnHandlerError = (ex, msg) => { seen = ex; seenMessage = msg; return Task.CompletedTask; };
+
+        await consumer.SubscribeAsync(Topic, (msg, ct) => throw new InvalidOperationException("boom"));
+
+        var appMessage = new MqttApplicationMessageBuilder().WithTopic(Topic).WithPayload("body").Build();
+        await DeliverAsync(consumer, appMessage);
+
+        seen.Should().BeOfType<InvalidOperationException>().Which.Message.Should().Be("boom");
+        seenMessage.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task OnHandlerError_HookThatThrows_DoesNotBreakDispatch()
+    {
+        // CR-L289: an exception from the error hook itself is swallowed (dispatch must survive).
+        var (mock, _) = MockClient();
+        var serializer = new JsonMessageSerializer();
+        var consumer = new MqttConsumer(mock.Object, serializer, new MqttSettings());
+        consumer.OnHandlerError = (ex, msg) => throw new InvalidOperationException("hook failed");
+
+        await consumer.SubscribeAsync(Topic, (msg, ct) => throw new InvalidOperationException("handler failed"));
+
+        var appMessage = new MqttApplicationMessageBuilder().WithTopic(Topic).WithPayload("body").Build();
+        var act = async () => await DeliverAsync(consumer, appMessage);
+
+        await act.Should().NotThrowAsync();
+    }
+
+    [Fact]
     public async Task Producer_AttachesPayloadTypeAndHeaders_AsUserProperties()
     {
         var (mock, captured) = MockClient();

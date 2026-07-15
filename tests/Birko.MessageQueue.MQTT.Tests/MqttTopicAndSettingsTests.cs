@@ -37,6 +37,11 @@ public class MqttTopicAndSettingsTests
     [InlineData("sensors/+/temp", "sensors/kitchen/humidity", false)]
     [InlineData("sensors/#", "sensors/kitchen/temp/extra", true)]            // multi-level wildcard
     [InlineData("sensors/livingroom", "sensors/livingroom/temp", false)]     // level count mismatch
+    // CR-L291: a leading '#'/'+' wildcard must not match $-prefixed system topics; an exact first level does.
+    [InlineData("#", "$SYS/broker/uptime", false)]
+    [InlineData("+/x", "$SYS/x", false)]
+    [InlineData("$SYS/#", "$SYS/broker/uptime", true)]
+    [InlineData("#", "normal/topic", true)]
     public void Matches(string filter, string topic, bool expected)
         => MqttTopic.Matches(filter, topic).Should().Be(expected);
 
@@ -76,5 +81,19 @@ public class MqttTopicAndSettingsTests
         target.KeepAlive.Should().Be(System.TimeSpan.FromSeconds(120));
         target.MaxReconnectAttempts.Should().Be(9);
         target.DefaultQualityOfService.Should().Be(MqttQualityOfService.ExactlyOnce);
+    }
+
+    [Fact]
+    public void LoadFrom_SharesLastWillReference()
+    {
+        // CR-L288: LastWill (and ClientCertificate) are copied by reference — the documented shallow-copy
+        // ownership contract. Pin it so a future change to deep-copy is a conscious decision.
+        var lastWill = new MqttLastWill { Topic = "status", Payload = "offline" };
+        var source = new MqttSettings { LastWill = lastWill };
+
+        var target = new MqttSettings();
+        target.LoadFrom(source);
+
+        target.LastWill.Should().BeSameAs(lastWill);
     }
 }
