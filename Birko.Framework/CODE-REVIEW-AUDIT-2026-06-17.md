@@ -6780,25 +6780,28 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead `.Where(m => m != null)` filter and needless ToList allocation
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ViewModel\Repositories/AbstractAsyncBulkViewModelRepository.cs:62-67, 105-110, 152-157`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** CreateModelInstance() returns a non-null TModel (TModel : AbstractModel, created via Store.CreateInstance() or Activator.CreateInstance<TModel>()), so `.Where(m => m != null)` can never filter anything and the trailing `!` null-forgiving operator on the ToList is suppressing a warning for a condition that cannot occur. The filter is dead code and the materialization is an unnecessary allocation (the store CreateAsync/UpdateAsync/DeleteAsync accept IEnumerable<T> and can enumerate lazily).
 - **Fix:** Drop the `.Where(m => m != null)` and the `!`; pass the Select projection directly (or ToList only if a stable snapshot is genuinely required).
+- **Resolution (Batch AQ):** Dropped the dead `.Where(m => m != null).ToList()!` from the async bulk repo's CreateAsync/UpdateAsync/DeleteAsync(IEnumerable) — the projection is now passed lazily (matches the already-lazy sync bulk sibling). Pinned by `AsyncBulkViewModelRepositoryProjectionTests` (all items flow through Create/Update/Delete round-trips; none dropped).
 
 ### CR-L238 · ⚪ low · Birko.Data.ViewModel
 - **Title:** README documents ViewModels/ classes that do not exist in the project
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ViewModel\README.md:11,57-62`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** README and CLAUDE-style overview claim the project ships `ViewModel<T>`, `ModelViewModel<TViewModel, TModel>`, `AbstractLogViewModel`, `LogViewModel` under a ViewModels/ folder, and the usage example extends ModelViewModel<ProductViewModel, Product>. No ViewModels/ folder or those files exist — the projitems compiles only the 8 Repositories files. The documented base classes and the primary usage example are therefore unbuildable, misleading consumers about the project's surface.
 - **Fix:** Either add the missing ViewModel base classes or correct README/Architecture to reflect that the project is repository-abstractions only (ViewModels are supplied by the consumer implementing ILoadable<TModel>).
+- **Resolution (Batch AQ):** Doc-correct option taken. The base classes DO exist but in **Birko.Data.Core** (namespace `Birko.Data.ViewModels`, non-generic — `ViewModel`/`ModelViewModel`/`AbstractLogViewModel`/`LogViewModel`), not here. Rewrote README + CLAUDE to state this project ships the repository abstractions only (the 8 Repositories files), point the ViewModel base classes at Birko.Data.Core, drop the phantom `ViewModels/` folder from the architecture tree, and replace the unbuildable `ModelViewModel<TVm,TModel>` + `LoadAsync`/`SaveAsync` example with a real one (consumer VM implementing `ILoadable<TModel>`, concrete repo overriding `MapToModel`, real `CreateInstance`/`CreateAsync` API).
 
 ### CR-L239 · ⚪ low · Birko.Data.ViewModel
 - **Title:** Create throws AccessViolationException for a domain/state condition
 - **Path:** `C:\Source\Birko\Framework\Birko.Data.ViewModel\Repositories/AbstractViewModelRepository.cs:188,211,236; AbstractAsyncViewModelRepository.cs:204,221,240`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Read-mode violations throw AccessViolationException, which is a CLR corrupted-state exception (SEH) not intended for application-level invariants; by default the runtime will not even let user code catch it (legacyCorruptedStateExceptionsPolicy). This is the wrong exception type for a 'repository is read-only' guard and makes the condition effectively uncatchable for some host configurations.
 - **Fix:** Throw InvalidOperationException (or a dedicated Birko exception) instead of AccessViolationException.
+- **Resolution (Batch AQ):** Replaced AccessViolationException → InvalidOperationException at **all 18 read-mode guard sites** across the 4 repositories (the audit named the 6 single-item sites; the bulk siblings carried the same CR-M180 defect and were fixed for consistency). Verified no framework/test source catches or asserts the old type. Pinned by the new `SingleItemViewModelRepositoryReadModeTests` (the audit's primary sync+async single-item sites) plus the updated `BulkViewModelRepositoryReadModeTests`.
 
 ### CR-L240 · ⚪ low · Birko.Data.Views
 - **Title:** RegisterFromAssembly can throw ReflectionTypeLoadException on assemblies with unloadable types

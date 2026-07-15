@@ -13,7 +13,34 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**236 / 418 triaged** as of 2026-07-15. Next open is CR-L237 (Birko.Data.ViewModel cluster, L237–L239).
+**239 / 418 triaged** as of 2026-07-15. Next open is CR-L240 (Birko.Data.Views cluster, L240–L243).
+
+**Batch AQ — Data.ViewModel cluster (CR-L237, CR-L238, CR-L239):** Birko.Data.ViewModel. All closed;
+**/code-review: 1 real finding (a CR-id mislabel), fixed in-batch; no correctness bugs**. **L237**
+(cleanup): dropped the dead `.Where(m => m != null).ToList()!` from the async bulk repo's
+`CreateAsync`/`UpdateAsync`/`DeleteAsync(IEnumerable)` — `LoadModelInstance` returns a non-null TModel
+(`CreateModelInstance` → `Store.CreateInstance()` / `Activator.CreateInstance<TModel>()`), so the
+filter never fired and the `ToList()!` was a needless snapshot; the projection is now passed lazily,
+matching the already-lazy sync bulk sibling (`AbstractBulkViewModelRepository`, which never had the
+defect). **L238** (docs): the README + CLAUDE.md advertised `ViewModel<T>` / `ModelViewModel<TVm,TModel>`
+/ `AbstractLogViewModel` / `LogViewModel` under a `ViewModels/` folder + a `LoadAsync`/`SaveAsync`
+usage example — none of which exist here (the projitems compiles only the 8 Repositories files). Those
+base classes DO exist but in **Birko.Data.Core** (namespace `Birko.Data.ViewModels`, and they are
+**non-generic**). Rewrote both docs: this project ships the repository abstractions only, the base
+classes are pointed at Birko.Data.Core, the phantom folder is gone from the architecture tree, and the
+example is now buildable (consumer VM `: ModelViewModel, ILoadable<Product>`, concrete repo overriding
+`MapToModel`, real `CreateInstance`/`CreateAsync` API). **L239** (convention): replaced the CLR
+corrupted-state `AccessViolationException` (uncatchable under `legacyCorruptedStateExceptionsPolicy`)
+with `InvalidOperationException` at **all 18** read-mode guard sites across the 4 repos — the audit
+named the 6 single-item sites; the bulk siblings carried the identical CR-M180 defect and were fixed
+for consistency. Cross-file trace confirmed no framework/test source catches or asserts the old type
+(no downstream breakage). **/code-review** found the dead-filter work (CR-L237) had been mislabeled
+`CR-L239` in three source comments + two test artifacts (CR-L239 is the exception finding) — corrected.
+**Tests:** Data.ViewModel.Tests 11 → 17 — `SingleItemViewModelRepositoryReadModeTests` (the audit's
+primary sync+async single-item read-mode guards → InvalidOperationException) + `AsyncBulkViewModelRepositoryProjectionTests`
+(Create/Update/Delete bulk round-trips prove no items dropped by the lazy projection); existing
+`BulkViewModelRepositoryReadModeTests` flipped to InvalidOperationException. Downstream SQL.ViewModel.Tests
+11 green (consumer of the fixed abstract bases). Suites green: Data.ViewModel.Tests 17, SQL.ViewModel.Tests 11.
 
 **Batch AP — Data.TimescaleDB.ViewModel cluster (CR-L234, CR-L235, CR-L236):** Birko.Data.TimescaleDB.ViewModel
 (+ same-defect extras in Birko.Data.TimescaleDB and Birko.Data.ViewModel). All closed; **/code-review:
