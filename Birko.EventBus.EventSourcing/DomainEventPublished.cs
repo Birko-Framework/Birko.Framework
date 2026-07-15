@@ -47,6 +47,8 @@ namespace Birko.EventBus.EventSourcing
         /// </summary>
         public DomainEventPublished(DomainEvent domainEvent)
         {
+            if (domainEvent is null) throw new ArgumentNullException(nameof(domainEvent));
+
             AggregateId = domainEvent.AggregateId;
             Version = domainEvent.Version;
             DomainEventType = domainEvent.EventType;
