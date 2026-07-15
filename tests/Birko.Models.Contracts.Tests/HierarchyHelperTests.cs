@@ -119,4 +119,46 @@ public class HierarchyHelperTests
         ((Action)(() => HierarchyHelper.RewriteDescendantPaths(nodes, "/old", null!)))
             .Should().Throw<ArgumentNullException>();
     }
+
+    // ── IsDescendantOf (CR-L305) ─────────────────────────
+
+    [Fact]
+    public void IsDescendantOf_ChildPath_ReturnsTrue()
+    {
+        var ancestor = new Node { Path = "/a" };
+        var descendant = new Node { Path = "/a/b" };
+
+        HierarchyHelper.IsDescendantOf(descendant, ancestor).Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsDescendantOf_SiblingPrefix_ReturnsFalse()
+    {
+        // "/ab" is not under "/a" — the separator boundary matters.
+        var ancestor = new Node { Path = "/a" };
+        var other = new Node { Path = "/ab" };
+
+        HierarchyHelper.IsDescendantOf(other, ancestor).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsDescendantOf_SameNode_ReturnsFalse()
+    {
+        var node = new Node { Path = "/a" };
+
+        HierarchyHelper.IsDescendantOf(node, node).Should().BeFalse();
+    }
+
+    [Fact]
+    public void IsDescendantOf_NullOrEmptyPath_ReturnsFalse()
+    {
+        // CR-L305: an un-materialized (null/empty) Path must return false, not NRE.
+        var withPath = new Node { Path = "/a" };
+        var nullPath = new Node { Path = null! };
+        var emptyPath = new Node { Path = "" };
+
+        HierarchyHelper.IsDescendantOf(nullPath, withPath).Should().BeFalse();
+        HierarchyHelper.IsDescendantOf(withPath, nullPath).Should().BeFalse();
+        HierarchyHelper.IsDescendantOf(emptyPath, withPath).Should().BeFalse();
+    }
 }
