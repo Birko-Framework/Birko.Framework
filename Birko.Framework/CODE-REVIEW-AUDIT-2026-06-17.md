@@ -7341,7 +7341,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IsDescendantOf dereferences both Path properties without null checks
 - **Path:** `C:\Source\Birko\Framework\Birko.Models.Contracts\Contracts/IHierarchical.cs:120`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** `potentialDescendant.Path.StartsWith(potentialAncestor.Path + Separator)` throws NRE if either entity's Path is null. As a public helper on a contracts type it will be called with arbitrary IHierarchical instances whose Path may not yet be computed.
 - **Fix:** Add a guard returning false when either Path is null/empty (early return), consistent with the framework's guard-clause convention.
 

@@ -13,7 +13,15 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**304 / 418 triaged** as of 2026-07-15. Next open is CR-L305 (Birko.Models.Contracts cluster, L305…).
+**305 / 418 triaged** as of 2026-07-15. Next open is CR-L306 (Birko.Models.Customers cluster, L306…).
+
+**Batch BN — Birko.Models.Contracts (CR-L305):** Birko.Models.Contracts. Closed;
+**/code-review clean (no findings)**. **L305** (nullable): `HierarchyHelper.IsDescendantOf` dereferenced
+both `Path` properties unguarded, NRE-ing when either entity's Path wasn't yet materialized. Added a
+guard returning false when either argument or its Path is null/empty (guard-clause convention), and aligned
+the `StartsWith` to `StringComparison.Ordinal` to match the sibling `RewriteDescendantPaths` path handling.
+**Tests:** Contracts.Tests 7 → 11 — `IsDescendantOf` child→true, sibling-prefix→false (separator boundary),
+same-node→false, and null/empty Path→false (the L305 guard). Suite green: Contracts.Tests 11.
 
 **Batch BM — Birko.Models.Category cluster (CR-L303, CR-L304):** Birko.Models.Category. Both closed;
 **/code-review clean (no findings)**. **L303** (convention): all three `LoadFrom` methods (Model +
