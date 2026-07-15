@@ -7013,7 +7013,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated check body across the two health checks
 - **Path:** `C:\Source\Birko\Framework\Birko.Health.Azure\AzureBlobHealthCheck.cs:36-61 / AzureKeyVaultHealthCheck.cs:35-60`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The two CheckAsync bodies are near-identical: stopwatch, latencyMs rounding, the >2000ms Degraded branch, data dictionary construction, and the catch-all differ only by the probe call and the label string. As more Azure checks are added (the CLAUDE.md explicitly anticipates Azure Service Bus), this stopwatch+latency+threshold boilerplate will be copied again.
 - **Fix:** Consider a small shared helper (e.g. a static 'MeasureAsync(string label, Func<CancellationToken,Task> probe, ct)' in this project, or a protected base in Birko.Health) that wraps timing, the latency/degraded threshold, and the data dictionary. Keep the cancellation-rethrow fix in that one place.
 
@@ -7021,7 +7021,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Degraded (slow > 2s) path has no test
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Health.Azure.Tests/Azure/AzureBlobHealthCheckTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Tests cover constructor null-guards, instance creation, the factory-throws Unhealthy path, and the cancelled-token path, but there is no test exercising the Healthy success path with a populated data['latencyMs'] entry, nor the >2000ms Degraded branch. Note-only per review scope; full coverage is hard without a fake AzureBlobStorage/AzureKeyVaultSecretProvider, but the probe call is not abstracted behind an interface, so these branches are effectively untestable as written.
 - **Fix:** If the timing/threshold logic is extracted into a helper (see cleanup finding), unit-test that helper directly for the Healthy and Degraded branches without needing a live Azure dependency.
 

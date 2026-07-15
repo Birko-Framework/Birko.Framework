@@ -13,7 +13,23 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**263 / 418 triaged** as of 2026-07-15. Next open is CR-L264 (Birko.Health.Azure cluster, L264…).
+**265 / 418 triaged** as of 2026-07-15. Next open is CR-L266 (Birko.Health.Data cluster, L266…).
+
+**Batch AY — Birko.Health.Azure cluster (CR-L264, CR-L265):** Birko.Health.Azure. Both closed;
+**/code-review clean (no findings)**. **L264** (cleanup): the near-identical `CheckAsync` bodies of
+`AzureBlobHealthCheck` and `AzureKeyVaultHealthCheck` (stopwatch + latencyMs rounding + `>2000ms` Degraded
+branch + data dict + cancellation-rethrow + catch-all) are extracted into a new internal
+`AzureHealthCheckHelper.MeasureAsync(label, probe, ct, slowThreshold?)` (registered in the `.projitems`).
+Both checks now delegate — passing their label and a lightweight-probe lambda — so the CR-M191
+cancellation-rethrow lives in one place and future Azure checks (Service Bus, per the CLAUDE.md) don't
+re-copy the boilerplate. Behavior is byte-for-byte preserved (identical messages, same `>2s` boundary via
+`sw.Elapsed > threshold`, factory-throw → Unhealthy). **L265** (test-gap): the previously-untestable Healthy
+and Degraded branches (no fake Azure client, probe not abstracted) are now unit-testable via the helper.
+`AzureHealthCheckHelperTests` covers fast-probe → Healthy (with `latencyMs`), a real small delay + a
+`slowThreshold: TimeSpan.Zero` → Degraded (deterministic, no 2s wait), probe-throws → Unhealthy (label in
+message + Exception set), and probe-`OperationCanceledException` → rethrows (CR-M191). The helper's `internal`
+visibility is fine — the shared project compiles into the test assembly. **Tests:** Health.Azure.Tests
+12 → 16. Suite green: Health.Azure.Tests 16.
 
 **Batch AX — Birko.Health cluster (CR-L261, CR-L262, CR-L263):** Birko.Health. All closed;
 **/code-review clean (no findings)**. **L261** (nullable): `DiskSpaceHealthCheck.CheckAsync` replaced
