@@ -13,7 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**337 / 418 triaged** as of 2026-07-16. Next open is CR-L338 (Birko.Security.AzureKeyVault cluster, L338…).
+**340 / 418 triaged** as of 2026-07-16. Next open is CR-L341 (Birko.Security.BCrypt cluster, L341…).
+
+**Batch CF — Birko.Security.AzureKeyVault cluster (CR-L338, CR-L339, CR-L340):** Birko.Security.AzureKeyVault.
+All closed; **/code-review clean (no findings)**. **L338** (cleanup): the `GetSecretPairsAsync` override is
+byte-identical to `ISecretProvider`'s default interface method. Kept it — a DIM isn't visible on the concrete
+type, so removing it would be a silent public-API break for concrete-typed consumers; added a comment
+documenting the intentional re-declaration (keep in sync with the default). **L339** (bug): `_accessToken` is
+read lock-free on the token fast path — marked it `volatile` (legal for a reference field) so writes publish;
+`_tokenExpiresAt` (a `DateTime`, can't be volatile) left non-volatile with a comment noting the only cost of a
+stale read is a redundant fetch under the lock (the in-lock double-check is authoritative) or use within the
+5-minute expiry buffer. **L340** (nullable): `ExtractSecretName`/`ExtractVersion` did `new Uri(secretId)` after
+only a null/empty guard — a relative/malformed id threw `UriFormatException` out of `ListSecretsAsync`. Switched
+to `Uri.TryCreate(..., UriKind.Absolute, ...)` returning null on failure (subsumes the old guard); malformed
+entries are now skipped. Tests: `ListSecretsAsync_MalformedSecretId_SkipsEntryWithoutThrowing`,
+`GetSecretPairsAsync_ReturnsSingleValueEntry` (27 pass).
 
 **Batch CE — Birko.Security.AspNetCore (CR-L337):** Birko.Security.AspNetCore. Closed;
 **/code-review clean (no findings)**. **L337** (cleanup, comment-only): `TokenServiceAdapter.GenerateAccessToken`

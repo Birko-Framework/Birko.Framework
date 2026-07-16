@@ -7605,25 +7605,28 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetSecretPairsAsync override duplicates the default interface method verbatim
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.AzureKeyVault\AzureKeyVaultSecretProvider.cs:148-153`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** This override is byte-for-byte identical to the default interface method `ISecretProvider.GetSecretPairsAsync` (ISecretProvider.cs:57-62) — same body, same single-entry {"value": value} dictionary. It adds no provider-specific behavior (Azure Key Vault secrets are single-valued), so it is dead/duplicated logic.
 - **Fix:** Remove the override and rely on the default interface method, or add a comment explaining why the explicit re-implementation is needed (e.g. to surface it on the concrete type for non-interface-typed callers). If kept, prefer delegating rather than copying the body.
+- **Resolution (CR-L338, Batch CF):** Kept the override — this is a public provider type consumers may hold concretely, and a default interface method is not visible on the implementing type, so removing it would be a silent public-API break. Added a comment documenting that it intentionally re-declares the single-valued default behavior for concrete-typed callers and must be kept in sync with the interface default. Test `GetSecretPairsAsync_ReturnsSingleValueEntry` pins the single "value" entry.
 
 ### CR-L339 · ⚪ low · Birko.Security.AzureKeyVault
 - **Title:** Token-cache fields read outside the lock without memory barrier
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.AzureKeyVault\AzureKeyVaultSecretProvider.cs:178`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** `_accessToken` and `_tokenExpiresAt` are read on the fast path (line 178) outside `_tokenLock`, but neither field is volatile. The double-checked pattern is otherwise correct, and the consequence is at worst a redundant token fetch or a slightly stale read of `_tokenExpiresAt` (a struct read that is not guaranteed atomic on 32-bit). Low practical risk, but it is a textbook double-checked-locking-without-volatile pattern.
 - **Fix:** Mark `_accessToken` volatile and/or guard the fast-path read, or accept the documented benign race. At minimum a comment noting the intentional lock-free fast path would help.
+- **Resolution (CR-L339, Batch CF):** Marked `_accessToken` (a reference field, legal to mark) `volatile` so fast-path reads see published writes. Left `_tokenExpiresAt` non-volatile — a `DateTime` cannot be marked volatile, and a torn/stale read there only ever causes a redundant fetch under the lock (the double-check inside the lock is authoritative) or use of a token still inside its 5-minute expiry buffer; documented that benign race in a field comment.
 
 ### CR-L340 · ⚪ low · Birko.Security.AzureKeyVault
 - **Title:** ExtractSecretName / ExtractVersion throw on a non-absolute or malformed secret id
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.AzureKeyVault\AzureKeyVaultSecretProvider.cs:267-282`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Both helpers do `new Uri(secretId)` after only a null/empty guard. If Azure ever returns a relative or malformed `id` value, `new Uri(...)` throws UriFormatException, which would surface from ListSecretsAsync / GetSecretWithMetadataAsync as an unexpected exception rather than a skipped entry. Low risk because Azure returns well-formed absolute URIs, but the parsing is unguarded.
 - **Fix:** Use `Uri.TryCreate(secretId, UriKind.Absolute, out var uri)` and return null on failure, consistent with the defensive null-handling already present in these methods.
+- **Resolution (CR-L340, Batch CF):** Both `ExtractSecretName` and `ExtractVersion` now use `Uri.TryCreate(secretId, UriKind.Absolute, out var uri)`, returning null on failure (this also subsumes the prior null/empty guard, since `TryCreate` fails for both). `ListSecretsAsync` already skips null names, so a malformed id is dropped rather than throwing. Test `ListSecretsAsync_MalformedSecretId_SkipsEntryWithoutThrowing` covers relative + non-URI ids alongside a valid one.
 
 ### CR-L341 · ⚪ low · Birko.Security.BCrypt
 - **Title:** DecodeBCryptBase64 silently accepts invalid characters (IndexOf returns -1)
