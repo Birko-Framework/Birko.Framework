@@ -16,6 +16,7 @@ public class AesEncryptionProvider : IEncryptionProvider
 
     public byte[] Encrypt(byte[] data, byte[] key)
     {
+        ArgumentNullException.ThrowIfNull(data); // CR-L335: guard before reading data.Length
         ValidateKey(key);
 
         var nonce = RandomNumberGenerator.GetBytes(NonceSize);
@@ -35,6 +36,7 @@ public class AesEncryptionProvider : IEncryptionProvider
 
     public byte[] Decrypt(byte[] encryptedData, byte[] key)
     {
+        ArgumentNullException.ThrowIfNull(encryptedData); // CR-L335: guard before reading .Length
         ValidateKey(key);
 
         if (encryptedData.Length < NonceSize + TagSize)
@@ -74,6 +76,9 @@ public class AesEncryptionProvider : IEncryptionProvider
 
     private static void ValidateKey(byte[] key)
     {
+        // CR-L335: guard null before dereferencing key.Length, so a null key gives the intended clear
+        // ArgumentNullException rather than a NullReferenceException.
+        ArgumentNullException.ThrowIfNull(key);
         if (key.Length != KeySize)
             throw new ArgumentException($"Key must be exactly {KeySize} bytes (256 bits) for AES-256-GCM.", nameof(key));
     }

@@ -194,6 +194,12 @@ namespace Birko.Security.Authentication
             if (value.StartsWith("${", StringComparison.Ordinal) && value.EndsWith("}", StringComparison.Ordinal))
             {
                 var envVar = value.Substring(2, value.Length - 3);
+                // CR-L336: reject an empty/whitespace variable name (e.g. "${}") rather than passing it to
+                // Environment.GetEnvironmentVariable — treat the malformed token as a literal.
+                if (string.IsNullOrWhiteSpace(envVar))
+                {
+                    return value;
+                }
                 return Environment.GetEnvironmentVariable(envVar) ?? value;
             }
 
