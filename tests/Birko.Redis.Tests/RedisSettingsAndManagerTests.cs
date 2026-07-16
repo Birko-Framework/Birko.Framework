@@ -97,4 +97,23 @@ public class RedisSettingsAndManagerTests
         var act = () => { mgr.Dispose(); mgr.Dispose(); };
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void GetConnectionString_EmptyRawOverride_FallsThroughToProperties()
+    {
+        // CR-L331: an explicitly-empty RawConnectionString must NOT be returned verbatim.
+        var s = new RedisSettings("myhost", 6380) { RawConnectionString = "" };
+
+        s.GetConnectionString().Should().Be("myhost:6380");
+    }
+
+    [Fact]
+    public void Constructor_LeavesNameAndUserNameNonNull()
+    {
+        // CR-L332: the ctor passes string.Empty (not null!) for Name/UserName — the non-null contract holds.
+        var s = new RedisSettings("myhost");
+
+        s.Name.Should().NotBeNull();
+        s.UserName.Should().NotBeNull();
+    }
 }
