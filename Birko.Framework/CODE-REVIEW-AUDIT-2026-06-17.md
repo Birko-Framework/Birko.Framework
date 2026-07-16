@@ -7758,17 +7758,19 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AddVaultPath overloads skip argument-null guards
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Vault.Configuration\LocalVaultConfigurationExtensions.cs:76-96`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Both AddVaultPath overloads (VaultSecretProvider variant at 76-82, ISecretProvider variant at 89-96) call builder.Add(...) with no ArgumentNullException.ThrowIfNull on builder/client/provider, unlike the sibling AddSecretConfiguration methods in SecretConfigurationExtensions.cs (lines 23, 37-39) which guard every argument. A null client/provider is incidentally caught by the source constructor's null check, but a null builder produces a bare NullReferenceException on .Add rather than a clear ArgumentNullException. Inconsistent with the established guard pattern in the same assembly.
 - **Fix:** Add ArgumentNullException.ThrowIfNull(builder); plus ThrowIfNull(client)/ThrowIfNull(provider) at the top of both AddVaultPath overloads to match AddSecretConfiguration.
+- **Resolution (CR-L355, Batch CM):** Added `ArgumentNullException.ThrowIfNull(builder)` + `ThrowIfNull(client)`/`ThrowIfNull(provider)` to both `AddVaultPath` overloads, matching the sibling `AddSecretConfiguration`. Tests `AddVaultPath_NullBuilder_Throws` / `AddVaultPath_NullProvider_Throws`.
 
 ### CR-L356 · ⚪ low · Birko.Security.Vault.Configuration
 - **Title:** Load() swallows all exceptions to Console.WriteLine, yielding silent empty config
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Vault.Configuration\LocalVaultConfigurationProvider.cs:35-38`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Both Load() overrides (LocalVaultConfigurationProvider.cs:35-38 and SecretConfigurationProvider.cs:35-38) catch every Exception and write a message to Console.WriteLine, then return. The inner LoadAsync also catches read/list failures the same way (lines 56-58, 66-69 / 58-61, 71-74). A transient Vault outage or auth failure therefore produces a silently empty configuration section rather than a startup failure, and the only signal is unstructured Console output (no ILogger). This appears intentional (the LocalVaultOptions docs say empty token 'log a warning and no-op'), so flagging as low: confirm this fail-open behavior is desired for secret loading, since missing secrets can let an app boot with wrong/default config.
 - **Fix:** Consider routing diagnostics through an injectable Action<string> or ILogger instead of Console.WriteLine, and document explicitly that load failures are non-fatal so consumers know required secrets must be validated separately.
+- **Resolution (CR-L356, Batch CM):** Both providers (`LocalVaultConfigurationProvider`, `SecretConfigurationProvider`) now take an optional `Action<string>? diagnostics` (default `Console.WriteLine`) and route all their catch-site messages through it; the sink is threaded through both config sources and exposed as an optional trailing parameter on `AddVaultPath` (both overloads), `AddSecretConfiguration` (both overloads) and `AddLocalVaultConfiguration` (whose own "token is empty — skipping" message now also uses it). The fail-open behavior (a load failure yields an empty config section + diagnostic, never a startup crash; required secrets must be validated separately) is now documented on both providers' `Load()`. Test `Load_ListSecretsThrows_RoutesDiagnosticToInjectedSink_NotConsole` captures the warning via an injected sink.
 
 ### CR-L357 · ⚪ low · Birko.Serialization
 - **Title:** XML string Serialize emits encoding="utf-16" while byte/stream paths emit utf-8

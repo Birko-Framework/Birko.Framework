@@ -13,8 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**354 / 418 triaged** as of 2026-07-16. Next open is CR-L355 (Birko.Security.Vault.Configuration cluster,
-L355/L356).
+**356 / 418 triaged** as of 2026-07-16. Next open is CR-L357 (Birko.Serialization cluster, L357…).
+
+**Batch CM — Birko.Security.Vault.Configuration (CR-L355, CR-L356):** Birko.Security.Vault.Configuration
+(tests live in Birko.Security.Vault.Tests — the config projitems compiles into that assembly). Both closed;
+**/code-review clean (no findings)**. **L355** (convention): both `AddVaultPath` overloads skipped arg guards;
+added `ArgumentNullException.ThrowIfNull(builder)` + client/provider to match the sibling `AddSecretConfiguration`.
+**L356** (other): both `Load()` overrides swallowed every exception to hard-coded `Console.WriteLine`, yielding a
+silently-empty config on a Vault outage. Added an injectable `Action<string>? diagnostics` (default
+`Console.WriteLine`) to both providers, threaded through both config sources and exposed as an optional trailing
+param on `AddVaultPath` ×2 / `AddSecretConfiguration` ×2 / `AddLocalVaultConfiguration` (whose own skip message
+now uses it too); documented the intentional fail-open behavior on both `Load()` methods. Vault.Tests →52.
 
 **Batch CL — Birko.Security.Vault (CR-L353, CR-L354):** Birko.Security.Vault. Both closed;
 **/code-review clean (no findings)**. **L353** (nullable): `VaultSettings.Token` setter did `Password = value!`,
