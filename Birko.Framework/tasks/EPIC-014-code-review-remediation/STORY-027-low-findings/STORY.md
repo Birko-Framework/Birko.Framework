@@ -13,9 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**349 / 418 triaged** as of 2026-07-16. Next open is CR-L350 (Birko.Security.OAuth.Server cluster,
-security half — L350/L351/L352). NOTE: the OAuth.Server cluster is being done in two sub-batches — CJ (scope
-consolidation, L348/L349, done) and CK (refresh/code security + tests, L350/L351/L352, next).
+**352 / 418 triaged** as of 2026-07-16. Next open is CR-L353 (Birko.Security.Vault cluster, L353/L354).
+
+**Batch CK — Birko.Security.OAuth.Server refresh/code security (CR-L350, CR-L351, CR-L352):**
+Birko.Security.OAuth.Server. All closed; **/code-review clean (no findings)**. **L350** (security): a replayed
+already-revoked (rotated) refresh token was simply rejected, leaving sibling tokens valid. `HandleRefreshTokenAsync`
+now splits ownership/expiry from the revoked check — an owned, unexpired, `Revoked` token triggers
+`IRefreshTokenStore.RevokeFamilyAsync(clientId, userId)` (new DIM revoking all non-revoked siblings, bounded by
+CountAsync; overridable with a set-based update) before invalid_grant (RFC 6819 §5.2.2.3 reuse detection);
+foreign-client tokens stay on the generic path so they never touch this client's family. **L351** (bug→doc): the
+read→check-Used→set redemption is not atomic on the single-result `IAsyncStore` surface, so genuine single-use
+needs store-level CAS. Documented the contract on `IAuthorizationCodeStore` + an inline note at the redemption
+site (reference InMemory/JSON are last-write-wins; DB backends should `UPDATE ... WHERE Code=@c AND Used=0`).
+**L352** (test-gap): added revoked-replay→invalid_grant+family-revocation, narrower-scope-on-refresh, and
+RotateRefreshTokens=false-keeps-token tests. OAuth.Server.Tests →48. (Cluster done across CJ+CK.)
 
 **Batch CJ — Birko.Security.OAuth.Server scope consolidation (CR-L348, CR-L349):** Birko.Security.OAuth.Server.
 Both closed; **/code-review clean (no findings)**. **L348** (cleanup): the byte-identical `NarrowScope` was

@@ -7713,25 +7713,28 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Rotated/replayed refresh token does not trigger token-family revocation
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.OAuth.Server\Endpoints/Token/TokenEndpointHandler.cs:161`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** On refresh-token rotation the old record is marked Revoked and a replay is correctly rejected (line 161 rejects record.Revoked). However RFC 6819 §5.2.2.3 / OAuth 2.1 recommend that detecting use of an already-revoked (rotated) refresh token signals theft and should revoke the entire token family for that (clientId,userId). Currently a stolen-then-rotated token is simply rejected with invalid_grant, leaving any concurrently-minted sibling tokens valid. The CLAUDE.md note for this project claims rotation is enabled 'per RFC 6819 §5.2.2.3' but the reuse-detection half of that guidance is not implemented.
 - **Fix:** On encountering a Revoked refresh record during HandleRefreshTokenAsync, revoke all RefreshTokenRecords for the same ClientId+UserId before throwing. Same idea applies to single-use authorization-code replay (TokenEndpointHandler.cs:130).
+- **Resolution (CR-L350, Batch CK):** `HandleRefreshTokenAsync` now separates the ownership/expiry checks from the revoked check: a record that is present, unexpired and belongs to this client but is `Revoked` triggers `IRefreshTokenStore.RevokeFamilyAsync(clientId, userId)` (a new DIM that revokes every not-yet-revoked sibling, bounded by CountAsync; backends can override with a set-based update) before rejecting with invalid_grant. Ordering keeps a foreign-client token on the generic invalid_grant path so it never touches this client's family. Test `RefreshToken_ReplayOfRevokedToken_RejectsAndRevokesFamily` asserts the still-valid sibling is revoked. (Authorization-code replay is covered by CR-L351.)
 
 ### CR-L351 · ⚪ low · Birko.Security.OAuth.Server
 - **Title:** Authorization-code single-use enforced by read-then-write, not atomically (TOCTOU)
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.OAuth.Server\Endpoints/Token/TokenEndpointHandler.cs:130`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Code redemption reads the code (line 129), checks code.Used (130), then sets Used=true and persists (148-149). Between the check and the update two concurrent /token requests with the same code can both pass the !Used check and both be issued token pairs. The same non-atomic check-then-set pattern is used for device-code state. With the InMemory/JSON reference stores this is a real race; SQL backends would need a conditional update to be safe.
 - **Fix:** Document that single-use enforcement relies on the store providing an atomic conditional update, or add an optimistic-concurrency guard (e.g. a filtered Update(filter: Used==false) that returns affected count) so a losing concurrent redemption fails.
+- **Resolution (CR-L351, Batch CK):** Documented, per the audit's first option — the `IAsyncStore<T>` surface the handler holds exposes only single-result read + update, not an atomic conditional update, so genuine CAS must come from the store. Added an explicit contract note on `IAuthorizationCodeStore` (redemption is race-free only if UpdateAsync/claim is an atomic conditional update; reference InMemory/JSON stores are last-write-wins and carry the TOCTOU window; DB backends should use `UPDATE ... WHERE Code=@c AND Used=0`) and an inline comment at the redemption site in `HandleAuthorizationCodeAsync`. No behavior change.
 
 ### CR-L352 · ⚪ low · Birko.Security.OAuth.Server
 - **Title:** No tests for refresh-token reuse rejection or scope-narrowing on refresh
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Security.OAuth.Server.Tests/TokenEndpointHandlerTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Tests cover that rotation revokes the old token and issues a new one (RefreshToken_Rotates_RevokesPreviousIssuesNew) and the slow_down path, but there is no test asserting that presenting an already-revoked refresh token is rejected with invalid_grant, nor that a refresh request requesting a narrower scope (request.Scope subset of record.Scope at line 164) is honored, nor the no-rotation branch (RotateRefreshTokens=false keeps the same refresh token, lines 173-176). These are public behaviors with branch logic and no coverage.
 - **Fix:** Add tests for: revoked-token replay → invalid_grant; refresh with explicit narrower scope; RotateRefreshTokens=false returning the original refresh_token.
+- **Resolution (CR-L352, Batch CK):** Added all three: `RefreshToken_ReplayOfRevokedToken_RejectsAndRevokesFamily` (revoked-token replay → invalid_grant, and via CR-L350 the sibling is revoked too), `RefreshToken_ExplicitNarrowerScope_IsHonored` (request "read" against stored "read write" → "read"), and `RefreshToken_RotationDisabled_KeepsSameRefreshToken` (RotateRefreshTokens=false returns the original token unchanged and leaves the record un-revoked). OAuth.Server.Tests → 48.
 
 ### CR-L353 · ⚪ low · Birko.Security.Vault
 - **Title:** Token setter writes null into a non-nullable Password via null-forgiveness
