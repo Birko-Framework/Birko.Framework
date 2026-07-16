@@ -177,3 +177,54 @@ public class SplitMixProviderTests : ProviderTestBase
         }
     }
 }
+
+/// <summary>
+/// CR-L329: boundary coverage for the PRNG providers — NextInt(max)/NextInt(min,max) range exclusivity
+/// (the (int)(NextDouble()*range) boundary must never return the exclusive upper bound) and NextBytes
+/// filling an odd-length (non-word-multiple) buffer.
+/// </summary>
+public class PrngBoundaryTests
+{
+    private static System.Collections.Generic.IEnumerable<IRandomProvider> Prngs() =>
+        new IRandomProvider[]
+        {
+            new XorShiftProvider(12345UL),
+            new SplitMixProvider(12345UL),
+            new MersenneTwisterProvider(12345u),
+        };
+
+    [Fact]
+    public void NextInt_MaxValue_IsExclusiveAndNonNegative()
+    {
+        foreach (var p in Prngs())
+        {
+            for (int i = 0; i < 2000; i++)
+            {
+                p.NextInt(10).Should().BeInRange(0, 9);
+            }
+        }
+    }
+
+    [Fact]
+    public void NextInt_MinMax_StaysWithinExclusiveRange()
+    {
+        foreach (var p in Prngs())
+        {
+            for (int i = 0; i < 2000; i++)
+            {
+                p.NextInt(5, 8).Should().BeInRange(5, 7);
+            }
+        }
+    }
+
+    [Fact]
+    public void NextBytes_FillsOddLengthBuffer()
+    {
+        foreach (var p in Prngs())
+        {
+            var buffer = new byte[13];
+            p.NextBytes(buffer);
+            buffer.Should().Contain(b => b != 0, "an odd-length buffer must be fully filled, not left zero");
+        }
+    }
+}

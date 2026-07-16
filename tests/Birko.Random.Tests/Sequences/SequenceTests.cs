@@ -348,3 +348,30 @@ public class TokenGeneratorTests
         act.Should().Throw<ArgumentException>();
     }
 }
+
+/// <summary>
+/// CR-L327: a single-character alphabet used to break the mask formula
+/// (Math.Log(alphabet.Length - 1) = Math.Log(0) = -Infinity). It is now special-cased across all three
+/// generation paths (NanoId RNG, NanoId provider-backed, Token).
+/// </summary>
+public class SingleCharAlphabetTests
+{
+    [Fact]
+    public void NanoId_SingleCharAlphabet_FillsWithThatChar()
+    {
+        NanoIdGenerator.New("a", 10).Should().Be("aaaaaaaaaa");
+    }
+
+    [Fact]
+    public void NanoId_ProviderBacked_SingleCharAlphabet_FillsWithThatChar()
+    {
+        var provider = new XorShiftProvider(1UL);
+        NanoIdGenerator.New(provider, "x", 4).Should().Be("xxxx");
+    }
+
+    [Fact]
+    public void Token_SingleCharAlphabet_FillsWithThatChar()
+    {
+        TokenGenerator.NewCustom("z", 5).Should().Be("zzzzz");
+    }
+}
