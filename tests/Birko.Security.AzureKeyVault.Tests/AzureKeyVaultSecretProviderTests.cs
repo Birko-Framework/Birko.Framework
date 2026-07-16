@@ -1,6 +1,7 @@
 using Birko.Security.AzureKeyVault;
 using FluentAssertions;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
@@ -161,6 +162,59 @@ public class AzureKeyVaultSecretProviderTests
         result.Should().HaveCount(2);
         result.Should().Contain("key1");
         result.Should().Contain("key2");
+    }
+
+    [Fact]
+    public async Task ListSecretsAsync_MalformedSecretId_SkipsEntryWithoutThrowing()
+    {
+        // CR-L340: a relative / malformed secret id must not surface as a UriFormatException out of
+        // ExtractSecretName — the entry is skipped (Uri.TryCreate fails => null name) while valid ids parse.
+        var listResponse = JsonSerializer.Serialize(new
+        {
+            value = new[]
+            {
+                new { id = "not a valid uri" },
+                new { id = "/secrets/relative-only" },
+                new { id = "https://test.vault.azure.net/secrets/good-key" }
+            }
+        });
+
+        var handler = new SequentialHttpHandler(
+            (HttpStatusCode.OK, JsonSerializer.Serialize(new { access_token = "token", expires_in = 3600 })),
+            (HttpStatusCode.OK, listResponse)
+        );
+        var httpClient = new HttpClient(handler);
+        var settings = new AzureKeyVaultSettings("https://test.vault.azure.net/", "t", "c", "s");
+        using var provider = new AzureKeyVaultSecretProvider(settings, httpClient);
+
+        var act = async () => await provider.ListSecretsAsync();
+
+        var result = await act.Should().NotThrowAsync();
+        result.Which.Should().ContainSingle().Which.Should().Be("good-key");
+    }
+
+    [Fact]
+    public async Task GetSecretPairsAsync_ReturnsSingleValueEntry()
+    {
+        // CR-L338: the concrete override surfaces the single-valued default behavior — one "value" entry.
+        var secretResponse = JsonSerializer.Serialize(new
+        {
+            value = "pair-value",
+            id = "https://test.vault.azure.net/secrets/my-secret/v1"
+        });
+        var handler = new SequentialHttpHandler(
+            (HttpStatusCode.OK, JsonSerializer.Serialize(new { access_token = "token", expires_in = 3600 })),
+            (HttpStatusCode.OK, secretResponse)
+        );
+        var httpClient = new HttpClient(handler);
+        var settings = new AzureKeyVaultSettings("https://test.vault.azure.net/", "t", "c", "s");
+        using var provider = new AzureKeyVaultSecretProvider(settings, httpClient);
+
+        var pairs = await provider.GetSecretPairsAsync("my-secret");
+
+        pairs.Should().NotBeNull();
+        pairs!.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new KeyValuePair<string, string>("value", "pair-value"));
     }
 
     [Fact]
