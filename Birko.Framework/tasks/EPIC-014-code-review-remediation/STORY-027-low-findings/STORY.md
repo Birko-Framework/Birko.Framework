@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**329 / 418 triaged** as of 2026-07-16. Next open is CR-L330 (Birko.Redis cluster, L330…).
+**332 / 418 triaged** as of 2026-07-16. Next open is CR-L333 (Birko.Rules cluster, L333…).
+
+**Batch CB — Birko.Redis cluster (CR-L330, CR-L331, CR-L332):** Birko.Redis. All closed;
+**/code-review clean (no findings)**. **L330** (bug): `RedisConnectionManager.GetServer()` derived the
+endpoint via `_connectionString.Split(',')[0]` — broken for option-first tokens (`abortConnect=false,host`)
+or raw strings, and silently dropped all but the first cluster endpoint. Now resolves the endpoint from the
+live multiplexer (`GetEndPoints()[0]`) — no string-parse assumptions. **L331** (bug): `GetConnectionString`
+short-circuited on `RawConnectionString != null`, so an explicit `""` was returned verbatim (invalid
+connection string) — changed to `!string.IsNullOrEmpty` so empty falls through to property-based building.
+**L332** (nullable): the parameterized ctor passed `null!` for Name/UserName/Password into base; pass
+`string.Empty` instead (GetId/GetConnectionString treat empty as unset, so behavior-preserving) to keep the
+non-null contract honest rather than a load-bearing `!`. **Tests:** Redis.Tests 10 → 12 —
+`GetConnectionString_EmptyRawOverride_FallsThroughToProperties`, `Constructor_LeavesNameAndUserNameNonNull`.
+(L330's GetServer needs a live Redis — code-review-verified.) Suite green: Redis.Tests 12.
 
 **Batch CA — Birko.Random cluster (CR-L326, CR-L327, CR-L328, CR-L329):** Birko.Random. All closed;
 **/code-review clean (no findings)**. **L326** (bug): `SnowflakeGenerator.Next` reset `_sequence = 0` in the

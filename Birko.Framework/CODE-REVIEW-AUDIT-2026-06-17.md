@@ -7541,7 +7541,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetServer() endpoint parse breaks for non-host-first / raw connection strings
 - **Path:** `C:\Source\Birko\Framework\Birko.Redis\RedisConnectionManager.cs:51`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** GetServer() derives the endpoint via _connectionString.Split(',')[0]. This assumes the first comma-delimited token is always 'host:port'. When the manager is built from a RawConnectionString (or a string where an option like 'abortConnect=false' precedes the endpoint), [0] is not an endpoint and GetServer(string) will fail or target the wrong server. Multi-endpoint clusters are also silently reduced to the first endpoint.
 - **Fix:** Resolve the endpoint from the live multiplexer instead of re-parsing the string, e.g. _connection.Value.GetEndPoints() and call GetServer(endpoint) on the first (or iterate). This avoids string-parse assumptions entirely.
 
@@ -7549,7 +7549,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RawConnectionString empty-string is returned verbatim
 - **Path:** `C:\Source\Birko\Framework\Birko.Redis\RedisSettings.cs:70`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** GetConnectionString() short-circuits on 'RawConnectionString != null', so an explicitly-set empty string ("") is returned verbatim instead of falling back to property-based building, producing an invalid connection string. The property is documented as an override 'if set'.
 - **Fix:** Use !string.IsNullOrEmpty(RawConnectionString) for the guard, consistent with the IsNullOrEmpty checks used for Password/UserName/Name a few lines below.
 
@@ -7557,7 +7557,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Settings constructor passes null! through to base for name/username
 - **Path:** `C:\Source\Birko\Framework\Birko.Redis\RedisSettings.cs:55`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The parameterized constructor calls base(host, null!, null!, password ?? null!, port, useSsl), forcing null into RemoteSettings.Name and UserName (both declared 'string ... = null!'). This compiles without nullable warnings (the ! suppresses them) and matches the framework's existing 'string Prop { get; set; } = null!;' pattern, so it is in-convention, but it does mean Name/UserName are silently null after this ctor — GetConnectionString guards with IsNullOrEmpty so it is safe in practice. Flagged only because the '!' is load-bearing and a future refactor that reads Name/UserName unguarded would NPE.
 - **Fix:** Optional: pass string.Empty instead of null! for Name/UserName to keep the non-null contract honest, since GetId()/GetConnectionString already treat empty as 'unset'.
 
