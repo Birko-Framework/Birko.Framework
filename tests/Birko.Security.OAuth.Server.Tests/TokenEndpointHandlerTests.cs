@@ -278,6 +278,92 @@ public class TokenEndpointHandlerTests
     }
 
     [Fact]
+    public async Task RefreshToken_ReplayOfRevokedToken_RejectsAndRevokesFamily()
+    {
+        // CR-L352 (+CR-L350): presenting an already-revoked (rotated) refresh token is rejected with
+        // invalid_grant AND triggers RFC 6819 reuse detection — every sibling token in the (client, user)
+        // family is revoked, so a concurrently-minted still-valid token can no longer be used.
+        var fixture = new TestServer();
+        fixture.RegisterConfidentialClient("c1", "s1", OAuthGrantTypes.RefreshToken);
+        const string replayed = "already-rotated-token";
+        const string sibling = "sibling-still-valid-token";
+        await fixture.Refreshes.CreateAsync(new RefreshTokenRecord
+        {
+            TokenHash = ClientSecretHasher.Hash(replayed),
+            ClientId = "c1", UserId = "user-1", Scope = "read",
+            ExpiresAt = fixture.Clock.UtcNow.AddDays(1), Revoked = true // already rotated away
+        });
+        await fixture.Refreshes.CreateAsync(new RefreshTokenRecord
+        {
+            TokenHash = ClientSecretHasher.Hash(sibling),
+            ClientId = "c1", UserId = "user-1", Scope = "read",
+            ExpiresAt = fixture.Clock.UtcNow.AddDays(1), Revoked = false // sibling, still valid
+        });
+
+        var act = async () => await fixture.Server.Token.HandleAsync(new TokenRequest
+        {
+            GrantType = OAuthGrantTypes.RefreshToken,
+            ClientId = "c1", ClientSecret = "s1", RefreshToken = replayed
+        });
+        (await act.Should().ThrowAsync<OAuthServerException>())
+            .Which.ErrorCode.Should().Be(OAuthErrorCodes.InvalidGrant);
+
+        // The whole family is now revoked — including the previously-valid sibling.
+        (await fixture.Refreshes.GetByHashAsync(ClientSecretHasher.Hash(sibling)))!.Revoked.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RefreshToken_ExplicitNarrowerScope_IsHonored()
+    {
+        // CR-L352: a refresh requesting a subset of the stored scope narrows to that subset.
+        var fixture = new TestServer();
+        fixture.RegisterConfidentialClient("c1", "s1", OAuthGrantTypes.RefreshToken);
+        const string plaintext = "the-refresh-token";
+        await fixture.Refreshes.CreateAsync(new RefreshTokenRecord
+        {
+            TokenHash = ClientSecretHasher.Hash(plaintext),
+            ClientId = "c1", UserId = "user-1", Scope = "read write",
+            ExpiresAt = fixture.Clock.UtcNow.AddDays(1)
+        });
+
+        var response = await fixture.Server.Token.HandleAsync(new TokenRequest
+        {
+            GrantType = OAuthGrantTypes.RefreshToken,
+            ClientId = "c1", ClientSecret = "s1", RefreshToken = plaintext,
+            Scope = "read"
+        });
+
+        response.Scope.Should().Be("read");
+    }
+
+    [Fact]
+    public async Task RefreshToken_RotationDisabled_KeepsSameRefreshToken()
+    {
+        // CR-L352: with RotateRefreshTokens=false the original refresh_token is returned unchanged and the
+        // stored record is not revoked (only a new access token is minted).
+        var fixture = new TestServer();
+        fixture.Settings.RotateRefreshTokens = false;
+        fixture.RegisterConfidentialClient("c1", "s1", OAuthGrantTypes.RefreshToken);
+        const string plaintext = "the-refresh-token";
+        await fixture.Refreshes.CreateAsync(new RefreshTokenRecord
+        {
+            TokenHash = ClientSecretHasher.Hash(plaintext),
+            ClientId = "c1", UserId = "user-1", Scope = "read",
+            ExpiresAt = fixture.Clock.UtcNow.AddDays(1)
+        });
+
+        var response = await fixture.Server.Token.HandleAsync(new TokenRequest
+        {
+            GrantType = OAuthGrantTypes.RefreshToken,
+            ClientId = "c1", ClientSecret = "s1", RefreshToken = plaintext
+        });
+
+        response.AccessToken.Should().NotBeNullOrWhiteSpace();
+        response.RefreshToken.Should().Be(plaintext); // unchanged
+        (await fixture.Refreshes.GetByHashAsync(ClientSecretHasher.Hash(plaintext)))!.Revoked.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task DeviceCode_Pending_ReturnsAuthorizationPending()
     {
         var fixture = new TestServer();
