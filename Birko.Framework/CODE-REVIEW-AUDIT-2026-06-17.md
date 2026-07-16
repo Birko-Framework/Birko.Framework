@@ -7889,7 +7889,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** HttpResponseMessage not disposed in non-streaming operations
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage.AzureBlob\AzureBlobStorage.cs:117,153,179,202,408,416`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Upload/Delete/GetReference/List/ExistsInternal/GetReferenceInternal call _httpClient.SendAsync and read headers/body but never dispose the returned HttpResponseMessage. Less severe than the DownloadAsync case because the body is fully buffered/consumed, but the responses are still IDisposable and should be wrapped in 'using' for deterministic cleanup and to satisfy analyzer CA2000.
 - **Fix:** Wrap each SendAsync result in 'using var response = ...' (the streaming DownloadAsync is the exception that must transfer ownership).
 
@@ -7897,7 +7897,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetDownloadUrlAsync / GetUploadUrlAsync ignore the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage.AzureBlob\AzureBlobStorage.cs:266-312`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Both methods accept a CancellationToken ct but never observe it. Framework convention is that async methods observe their CancellationToken. These are synchronous-bodied (pure HMAC computation) so the practical impact is nil, but a ct.ThrowIfCancellationRequested() at the top would honor the contract for an already-cancelled token.
 - **Fix:** Add ct.ThrowIfCancellationRequested() at method entry, or document that no I/O occurs so cancellation is a no-op.
 
@@ -7905,7 +7905,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** TenantId/ClientId/ClientSecret setters use null-forgiving on nullable backing fields
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage.AzureBlob\AzureBlobSettings.cs:24-42`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** TenantId/ClientId/ClientSecret are typed string? but their setters write value! into the (presumably non-null) base Name/UserName/Password members. Assigning null through these setters would store a null behind a non-null contract, and the '!' suppresses the warning rather than handling it. If the base members are themselves nullable this is harmless; if not, this can plant a null that later surfaces as a CS8600-class issue at the consumer. Verify base member nullability and drop the '!' if the base is nullable, or coalesce to string.Empty if not.
 - **Fix:** Make the alias property types match the base member nullability, or use 'value ?? string.Empty' instead of 'value!'.
 
@@ -7913,7 +7913,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FormUrlEncodedContent token request not disposed
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage.AzureBlob\AzureBlobStorage.cs:584-592`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** tokenRequest (FormUrlEncodedContent, an IDisposable HttpContent) is passed to PostAsync but never disposed. Minor since it is small and short-lived, but it should be in a 'using' for consistency with the other resource-cleanup concerns.
 - **Fix:** using var tokenRequest = new FormUrlEncodedContent(...);
 
@@ -7921,7 +7921,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gap: no coverage of HTTP-driven behavior (NotFound mapping, metadata/XML parsing, exists, list)
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Storage.AzureBlob.Tests\AzureBlob\AzureBlobStorageTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** All storage tests only exercise argument-null/validation paths before any HTTP call. There is no fake HttpMessageHandler covering: DownloadAsync NotFound -> StorageResult.NotFound, ParseBlobProperties (ETag/creation-time/x-ms-meta parsing), ParseBlobList XML parsing, ExistsInternalAsync truthiness, OverwriteExisting gating, or the token-acquisition/caching/refresh logic. These are the highest-logic, highest-risk areas (including the DownloadAsync leak and SAS encoding above) and are completely untested.
 - **Fix:** Add a stub HttpMessageHandler to drive UploadAsync/DownloadAsync/ListAsync/GetReferenceAsync against canned responses, and a test for the token cache/refresh (-5min skew) path.
 

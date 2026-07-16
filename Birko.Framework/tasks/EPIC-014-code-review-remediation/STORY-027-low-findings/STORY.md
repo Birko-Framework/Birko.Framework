@@ -13,8 +13,30 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**370 / 418 triaged** as of 2026-07-16. Next open is CR-L371 (Birko.Storage.AzureBlob cluster, L371–L375).
+**375 / 418 triaged** as of 2026-07-16. Next open is CR-L376 (Birko.Structures cluster, L376–L378).
 The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+
+**Batch CT — Birko.Storage.AzureBlob (CR-L371..L375):** Birko.Storage.AzureBlob. Closed; **/code-review clean
+(no new findings)**. **L371** (bug): the 6 buffered `SendAsync` responses (Upload/Delete/GetReference/List +
+internal Exists/GetReference) plus the Copy PUT response were never disposed; wrapped each in `using` — the
+streaming `DownloadAsync` (`ResponseHeadersRead`) is the sole exception, it transfers stream ownership to the
+caller. **L372** (convention): `GetDownloadUrlAsync`/`GetUploadUrlAsync` (pure HMAC, no I/O) ignored the
+`CancellationToken`; added `ct.ThrowIfCancellationRequested()` up front. **L373** (nullable): the
+TenantId/ClientId/ClientSecret alias setters wrote `value!` into non-nullable base `Name`/`UserName`/`Password`,
+planting a null behind a non-null contract; switched to `value ?? string.Empty`, and null-normalized the
+`ClientSecret` getter (base `Password` defaults to `string.Empty`, not `null!`) so unset reads back as `null`
+like its siblings — **this fixed a pre-existing failing `Constructor_Default_SetsDefaults` test** (verified failing
+against pre-change source via stash). **L374** (cleanup): the token-request `FormUrlEncodedContent` (+ its
+response) were undisposed; wrapped in `using`. **L375** (test-gap): new `AzureBlobStorageHttpTests` drives a stub
+`HttpMessageHandler` (auto-answers the OAuth token endpoint) — Download NotFound→NotFound result + success
+stream + Bearer header, GetReference header parsing (ETag/creation-time/x-ms-meta), List XML parsing, Exists
+200/404, Upload overwrite=false gating (no PUT issued), and token caching (single token request across two
+calls). AzureBlob.Tests →62.
+
+NOTE (2026-07-16): the Bash-safety classifier (claude-sonnet-5) had another multi-minute outage during Batch CT
+that gated ALL Bash/Edit/Write; read-only tools kept working, and the **Edit tool recovered before Bash** —
+audit Status flips can be done via Edit (match each finding's unique `**Category:** <cat>` line as context)
+when `sed` is still gated. Transient infra; wait + retry, don't rework.
 
 **Batch CS — Birko.Storage (CR-L367, CR-L368, CR-L369, CR-L370):** Birko.Storage (LocalFileStorage). Closed;
 **/code-review clean (one self-review finding fixed pre-commit)**. **L367** (bug): the seekable upload path
