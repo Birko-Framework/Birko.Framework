@@ -43,7 +43,7 @@ namespace Birko.Serialization.Xml
         {
             ArgumentNullException.ThrowIfNull(value);
             var serializer = new XmlSerializer(value.GetType());
-            using var stringWriter = new StringWriter();
+            using var stringWriter = new EncodedStringWriter(_writerSettings.Encoding);
             using var xmlWriter = XmlWriter.Create(stringWriter, _writerSettings);
             serializer.Serialize(xmlWriter, value);
             return stringWriter.ToString();
@@ -53,7 +53,7 @@ namespace Birko.Serialization.Xml
         {
             ArgumentNullException.ThrowIfNull(value);
             var serializer = new XmlSerializer(typeof(T));
-            using var stringWriter = new StringWriter();
+            using var stringWriter = new EncodedStringWriter(_writerSettings.Encoding);
             using var xmlWriter = XmlWriter.Create(stringWriter, _writerSettings);
             serializer.Serialize(xmlWriter, value);
             return stringWriter.ToString();
@@ -199,6 +199,20 @@ namespace Birko.Serialization.Xml
             using var xmlReader = XmlReader.Create(stream, _readerSettings);
             var result = (T?)serializer.Deserialize(xmlReader);
             return Task.FromResult(result);
+        }
+
+        /// <summary>
+        /// CR-L357: XmlWriter derives the <c>&lt;?xml encoding="…"?&gt;</c> declaration from the underlying
+        /// TextWriter's <see cref="TextWriter.Encoding"/>. A plain <see cref="StringWriter"/> always reports
+        /// UTF-16, so the string overloads emitted <c>encoding="utf-16"</c> while the byte/stream overloads
+        /// emitted the configured <c>utf-8</c> — a contradictory declaration for the same logical payload.
+        /// This subclass reports the writer settings' encoding so all overloads agree.
+        /// </summary>
+        private sealed class EncodedStringWriter : StringWriter
+        {
+            private readonly Encoding _encoding;
+            public EncodedStringWriter(Encoding encoding) => _encoding = encoding;
+            public override Encoding Encoding => _encoding;
         }
     }
 }
