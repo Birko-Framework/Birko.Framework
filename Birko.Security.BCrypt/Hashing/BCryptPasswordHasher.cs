@@ -6,7 +6,9 @@ namespace Birko.Security.BCrypt.Hashing;
 
 /// <summary>
 /// BCrypt password hasher. Implements <see cref="IPasswordHasher"/> using the BCrypt adaptive hashing algorithm.
-/// Output format: standard BCrypt "$2a$" / "$2b$" modular crypt format.
+/// Produces the standard BCrypt "$2a$" modular crypt format. Verification also accepts "$2b$"-tagged hashes from
+/// other implementations; the "$2a$"/"$2b$" semantic difference (a sign-extension wraparound for passwords &gt;=
+/// 256 bytes) cannot arise here because inputs are capped at 72 bytes, so both variants hash identically.
 /// </summary>
 /// <remarks>
 /// BCrypt is intentionally slow and includes a work factor that can be increased over time.
@@ -423,12 +425,29 @@ public class BCryptPasswordHasher : IPasswordHasher
 
     private static bool IsValidBCryptHash(string hash)
     {
-        return hash.Length == 60
-            && hash[0] == '$'
-            && hash[1] == '2'
-            && (hash[2] == 'a' || hash[2] == 'b')
-            && hash[3] == '$'
-            && hash[6] == '$';
+        if (hash.Length != 60
+            || hash[0] != '$'
+            || hash[1] != '2'
+            || (hash[2] != 'a' && hash[2] != 'b')
+            || hash[3] != '$'
+            || hash[6] != '$')
+        {
+            return false;
+        }
+
+        // CR-L341: the 22-char salt + 31-char digest (indices 7..59) must all be drawn from the BCrypt-Base64
+        // alphabet. Without this, a shaped-but-corrupt hash reaches DecodeBCryptBase64 where an out-of-alphabet
+        // char produces IndexOf == -1 and decodes to silent garbage salt bytes instead of being rejected;
+        // validating here lets Verify return false cleanly for a malformed hash.
+        for (int i = 7; i < 60; i++)
+        {
+            if (BCryptBase64.IndexOf(hash[i]) < 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static string EncodeBCryptBase64(byte[] data, int length)
@@ -460,15 +479,26 @@ public class BCryptPasswordHasher : IPasswordHasher
         int off = 0, soff = 0;
         while (off < maxBytes && soff < encoded.Length)
         {
-            int c1 = BCryptBase64.IndexOf(encoded[soff++]);
-            int c2 = soff < encoded.Length ? BCryptBase64.IndexOf(encoded[soff++]) : 0;
+            int c1 = DecodeBCryptChar(encoded[soff++]);
+            int c2 = soff < encoded.Length ? DecodeBCryptChar(encoded[soff++]) : 0;
             if (off < maxBytes) result[off++] = (byte)((c1 << 2) | ((c2 >> 4) & 0x03));
-            int c3 = soff < encoded.Length ? BCryptBase64.IndexOf(encoded[soff++]) : 0;
+            int c3 = soff < encoded.Length ? DecodeBCryptChar(encoded[soff++]) : 0;
             if (off < maxBytes) result[off++] = (byte)(((c2 & 0x0F) << 4) | ((c3 >> 2) & 0x0F));
-            int c4 = soff < encoded.Length ? BCryptBase64.IndexOf(encoded[soff++]) : 0;
+            int c4 = soff < encoded.Length ? DecodeBCryptChar(encoded[soff++]) : 0;
             if (off < maxBytes) result[off++] = (byte)(((c3 & 0x03) << 6) | c4);
         }
         return result;
+    }
+
+    // CR-L341: reject an out-of-alphabet character instead of coercing IndexOf's -1 into byte math.
+    // Callers reaching here have already passed IsValidBCryptHash (Verify) or generated the salt
+    // themselves (Hash), so this throw only guards against direct misuse of the private decoder.
+    private static int DecodeBCryptChar(char c)
+    {
+        int idx = BCryptBase64.IndexOf(c);
+        if (idx < 0)
+            throw new ArgumentException($"Invalid BCrypt-Base64 character '{c}'.");
+        return idx;
     }
 
     #endregion
