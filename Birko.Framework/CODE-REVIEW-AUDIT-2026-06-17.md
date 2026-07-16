@@ -7825,7 +7825,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DeserializeAsync uses Task.Run for CPU-bound work (sync-over-async)
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization.Protobuf\ProtobufBinarySerializer.cs:129-140`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** DeserializeAsync wraps the synchronous Serializer.Deserialize in Task.Run(...). protobuf-net has no native async API so offloading is defensible, but it differs from the sibling MessagePackBinarySerializer.DeserializeAsync, which copies the stream via the truly-async stream.CopyToAsync(ms, cancellationToken) and then deserializes from the buffer. The Task.Run approach offloads to a thread-pool thread for no I/O benefit and is the established 'sync-over-async' smell. It does at least observe the token via the Task.Run ct overload.
 - **Fix:** For consistency with MessagePackBinarySerializer, either keep the operation synchronous and complete a Task, or buffer the stream with CopyToAsync and deserialize from the in-memory bytes; avoid Task.Run for pure CPU work.
 
@@ -7833,7 +7833,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Non-generic Serialize(object) and string Deserialize<T> paths are untested
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Serialization.Tests\Protobuf\ProtobufBinarySerializerTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The test suite covers byte round-trip, string round-trip, by-type deserialize, nested objects, and two null-guard cases, but never exercises: the non-generic SerializeToBytes(object)/Serialize(object) success path that calls Serializer.Serialize(stream, value) with a boxed object (protobuf-net 3.x is sensitive to the generic-vs-object overload), the stream-based Serialize/Deserialize overloads, and none of the four async methods (SerializeAsync/DeserializeAsync) are tested at all. The async cancellation gap above would have been caught by a cancelled-token test.
 - **Fix:** Add tests for the Stream Serialize/Deserialize overloads, the non-generic object Serialize path, and the four async methods including an already-cancelled-token assertion (which would expose the SerializeAsync token gap).
 

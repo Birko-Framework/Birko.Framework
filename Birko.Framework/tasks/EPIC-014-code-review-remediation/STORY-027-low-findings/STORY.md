@@ -13,8 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**362 / 418 triaged** as of 2026-07-16. Next open is CR-L363 (Birko.Serialization.Protobuf cluster,
-L363/L364).
+**364 / 418 triaged** as of 2026-07-16. Next open is CR-L365 (Birko.Serialization.Yaml cluster, L365/L366).
+
+**Batch CQ — Birko.Serialization.Protobuf (CR-L363, CR-L364):** Birko.Serialization.Protobuf. Closed;
+**/code-review clean (no findings)**. **L363** (convention): `DeserializeAsync` (both overloads) wrapped the
+synchronous `Serializer.Deserialize` in `Task.Run(..., ct)` — the sync-over-async smell, offloading pure CPU
+work to a thread-pool thread for no I/O benefit. protobuf-net has no native async API, so — matching the sibling
+`SerializeAsync` in the same file — both now deserialize synchronously, observe the token up front via
+`ThrowIfCancellationRequested()`, and return `Task.FromResult`. **L364** (test-gap): added
+`ProtobufStreamCoverageTests` beyond the existing CR-M244/M245 `ProtobufStreamCancellationTests` — sync Stream
+round-trips (generic + by-type), the non-generic boxed-`object` serialize path (protobuf-net 3.x overload
+sensitivity), async by-type round-trip, and the `DeserializeAsync` cancelled-token gap. Serialization.Tests →102.
 
 **Batch CP — Birko.Serialization.Newtonsoft (CR-L361, CR-L362):** Birko.Serialization.Newtonsoft. Closed;
 **/code-review clean (no findings)**. **L361** (async CT observation): both `SerializeAsync` overloads did the
