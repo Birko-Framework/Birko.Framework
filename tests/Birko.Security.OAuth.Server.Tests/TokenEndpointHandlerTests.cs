@@ -30,6 +30,44 @@ public class TokenEndpointHandlerTests
     }
 
     [Fact]
+    public async Task ClientCredentials_SupportedScopesConfigured_NarrowsToServerIntersection()
+    {
+        // CR-L349: OAuthServerSettings.SupportedScopes (previously dead) now constrains issuance. The client
+        // is registered for {read, write} but the server only supports {read}, so "read write" narrows to "read".
+        var fixture = new TestServer();
+        fixture.Settings.SupportedScopes = new HashSet<string> { "read" };
+        fixture.RegisterConfidentialClient("c1", "s1", OAuthGrantTypes.ClientCredentials);
+
+        var response = await fixture.Server.Token.HandleAsync(new TokenRequest
+        {
+            GrantType = OAuthGrantTypes.ClientCredentials,
+            ClientId = "c1",
+            ClientSecret = "s1",
+            Scope = "read write"
+        });
+
+        response.Scope.Should().Be("read");
+    }
+
+    [Fact]
+    public async Task ClientCredentials_SupportedScopesEmpty_ImposesNoConstraint()
+    {
+        // CR-L349: an empty SupportedScopes set must not constrain — the client's full allowed set is issued.
+        var fixture = new TestServer(); // SupportedScopes defaults to empty
+        fixture.RegisterConfidentialClient("c1", "s1", OAuthGrantTypes.ClientCredentials);
+
+        var response = await fixture.Server.Token.HandleAsync(new TokenRequest
+        {
+            GrantType = OAuthGrantTypes.ClientCredentials,
+            ClientId = "c1",
+            ClientSecret = "s1",
+            Scope = "read write"
+        });
+
+        response.Scope.Should().Be("read write");
+    }
+
+    [Fact]
     public async Task ClientCredentials_RejectsWrongSecret()
     {
         var fixture = new TestServer();
