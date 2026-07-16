@@ -47,7 +47,7 @@ public class AuthorizationEndpointHandler
         var (client, scope) = await ValidateAsync(request, ct).ConfigureAwait(false);
 
         var prior = await _consents.GetAsync(userId, client.ClientId, ct).ConfigureAwait(false);
-        if (prior != null && CoversAllScopes(prior.Scope, scope))
+        if (prior != null && ScopeUtil.CoversAllScopes(prior.Scope, scope))
         {
             var code = await IssueCodeAsync(request, client, userId, scope, ct).ConfigureAwait(false);
             return new AuthorizeResponse
@@ -93,9 +93,9 @@ public class AuthorizationEndpointHandler
                 GrantedAt = _clock.UtcNow
             }, ct: ct).ConfigureAwait(false);
         }
-        else if (!CoversAllScopes(existing.Scope, scope))
+        else if (!ScopeUtil.CoversAllScopes(existing.Scope, scope))
         {
-            existing.Scope = MergeScopes(existing.Scope, scope);
+            existing.Scope = ScopeUtil.MergeScopes(existing.Scope, scope);
             existing.GrantedAt = _clock.UtcNow;
             await _consents.UpdateAsync(existing, ct: ct).ConfigureAwait(false);
         }
@@ -137,7 +137,7 @@ public class AuthorizationEndpointHandler
             throw new OAuthServerException(OAuthErrorCodes.InvalidRequest, "PKCE code_challenge is required for public clients.");
         }
 
-        var scope = NarrowScope(request.Scope, client.AllowedScopes);
+        var scope = ScopeUtil.NarrowScope(request.Scope, client.AllowedScopes, _settings.SupportedScopes);
         return (client, scope);
     }
 
@@ -158,35 +158,4 @@ public class AuthorizationEndpointHandler
         return code;
     }
 
-    private static string NarrowScope(string? requested, IEnumerable<string> allowed)
-    {
-        var allowedSet = new HashSet<string>(allowed, StringComparer.Ordinal);
-        if (string.IsNullOrWhiteSpace(requested))
-        {
-            return string.Join(' ', allowedSet);
-        }
-        var requestedScopes = requested!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var granted = requestedScopes.Where(allowedSet.Contains).ToArray();
-        if (granted.Length == 0 && allowedSet.Count > 0)
-        {
-            throw new OAuthServerException(OAuthErrorCodes.InvalidScope, "None of the requested scopes are allowed for this client.");
-        }
-        return string.Join(' ', granted);
-    }
-
-    private static bool CoversAllScopes(string granted, string requested)
-    {
-        var grantedSet = granted.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
-        return requested.Split(' ', StringSplitOptions.RemoveEmptyEntries).All(grantedSet.Contains);
-    }
-
-    private static string MergeScopes(string existing, string toAdd)
-    {
-        var set = existing.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.Ordinal);
-        foreach (var s in toAdd.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-        {
-            set.Add(s);
-        }
-        return string.Join(' ', set);
-    }
 }

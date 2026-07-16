@@ -38,6 +38,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\ClientRegistration\ClientRegistrationResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Endpoints\ClientRegistration\ClientRegistrationHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Internal\PkceValidator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Internal\ScopeUtil.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Internal\RandomStringGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Internal\ClientSecretHasher.cs" />
   </ItemGroup>

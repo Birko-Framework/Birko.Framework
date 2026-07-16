@@ -115,7 +115,7 @@ public class TokenEndpointHandler
 
     private Task<TokenResponse> HandleClientCredentialsAsync(OAuthClient client, TokenRequest request, CancellationToken ct)
     {
-        var scope = NarrowScope(request.Scope, client.AllowedScopes);
+        var scope = ScopeUtil.NarrowScope(request.Scope, client.AllowedScopes, _settings.SupportedScopes);
         // RFC 6749 §4.4.3 — refresh tokens SHOULD NOT be issued.
         var response = IssueAccessToken(client.ClientId, subject: client.ClientId, scope: scope);
         return Task.FromResult(response);
@@ -161,7 +161,7 @@ public class TokenEndpointHandler
         if (record == null || record.Revoked || record.ExpiresAt <= _clock.UtcNow || record.ClientId != client.ClientId)
             throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "Refresh token is invalid or expired.");
 
-        var scope = NarrowScope(request.Scope ?? record.Scope, record.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        var scope = ScopeUtil.NarrowScope(request.Scope ?? record.Scope, record.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries), _settings.SupportedScopes);
 
         if (_settings.RotateRefreshTokens)
         {
@@ -257,21 +257,5 @@ public class TokenEndpointHandler
 
         response.RefreshToken = refresh;
         return response;
-    }
-
-    private static string NarrowScope(string? requested, IEnumerable<string> allowed)
-    {
-        var allowedSet = new HashSet<string>(allowed, StringComparer.Ordinal);
-        if (string.IsNullOrWhiteSpace(requested))
-        {
-            return string.Join(' ', allowedSet);
-        }
-        var requestedScopes = requested!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var granted = requestedScopes.Where(allowedSet.Contains).ToArray();
-        if (granted.Length == 0 && allowedSet.Count > 0)
-        {
-            throw new OAuthServerException(OAuthErrorCodes.InvalidScope, "None of the requested scopes are allowed for this client.");
-        }
-        return string.Join(' ', granted);
     }
 }

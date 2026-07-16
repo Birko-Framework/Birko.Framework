@@ -48,7 +48,7 @@ public class DeviceAuthorizationHandler
         if (!client.AllowedGrantTypes.Contains(OAuthGrantTypes.DeviceCode))
             throw new OAuthServerException(OAuthErrorCodes.UnauthorizedClient, "Client is not authorized for the device-code grant.");
 
-        var scope = NarrowScope(request.Scope, client.AllowedScopes);
+        var scope = ScopeUtil.NarrowScope(request.Scope, client.AllowedScopes, _settings.SupportedScopes);
 
         var deviceCode = RandomStringGenerator.Base64Url(32);
         var userCode = RandomStringGenerator.UserCode(8);
@@ -88,19 +88,4 @@ public class DeviceAuthorizationHandler
         await _devices.UpdateAsync(device, ct: ct).ConfigureAwait(false);
     }
 
-    private static string NarrowScope(string? requested, IEnumerable<string> allowed)
-    {
-        var allowedSet = new HashSet<string>(allowed, StringComparer.Ordinal);
-        if (string.IsNullOrWhiteSpace(requested))
-        {
-            return string.Join(' ', allowedSet);
-        }
-        var requestedScopes = requested!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var granted = requestedScopes.Where(allowedSet.Contains).ToArray();
-        if (granted.Length == 0 && allowedSet.Count > 0)
-        {
-            throw new OAuthServerException(OAuthErrorCodes.InvalidScope, "None of the requested scopes are allowed for this client.");
-        }
-        return string.Join(' ', granted);
-    }
 }
