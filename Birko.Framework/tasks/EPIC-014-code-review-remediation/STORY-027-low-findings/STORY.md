@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**332 / 418 triaged** as of 2026-07-16. Next open is CR-L333 (Birko.Rules cluster, L333…).
+**334 / 418 triaged** as of 2026-07-16. Next open is CR-L335 (Birko.Security cluster, L335…).
+
+**Batch CC — Birko.Rules cluster (CR-L333, CR-L334):** Birko.Rules. Both closed;
+**/code-review clean (no findings)**. **L333** (bug): `ComparisonHelper.AreEqual` compared doubles with
+`Math.Abs(da - db) < double.Epsilon` (~4.9e-324 = effectively strict equality), so a float `0.1f` promoted
+to double did NOT equal the double literal `0.1` — contradicting the engine's advertised numeric promotion.
+Replaced with a scaled relative tolerance (`1e-6 * max(|a|,|b|)`) applied **only to fractional values**;
+integral values (int/long/whole decimals) stay exact — the initial flat-tolerance draft would have wrongly
+equated large integers (1e9 vs 1e9+1), which the self-review caught and the `bothIntegral` guard fixes.
+`CompareValues` (ordering) left as-is per the audit's scope. **L334** (test-gap — **verified, no action**):
+the `RuleBasedValidator`/`RuleSpecification` tests reference types that live outside Birko.Rules (composed
+from imported projitems) — confirmed the whole Rules.Tests suite compiles and passes (135 pre-existing), so
+the cross-module coverage is intact; no change needed in Birko.Rules. **Tests:** Rules.Tests 135 → 138 —
+float-promotion match, distinct-doubles no-match, and large-integer exactness. Suite green: Rules.Tests 138.
 
 **Batch CB — Birko.Redis cluster (CR-L330, CR-L331, CR-L332):** Birko.Redis. All closed;
 **/code-review clean (no findings)**. **L330** (bug): `RedisConnectionManager.GetServer()` derived the

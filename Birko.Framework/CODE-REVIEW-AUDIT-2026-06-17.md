@@ -7565,7 +7565,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Numeric equality tolerance uses double.Epsilon, which is effectively exact equality
 - **Path:** `C:\Source\Birko\Framework\Birko.Rules\Evaluation\ComparisonHelper.cs:46-47`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** AreEqual compares two doubles with 'Math.Abs(da - db) < double.Epsilon'. double.Epsilon is the smallest positive denormal (~4.9e-324), so this is essentially strict equality and provides no real tolerance for float->double promotion error. For example a float 0.1f promoted via TryToDouble (ComparisonHelper.cs:134) compared to a double 0.1 literal will not be equal, which is surprising for a rule engine that advertises 'numeric promotion (int vs double, decimal vs long)'. The comparison is also asymmetric in spirit with CompareValues which uses exact CompareTo.
 - **Fix:** Either document that Equal is exact for floating point, or use a relative/scaled tolerance. For integral/decimal promotion the current path is fine; the concern is only float/double literals.
 
@@ -7573,7 +7573,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Tests reference RuleBasedValidator / RuleSpecification types not present in Birko.Rules
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Rules.Tests\RuleBasedValidatorTests.cs, RuleSpecificationTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The .Tests sibling contains RuleBasedValidatorTests.cs and RuleSpecificationTests.cs, but no RuleBasedValidator or RuleSpecification type exists in the Birko.Rules projitems (only Rule, RuleGroup, RuleSet, RuleEvaluator, RuleExpressionConverter, contexts). These integration types presumably live in other Birko projects (e.g. Birko.Validation / Birko.Data.Patterns ISpecification). Not a defect in this project, but noting the test suite spans types outside this module. The in-module surface (RuleEvaluator, RuleExpressionConverter, both contexts) does appear to have dedicated tests, so core coverage looks adequate.
 - **Fix:** No action in Birko.Rules; confirm those tests' subject types compile from the consuming aggregator. Optionally add a test asserting the disabled-child-in-AND-group semantics once issue #1 is decided, since both paths currently disagree and neither behavior is pinned by a test.
 
