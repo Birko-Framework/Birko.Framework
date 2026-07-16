@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Birko.Security;
 using Birko.Security.Configuration;
+using Birko.Security.Vault.Configuration;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Xunit;
@@ -166,6 +167,40 @@ public class SecretConfigurationProviderTests
             .Build();
 
         config["name"].Should().Be("root");
+    }
+
+    [Fact]
+    public void Load_ListSecretsThrows_RoutesDiagnosticToInjectedSink_NotConsole()
+    {
+        // CR-L356: the fail-open diagnostic must be routable through an injected sink instead of Console.WriteLine.
+        var provider = new ThrowingListSecretProvider();
+        var captured = new List<string>();
+
+        var config = new ConfigurationBuilder()
+            .AddSecretConfiguration(provider, "myapp", recursive: true, diagnostics: captured.Add)
+            .Build();
+
+        // Still fail-open: the readable pairs loaded, listing failure did not throw.
+        config["name"].Should().Be("root");
+        // ...and the warning went to our sink.
+        captured.Should().Contain(m => m.Contains("warning listing") && m.Contains("connection refused"));
+    }
+
+    [Fact]
+    public void AddVaultPath_NullBuilder_Throws()
+    {
+        // CR-L355: AddVaultPath (ISecretProvider overload) must guard its arguments like AddSecretConfiguration.
+        var provider = new MockSecretProvider();
+        var act = () => ((IConfigurationBuilder)null!).AddVaultPath(provider, "path");
+        act.Should().Throw<ArgumentNullException>().WithParameterName("builder");
+    }
+
+    [Fact]
+    public void AddVaultPath_NullProvider_Throws()
+    {
+        var builder = new ConfigurationBuilder();
+        var act = () => builder.AddVaultPath((ISecretProvider)null!, "path");
+        act.Should().Throw<ArgumentNullException>().WithParameterName("provider");
     }
 
     [Fact]
