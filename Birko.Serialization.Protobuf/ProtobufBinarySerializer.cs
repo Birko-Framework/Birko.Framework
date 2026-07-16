@@ -128,17 +128,22 @@ namespace Birko.Serialization.Protobuf
             return Task.CompletedTask;
         }
 
-        public async Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
+        public Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(type);
-            return await Task.Run(() => Serializer.Deserialize(type, stream), cancellationToken).ConfigureAwait(false);
+            // CR-L363: protobuf-net has no native async API. Deserialize synchronously and complete a Task
+            // (observing the token up front) rather than offloading pure CPU work to a thread-pool thread via
+            // Task.Run — matches the SerializeAsync shape above.
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<object?>(Serializer.Deserialize(type, stream));
         }
 
-        public async Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
+        public Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            return await Task.Run(() => Serializer.Deserialize<T>(stream), cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested(); // CR-L363
+            return Task.FromResult<T?>(Serializer.Deserialize<T>(stream));
         }
     }
 }
