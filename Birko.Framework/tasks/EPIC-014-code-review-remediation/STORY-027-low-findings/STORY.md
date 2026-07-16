@@ -13,8 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**366 / 418 triaged** as of 2026-07-16. Next open is CR-L367 (Birko.Storage cluster, L367–L370). The whole
-Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is now DONE.
+**370 / 418 triaged** as of 2026-07-16. Next open is CR-L371 (Birko.Storage.AzureBlob cluster, L371–L375).
+The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+
+**Batch CS — Birko.Storage (CR-L367, CR-L368, CR-L369, CR-L370):** Birko.Storage (LocalFileStorage). Closed;
+**/code-review clean (one self-review finding fixed pre-commit)**. **L367** (bug): the seekable upload path
+validated `content.Length` up front but the plain `CopyToAsync` branch never re-checked, so a stream that
+under-reports Length could bypass `MaxFileSize`; added a post-write `size > MaxFileSize` re-check (throws inside
+the try → temp file cleaned up, no partial), matching the non-seekable `CopyWithLimitAsync` guarantee. **L368**
+(cleanup): `ListAsync` discarded the enumerated full path then rebuilt it with a second `Path.Combine`; now
+carries a `(Full, Storage)` tuple and stats `p.Full` directly + documented the lightweight-reference design
+(ContentType/ETag/Metadata omitted — use `GetReferenceAsync`). **L369** (bug): `MoveAsync` was
+`CopyAsync`-then-`DeleteAsync`, leaving the source at both paths if the delete failed; rewrote it on `File.Move`
+(atomic same-volume rename, no dual-existence window; cross-volume degrades to internal copy+delete) with source
+metadata read before the move, source `.meta.json` dropped, fresh dest metadata written. **Self-review caught** a
+new data-loss edge: same-path move under `OverwriteExisting=true` would call `File.Move(x, x, overwrite:true)`
+which can delete the shared target — added a same-path no-op short-circuit. **L370** (test-gap): new
+`LocalFileStorageCoverageTests` — non-seekable over/under-limit uploads, no-partial-on-failure, the L367
+lying-Length case, `CopyAsync` metadata inheritance + overwrite collision, `MoveAsync` metadata preservation +
+source-meta removal + overwrite collision + same-path no-op. Storage.Tests →55.
 
 **Batch CR — Birko.Serialization.Yaml (CR-L365, CR-L366):** Birko.Serialization.Yaml. Closed;
 **/code-review clean (no findings)**. **L365** (async CT observation): the four sync-wrapped async methods

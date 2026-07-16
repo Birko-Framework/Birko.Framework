@@ -7857,7 +7857,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** MaxFileSize is silently not enforced for seekable streams reporting an unknown/zero length is fine, but a seekable stream that lies is unchecked
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage\Local\LocalFileStorage.cs:63-84`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When content.CanSeek is true the size is validated up-front via content.Length (line 63-69) and then copied with the plain CopyToAsync path (line 82) which does NOT re-check the limit. The streamed-limit enforcement (CopyWithLimitAsync) only runs for non-seekable streams. A seekable stream whose Length under-reports the bytes actually produced during CopyToAsync would bypass MaxFileSize. This is an edge case (well-behaved Streams do not do this) so it is low severity, but the two code paths give different guarantees for the same option.
 - **Fix:** Either trust Length for seekable streams (document it) or run the post-write fileStream.Length back through the limit check on both paths.
 
@@ -7865,7 +7865,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ListAsync FileReference Path is re-resolved on disk per entry, duplicating work and racing deletion
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage\Local\LocalFileStorage.cs:197-220`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The enumeration first maps each full path to a storage path (ToStoragePath), then in the projection re-builds the system path via Path.Combine(_basePath, p.Replace(...)) and constructs a fresh FileInfo to stat each file — discarding the full path it already had. Besides the needless re-allocation/round-trip, info.Exists is re-checked (info.Exists ? ... : 0/MinValue) to guard against a file deleted between enumeration and stat, but ContentType is always string.Empty and the companion .meta.json (which holds the real ContentType/ETag/Metadata) is never read, so listed references are missing metadata that GetReferenceAsync returns. Either keep the original full path through the pipeline, or document that ListAsync returns lightweight (metadata-less) references by design.
 - **Fix:** Carry the full filesystem path through the Select so a second Path.Combine and the redundant existence dance are avoided; consider loading .meta.json for ContentType/ETag if list consumers need it.
 
@@ -7873,7 +7873,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** MoveAsync is not atomic and can lose the source on a delete failure
 - **Path:** `C:\Source\Birko\Framework\Birko.Storage\Local\LocalFileStorage.cs:279-288`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** MoveAsync does CopyAsync then DeleteAsync. For a same-volume local move this could use File.Move (atomic rename, cheaper). As written, if DeleteAsync throws (e.g. the source is locked) the file now exists at both paths, and there is no rollback of the copy. Low severity for local FS but worth noting since the public contract implies a move.
 - **Fix:** Use File.Move when source and destination are on the same volume and overwrite semantics permit; otherwise wrap so a failed delete is surfaced clearly.
 
@@ -7881,7 +7881,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Test gaps: presigned-URL contract, extension helpers, and failure/cancellation paths in Birko.Storage.Tests
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Storage.Tests`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** LocalFileStorage has solid coverage (25 facts). Not covered in the Birko.Storage.Tests sibling: FileStorageExtensions (UploadBytesAsync/UploadFileAsync/DownloadBytesAsync/DownloadToFileAsync) has its own test file but the non-seekable MaxFileSize streaming path (CopyWithLimitAsync) and the partial-file-on-failure behavior are untested; CopyAsync metadata inheritance from source .meta.json (line 256-272) and CopyAsync OverwriteExisting=false collision; cancellation behavior for any method (ties to the CancellationToken finding). Note only — not a deep dive.
 - **Fix:** Add tests for the non-seekable over-limit upload, upload failure leaving (or not leaving) a partial file, and CopyAsync inheriting ContentType/Metadata from the source's .meta.json.
 
