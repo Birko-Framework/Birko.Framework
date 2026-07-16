@@ -13,7 +13,14 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**336 / 418 triaged** as of 2026-07-16. Next open is CR-L337 (Birko.Security.AspNetCore cluster, L337…).
+**337 / 418 triaged** as of 2026-07-16. Next open is CR-L338 (Birko.Security.AzureKeyVault cluster, L338…).
+
+**Batch CE — Birko.Security.AspNetCore (CR-L337):** Birko.Security.AspNetCore. Closed;
+**/code-review clean (no findings)**. **L337** (cleanup, comment-only): `TokenServiceAdapter.GenerateAccessToken`
+carried a false comment — "JwtTokenProvider expands these to multiple JWT claims internally". Verified against
+`JwtTokenProvider.GenerateToken` (`claims.Select(c => new Claim(c.Key, c.Value))` — exactly one claim per
+dictionary key), so it does NOT expand the `;`-joined roles/permissions. Corrected the comment to state the
+truth (single joined claim per key; consumers split on `;`). No behavior/test surface (comment-only).
 
 **Batch CD — Birko.Security cluster (CR-L335, CR-L336):** Birko.Security. Both closed;
 **/code-review clean (no findings)**. **L335** (nullable): `AesEncryptionProvider.ValidateKey`/`Encrypt`/

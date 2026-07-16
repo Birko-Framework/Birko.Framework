@@ -7597,7 +7597,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Misleading comment claims JwtTokenProvider expands joined claims into multiple JWT claims
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.AspNetCore\Authentication/TokenServiceAdapter.cs:58`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The comment states 'JwtTokenProvider expands these to multiple JWT claims internally'. It does not — JwtTokenProvider.GenerateToken does claims.Select(c => new Claim(c.Key, c.Value)), one claim per key. The comment directly contributed to the separator bug above by encoding a false assumption about downstream behavior.
 - **Fix:** Correct or remove the comment once the separator handling is fixed, so future maintainers don't rely on a non-existent expansion.
 
