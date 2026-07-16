@@ -7650,17 +7650,19 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Override TokenOptions can carry empty/whitespace Secret, bypassing the constructor's fail-fast check
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Jwt\JwtTokenProvider.cs:34`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The constructor validates _defaultOptions.Secret is non-empty, but GenerateToken (line 34) and ValidateToken (line 73) accept an optional 'options' override whose Secret is never validated. A caller passing an override TokenOptions with an empty Secret reaches Encoding.UTF8.GetBytes(opts.Secret) with an empty key, which surfaces as a signing exception deep in the JWT handler rather than the clear ArgumentException the constructor would have produced. ValidateToken swallows it into a generic 'Unexpected error' failure, masking the misconfiguration.
 - **Fix:** Factor the secret validation into a small helper and apply it to the effective 'opts' in both GenerateToken and ValidateToken, not just to _defaultOptions in the constructor.
+- **Resolution (CR-L343, Batch CH):** Added `EnsureSecretPresent(TokenOptions)` and call it on the effective `opts` in both `GenerateToken` and `ValidateToken` (before the try, so an empty override fails fast rather than being masked as a generic failure); the constructor now delegates to the same helper. Tests `GenerateToken_OverrideWithEmptySecret_Throws` and `ValidateToken_OverrideWithEmptySecret_Throws` cover both entry points.
 
 ### CR-L344 · ⚪ low · Birko.Security.Jwt
 - **Title:** iat and exp claims are derived from two different clock reads
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Jwt\JwtTokenProvider.cs:44`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** expiresAt is computed from _clock.UtcNow (line 36) while the iat claim is computed from _clock.OffsetUtcNow (line 44). With SystemDateTimeProvider these are effectively identical, but a TestDateTimeProvider (or any provider) is free to return inconsistent values from the two properties, producing a token whose iat and exp were sampled from different instants. Reading the clock once into a single DateTimeOffset and deriving both values from it removes the latent inconsistency.
 - **Fix:** Capture 'var now = _clock.OffsetUtcNow;' once and derive both expiresAt (now.AddMinutes(...)) and the iat claim (now.ToUnixTimeSeconds()) from it.
+- **Resolution (CR-L344, Batch CH):** `GenerateToken` now reads `var now = _clock.OffsetUtcNow;` once and derives both `expiresAt = now.AddMinutes(opts.ExpirationMinutes).UtcDateTime` and the iat claim `now.ToUnixTimeSeconds()` from it. Test `GenerateToken_InconsistentClock_IatAndExpFromSameInstant` uses a clock whose UtcNow deliberately disagrees with OffsetUtcNow and asserts exp − iat == exactly ExpirationMinutes, proving both claims come from the single instant.
 
 ### CR-L345 · ⚪ low · Birko.Security.NFC
 - **Title:** NfcAuthResult.Claims is public init-only but never populated

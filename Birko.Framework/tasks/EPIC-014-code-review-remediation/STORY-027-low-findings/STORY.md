@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**342 / 418 triaged** as of 2026-07-16. Next open is CR-L343 (Birko.Security.Jwt cluster, L343…).
+**344 / 418 triaged** as of 2026-07-16. Next open is CR-L345 (Birko.Security.NFC cluster, L345…).
+
+**Batch CH — Birko.Security.Jwt cluster (CR-L343, CR-L344):** Birko.Security.Jwt. Both closed;
+**/code-review clean (no findings)**. **L343** (bug): the ctor validated `_defaultOptions.Secret` but the
+per-call `options` override was unchecked — an empty override secret produced an opaque signing exception
+(`GenerateToken`) or a masked generic failure (`ValidateToken`). Factored an `EnsureSecretPresent` helper and
+applied it to the effective `opts` in both methods (before the try in `ValidateToken`, so it fails fast); ctor
+delegates to it too. **L344** (other): `expiresAt` was read from `_clock.UtcNow` while the iat claim used
+`_clock.OffsetUtcNow` — two clock reads a custom provider could return inconsistently. Now reads
+`OffsetUtcNow` once and derives both. Tests: `GenerateToken_OverrideWithEmptySecret_Throws`,
+`ValidateToken_OverrideWithEmptySecret_Throws`, `GenerateToken_InconsistentClock_IatAndExpFromSameInstant`
+(skewed-clock double asserts exp − iat == ExpirationMinutes) (13 pass).
 
 **Batch CG — Birko.Security.BCrypt cluster (CR-L341, CR-L342):** Birko.Security.BCrypt. Both closed;
 **/code-review clean (no findings)**. **L341** (bug): `DecodeBCryptBase64` coerced `BCryptBase64.IndexOf`'s
