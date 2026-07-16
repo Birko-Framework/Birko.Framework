@@ -55,9 +55,10 @@ public sealed class TokenServiceAdapter
         if (request.TenantGuid.HasValue)
             claims[_options.Claims.TenantGuidClaim] = request.TenantGuid.Value.ToString();
 
-        // Roles and permissions are multi-value — encode as semicolon-separated
-        // (ITokenProvider uses IDictionary which doesn't support multi-value keys;
-        //  JwtTokenProvider expands these to multiple JWT claims internally)
+        // Roles and permissions are multi-value — encode as a single semicolon-separated claim value
+        // (ITokenProvider uses IDictionary, which doesn't support multi-value keys). CR-L337: JwtTokenProvider
+        // does NOT expand these — GenerateToken emits exactly one JWT claim per dictionary key, so the joined
+        // string is stored verbatim and consumers must split the claim on ';' to recover the individual values.
         if (request.Roles is { Count: > 0 })
             claims[_options.Claims.RoleClaim] = string.Join(";", request.Roles);
 
