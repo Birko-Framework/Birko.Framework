@@ -7740,17 +7740,19 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Token setter writes null into a non-nullable Password via null-forgiveness
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Vault\VaultSettings.cs:22`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Token is declared `string?` but its setter does `Password = value!`. PasswordSettings.Password is a non-nullable `string`. Setting Token = null stores a null into a property the type system promises is non-null, which can produce a downstream null-deref/NRE that the nullable analysis would otherwise have caught. The `!` suppresses the warning without making it safe.
 - **Fix:** Either make the assignment null-tolerant the same way the base does (Password = value ?? null!) only if the base genuinely tolerates null, or guard/normalize (e.g. Password = value ?? string.Empty), and keep the get/set null-shape consistent.
+- **Resolution (CR-L353, Batch CL):** Made `Token` a faithful `string?` alias on both ends — setter normalizes null to `string.Empty` (no more `value!` forcing a null into the non-nullable `Password`), getter returns null when the backing password is empty. This also fixed a pre-existing **failing** test (`DefaultSettings_HasCorrectDefaults` asserted `Token` is null by default, but the old `get => Password` returned `""`). Added `Token_SetNull_StoresEmptyPassword_ReadsBackNull` and `Token_SetEmpty_ReadsBackNull`.
 
 ### CR-L354 · ⚪ low · Birko.Security.Vault
 - **Title:** HttpClient is mutated in the constructor even when injected (shared-client hazard)
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.Vault\VaultSecretProvider.cs:42`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** When a caller passes in an HttpClient (the not-owned path, _ownsHttpClient = false), the constructor still mutates it: sets BaseAddress (line 42), Timeout (line 43), and adds DefaultRequestHeaders (X-Vault-Token, X-Vault-Namespace, lines 47/51). If the same HttpClient instance is shared (e.g. from IHttpClientFactory or reused across providers), this overwrites its BaseAddress/Timeout and appends headers that accumulate/conflict. DefaultRequestHeaders.Add also throws if the header is already present, so constructing two providers over one client throws.
 - **Fix:** Only configure BaseAddress/Timeout/default headers when _ownsHttpClient is true; otherwise pass the token/namespace per-request (or build absolute URIs and attach headers on each HttpRequestMessage).
+- **Resolution (CR-L354, Batch CL):** Adopted the build-absolute-URIs + per-request-headers approach (the same shape as the AzureKeyVault CR-H137 fix). Added a `_baseUri` field and a `SendCoreAsync(method, relativePath, content, ct)` helper that resolves an absolute URI against the Vault address and attaches X-Vault-Token / X-Vault-Namespace on each `HttpRequestMessage`; all six request sites (get/set/delete/list/pairs/health) route through it. The constructor no longer sets BaseAddress or DefaultRequestHeaders at all, and only sets `Timeout` when `_ownsHttpClient`. Tests: `Constructor_InjectedHttpClient_NotMutated`, `Constructor_TwoProvidersOverOneClient_DoesNotThrow`, `Requests_CarryTokenAndNamespaceHeaders_AtAbsoluteUri`. Vault.Tests →49.
 
 ### CR-L355 · ⚪ low · Birko.Security.Vault.Configuration
 - **Title:** AddVaultPath overloads skip argument-null guards

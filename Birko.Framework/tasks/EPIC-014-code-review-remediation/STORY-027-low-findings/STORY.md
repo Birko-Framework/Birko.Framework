@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**352 / 418 triaged** as of 2026-07-16. Next open is CR-L353 (Birko.Security.Vault cluster, L353/L354).
+**354 / 418 triaged** as of 2026-07-16. Next open is CR-L355 (Birko.Security.Vault.Configuration cluster,
+L355/L356).
+
+**Batch CL — Birko.Security.Vault (CR-L353, CR-L354):** Birko.Security.Vault. Both closed;
+**/code-review clean (no findings)**. **L353** (nullable): `VaultSettings.Token` setter did `Password = value!`,
+forcing null into the non-nullable `PasswordSettings.Password`. Made Token a faithful `string?` alias — setter
+normalizes null→`string.Empty`, getter returns null when the backing password is empty. This also fixed a
+**pre-existing failing test** (`DefaultSettings_HasCorrectDefaults` expected `Token` null by default but the old
+`get => Password` returned `""`). **L354** (convention): the ctor mutated an injected HttpClient (BaseAddress/
+Timeout/DefaultRequestHeaders), so a shared client was overwritten and two providers over one client threw on
+duplicate headers. Switched to absolute URIs + per-request headers via a new `SendCoreAsync` helper (all six
+request sites); the ctor no longer sets BaseAddress/DefaultRequestHeaders and only sets Timeout when it owns the
+client (same shape as the AzureKeyVault CR-H137 fix). Tests: Token null/empty round-trips + injected-client
+not-mutated / two-providers-no-throw / per-request-headers-at-absolute-URI. Vault.Tests →49.
 
 **Batch CK — Birko.Security.OAuth.Server refresh/code security (CR-L350, CR-L351, CR-L352):**
 Birko.Security.OAuth.Server. All closed; **/code-review clean (no findings)**. **L350** (security): a replayed
