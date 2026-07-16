@@ -53,7 +53,7 @@ namespace Birko.Security.NFC
         /// </summary>
         public DateTime Timestamp { get; init; } = DateTime.UtcNow;
 
-        public static NfcAuthResult Success(Guid userId, string tagUid, TokenResult? token = null, string? userName = null, string? email = null)
+        public static NfcAuthResult Success(Guid userId, string tagUid, TokenResult? token = null, string? userName = null, string? email = null, IDictionary<string, string>? claims = null)
         {
             return new NfcAuthResult
             {
@@ -62,7 +62,8 @@ namespace Birko.Security.NFC
                 TagUid = tagUid,
                 Token = token,
                 UserName = userName,
-                Email = email
+                Email = email,
+                Claims = claims ?? new Dictionary<string, string>()
             };
         }
 

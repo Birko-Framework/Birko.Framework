@@ -66,30 +66,33 @@ namespace Birko.Security.NFC
                 await _store.UpdateAsync(mapping, cancellationToken).ConfigureAwait(false);
             }
 
+            // CR-L345: build the claims/metadata once so they can populate NfcAuthResult.Claims regardless of
+            // whether token issuance is configured (previously this dictionary was built only inside the token
+            // branch and never surfaced to the caller, leaving Claims permanently empty).
+            var claims = new Dictionary<string, string>
+            {
+                ["sub"] = mapping.UserId.ToString(),
+                ["nfc_uid"] = normalizedUid,
+                ["auth_method"] = "nfc"
+            };
+
+            if (!string.IsNullOrEmpty(mapping.Email))
+            {
+                claims["email"] = mapping.Email;
+            }
+            if (!string.IsNullOrEmpty(mapping.UserName))
+            {
+                claims["name"] = mapping.UserName;
+            }
+
             // Issue token if configured
             TokenResult? token = null;
             if (_settings.IssueTokens && _tokenProvider != null)
             {
-                var claims = new Dictionary<string, string>
-                {
-                    ["sub"] = mapping.UserId.ToString(),
-                    ["nfc_uid"] = normalizedUid,
-                    ["auth_method"] = "nfc"
-                };
-
-                if (!string.IsNullOrEmpty(mapping.Email))
-                {
-                    claims["email"] = mapping.Email;
-                }
-                if (!string.IsNullOrEmpty(mapping.UserName))
-                {
-                    claims["name"] = mapping.UserName;
-                }
-
                 token = _tokenProvider.GenerateToken(claims, _tokenOptions);
             }
 
-            return NfcAuthResult.Success(mapping.UserId, normalizedUid, token, mapping.UserName, mapping.Email);
+            return NfcAuthResult.Success(mapping.UserId, normalizedUid, token, mapping.UserName, mapping.Email, claims);
         }
 
         public async Task<NfcTagMapping> EnrollAsync(Guid userId, string tagUid, string? label = null, string? userName = null, string? email = null, CancellationToken cancellationToken = default)
@@ -136,7 +139,17 @@ namespace Birko.Security.NFC
                 EnrolledAt = DateTime.UtcNow
             };
 
-            await _store.AddAsync(mapping, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _store.AddAsync(mapping, cancellationToken).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                // CR-L346: a concurrent EnrollAsync for the same new UID can slip past the check-then-act guard
+                // above and lose the AddAsync race. Normalize the low-level store collision into the same
+                // friendly "already enrolled" error the pre-check throws; keep the original as InnerException.
+                throw new InvalidOperationException($"Tag {normalizedUid} is already enrolled.", ex);
+            }
             return mapping;
         }
 
@@ -192,9 +205,18 @@ namespace Birko.Security.NFC
     /// </summary>
     public interface INfcTagMappingStore
     {
+        /// <summary>Returns the mapping for the given tag UID, or null if none exists.</summary>
         Task<NfcTagMapping?> GetByTagUidAsync(string tagUid, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<NfcTagMapping>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default);
         Task AddAsync(NfcTagMapping mapping, CancellationToken cancellationToken = default);
+        /// <summary>
+        /// CR-L347: Persists the field changes made to <paramref name="mapping"/> (matched by
+        /// <see cref="NfcTagMapping.TagUid"/>). <see cref="NfcAuthProvider.AuthenticateAsync"/> mutates the
+        /// instance returned by <see cref="GetByTagUidAsync"/> (e.g. LastUsedAt) and passes it here, so
+        /// implementations MUST persist the mutated fields of the supplied instance whether or not it is the
+        /// same reference previously returned — a store that hands out detached/copied entities must still
+        /// save those changes on update.
+        /// </summary>
         Task UpdateAsync(NfcTagMapping mapping, CancellationToken cancellationToken = default);
         Task DeleteAsync(string tagUid, CancellationToken cancellationToken = default);
     }
