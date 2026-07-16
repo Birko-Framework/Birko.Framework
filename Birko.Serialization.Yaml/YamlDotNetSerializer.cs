@@ -123,25 +123,38 @@ namespace Birko.Serialization.Yaml
             return _yamlDeserializer.Deserialize<T>(reader);
         }
 
+        // CR-L365: YamlDotNet has no async API, so these are sync-wrapped. Observe the token up front so a
+        // pre-cancelled token surfaces OperationCanceledException before doing the (synchronous) work.
         public Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            cancellationToken.ThrowIfCancellationRequested();
             Serialize(stream, value);
             return Task.CompletedTask;
         }
 
         public Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(value);
+            cancellationToken.ThrowIfCancellationRequested();
             Serialize<T>(stream, value);
             return Task.CompletedTask;
         }
 
         public Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(stream);
+            ArgumentNullException.ThrowIfNull(type);
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(Deserialize(stream, type));
         }
 
         public Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
         {
+            ArgumentNullException.ThrowIfNull(stream);
+            cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(Deserialize<T>(stream));
         }
     }
