@@ -13,7 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**347 / 418 triaged** as of 2026-07-16. Next open is CR-L348 (Birko.Security.OAuth.Server cluster, L348…).
+**349 / 418 triaged** as of 2026-07-16. Next open is CR-L350 (Birko.Security.OAuth.Server cluster,
+security half — L350/L351/L352). NOTE: the OAuth.Server cluster is being done in two sub-batches — CJ (scope
+consolidation, L348/L349, done) and CK (refresh/code security + tests, L350/L351/L352, next).
+
+**Batch CJ — Birko.Security.OAuth.Server scope consolidation (CR-L348, CR-L349):** Birko.Security.OAuth.Server.
+Both closed; **/code-review clean (no findings)**. **L348** (cleanup): the byte-identical `NarrowScope` was
+copy-pasted across all three endpoint handlers (Token/Authorize/Device), and `CoversAllScopes`/`MergeScopes`
+duplicated in Authorize. Extracted `internal static ScopeUtil` (Internal/ScopeUtil.cs, registered in
+.projitems); all three handlers delegate, private copies removed. **L349** (cleanup): `OAuthServerSettings.
+SupportedScopes` was declared but never consulted. `ScopeUtil.NarrowScope` now takes an optional
+`supportedScopes` and intersects the client's allowed set with it when non-empty (empty = no constraint, per
+the doc); all handlers pass `_settings.SupportedScopes`. Tests:
+`ClientCredentials_SupportedScopesConfigured_NarrowsToServerIntersection`,
+`ClientCredentials_SupportedScopesEmpty_ImposesNoConstraint` (45 pass).
 
 **Batch CI — Birko.Security.NFC cluster (CR-L345, CR-L346, CR-L347):** Birko.Security.NFC. All closed;
 **/code-review clean (no findings)**. **L345** (cleanup): `NfcAuthResult.Claims` was public but never populated

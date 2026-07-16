@@ -7695,17 +7695,19 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** NarrowScope helper is copy-pasted verbatim across three handlers
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.OAuth.Server\Endpoints/Token/TokenEndpointHandler.cs:262, Endpoints/Authorize/AuthorizationEndpointHandler.cs:161, Endpoints/DeviceAuthorization/DeviceAuthorizationHandler.cs:91`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The identical private static NarrowScope(string? requested, IEnumerable<string> allowed) method (allowed-set construction, empty-request fallback, requested-scope filtering, invalid_scope throw) is duplicated byte-for-byte in TokenEndpointHandler, AuthorizationEndpointHandler, and DeviceAuthorizationHandler. CoversAllScopes/MergeScopes in the authorize handler share the same Split('  ', RemoveEmptyEntries)+HashSet(Ordinal) idiom. Any future scope-policy change (e.g. honoring OAuthServerSettings.SupportedScopes, which is currently never consulted anywhere) must be made in three places.
 - **Fix:** Extract a single internal static ScopeUtil (in Internal/) with NarrowScope/CoversAllScopes/MergeScopes and reuse it from all three handlers. While there, consider wiring OAuthServerSettings.SupportedScopes into NarrowScope since it is defined but currently dead.
+- **Resolution (CR-L348, Batch CJ):** Extracted `internal static class ScopeUtil` in `Internal/ScopeUtil.cs` (registered in the .projitems) with `NarrowScope`/`CoversAllScopes`/`MergeScopes`; all three handlers now delegate to it and their private copies are removed. `SupportedScopes` is wired in as part of the same change (see CR-L349).
 
 ### CR-L349 · ⚪ low · Birko.Security.OAuth.Server
 - **Title:** OAuthServerSettings.SupportedScopes is declared but never used
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.OAuth.Server\OAuthServerSettings.cs:61`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** SupportedScopes is documented as 'Scopes this server is willing to issue' but no handler references it — NarrowScope narrows only against the per-client AllowedScopes. The setting is effectively dead configuration that a host operator would reasonably expect to constrain issuance.
 - **Fix:** Either intersect requested/allowed scopes with SupportedScopes inside the shared NarrowScope, or remove the property and its XML doc to avoid implying behavior that does not exist.
+- **Resolution (CR-L349, Batch CJ):** `ScopeUtil.NarrowScope` takes an optional `supportedScopes` argument and intersects the client's allowed set with it when non-empty (empty imposes no constraint, matching the property's documented "if empty, any requested scope is allowed"). All three handlers pass `_settings.SupportedScopes`. Tests `ClientCredentials_SupportedScopesConfigured_NarrowsToServerIntersection` and `ClientCredentials_SupportedScopesEmpty_ImposesNoConstraint`.
 
 ### CR-L350 · ⚪ low · Birko.Security.OAuth.Server
 - **Title:** Rotated/replayed refresh token does not trigger token-family revocation
