@@ -23,7 +23,11 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     private readonly HttpClient _httpClient;
     private readonly ISerializer _serializer;
     private readonly bool _ownsHttpClient;
-    private string? _accessToken;
+    // CR-L339: _accessToken is read on the lock-free fast path of GetAccessTokenAsync, so publish writes
+    // via volatile. _tokenExpiresAt (a DateTime, not atomically readable on 32-bit) is left non-volatile:
+    // a torn/stale read there only ever causes a redundant token fetch under the lock (the double-check
+    // inside the lock is authoritative) or use of a token still within its 5-minute expiry buffer — benign.
+    private volatile string? _accessToken;
     private DateTime _tokenExpiresAt;
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
 
@@ -151,6 +155,11 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
     }
 
     /// <inheritdoc />
+    // CR-L338: Azure Key Vault secrets are single-valued, so this matches ISecretProvider's default
+    // single-entry implementation. It is re-declared explicitly (rather than inheriting the default
+    // interface method) so the member is callable on a concrete AzureKeyVaultSecretProvider reference,
+    // not only through the ISecretProvider interface — default interface methods are not visible on the
+    // implementing type. Keep the body in sync with the interface default.
     public async Task<IReadOnlyDictionary<string, string>?> GetSecretPairsAsync(string key, CancellationToken ct = default)
     {
         var value = await GetSecretAsync(key, ct).ConfigureAwait(false);
@@ -272,8 +281,9 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
 
     private static string? ExtractSecretName(string? secretId)
     {
-        if (string.IsNullOrEmpty(secretId)) return null;
-        var uri = new Uri(secretId);
+        // CR-L340: tolerate a relative/malformed id (return null) instead of letting new Uri(...) throw
+        // UriFormatException up through ListSecretsAsync/GetSecretWithMetadataAsync.
+        if (!Uri.TryCreate(secretId, UriKind.Absolute, out var uri)) return null;
         var segments = uri.Segments;
         // /secrets/name or /secrets/name/version
         return segments.Length >= 3 ? segments[2].TrimEnd('/') : null;
@@ -281,8 +291,8 @@ public class AzureKeyVaultSecretProvider : ISecretProvider, IDisposable
 
     private static string? ExtractVersion(string? secretId)
     {
-        if (string.IsNullOrEmpty(secretId)) return null;
-        var uri = new Uri(secretId);
+        // CR-L340: tolerate a relative/malformed id (return null) instead of throwing UriFormatException.
+        if (!Uri.TryCreate(secretId, UriKind.Absolute, out var uri)) return null;
         var segments = uri.Segments;
         return segments.Length >= 4 ? segments[3].TrimEnd('/') : null;
     }
