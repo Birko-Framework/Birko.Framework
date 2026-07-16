@@ -116,6 +116,24 @@ public class BCryptPasswordHasherTests
     }
 
     [Fact]
+    public void Verify_ShapedHashWithInvalidBase64Char_ReturnsFalse()
+    {
+        // CR-L341: a 60-char hash that passes the coarse $2a$XX$ shape check but carries an out-of-alphabet
+        // character in the salt/digest body must be rejected (return false) rather than decoded into garbage
+        // salt bytes (where IndexOf's -1 was previously coerced into byte math).
+        var hasher = new BCryptPasswordHasher(workFactor: 4);
+        var valid = hasher.Hash("password");
+        valid.Length.Should().Be(60);
+
+        // Corrupt a salt-body char (index 10) to '!', which is not in the BCrypt-Base64 alphabet (./A-Za-z0-9).
+        var corrupted = valid[..10] + '!' + valid[11..];
+        corrupted.Length.Should().Be(60);
+
+        hasher.Invoking(h => h.Verify("password", corrupted)).Should().NotThrow()
+            .Which.Should().BeFalse();
+    }
+
+    [Fact]
     public void Hash_IncludesWorkFactorInOutput()
     {
         var hasher = new BCryptPasswordHasher(workFactor: 5);
