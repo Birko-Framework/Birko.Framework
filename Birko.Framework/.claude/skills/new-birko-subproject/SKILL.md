@@ -72,6 +72,11 @@ Everything below comes from `CLAUDE-maintenance.md` § "New Project Checklist". 
 
 - Some projects have one (e.g. `Birko.Data.ElasticSearch/azure-pipelines.yml`); most don't. Only add if the user asks.
 
+### 8. `docs/specs/.map.yml`
+
+- Seed the [[specs]] skill's area map (from its `templates/map.yml`) with one starting area covering the project's public surface — specs live **per-repo** in the polyrepo, so each `Birko.X` carries its own `docs/specs/`. Once real types exist, `/specs regen` harvests the capability specs; `/tasks close` on a story then offers the scoped regen automatically.
+- Skip for projects with no behavioral surface (pure contracts/marker interfaces) — don't invent areas for nothing.
+
 ## Registrations to update
 
 After creating the project files, update **all** of these in the same change:

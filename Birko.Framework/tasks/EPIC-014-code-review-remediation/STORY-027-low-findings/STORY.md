@@ -13,7 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**325 / 418 triaged** as of 2026-07-15. Next open is CR-L326 (Birko.Random cluster, L326…).
+**329 / 418 triaged** as of 2026-07-16. Next open is CR-L330 (Birko.Redis cluster, L330…).
+
+**Batch CA — Birko.Random cluster (CR-L326, CR-L327, CR-L328, CR-L329):** Birko.Random. All closed;
+**/code-review clean (no findings)**. **L326** (bug): `SnowflakeGenerator.Next` reset `_sequence = 0` in the
+else-branch *before* the backwards-clock guard threw — moved the `timestamp < _lastTimestamp` guard to the
+top of the lock so a backwards clock is rejected before any state mutation. **L327** (bug): the NanoId/Token
+mask formula `Math.Log(alphabet.Length - 1)` is `Math.Log(0)` = -Infinity for a single-char alphabet
+(→ nonsensical mask). **L328** (cleanup): the mask/step + rejection-fill loop was copy-pasted 3× (NanoId RNG,
+NanoId provider, Token) — extracted a shared internal `AlphabetSampler.Sample(alphabet, size, SpanByteFill)`
+(taking a byte-fill delegate) used by all three, so the L327 single-char special-case lives in **one** place
+(1-char → fill with that char). Behavior-preserving for length ≥ 2 (provider-backed path stays byte-identical
+per seed). **L329** (test-gap): added PRNG boundary tests (NextInt(max)/NextInt(min,max) exclusivity + odd
+NextBytes fill across XorShift/SplitMix/Mersenne) and single-char alphabet tests for all 3 paths.
+**Tests:** Random.Tests 115 → 121. Suite green: Random.Tests 121. (L326's backwards-clock path has no clock
+seam — code-review-verified; the reorder is covered by the 115 unchanged existing tests.)
 
 **Batch BZ — Birko.Models.Users.SQL cluster (CR-L324, CR-L325):** Birko.Models.Users.SQL. Both closed;
 **/code-review clean (no findings)**. **L324** (other): the junction/FK lookup columns had no indexes

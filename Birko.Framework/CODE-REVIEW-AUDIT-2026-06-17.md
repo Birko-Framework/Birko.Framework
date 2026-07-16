@@ -7509,7 +7509,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Clock-backwards check runs after sequence reset, can emit a too-low timestamp
 - **Path:** `C:\Source\Birko\Framework\Birko.Random\Sequences\SnowflakeGenerator.cs:54-74`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** When the wall clock moves backwards so that the new `timestamp < _lastTimestamp` (and not equal), the else-branch resets `_sequence = 0` (line 65) before the backwards guard (line 68) throws. The throw still prevents emitting an ID, so this is benign today, but the sequence side-effect on the backwards path is dead/confusing state mutation. Minor.
 - **Fix:** Move the `timestamp < _lastTimestamp` guard to the top of the lock, before the equal/else branch, so backwards clocks are rejected before any state mutation.
 
@@ -7517,7 +7517,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** NanoId/Token alphabet mask formula breaks for single-character alphabet
 - **Path:** `C:\Source\Birko\Framework\Birko.Random\Sequences\TokenGenerator.cs:95`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** `int mask = (2 << (int)Math.Floor(Math.Log(alphabet.Length - 1) / Math.Log(2))) - 1;` evaluates Math.Log(0) = -Infinity when alphabet.Length == 1, and (int)Floor(-Infinity) is int.MinValue, producing a nonsensical shift/mask. Same expression in NanoIdGenerator.New (lines 47 and 91). A 1-char alphabet is pathological but currently passes the IsNullOrEmpty guard, so it is reachable and would loop/behave incorrectly rather than throw a clear error.
 - **Fix:** Special-case alphabet.Length == 1 (fill with that char), or guard alphabet.Length >= 2, in both NanoIdGenerator and TokenGenerator.GenerateFromAlphabet.
 
@@ -7525,7 +7525,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated NanoID/Token generation loop and mask formula
 - **Path:** `C:\Source\Birko\Framework\Birko.Random\Sequences\NanoIdGenerator.cs:29-113`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The mask/step computation plus the rejection-sampling fill loop is copy-pasted three times: NanoIdGenerator.New(string,int) (RNG-backed), NanoIdGenerator.New(IRandomProvider,...) (provider-backed), and TokenGenerator.GenerateFromAlphabet. The single-character mask bug above therefore has to be fixed in three places. Worth extracting one shared helper (taking a fill delegate or an IRandomProvider) so the alphabet-rejection logic lives once.
 - **Fix:** Extract a private shared 'fill from alphabet with mask rejection' helper used by all three callers.
 
@@ -7533,7 +7533,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for the provider-backed NanoId path edge behavior or NextInt(maxValue) bounds on PRNGs
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Random.Tests\Sequences\SequenceTests.cs:149-162`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Provider-backed NanoID has one happy-path test; there is no coverage asserting NextInt(maxValue)/NextInt(min,max) of the PRNG providers (XorShift/SplitMix/Mersenne) never return maxValue (the `(int)(NextDouble()*range)` boundary), nor of NextBytes filling a non-multiple-of-8/4 buffer correctly. Note only.
 - **Fix:** Add boundary tests for NextInt range exclusivity and odd-length NextBytes across the PRNG providers.
 
