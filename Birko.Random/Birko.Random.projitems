@@ -21,6 +21,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Distributions\ExponentialDistribution.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Distributions\PoissonDistribution.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Distributions\BernoulliDistribution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Sequences\AlphabetSampler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sequences\GuidGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sequences\NanoIdGenerator.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Sequences\SnowflakeGenerator.cs" />

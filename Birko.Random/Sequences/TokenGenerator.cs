@@ -92,26 +92,7 @@ public static class TokenGenerator
             throw new ArgumentOutOfRangeException(nameof(length), "Length must be positive.");
         }
 
-        int mask = (2 << (int)Math.Floor(Math.Log(alphabet.Length - 1) / Math.Log(2))) - 1;
-        int step = (int)Math.Ceiling(1.6 * mask * length / alphabet.Length);
-
-        Span<byte> bytes = stackalloc byte[step];
-        Span<char> result = stackalloc char[length];
-        int count = 0;
-
-        while (count < length)
-        {
-            RandomNumberGenerator.Fill(bytes);
-            for (int i = 0; i < step && count < length; i++)
-            {
-                int index = bytes[i] & mask;
-                if (index < alphabet.Length)
-                {
-                    result[count++] = alphabet[index];
-                }
-            }
-        }
-
-        return new string(result);
+        // CR-L327/L328: shared mask-rejection sampling (single-char alphabet handled inside).
+        return AlphabetSampler.Sample(alphabet, length, RandomNumberGenerator.Fill);
     }
 }

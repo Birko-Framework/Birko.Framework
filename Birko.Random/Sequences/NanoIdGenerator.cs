@@ -43,29 +43,8 @@ public static class NanoIdGenerator
             throw new ArgumentException("Alphabet must not exceed 256 characters.", nameof(alphabet));
         }
 
-        // Calculate mask for uniform distribution over alphabet
-        int mask = (2 << (int)Math.Floor(Math.Log(alphabet.Length - 1) / Math.Log(2))) - 1;
-        int step = (int)Math.Ceiling(1.6 * mask * size / alphabet.Length);
-
-        Span<byte> bytes = stackalloc byte[step];
-        Span<char> result = stackalloc char[size];
-        int count = 0;
-
-        while (count < size)
-        {
-            RandomNumberGenerator.Fill(bytes);
-
-            for (int i = 0; i < step && count < size; i++)
-            {
-                int index = bytes[i] & mask;
-                if (index < alphabet.Length)
-                {
-                    result[count++] = alphabet[index];
-                }
-            }
-        }
-
-        return new string(result);
+        // CR-L327/L328: shared mask-rejection sampling (single-char alphabet handled inside).
+        return AlphabetSampler.Sample(alphabet, size, RandomNumberGenerator.Fill);
     }
 
     /// <summary>
@@ -88,27 +67,7 @@ public static class NanoIdGenerator
             throw new ArgumentOutOfRangeException(nameof(size), "Size must be positive.");
         }
 
-        int mask = (2 << (int)Math.Floor(Math.Log(alphabet.Length - 1) / Math.Log(2))) - 1;
-        int step = (int)Math.Ceiling(1.6 * mask * size / alphabet.Length);
-
-        Span<byte> bytes = stackalloc byte[step];
-        Span<char> result = stackalloc char[size];
-        int count = 0;
-
-        while (count < size)
-        {
-            provider.NextBytes(bytes);
-
-            for (int i = 0; i < step && count < size; i++)
-            {
-                int index = bytes[i] & mask;
-                if (index < alphabet.Length)
-                {
-                    result[count++] = alphabet[index];
-                }
-            }
-        }
-
-        return new string(result);
+        // CR-L327/L328: shared mask-rejection sampling, provider-backed byte fill.
+        return AlphabetSampler.Sample(alphabet, size, provider.NextBytes);
     }
 }

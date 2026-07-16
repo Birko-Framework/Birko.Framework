@@ -51,6 +51,14 @@ public sealed class SnowflakeGenerator
         {
             long timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _epoch;
 
+            // CR-L326: reject a backwards clock before any state mutation — the guard used to run after the
+            // else-branch reset _sequence = 0, a confusing dead side-effect on the rejected path.
+            if (timestamp < _lastTimestamp)
+            {
+                throw new InvalidOperationException(
+                    $"Clock moved backwards. Refusing to generate ID for {_lastTimestamp - timestamp}ms.");
+            }
+
             if (timestamp == _lastTimestamp)
             {
                 _sequence = (_sequence + 1) & MaxSequence;
@@ -63,12 +71,6 @@ public sealed class SnowflakeGenerator
             else
             {
                 _sequence = 0;
-            }
-
-            if (timestamp < _lastTimestamp)
-            {
-                throw new InvalidOperationException(
-                    $"Clock moved backwards. Refusing to generate ID for {_lastTimestamp - timestamp}ms.");
             }
 
             _lastTimestamp = timestamp;
