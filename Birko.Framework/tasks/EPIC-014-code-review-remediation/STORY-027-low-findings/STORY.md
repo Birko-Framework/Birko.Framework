@@ -13,7 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**334 / 418 triaged** as of 2026-07-16. Next open is CR-L335 (Birko.Security cluster, L335…).
+**336 / 418 triaged** as of 2026-07-16. Next open is CR-L337 (Birko.Security.AspNetCore cluster, L337…).
+
+**Batch CD — Birko.Security cluster (CR-L335, CR-L336):** Birko.Security. Both closed;
+**/code-review clean (no findings)**. **L335** (nullable): `AesEncryptionProvider.ValidateKey`/`Encrypt`/
+`Decrypt` dereferenced `key.Length`/`data.Length`/`encryptedData.Length` unguarded — a null argument NRE'd
+instead of the intended clean `ArgumentNullException`. Added `ArgumentNullException.ThrowIfNull` to all three
+(matching Pbkdf2PasswordHasher's guard style). **L336** (other): `ExpandEnvironmentVariable` for `"${}"`
+extracted an empty var name and called `Environment.GetEnvironmentVariable("")`; guard empty/whitespace
+names to return the literal token instead (output unchanged, avoids the meaningless lookup). **Tests:**
+Security.Tests 15 → 19 — Encrypt null-data/null-key + Decrypt null-data → `ArgumentNullException`, and
+`ExpandEnvironmentVariable("${}")` → literal. Suite green: Security.Tests 19.
 
 **Batch CC — Birko.Rules cluster (CR-L333, CR-L334):** Birko.Rules. Both closed;
 **/code-review clean (no findings)**. **L333** (bug): `ComparisonHelper.AreEqual` compared doubles with

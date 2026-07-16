@@ -7581,7 +7581,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** AesEncryptionProvider.Encrypt/Decrypt and ValidateKey null-deref on null arguments
 - **Path:** `C:\Source\Birko\Framework\Birko.Security\Encryption/AesEncryptionProvider.cs:17-19,75-78`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** ValidateKey(byte[] key) dereferences `key.Length` with no null check (line 77), so passing a null key throws NullReferenceException rather than the intended ArgumentException (the method's whole purpose is to produce a clean ArgumentException for a bad key). Likewise Encrypt(byte[] data, ...) reads `data.Length` (line 22) and Decrypt reads `encryptedData.Length` (line 40) with no null guard, yielding NRE on null input. For a public crypto API these should be ArgumentNullException with the parameter name. Per the framework no-nullable-warning / explicit-null-check convention these are the kind of dereferences that should be guarded.
 - **Fix:** Add `ArgumentNullException.ThrowIfNull(key)` in ValidateKey and `ArgumentNullException.ThrowIfNull(data)` / `(encryptedData)` at the top of Encrypt/Decrypt, matching the guard style already used in Pbkdf2PasswordHasher.
 
@@ -7589,7 +7589,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ExpandEnvironmentVariable edge case for empty variable name
 - **Path:** `C:\Source\Birko\Framework\Birko.Security\Authentication/AuthenticationService.cs:193-197`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** For input "${}" (length 3), the StartsWith/EndsWith check passes and `value.Substring(2, value.Length - 3)` yields an empty env var name, then `Environment.GetEnvironmentVariable("")` is called. This does not crash (returns null, falls back to the original value), but the empty-brace case is untested and silently treats malformed config as a literal token. Worth a guard so empty/whitespace var names are rejected rather than silently passed through to GetEnvironmentVariable.
 - **Fix:** After extracting envVar, `if (string.IsNullOrWhiteSpace(envVar)) return value;` before calling Environment.GetEnvironmentVariable.
 
