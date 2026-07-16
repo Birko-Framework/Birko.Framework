@@ -44,7 +44,26 @@ internal static class ComparisonHelper
 
         // Try numeric comparison (handles int vs double, decimal vs long, etc.)
         if (TryToDouble(a, out var da) && TryToDouble(b, out var db))
-            return Math.Abs(da - db) < double.Epsilon;
+        {
+            // CR-L333: the old `< double.Epsilon` (~4.9e-324) was effectively strict equality and gave no
+            // room for float→double promotion error — the float 0.1f promoted via TryToDouble did not
+            // compare equal to the double literal 0.1, contradicting this engine's advertised numeric
+            // promotion. Apply a scaled relative tolerance ONLY to fractional values; integral values
+            // (int/long/whole decimals) stay exact so two distinct integers never falsely match — the audit
+            // scoped the concern to float/double literals, and a flat relative tolerance would wrongly equate
+            // large integers (e.g. 1e9 vs 1e9+1).
+            var diff = Math.Abs(da - db);
+            if (diff == 0d)
+            {
+                return true;
+            }
+            bool bothIntegral = da == Math.Truncate(da) && db == Math.Truncate(db);
+            if (bothIntegral)
+            {
+                return false;
+            }
+            return diff <= 1e-6 * Math.Max(Math.Abs(da), Math.Abs(db));
+        }
 
         return a.Equals(b) || string.Equals(a.ToString(), b.ToString(), StringComparison.OrdinalIgnoreCase);
     }
