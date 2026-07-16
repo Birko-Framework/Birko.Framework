@@ -114,7 +114,9 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
             }
         }
 
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        // CR-L371: dispose the buffered response (the streaming DownloadAsync is the sole exception —
+        // it transfers stream ownership to the caller).
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
         // Fetch reference for the uploaded blob
@@ -150,7 +152,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
         var uri = GetBlobUri(blobPath);
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Delete, uri, ct).ConfigureAwait(false);
 
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false); // CR-L371
 
         if (response.StatusCode == HttpStatusCode.NotFound)
             return false;
@@ -176,7 +178,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
         var uri = GetBlobUri(blobPath);
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Head, uri, ct).ConfigureAwait(false);
 
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false); // CR-L371
 
         if (response.StatusCode == HttpStatusCode.NotFound)
             return StorageResult<FileReference>.NotFound();
@@ -199,7 +201,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
             uri += $"&maxresults={maxResults.Value}";
 
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Get, uri, ct).ConfigureAwait(false);
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false); // CR-L371
 
         if (response.StatusCode == HttpStatusCode.NotFound)
             return Array.Empty<FileReference>();
@@ -246,7 +248,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
             }
         }
 
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false); // CR-L371
         response.EnsureSuccessStatusCode();
 
         return await GetReferenceInternalAsync(dstBlobPath, destinationPath, ct).ConfigureAwait(false);
@@ -268,6 +270,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
         PresignedUrlOptions? options = null,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-L372: observe the token (body is pure HMAC, no I/O)
         ValidateSasCredentials();
         var blobPath = ResolvePath(path);
         var expiry = options?.Expiry ?? TimeSpan.FromHours(1);
@@ -292,6 +295,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
         PresignedUrlOptions? options = null,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested(); // CR-L372: observe the token (body is pure HMAC, no I/O)
         ValidateSasCredentials();
         var blobPath = ResolvePath(path);
         var expiry = options?.Expiry ?? TimeSpan.FromHours(1);
@@ -421,7 +425,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
     {
         var uri = GetBlobUri(blobPath);
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Head, uri, ct).ConfigureAwait(false);
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false); // CR-L371
         return response.StatusCode != HttpStatusCode.NotFound && response.IsSuccessStatusCode;
     }
 
@@ -429,7 +433,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
     {
         var uri = GetBlobUri(blobPath);
         var request = await CreateAuthorizedRequestAsync(HttpMethod.Head, uri, ct).ConfigureAwait(false);
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false); // CR-L371
         response.EnsureSuccessStatusCode();
         return ParseBlobProperties(logicalPath, blobPath, response);
     }
@@ -597,7 +601,8 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
             }
 
             var tokenEndpoint = $"https://login.microsoftonline.com/{_settings.TenantId}/oauth2/v2.0/token";
-            var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
+            // CR-L374: FormUrlEncodedContent is IDisposable; dispose it (and the response, CR-L371).
+            using var tokenRequest = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "client_credentials",
                 ["client_id"] = _settings.ClientId,
@@ -605,7 +610,7 @@ public sealed class AzureBlobStorage : IFileStorage, IPresignedUrlStorage, IDisp
                 ["scope"] = "https://storage.azure.com/.default"
             });
 
-            var response = await _httpClient.PostAsync(tokenEndpoint, tokenRequest, ct).ConfigureAwait(false);
+            using var response = await _httpClient.PostAsync(tokenEndpoint, tokenRequest, ct).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);

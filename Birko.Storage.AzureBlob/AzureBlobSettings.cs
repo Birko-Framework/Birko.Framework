@@ -24,21 +24,25 @@ public class AzureBlobSettings : RemoteSettings
     public string? TenantId
     {
         get => Name;
-        set => Name = value!;
+        // CR-L373: base Name is a non-nullable string; coalesce null → empty instead of planting a null
+        // behind the non-null contract with `value!`.
+        set => Name = value ?? string.Empty;
     }
 
     /// <summary>Azure AD client/application ID. Alias for <see cref="RemoteSettings.UserName"/>.</summary>
     public string? ClientId
     {
         get => UserName;
-        set => UserName = value!;
+        set => UserName = value ?? string.Empty; // CR-L373
     }
 
     /// <summary>Azure AD client secret. Alias for <see cref="PasswordSettings.Password"/>.</summary>
     public string? ClientSecret
     {
-        get => Password;
-        set => Password = value!;
+        // CR-L373: base Password defaults to string.Empty (not null!), so normalize empty → null here to
+        // present the same "unset reads back as null" contract as TenantId/ClientId.
+        get => string.IsNullOrEmpty(Password) ? null : Password;
+        set => Password = value ?? string.Empty; // CR-L373
     }
 
     /// <summary>
