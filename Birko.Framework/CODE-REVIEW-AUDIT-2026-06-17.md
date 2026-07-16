@@ -7632,17 +7632,19 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DecodeBCryptBase64 silently accepts invalid characters (IndexOf returns -1)
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.BCrypt\Hashing/BCryptPasswordHasher.cs:484-490`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** BCryptBase64.IndexOf(...) returns -1 for any character not in the custom alphabet. The result is cast/shifted into bytes (e.g. (byte)((c1 << 2) | ...)) with no validation, so a malformed salt that passed the coarse IsValidBCryptHash shape check produces silent garbage salt bytes rather than a clear rejection. Verify would then just return false for a structurally-wrong-but-shaped hash, which is acceptable, but a corrupt-but-decodable salt could mask bugs.
 - **Fix:** Treat IndexOf == -1 as an invalid hash (return false from Verify / throw ArgumentException from HashPassword) rather than coercing -1 into byte math.
+- **Resolution (CR-L341, Batch CG):** Two-layer fix. `IsValidBCryptHash` now validates that every char in the salt+digest body (indices 7..59) is in the BCrypt-Base64 alphabet, so `Verify` cleanly returns false for a shaped-but-corrupt hash before it ever reaches the decoder (and `NeedsRehash` returns true for such a hash — the correct "rehash it" answer). As a defensive backstop, `DecodeBCryptBase64` now routes each real char through `DecodeBCryptChar`, which throws `ArgumentException` on an out-of-alphabet char instead of coercing -1 into byte math; this only guards direct misuse of the private decoder (the `Hash` path always feeds a self-generated valid salt). Test `Verify_ShapedHashWithInvalidBase64Char_ReturnsFalse` pins the corrupt-body case.
 
 ### CR-L342 · ⚪ low · Birko.Security.BCrypt
 - **Title:** Documentation claims '$2b$' support but GenerateSalt only ever emits '$2a$'
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.BCrypt\Hashing/BCryptPasswordHasher.cs:9,265`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The class summary and CLAUDE.md state output is '$2a$' / '$2b$' modular crypt format, and IsValidBCryptHash accepts both '$2a$' and '$2b$' on verify. However GenerateSalt hard-codes '$2a$' so this library never produces '$2b$'. More importantly, '$2a$' vs '$2b$' differ in defined handling of the password length / null-termination edge cases; tagging output '$2a$' commits to those exact semantics, which compounds the interoperability risk in finding #1.
 - **Fix:** Either drop the '$2b$' claim or make the prefix explicit/configurable, and ensure the chosen prefix's documented semantics actually match the implementation.
+- **Resolution (CR-L342, Batch CG):** Verify-first correction to the audit premise — CLAUDE.md and README.md already document only `$2a$XX$` (accurate); the overclaim lived solely in the line-9 class summary. Reworded it to state the library *produces* `$2a$` and *also verifies* `$2b$`-tagged hashes from other implementations, and noted that the `$2a$`/`$2b$` semantic difference (the sign-extension wraparound for passwords >= 256 bytes) cannot arise here because inputs are capped at 72 bytes, so both variants hash identically. No behavior change (doc-only).
 
 ### CR-L343 · ⚪ low · Birko.Security.Jwt
 - **Title:** Override TokenOptions can carry empty/whitespace Secret, bypassing the constructor's fail-fast check

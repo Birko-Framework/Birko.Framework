@@ -13,7 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**340 / 418 triaged** as of 2026-07-16. Next open is CR-L341 (Birko.Security.BCrypt cluster, L341…).
+**342 / 418 triaged** as of 2026-07-16. Next open is CR-L343 (Birko.Security.Jwt cluster, L343…).
+
+**Batch CG — Birko.Security.BCrypt cluster (CR-L341, CR-L342):** Birko.Security.BCrypt. Both closed;
+**/code-review clean (no findings)**. **L341** (bug): `DecodeBCryptBase64` coerced `BCryptBase64.IndexOf`'s
+`-1` (out-of-alphabet char) into byte math, so a shaped-but-corrupt hash decoded to silent garbage salt
+bytes. Two-layer fix — `IsValidBCryptHash` now validates every salt+digest body char (indices 7..59) is in
+the alphabet (so `Verify` returns false, `NeedsRehash` returns true, for a corrupt body), plus a defensive
+`DecodeBCryptChar` that throws `ArgumentException` on `-1` to guard direct misuse of the private decoder
+(the `Hash` path always feeds a self-generated valid salt). **L342** (doc): verify-first found CLAUDE.md/
+README already say only `$2a$XX$` (accurate) — the `$2b$`-emits overclaim was solely in the line-9 class
+summary. Reworded to "produces `$2a$`, also verifies `$2b$`"; noted the `$2a$`/`$2b$` wraparound semantic
+can't arise under the 72-byte input cap. Test: `Verify_ShapedHashWithInvalidBase64Char_ReturnsFalse` (30 pass).
 
 **Batch CF — Birko.Security.AzureKeyVault cluster (CR-L338, CR-L339, CR-L340):** Birko.Security.AzureKeyVault.
 All closed; **/code-review clean (no findings)**. **L338** (cleanup): the `GetSecretPairsAsync` override is
