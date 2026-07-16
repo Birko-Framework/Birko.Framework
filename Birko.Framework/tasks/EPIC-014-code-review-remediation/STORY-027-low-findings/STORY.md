@@ -13,7 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**344 / 418 triaged** as of 2026-07-16. Next open is CR-L345 (Birko.Security.NFC cluster, L345…).
+**347 / 418 triaged** as of 2026-07-16. Next open is CR-L348 (Birko.Security.OAuth.Server cluster, L348…).
+
+**Batch CI — Birko.Security.NFC cluster (CR-L345, CR-L346, CR-L347):** Birko.Security.NFC. All closed;
+**/code-review clean (no findings)**. **L345** (cleanup): `NfcAuthResult.Claims` was public but never populated
+(the claims dict was built only inside `AuthenticateAsync`'s token branch and never surfaced). Now the
+sub/nfc_uid/auth_method + optional email/name dict is built once regardless of token issuance and passed into
+`Success(..., claims)` (new optional, source/binary-compatible trailing param). **L346** (bug): a concurrent
+enroll of the same new UID could pass the check-then-act guard and hit `AddAsync`, leaking the store's
+low-level "already exists in the store" message. Wrapped `AddAsync` in a try/catch that normalizes the
+`InvalidOperationException` to the friendly "already enrolled" message (original kept as InnerException); the
+`MaxTagsPerUser` throw is before the try. **L347** (convention): documented on `INfcTagMappingStore.UpdateAsync`
+that implementations must persist the mutated fields of the supplied instance even when detached/copied
+(the implicit AuthenticateAsync LastUsedAt round-trip contract). Tests:
+`AuthenticateAsync_Success_PopulatesClaims_WithoutTokenIssuance`,
+`AuthenticateAsync_Success_OmitsOptionalClaimsWhenAbsent`,
+`EnrollAsync_AddRaceCollision_ThrowsFriendlyAlreadyEnrolled` (49 pass).
 
 **Batch CH — Birko.Security.Jwt cluster (CR-L343, CR-L344):** Birko.Security.Jwt. Both closed;
 **/code-review clean (no findings)**. **L343** (bug): the ctor validated `_defaultOptions.Secret` but the

@@ -7668,25 +7668,28 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** NfcAuthResult.Claims is public init-only but never populated
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.NFC\NfcAuthResult.cs:44`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** The Claims dictionary is exposed on the public result type but Success()/Failure() never set it, and AuthenticateAsync builds its claims dictionary locally (NfcAuthProvider.cs:73-87) without copying it into the result. Callers always see an empty dictionary, so the property is dead surface that implies metadata is available when it never is.
 - **Fix:** Either populate Claims from the dictionary built in AuthenticateAsync (pass it into Success()) or remove the property until it is actually used.
+- **Resolution (CR-L345, Batch CI):** Populated it. The claims/metadata dictionary (sub/nfc_uid/auth_method + optional email/name) is now built once in `AuthenticateAsync` regardless of token issuance, used for the optional JWT if configured, and passed into `Success(..., claims)` (a new optional, source/binary-compatible trailing parameter). Tests `AuthenticateAsync_Success_PopulatesClaims_WithoutTokenIssuance` and `AuthenticateAsync_Success_OmitsOptionalClaimsWhenAbsent`.
 
 ### CR-L346 · ⚪ low · Birko.Security.NFC
 - **Title:** EnrollAsync TOCTOU surfaces a raw store exception on concurrent enroll of same UID
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.NFC\NfcAuthProvider.cs:105-139`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** There is a check-then-act gap between GetByTagUidAsync (line 105) and AddAsync (line 139). Two concurrent EnrollAsync calls for the same new UID both pass the 'already enrolled' guard, then one reaches InMemoryNfcTagMappingStore.AddAsync where TryAdd fails and throws InvalidOperationException("Tag {uid} already exists in the store.") (line 225) — a low-level store message rather than the intended friendly 'already enrolled' InvalidOperationException. Single-threaded callers are unaffected; this only matters under concurrent enrollment of identical tags.
 - **Fix:** Catch the AddAsync collision and rethrow with the consistent 'already enrolled' message, or treat enrollment as idempotent. Low priority given the typical single-reader-per-tag usage.
+- **Resolution (CR-L346, Batch CI):** `EnrollAsync` now wraps the `AddAsync` call in a try/catch that normalizes an `InvalidOperationException` (the store collision) into the same friendly "Tag {uid} is already enrolled." message the pre-check throws, preserving the original store exception as `InnerException` for diagnostics. The `MaxTagsPerUser` throw is before the try and unaffected. Test `EnrollAsync_AddRaceCollision_ThrowsFriendlyAlreadyEnrolled` uses a store stub that reports absent on read but collides on add to exercise the TOCTOU window deterministically.
 
 ### CR-L347 · ⚪ low · Birko.Security.NFC
 - **Title:** LastUsedAt usage-tracking relies on store returning a live/mutable mapping instance
 - **Path:** `C:\Source\Birko\Framework\Birko.Security.NFC\NfcAuthProvider.cs:62-67`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** AuthenticateAsync mutates the mapping returned by GetByTagUidAsync (mapping.LastUsedAt = DateTime.UtcNow) then calls UpdateAsync(mapping). The shipped InMemoryNfcTagMappingStore returns the stored reference so this round-trips correctly, but a DB-backed INfcTagMappingStore that returns detached/copied entities (the documented production scenario at lines 190-192) must re-read or rely on this same instance for the update to persist. The pattern is fine but the contract that GetByTagUidAsync returns a writable, update-compatible instance is implicit and undocumented on the interface.
 - **Fix:** Document on INfcTagMappingStore.UpdateAsync that it must persist field changes on the passed instance, or have AuthenticateAsync update only the fields it changed. No code change strictly required for the in-memory store.
+- **Resolution (CR-L347, Batch CI):** Documented the contract on `INfcTagMappingStore.UpdateAsync` (XML doc) — implementations must persist the mutated fields of the supplied instance whether or not it is the same reference `GetByTagUidAsync` returned, so a store handing out detached/copied entities still saves the changes `AuthenticateAsync` makes (e.g. LastUsedAt). Doc-only, no behavior change.
 
 ### CR-L348 · ⚪ low · Birko.Security.OAuth.Server
 - **Title:** NarrowScope helper is copy-pasted verbatim across three handlers
