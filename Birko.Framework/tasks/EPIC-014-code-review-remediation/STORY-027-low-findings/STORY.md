@@ -13,7 +13,16 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**364 / 418 triaged** as of 2026-07-16. Next open is CR-L365 (Birko.Serialization.Yaml cluster, L365/L366).
+**366 / 418 triaged** as of 2026-07-16. Next open is CR-L367 (Birko.Storage cluster, L367–L370). The whole
+Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is now DONE.
+
+**Batch CR — Birko.Serialization.Yaml (CR-L365, CR-L366):** Birko.Serialization.Yaml. Closed;
+**/code-review clean (no findings)**. **L365** (async CT observation): the four sync-wrapped async methods
+(YamlDotNet has no async API) ignored the `CancellationToken` entirely; added `ThrowIfCancellationRequested()`
+up front (plus explicit null guards, mirroring the sibling Protobuf async shape) so a pre-cancelled token
+surfaces `OperationCanceledException`. **L366** (test-gap): added `YamlStreamCoverageTests` — sync Stream
+round-trips (generic + by-type), untyped `DeserializeFromBytes(byte[], Type)`, generic `SerializeToBytes<T>`,
+untyped `SerializeAsync(object)` round-trip, and pre-cancelled-token serialize/deserialize. Serialization.Tests →108.
 
 **Batch CQ — Birko.Serialization.Protobuf (CR-L363, CR-L364):** Birko.Serialization.Protobuf. Closed;
 **/code-review clean (no findings)**. **L363** (convention): `DeserializeAsync` (both overloads) wrapped the

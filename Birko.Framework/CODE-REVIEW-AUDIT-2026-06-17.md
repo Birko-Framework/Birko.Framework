@@ -7841,7 +7841,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async methods never observe the CancellationToken
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization.Yaml\YamlDotNetSerializer.cs:126-146`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The four async methods (SerializeAsync/DeserializeAsync, both typed and untyped) are sync-wrapped (Serialize(...) then Task.CompletedTask / Task.FromResult). The sync-wrapping itself is documented and acceptable (YamlDotNet has no async API). However the CancellationToken parameter is completely ignored, so callers passing an already-cancelled token will not get an OperationCanceledException. The framework otherwise emphasizes consistent cancellation observation (see the 2026-06-15 AbstractAsyncStore change). Low severity because the operations are synchronous and complete immediately.
 - **Fix:** Call cancellationToken.ThrowIfCancellationRequested() at the top of each async method before delegating to the sync path, so an already-cancelled token surfaces the idiomatic .NET behavior.
 
@@ -7849,7 +7849,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Untested overloads: untyped byte/stream deserialize and sync stream serialize
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Serialization.Tests\Yaml\YamlDotNetSerializerTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Tests cover the main string/bytes/async-stream round-trips, camelCase, null guards, custom builders, unmatched-property tolerance, and nested objects. Not directly exercised: DeserializeFromBytes(byte[], Type) (untyped), the synchronous Serialize(Stream,...)/Deserialize(Stream,...) overloads, SerializeToBytes<T>(T), and the SerializeAsync untyped (object) overload. Note only, per scope.
 - **Fix:** Add round-trip cases for the untyped byte-array and synchronous stream overloads to close the small coverage gap.
 
