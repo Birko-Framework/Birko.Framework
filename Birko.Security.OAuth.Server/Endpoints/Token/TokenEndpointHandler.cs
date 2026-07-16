@@ -145,6 +145,12 @@ public class TokenEndpointHandler
             throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "PKCE is required for public clients.");
         }
 
+        // CR-L351: single-use is enforced by this read (line above) / check (code.Used) / set-and-persist
+        // sequence, which is NOT atomic on its own. Two concurrent /token requests presenting the same code
+        // can both pass the !Used check before either persists Used=true and both be issued tokens. Safe
+        // single-use therefore relies on IAuthorizationCodeStore.UpdateAsync being an atomic conditional
+        // update (see the interface docs) — the reference InMemory/JSON stores are last-write-wins and carry
+        // this TOCTOU window; SQL/document backends should claim the code with a conditional update.
         code.Used = true;
         await _codes.UpdateAsync(code, ct: ct).ConfigureAwait(false);
 
@@ -158,8 +164,19 @@ public class TokenEndpointHandler
 
         var hash = ClientSecretHasher.Hash(request.RefreshToken!);
         var record = await _refreshes.GetByHashAsync(hash, ct).ConfigureAwait(false);
-        if (record == null || record.Revoked || record.ExpiresAt <= _clock.UtcNow || record.ClientId != client.ClientId)
+        if (record == null || record.ExpiresAt <= _clock.UtcNow || record.ClientId != client.ClientId)
             throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "Refresh token is invalid or expired.");
+
+        // CR-L350: RFC 6819 §5.2.2.3 / OAuth 2.1 reuse detection — a request presenting an already-revoked
+        // (rotated) refresh token that legitimately belongs to this client signals the token may be
+        // compromised. Revoke the entire (client, user) family so any concurrently-minted sibling tokens are
+        // invalidated too, then reject. Kept behind the client-ownership check above so a token belonging to a
+        // different client falls through to the generic invalid_grant without touching this client's family.
+        if (record.Revoked)
+        {
+            await _refreshes.RevokeFamilyAsync(record.ClientId, record.UserId, ct).ConfigureAwait(false);
+            throw new OAuthServerException(OAuthErrorCodes.InvalidGrant, "Refresh token is invalid or expired.");
+        }
 
         var scope = ScopeUtil.NarrowScope(request.Scope ?? record.Scope, record.Scope.Split(' ', StringSplitOptions.RemoveEmptyEntries), _settings.SupportedScopes);
 
