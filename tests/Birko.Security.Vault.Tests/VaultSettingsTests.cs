@@ -44,6 +44,26 @@ public class VaultSettingsTests
     }
 
     [Fact]
+    public void Token_SetNull_StoresEmptyPassword_ReadsBackNull()
+    {
+        // CR-L353: a null Token must not be forced into the non-nullable Password via `value!`; it normalizes
+        // to string.Empty and reads back as null (no token configured).
+        var settings = new VaultSettings { Token = "prior" };
+        settings.Token = null;
+
+        settings.Password.Should().Be(string.Empty);
+        settings.Token.Should().BeNull();
+    }
+
+    [Fact]
+    public void Token_SetEmpty_ReadsBackNull()
+    {
+        var settings = new VaultSettings { Token = string.Empty };
+        settings.Token.Should().BeNull();
+        settings.Password.Should().Be(string.Empty);
+    }
+
+    [Fact]
     public void MountPath_MapsToName()
     {
         var settings = new VaultSettings { MountPath = "kv-v2" };

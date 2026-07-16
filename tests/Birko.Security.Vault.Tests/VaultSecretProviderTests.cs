@@ -254,6 +254,59 @@ public class VaultSecretProviderTests
         (await provider.GetSecretPairsAsync("myapp")).Should().BeNull();
     }
 
+    // ── Injected-HttpClient hygiene (CR-L354) ──
+
+    [Fact]
+    public void Constructor_InjectedHttpClient_NotMutated()
+    {
+        // CR-L354: the provider must not overwrite an injected/shared client's BaseAddress, Timeout, or
+        // DefaultRequestHeaders — those belong to the caller (e.g. IHttpClientFactory).
+        var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(7) };
+        var settings = new VaultSettings { Address = "http://localhost:8200", Token = "test", Namespace = "ns", TimeoutSeconds = 30 };
+
+        using var provider = new VaultSecretProvider(settings, httpClient);
+
+        httpClient.BaseAddress.Should().BeNull("an injected client's BaseAddress must be left untouched");
+        httpClient.Timeout.Should().Be(TimeSpan.FromSeconds(7), "an injected client's Timeout must be left untouched");
+        httpClient.DefaultRequestHeaders.Contains("X-Vault-Token").Should().BeFalse();
+        httpClient.DefaultRequestHeaders.Contains("X-Vault-Namespace").Should().BeFalse();
+    }
+
+    [Fact]
+    public void Constructor_TwoProvidersOverOneClient_DoesNotThrow()
+    {
+        // Previously each provider did DefaultRequestHeaders.Add(...), so the second construction over a shared
+        // client threw on the duplicate header. With per-request headers this is safe.
+        var httpClient = new HttpClient();
+        var settings = new VaultSettings { Address = "http://localhost:8200", Token = "test", Namespace = "ns" };
+
+        var act = () =>
+        {
+            using var p1 = new VaultSecretProvider(settings, httpClient);
+            using var p2 = new VaultSecretProvider(settings, httpClient);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public async Task Requests_CarryTokenAndNamespaceHeaders_AtAbsoluteUri()
+    {
+        // CR-L354: token/namespace travel as per-request headers and the request targets an absolute URI
+        // derived from the settings address (no reliance on a mutated client BaseAddress).
+        var handler = new CapturingHandler(HttpStatusCode.OK, "{}");
+        var httpClient = new HttpClient(handler);
+        var settings = new VaultSettings { Address = "http://vault.local:8200", Token = "hvs.abc", Namespace = "team-a" };
+        using var provider = new VaultSecretProvider(settings, httpClient);
+
+        await provider.IsHealthyAsync();
+
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.RequestUri!.AbsoluteUri.Should().Be("http://vault.local:8200/v1/sys/health");
+        handler.LastRequest.Headers.GetValues("X-Vault-Token").Should().ContainSingle().Which.Should().Be("hvs.abc");
+        handler.LastRequest.Headers.GetValues("X-Vault-Namespace").Should().ContainSingle().Which.Should().Be("team-a");
+    }
+
     #region Test Helpers
 
     private class FakeHttpHandler : HttpMessageHandler
@@ -269,6 +322,28 @@ public class VaultSecretProviderTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            return Task.FromResult(new HttpResponseMessage(_statusCode)
+            {
+                Content = new StringContent(_content, System.Text.Encoding.UTF8, "application/json")
+            });
+        }
+    }
+
+    private class CapturingHandler : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _statusCode;
+        private readonly string _content;
+        public HttpRequestMessage? LastRequest { get; private set; }
+
+        public CapturingHandler(HttpStatusCode statusCode, string content)
+        {
+            _statusCode = statusCode;
+            _content = content;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            LastRequest = request;
             return Task.FromResult(new HttpResponseMessage(_statusCode)
             {
                 Content = new StringContent(_content, System.Text.Encoding.UTF8, "application/json")
