@@ -18,8 +18,12 @@ public class VaultSettings : PasswordSettings
     /// <summary>Authentication token for Vault access. Alias for <see cref="PasswordSettings.Password"/>.</summary>
     public string? Token
     {
-        get => Password;
-        set => Password = value!;
+        // CR-L353: PasswordSettings.Password is non-nullable (defaults to string.Empty). Present Token as a
+        // faithful string? alias — an empty backing password reads back as null (no token configured) — and
+        // normalize a null assignment to string.Empty rather than forcing a null in via `value!`, which stored
+        // a null the type system promised was non-null and could NRE downstream (e.g. the X-Vault-Token build).
+        get => string.IsNullOrEmpty(Password) ? null : Password;
+        set => Password = value ?? string.Empty;
     }
 
     /// <summary>KV secrets engine mount path (default: "secret"). Alias for <see cref="Settings.Name"/>.</summary>

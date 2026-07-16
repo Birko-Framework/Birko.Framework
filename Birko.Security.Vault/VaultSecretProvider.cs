@@ -21,6 +21,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
     private readonly HttpClient _httpClient;
     private readonly ISerializer _serializer;
     private readonly bool _ownsHttpClient;
+    private readonly Uri _baseUri;
 
     /// <summary>
     /// Creates a new Vault secret provider with the specified settings.
@@ -38,18 +39,40 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
         _ownsHttpClient = httpClient == null;
         _httpClient = httpClient ?? new HttpClient();
         _serializer = serializer ?? new SystemJsonSerializer();
+        _baseUri = new Uri(_settings.Address.TrimEnd('/') + "/");
 
-        _httpClient.BaseAddress = new Uri(_settings.Address.TrimEnd('/') + "/");
-        _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+        // CR-L354: only mutate the client we own. An injected/shared client (e.g. from IHttpClientFactory or
+        // reused across providers) keeps its own BaseAddress/Timeout/headers — every request built by
+        // SendCoreAsync uses an absolute URI and attaches the Vault token/namespace as per-request headers, so
+        // nothing on the shared client is overwritten and constructing two providers over one client no longer
+        // throws on duplicate DefaultRequestHeaders.
+        if (_ownsHttpClient)
+        {
+            _httpClient.Timeout = TimeSpan.FromSeconds(_settings.TimeoutSeconds);
+        }
+    }
 
+    /// <summary>
+    /// Sends a Vault API request against an absolute URI with per-request token/namespace headers, so a
+    /// caller-owned HttpClient is never mutated (CR-L354). <paramref name="relativePath"/> is resolved
+    /// against the Vault base address (e.g. "v1/secret/data/foo").
+    /// </summary>
+    private Task<HttpResponseMessage> SendCoreAsync(HttpMethod method, string relativePath, HttpContent? content, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(method, new Uri(_baseUri, relativePath));
+        if (content != null)
+        {
+            request.Content = content;
+        }
         if (!string.IsNullOrEmpty(_settings.Token))
         {
-            _httpClient.DefaultRequestHeaders.Add("X-Vault-Token", _settings.Token);
+            request.Headers.Add("X-Vault-Token", _settings.Token);
         }
         if (!string.IsNullOrEmpty(_settings.Namespace))
         {
-            _httpClient.DefaultRequestHeaders.Add("X-Vault-Namespace", _settings.Namespace);
+            request.Headers.Add("X-Vault-Namespace", _settings.Namespace);
         }
+        return _httpClient.SendAsync(request, ct);
     }
 
     /// <inheritdoc />
@@ -67,7 +90,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
         ArgumentNullException.ThrowIfNull(key);
 
         var path = BuildDataPath(key);
-        var response = await _httpClient.GetAsync($"v1/{path}", ct).ConfigureAwait(false);
+        var response = await SendCoreAsync(HttpMethod.Get, $"v1/{path}", null, ct).ConfigureAwait(false);
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
@@ -100,7 +123,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
             : _serializer.Serialize(new Dictionary<string, string> { ["value"] = value });
 
         var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-        var response = await _httpClient.PostAsync($"v1/{path}", content, ct).ConfigureAwait(false);
+        var response = await SendCoreAsync(HttpMethod.Post, $"v1/{path}", content, ct).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
     }
 
@@ -113,7 +136,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
             ? $"{_settings.MountPath}/metadata/{key}"
             : $"{_settings.MountPath}/{key}";
 
-        var response = await _httpClient.DeleteAsync($"v1/{path}", ct).ConfigureAwait(false);
+        var response = await SendCoreAsync(HttpMethod.Delete, $"v1/{path}", null, ct).ConfigureAwait(false);
 
         if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
         {
@@ -130,8 +153,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
 
         listPath = listPath.TrimEnd('/');
 
-        var request = new HttpRequestMessage(HttpMethod.Get, $"v1/{listPath}?list=true");
-        var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
+        var response = await SendCoreAsync(HttpMethod.Get, $"v1/{listPath}?list=true", null, ct).ConfigureAwait(false);
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return Array.Empty<string>();
@@ -166,7 +188,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
         ArgumentNullException.ThrowIfNull(key);
 
         var path = BuildDataPath(key);
-        var response = await _httpClient.GetAsync($"v1/{path}", ct).ConfigureAwait(false);
+        var response = await SendCoreAsync(HttpMethod.Get, $"v1/{path}", null, ct).ConfigureAwait(false);
 
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             return null;
@@ -205,7 +227,7 @@ public class VaultSecretProvider : ISecretProvider, IDisposable
     {
         try
         {
-            var response = await _httpClient.GetAsync("v1/sys/health", ct).ConfigureAwait(false);
+            var response = await SendCoreAsync(HttpMethod.Get, "v1/sys/health", null, ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch
