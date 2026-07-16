@@ -13,8 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**357 / 418 triaged** as of 2026-07-16. Next open is CR-L358 (Birko.Serialization.MessagePack cluster,
-L358/L359/L360).
+**360 / 418 triaged** as of 2026-07-16. Next open is CR-L361 (Birko.Serialization.Newtonsoft cluster,
+L361/L362).
+
+**Batch CO — Birko.Serialization.MessagePack (CR-L358, CR-L359, CR-L360):** Birko.Serialization.MessagePack.
+Closed; **/code-review clean (no findings)**. **L358** (cleanup) + **L359** (async CT observation): the four
+`Stream` overloads buffered the whole payload through an intermediate `byte[]`/`MemoryStream` before writing
+or after copying; the async ones only observed the `CancellationToken` during the stream copy, not the
+serialize/deserialize work. MessagePack ships native `(Type/T, Stream, options[, ct])` sync + async stream
+overloads, so all six methods now serialize/deserialize straight against the stream — no full-payload copy —
+and the async four thread the token through `SerializeAsync`/`DeserializeAsync` so a pre-cancelled token
+surfaces `OperationCanceledException` on the actual work. **L360** (test-gap): the Stream + async overloads
+were entirely untested; added `MessagePackStreamCancellationTests` — sync/async round-trips (generic +
+by-type), leave-stream-open, and pre-cancelled-token serialize/deserialize. Serialization.Tests →90.
 
 **Batch CN — Birko.Serialization (CR-L357):** Birko.Serialization. Closed; **/code-review clean (no findings)**.
 **L357** (bug): the string `Serialize` overloads wrote through a plain `StringWriter`, which always reports

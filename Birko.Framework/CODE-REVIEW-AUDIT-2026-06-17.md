@@ -7785,7 +7785,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stream serialize/deserialize buffer through an intermediate byte[]/MemoryStream instead of using MessagePack's native stream overloads
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization.MessagePack\MessagePackBinarySerializer.cs:85-148`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Serialize(Stream,...) and Serialize<T>(Stream,...) (lines 85-99) build a full byte[] then call stream.Write; the Deserialize(Stream,...) / Deserialize<T>(Stream) (lines 101-116) and their async counterparts (lines 134-149) CopyTo a MemoryStream and then ms.ToArray(). MessagePackSerializer has native Serialize(Stream, value, options) and Deserialize(type/T, Stream, options) overloads that avoid the extra full-payload allocation. Correctness is fine; this is purely a needless-allocation cleanup for large payloads.
 - **Fix:** Use MessagePackSerializer.Serialize(stream, value, _options) and MessagePackSerializer.Deserialize<T>(stream, _options) directly. Note: the async overloads (SerializeAsync/DeserializeAsync) take a CancellationToken, so switching to them would also fix the token-observation gap below.
 
@@ -7793,7 +7793,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async methods do the CPU-bound MessagePack work synchronously and only observe the token during stream copy
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization.MessagePack\MessagePackBinarySerializer.cs:118-149`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SerializeAsync (lines 118-132) calls MessagePackSerializer.Serialize synchronously before the awaited WriteAsync, so an already-cancelled token is not checked before a potentially large serialize. DeserializeAsync (lines 134-149) passes the token to CopyToAsync (good) but the subsequent MessagePackSerializer.Deserialize ignores it. MessagePack's native async stream overloads accept a CancellationToken and would let the token flow through the actual serialize/deserialize. The convention asks async methods to observe CancellationToken; today it is only partially observed.
 - **Fix:** Switch to MessagePackSerializer.SerializeAsync(stream, value, _options, cancellationToken) and DeserializeAsync<T>(stream, _options, cancellationToken).
 
@@ -7801,7 +7801,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stream-based and async methods have no test coverage
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Serialization.Tests/MessagePack/MessagePackBinarySerializerTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The test suite covers string/byte round-trips and null guards but does not exercise any of the Stream overloads (Serialize(Stream,...), Deserialize(Stream,...)) or the async overloads (SerializeAsync/DeserializeAsync), nor cancellation behavior. Sibling serializers (e.g. Yaml) note stream overloads in their suites; these MessagePack stream/async paths are public functionality currently untested.
 - **Fix:** Add round-trip tests for the sync Stream overloads and the async overloads, plus a cancellation test once the token is wired through the native overloads.
 
