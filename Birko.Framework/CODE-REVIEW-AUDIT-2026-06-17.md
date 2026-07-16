@@ -7809,7 +7809,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Async serialize/deserialize do not observe cancellation before doing the work
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization.Newtonsoft\NewtonsoftJsonSerializer.cs:124-163`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SerializeAsync (both overloads) performs the entire synchronous serializer.Serialize(jsonWriter, value) work and only awaits the final FlushAsync(cancellationToken) — so an already-cancelled token is not observed until after the full payload has been written. DeserializeAsync passes the token to Task.Run, which is the correct pattern. Newtonsoft has no truly-async serialize path, so the synchronous-write-then-async-flush shape is acceptable, but the token is effectively ignored for the serialize work. Not a correctness bug for typical payloads; framework convention (CLAUDE.md) asks async methods to observe the CancellationToken.
 - **Fix:** Add cancellationToken.ThrowIfCancellationRequested() at the top of both SerializeAsync overloads (and optionally DeserializeAsync) so a pre-cancelled token surfaces OperationCanceledException immediately, consistent with the framework's async cancellation contract.
 
@@ -7817,7 +7817,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Stream and async overloads (8 public methods) have no tests
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Serialization.Tests/Newtonsoft/NewtonsoftJsonSerializerTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The test suite covers string/byte round-trips, ContentType/Format, camelCase, null guards, by-type deserialize, custom settings, and nested objects. It does not exercise any of the 8 stream overloads: Serialize(Stream,...) x2, Deserialize(Stream,...) x2, SerializeAsync x2, DeserializeAsync x2. In particular the leaveOpen:true behavior (stream remains usable after serialize/deserialize) and async round-trips through a MemoryStream are untested.
 - **Fix:** Add MemoryStream round-trip tests for the sync and async stream overloads, asserting the stream stays open (leaveOpen) and the deserialized payload matches; include a cancellation test for the async overloads.
 

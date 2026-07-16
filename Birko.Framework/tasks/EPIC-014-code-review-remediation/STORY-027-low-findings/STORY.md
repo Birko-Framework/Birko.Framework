@@ -13,8 +13,18 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**360 / 418 triaged** as of 2026-07-16. Next open is CR-L361 (Birko.Serialization.Newtonsoft cluster,
-L361/L362).
+**362 / 418 triaged** as of 2026-07-16. Next open is CR-L363 (Birko.Serialization.Protobuf cluster,
+L363/L364).
+
+**Batch CP — Birko.Serialization.Newtonsoft (CR-L361, CR-L362):** Birko.Serialization.Newtonsoft. Closed;
+**/code-review clean (no findings)**. **L361** (async CT observation): both `SerializeAsync` overloads did the
+entire synchronous `serializer.Serialize(...)` before awaiting `FlushAsync(ct)`, so a pre-cancelled token was
+only surfaced after the full payload was written. Newtonsoft has no truly-async serialize path, so — mirroring
+the Protobuf CR-M245 pattern — added `cancellationToken.ThrowIfCancellationRequested()` at the top of both
+overloads (`DeserializeAsync` already observes via `Task.Run(func, ct)`, no change). **L362** (test-gap): the 8
+Stream/async overloads were untested; added `NewtonsoftStreamCancellationTests` — sync/async round-trips
+(generic + by-type), `leaveOpen` (second serialize onto the same stream succeeds), and pre-cancelled-token
+serialize/deserialize. Serialization.Tests →97.
 
 **Batch CO — Birko.Serialization.MessagePack (CR-L358, CR-L359, CR-L360):** Birko.Serialization.MessagePack.
 Closed; **/code-review clean (no findings)**. **L358** (cleanup) + **L359** (async CT observation): the four
