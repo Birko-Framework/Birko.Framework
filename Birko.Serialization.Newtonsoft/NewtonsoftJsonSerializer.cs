@@ -125,6 +125,9 @@ namespace Birko.Serialization.Newtonsoft
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
+            // CR-L361: Newtonsoft has no truly-async serialize path (we write synchronously then flush async),
+            // so observe the token up front — a pre-cancelled token must not do the full serialize first.
+            cancellationToken.ThrowIfCancellationRequested();
             using var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true);
             using var jsonWriter = new JsonTextWriter(streamWriter);
             var serializer = JsonSerializer.Create(_settings);
@@ -136,6 +139,8 @@ namespace Birko.Serialization.Newtonsoft
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
+            // CR-L361: observe the token up front (see the non-generic overload above).
+            cancellationToken.ThrowIfCancellationRequested();
             using var streamWriter = new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen: true);
             using var jsonWriter = new JsonTextWriter(streamWriter);
             var serializer = JsonSerializer.Create(_settings);
