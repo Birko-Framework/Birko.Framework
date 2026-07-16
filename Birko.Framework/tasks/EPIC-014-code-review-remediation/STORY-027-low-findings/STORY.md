@@ -13,7 +13,16 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**356 / 418 triaged** as of 2026-07-16. Next open is CR-L357 (Birko.Serialization cluster, L357…).
+**357 / 418 triaged** as of 2026-07-16. Next open is CR-L358 (Birko.Serialization.MessagePack cluster,
+L358/L359/L360).
+
+**Batch CN — Birko.Serialization (CR-L357):** Birko.Serialization. Closed; **/code-review clean (no findings)**.
+**L357** (bug): the string `Serialize` overloads wrote through a plain `StringWriter`, which always reports
+UTF-16, so `XmlWriter` emitted `encoding="utf-16"` in the declaration while the byte/stream overloads emitted
+the configured `utf-8` — a contradictory declaration for the same payload. Added a private
+`EncodedStringWriter : StringWriter` overriding `Encoding` to return `_writerSettings.Encoding`; both string
+overloads now declare the configured encoding (utf-8 default), matching the byte/stream paths. Tests assert
+utf-8 default + a custom utf-16 settings case. Serialization.Tests (Xml) →20.
 
 **Batch CM — Birko.Security.Vault.Configuration (CR-L355, CR-L356):** Birko.Security.Vault.Configuration
 (tests live in Birko.Security.Vault.Tests — the config projitems compiles into that assembly). Both closed;

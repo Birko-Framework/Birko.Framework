@@ -7776,9 +7776,10 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** XML string Serialize emits encoding="utf-16" while byte/stream paths emit utf-8
 - **Path:** `C:\Source\Birko\Framework\Birko.Serialization\Xml\SystemXmlSerializer.cs:42-60`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** closed
 - **Detail:** Serialize(object)/Serialize<T>(T) write through a StringWriter. XmlWriter ignores XmlWriterSettings.Encoding when the underlying TextWriter is a StringWriter (always UTF-16), so with the default settings (OmitXmlDeclaration=false) the string output contains <?xml version="1.0" encoding="utf-16"?>, whereas SerializeToBytes / Serialize(Stream) correctly emit encoding="utf-8" (the configured UTF8Encoding). The same logical payload therefore carries a contradictory declared encoding depending on which overload produced it, which can break downstream consumers that honor the declared encoding when re-reading the string as bytes.
 - **Fix:** Use a StringWriter subclass that overrides Encoding to return the configured encoding (the standard Utf8StringWriter trick), or document that the string overload is UTF-16 and the byte/stream overloads are UTF-8.
+- **Resolution (CR-L357, Batch CN):** Added a private `EncodedStringWriter : StringWriter` that overrides `Encoding` to return `_writerSettings.Encoding`, and used it in both string `Serialize` overloads. The `<?xml encoding="…"?>` declaration now matches the configured encoding (utf-8 by default) — identical to the byte/stream overloads — instead of the StringWriter-forced utf-16. Tests `Serialize_String_DeclaresUtf8_MatchingByteOverload` and `Serialize_String_CustomEncodingSettings_DeclarationMatchesConfiguredEncoding` (utf-16 settings → utf-16 declaration).
 
 ### CR-L358 · ⚪ low · Birko.Serialization.MessagePack
 - **Title:** Stream serialize/deserialize buffer through an intermediate byte[]/MemoryStream instead of using MessagePack's native stream overloads
