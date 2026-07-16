@@ -63,6 +63,38 @@ namespace Birko.Serialization.Tests.Xml
         }
 
         [Fact]
+        public void Serialize_String_DeclaresUtf8_MatchingByteOverload()
+        {
+            // CR-L357: the string overload previously emitted encoding="utf-16" (StringWriter forces UTF-16),
+            // contradicting the byte/stream overloads which declare utf-8. Both must agree now.
+            var payload = new XmlTestPayload { Name = "enc", Value = 1, IsActive = true };
+
+            var xml = _serializer.Serialize((object)payload);
+            xml.Should().Contain("encoding=\"utf-8\"");
+            xml.Should().NotContain("utf-16");
+
+            var bytesXml = System.Text.Encoding.UTF8.GetString(_serializer.SerializeToBytes((object)payload));
+            // strip a UTF-8 BOM if present so the declaration comparison is clean
+            bytesXml = bytesXml.TrimStart('﻿');
+            bytesXml.Should().Contain("encoding=\"utf-8\"");
+        }
+
+        [Fact]
+        public void Serialize_String_CustomEncodingSettings_DeclarationMatchesConfiguredEncoding()
+        {
+            // A custom writer-settings encoding (utf-16) must be reflected in the string declaration too.
+            var utf16Serializer = new SystemXmlSerializer(new XmlWriterSettings
+            {
+                Indent = false,
+                OmitXmlDeclaration = false,
+                Encoding = System.Text.Encoding.Unicode // utf-16
+            });
+
+            var xml = utf16Serializer.Serialize((object)new XmlTestPayload { Name = "u", Value = 2, IsActive = false });
+            xml.Should().Contain("encoding=\"utf-16\"");
+        }
+
+        [Fact]
         public void RoundTrip_String_PreservesData()
         {
             var original = new XmlTestPayload { Name = "roundtrip", Value = 99, IsActive = false };
