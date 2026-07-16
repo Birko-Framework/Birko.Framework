@@ -82,3 +82,42 @@ public class PasswordHasherAndEncryptionTests
         provider.Invoking(p => p.Decrypt(cipher, key)).Should().Throw<CryptographicException>();
     }
 }
+
+/// <summary>
+/// CR-L335: the AES provider must give a clean ArgumentNullException on null data/key (was NRE).
+/// CR-L336: ExpandEnvironmentVariable must treat an empty-braces token ("${}") as a literal.
+/// </summary>
+public class SecurityNullGuardTests
+{
+    [Fact]
+    public void Aes_Encrypt_NullData_ThrowsArgumentNullException()
+    {
+        var provider = new AesEncryptionProvider();
+        var key = AesEncryptionProvider.GenerateKey();
+
+        provider.Invoking(p => p.Encrypt(null!, key)).Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Aes_Encrypt_NullKey_ThrowsArgumentNullException()
+    {
+        var provider = new AesEncryptionProvider();
+
+        provider.Invoking(p => p.Encrypt(new byte[] { 1, 2, 3 }, null!)).Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Aes_Decrypt_NullData_ThrowsArgumentNullException()
+    {
+        var provider = new AesEncryptionProvider();
+        var key = AesEncryptionProvider.GenerateKey();
+
+        provider.Invoking(p => p.Decrypt(null!, key)).Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void ExpandEnvironmentVariable_EmptyBraces_ReturnsLiteral()
+    {
+        Birko.Security.Authentication.AuthenticationService.ExpandEnvironmentVariable("${}").Should().Be("${}");
+    }
+}
