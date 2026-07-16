@@ -18,14 +18,22 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
     private readonly ISecretProvider _provider;
     private readonly string _path;
     private readonly bool _recursive;
+    private readonly Action<string> _diagnostics;
 
-    public SecretConfigurationProvider(ISecretProvider provider, string path, bool recursive = true)
+    public SecretConfigurationProvider(ISecretProvider provider, string path, bool recursive = true, Action<string>? diagnostics = null)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _path = (path ?? string.Empty).Trim('/');
         _recursive = recursive;
+        // CR-L356: injectable diagnostic sink (default Console.WriteLine) instead of hard-coded Console.
+        _diagnostics = diagnostics ?? Console.WriteLine;
     }
 
+    /// <summary>
+    /// CR-L356: load failures are intentionally NON-FATAL (fail-open) — a provider outage or auth failure
+    /// yields an empty configuration section and a diagnostic message rather than crashing startup. Consumers
+    /// that require specific secrets must validate their presence separately; missing secrets will not throw here.
+    /// </summary>
     public override void Load()
     {
         try
@@ -34,7 +42,7 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SecretConfiguration: error loading '{_path}': {ex.Message}");
+            _diagnostics($"SecretConfiguration: error loading '{_path}': {ex.Message}");
         }
     }
 
@@ -57,7 +65,7 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SecretConfiguration: warning reading '{path}': {ex.Message}");
+            _diagnostics($"SecretConfiguration: warning reading '{path}': {ex.Message}");
         }
 
         if (!_recursive) return;
@@ -70,7 +78,7 @@ public sealed class SecretConfigurationProvider : ConfigurationProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"SecretConfiguration: warning listing '{path}': {ex.Message}");
+            _diagnostics($"SecretConfiguration: warning listing '{path}': {ex.Message}");
             return;
         }
 

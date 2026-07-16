@@ -18,11 +18,12 @@ public static class SecretConfigurationExtensions
         this IConfigurationBuilder builder,
         ISecretProvider provider,
         string path,
-        bool recursive = true)
+        bool recursive = true,
+        Action<string>? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(provider);
-        return builder.Add(new SecretConfigurationSource(provider, path, recursive));
+        return builder.Add(new SecretConfigurationSource(provider, path, recursive, diagnostics));
     }
 
     /// <summary>
@@ -32,7 +33,8 @@ public static class SecretConfigurationExtensions
         this IConfigurationBuilder builder,
         ISecretProvider provider,
         IEnumerable<string> paths,
-        bool recursive = true)
+        bool recursive = true,
+        Action<string>? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(provider);
@@ -40,7 +42,7 @@ public static class SecretConfigurationExtensions
 
         foreach (var path in paths)
         {
-            builder.Add(new SecretConfigurationSource(provider, path, recursive));
+            builder.Add(new SecretConfigurationSource(provider, path, recursive, diagnostics));
         }
         return builder;
     }

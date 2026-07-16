@@ -15,13 +15,22 @@ public sealed class LocalVaultConfigurationProvider : ConfigurationProvider
 {
     private readonly VaultSecretProvider _client;
     private readonly string _path;
+    private readonly Action<string> _diagnostics;
 
-    public LocalVaultConfigurationProvider(VaultSecretProvider client, string path)
+    public LocalVaultConfigurationProvider(VaultSecretProvider client, string path, Action<string>? diagnostics = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _path = (path ?? string.Empty).Trim('/');
+        // CR-L356: diagnostics are routed through an injectable sink (default Console.WriteLine) instead of
+        // hard-coding Console, so hosts can capture them via ILogger/etc.
+        _diagnostics = diagnostics ?? Console.WriteLine;
     }
 
+    /// <summary>
+    /// CR-L356: load failures are intentionally NON-FATAL (fail-open) — a Vault outage or auth failure
+    /// yields an empty configuration section and a diagnostic message rather than crashing startup. Consumers
+    /// that require specific secrets must validate their presence separately; missing secrets will not throw here.
+    /// </summary>
     public override void Load()
     {
         try
@@ -30,7 +39,7 @@ public sealed class LocalVaultConfigurationProvider : ConfigurationProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"LocalVault: error loading '{_path}': {ex.Message}");
+            _diagnostics($"LocalVault: error loading '{_path}': {ex.Message}");
         }
     }
 
@@ -54,7 +63,7 @@ public sealed class LocalVaultConfigurationProvider : ConfigurationProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"LocalVault: warning reading '{path}': {ex.Message}");
+            _diagnostics($"LocalVault: warning reading '{path}': {ex.Message}");
         }
 
         // Recurse into sub-paths so nested KV folders become nested config keys.
@@ -65,7 +74,7 @@ public sealed class LocalVaultConfigurationProvider : ConfigurationProvider
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"LocalVault: warning listing '{path}': {ex.Message}");
+            _diagnostics($"LocalVault: warning listing '{path}': {ex.Message}");
             return;
         }
 

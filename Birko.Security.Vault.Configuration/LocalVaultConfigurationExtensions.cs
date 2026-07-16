@@ -38,16 +38,19 @@ public static class LocalVaultConfigurationExtensions
     public static IConfigurationBuilder AddLocalVaultConfiguration(
         this IConfigurationBuilder builder,
         string projectName,
-        LocalVaultOptions? options = null)
+        LocalVaultOptions? options = null,
+        Action<string>? diagnostics = null)
     {
         if (!IsEnabled()) return builder;
         if (string.IsNullOrWhiteSpace(projectName))
             throw new ArgumentException("Project name is required.", nameof(projectName));
 
+        // CR-L356: route the skip/diagnostic message through the injectable sink (default Console.WriteLine).
+        var report = diagnostics ?? Console.WriteLine;
         options = ResolveOptions(options);
         if (string.IsNullOrWhiteSpace(options.Token))
         {
-            Console.WriteLine("LocalVault: token is empty — skipping.");
+            report("LocalVault: token is empty — skipping.");
             return builder;
         }
 
@@ -63,7 +66,7 @@ public static class LocalVaultConfigurationExtensions
         var project = projectName.ToLowerInvariant();
         foreach (var path in BuildPaths(project, options))
         {
-            builder.Add(new LocalVaultConfigurationSource(client, path));
+            builder.Add(new LocalVaultConfigurationSource(client, path, diagnostics));
         }
         return builder;
     }
@@ -76,9 +79,14 @@ public static class LocalVaultConfigurationExtensions
     public static IConfigurationBuilder AddVaultPath(
         this IConfigurationBuilder builder,
         VaultSecretProvider client,
-        string path)
+        string path,
+        Action<string>? diagnostics = null)
     {
-        return builder.Add(new LocalVaultConfigurationSource(client, path));
+        // CR-L355: guard arguments like the sibling AddSecretConfiguration, so a null builder/client fails
+        // with a clear ArgumentNullException rather than a bare NRE on .Add / inside the source.
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(client);
+        return builder.Add(new LocalVaultConfigurationSource(client, path, diagnostics));
     }
 
     /// <summary>
@@ -90,9 +98,13 @@ public static class LocalVaultConfigurationExtensions
         this IConfigurationBuilder builder,
         ISecretProvider provider,
         string path,
-        bool recursive = true)
+        bool recursive = true,
+        Action<string>? diagnostics = null)
     {
-        return builder.Add(new SecretConfigurationSource(provider, path, recursive));
+        // CR-L355: guard arguments to match AddSecretConfiguration.
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(provider);
+        return builder.Add(new SecretConfigurationSource(provider, path, recursive, diagnostics));
     }
 
     // ── Internal ───────────────────────────────────────────────────────────────
