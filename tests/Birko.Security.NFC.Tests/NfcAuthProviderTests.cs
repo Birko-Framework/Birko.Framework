@@ -314,4 +314,70 @@ public class NfcAuthProviderTests
         var mapping = await _auth.GetTagMappingAsync("NOPE0001");
         mapping.Should().BeNull();
     }
+
+    // ── Claims population (CR-L345) ──
+
+    [Fact]
+    public async Task AuthenticateAsync_Success_PopulatesClaims_WithoutTokenIssuance()
+    {
+        // CR-L345: Claims must be populated on a successful auth even when no token provider is configured.
+        await _auth.EnrollAsync(_userId, "04A1B2C3", userName: "John", email: "john@test.com");
+
+        var result = await _auth.AuthenticateAsync("04A1B2C3");
+
+        result.IsAuthenticated.Should().BeTrue();
+        result.Token.Should().BeNull(); // default provider issues no token
+        result.Claims.Should().Contain("sub", _userId.ToString());
+        result.Claims.Should().Contain("nfc_uid", "04A1B2C3");
+        result.Claims.Should().Contain("auth_method", "nfc");
+        result.Claims.Should().Contain("email", "john@test.com");
+        result.Claims.Should().Contain("name", "John");
+    }
+
+    [Fact]
+    public async Task AuthenticateAsync_Success_OmitsOptionalClaimsWhenAbsent()
+    {
+        // No userName/email enrolled → those optional claims are not added, but the core ones are.
+        await _auth.EnrollAsync(_userId, "04A1B2C3");
+
+        var result = await _auth.AuthenticateAsync("04A1B2C3");
+
+        result.Claims.Keys.Should().BeEquivalentTo(new[] { "sub", "nfc_uid", "auth_method" });
+    }
+
+    // ── Concurrent-enroll collision (CR-L346) ──
+
+    [Fact]
+    public async Task EnrollAsync_AddRaceCollision_ThrowsFriendlyAlreadyEnrolled()
+    {
+        // CR-L346: simulate the TOCTOU window — GetByTagUidAsync reports "not enrolled" (null) so the pre-check
+        // passes, but AddAsync loses the race and throws the low-level store collision. EnrollAsync must
+        // normalize that to the friendly "already enrolled" message rather than leaking the store's wording.
+        var store = new AddCollisionStore();
+        var auth = new NfcAuthProvider(store);
+
+        var act = async () => await auth.EnrollAsync(_userId, "04A1B2C3");
+
+        (await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("*already enrolled*"))
+            .And.InnerException.Should().BeOfType<InvalidOperationException>(); // original store error preserved
+    }
+
+    /// <summary>Store stub whose GetByTagUidAsync reports absent but whose AddAsync always collides.</summary>
+    private sealed class AddCollisionStore : INfcTagMappingStore
+    {
+        public Task<NfcTagMapping?> GetByTagUidAsync(string tagUid, CancellationToken cancellationToken = default)
+            => Task.FromResult<NfcTagMapping?>(null);
+
+        public Task<IReadOnlyList<NfcTagMapping>> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<NfcTagMapping>>(new List<NfcTagMapping>());
+
+        public Task AddAsync(NfcTagMapping mapping, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException($"Tag {mapping.TagUid} already exists in the store.");
+
+        public Task UpdateAsync(NfcTagMapping mapping, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task DeleteAsync(string tagUid, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
 }
