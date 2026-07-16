@@ -30,6 +30,35 @@ public class RuleEvaluatorTests
     }
 
     [Fact]
+    public void Equal_FloatPromotedToDouble_MatchesWithinTolerance()
+    {
+        // CR-L333: a float field (0.1f) promoted to double must compare equal to the double literal 0.1 —
+        // the old `< double.Epsilon` was effectively exact equality and this did not match.
+        var rule = new Rule("Ratio", ComparisonOperator.Equal, 0.1);
+        var result = _evaluator.Evaluate(rule, Ctx(("Ratio", 0.1f)));
+        result.IsMatch.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Equal_DistinctDoubles_DoNotMatch()
+    {
+        // The scaled tolerance must still reject values that genuinely differ.
+        var rule = new Rule("Ratio", ComparisonOperator.Equal, 0.1);
+        var result = _evaluator.Evaluate(rule, Ctx(("Ratio", 0.2)));
+        result.IsMatch.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Equal_LargeIntegersDifferingByOne_DoNotMatch()
+    {
+        // CR-L333: integral equality stays exact — the fractional tolerance must NOT loosen it (a flat
+        // relative tolerance would wrongly equate 1e9 and 1e9+1).
+        var rule = new Rule("Id", ComparisonOperator.Equal, 1_000_000_000L);
+        var result = _evaluator.Evaluate(rule, Ctx(("Id", 1_000_000_001L)));
+        result.IsMatch.Should().BeFalse();
+    }
+
+    [Fact]
     public void NotEqual_Match()
     {
         var rule = new Rule("Status", ComparisonOperator.NotEqual, "Active");
