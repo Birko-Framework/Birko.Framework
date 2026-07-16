@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using Birko.Security;
 using Birko.Security.Jwt;
 using Birko.Time;
@@ -140,5 +141,69 @@ public class JwtTokenProviderTests
 
         a.Should().NotBeNullOrEmpty();
         a.Should().NotBe(b);
+    }
+
+    [Fact]
+    public void GenerateToken_OverrideWithEmptySecret_Throws()
+    {
+        // CR-L343: the per-call override secret must be validated, not just _defaultOptions in the ctor.
+        var provider = ProviderAt(DateTimeOffset.UtcNow);
+        var badOpts = Options();
+        badOpts.Secret = "   ";
+
+        provider.Invoking(p => p.GenerateToken(new Dictionary<string, string> { ["sub"] = "u" }, badOpts))
+            .Should().Throw<ArgumentException>().WithParameterName("options");
+    }
+
+    [Fact]
+    public void ValidateToken_OverrideWithEmptySecret_Throws()
+    {
+        // CR-L343: an empty override secret is a misconfiguration that must fail fast, not be swallowed
+        // into a generic "unexpected error" validation failure.
+        var provider = ProviderAt(DateTimeOffset.UtcNow);
+        var result = provider.GenerateToken(new Dictionary<string, string> { ["sub"] = "u" });
+        var badOpts = Options();
+        badOpts.Secret = "";
+
+        provider.Invoking(p => p.ValidateToken(result.Token, badOpts))
+            .Should().Throw<ArgumentException>().WithParameterName("options");
+    }
+
+    [Fact]
+    public void GenerateToken_InconsistentClock_IatAndExpFromSameInstant()
+    {
+        // CR-L344: iat and exp are both derived from a single _clock.OffsetUtcNow read. A clock whose
+        // UtcNow disagrees with OffsetUtcNow must not split the two claims across different instants —
+        // exp minus iat must equal exactly ExpirationMinutes.
+        var offsetInstant = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var clock = new InconsistentClock(
+            utcNow: offsetInstant.UtcDateTime.AddMinutes(30), // deliberately skewed vs OffsetUtcNow
+            offsetUtcNow: offsetInstant);
+        var provider = new JwtTokenProvider(Options(), clock);
+
+        var result = provider.GenerateToken(new Dictionary<string, string> { ["sub"] = "u" });
+
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(result.Token);
+        var iat = long.Parse(jwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.Iat).Value);
+        var exp = ((DateTimeOffset)jwt.ValidTo).ToUnixTimeSeconds();
+
+        iat.Should().Be(offsetInstant.ToUnixTimeSeconds());
+        (exp - iat).Should().Be(60 * 60); // ExpirationMinutes (60) in seconds — no cross-clock drift
+    }
+
+    private sealed class InconsistentClock : IDateTimeProvider
+    {
+        private readonly DateTime _utcNow;
+        private readonly DateTimeOffset _offsetUtcNow;
+
+        public InconsistentClock(DateTime utcNow, DateTimeOffset offsetUtcNow)
+        {
+            _utcNow = utcNow;
+            _offsetUtcNow = offsetUtcNow;
+        }
+
+        public DateTime UtcNow => _utcNow;
+        public DateTimeOffset OffsetUtcNow => _offsetUtcNow;
+        public DateOnly Today => DateOnly.FromDateTime(_utcNow);
     }
 }
