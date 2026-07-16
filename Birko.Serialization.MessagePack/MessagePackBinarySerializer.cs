@@ -82,70 +82,62 @@ namespace Birko.Serialization.MessagePack
             return MessagePackSerializer.Deserialize<T>(data, _options);
         }
 
+        // CR-L358: MessagePackSerializer has native (Type/T, Stream, options) overloads, so we serialize/
+        // deserialize straight against the stream — no intermediate byte[]/MemoryStream copy of the payload.
         public void Serialize(Stream stream, object value)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
-            var bytes = MessagePackSerializer.Serialize(value.GetType(), value, _options);
-            stream.Write(bytes, 0, bytes.Length);
+            MessagePackSerializer.Serialize(value.GetType(), stream, value, _options);
         }
 
         public void Serialize<T>(Stream stream, T value)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
-            var bytes = MessagePackSerializer.Serialize(value, _options);
-            stream.Write(bytes, 0, bytes.Length);
+            MessagePackSerializer.Serialize(stream, value, _options);
         }
 
         public object? Deserialize(Stream stream, Type type)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(type);
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-            return MessagePackSerializer.Deserialize(type, ms.ToArray(), _options);
+            return MessagePackSerializer.Deserialize(type, stream, _options);
         }
 
         public T? Deserialize<T>(Stream stream)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-            return MessagePackSerializer.Deserialize<T>(ms.ToArray(), _options);
+            return MessagePackSerializer.Deserialize<T>(stream, _options);
         }
 
-        public async Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
+        // CR-L359: the native async stream overloads take the CancellationToken, so it flows through the
+        // actual serialize/deserialize work — not just a preliminary stream copy.
+        public Task SerializeAsync(Stream stream, object value, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
-            var bytes = MessagePackSerializer.Serialize(value.GetType(), value, _options);
-            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+            return MessagePackSerializer.SerializeAsync(value.GetType(), stream, value, _options, cancellationToken);
         }
 
-        public async Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
+        public Task SerializeAsync<T>(Stream stream, T value, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(value);
-            var bytes = MessagePackSerializer.Serialize(value, _options);
-            await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
+            return MessagePackSerializer.SerializeAsync(stream, value, _options, cancellationToken);
         }
 
         public async Task<object?> DeserializeAsync(Stream stream, Type type, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
             ArgumentNullException.ThrowIfNull(type);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-            return MessagePackSerializer.Deserialize(type, ms.ToArray(), _options);
+            return await MessagePackSerializer.DeserializeAsync(type, stream, _options, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<T?> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(stream);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms, cancellationToken).ConfigureAwait(false);
-            return MessagePackSerializer.Deserialize<T>(ms.ToArray(), _options);
+            return await MessagePackSerializer.DeserializeAsync<T>(stream, _options, cancellationToken).ConfigureAwait(false);
         }
     }
 }
