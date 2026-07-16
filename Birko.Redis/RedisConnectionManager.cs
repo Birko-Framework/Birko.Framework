@@ -55,7 +55,16 @@ namespace Birko.Redis
         /// <summary>
         /// Gets the Redis server for administrative operations (e.g., SCAN).
         /// </summary>
-        public IServer GetServer() => _connection.Value.GetServer(_connectionString.Split(',')[0]);
+        public IServer GetServer()
+        {
+            // CR-L330: resolve the endpoint from the live multiplexer rather than re-parsing
+            // _connectionString.Split(',')[0] — that assumed the first comma-token is always host:port,
+            // which breaks for option-first tokens (e.g. "abortConnect=false,host:port") or raw strings,
+            // and silently dropped all but the first endpoint of a cluster.
+            var multiplexer = _connection.Value;
+            var endpoints = multiplexer.GetEndPoints();
+            return multiplexer.GetServer(endpoints[0]);
+        }
 
         /// <summary>
         /// Whether the connection is established and healthy.

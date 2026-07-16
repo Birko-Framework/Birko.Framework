@@ -52,7 +52,9 @@ namespace Birko.Redis
         /// <param name="database">The database index (0-15).</param>
         /// <param name="useSsl">Whether to use TLS.</param>
         public RedisSettings(string host, int port = 6379, string? password = null, int database = 0, bool useSsl = false)
-            : base(host, null!, null!, password ?? null!, port, useSsl)
+            // CR-L332: pass string.Empty (not null!) for Name/UserName/Password — GetId/GetConnectionString
+            // treat empty as "unset", so this keeps the non-null contract honest instead of a load-bearing !.
+            : base(host, string.Empty, string.Empty, password ?? string.Empty, port, useSsl)
         {
             Database = database;
         }
@@ -67,7 +69,9 @@ namespace Birko.Redis
         /// </summary>
         public string GetConnectionString()
         {
-            if (RawConnectionString != null)
+            // CR-L331: only an actually-set raw string overrides; an explicit "" falls through to
+            // property-based building (was returned verbatim, yielding an invalid connection string).
+            if (!string.IsNullOrEmpty(RawConnectionString))
             {
                 return RawConnectionString;
             }
