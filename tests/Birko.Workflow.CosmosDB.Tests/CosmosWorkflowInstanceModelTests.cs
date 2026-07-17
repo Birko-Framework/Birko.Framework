@@ -75,4 +75,17 @@ public class CosmosWorkflowInstanceModelTests
     {
         CosmosWorkflowInstanceModel.FromInstance("W", CreateTestInstance()).Status.Should().Be((int)WorkflowStatus.Active);
     }
+
+    [Fact]
+    public void UpdateFromInstance_LeavesWorkflowNameUntouched()
+    {
+        // CR-L404: UpdateFromInstance is WorkflowName-neutral (it only refreshes state/data/history),
+        // which is precisely why SaveAsync's existing-instance branch must set existing.WorkflowName
+        // itself (mirroring the RavenDB reference) to avoid keeping a stale name on re-save.
+        var model = CosmosWorkflowInstanceModel.FromInstance("OriginalWorkflow", CreateTestInstance());
+
+        model.UpdateFromInstance(CreateTestInstance());
+
+        model.WorkflowName.Should().Be("OriginalWorkflow");
+    }
 }
