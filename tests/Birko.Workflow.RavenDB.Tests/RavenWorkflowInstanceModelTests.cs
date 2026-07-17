@@ -75,4 +75,30 @@ public class RavenWorkflowInstanceModelTests
     {
         RavenWorkflowInstanceModel.FromInstance("W", CreateTestInstance()).Status.Should().Be((int)WorkflowStatus.Active);
     }
+
+    [Fact]
+    public void ToInstance_EmptyDataJson_ThrowsClearError()
+    {
+        // CR-L413: DataJson defaults to string.Empty (invalid JSON) — ToInstance throws a clear
+        // InvalidOperationException instead of `!`-forcing a null into Restore.
+        var model = RavenWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = string.Empty;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty DataJson*");
+    }
+
+    [Fact]
+    public void ToInstance_LiteralNullDataJson_ThrowsClearError()
+    {
+        // CR-L413: a payload that deserializes to null (stored literal "null") is treated as a corrupt
+        // record rather than deferring a NullReferenceException to instance.Data consumers.
+        var model = RavenWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = "null";
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*deserialized to null*");
+    }
 }
