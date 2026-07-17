@@ -53,6 +53,9 @@ public class CosmosDBWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData
         if (existing != null)
         {
             existing.UpdateFromInstance(instance);
+            // UpdateFromInstance does not touch WorkflowName; mirror the RavenDB reference and
+            // refresh it so a re-save under a different workflowName isn't silently kept stale (CR-L404).
+            existing.WorkflowName = workflowName;
             await _store.UpdateAsync(existing, ct: ct).ConfigureAwait(false);
             return existing.Guid ?? instance.InstanceId;
         }
