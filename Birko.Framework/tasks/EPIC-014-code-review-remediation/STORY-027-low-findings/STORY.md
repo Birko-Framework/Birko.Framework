@@ -1,8 +1,9 @@
 ---
 id: STORY-027
 parent: EPIC-014
-status: in-progress
+status: done
 created: 2026-06-18
+completed: 2026-07-17
 source: CODE-REVIEW-AUDIT-2026-06-17.md
 severity: low
 finding-count: 418
@@ -13,9 +14,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**417 / 418 triaged** as of 2026-07-17. Next open is CR-L418 (Birko.Workflow.XML — the LAST finding).
-The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the whole
-Birko.Serialization meta-cluster are DONE.
+**418 / 418 triaged as of 2026-07-17 — STORY-027 COMPLETE.** All low code-review findings closed.
+
+**Batch DJ — Birko.Workflow.XML (CR-L418):** Birko.Workflow.XML. **/code-review clean (no findings)**. **L418**
+(test-gap): created the missing `Birko.Workflow.XML.Tests` project (xUnit + FluentAssertions; git-init'd, own
+polyrepo, registered in `.slnx` + `.code-workspace`). **Test-gap uncovered a real bug** (the value of the
+finding): the XML backend was **non-functional** — `FromInstance`/`UpdateFromInstance` threw on EVERY save
+because `s.Serialize(instance.History)` hit two `System.Xml.XmlSerializer` incompatibilities: (1)
+`WorkflowInstance.History` is typed `IReadOnlyList<StateChangeRecord>` (an interface XmlSerializer can't
+serialize) and (2) `StateChangeRecord` is a positional record (no parameterless ctor). CR-M275 had only patched
+the deserialize-default path; the serialize path was never exercised (no tests). **Fixed** (user-approved
+scope): added an XmlSerializer-friendly `XmlStateChangeRecord` DTO (parameterless ctor + settable props), map
+`StateChangeRecord ↔ DTO`, serialize a concrete `List<XmlStateChangeRecord>`, and updated the HistoryXml default
+root to `<ArrayOfXmlStateChangeRecord />`. Tests: scalar mapping, data+empty-history round-trip, HistoryXml
+default lock, status casting, and a **non-empty-history round-trip** proving the backend now actually persists
+real instances. **Deferred analogue:** XML `ToInstance` also has the `Deserialize<TData>(DataXml)!` +
+`Guid ?? NewGuid()` patterns (ES CR-L405/L406 — not filed for XML). XML.Tests = 6 (new).
 
 **Batch DI — Birko.Workflow.SQL (CR-L415, CR-L416, CR-L417):** Birko.Workflow.SQL. **/code-review clean (no
 findings)**. **L415** (nullable): `ToInstance` `Deserialize<TData>(DataJson)!` guarded (empty/whitespace +

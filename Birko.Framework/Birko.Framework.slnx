@@ -327,6 +327,7 @@
     <Project Path="../../Framework.Tests/Birko.Workflow.RavenDB.Tests/Birko.Workflow.RavenDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Workflow.CosmosDB.Tests/Birko.Workflow.CosmosDB.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Workflow.ElasticSearch.Tests/Birko.Workflow.ElasticSearch.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Workflow.XML.Tests/Birko.Workflow.XML.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Communication.Camera.Tests/Birko.Communication.Camera.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Migrations.SQL.Tests/Birko.Data.Migrations.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Caching.Tests/Birko.Caching.Tests.csproj" />

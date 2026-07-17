@@ -8265,7 +8265,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No dedicated Birko.Workflow.XML.Tests project
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.XML\Birko.Workflow.XML (project root)`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** There is no Birko.Workflow.XML.Tests sibling, so the public surface (XmlWorkflowInstanceStore<TData> Save/Load/Delete/FindByState/FindByStatus/FindByWorkflowName and the model's ToInstance/FromInstance/UpdateFromInstance round-trip) is untested. CLAUDE.md states every new public functionality must have corresponding tests. Note: the JSON file-based sibling also lacks a dedicated test project (only Birko.Workflow.SQL.Tests exists among the backends), so this is a consistent backend-wide gap rather than XML being uniquely neglected. A round-trip test would also have caught the HistoryXml default bug above (deserialize a model that relies on the default history value).
 - **Fix:** Add Birko.Workflow.XML.Tests (xUnit + FluentAssertions) covering Save-new vs Save-update, Load round-trip preserving CurrentState/Status/Data/History, Delete, the three Find* queries with ordering/limit, and an explicit empty-history round-trip to lock the HistoryXml default.
 

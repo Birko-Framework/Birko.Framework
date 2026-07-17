@@ -1241,6 +1241,10 @@
 			"path": "../../Framework.Tests/Birko.Workflow.ElasticSearch.Tests"
 		},
 		{
+			"name": "Tests / Birko.Workflow.XML.Tests",
+			"path": "../../Framework.Tests/Birko.Workflow.XML.Tests"
+		},
+		{
 			"name": "Tests / Birko.Workflow.Tests",
 			"path": "../../Framework.Tests/Birko.Workflow.Tests"
 		},
