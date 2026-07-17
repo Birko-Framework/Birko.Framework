@@ -13,9 +13,28 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**414 / 418 triaged** as of 2026-07-17. Next open is CR-L415 (Birko.Workflow.SQL cluster, L415–417).
-Remaining Workflow backends: SQL L415–417, XML L418 (LAST). The Birko.Workflow core (L399–403), the entire
-Birko.Web.* cluster (L392–398), and the whole Birko.Serialization meta-cluster are DONE.
+**417 / 418 triaged** as of 2026-07-17. Next open is CR-L418 (Birko.Workflow.XML — the LAST finding).
+The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the whole
+Birko.Serialization meta-cluster are DONE.
+
+**Batch DI — Birko.Workflow.SQL (CR-L415, CR-L416, CR-L417):** Birko.Workflow.SQL. **/code-review clean (no
+findings)**. **L415** (nullable): `ToInstance` `Deserialize<TData>(DataJson)!` guarded (empty/whitespace +
+null-deserialize → clear `InvalidOperationException`), `!` removed — mirrors ES/JSON/Mongo/Raven. **L416**
+(convention): routed `ToInstance`/`FromInstance`/`UpdateFromInstance` through `Birko.Serialization.ISerializer`
+(injectable `ISerializer? serializer = null`, static `SystemJsonSerializer` default) instead of raw
+`System.Text.Json` — added the `Birko.Serialization` projitems import to SQL.Tests. **IMPORTANT wire-format
+decision:** `SystemJsonSerializer`'s *parameterless* default is **camelCase**, but this backend historically
+wrote **PascalCase** (raw `JsonSerializer` default). Verified there is NO persisted data at risk (the only
+possible consumer, Symbio, imports only `Birko.Workflow` core and wires no persistence backend), yet chose to
+**preserve PascalCase** via `new SystemJsonSerializer(new JsonSerializerOptions())` — it (a) keeps SQL aligned
+with the 4 other JSON-string backends (Cosmos/ES/Mongo/Raven all still use raw-default PascalCase) and (b) the
+seam is fully overridable per call. Pinned with a `FromInstance_PreservesPascalCaseWireFormat` test. **L417**
+(test-gap): store `SaveAsync`/`FindBy*`/schema remain integration-tier (STORY-028) — the store is hard-typed to
+`AsyncDataBaseBulkStore<DB,…>` and can't take the InMemory double without a live connector (a testability
+limitation the audit itself acknowledged); the MODEL layer is now well-covered (round-trips + the new
+CR-L415 guards + wire-format pin). SQL.Tests →10. **FOLLOW-ON (separate task):** extending the ISerializer seam
+to the 4 raw backends (Cosmos/ES/Mongo/Raven) + aligning the JSON backend's default to PascalCase for full
+family uniformity is tracked as **STORY-029** (beyond the audit's filed low findings).
 
 **Batch DH — Birko.Workflow.RavenDB (CR-L413, CR-L414):** Birko.Workflow.RavenDB. **/code-review clean (no
 findings)**. **L413** (nullable): `ToInstance` `Deserialize<TData>(DataJson)!` guarded (empty/whitespace +

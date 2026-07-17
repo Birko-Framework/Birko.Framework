@@ -8241,7 +8241,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ToInstance suppresses a possibly-null deserialization result with '!'
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.SQL\Models\WorkflowInstanceModel.cs:40`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** JsonSerializer.Deserialize<TData>(DataJson)! uses the null-forgiving operator, but Deserialize can legitimately return null (e.g. DataJson is the literal "null" or empty). The framework convention permits '!' only when provably safe; here it is not, and a null data value is then handed to WorkflowInstance<TData>.Restore. Matches the JSON reference, so the divergence is only in not guarding it.
 - **Fix:** Throw a clear exception (or coalesce) when Deserialize returns null, e.g. ?? throw new InvalidOperationException($"Workflow instance {Guid} has no deserializable Data"), instead of '!'.
 
@@ -8249,7 +8249,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SQL model serializes with raw System.Text.Json instead of the Birko.Serialization abstraction
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.SQL\Models\WorkflowInstanceModel.cs:40-73`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The JSON reference model (JsonWorkflowInstanceModel) routes all DataJson/HistoryJson (de)serialization through Birko.Serialization.ISerializer (SystemJsonSerializer default, with an injectable override). The SQL model instead calls System.Text.Json.JsonSerializer directly with default options, so it has no override seam and can diverge from the rest of the framework's serialization conventions (naming policy, converters). Not a bug, but an inconsistency between two sibling backends that are otherwise line-for-line identical.
 - **Fix:** Mirror the JSON model: take an optional ISerializer parameter defaulting to a static SystemJsonSerializer, and use it in ToInstance/FromInstance/UpdateFromInstance.
 
@@ -8257,7 +8257,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SqlWorkflowInstanceStore and SqlWorkflowInstanceSchema have no tests
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Workflow.SQL.Tests\Models\WorkflowInstanceModelTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The .Tests project covers only WorkflowInstanceModel mapping (FromInstance/ToInstance/UpdateFromInstance round-trips). The store's SaveAsync upsert branch, LoadAsync/DeleteAsync, and the FindBy* query methods have no coverage, and the schema helper is untested. The store is hard-typed to AsyncDataBaseBulkStore<DB, ...>, which makes it awkward to unit-test without a live connector (it cannot accept the Birko.Data.InMemory test double), so the gap is partly a testability design limitation. Noted only; the JSON sibling has no test project at all, so this backend is already ahead of its peers.
 - **Fix:** Consider adding SQLite-backed integration tests for SaveAsync (insert + update branches) and the FindBy* filters, or introduce an interface seam so an in-memory store can be substituted.
 
