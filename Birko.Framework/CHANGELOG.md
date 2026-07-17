@@ -4,6 +4,13 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-07-17 — Tenant isolation hardening — EPIC-017
+
+Multi-tenant fail-closed support across the data + event layers (from a Symbio security review):
+- **`TenantIsolationMode { Permissive (default), Strict }`** in `Birko.Data.Tenant` (STORY-044) — Strict throws on "no tenant in scope" instead of silently spanning all tenants; opt in via `StoreWrapperBuilder.Build(tenantMode:)`, `AsTenantAware(mode:)`, or the `AddTenant*Repository` DI extensions. Explicit cross-tenant admin via `ITenantContext.WithAllTenants(...)` (non-breaking default interface methods). Both async **and** sync wrappers are mode-aware.
+- **`StoreWrapperBuilder` decorator reorder** (STORY-045) — Tenant now sits *inside* Default/Sluggable/SoftDelete but *outside* Audit/Timestamp/EventSourcing, so per-tenant uniqueness probes are tenant-scoped (fixed a cross-tenant default-clobber + global-slug-uniqueness leak).
+- **`IEventScopeAccessor`** in `Birko.EventBus` + `OutboxProcessor` scope restoration (STORY-046) — background event dispatch re-establishes the tenant an event was published under, so handlers work under Strict. New **`Birko.EventBus.Tenant`** bridge sibling implements it (`AddEventTenantScope()`), mapping `EventContext.TenantGuid` → `WithTenantAsync` / `WithAllTenants`.
+
 ## 2026-07-14 — Birko.Helpers.PathValidator.ValidateDirectory — reject only path-invalid chars (consumer backport)
 
 `Birko.Helpers.PathValidator.ValidateDirectory` checked the **whole** directory path against `Path.GetInvalidPathChars()` **plus** `Path.GetInvalidFileNameChars()` — but the file-name set additionally includes the directory separators (`\`/`/`) and the drive-letter `:` on Windows, so it threw `ArgumentException` on **every absolute Windows path** (e.g. `C:\Users\…`). A directory path legitimately contains separators and a drive colon; the method now checks against `Path.GetInvalidPathChars()` only (control chars etc.), and `Path.GetFullPath` still rejects truly-malformed paths. Surfaced by a consumer app. Tests: `Birko.Helpers.Tests` 88 → 92 (`ValidateDirectory` accepts an absolute path + separators/drive-colon, rejects a NUL control char, rejects null/empty).
