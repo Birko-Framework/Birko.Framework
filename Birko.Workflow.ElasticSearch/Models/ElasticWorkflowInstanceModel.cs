@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using Birko.Data.Models;
+using Birko.Serialization;
+using Birko.Serialization.Json;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Nest;
@@ -33,8 +34,14 @@ public class ElasticWorkflowInstanceModel : AbstractModel
 
     public const string IndexName = "workflow-instances";
 
-    public WorkflowInstance<TData> ToInstance<TData>() where TData : class
+    // STORY-029: route (de)serialization through Birko.Serialization.ISerializer (injectable, camelCase
+    // SystemJsonSerializer default) so all workflow backends share one seam and wire format.
+    private static readonly ISerializer DefaultSerializer = new SystemJsonSerializer();
+
+    public WorkflowInstance<TData> ToInstance<TData>(ISerializer? serializer = null) where TData : class
     {
+        var s = serializer ?? DefaultSerializer;
+
         // CR-L406: a persisted document with no Guid is corrupt. Minting a random InstanceId here
         // would diverge from the document id, so the next SaveAsync upsert (matched on Guid) would
         // miss the row and create a duplicate — surface the bad record instead.
@@ -53,10 +60,10 @@ public class ElasticWorkflowInstanceModel : AbstractModel
                 $"Workflow instance '{Guid}' has empty DataJson and cannot be restored (workflow '{WorkflowName}').");
         }
 
-        var data = JsonSerializer.Deserialize<TData>(DataJson)
+        var data = s.Deserialize<TData>(DataJson)
                    ?? throw new InvalidOperationException(
                        $"Workflow instance '{Guid}' DataJson deserialized to null and cannot be restored (workflow '{WorkflowName}').");
-        var history = JsonSerializer.Deserialize<List<StateChangeRecord>>(HistoryJson)
+        var history = s.Deserialize<List<StateChangeRecord>>(HistoryJson)
                       ?? new List<StateChangeRecord>();
 
         return WorkflowInstance<TData>.Restore(
@@ -67,28 +74,30 @@ public class ElasticWorkflowInstanceModel : AbstractModel
             history);
     }
 
-    public static ElasticWorkflowInstanceModel FromInstance<TData>(string workflowName, WorkflowInstance<TData> instance)
+    public static ElasticWorkflowInstanceModel FromInstance<TData>(string workflowName, WorkflowInstance<TData> instance, ISerializer? serializer = null)
         where TData : class
     {
+        var s = serializer ?? DefaultSerializer;
         return new ElasticWorkflowInstanceModel
         {
             Guid = instance.InstanceId,
             WorkflowName = workflowName,
             CurrentState = instance.CurrentState,
             Status = (int)instance.Status,
-            DataJson = JsonSerializer.Serialize(instance.Data),
-            HistoryJson = JsonSerializer.Serialize(instance.History),
+            DataJson = s.Serialize(instance.Data),
+            HistoryJson = s.Serialize(instance.History),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
     }
 
-    public void UpdateFromInstance<TData>(WorkflowInstance<TData> instance) where TData : class
+    public void UpdateFromInstance<TData>(WorkflowInstance<TData> instance, ISerializer? serializer = null) where TData : class
     {
+        var s = serializer ?? DefaultSerializer;
         CurrentState = instance.CurrentState;
         Status = (int)instance.Status;
-        DataJson = JsonSerializer.Serialize(instance.Data);
-        HistoryJson = JsonSerializer.Serialize(instance.History);
+        DataJson = s.Serialize(instance.Data);
+        HistoryJson = s.Serialize(instance.History);
         UpdatedAt = DateTime.UtcNow;
     }
 }
