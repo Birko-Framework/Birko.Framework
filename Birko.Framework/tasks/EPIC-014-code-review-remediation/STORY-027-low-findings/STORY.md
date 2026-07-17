@@ -13,9 +13,31 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**398 / 418 triaged** as of 2026-07-17. Next open is CR-L399 (Birko.Workflow core cluster, L399–403), then
-Workflow backends L404–418 (CosmosDB/ElasticSearch/JSON/MongoDB/RavenDB/SQL/XML). The entire Birko.Web.*
-cluster (L392–398) and the whole Birko.Serialization meta-cluster are DONE.
+**403 / 418 triaged** as of 2026-07-17. Next open is CR-L404 (Birko.Workflow backends cluster, L404–418 —
+CosmosDB/ElasticSearch/JSON/MongoDB/RavenDB/SQL/XML). The Birko.Workflow core (L399–403), the entire
+Birko.Web.* cluster (L392–398), and the whole Birko.Serialization meta-cluster are DONE.
+
+**Batch DC — Birko.Workflow core (CR-L399, CR-L400, CR-L401, CR-L402, CR-L403):** Birko.Workflow (C#, back to
+xUnit). **/code-review clean (no findings)**. **L399** (other): the engine's `GetPermittedTriggers(definition,
+instance)` delegated to the definition's state-only method, so it reported guarded triggers that `FireAsync`
+would then Deny (misleading for UI enable/disable). Made the engine overload guard-aware — it now filters
+`definition.Transitions` by `FromState == CurrentState` and, per trigger, checks that the transition `FireAsync`
+would select (first matching FromState+Trigger, mirroring its `FirstOrDefault`) passes all its guards. The
+definition's state-only method is unchanged (still public + tested). **Updated** the existing
+`GetPermittedTriggers_ReturnsAvailableTriggers` test (which pinned the old state-only behavior) into a
+guard-fails/guard-passes pair. **L400** (bug): `WorkflowActionException` always reported `fromState`, even when a
+destination-state OnEntry action threw. Added an `actionState` local that flips to `toState` once entry actions
+run, so the exception names the actual failing phase (rollback of `CurrentState` to `fromState` per CR-M267 is
+unchanged). **L401** (convention): `FireAsync` now calls `cancellationToken.ThrowIfCancellationRequested()` at
+the top — a guard-only/actionless transition previously ignored a pre-cancelled token (framework convention:
+throw at the top of every public async path). **L402** (test-gap): new `DiExtensionTests` case registers a
+capturing `Action<StateChangeRecord,string,Guid>`, fires a transition through the DI-resolved engine, and
+asserts the fan-out lambda + engine `onStateChanged` delivered the record/name/instanceId. **L403** (other):
+Mermaid state `Description` was emitted verbatim while names/triggers go through `Escape`; a newline would break
+the single-line `Name : Description` statement. Added `EscapeDescription` (preserves spaces — legal in
+descriptions — but collapses CR/LF to spaces + trims) + a test. NOTE: `DotDiagramGenerator` embeds Description
+into a quoted label with a deliberate `\n` — a **deferred analogue** (no CR-L filed; a raw newline/quote there
+could also break DOT output). Workflow.Tests →38.
 
 **Batch DB — Birko.Web.Shell (CR-L396, CR-L397, CR-L398):** Birko.Web.Shell (TypeScript, `Birko\Web` bucket).
 Verified via Birko.Web.Playground build + headless verify (66 components, EMPTY (none), 0 PAGEERROR);

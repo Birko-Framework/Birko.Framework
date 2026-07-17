@@ -8113,7 +8113,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** GetPermittedTriggers ignores guards, so it can report triggers that FireAsync will deny
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow\Execution/WorkflowEngine.cs:118`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetPermittedTriggers delegates to definition.GetPermittedTriggers(currentState) (WorkflowDefinition.cs:24), which only filters by FromState and never evaluates the transition Guards against the instance. The method takes the full instance (not just the state) and lives on the engine, which strongly implies guard-aware results; callers using it to drive a UI (enable/disable actions) will surface triggers that then come back as TransitionResult.Denied. Either evaluate guards here (the instance is available) or document that it is state-only and rename/keep the state-only overload on the definition.
 - **Fix:** Filter definition.Transitions by FromState==CurrentState AND all guard predicates passing against the instance, mirroring the denial logic in FireAsync (lines 43-49).
 
@@ -8121,7 +8121,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** WorkflowActionException reports fromState even when an OnEntry action of the destination state failed
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow\Execution/WorkflowEngine.cs:100`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** On any action failure the catch wraps the exception with `fromState` (line 102). When the failing action is a toState OnEntry action (lines 79-82) the reported State is the origin, not the state whose entry action threw, which is misleading for diagnostics. The exact failing phase (exit / transition action / entry) is lost.
 - **Fix:** Track the current phase/state in a local as actions run and pass that to WorkflowActionException, or add the phase to the exception.
 
@@ -8129,7 +8129,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** FireAsync does not observe an already-cancelled token before doing work
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow\Execution/WorkflowEngine.cs:19`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** FireAsync passes cancellationToken into the action delegates but never calls cancellationToken.ThrowIfCancellationRequested() itself. If a transition has no actions (the common guard-only / pure state-change case), a pre-cancelled token is silently ignored and the transition completes. The framework convention (see CLAUDE.md: async stores now ThrowIfCancellationRequested at the top of every public async path) is that an already-cancelled token surfaces OperationCanceledException even on no-op work.
 - **Fix:** Add cancellationToken.ThrowIfCancellationRequested() near the top of FireAsync, before mutating state.
 
@@ -8137,7 +8137,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** PublishStateChanges DI path (callback fan-out) and the onStateChanged engine callback are untested
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Workflow.Tests/DiExtensionTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** AddWorkflowEngine(options => PublishStateChanges = true) (WorkflowServiceCollectionExtensions.cs:22-49) only asserts the engine resolves; the registered fan-out lambda that resolves IEnumerable<Action<StateChangeRecord,string,Guid>> and invokes each callback is never exercised, nor is the WorkflowEngine(onStateChanged) constructor's invocation on a successful transition (WorkflowEngine.cs:93). A regression in the callback wiring would pass tests.
 - **Fix:** Register a capturing Action<StateChangeRecord,string,Guid> in DI, fire a transition through the resolved engine, and assert the callback received the record/name/instanceId.
 
@@ -8145,7 +8145,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Mermaid state Description is emitted unescaped while Trigger is escaped
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow\Visualization/MermaidDiagramGenerator.cs:19`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Line 19 writes `state.Description` verbatim into the `Name : Description` line, whereas state names and triggers go through Escape (space->underscore). A description containing a newline or a Mermaid-significant character can produce invalid diagram output. This is inconsistent with how triggers/states are handled and is a latent output-correctness issue rather than a crash.
 - **Fix:** Decide on a consistent escaping policy for description text (at minimum strip/replace newlines) before interpolating it into the diagram.
 
