@@ -8081,7 +8081,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ApiClient retry after token refresh does not reset content/state on second 401 path
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Core\src/http/api-client.ts:129`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When onRefreshToken exists and the first response is 401, the code refreshes and retries (lines 129-145). If refresh returns null (newToken falsy), it skips the retry but then still evaluates `if (response.status === 401)` against the ORIGINAL response and calls onUnauthorized — correct. However, if the refreshed retry fetch throws (caught at line 142), it returns a synthetic `{ ok:false, status:0 }` immediately and never reaches the body-parsing/onUnauthorized logic, which is acceptable, but onUnauthorized is then NOT called even though auth effectively failed. Minor: a user whose refresh succeeded but whose retry hit a transient network error is left without the logout signal. Low impact but worth a deliberate decision.
 - **Fix:** Decide whether a network failure on the post-refresh retry should also trigger onUnauthorized, or document that only an explicit 401 does.
 

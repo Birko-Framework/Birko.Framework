@@ -13,9 +13,20 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**394 / 418 triaged** as of 2026-07-17. Next open is CR-L395 (Birko.Web.Core cluster, L395 —
-TypeScript, verify via Birko.Web.Playground not xUnit), then Web.Shell L396–398, then Workflow core
-L399–403 + backends L404–418. The whole Birko.Serialization meta-cluster is DONE.
+**395 / 418 triaged** as of 2026-07-17. Next open is CR-L396 (Birko.Web.Shell cluster, L396–398 —
+TypeScript, verify via Birko.Web.Playground not xUnit), then Workflow core L399–403 + backends L404–418.
+The whole Birko.Serialization meta-cluster is DONE.
+
+**Batch DA — Birko.Web.Core (CR-L395):** Birko.Web.Core (TypeScript, `Birko\Web` bucket). Verified via
+Birko.Web.Playground build + headless verify (66 components, EMPTY (none), 0 PAGEERROR); **/code-review clean
+(no findings)**. **L395** (bug/decision): `api-client.ts` `_fetch` refreshes the token on a 401 and retries;
+if that retry *throws* (network error), it returns `{ ok:false, status:0 }` without calling `onUnauthorized`.
+Made a **deliberate decision** and documented it: a network error on the post-refresh retry is NOT an auth
+failure (the refresh succeeded — `newToken` truthy — so it's a transient blip on an authenticated session);
+logging the user out over a network hiccup would be wrong. `onUnauthorized` stays reserved for an explicit 401
+(token rejected after refresh, or refresh returned null), matching the first-fetch network path's status-0
+shape. Comment-only in source; pinned the contract with two Playground `backport-smoke` assertions
+(retry-network-error → no logout; explicit-401-after-refresh → logout). backport-smoke →49/49.
 
 **Batch CZ — Birko.Web.Components (CR-L392, CR-L393, CR-L394):** Birko.Web.Components (TypeScript, `Birko\Web`
 bucket). Verified by building + headless-running Birko.Web.Playground (`node build.js && node verify.mjs`) — 66
