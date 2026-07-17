@@ -43,6 +43,12 @@ public class CorrelationIdMiddleware
         Activity.Current?.SetBaggage("correlation-id", correlationId);
 
         context.Items["CorrelationId"] = correlationId;
+
+        // CR-L380: the header is written here — before awaiting the rest of the pipeline — so it is always
+        // present before any downstream component can start the response. Writing it eagerly at this point
+        // cannot hit the "response already started" exception that context.Response.OnStarting guards
+        // against (that risk only applies to middleware that mutates headers AFTER awaiting _next), so the
+        // simpler eager write is correct here and also survives a downstream throw.
         context.Response.Headers[headerName] = correlationId;
 
         await _next(context).ConfigureAwait(false);

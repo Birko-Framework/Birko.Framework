@@ -29,8 +29,10 @@ public static class BirkoTelemetryConventions
     /// <summary>Tag name for the operation (e.g., "Read", "Create").</summary>
     public const string OperationTag = "birko.store.operation";
 
-    /// <summary>Tag name for the tenant identifier.</summary>
-    public const string TenantTag = "birko.store.tenant";
+    // CR-L381: a "birko.store.tenant" TenantTag constant was declared here but never emitted by any metric
+    // or activity (the instrumentation wrappers have no tenant context to source it from), so it was removed
+    // to avoid implying tenant tagging exists. Re-introduce it alongside actual tenant resolution if/when the
+    // wrappers gain a tenant source.
 
     /// <summary>Tag name indicating whether the operation is bulk.</summary>
     public const string BulkTag = "birko.store.bulk";
