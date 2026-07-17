@@ -7977,7 +7977,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** OTLP endpoint parsed with new Uri() — invalid string would throw inside the configure callback
 - **Path:** `C:\Source\Birko\Framework\Birko.Telemetry.OpenTelemetry\OpenTelemetryServiceExtensions.cs:56`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** options.OtlpEndpoint is fed directly into new Uri(...) at lines 56 and 84. The property has a valid non-null default and is non-nullable, so the happy path is safe, but a consumer supplying a malformed endpoint string gets a UriFormatException surfaced from deep inside the OTel builder callback rather than a clear validation error. There is no test covering an invalid endpoint.
 - **Fix:** Optionally validate the endpoint up front (Uri.TryCreate with UriKind.Absolute) and throw an ArgumentException with a clear message, so misconfiguration fails fast with a useful diagnostic.
 
@@ -7985,7 +7985,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No test asserts the ASP.NET Core instrumentation path (default-on branch)
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Telemetry.OpenTelemetry.Tests\OpenTelemetryServiceExtensionsTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Every test in OpenTelemetryServiceExtensionsTests sets EnableAspNetCoreInstrumentation = false, so the default-on code path (lines 47-50 and 75-78 of OpenTelemetryServiceExtensions.cs) — the most likely real-world configuration and the one tied to the optional-package issue above — is never exercised. No test confirms AddBirkoOpenTelemetry() with true-defaults builds when the AspNetCore package is present, nor the OTLP-exporter-enabled path (all tests disable OTLP).
 - **Fix:** Add a test that leaves EnableAspNetCoreInstrumentation at its default (true) and asserts the provider builds, plus one exercising EnableOtlpTraceExporter/MetricsExporter true to cover the AddOtlpExporter branches.
 

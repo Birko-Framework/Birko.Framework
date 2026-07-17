@@ -13,8 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**381 / 418 triaged** as of 2026-07-17. Next open is CR-L382 (Birko.Telemetry.OpenTelemetry cluster, L382–L383).
+**383 / 418 triaged** as of 2026-07-17. Next open is CR-L384 (Birko.Time cluster, L384–L387).
 The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+
+**Batch CW — Birko.Telemetry.OpenTelemetry (CR-L382, CR-L383):** Birko.Telemetry.OpenTelemetry. Closed;
+**/code-review clean (no new findings)**. **L382** (robustness): `OtlpEndpoint` was fed straight into
+`new Uri(...)` inside the OTel trace + metrics builder callbacks, so a malformed value surfaced a
+`UriFormatException` from deep inside the builder at provider-build time. Now parsed once up front with
+`Uri.TryCreate(UriKind.Absolute)` — throwing a clear `ArgumentException` — but only when an OTLP exporter is
+actually enabled (the endpoint is unused otherwise); both callbacks reuse the pre-parsed `Uri`. **L383**
+(test-gap): every existing test disabled AspNetCore instrumentation and OTLP, so those branches were never
+exercised. Added tests for `EnableAspNetCoreInstrumentation=true` (both providers build; test project already
+references `OpenTelemetry.Instrumentation.AspNetCore` + `Microsoft.AspNetCore.App`), OTLP trace+metrics enabled,
+and the L382 invalid-endpoint throw / disabled-OTLP-ignores-bad-endpoint cases. **Verify-first correction:** the
+audit called this the "default-on branch" but `EnableAspNetCoreInstrumentation` actually defaults to **false** —
+the test sets it true explicitly. OpenTelemetry.Tests →15.
 
 **Batch CV — Birko.Telemetry (CR-L379, CR-L380, CR-L381):** Birko.Telemetry. Closed; **/code-review clean (no
 new findings)**. **L379** (test-gap): the fluent wrap helpers and the DI/middleware registration extensions —
