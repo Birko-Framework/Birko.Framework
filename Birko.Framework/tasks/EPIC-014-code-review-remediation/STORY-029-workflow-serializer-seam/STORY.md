@@ -1,14 +1,38 @@
 ---
 id: STORY-029
 parent: EPIC-014
-status: planned
+status: done
 created: 2026-07-17
+completed: 2026-07-17
 theme: workflow-serializer-seam
 origin: follow-on from CR-L416 (STORY-027, Batch DI)
-affects: [Birko.Workflow.CosmosDB, Birko.Workflow.ElasticSearch, Birko.Workflow.MongoDB, Birko.Workflow.RavenDB, Birko.Workflow.JSON]
+affects: [Birko.Workflow.CosmosDB, Birko.Workflow.ElasticSearch, Birko.Workflow.MongoDB, Birko.Workflow.RavenDB, Birko.Workflow.SQL, Birko.Workflow.JSON, Birko.Workflow.XML]
 ---
 
 # Workflow backends — unify the serialization seam (ISerializer everywhere)
+
+## Outcome (2026-07-17) — DONE
+
+All **seven** workflow instance models now route (de)serialization through
+`Birko.Serialization.ISerializer` (injectable `ISerializer? serializer = null`) and share one wire
+format:
+- **JSON-string backends** (CosmosDB, ElasticSearch, MongoDB, RavenDB, SQL, JSON) default to
+  `new SystemJsonSerializer()` — **camelCase**, matching the framework's deliberate convention
+  (BackgroundJobs `JobSerializationHelper`, the Data.JSON store). CosmosDB/ES/Mongo/Raven were
+  migrated off raw `System.Text.Json`; SQL was flipped from its CR-L416 PascalCase pin.
+- **XML backend** already used `SystemXmlSerializer` (element-based, format N/A).
+- Every model now **throws on a null Guid** (was `Guid ?? Guid.NewGuid()`, which diverged from the
+  document id and duplicated on the next SaveAsync) and on empty/whitespace/null-deserialize payload
+  (the `!` suppression is gone family-wide). ES already had the Guid guard (CR-L406).
+
+Tests per backend: camelCase wire-format pin + injectable-serializer override + null-Guid + the
+existing corrupt-record guards. All green — Cosmos 8, ES 8, Mongo 8, Raven 8, SQL 12, JSON 10, XML 8.
+Verified via the round-trip tests (incl. non-empty `StateChangeRecord` history) that camelCase
+round-trips. Safe: no persisted workflow data exists (Symbio uses only `Birko.Workflow` core).
+
+Commits — source/test per repo: Cosmos f5c4f6a/092b019, ES 6c0f5e3/b1c48b1, Mongo 6cf4a45/e86f43d,
+Raven 040f2c2/452e7db, plus SQL/JSON/XML (see git log). Codebase-wide sweep (below) confirmed no
+other persistence layer needs migrating.
 
 ## Why this is its own story
 
