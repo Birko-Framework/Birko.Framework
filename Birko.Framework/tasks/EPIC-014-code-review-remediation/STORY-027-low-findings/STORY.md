@@ -13,10 +13,26 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**404 / 418 triaged** as of 2026-07-17. Next open is CR-L405 (Birko.Workflow.ElasticSearch cluster, L405–407).
-Remaining Workflow backends: ElasticSearch L405–407, JSON L408–409, MongoDB L410–412, RavenDB L413–414,
-SQL L415–417, XML L418. The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the
-whole Birko.Serialization meta-cluster are DONE.
+**407 / 418 triaged** as of 2026-07-17. Next open is CR-L408 (Birko.Workflow.JSON cluster, L408–409).
+Remaining Workflow backends: JSON L408–409, MongoDB L410–412, RavenDB L413–414, SQL L415–417, XML L418.
+The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the whole
+Birko.Serialization meta-cluster are DONE.
+
+**Batch DE — Birko.Workflow.ElasticSearch (CR-L405, CR-L406, CR-L407):** Birko.Workflow.ElasticSearch.
+**/code-review clean (no findings)**. **L405** (bug): `ElasticWorkflowInstanceModel.ToInstance` did
+`JsonSerializer.Deserialize<TData>(DataJson)!` — DataJson defaults to `string.Empty` (invalid JSON) so an
+unpopulated/cleared record threw an opaque `JsonException`, and the `!` forced a legitimately-null payload
+(stored `"null"`) into a non-null `TData`. Now guards `string.IsNullOrWhiteSpace(DataJson)` and a null
+deserialize result, throwing a clear `InvalidOperationException` naming the instance; `!` removed. **L406**
+(bug): `ToInstance` passed `Guid ?? Guid.NewGuid()` — a document with a null Guid got a fresh random InstanceId
+that diverged from the document id, so the next SaveAsync upsert (matched on Guid) would miss and create a
+duplicate. Now throws on a null Guid (corrupt record) and uses `Guid.Value`. **L407** (other): documented the
+read-then-write (non-atomic) SaveAsync upsert duplicate caveat under concurrency — a shared characteristic with
+the Mongo/Raven/Cosmos siblings (audit explicitly offered "at minimum document"); exactly-once would need ES
+`_id` keyed off InstanceId or optimistic concurrency. Added 3 model tests (null-Guid / empty-DataJson /
+literal-null-DataJson all throw clear errors). NOTE: ES SaveAsync already sets `existing.WorkflowName` (the
+L404 CosmosDB bug doesn't exist here). **Deferred analogue:** `CosmosWorkflowInstanceModel.ToInstance` has the
+identical `Deserialize!` + `Guid ?? NewGuid()` pattern (no CR-L filed; fix in a future pass). ES.Tests →6.
 
 **Batch DD — Birko.Workflow.CosmosDB (CR-L404):** Birko.Workflow.CosmosDB. **/code-review clean (no findings)**.
 **L404** (bug): `CosmosDBWorkflowInstanceStore.SaveAsync` existing-instance branch called only

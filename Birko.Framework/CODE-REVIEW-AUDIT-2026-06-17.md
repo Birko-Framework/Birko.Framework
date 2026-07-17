@@ -8161,7 +8161,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ToInstance throws on empty/default DataJson instead of degrading
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.ElasticSearch\Models/ElasticWorkflowInstanceModel.cs:38`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** DataJson defaults to string.Empty. JsonSerializer.Deserialize<TData>(DataJson) throws JsonException when DataJson is "" (invalid JSON), and the trailing ! suppresses the legitimate CS8600/CS8602 null warning. A model that exists in the index but was never populated through FromInstance (or whose DataJson got cleared) will throw during LoadAsync/FindBy* rather than returning a clean result. The deserialized value can also legitimately be null (e.g. stored literal "null"), which the ! forces into a non-null TData passed to Restore.
 - **Fix:** Guard for empty/whitespace DataJson before deserializing and decide on a defined behavior (skip, return null, or throw a typed exception). If TData can legitimately be null, drop the ! and propagate nullability rather than suppressing it.
 
@@ -8169,7 +8169,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ToInstance silently fabricates a random InstanceId when Guid is null
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.ElasticSearch\Models/ElasticWorkflowInstanceModel.cs:43`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** AbstractModel.Guid is Guid? (defaults to null). ToInstance passes `Guid ?? System.Guid.NewGuid()` to WorkflowInstance.Restore. If a stored document ever has a null Guid (data corruption, manual index edit, partial write), the loaded instance gets a brand-new random InstanceId that does not match its document id, so a subsequent SaveAsync upsert (which matches on m.Guid == instance.InstanceId) will not find the existing row and will create a duplicate instead of updating.
 - **Fix:** Treat a null Guid as an error/invalid record (return null or throw) rather than minting a new id that diverges from the persisted document.
 
@@ -8177,7 +8177,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Save upsert is read-then-write (non-atomic) — duplicate risk under concurrency
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.ElasticSearch\ElasticSearchWorkflowInstanceStore.cs:33`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SaveAsync does ReadAsync(m => m.Guid == instance.InstanceId) then branches to Update or Create. Two concurrent SaveAsync calls for the same new InstanceId can both observe existing==null and both CreateAsync, producing two ES documents for one workflow instance. This is the same pattern used by the MongoDB/RavenDB/CosmosDB siblings, so it is a shared design characteristic rather than an ElasticSearch-specific regression, but ElasticSearch's CreateAsync mints its own document id rather than keying on Guid, so duplicates are silent.
 - **Fix:** If exactly-once upsert matters, key the ES document _id off instance.InstanceId so a re-create overwrites rather than duplicates, or use an index op with optimistic concurrency. At minimum document the at-least-once/duplicate caveat.
 
