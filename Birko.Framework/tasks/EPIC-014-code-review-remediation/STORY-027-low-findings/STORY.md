@@ -13,8 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**375 / 418 triaged** as of 2026-07-16. Next open is CR-L376 (Birko.Structures cluster, L376–L378).
+**378 / 418 triaged** as of 2026-07-17. Next open is CR-L379 (Birko.Telemetry cluster, L379–L381).
 The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+
+**Batch CU — Birko.Structures (CR-L376, CR-L377, CR-L378):** Birko.Structures. Closed; **/code-review clean
+(no new findings)**. **L376** (bug): `BloomFilter.GetHashes` derived the second hash by bit-rotation
+(`(hash>>16)|(hash<<16)`), which collapses to 0 when `GetHashCode()==0` (and toward hash1 when the low/high
+16 bits match) — so the double-hashing step `h1 + i*h2` mapped every probe to one bit, wrecking the
+false-positive rate. Replaced with the Murmur3 fmix32 finalizer and forced `hash2` odd (`| 1`) so it's never 0
+and independent of hash1; made `GetHashes` static (no instance state). Added a zero-hash round-trip test + a
+deterministic int-set false-positive-rate test. Structures.Tests →78. **L377** (cleanup): **verify-first —
+already fixed by commit f74f1de (CR-H142)**; the dead `prefix[..^remaining.Length] + (…?"":"" )` expression is
+gone, `GetWordsWithPrefix` now seeds from the properly reconstructed `matchedPath` returned by
+`FindNodeForPrefix`. No code change. **L378** (cleanup): **accept-as-is per the audit's own "no action strictly
+required"** — `DisjointSet.GetSetMembers`/`GetAllSets` are inherently O(n·α) "get all" scans; a cheaper form
+would need a reverse index that complicates `Union` (wrong altitude for a documented non-issue). No code change.
 
 **Batch CT — Birko.Storage.AzureBlob (CR-L371..L375):** Birko.Storage.AzureBlob. Closed; **/code-review clean
 (no new findings)**. **L371** (bug): the 6 buffered `SendAsync` responses (Upload/Delete/GetReference/List +

@@ -7929,7 +7929,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** BloomFilter second hash collapses to the first when the item hash is 0
 - **Path:** `C:\Source\Birko\Framework\Birko.Structures\Filters\BloomFilter.cs:112-117`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetHashes derives hash2 purely by rotating hash1 (`(hash >> 16) | (hash << 16)`). When GetHashCode() returns 0, hash1 and hash2 are both 0, so the double-hashing step `h1 + i*h2` yields the same index for every i and all _hashCount probes map to one bit. This degrades the false-positive rate for any item whose hash is 0 (and weakly for items whose low/high 16 bits are equal). Not a correctness violation (no false negatives) but undermines the structure's purpose.
 - **Fix:** Mix hash2 with a non-zero constant (or use a distinct mixing function / odd multiplier) so the two hashes are independent and hash2 is never 0.
 
@@ -7937,7 +7937,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead/confusing prefix-reconstruction expression in GetWordsWithPrefix
 - **Path:** `C:\Source\Birko\Framework\Birko.Structures\Tries\CompressedTrie.cs:71`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `prefix[..^remaining.Length] + (remaining.Length > 0 ? "" : "")` — both ternary arms are the empty string, and because FindNodeForPrefix only ever returns a non-null node with remaining == "", `prefix[..^0]` is just `prefix`. The whole expression is equivalent to `prefix`. This is the surface symptom of the high-severity bug above; once that is fixed this line should be replaced with the properly reconstructed node prefix.
 - **Fix:** Remove the no-op expression as part of fixing the GetWordsWithPrefix bug.
 
@@ -7945,7 +7945,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** DisjointSet.GetSetMembers calls Find for every element (O(n) Find calls)
 - **Path:** `C:\Source\Birko\Framework\Birko.Structures\Sets\DisjointSet.cs:105-119`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetSetMembers does Find(element) once for the root then Find(item) for every key in _parent. GetAllSets (line 124) does the same full Find sweep. Functionally correct, but for a structure whose selling point is near-O(1) ops these are unavoidably O(n*alpha) scans; acceptable for a 'get all' operation but worth noting the per-call Find on every key allocates nothing yet recurses. Minor — no action strictly required.
 - **Fix:** Acceptable as-is; if these become hot, group by Find(item) in a single pass (GetAllSets already does this) and have GetSetMembers reuse that grouping.
 
