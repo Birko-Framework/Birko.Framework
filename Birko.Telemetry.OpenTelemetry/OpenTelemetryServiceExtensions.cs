@@ -27,6 +27,20 @@ public static class OpenTelemetryServiceExtensions
         var options = new BirkoOpenTelemetryOptions();
         configure?.Invoke(options);
 
+        // CR-L382: parse the OTLP endpoint up front so a malformed value fails fast with a clear message
+        // here, rather than surfacing a UriFormatException from deep inside an OpenTelemetry builder callback
+        // at provider-build time. Only relevant when an OTLP exporter is actually enabled.
+        Uri? otlpEndpoint = null;
+        if (options.EnableOtlpTraceExporter || options.EnableOtlpMetricsExporter)
+        {
+            if (!Uri.TryCreate(options.OtlpEndpoint, UriKind.Absolute, out otlpEndpoint))
+            {
+                throw new ArgumentException(
+                    $"BirkoOpenTelemetryOptions.OtlpEndpoint '{options.OtlpEndpoint}' is not a valid absolute URI.",
+                    nameof(configure));
+            }
+        }
+
         services.AddOpenTelemetry()
             .ConfigureResource(resource =>
             {
@@ -53,7 +67,7 @@ public static class OpenTelemetryServiceExtensions
                 {
                     tracing.AddOtlpExporter(otlp =>
                     {
-                        otlp.Endpoint = new Uri(options.OtlpEndpoint);
+                        otlp.Endpoint = otlpEndpoint!; // validated above when EnableOtlpTraceExporter is set
                     });
                 }
 
@@ -81,7 +95,7 @@ public static class OpenTelemetryServiceExtensions
                 {
                     metrics.AddOtlpExporter((otlp, metricReader) =>
                     {
-                        otlp.Endpoint = new Uri(options.OtlpEndpoint);
+                        otlp.Endpoint = otlpEndpoint!; // validated above when EnableOtlpMetricsExporter is set
                         if (options.MetricsExportInterval.HasValue)
                         {
                             metricReader.PeriodicExportingMetricReaderOptions.ExportIntervalMilliseconds =
