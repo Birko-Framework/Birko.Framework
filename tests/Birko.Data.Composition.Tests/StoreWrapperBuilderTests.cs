@@ -10,6 +10,7 @@ using Birko.Data.Models;
 using Birko.Data.Patterns.Models;
 using Birko.Data.Stores;
 using Birko.Data.Tenant.Models;
+using Birko.Data.Tenant.Stores;
 using FluentAssertions;
 using Xunit;
 
@@ -69,6 +70,13 @@ public class StoreWrapperBuilderTests
         public string? Slug { get; set; }
         public string? Name { get; set; }
         public string? GetSlugSource() => Name;
+    }
+
+    // Plain ITenant — STORY-044: exercises the strict/permissive isolation mode end-to-end via Build.
+    public class TenantOnlyModel : AbstractModel, ITenant
+    {
+        public Guid TenantGuid { get; set; }
+        public string? TenantName { get; set; }
     }
 
     // ITenant + IEventSourced — STORY-045: the tenant guard must reject a cross-tenant write BEFORE the
@@ -335,5 +343,149 @@ public class StoreWrapperBuilderTests
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
         events.AppendCount.Should().Be(0, "the tenant guard must reject before EventSourcing records an event");
+    }
+
+    // ---- STORY-044: opt-in strict (fail-closed) tenancy mode ----
+
+    [Fact]
+    public async Task Strict_mode_read_with_no_tenant_throws_instead_of_returning_all_tenants()
+    {
+        var raw = Raw<TenantOnlyModel>();
+        var ctx = new TenantContext(); // no tenant set
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx, tenantMode: TenantIsolationMode.Strict);
+
+        var act = async () => await store.ReadAsync(x => true);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task Strict_mode_create_with_no_tenant_throws_instead_of_stamping_empty()
+    {
+        var raw = Raw<TenantOnlyModel>();
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx, tenantMode: TenantIsolationMode.Strict);
+
+        var act = async () => await store.CreateAsync(new TenantOnlyModel());
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        (await raw.ReadAsync(x => true)).Should().BeEmpty("strict mode must not persist a Guid.Empty-stamped row");
+    }
+
+    [Fact]
+    public async Task Strict_mode_filter_delete_with_no_tenant_throws()
+    {
+        var raw = Raw<TenantOnlyModel>();
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx, tenantMode: TenantIsolationMode.Strict);
+
+        var act = async () => await store.DeleteAsync(x => true);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task Permissive_mode_is_the_default_and_still_fails_open_on_reads()
+    {
+        // Backward-compat pin: Build without tenantMode keeps today's fail-open behaviour.
+        var raw = Raw<TenantOnlyModel>();
+        await raw.CreateAsync(new[]
+        {
+            new TenantOnlyModel { TenantGuid = new Guid("11111111-1111-1111-1111-111111111111") },
+            new TenantOnlyModel { TenantGuid = new Guid("22222222-2222-2222-2222-222222222222") },
+        });
+        var ctx = new TenantContext(); // no tenant set
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx); // default Permissive
+
+        var all = await store.ReadAsync(x => true);
+
+        all.Should().HaveCount(2, "the permissive default still returns every tenant's rows when no tenant is set");
+    }
+
+    [Fact]
+    public async Task Strict_mode_with_a_tenant_set_scopes_reads_to_that_tenant()
+    {
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var tenantB = new Guid("22222222-2222-2222-2222-222222222222");
+        var raw = Raw<TenantOnlyModel>();
+        await raw.CreateAsync(new[]
+        {
+            new TenantOnlyModel { TenantGuid = tenantA },
+            new TenantOnlyModel { TenantGuid = tenantB },
+        });
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx, tenantMode: TenantIsolationMode.Strict);
+
+        ctx.SetTenant(tenantA);
+        var rows = await store.ReadAsync(x => true);
+
+        rows.Should().ContainSingle().Which.TenantGuid.Should().Be(tenantA);
+    }
+
+    [Fact]
+    public async Task Strict_mode_all_tenants_scope_allows_deliberate_cross_tenant_read()
+    {
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var tenantB = new Guid("22222222-2222-2222-2222-222222222222");
+        var raw = Raw<TenantOnlyModel>();
+        await raw.CreateAsync(new[]
+        {
+            new TenantOnlyModel { TenantGuid = tenantA },
+            new TenantOnlyModel { TenantGuid = tenantB },
+        });
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx, tenantMode: TenantIsolationMode.Strict);
+
+        // Outside a scope, strict fails closed.
+        var blocked = async () => await store.ReadAsync(x => true);
+        await blocked.Should().ThrowAsync<InvalidOperationException>();
+
+        // Inside an explicit all-tenants scope, the same read is allowed and returns every tenant.
+        var all = await ctx.WithAllTenantsAsync(async () => await store.ReadAsync(x => true));
+        all.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Strict_mode_all_tenants_scope_preserves_per_item_tenant_on_create()
+    {
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var raw = Raw<TenantOnlyModel>();
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantOnlyModel>(raw, tenantContext: ctx, tenantMode: TenantIsolationMode.Strict);
+
+        await ctx.WithAllTenantsAsync(async () =>
+        {
+            await store.CreateAsync(new TenantOnlyModel { TenantGuid = tenantA });
+        });
+
+        var all = await raw.ReadAsync(x => true);
+        all.Should().ContainSingle().Which.TenantGuid.Should().Be(tenantA,
+            "admin-scope create must preserve the caller's per-item TenantGuid, not stamp Guid.Empty");
+    }
+
+    [Fact]
+    public async Task AsTenantAware_extension_honours_strict_mode()
+    {
+        var raw = Raw<TenantOnlyModel>();
+        var ctx = new TenantContext();
+        var store = ((IAsyncStore<TenantOnlyModel>)raw).AsTenantAware(ctx, TenantIsolationMode.Strict);
+
+        var act = async () => await store.ReadAsync(x => true);
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void Sync_tenant_wrapper_honours_strict_mode()
+    {
+        // Sync-path parity (STORY-044 gap close): TenantStoreWrapper / TenantBulkStoreWrapper are
+        // now mode-aware too, exercised through the sync AsTenantAware extension.
+        var raw = new InMemoryStore<TenantOnlyModel>();
+        var ctx = new TenantContext();
+        var store = ((IStore<TenantOnlyModel>)raw).AsTenantAware(ctx, TenantIsolationMode.Strict);
+
+        Action act = () => store.Read(x => true);
+
+        act.Should().Throw<InvalidOperationException>();
     }
 }
