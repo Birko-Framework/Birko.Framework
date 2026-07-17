@@ -82,6 +82,59 @@ public class HolidayTests
         act.Should().Throw<ArgumentOutOfRangeException>();
     }
 
+    // CR-L384: the day must be validated against the actual month, not a blanket 1..31.
+
+    [Theory]
+    [InlineData(2, 30)]  // Feb 30 — never exists
+    [InlineData(4, 31)]  // Apr has 30 days
+    [InlineData(6, 31)]  // Jun has 30 days
+    [InlineData(9, 31)]  // Sep has 30 days
+    [InlineData(11, 31)] // Nov has 30 days
+    [InlineData(1, 0)]   // below minimum
+    public void Fixed_ImpossibleDate_Throws(int month, int day)
+    {
+        var act = () => Holiday.Fixed("Bad", month, day);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void Fixed_Feb29_IsAllowed_ForRecurringHoliday()
+    {
+        // Year is unknown for recurring holidays, so Feb 29 must remain a legal recurring date.
+        var act = () => Holiday.Fixed("Leap Day", 2, 29);
+
+        act.Should().NotThrow();
+    }
+
+    [Theory]
+    [InlineData(4, 30)]  // Apr 30 is valid
+    [InlineData(2, 28)]  // Feb 28 is valid
+    [InlineData(12, 31)] // Dec 31 is valid
+    public void Fixed_ValidEndOfMonth_IsAllowed(int month, int day)
+    {
+        var act = () => Holiday.Fixed("Ok", month, day);
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void OneTime_Feb29_NonLeapYear_Throws()
+    {
+        // The year is known for a one-time holiday, so Feb 29 in a non-leap year is a real impossible date.
+        var act = () => Holiday.OneTime("Bad", 2025, 2, 29);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
+    public void OneTime_Feb29_LeapYear_IsAllowed()
+    {
+        var act = () => Holiday.OneTime("Leap", 2024, 2, 29);
+
+        act.Should().NotThrow();
+    }
+
     [Fact]
     public void ToString_Recurring_ShowsMonthDay()
     {
