@@ -73,12 +73,22 @@ Landed (framework, uncommitted):
   layering.
 
 Also landed — the **tenant bridge** (new sibling `Birko.EventBus.Tenant`, scaffolded via
-`new-birko-subproject`):
-- `TenantEventScopeAccessor : IEventScopeAccessor` — maps `EventContext.TenantGuid` →
+`new-birko-subproject`) — now **both halves**, so publish attribution and consume restoration go
+through the same `Tenant.Current`:
+- **Consume side** — `TenantEventScopeAccessor : IEventScopeAccessor` — maps `EventContext.TenantGuid` →
   `WithTenantAsync` (set) / `WithAllTenantsAsync` (null/`Guid.Empty` = system event).
-- `AddEventTenantScope()` DI extension (over `Tenant.Current`; overload takes an explicit context).
-- Registered in `.slnx` + `.code-workspace`; `Birko.EventBus.Tenant.Tests` 4/4 green (specific-tenant,
-  null→all-tenants, empty→system, DI wiring). This is the only project depending on both
+- **Publish side** — `TenantEventEnricher : IEventEnricher` — stamps `EventContext.TenantGuid` from the
+  ambient `ITenantContext` at publish time, so `OutboxEntry.TenantGuid` is correct for **every** flow
+  (HTTP request, background job, explicit `WithTenant` scope) — not just authenticated HTTP. Fixes the
+  `Guid.Empty`-orphan bug for non-HTTP / anonymous publishes (follow-up from Symbio's live verification:
+  an HttpContext-based enricher leaves off-request publishes unattributed). Enrichers run synchronously
+  in the publish flow, so nesting works — inside `WithTenant(t)` even within an outer `WithAllTenants`,
+  the specific tenant is captured (the cross-tenant-job per-entity attribution pattern).
+- `AddEventTenantScope()` registers **both** (over `Tenant.Current`; overload takes an explicit context)
+  — consumers drop hand-rolled HttpContext tenant enrichers.
+- Registered in `.slnx` + `.code-workspace`; `Birko.EventBus.Tenant.Tests` 8/8 green (accessor:
+  specific-tenant, null→all-tenants, empty→system; enricher: ambient-stamp, null-when-unset,
+  nested-WithTenant-wins, no-clobber; DI wires both halves). Only project depending on both
   `Birko.EventBus` and `Birko.Data.Tenant`, keeping the two cores independent.
 
 Not done yet (framework follow-up):
@@ -102,7 +112,9 @@ flipping `TenantIsolationMode.Strict` is per-consumer work tracked in each consu
 - [x] Outbox processor restores scope from `entry.TenantGuid` before re-publish (red→green test).
 - [x] Default (no bridge) behaviour unchanged (no-op accessor; existing outbox tests green).
 - [x] Abstraction is tenant-agnostic (test proves it without Birko.Data.Tenant).
-- [x] Tenant bridge (`Birko.EventBus.Tenant`) + `AddEventTenantScope()` (4/4 tests).
+- [x] Tenant bridge (`Birko.EventBus.Tenant`) — consume-side accessor + publish-side enricher +
+  `AddEventTenantScope()` registering both (8/8 tests). Publish-side stamping fixes the `Guid.Empty`
+  orphan for non-HTTP / anonymous flows.
 - [ ] Distributed-consumer pipeline behavior.
 
 (Consumer adoption — wiring `AddEventTenantScope()` + the Strict flip + end-to-end verification — is
