@@ -9,6 +9,7 @@ using Birko.Data.InMemory.Stores;
 using Birko.Data.Models;
 using Birko.Data.Patterns.Models;
 using Birko.Data.Stores;
+using Birko.Data.Tenant.Models;
 using FluentAssertions;
 using Xunit;
 
@@ -49,6 +50,41 @@ public class StoreWrapperBuilderTests
         public DateTime? DeletedAt { get; set; }
     }
 
+    // ITenant + IDefault — STORY-045: the Default wrapper's uniqueness probe must be tenant-scoped,
+    // which requires Tenant to sit INSIDE Default in the chain.
+    public class TenantDefaultModel : AbstractModel, ITenant, IDefault
+    {
+        public Guid TenantGuid { get; set; }
+        public string? TenantName { get; set; }
+        public bool IsDefault { get; set; }
+        public string? Note { get; set; }
+    }
+
+    // ITenant + ISluggable — STORY-045: the Sluggable wrapper's slug-collision probe must be
+    // tenant-scoped, so the same slug is usable across tenants.
+    public class TenantSluggableModel : AbstractModel, ITenant, ISluggable
+    {
+        public Guid TenantGuid { get; set; }
+        public string? TenantName { get; set; }
+        public string? Slug { get; set; }
+        public string? Name { get; set; }
+        public string? GetSlugSource() => Name;
+    }
+
+    // ITenant + IEventSourced — STORY-045: the tenant guard must reject a cross-tenant write BEFORE the
+    // EventSourcing wrapper records anything (Tenant stays OUTSIDE EventSourcing after the reorder).
+    public class TenantEventSourcedModel : AbstractModel, ITenant, IEventSourced
+    {
+        private readonly List<IEvent> _uncommitted = new();
+        public Guid TenantGuid { get; set; }
+        public string? TenantName { get; set; }
+        public long Version { get; set; }
+        public void ApplyEvent(IEvent @event) => _uncommitted.Add(@event);
+        public IEvent[] GetUncommittedEvents() => _uncommitted.ToArray();
+        public void MarkEventsAsCommitted() => _uncommitted.Clear();
+        public void LoadFromEvents(IEnumerable<IEvent> events) { }
+    }
+
     public class EventSourcedModel : AbstractModel, IEventSourced
     {
         private readonly List<IEvent> _uncommitted = new();
@@ -72,6 +108,18 @@ public class StoreWrapperBuilderTests
     {
         public Task AppendAsync(IEvent @event, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task AppendRangeAsync(IEnumerable<IEvent> events, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IEnumerable<IEvent>> ReadAsync(Guid aggregateId, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
+        public Task<IEnumerable<IEvent>> ReadUpToVersionAsync(Guid aggregateId, long maxVersion, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
+        public Task<IEnumerable<IEvent>> ReadFromVersionAsync(Guid aggregateId, long fromVersion, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
+        public Task<long> GetVersionAsync(Guid aggregateId, CancellationToken cancellationToken = default) => Task.FromResult(0L);
+        public Task<IEnumerable<IEvent>> ReadAllFromAsync(DateTime from, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
+    }
+
+    private sealed class RecordingAsyncEventStore : IAsyncEventStore
+    {
+        public int AppendCount { get; private set; }
+        public Task AppendAsync(IEvent @event, CancellationToken cancellationToken = default) { AppendCount++; return Task.CompletedTask; }
+        public Task AppendRangeAsync(IEnumerable<IEvent> events, CancellationToken cancellationToken = default) { AppendCount += events.Count(); return Task.CompletedTask; }
         public Task<IEnumerable<IEvent>> ReadAsync(Guid aggregateId, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
         public Task<IEnumerable<IEvent>> ReadUpToVersionAsync(Guid aggregateId, long maxVersion, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
         public Task<IEnumerable<IEvent>> ReadFromVersionAsync(Guid aggregateId, long fromVersion, CancellationToken cancellationToken = default) => Task.FromResult<IEnumerable<IEvent>>(Array.Empty<IEvent>());
@@ -183,5 +231,109 @@ public class StoreWrapperBuilderTests
         result.Should().NotBeSameAs(raw);
         result.GetType().Name.Should().Contain("EventSourcing");
         Inner(result).Should().BeSameAs(raw);
+    }
+
+    [Fact]
+    public async Task Default_uniqueness_is_scoped_per_tenant_not_global()
+    {
+        // STORY-045 regression: with Tenant outermost, AsyncDefaultStoreWrapper.UnsetOtherDefaultsAsync
+        // probes+writes BELOW the tenant boundary, so tenant B setting its default silently clears
+        // tenant A's default (cross-tenant data corruption). The fix moves Tenant inside Default so the
+        // probe is tenant-scoped.
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var tenantB = new Guid("22222222-2222-2222-2222-222222222222");
+
+        var raw = Raw<TenantDefaultModel>();
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantDefaultModel>(raw, tenantContext: ctx);
+
+        ctx.SetTenant(tenantA);
+        await store.CreateAsync(new TenantDefaultModel { IsDefault = true });
+
+        ctx.SetTenant(tenantB);
+        await store.CreateAsync(new TenantDefaultModel { IsDefault = true });
+
+        // Read straight from the raw (unscoped) store to inspect cross-tenant state.
+        var all = await raw.ReadAsync(x => true);
+        all.Single(x => x.TenantGuid == tenantA).IsDefault.Should().BeTrue(
+            "tenant B setting its own default must not clear tenant A's default (per-tenant uniqueness)");
+        all.Single(x => x.TenantGuid == tenantB).IsDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Slug_uniqueness_is_scoped_per_tenant_not_global()
+    {
+        // STORY-045 regression: with Tenant outermost, AsyncSluggableBulkStoreWrapper's collision probe
+        // reads BELOW the tenant boundary, so tenant B reusing tenant A's slug is forced to a
+        // "-2" suffix (global uniqueness + cross-tenant existence leak). The fix moves Tenant inside
+        // Sluggable so the probe is tenant-scoped and the same slug is usable per tenant.
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var tenantB = new Guid("22222222-2222-2222-2222-222222222222");
+
+        var raw = Raw<TenantSluggableModel>();
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantSluggableModel>(raw, tenantContext: ctx);
+
+        ctx.SetTenant(tenantA);
+        await store.CreateAsync(new TenantSluggableModel { Name = "Electronics" });
+
+        ctx.SetTenant(tenantB);
+        await store.CreateAsync(new TenantSluggableModel { Name = "Electronics" });
+
+        var all = await raw.ReadAsync(x => true);
+        all.Single(x => x.TenantGuid == tenantA).Slug.Should().Be("electronics");
+        all.Single(x => x.TenantGuid == tenantB).Slug.Should().Be("electronics",
+            "the same slug must be usable in a different tenant (per-tenant uniqueness), not forced to 'electronics-2'");
+    }
+
+    [Fact]
+    public async Task Default_filter_update_only_touches_current_tenant_rows()
+    {
+        // STORY-045: AsyncDefaultStoreWrapper.UpdateAsync(filter, Action<T>) reads then writes via its
+        // inner store; with Tenant inside Default those reads/writes are tenant-scoped, so a filter
+        // update under tenant A must not mutate tenant B's rows.
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var tenantB = new Guid("22222222-2222-2222-2222-222222222222");
+
+        var raw = Raw<TenantDefaultModel>();
+        var ctx = new TenantContext();
+        var store = StoreWrapperBuilder.Build<TenantDefaultModel>(raw, tenantContext: ctx);
+
+        ctx.SetTenant(tenantA);
+        await store.CreateAsync(new TenantDefaultModel());
+        ctx.SetTenant(tenantB);
+        await store.CreateAsync(new TenantDefaultModel());
+
+        // Acting as tenant A, blanket-update everything the filter matches.
+        ctx.SetTenant(tenantA);
+        await store.UpdateAsync(x => true, item => item.Note = "touched");
+
+        var all = await raw.ReadAsync(x => true);
+        all.Single(x => x.TenantGuid == tenantA).Note.Should().Be("touched");
+        all.Single(x => x.TenantGuid == tenantB).Note.Should().BeNull(
+            "a filter update scoped to tenant A must not mutate tenant B's rows");
+    }
+
+    [Fact]
+    public async Task Tenant_guard_rejects_cross_tenant_write_before_any_event_is_recorded()
+    {
+        // STORY-045 invariant: Tenant stays OUTSIDE EventSourcing, so a cross-tenant guard rejection
+        // throws before the EventSourcing wrapper records anything (no orphan events).
+        var tenantA = new Guid("11111111-1111-1111-1111-111111111111");
+        var tenantB = new Guid("22222222-2222-2222-2222-222222222222");
+
+        var raw = Raw<TenantEventSourcedModel>();
+        var ctx = new TenantContext();
+        var events = new RecordingAsyncEventStore();
+        var store = StoreWrapperBuilder.Build<TenantEventSourcedModel>(raw, tenantContext: ctx, eventStore: events);
+
+        // An item owned by tenant B, but we act as tenant A.
+        var foreignItem = new TenantEventSourcedModel { Guid = Guid.NewGuid(), TenantGuid = tenantB };
+        ctx.SetTenant(tenantA);
+
+        var act = async () => await store.UpdateAsync(foreignItem);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        events.AppendCount.Should().Be(0, "the tenant guard must reject before EventSourcing records an event");
     }
 }
