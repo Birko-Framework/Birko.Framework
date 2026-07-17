@@ -164,4 +164,47 @@ public class WorkflowInstanceModelTests
     }
 
     #endregion
+
+    #region Corrupt-record guards (CR-L415)
+
+    [Fact]
+    public void ToInstance_EmptyDataJson_ThrowsClearError()
+    {
+        // CR-L415: DataJson defaults to string.Empty (invalid JSON) — ToInstance throws a clear
+        // InvalidOperationException instead of `!`-forcing a null into Restore.
+        var model = WorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = string.Empty;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty DataJson*");
+    }
+
+    [Fact]
+    public void ToInstance_LiteralNullDataJson_ThrowsClearError()
+    {
+        // CR-L415: a payload that deserializes to null (stored literal "null") is treated as a corrupt
+        // record rather than deferring a NullReferenceException to instance.Data consumers.
+        var model = WorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = "null";
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*deserialized to null*");
+    }
+
+    [Fact]
+    public void FromInstance_PreservesPascalCaseWireFormat()
+    {
+        // CR-L416: routing through ISerializer must NOT change the persisted wire format. The backend
+        // historically wrote PascalCase (default System.Text.Json) DataJson; SystemJsonSerializer's
+        // parameterless default is camelCase, which would silently fail to match existing rows on read.
+        // Pin PascalCase property names so a future camelCase regression is caught.
+        var model = WorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+
+        model.DataJson.Should().Contain("\"OrderId\"");
+        model.DataJson.Should().NotContain("\"orderId\"");
+    }
+
+    #endregion
 }
