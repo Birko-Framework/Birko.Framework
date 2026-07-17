@@ -55,7 +55,26 @@ public class XmlWorkflowInstanceModel : AbstractModel
     public WorkflowInstance<TData> ToInstance<TData>(ISerializer? serializer = null) where TData : class
     {
         var s = serializer ?? DefaultSerializer;
-        var data = s.Deserialize<TData>(DataXml)!;
+
+        // STORY-029: a persisted document with no Guid is corrupt — minting a random InstanceId would
+        // diverge from the document id and duplicate on the next SaveAsync upsert (matches ES CR-L406).
+        if (Guid == null)
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance document has no Guid and cannot be restored (workflow '{WorkflowName}').");
+        }
+
+        // STORY-029: DataXml defaults to string.Empty (invalid XML); guard empty/whitespace + a null
+        // deserialize result with a clear error instead of forcing a null into Restore with `!`.
+        if (string.IsNullOrWhiteSpace(DataXml))
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance '{Guid}' has empty DataXml and cannot be restored (workflow '{WorkflowName}').");
+        }
+
+        var data = s.Deserialize<TData>(DataXml)
+                   ?? throw new InvalidOperationException(
+                       $"Workflow instance '{Guid}' DataXml deserialized to null and cannot be restored (workflow '{WorkflowName}').");
         // CR-M275: guard against an empty/whitespace HistoryXml so the new-List fallback is reachable
         // regardless of the stored literal (System.Xml is quirky around empty collection roots).
         // CR-L418: deserialize into the XmlSerializer-friendly DTO list, then map back to StateChangeRecord.
@@ -67,7 +86,7 @@ public class XmlWorkflowInstanceModel : AbstractModel
             .ToList();
 
         return WorkflowInstance<TData>.Restore(
-            Guid ?? System.Guid.NewGuid(),
+            Guid.Value,
             CurrentState,
             (WorkflowStatus)Status,
             data,
