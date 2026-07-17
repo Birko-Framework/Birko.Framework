@@ -1,9 +1,11 @@
+using Birko.Serialization.Json;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.SQL.Models;
 using FluentAssertions;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Xunit;
 
 namespace Birko.Workflow.SQL.Tests.Models;
@@ -194,16 +196,36 @@ public class WorkflowInstanceModelTests
     }
 
     [Fact]
-    public void FromInstance_PreservesPascalCaseWireFormat()
+    public void FromInstance_UsesCamelCaseWireFormat()
     {
-        // CR-L416: routing through ISerializer must NOT change the persisted wire format. The backend
-        // historically wrote PascalCase (default System.Text.Json) DataJson; SystemJsonSerializer's
-        // parameterless default is camelCase, which would silently fail to match existing rows on read.
-        // Pin PascalCase property names so a future camelCase regression is caught.
+        // STORY-029: the workflow-backend family is unified on camelCase (the framework's deliberate
+        // ISerializer convention — BackgroundJobs / Data.JSON store / Workflow.JSON). This supersedes the
+        // CR-L416 PascalCase pin (safe — no persisted workflow data exists).
         var model = WorkflowInstanceModel.FromInstance("W", CreateTestInstance());
 
+        model.DataJson.Should().Contain("\"orderId\"");
+        model.DataJson.Should().NotContain("\"OrderId\"");
+    }
+
+    [Fact]
+    public void FromInstance_WithInjectedSerializer_OverridesFormat()
+    {
+        // STORY-029: the seam is overridable — a caller can still pass a PascalCase serializer.
+        var pascal = new SystemJsonSerializer(new JsonSerializerOptions());
+        var model = WorkflowInstanceModel.FromInstance("W", CreateTestInstance(), pascal);
+
         model.DataJson.Should().Contain("\"OrderId\"");
-        model.DataJson.Should().NotContain("\"orderId\"");
+    }
+
+    [Fact]
+    public void ToInstance_NullGuid_Throws()
+    {
+        var model = WorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.Guid = null;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no Guid*");
     }
 
     #endregion
