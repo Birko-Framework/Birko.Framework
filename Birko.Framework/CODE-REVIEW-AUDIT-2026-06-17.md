@@ -8153,7 +8153,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SaveAsync does not update WorkflowName on the existing-instance branch
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.CosmosDB\CosmosDBWorkflowInstanceStore.cs:53-58`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** When an existing model is found, only existing.UpdateFromInstance(instance) is called, which never writes WorkflowName (see UpdateFromInstance in CosmosWorkflowInstanceModel.cs:53-60). The reference backend RavenDBWorkflowInstanceStore.SaveAsync (RavenDBWorkflowInstanceStore.cs:38) explicitly sets existing.WorkflowName = workflowName before update. If a workflow instance is ever re-saved under a different workflowName, the Cosmos backend silently keeps the stale name, whereas Raven corrects it. In practice the name rarely changes, hence low severity, but it is an unintended divergence from the canonical implementation.
 - **Fix:** Mirror the reference: set existing.WorkflowName = workflowName; after UpdateFromInstance(instance) in the existing branch.
 

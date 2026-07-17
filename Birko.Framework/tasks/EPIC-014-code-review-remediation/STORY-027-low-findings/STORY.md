@@ -13,9 +13,19 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**403 / 418 triaged** as of 2026-07-17. Next open is CR-L404 (Birko.Workflow backends cluster, L404–418 —
-CosmosDB/ElasticSearch/JSON/MongoDB/RavenDB/SQL/XML). The Birko.Workflow core (L399–403), the entire
-Birko.Web.* cluster (L392–398), and the whole Birko.Serialization meta-cluster are DONE.
+**404 / 418 triaged** as of 2026-07-17. Next open is CR-L405 (Birko.Workflow.ElasticSearch cluster, L405–407).
+Remaining Workflow backends: ElasticSearch L405–407, JSON L408–409, MongoDB L410–412, RavenDB L413–414,
+SQL L415–417, XML L418. The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the
+whole Birko.Serialization meta-cluster are DONE.
+
+**Batch DD — Birko.Workflow.CosmosDB (CR-L404):** Birko.Workflow.CosmosDB. **/code-review clean (no findings)**.
+**L404** (bug): `CosmosDBWorkflowInstanceStore.SaveAsync` existing-instance branch called only
+`existing.UpdateFromInstance(instance)`, which is WorkflowName-neutral, so a re-save under a different
+workflowName silently kept the stale name — a divergence from the canonical RavenDB backend
+(`existing.WorkflowName = workflowName`). Mirrored the reference: set `existing.WorkflowName = workflowName`
+after `UpdateFromInstance`. Store-level SaveAsync verification is integration-tier (STORY-028, needs live
+Cosmos); added a model-level contract test (`UpdateFromInstance_LeavesWorkflowNameUntouched`) pinning the
+name-neutral contract that necessitates the store-side refresh. CosmosDB.Tests →4.
 
 **Batch DC — Birko.Workflow core (CR-L399, CR-L400, CR-L401, CR-L402, CR-L403):** Birko.Workflow (C#, back to
 xUnit). **/code-review clean (no findings)**. **L399** (other): the engine's `GetPermittedTriggers(definition,
