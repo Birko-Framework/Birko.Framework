@@ -13,8 +13,21 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**387 / 418 triaged** as of 2026-07-17. Next open is CR-L388 (Birko.Validation cluster, L388–…).
-The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+**391 / 418 triaged** as of 2026-07-17. Next open is CR-L392 (Birko.Web.Components cluster, L392–L394 —
+TypeScript, verify via Birko.Web.Playground not xUnit). The whole Birko.Serialization meta-cluster is DONE.
+
+**Batch CY — Birko.Validation (CR-L388, CR-L389, CR-L390, CR-L391):** Birko.Validation. Closed; **/code-review
+clean (no new findings)**. **L388** (bug): `RequiredRule` probed a non-`ICollection` `IEnumerable` via
+`e.GetEnumerator().MoveNext()` and discarded the enumerator — a resource leak for lazy/DB-backed sequences.
+Extracted `HasAnyElement` that disposes the enumerator in a `finally` (cast-and-dispose, since the non-generic
+`IEnumerator` isn't `IDisposable`). **L389** (bug): `RuleBuilder.In()` with no arguments built an empty set, so
+every value failed `NOT_IN_SET` with an empty allowed-list — a silent unsatisfiable-property trap. Now throws
+`ArgumentException` up front. **L390** (test-gap): new `Integration/RuleBasedValidatorTests` pinning the
+"matched rule == violation" semantics, the `RULE_{Severity}` error code, `ExtractError` field/Description/Name
+derivation, both constructors, and the async path. **L391** (other): documented on `Must()` that a null
+reference-type value is treated as valid and the predicate is skipped (null-rejection is `Required`'s job) +
+a test proving the predicate isn't invoked for null (an unguarded `d!.Length` would NRE if it were).
+Validation.Tests →130.
 
 **Batch CX — Birko.Time (CR-L384, CR-L385, CR-L386, CR-L387):** Birko.Time. Closed; **/code-review clean (no
 new findings)**. **L384** (bug): `Holiday`'s ctor validated the day as a blanket 1..31 regardless of month, so

@@ -8025,7 +8025,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RequiredRule leaks the IEnumerator for non-ICollection enumerables
 - **Path:** `C:\Source\Birko\Framework\Birko.Validation\Rules\RequiredRule.cs:28`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** For a value that is IEnumerable but not ICollection, IsValid calls e.GetEnumerator().MoveNext() and discards the enumerator. Most IEnumerator implementations are IDisposable (and lazy/DB-backed sequences in particular hold resources), so the enumerator is never disposed. The ICollection branch above (Count > 0) already covers the common in-memory cases, so this path only fires for lazy sequences — exactly the ones where leaking the enumerator matters.
 - **Fix:** Materialize the check with disposal, e.g. `IEnumerable e => e.Cast<object?>().Any()` (which disposes the enumerator) or use an explicit `using var en = e.GetEnumerator(); return en.MoveNext();` pattern.
 
@@ -8033,7 +8033,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** RuleBuilder.In with empty allowedValues silently rejects everything
 - **Path:** `C:\Source\Birko\Framework\Birko.Validation\Fluent\RuleBuilder.cs:136`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** In(params TProp[] allowedValues) builds a HashSet and a CustomRule that passes only when set.Contains(typed). If called with no arguments the set is empty, so every value (including valid ones) fails with NOT_IN_SET and the error message lists no allowed values. This is a silent misconfiguration trap rather than a guard-clause rejection.
 - **Fix:** Guard against an empty/null allowedValues array in In() (throw ArgumentException), or document that it makes the property unsatisfiable.
 
@@ -8041,7 +8041,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for RuleBasedValidator
 - **Path:** `C:\Source\Birko\Framework\Birko.Validation\Integration\RuleBasedValidator.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** RuleBasedValidator<T> (the Birko.Rules-driven validator, both constructors, the match-as-violation Validate path, and the ExtractError property/code/message derivation) has no corresponding test file in Birko.Validation.Tests/Integration. The 'matched rule == violation' semantics and the RULE_{Severity} error-code formatting are non-obvious behaviors worth pinning down. Note only — not a correctness defect.
 - **Fix:** Add an Integration/RuleBasedValidatorTests covering a matching rule producing an error, a non-matching rule producing none, and the ExtractError fallbacks (leaf Field vs Rule.Name vs Description).
 
@@ -8049,7 +8049,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Must() null-handling for reference-type properties is implicit
 - **Path:** `C:\Source\Birko\Framework\Birko.Validation\Fluent\RuleBuilder.cs:118`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The Must predicate adapter returns valid (true) without invoking the user predicate when value is null and default(TProp) is null (i.e. any reference-type TProp). This means `RuleFor(x => x.Name).Must(...)` never runs the predicate for a null Name and treats it as valid, deferring null handling to Required(). The behavior is defensible and matches the other rules' 'null is Required's job' convention, but it is undocumented on Must() and could surprise a caller whose predicate is meant to reject null. No test exercises the null path of Must().
 - **Fix:** Document on Must() that null values are treated as valid (use Required for null), and add a test asserting Must() skips the predicate for null on a reference-type property.
 
