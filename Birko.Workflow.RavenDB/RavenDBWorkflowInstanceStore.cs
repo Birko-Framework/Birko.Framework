@@ -29,6 +29,13 @@ namespace Birko.Workflow.RavenDB
 
         public AsyncRavenDBStore<RavenWorkflowInstanceModel> Store => _store;
 
+        /// <remarks>
+        /// CR-L414: this is a read-then-write upsert (Read → branch to Update/Create) with no transaction
+        /// or optimistic concurrency. Documents are keyed by Guid, so a concurrent double-save of the same
+        /// new instance overwrites rather than duplicating — the impact is a last-writer-wins lost update,
+        /// not a duplicate. If concurrent edits of one instance are expected, use RavenDB optimistic
+        /// concurrency (change-vector) or wrap the save in the transactional store AsyncRavenDBStore supports.
+        /// </remarks>
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
             var existing = await _store.ReadFirstAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);

@@ -25,7 +25,19 @@ public class RavenWorkflowInstanceModel : AbstractModel
 
     public WorkflowInstance<TData> ToInstance<TData>() where TData : class
     {
-        var data = JsonSerializer.Deserialize<TData>(DataJson)!;
+        // CR-L413: DataJson defaults to string.Empty (invalid JSON) and Deserialize<TData> returns a
+        // nullable T; the old `!` masked a genuinely-null payload (empty / "null" / deserialize-to-null),
+        // deferring a NullReferenceException to every consumer of instance.Data. Fail fast with a clear
+        // error instead, mirroring the History `??` fallback's explicit handling.
+        if (string.IsNullOrWhiteSpace(DataJson))
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance '{Guid}' has empty DataJson and cannot be restored (workflow '{WorkflowName}').");
+        }
+
+        var data = JsonSerializer.Deserialize<TData>(DataJson)
+                   ?? throw new InvalidOperationException(
+                       $"Workflow instance '{Guid}' DataJson deserialized to null and cannot be restored (workflow '{WorkflowName}').");
         var history = JsonSerializer.Deserialize<List<StateChangeRecord>>(HistoryJson)
                       ?? new List<StateChangeRecord>();
 
