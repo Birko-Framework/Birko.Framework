@@ -38,6 +38,14 @@ public class JsonWorkflowInstanceModel : AbstractModel
     {
         var s = serializer ?? DefaultSerializer;
 
+        // STORY-029: a persisted document with no Guid is corrupt — minting a random InstanceId would
+        // diverge from the stored id and duplicate on the next SaveAsync upsert (matches ES CR-L406).
+        if (Guid == null)
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance document has no Guid and cannot be restored (workflow '{WorkflowName}').");
+        }
+
         // CR-L408: DataJson defaults to string.Empty (invalid JSON) and Deserialize<TData> returns a
         // nullable T; the old `!` masked a genuinely-null payload (empty / "null" / deserialize-to-null),
         // deferring a NullReferenceException to every consumer of instance.Data. Fail fast with a clear
@@ -55,7 +63,7 @@ public class JsonWorkflowInstanceModel : AbstractModel
                       ?? new List<StateChangeRecord>();
 
         return WorkflowInstance<TData>.Restore(
-            Guid ?? System.Guid.NewGuid(),
+            Guid.Value,
             CurrentState,
             (WorkflowStatus)Status,
             data,
