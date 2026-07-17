@@ -315,5 +315,42 @@ public class AbstractValidatorTests
         public NotEqualValidator() { RuleFor(x => x.Status).NotEqual("NONE"); }
     }
 
+    [Fact]
+    public void RuleFor_In_EmptyAllowedValues_Throws()
+    {
+        // CR-L389: In() with no allowed values would make the property unsatisfiable; it must reject up front.
+        var act = () => new EmptyInValidator();
+
+        act.Should().Throw<ArgumentException>().WithParameterName("allowedValues");
+    }
+
+    private class EmptyInValidator : AbstractValidator<TestModel>
+    {
+        public EmptyInValidator() { RuleFor(x => x.Status).In(); }
+    }
+
+    [Fact]
+    public void RuleFor_Must_NullReferenceValue_TreatedAsValid_PredicateNotInvoked()
+    {
+        // CR-L391: for a reference-type property, Must treats null as valid and never invokes the predicate
+        // (null-rejection is Required's job). The predicate here would throw on null if it were called.
+        var validator = new MustNeverNullDerefValidator();
+        var model = new TestModel { Description = null };
+
+        var result = validator.Validate(model);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    private class MustNeverNullDerefValidator : AbstractValidator<TestModel>
+    {
+        public MustNeverNullDerefValidator()
+        {
+            // No null-guard in the predicate: d! would NRE at runtime if invoked with a null Description,
+            // proving Must skips the predicate for null (the ! only silences the compile-time warning).
+            RuleFor(x => x.Description).Must(d => d!.Length > 3, "Too short.");
+        }
+    }
+
     #endregion
 }
