@@ -115,4 +115,28 @@ public class XmlWorkflowInstanceModelTests
         restored.History[0].OccurredAt.Should().Be(occurred);
         restored.History[1].ToState.Should().Be("Approved");
     }
+
+    // ── STORY-029: corrupt-record guards (null Guid + empty DataXml) ──
+
+    [Fact]
+    public void ToInstance_NullGuid_Throws()
+    {
+        var model = XmlWorkflowInstanceModel.FromInstance("W", CreateInstance());
+        model.Guid = null;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no Guid*");
+    }
+
+    [Fact]
+    public void ToInstance_EmptyDataXml_ThrowsClearError()
+    {
+        var model = XmlWorkflowInstanceModel.FromInstance("W", CreateInstance());
+        model.DataXml = string.Empty;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty DataXml*");
+    }
 }
