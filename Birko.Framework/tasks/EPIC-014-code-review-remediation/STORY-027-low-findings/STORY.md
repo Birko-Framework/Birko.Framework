@@ -13,9 +13,26 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**395 / 418 triaged** as of 2026-07-17. Next open is CR-L396 (Birko.Web.Shell cluster, L396–398 —
-TypeScript, verify via Birko.Web.Playground not xUnit), then Workflow core L399–403 + backends L404–418.
-The whole Birko.Serialization meta-cluster is DONE.
+**398 / 418 triaged** as of 2026-07-17. Next open is CR-L399 (Birko.Workflow core cluster, L399–403), then
+Workflow backends L404–418 (CosmosDB/ElasticSearch/JSON/MongoDB/RavenDB/SQL/XML). The entire Birko.Web.*
+cluster (L392–398) and the whole Birko.Serialization meta-cluster are DONE.
+
+**Batch DB — Birko.Web.Shell (CR-L396, CR-L397, CR-L398):** Birko.Web.Shell (TypeScript, `Birko\Web` bucket).
+Verified via Birko.Web.Playground build + headless verify (66 components, EMPTY (none), 0 PAGEERROR);
+**/code-review clean (no findings)**. **L396** (cleanup): `base-split-page.ts` `_wireSplitEvents` queried
+`#btn-detail-edit`/`#btn-detail-delete` and `listen()`-bound them, but those buttons only exist AFTER a row is
+selected — `_selectEntity` creates them via innerHTML and re-binds them with raw `addEventListener` on every
+selection. The `_wireSplitEvents` block was dead (found nothing at wire time). Removed it, documented the
+ownership. **L397** (convention): the base `_afterSaveComplete` was `void` and called un-awaited, so the split
+page's `async` override (which awaits `_selectEntity` to refresh the detail panel) ran fire-and-forget after the
+save button's loading was cleared, with any re-select error unobserved. Widened the base return to
+`void | Promise<void>` (backward-compatible — both a plain `void` override and an async `Promise<void>` override
+remain valid; avoids breaking consumer overrides that a bare `Promise<void>` would) and `await`ed it at the call
+site inside the try, so an async override completes and surfaces errors before loading clears. **L398**
+(nullable): `entity-search-provider.ts` called `resp.data.map(...)` after only an `!resp.ok` check — an ok
+response with a null/non-array body (the API envelope is loosely typed) would throw inside the command-palette
+search. Added `|| !Array.isArray(resp.data)` to the guard. Pinned with a Playground `backport-smoke` assertion
+(ok+null body → `[]`, no throw). backport-smoke →50/50.
 
 **Batch DA — Birko.Web.Core (CR-L395):** Birko.Web.Core (TypeScript, `Birko\Web` bucket). Verified via
 Birko.Web.Playground build + headless verify (66 components, EMPTY (none), 0 PAGEERROR); **/code-review clean

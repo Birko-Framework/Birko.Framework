@@ -8089,7 +8089,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Detail edit/delete buttons wired twice (dead listen() in _wireSplitEvents)
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Shell\src/pages/base-split-page.ts:308`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `_wireSplitEvents()` (called every onUpdated) queries `#btn-detail-edit`/`#btn-detail-delete` and binds them via `this.listen(...)` at lines 309-312. But those buttons only exist after a row is selected, and `_selectEntity()` recreates them via `body.innerHTML = ...` (line 352) and immediately re-binds them with raw `addEventListener` at lines 355-358. So the lines 309-312 block either finds nothing (buttons not yet rendered) or binds a stale element that innerHTML later replaces — it is effectively dead, and the real wiring is the raw addEventListener in _selectEntity. Confusing duplicate logic.
 - **Fix:** Remove the editBtn/deleteBtn block from _wireSplitEvents (lines 308-312); the buttons are owned and wired by _selectEntity. Or, conversely, move all detail-button wiring into _wireSplitEvents using event delegation on #detail-body so it survives innerHTML rewrites.
 
@@ -8097,7 +8097,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Split-page _afterSaveComplete widens base void return to Promise and runs unawaited
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Shell\src/pages/base-split-page.ts:380`
 - **Category:** convention · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The base declares `protected _afterSaveComplete(_entity, _isEdit): void` and calls it synchronously (base-crud-page.ts:908, inside the try before the finally clears loading). The split override is `async` and awaits `_selectEntity` to refresh the detail panel. Because the base caller does not await, the detail re-fetch is fire-and-forget after the save button's loading has already been cleared — any error in that re-select is unobserved, and ordering relative to the modal close is not guaranteed.
 - **Fix:** Either make the base _afterSaveComplete return Promise<void> and await it at the call site, or have the override not rely on awaited sequencing (kick off reloadDetail() explicitly and handle its own errors).
 
@@ -8105,7 +8105,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** entity-search-provider maps resp.data without null guard
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Shell\src/commands/entity-search-provider.ts:34`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** After `if (!resp.ok) return [];`, the code calls `resp.data.map(...)`. If the endpoint returns 200/204 with an empty or null body (resp.ok true, resp.data null/undefined), `.map` throws inside the command-palette search path. The data type is the loosely-typed API envelope, so a null data on an ok response is plausible.
 - **Fix:** Guard: `return (resp.data ?? []).map(...)` or `if (!resp.ok || !Array.isArray(resp.data)) return [];`.
 
