@@ -8057,7 +8057,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Off-by-one in emitted toIndex when moveCard target index is implicit
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\src/data/b-kanban.ts:450`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** `const toIndex = targetIndex ?? this._getOrderedCards(...).findIndex(c => c.id === cardId) - 1;` Operator precedence makes this `findIndex(...) - 1`. By this point the card has already been re-inserted, so findIndex returns its true position; subtracting 1 reports a toIndex one less than the actual landing position (the index-0 case is masked by Math.max(0,...) at line 457, but all other end-insert positions are reported wrong). Only affects the card-move/card-reorder event payload, not internal ordering.
 - **Fix:** Drop the `- 1` and use the actual findIndex result for the implicit-target case.
 
@@ -8065,7 +8065,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Duplicated escape helpers instead of reusing src/dom-utils.ts
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\src/data/b-editable-table.ts:514-522`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** _escAttr/_escText are a local re-implementation of the shared escape helpers. The CLAUDE.md accessibility pass explicitly consolidated 16 such per-component copies into src/dom-utils.ts (escapeHtml/escapeAttr); this file was not migrated. _escAttr also only escapes & and " (not < >), unlike the shared escapeHtml.
 - **Fix:** Import escapeAttr/escapeHtml from ../dom-utils and delete the local helpers.
 
@@ -8073,7 +8073,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Ineffective `indeterminate` HTML attribute in select-all markup
 - **Path:** `C:\Source\Birko\Framework\Birko.Web.Components\src/data/b-data-table.ts:435`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The select-all checkbox markup emits `${someSelected && !allSelected ? 'indeterminate' : ''}` as an HTML attribute, but `indeterminate` is a DOM property only and has no effect as an attribute. The correct value is applied imperatively later (line 482, `selectAll.indeterminate = ...`), so the markup token is dead.
 - **Fix:** Remove the no-op `indeterminate` token from the template string (the JS property assignment at line 482 is the real mechanism).
 

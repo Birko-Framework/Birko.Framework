@@ -13,8 +13,24 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**391 / 418 triaged** as of 2026-07-17. Next open is CR-L392 (Birko.Web.Components cluster, L392–L394 —
-TypeScript, verify via Birko.Web.Playground not xUnit). The whole Birko.Serialization meta-cluster is DONE.
+**394 / 418 triaged** as of 2026-07-17. Next open is CR-L395 (Birko.Web.Core cluster, L395 —
+TypeScript, verify via Birko.Web.Playground not xUnit), then Web.Shell L396–398, then Workflow core
+L399–403 + backends L404–418. The whole Birko.Serialization meta-cluster is DONE.
+
+**Batch CZ — Birko.Web.Components (CR-L392, CR-L393, CR-L394):** Birko.Web.Components (TypeScript, `Birko\Web`
+bucket). Verified by building + headless-running Birko.Web.Playground (`node build.js && node verify.mjs`) — 66
+components rendered, EMPTY: (none), zero PAGEERROR; **/code-review** surfaced one test-coverage note, addressed.
+**L392** (bug): `b-kanban.ts` `moveCard` computed the emitted `toIndex` as
+`targetIndex ?? findIndex(...) - 1` — `??` binds looser than `-`, so the implicit-target case (card already
+re-inserted) reported the landing index one too low (the index-0 case was masked by the `Math.max(0,…)` clamp).
+Dropped the `- 1`. Added a Playground `backport-smoke` regression asserting the true landing index on **both**
+branches sharing the expression (same-column `card-reorder` + cross-column `card-move`). **L393** (cleanup):
+`b-editable-table.ts` carried local `_escAttr`/`_escText` re-implementations (and `_escAttr` only escaped `&`
+and `"`, not `< >`) — the accessibility pass had consolidated 16 such copies into `src/dom-utils.ts`. Migrated
+to the shared `escapeHtml`/`escapeAttr` (a strict superset — now also escapes `< >`) and deleted the local
+helpers. **L394** (cleanup): `b-data-table.ts` select-all markup emitted `indeterminate` as an HTML *attribute*,
+which is a no-op (it's a DOM property only; the real value is set imperatively at line 481). Removed the dead
+token and the now-unused render-side `someSelected` computation. backport-smoke →47/47.
 
 **Batch CY — Birko.Validation (CR-L388, CR-L389, CR-L390, CR-L391):** Birko.Validation. Closed; **/code-review
 clean (no new findings)**. **L388** (bug): `RequiredRule` probed a non-`ICollection` `IEnumerable` via
