@@ -110,6 +110,12 @@ public class RuleBuilder<T, TProp>
 
     /// <summary>
     /// Value must satisfy the predicate (receives property value).
+    /// <para>
+    /// CR-L391: for a reference-type <typeparamref name="TProp"/>, a null value is treated as valid and the
+    /// predicate is NOT invoked — null-rejection is <see cref="Required"/>'s job, matching the other rules'
+    /// convention. If your predicate is meant to reject null, add a <see cref="Required"/> rule instead of
+    /// relying on Must.
+    /// </para>
     /// </summary>
     public RuleBuilder<T, TProp> Must(Func<TProp, bool> predicate, string? message = null, string? errorCode = null)
     {
@@ -135,6 +141,13 @@ public class RuleBuilder<T, TProp>
     /// </summary>
     public RuleBuilder<T, TProp> In(params TProp[] allowedValues)
     {
+        // CR-L389: an empty set would make the property unsatisfiable (every value fails NOT_IN_SET with an
+        // empty allowed-values list) — a silent misconfiguration trap. Reject it up front instead.
+        if (allowedValues == null || allowedValues.Length == 0)
+        {
+            throw new ArgumentException("At least one allowed value must be provided.", nameof(allowedValues));
+        }
+
         var set = new System.Collections.Generic.HashSet<TProp>(allowedValues);
         _propertyRule.AddRule(new CustomRule(
             _propertyRule.PropertyName,
