@@ -15,7 +15,7 @@ public class ConventionsTests
     [InlineData(nameof(BirkoTelemetryConventions.StoreTypeTag))]
     [InlineData(nameof(BirkoTelemetryConventions.EntityTypeTag))]
     [InlineData(nameof(BirkoTelemetryConventions.OperationTag))]
-    [InlineData(nameof(BirkoTelemetryConventions.TenantTag))]
+    // CR-L381: TenantTag was removed (dead constant, never emitted).
     [InlineData(nameof(BirkoTelemetryConventions.BulkTag))]
     [InlineData(nameof(BirkoTelemetryConventions.DefaultCorrelationIdHeader))]
     public void AllConstants_ShouldBeNonNullAndNonEmpty(string fieldName)
