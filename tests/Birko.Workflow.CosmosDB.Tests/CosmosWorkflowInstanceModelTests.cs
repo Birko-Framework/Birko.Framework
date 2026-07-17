@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using Birko.Serialization.Json;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.CosmosDB.Models;
@@ -87,5 +89,49 @@ public class CosmosWorkflowInstanceModelTests
         model.UpdateFromInstance(CreateTestInstance());
 
         model.WorkflowName.Should().Be("OriginalWorkflow");
+    }
+
+    // ── STORY-029: ISerializer seam + camelCase wire format + null-Guid guard ──
+
+    [Fact]
+    public void FromInstance_UsesCamelCaseWireFormat()
+    {
+        // STORY-029: the default serializer is camelCase (matches BackgroundJobs / Data.JSON / Workflow.JSON).
+        var model = CosmosWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+
+        model.DataJson.Should().Contain("\"orderId\"");
+        model.DataJson.Should().NotContain("\"OrderId\"");
+    }
+
+    [Fact]
+    public void FromInstance_WithInjectedSerializer_OverridesFormat()
+    {
+        // STORY-029: the seam is overridable — a caller can pass any ISerializer (here PascalCase).
+        var pascal = new SystemJsonSerializer(new JsonSerializerOptions());
+        var model = CosmosWorkflowInstanceModel.FromInstance("W", CreateTestInstance(), pascal);
+
+        model.DataJson.Should().Contain("\"OrderId\"");
+    }
+
+    [Fact]
+    public void ToInstance_NullGuid_Throws()
+    {
+        var model = CosmosWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.Guid = null;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no Guid*");
+    }
+
+    [Fact]
+    public void ToInstance_EmptyDataJson_ThrowsClearError()
+    {
+        var model = CosmosWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = string.Empty;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty DataJson*");
     }
 }
