@@ -13,7 +13,7 @@ namespace Birko.Data.Composition;
 
 /// <summary>
 /// Builds a store decorator chain based on which interfaces T implements.
-/// Chain order (outermost → innermost): Tenant → Default → Sluggable → SoftDelete → Audit → Timestamp → EventSourcing → RawStore.
+/// Chain order (outermost → innermost): Default → Sluggable → SoftDelete → Tenant → Audit → Timestamp → EventSourcing → RawStore.
 /// Uses runtime type checks because C# generic constraints are compile-time only.
 /// </summary>
 public static class StoreWrapperBuilder
@@ -56,6 +56,21 @@ public static class StoreWrapperBuilder
             store = Wrap(typeof(AsyncAuditBulkStoreWrapper<,>), store, auditContext);
         }
 
+        // Tenant filter (applies to ITenant entities).
+        // Positioned INSIDE the uniqueness/soft-delete wrappers (Default, Sluggable, SoftDelete) but
+        // OUTSIDE the enrichers (Audit, Timestamp, EventSourcing). Rationale:
+        //  - Default/Sluggable issue their OWN probe + corrective queries against their inner store;
+        //    with Tenant inside them, those queries pass through the tenant filter and are scoped to
+        //    the current tenant — so uniqueness (single IsDefault, unique slug) is enforced PER TENANT,
+        //    not globally across tenants (STORY-045: Tenant-outermost silently corrupted sibling tenants).
+        //  - Still outside EventSourcing/Timestamp/Audit so the tenant guard rejects a cross-tenant write
+        //    BEFORE an event is recorded (no orphan events) and TenantGuid is stamped in time to be
+        //    captured in the audit/event payload.
+        if (tenantContext is not null && typeof(ITenant).IsAssignableFrom(typeof(T)))
+        {
+            store = Wrap(typeof(AsyncTenantBulkStoreWrapper<,>), store, tenantContext);
+        }
+
         // SoftDelete: filters deleted on reads, converts delete to update (applies to ISoftDeletable entities)
         if (typeof(ISoftDeletable).IsAssignableFrom(typeof(T)))
         {
@@ -69,16 +84,10 @@ public static class StoreWrapperBuilder
             store = WrapSingle(typeof(AsyncSluggableBulkStoreWrapper<,>), store);
         }
 
-        // Default: enforces single IsDefault=true (applies to IDefault entities)
+        // Outermost: Default — enforces single IsDefault=true (applies to IDefault entities)
         if (typeof(IDefault).IsAssignableFrom(typeof(T)))
         {
             store = WrapSingle(typeof(AsyncDefaultStoreWrapper<,>), store);
-        }
-
-        // Outermost: Tenant filter (applies to ITenant entities)
-        if (tenantContext is not null && typeof(ITenant).IsAssignableFrom(typeof(T)))
-        {
-            store = Wrap(typeof(AsyncTenantBulkStoreWrapper<,>), store, tenantContext);
         }
 
         return store;
