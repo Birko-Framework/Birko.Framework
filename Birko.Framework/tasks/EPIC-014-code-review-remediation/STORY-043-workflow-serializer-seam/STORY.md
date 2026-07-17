@@ -1,5 +1,5 @@
 ---
-id: STORY-029
+id: STORY-043
 parent: EPIC-014
 status: done
 created: 2026-07-17
@@ -103,7 +103,7 @@ persistence-domain-data offenders.** Everything else is legitimate:
     (never stored/round-tripped).
   - `Birko.DesignTokens/Model.cs` — design-token config model.
 
-So STORY-029's scope (the 4 raw workflow backends) is **complete** — no other persistence layer needs
+So STORY-043's scope (the 4 raw workflow backends) is **complete** — no other persistence layer needs
 migrating.
 
 ## Wire-format decision (REVISED after the sweep)
@@ -143,4 +143,4 @@ Symbio, wires no workflow persistence backend), so no migration is required rega
 - STORY-027 CR-L415/L416 (SQL) already applied the seam to SQL with a PascalCase default and a
   `FromInstance_PreservesPascalCaseWireFormat` pin — use it as the template.
 - The store-level `SaveAsync`/`FindBy*` concurrency + schema tests remain integration-tier
-  (STORY-028); this story is model-layer only.
+  (STORY-042); this story is model-layer only.

@@ -43,12 +43,12 @@ possible consumer, Symbio, imports only `Birko.Workflow` core and wires no persi
 **preserve PascalCase** via `new SystemJsonSerializer(new JsonSerializerOptions())` — it (a) keeps SQL aligned
 with the 4 other JSON-string backends (Cosmos/ES/Mongo/Raven all still use raw-default PascalCase) and (b) the
 seam is fully overridable per call. Pinned with a `FromInstance_PreservesPascalCaseWireFormat` test. **L417**
-(test-gap): store `SaveAsync`/`FindBy*`/schema remain integration-tier (STORY-028) — the store is hard-typed to
+(test-gap): store `SaveAsync`/`FindBy*`/schema remain integration-tier (STORY-042) — the store is hard-typed to
 `AsyncDataBaseBulkStore<DB,…>` and can't take the InMemory double without a live connector (a testability
 limitation the audit itself acknowledged); the MODEL layer is now well-covered (round-trips + the new
 CR-L415 guards + wire-format pin). SQL.Tests →10. **FOLLOW-ON (separate task):** extending the ISerializer seam
 to the 4 raw backends (Cosmos/ES/Mongo/Raven) + aligning the JSON backend's default to PascalCase for full
-family uniformity is tracked as **STORY-029** (beyond the audit's filed low findings).
+family uniformity is tracked as **STORY-043** (beyond the audit's filed low findings).
 
 **Batch DH — Birko.Workflow.RavenDB (CR-L413, CR-L414):** Birko.Workflow.RavenDB. **/code-review clean (no
 findings)**. **L413** (nullable): `ToInstance` `Deserialize<TData>(DataJson)!` guarded (empty/whitespace +
@@ -103,7 +103,7 @@ identical `Deserialize!` + `Guid ?? NewGuid()` pattern (no CR-L filed; fix in a 
 `existing.UpdateFromInstance(instance)`, which is WorkflowName-neutral, so a re-save under a different
 workflowName silently kept the stale name — a divergence from the canonical RavenDB backend
 (`existing.WorkflowName = workflowName`). Mirrored the reference: set `existing.WorkflowName = workflowName`
-after `UpdateFromInstance`. Store-level SaveAsync verification is integration-tier (STORY-028, needs live
+after `UpdateFromInstance`. Store-level SaveAsync verification is integration-tier (STORY-042, needs live
 Cosmos); added a model-level contract test (`UpdateFromInstance_LeavesWorkflowNameUntouched`) pinning the
 name-neutral contract that necessitates the store-side refresh. CosmosDB.Tests →4.
 

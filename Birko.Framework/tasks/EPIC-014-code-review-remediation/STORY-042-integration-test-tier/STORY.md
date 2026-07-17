@@ -1,5 +1,5 @@
 ---
-id: STORY-028
+id: STORY-042
 parent: EPIC-014
 status: planned
 created: 2026-07-14
@@ -30,7 +30,7 @@ like STORY-024/025/026/027.
 > **Cannot be executed in the current environment** — no Docker. This story is the plan; execution
 > requires a host with Docker (or a CI runner with the service containers).
 
-## Prerequisite — TASK-028-00: integration-test harness (blocks everything)
+## Prerequisite — TASK-042-00: integration-test harness (blocks everything)
 
 Before any cluster, add the shared plumbing:
 - A Testcontainers-based fixture pattern (xUnit `IAsyncLifetime` / collection fixtures) per backend.
@@ -42,6 +42,10 @@ Before any cluster, add the shared plumbing:
 
 **Acceptance:** one reference integration project (suggest MSSql, see cluster 1) runs green with Docker
 up and **skips cleanly** with Docker down; CI has an opt-in integration job.
+
+> **External consumer:** [[TASK-042]] (EPIC-016, cross-provider SQL store-factory + DI) is `review`-blocked
+> solely on this harness — its live CRUD round-trip is currently env-gated (`BIRKO_{PROV}_TEST`) and should
+> adopt the MSSql/Postgres fixture here once it exists. Coordinate cluster 1 with that task.
 
 ---
 
@@ -135,7 +139,7 @@ size-limit enforced; aggregation parsed correctly against a live index.
 
 | Order | Cluster | Fixture | Effort | Findings |
 |---|---|---|---|---|
-| 0 | Harness (TASK-028-00) | — | M | prerequisite |
+| 0 | Harness (TASK-042-00) | — | M | prerequisite |
 | 1 | MSSql bulk atomicity | MSSql/Postgres | S–M | M138 (M166 already closed offline via TASK-058) |
 | 2 | InfluxDB migrations | InfluxDB 2.x | M | M108, M109 |
 | 3 | Cosmos sync | Cosmos emulator | M | M159, M160 |

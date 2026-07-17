@@ -6,7 +6,7 @@ status: review
 priority: P2
 assignee: ai
 created: 2026-07-06
-depends-on: []
+depends-on: [STORY-042]
 blocks: []
 pr: null
 github-issue: null
@@ -43,6 +43,14 @@ Follow the `Birko.Data.SQL.SqLite` layout as the reference and keep naming symme
 - [x] `.projitems` updated for each of the three projects (new files compiled). — verified by building `Birko.Data.SQL.Providers.Tests`.
 - [~] Tests: a DI-resolution test per provider (register → resolve → CRUD round-trip), guarded. — `Birko.Data.SQL.Providers.Tests` (7 tests, green): per-provider factory/settings/connection-string + `AddXStores` singleton resolution run offline; the **live CRUD round-trip is env-gated** (`BIRKO_{PROV}_TEST`) and skipped until a server is provided → task stays `review`.
 - [x] `Recent Updates` entry added per Birko convention.
+
+## Depends on — [[STORY-042]] (integration-test tier)
+
+The one remaining criterion (the live CRUD round-trip) is blocked on the same missing capability
+STORY-042 exists to build — specifically its **`TASK-042-00` Testcontainers harness** (the MSSql/Postgres
+fixture in cluster 1), **not** the whole tier. When that harness lands, adopt it here: replace the
+bespoke `BIRKO_{PROV}_TEST` env gate with the shared fixture, run the round-trip, and move this task
+`review` → `done`.
 
 ## Out of scope
 

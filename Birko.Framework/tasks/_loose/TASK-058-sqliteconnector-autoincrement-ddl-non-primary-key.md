@@ -17,7 +17,7 @@ jira-key: null
 
 ## Context
 
-Surfaced while working **CR-M166** (STORY-028 cluster 1). Not an audit finding — a genuine framework
+Surfaced while working **CR-M166** (STORY-042 cluster 1). Not an audit finding — a genuine framework
 bug discovered during that work.
 
 `SqLiteConnector.FieldDefinition` (`Birko.Data.SQL.SqLite/Database/Connectors/SqLiteConnector.cs:143`)
@@ -98,7 +98,7 @@ emit `INTEGER PRIMARY KEY AUTOINCREMENT` as one adjacent clause (and ensure the 
   the dual-key `CreateTable` case + the autoincrement-PK-with-constraints case.
 - **Bonus:** if option (a) is taken, the CR-M166 SQL-sync `GetLastSyncTime`/`SetLastSyncTime` CRUD
   round-trips can then run on SQLite offline — **potentially closing CR-M166 without Docker** (verify
-  and, if so, update STORY-028 cluster 1 + the audit).
+  and, if so, update STORY-042 cluster 1 + the audit).
 
 ## Resolution (2026-07-14, done)
 
@@ -112,12 +112,12 @@ Chose **option (a)** + the PK-adjacency/type fix. `SqLiteConnector.FieldDefiniti
 **Verified offline (no Docker):** `Birko.Data.SQL.SqLite.Tests` 24 green (no regression); the dual-key
 `SqlSyncKnowledgeItem.CreateTable` now produces valid DDL and the full SQL sync-store CRUD round-trip
 runs on a real SQLite `.db` (`Birko.Data.Sync.Sql.Tests` 2 → 6). **This closed CR-M166 offline** and
-removed it from STORY-028 (integration-test tier).
+removed it from STORY-042 (integration-test tier).
 
 ## Notes
 
 - **This is offline-fixable** — Microsoft.Data.Sqlite + the on-disk SQLite tier work in the current
-  environment; it does **not** need the STORY-028 Docker harness. It is filed loose (like TASK-036)
+  environment; it does **not** need the STORY-042 Docker harness. It is filed loose (like TASK-036)
   rather than under EPIC-014 because it is a newly-found framework bug, not a `CR-*` audit finding.
 - Left as a task rather than fixed inline because of the option-(a)/(b)/(c) design decision above —
   worth a deliberate call (and possibly the user's) rather than a silent behaviour change.
