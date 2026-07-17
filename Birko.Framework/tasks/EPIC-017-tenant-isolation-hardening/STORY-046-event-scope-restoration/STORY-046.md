@@ -81,11 +81,13 @@ Also landed — the **tenant bridge** (new sibling `Birko.EventBus.Tenant`, scaf
   null→all-tenants, empty→system, DI wiring). This is the only project depending on both
   `Birko.EventBus` and `Birko.Data.Tenant`, keeping the two cores independent.
 
-Not done yet (follow-ups):
+Not done yet (framework follow-up):
 - **`ScopeRestorationBehavior : IEventPipelineBehavior`** for the distributed-consumer path (only needed
   once a distributed/MQTT transport dispatches these handlers; Symbio uses in-memory outbox today).
-- **Symbio wiring** — call `AddEventTenantScope()` alongside the Strict flip and verify async handlers
-  end-to-end (consumer-side task).
+
+Consumer adoption is **out of scope for this framework story** — calling `AddEventTenantScope()` and
+flipping `TenantIsolationMode.Strict` is per-consumer work tracked in each consumer's own `tasks/`
+(for Symbio: `Symbio/tasks/.../TASK-156`), per the polyrepo split in the root `CLAUDE.md`.
 
 ## Decisions
 
@@ -102,4 +104,6 @@ Not done yet (follow-ups):
 - [x] Abstraction is tenant-agnostic (test proves it without Birko.Data.Tenant).
 - [x] Tenant bridge (`Birko.EventBus.Tenant`) + `AddEventTenantScope()` (4/4 tests).
 - [ ] Distributed-consumer pipeline behavior.
-- [ ] Symbio wires `AddEventTenantScope()` and flips Strict end-to-end (consumer-side).
+
+(Consumer adoption — wiring `AddEventTenantScope()` + the Strict flip + end-to-end verification — is
+tracked in the consumer repo, not here; e.g. Symbio's TASK-156.)

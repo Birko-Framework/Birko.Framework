@@ -84,8 +84,9 @@ a multi-tenant framework.
 - **STORY-046** (in-progress) — Restore ambient (tenant) scope for background event dispatch. Async
   handlers throw under Strict because the outbox processor / MQ consumer dispatch outside the request's
   async flow. New transport-agnostic `IEventScopeAccessor` (no-op default) in `Birko.EventBus`;
-  `OutboxProcessor` restores scope from `entry.TenantGuid` before re-publish (prototyped, red→green,
-  9/9). Follow-ups: distributed-consumer pipeline behavior + the tenant bridge (`AddEventTenantScope`).
+  `OutboxProcessor` restores scope from `entry.TenantGuid` before re-publish (red→green, 9/9); new
+  `Birko.EventBus.Tenant` bridge (`AddEventTenantScope`, 4/4). Framework follow-up: distributed-consumer
+  pipeline behavior. (Consumer adoption is tracked per-consumer, e.g. Symbio TASK-156 — not this EPIC.)
 
 ## Success criteria
 
