@@ -30,6 +30,15 @@ public sealed class HolidayCalendar
         return _holidays.Any(h => h.FallsOn(date));
     }
 
+    /// <summary>
+    /// Returns the holidays relevant to <paramref name="year"/>: every recurring holiday plus the one-time
+    /// holidays whose <see cref="Holiday.Year"/> matches.
+    /// <para>
+    /// CR-L386: recurring holidays are returned <b>year-agnostic</b> — their <see cref="Holiday.Year"/> stays
+    /// <c>null</c>; they are not projected onto <paramref name="year"/>. Resolve a concrete date by combining
+    /// <paramref name="year"/> with each holiday's <see cref="Holiday.Month"/>/<see cref="Holiday.Day"/>.
+    /// </para>
+    /// </summary>
     public IReadOnlyList<Holiday> GetHolidays(int year)
     {
         return _holidays

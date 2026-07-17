@@ -25,9 +25,18 @@ public sealed class Holiday
             throw new ArgumentOutOfRangeException(nameof(month), "Month must be between 1 and 12.");
         }
 
-        if (day < 1 || day > 31)
+        // CR-L384: validate the day against the actual maximum for the month rather than a blanket 1..31,
+        // so impossible dates (Feb 30, Apr 31, ...) are rejected at construction instead of silently yielding
+        // a holiday FallsOn can never match. For a one-time holiday the year is known, so Feb 29 is validated
+        // exactly (rejected in non-leap years). For a recurring holiday the year is unknown, so a leap-year
+        // reference (2000) is used to keep Feb 29 a legal recurring date.
+        int maxDay = year.HasValue
+            ? DateTime.DaysInMonth(year.Value, month)
+            : DateTime.DaysInMonth(2000, month);
+
+        if (day < 1 || day > maxDay)
         {
-            throw new ArgumentOutOfRangeException(nameof(day), "Day must be between 1 and 31.");
+            throw new ArgumentOutOfRangeException(nameof(day), $"Day must be between 1 and {maxDay} for month {month:D2}.");
         }
 
         Name = name;

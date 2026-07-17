@@ -9,6 +9,13 @@ public sealed class DaySchedule
 {
     public TimeOnly Start { get; }
     public TimeOnly End { get; }
+
+    /// <summary>
+    /// Length of the day's break. CR-L385: this models break <b>length</b> only, not its position within the
+    /// day, so it is used purely for duration accounting (<see cref="WorkingDuration"/> subtracts it). It does
+    /// NOT carve a gap out of <see cref="IsWorkingAt"/> — a time inside the (unplaced) break still reports as
+    /// working time. Model an explicit break window if mid-day exclusion is required.
+    /// </summary>
     public TimeSpan BreakDuration { get; }
 
     public DaySchedule(TimeOnly start, TimeOnly end, TimeSpan? breakDuration = null)
@@ -44,7 +51,10 @@ public sealed class DaySchedule
     public TimeSpan WorkingDuration => WorkingSpan - BreakDuration;
 
     /// <summary>
-    /// Checks if the given time falls within this schedule's working hours.
+    /// Checks if the given time falls within this schedule's working hours (Start inclusive, End exclusive).
+    /// CR-L385: this does not exclude <see cref="BreakDuration"/> — the break has no modeled position, so a
+    /// time during the (nominal) break still counts as working. Use <see cref="WorkingDuration"/> for
+    /// break-adjusted totals.
     /// </summary>
     public bool IsWorkingAt(TimeOnly time)
     {
