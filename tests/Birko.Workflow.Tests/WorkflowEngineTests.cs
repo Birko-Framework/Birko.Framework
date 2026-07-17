@@ -200,6 +200,75 @@ public class WorkflowEngineTests
     }
 
     [Fact]
+    public async Task FireAsync_OnEntryThrows_ReportsToStateInException()
+    {
+        // CR-L400: when the destination's OnEntry action faults, the exception's State must
+        // name the state whose action threw (the to-state), not the origin.
+        var workflow = new WorkflowBuilder<TestData>("EntryFaultState")
+            .InitialState("A")
+            .State("A").And()
+            .State("B")
+                .OnEntry(async (inst, ct) => throw new InvalidOperationException("entry boom"))
+                .IsFinal()
+                .And()
+            .Transition("go", "A", "B").And()
+            .Build();
+
+        var engine = new WorkflowEngine();
+        var instance = WorkflowInstance<TestData>.Create(workflow, new TestData());
+
+        var act = async () => await engine.FireAsync(workflow, instance, "go");
+        var ex = (await act.Should().ThrowAsync<WorkflowActionException>()).Which;
+        ex.State.Should().Be("B", "the OnEntry action of the to-state failed");
+        ex.Trigger.Should().Be("go");
+    }
+
+    [Fact]
+    public async Task FireAsync_ExitOrTransitionActionThrows_ReportsFromStateInException()
+    {
+        // CR-L400 companion: an exit/transition action failure is still reported against the from-state.
+        var workflow = new WorkflowBuilder<TestData>("TransitionFaultState")
+            .InitialState("A")
+            .State("A").And()
+            .State("B").IsFinal().And()
+            .Transition("go", "A", "B")
+                .Action(async (inst, ct) => throw new InvalidOperationException("boom"))
+                .And()
+            .Build();
+
+        var engine = new WorkflowEngine();
+        var instance = WorkflowInstance<TestData>.Create(workflow, new TestData());
+
+        var act = async () => await engine.FireAsync(workflow, instance, "go");
+        var ex = (await act.Should().ThrowAsync<WorkflowActionException>()).Which;
+        ex.State.Should().Be("A", "the transition action ran in the from-state");
+    }
+
+    [Fact]
+    public async Task FireAsync_PreCancelledToken_ThrowsWithoutMutating()
+    {
+        // CR-L401: a pre-cancelled token must surface OperationCanceledException even for a
+        // guard-only / actionless transition that would otherwise complete silently.
+        var workflow = new WorkflowBuilder<TestData>("CancelObserving")
+            .InitialState("A")
+            .State("A").And()
+            .State("B").IsFinal().And()
+            .Transition("go", "A", "B").And()
+            .Build();
+
+        var engine = new WorkflowEngine();
+        var instance = WorkflowInstance<TestData>.Create(workflow, new TestData());
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var act = async () => await engine.FireAsync(workflow, instance, "go", cts.Token);
+        await act.Should().ThrowAsync<OperationCanceledException>();
+
+        instance.CurrentState.Should().Be("A", "a cancelled fire must not advance state");
+        instance.Status.Should().Be(WorkflowStatus.Active);
+    }
+
+    [Fact]
     public async Task FireAsync_FaultedInstance_Throws()
     {
         var workflow = new WorkflowBuilder<TestData>("Faulting")
@@ -246,11 +315,29 @@ public class WorkflowEngineTests
     }
 
     [Fact]
-    public void GetPermittedTriggers_ReturnsAvailableTriggers()
+    public void GetPermittedTriggers_GuardFails_ExcludesGuardedTrigger()
     {
+        // CR-L399: the engine overload is guard-aware. From "Pending", "pay" is guarded on
+        // PaymentReceived — with it false the guard fails, so "pay" must NOT be reported
+        // (FireAsync would deny it); only the unguarded "cancel" is permitted.
         var engine = new WorkflowEngine();
         var workflow = CreateOrderWorkflow();
-        var data = new TestData();
+        var data = new TestData { PaymentReceived = false };
+        var instance = WorkflowInstance<TestData>.Create(workflow, data);
+
+        var triggers = engine.GetPermittedTriggers(workflow, instance);
+
+        triggers.Should().BeEquivalentTo("cancel");
+    }
+
+    [Fact]
+    public void GetPermittedTriggers_GuardPasses_IncludesGuardedTrigger()
+    {
+        // CR-L399: with the guard satisfied, the guarded trigger is reported alongside
+        // the unguarded ones — matching what FireAsync will actually accept.
+        var engine = new WorkflowEngine();
+        var workflow = CreateOrderWorkflow();
+        var data = new TestData { PaymentReceived = true };
         var instance = WorkflowInstance<TestData>.Create(workflow, data);
 
         var triggers = engine.GetPermittedTriggers(workflow, instance);

@@ -34,6 +34,28 @@ public class VisualizationTests
     }
 
     [Fact]
+    public void MermaidGenerator_DescriptionWithNewline_StaysSingleLine()
+    {
+        // CR-L403: a state description is free text on the `Name : Description` line. A newline
+        // in it would split the single-line diagram statement and produce invalid Mermaid, so
+        // CR/LF are collapsed to spaces (state names/triggers still go through the name escape).
+        var workflow = new WorkflowBuilder<string>("DescFlow")
+            .InitialState("A")
+            .State("A").Description("Line one\r\nLine two\nLine three").And()
+            .State("B").IsFinal().And()
+            .Transition("go", "A", "B").And()
+            .Build();
+
+        var generator = new MermaidDiagramGenerator();
+        var output = generator.Generate(workflow);
+
+        output.Should().Contain("A : Line one Line two Line three");
+        // The description line must not introduce a raw newline into the statement.
+        output.Should().NotContain("Line one\r");
+        output.Should().NotContain("Line one\n");
+    }
+
+    [Fact]
     public void DotGenerator_ProducesValidOutput()
     {
         var generator = new DotDiagramGenerator();
