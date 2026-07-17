@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
 using Birko.Data.Models;
 using Birko.Serialization;
 using Birko.Serialization.Json;
@@ -37,12 +36,12 @@ namespace Birko.Workflow.SQL.Models
         [Birko.Data.SQL.Attributes.NamedField("UpdatedAt")]
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // CR-L416: routes through Birko.Serialization.ISerializer for an injectable seam, but pins the
-        // DEFAULT (PascalCase) System.Text.Json options — the historical wire format this backend wrote
-        // with raw JsonSerializer. SystemJsonSerializer's parameterless default is camelCase, which would
-        // silently fail to match property names on existing persisted DataJson/HistoryJson rows.
-        private static readonly ISerializer DefaultSerializer =
-            new SystemJsonSerializer(new JsonSerializerOptions());
+        // CR-L416 / STORY-029: route through Birko.Serialization.ISerializer for an injectable seam.
+        // STORY-029 aligned the default to camelCase (the framework's deliberate convention wherever the
+        // abstraction is used for persistence — BackgroundJobs, the Data.JSON store, and the Workflow.JSON
+        // backend are all camelCase). Verified no persisted workflow data exists, so the earlier
+        // PascalCase-preservation (CR-L416) is unnecessary; the whole workflow-backend family is now camelCase.
+        private static readonly ISerializer DefaultSerializer = new SystemJsonSerializer();
 
         public WorkflowInstance<TData> ToInstance<TData>(ISerializer? serializer = null) where TData : class
         {
@@ -50,6 +49,14 @@ namespace Birko.Workflow.SQL.Models
             // SystemJsonSerializer default) so this backend shares the JSON reference model's seam
             // rather than calling System.Text.Json directly.
             var s = serializer ?? DefaultSerializer;
+
+            // STORY-029: a persisted row with no Guid is corrupt — minting a random InstanceId would
+            // diverge from the stored id and duplicate on the next SaveAsync upsert (matches ES CR-L406).
+            if (Guid == null)
+            {
+                throw new InvalidOperationException(
+                    $"Workflow instance row has no Guid and cannot be restored (workflow '{WorkflowName}').");
+            }
 
             // CR-L415: DataJson defaults to string.Empty (invalid JSON) and Deserialize<TData> returns a
             // nullable T; the old `!` masked a genuinely-null payload (empty / "null" / deserialize-to-null),
@@ -68,7 +75,7 @@ namespace Birko.Workflow.SQL.Models
                           ?? new List<StateChangeRecord>();
 
             return WorkflowInstance<TData>.Restore(
-                Guid ?? System.Guid.NewGuid(),
+                Guid.Value,
                 CurrentState,
                 (WorkflowStatus)Status,
                 data,
