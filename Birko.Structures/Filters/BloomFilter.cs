@@ -109,11 +109,23 @@ public class BloomFilter<T> where T : notnull
         Count = 0;
     }
 
-    private (int Hash1, int Hash2) GetHashes(T item)
+    private static (int Hash1, int Hash2) GetHashes(T item)
     {
-        int hash = item.GetHashCode();
-        int hash1 = hash;
-        int hash2 = (hash >> 16) | (hash << 16); // Simple second hash via bit rotation
+        int hash1 = item.GetHashCode();
+
+        // CR-L376: derive an independent second hash with the Murmur3 fmix32 finalizer and force it odd.
+        // The old bit-rotation collapsed hash2 to 0 whenever GetHashCode() returned 0 (and toward hash1
+        // when the low/high 16 bits matched), so the double-hashing step h1 + i*h2 mapped every probe to
+        // the same bit — wrecking the false-positive rate. An odd, well-mixed hash2 is never 0 and keeps
+        // the probes independent.
+        uint h = (uint)hash1;
+        h ^= h >> 16;
+        h *= 0x85ebca6b;
+        h ^= h >> 13;
+        h *= 0xc2b2ae35;
+        h ^= h >> 16;
+        int hash2 = (int)h | 1;
+
         return (hash1, hash2);
     }
 
