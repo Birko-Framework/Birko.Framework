@@ -124,6 +124,31 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 - Use protected setters for properties that derived classes need to modify
 - `RemoteSettings` should be passed via `base.SetSettings()`, not constructed inline
 
+## Task tracking — this repo is the polyrepo family's aggregator
+
+The Birko family is a **polyrepo** (every `Birko.*` sub-project is its own git repo); this
+repo is its **aggregator** (the `.slnx`, the shared CLAUDE docs — and the cross-cutting plan).
+This is the aggregator override the generic `tasks` skill's shape detection defers to:
+
+- **Cross-cutting epics** (work spanning several `Birko.*` sub-projects) live in **this repo's
+  `tasks/`**, with the affected sub-projects listed in the EPIC's `affects:` frontmatter
+  (e.g. `affects: [Birko.AI, Birko.Data.Core]`).
+- **Single-sub-project work** stays in that sub-repo's own `tasks/` (the default
+  walk-up-to-`.git` rule already lands there) — don't track it here.
+- Cross-cutting `docs/features/` and `docs/specs/` follow the same split: family-wide at this
+  aggregator, per-project in each sub-repo (a cross-cutting story regens specs per affected
+  project, driven by `affects:`).
+
+## Skills shipped by this repo
+
+`.claude/skills/` is the home of the Birko-specific skills. They **build on top of the generic
+project-lifecycle-skills set** (never the reverse — the generic skills know only a "stack
+scaffolder" hook, not Birko). Project-local ones (new-birko-subproject, new-store-backend,
+verify-birko-conventions, the roll-changelog shadow) auto-load only inside this repo; the
+consumer-facing ones (birko-new-project, new-birko-web-page, new-birko-web-component,
+design-agent) are shared user-level via [install-skills.ps1](install-skills.ps1) (junctions —
+edit here, live immediately).
+
 ## Code Style
 - **Guard clauses:** Use early returns instead of wrapping entire method bodies in if blocks. Prefer `if (x == null) return;` over `if (x != null) { ... }`.
 - **No nullable warnings:** All new code must compile without CS8600–CS8605, CS8618, CS8625. Use proper null checks, `!` only when provably safe, or `?` annotations.
