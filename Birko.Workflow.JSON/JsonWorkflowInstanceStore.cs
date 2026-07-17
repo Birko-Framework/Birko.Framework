@@ -16,6 +16,14 @@ namespace Birko.Workflow.JSON
     /// JSON file-based workflow instance persistence.
     /// Good for development, testing, and single-process deployments.
     /// </summary>
+    /// <remarks>
+    /// CR-L409: SaveAsync is a read-then-write upsert (Read by InstanceId → branch to Update/Create)
+    /// and the underlying <see cref="AsyncJsonStore{T}"/> rewrites the whole file on save, so it is
+    /// NOT safe for concurrent multi-writer use: two concurrent saves for the same new instance can
+    /// both see no existing row and both Create, or interleave a full-file rewrite. This is acceptable
+    /// within the documented single-process/development scope — do not use it for concurrent workflow
+    /// persistence.
+    /// </remarks>
     public class JsonWorkflowInstanceStore<TData> : IWorkflowInstanceStore<TData>
         where TData : class
     {

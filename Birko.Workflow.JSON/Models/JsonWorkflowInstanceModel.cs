@@ -37,7 +37,20 @@ public class JsonWorkflowInstanceModel : AbstractModel
     public WorkflowInstance<TData> ToInstance<TData>(ISerializer? serializer = null) where TData : class
     {
         var s = serializer ?? DefaultSerializer;
-        var data = s.Deserialize<TData>(DataJson)!;
+
+        // CR-L408: DataJson defaults to string.Empty (invalid JSON) and Deserialize<TData> returns a
+        // nullable T; the old `!` masked a genuinely-null payload (empty / "null" / deserialize-to-null),
+        // deferring a NullReferenceException to every consumer of instance.Data. Fail fast with a clear
+        // error instead, mirroring the History `??` fallback's explicit handling.
+        if (string.IsNullOrWhiteSpace(DataJson))
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance '{Guid}' has empty DataJson and cannot be restored (workflow '{WorkflowName}').");
+        }
+
+        var data = s.Deserialize<TData>(DataJson)
+                   ?? throw new InvalidOperationException(
+                       $"Workflow instance '{Guid}' DataJson deserialized to null and cannot be restored (workflow '{WorkflowName}').");
         var history = s.Deserialize<List<StateChangeRecord>>(HistoryJson)
                       ?? new List<StateChangeRecord>();
 
