@@ -17,6 +17,12 @@ public sealed class WorkflowEngine : IWorkflowEngine
         string trigger,
         CancellationToken cancellationToken = default)
     {
+        // Observe an already-cancelled token before any work — a guard-only / pure
+        // state-change transition has no actions to propagate the token, so without
+        // this an OperationCanceledException would be silently swallowed (matches the
+        // framework convention: throw at the top of every public async path).
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (instance is not WorkflowInstance<TData> mutableInstance)
         {
             throw new ArgumentException("Instance must be created via WorkflowInstance<TData>.Create().", nameof(instance));
@@ -57,6 +63,11 @@ public sealed class WorkflowEngine : IWorkflowEngine
         var fromStateDef = definition.States.FirstOrDefault(s => s.Name == fromState);
         var toStateDef = definition.States.FirstOrDefault(s => s.Name == transition.ToState);
 
+        // Tracks the state whose action is currently running, so a failure is reported
+        // against the actual failing phase: fromState for exit/transition actions,
+        // toState once the destination's OnEntry actions run (CR-L400).
+        var actionState = fromState;
+
         try
         {
             if (fromStateDef != null)
@@ -73,6 +84,7 @@ public sealed class WorkflowEngine : IWorkflowEngine
             }
 
             mutableInstance.CurrentState = transition.ToState;
+            actionState = transition.ToState;
 
             if (toStateDef != null)
             {
@@ -105,7 +117,7 @@ public sealed class WorkflowEngine : IWorkflowEngine
             throw new WorkflowActionException(
                 definition.Name,
                 instance.InstanceId,
-                fromState,
+                actionState,
                 trigger,
                 ex);
         }
@@ -120,6 +132,16 @@ public sealed class WorkflowEngine : IWorkflowEngine
             return Array.Empty<string>();
         }
 
-        return definition.GetPermittedTriggers(instance.CurrentState);
+        // Unlike the definition's state-only GetPermittedTriggers, the engine overload
+        // has the instance, so it also evaluates guards — a trigger is permitted only if
+        // the transition FireAsync would select for it (the first one matching
+        // FromState+Trigger, per its FirstOrDefault) passes all its guards. This keeps
+        // the reported triggers in sync with what FireAsync will actually accept (CR-L399).
+        return definition.Transitions
+            .Where(t => t.FromState == instance.CurrentState)
+            .GroupBy(t => t.Trigger)
+            .Where(g => g.First().Guards.All(guard => guard.Predicate(instance)))
+            .Select(g => g.Key)
+            .ToList();
     }
 }

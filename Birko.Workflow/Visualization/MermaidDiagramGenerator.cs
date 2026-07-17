@@ -16,7 +16,7 @@ public sealed class MermaidDiagramGenerator : IWorkflowDiagramGenerator
         {
             if (state.Description != null)
             {
-                sb.AppendLine($"    {Escape(state.Name)} : {state.Description}");
+                sb.AppendLine($"    {Escape(state.Name)} : {EscapeDescription(state.Description)}");
             }
         }
 
@@ -34,4 +34,11 @@ public sealed class MermaidDiagramGenerator : IWorkflowDiagramGenerator
     }
 
     private static string Escape(string value) => value.Replace(" ", "_");
+
+    // State descriptions are free text on the `Name : Description` line, so (unlike state
+    // names/triggers) spaces are legal and must be preserved — but a newline would break the
+    // single-line diagram statement and produce invalid Mermaid. Collapse CR/LF to spaces and
+    // trim so the description stays on one line (CR-L403).
+    private static string EscapeDescription(string value) =>
+        value.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Trim();
 }
