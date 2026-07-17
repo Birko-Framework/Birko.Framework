@@ -28,7 +28,9 @@ public static class StoreWrapperBuilder
         IDateTimeProvider? clock = null,
         IAuditContext? auditContext = null,
         ITenantContext? tenantContext = null,
-        IAsyncEventStore? eventStore = null)
+        IAsyncEventStore? eventStore = null,
+        TenantIsolationMode tenantMode = TenantIsolationMode.Permissive,
+        Func<IAsyncBulkStore<T>, ITenantContext, IAsyncBulkStore<T>>? tenantWrapperFactory = null)
         where T : AbstractModel, new()
     {
         var effectiveClock = clock ?? new SystemDateTimeProvider();
@@ -66,9 +68,14 @@ public static class StoreWrapperBuilder
         //  - Still outside EventSourcing/Timestamp/Audit so the tenant guard rejects a cross-tenant write
         //    BEFORE an event is recorded (no orphan events) and TenantGuid is stamped in time to be
         //    captured in the audit/event payload.
+        // A consumer can inject a custom fail-closed wrapper via tenantWrapperFactory; otherwise the
+        // built-in wrapper is constructed with tenantMode (STORY-044 — Permissive keeps the fail-open
+        // default; Strict throws when no tenant is in scope).
         if (tenantContext is not null && typeof(ITenant).IsAssignableFrom(typeof(T)))
         {
-            store = Wrap(typeof(AsyncTenantBulkStoreWrapper<,>), store, tenantContext);
+            store = tenantWrapperFactory is not null
+                ? tenantWrapperFactory(store, tenantContext)
+                : Wrap(typeof(AsyncTenantBulkStoreWrapper<,>), store, tenantContext, tenantMode);
         }
 
         // SoftDelete: filters deleted on reads, converts delete to update (applies to ISoftDeletable entities)
