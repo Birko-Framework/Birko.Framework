@@ -20,6 +20,7 @@
     <Project Path="../Birko.EventBus/Birko.EventBus.shproj" />
     <Project Path="../Birko.EventBus.MessageQueue/Birko.EventBus.MessageQueue.shproj" />
     <Project Path="../Birko.EventBus.Outbox/Birko.EventBus.Outbox.shproj" />
+    <Project Path="../Birko.EventBus.Tenant/Birko.EventBus.Tenant.shproj" />
     <Project Path="../Birko.EventBus.EventSourcing/Birko.EventBus.EventSourcing.shproj" />
   </Folder>
   <Folder Name="/Caching/">
@@ -208,6 +209,7 @@
     <Project Path="../../Framework.Tests/Birko.EventBus.Tests/Birko.EventBus.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.EventBus.MessageQueue.Tests/Birko.EventBus.MessageQueue.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.EventBus.Outbox.Tests/Birko.EventBus.Outbox.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.EventBus.Tenant.Tests/Birko.EventBus.Tenant.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Messaging.Tests/Birko.Messaging.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Messaging.Razor.Tests/Birko.Messaging.Razor.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Models.Category.Tests/Birko.Models.Category.Tests.csproj" />

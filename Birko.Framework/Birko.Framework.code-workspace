@@ -433,6 +433,10 @@
 			"path": "../Birko.EventBus.Outbox"
 		},
 		{
+			"name": "EventBus / Birko.EventBus.Tenant",
+			"path": "../Birko.EventBus.Tenant"
+		},
+		{
 			"name": "Health / Birko.Health",
 			"path": "../Birko.Health"
 		},
@@ -1031,6 +1035,10 @@
 		{
 			"name": "Tests / Birko.EventBus.Outbox.Tests",
 			"path": "../../Framework.Tests/Birko.EventBus.Outbox.Tests"
+		},
+		{
+			"name": "Tests / Birko.EventBus.Tenant.Tests",
+			"path": "../../Framework.Tests/Birko.EventBus.Tenant.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Azure.Tests",

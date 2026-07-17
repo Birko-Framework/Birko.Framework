@@ -163,3 +163,10 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Tenant isolation hardening — EPIC-017 (2026-07-17)
+
+Multi-tenant fail-closed support across the data + event layers (from a Symbio security review):
+- **`TenantIsolationMode { Permissive (default), Strict }`** in `Birko.Data.Tenant` (STORY-044) — Strict throws on "no tenant in scope" instead of silently spanning all tenants; opt in via `StoreWrapperBuilder.Build(tenantMode:)`, `AsTenantAware(mode:)`, or the `AddTenant*Repository` DI extensions. Explicit cross-tenant admin via `ITenantContext.WithAllTenants(...)` (non-breaking default interface methods). Both async **and** sync wrappers are mode-aware.
+- **`StoreWrapperBuilder` decorator reorder** (STORY-045) — Tenant now sits *inside* Default/Sluggable/SoftDelete but *outside* Audit/Timestamp/EventSourcing, so per-tenant uniqueness probes are tenant-scoped (fixed a cross-tenant default-clobber + global-slug-uniqueness leak).
+- **`IEventScopeAccessor`** in `Birko.EventBus` + `OutboxProcessor` scope restoration (STORY-046) — background event dispatch re-establishes the tenant an event was published under, so handlers work under Strict. New **`Birko.EventBus.Tenant`** bridge sibling implements it (`AddEventTenantScope()`), mapping `EventContext.TenantGuid` → `WithTenantAsync` / `WithAllTenants`.

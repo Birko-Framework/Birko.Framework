@@ -1,10 +1,9 @@
 ---
 id: EPIC-017
-status: done
+status: in-progress
 created: 2026-07-17
-completed: 2026-07-17
 owner: ai
-affects: [Birko.Data.Tenant, Birko.Data.Composition]
+affects: [Birko.Data.Tenant, Birko.Data.Composition, Birko.EventBus, Birko.EventBus.Outbox, Birko.EventBus.MessageQueue]
 source: security-review (Symbio consumer) 2026-07-17
 ---
 
@@ -82,6 +81,11 @@ a multi-tenant framework.
   tenant-scoped. Relocated the Tenant wrapper to sit **inside** Default/Sluggable/SoftDelete but
   **outside** Audit/Timestamp/EventSourcing. 4 regression tests (Default + Sluggable per-tenant
   uniqueness both proven red→green; filter-update scoping; guard-before-event invariant).
+- **STORY-046** (in-progress) — Restore ambient (tenant) scope for background event dispatch. Async
+  handlers throw under Strict because the outbox processor / MQ consumer dispatch outside the request's
+  async flow. New transport-agnostic `IEventScopeAccessor` (no-op default) in `Birko.EventBus`;
+  `OutboxProcessor` restores scope from `entry.TenantGuid` before re-publish (prototyped, red→green,
+  9/9). Follow-ups: distributed-consumer pipeline behavior + the tenant bridge (`AddEventTenantScope`).
 
 ## Success criteria
 
