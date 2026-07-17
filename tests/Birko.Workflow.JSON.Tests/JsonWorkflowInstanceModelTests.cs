@@ -112,4 +112,30 @@ public class JsonWorkflowInstanceModelTests
         };
         model.ToInstance<TestData>().Status.Should().Be(WorkflowStatus.Completed);
     }
+
+    [Fact]
+    public void ToInstance_EmptyDataJson_ThrowsClearError()
+    {
+        // CR-L408: DataJson defaults to string.Empty (invalid JSON). Rather than an opaque
+        // deserializer exception or a `!`-forced null, ToInstance throws a clear InvalidOperationException.
+        var model = JsonWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = string.Empty;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty DataJson*");
+    }
+
+    [Fact]
+    public void ToInstance_LiteralNullDataJson_ThrowsClearError()
+    {
+        // CR-L408: a payload that deserializes to null (stored literal "null") is treated as a corrupt
+        // record instead of being forced non-null via `!` and deferring a NullReferenceException.
+        var model = JsonWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = "null";
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*deserialized to null*");
+    }
 }
