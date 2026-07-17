@@ -75,4 +75,43 @@ public class ElasticWorkflowInstanceModelTests
     {
         ElasticWorkflowInstanceModel.FromInstance("W", CreateTestInstance()).Status.Should().Be((int)WorkflowStatus.Active);
     }
+
+    [Fact]
+    public void ToInstance_NullGuid_Throws()
+    {
+        // CR-L406: a document with no Guid must surface as a corrupt record, not mint a random
+        // InstanceId that would diverge from the document and cause a duplicate on next SaveAsync.
+        var model = ElasticWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.Guid = null;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no Guid*");
+    }
+
+    [Fact]
+    public void ToInstance_EmptyDataJson_ThrowsClearError()
+    {
+        // CR-L405: DataJson defaults to string.Empty (invalid JSON). Instead of an opaque
+        // JsonException, ToInstance throws a clear InvalidOperationException naming the instance.
+        var model = ElasticWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = string.Empty;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*empty DataJson*");
+    }
+
+    [Fact]
+    public void ToInstance_LiteralNullDataJson_ThrowsClearError()
+    {
+        // CR-L405: a payload that legitimately deserializes to null (stored literal "null") is also
+        // treated as a corrupt record rather than forced non-null via `!`.
+        var model = ElasticWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.DataJson = "null";
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*deserialized to null*");
+    }
 }
