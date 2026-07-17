@@ -16,7 +16,7 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
     where TStore : IAsyncBulkStore<T>
     where T : Data.Models.AbstractModel, ITenant
 {
-    public AsyncTenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null) : base(innerStore, tenantContext)
+    public AsyncTenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null, TenantIsolationMode mode = TenantIsolationMode.Permissive) : base(innerStore, tenantContext, mode)
     {
     }
 
@@ -50,7 +50,7 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
 
     public async Task<IEnumerable<T>> ReadAsync(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null, CancellationToken cancellationToken = default)
     {
-        return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), orderBy, limit, offset, cancellationToken);
+        return await _innerStore.ReadAsync(TenantFilter(filter).Filter(), orderBy, limit, offset, cancellationToken);
     }
 
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)
@@ -68,17 +68,17 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
 
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken cancellationToken = default)
     {
-        await _innerStore.UpdateAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updateAction, cancellationToken);
+        await _innerStore.UpdateAsync(TenantFilter(filter).Filter()!, updateAction, cancellationToken);
     }
 
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates, CancellationToken cancellationToken = default)
     {
-        await _innerStore.UpdateAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updates, cancellationToken);
+        await _innerStore.UpdateAsync(TenantFilter(filter).Filter()!, updates, cancellationToken);
     }
 
     public async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken cancellationToken = default)
     {
-        await _innerStore.DeleteAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, cancellationToken);
+        await _innerStore.DeleteAsync(TenantFilter(filter).Filter()!, cancellationToken);
     }
 }
 

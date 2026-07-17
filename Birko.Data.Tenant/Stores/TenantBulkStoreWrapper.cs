@@ -14,7 +14,7 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
     where TStore : IBulkStore<T>
     where T : Data.Models.AbstractModel, ITenant
 {
-    public TenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null) : base(innerStore, tenantContext)
+    public TenantBulkStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null, TenantIsolationMode mode = TenantIsolationMode.Permissive) : base(innerStore, tenantContext, mode)
     {
     }
 
@@ -47,7 +47,7 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public IEnumerable<T> Read(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
-        return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), orderBy, limit, offset);
+        return _innerStore.Read(TenantFilter(filter).Filter(), orderBy, limit, offset);
     }
 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
@@ -65,17 +65,17 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
     {
-        _innerStore.Update((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updateAction);
+        _innerStore.Update(TenantFilter(filter).Filter()!, updateAction);
     }
 
     public void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
     {
-        _innerStore.Update((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!, updates);
+        _innerStore.Update(TenantFilter(filter).Filter()!, updates);
     }
 
     public void Delete(Expression<Func<T, bool>> filter)
     {
-        _innerStore.Delete((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter()!);
+        _innerStore.Delete(TenantFilter(filter).Filter()!);
     }
 }
 

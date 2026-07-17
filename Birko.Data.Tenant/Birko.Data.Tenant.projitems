@@ -13,6 +13,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\ITenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ITenantContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\TenantContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\TenantIsolationMode.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantStoreExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\TenantBulkStoreWrapper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncTenantBulkStoreWrapper.cs" />

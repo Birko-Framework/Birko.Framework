@@ -24,6 +24,31 @@ public interface ITenantContext
     bool HasTenant { get; }
 
     /// <summary>
+    /// Whether an explicit cross-tenant ("all tenants" / admin) scope is currently active. When
+    /// true, <see cref="TenantIsolationMode.Strict"/> isolation is intentionally bypassed for the
+    /// current async flow so back-office/maintenance code can operate across tenants on purpose.
+    /// Default false; <see cref="TenantContext"/> backs this with AsyncLocal state (STORY-044).
+    /// </summary>
+    bool IsAllTenantsScope => false;
+
+    /// <summary>
+    /// Run an action within an explicit all-tenants (admin) scope. The default implementation runs
+    /// the action WITHOUT establishing a scope — <see cref="TenantContext"/> overrides it to manage
+    /// real AsyncLocal state. A custom <see cref="ITenantContext"/> that does not override this gets
+    /// safe fail-closed behavior (no admin scope), so strict operations inside it still throw.
+    /// </summary>
+    void WithAllTenants(Action action) => action();
+
+    /// <inheritdoc cref="WithAllTenants(Action)"/>
+    TResult? WithAllTenants<TResult>(Func<TResult> action) => action();
+
+    /// <inheritdoc cref="WithAllTenants(Action)"/>
+    Task WithAllTenantsAsync(Func<Task> action) => action();
+
+    /// <inheritdoc cref="WithAllTenants(Action)"/>
+    async Task<TResult?> WithAllTenantsAsync<TResult>(Func<Task<TResult>> action) => await action();
+
+    /// <summary>
     /// Set the current tenant
     /// </summary>
     void SetTenant(Guid tenantGuid, string? tenantName = null);

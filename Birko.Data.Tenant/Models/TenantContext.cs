@@ -11,6 +11,7 @@ public class TenantContext : ITenantContext
 {
     private readonly AsyncLocal<Guid?> _currentTenantGuid = new();
     private readonly AsyncLocal<string?> _currentTenantName = new();
+    private readonly AsyncLocal<bool> _allTenantsScope = new();
 
     /// <inheritdoc />
     public Guid? CurrentTenantGuid => _currentTenantGuid.Value;
@@ -20,6 +21,9 @@ public class TenantContext : ITenantContext
 
     /// <inheritdoc />
     public bool HasTenant => _currentTenantGuid.Value.HasValue;
+
+    /// <inheritdoc />
+    public bool IsAllTenantsScope => _allTenantsScope.Value;
 
     /// <inheritdoc />
     public void SetTenant(Guid tenantGuid, string? tenantName = null)
@@ -104,6 +108,66 @@ public class TenantContext : ITenantContext
         {
             _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
+        }
+    }
+
+    /// <inheritdoc />
+    public void WithAllTenants(Action action)
+    {
+        var previous = _allTenantsScope.Value;
+        try
+        {
+            _allTenantsScope.Value = true;
+            action();
+        }
+        finally
+        {
+            _allTenantsScope.Value = previous;
+        }
+    }
+
+    /// <inheritdoc />
+    public TResult? WithAllTenants<TResult>(Func<TResult> action)
+    {
+        var previous = _allTenantsScope.Value;
+        try
+        {
+            _allTenantsScope.Value = true;
+            return action();
+        }
+        finally
+        {
+            _allTenantsScope.Value = previous;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task WithAllTenantsAsync(Func<Task> action)
+    {
+        var previous = _allTenantsScope.Value;
+        try
+        {
+            _allTenantsScope.Value = true;
+            await action();
+        }
+        finally
+        {
+            _allTenantsScope.Value = previous;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<TResult?> WithAllTenantsAsync<TResult>(Func<Task<TResult>> action)
+    {
+        var previous = _allTenantsScope.Value;
+        try
+        {
+            _allTenantsScope.Value = true;
+            return await action();
+        }
+        finally
+        {
+            _allTenantsScope.Value = previous;
         }
     }
 }

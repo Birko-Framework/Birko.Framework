@@ -24,7 +24,8 @@ namespace Birko.Data.Tenant.Repositories
         /// <returns>The service collection for chaining.</returns>
         public static IServiceCollection AddTenantRepository<TStore, TRepository, TModel>(
             this IServiceCollection services,
-            ServiceLifetime lifetime = ServiceLifetime.Scoped)
+            ServiceLifetime lifetime = ServiceLifetime.Scoped,
+            TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TStore : class, IStore<TModel>
             where TRepository : class, IBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
@@ -40,7 +41,7 @@ namespace Birko.Data.Tenant.Repositories
 
                 var wrappedStore = Activator.CreateInstance(
                     typeof(TenantStoreWrapper<,>).MakeGenericType(typeof(TStore), typeof(TModel)),
-                    innerStore, tenantContext) as IStore<TModel>;
+                    innerStore, tenantContext, mode) as IStore<TModel>;
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -60,7 +61,8 @@ namespace Birko.Data.Tenant.Repositories
         /// <returns>The service collection for chaining.</returns>
         public static IServiceCollection AddTenantAsyncRepository<TStore, TRepository, TModel>(
             this IServiceCollection services,
-            ServiceLifetime lifetime = ServiceLifetime.Scoped)
+            ServiceLifetime lifetime = ServiceLifetime.Scoped,
+            TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TStore : class, IAsyncStore<TModel>
             where TRepository : class, IBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
@@ -76,7 +78,7 @@ namespace Birko.Data.Tenant.Repositories
 
                 var wrappedStore = Activator.CreateInstance(
                     typeof(AsyncTenantStoreWrapper<,>).MakeGenericType(typeof(TStore), typeof(TModel)),
-                    innerStore, tenantContext) as IAsyncStore<TModel>;
+                    innerStore, tenantContext, mode) as IAsyncStore<TModel>;
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -97,7 +99,8 @@ namespace Birko.Data.Tenant.Repositories
         public static IServiceCollection AddTenantRepository<TRepository, TModel>(
             this IServiceCollection services,
             Func<IServiceProvider, IStore<TModel>> storeFactory,
-            ServiceLifetime lifetime = ServiceLifetime.Scoped)
+            ServiceLifetime lifetime = ServiceLifetime.Scoped,
+            TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TRepository : class, IBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
         {
@@ -106,7 +109,7 @@ namespace Birko.Data.Tenant.Repositories
                 var innerStore = storeFactory(sp);
                 var tenantContext = sp.GetService<ITenantContext>() ?? Models.Tenant.Current;
 
-                var wrappedStore = new TenantStoreWrapper<IStore<TModel>, TModel>(innerStore, tenantContext);
+                var wrappedStore = new TenantStoreWrapper<IStore<TModel>, TModel>(innerStore, tenantContext, mode);
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -127,7 +130,8 @@ namespace Birko.Data.Tenant.Repositories
         public static IServiceCollection AddTenantAsyncRepository<TRepository, TModel>(
             this IServiceCollection services,
             Func<IServiceProvider, IAsyncStore<TModel>> storeFactory,
-            ServiceLifetime lifetime = ServiceLifetime.Scoped)
+            ServiceLifetime lifetime = ServiceLifetime.Scoped,
+            TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TRepository : class, IBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
         {
@@ -136,7 +140,7 @@ namespace Birko.Data.Tenant.Repositories
                 var innerStore = storeFactory(sp);
                 var tenantContext = sp.GetService<ITenantContext>() ?? Models.Tenant.Current;
 
-                var wrappedStore = new AsyncTenantStoreWrapper<IAsyncStore<TModel>, TModel>(innerStore, tenantContext);
+                var wrappedStore = new AsyncTenantStoreWrapper<IAsyncStore<TModel>, TModel>(innerStore, tenantContext, mode);
 
                 return Activator.CreateInstance(typeof(TRepository), wrappedStore) as TRepository
                     ?? throw new InvalidOperationException($"Failed to create instance of {typeof(TRepository).Name}");
@@ -148,23 +152,23 @@ namespace Birko.Data.Tenant.Repositories
         /// <summary>
         /// Add a tenant-aware repository as a scoped service.
         /// </summary>
-        public static IServiceCollection AddTenantRepositoryScoped<TStore, TRepository, TModel>(this IServiceCollection services)
+        public static IServiceCollection AddTenantRepositoryScoped<TStore, TRepository, TModel>(this IServiceCollection services, TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TStore : class, IStore<TModel>
             where TRepository : class, IBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
         {
-            return services.AddTenantRepository<TStore, TRepository, TModel>(ServiceLifetime.Scoped);
+            return services.AddTenantRepository<TStore, TRepository, TModel>(ServiceLifetime.Scoped, mode);
         }
 
         /// <summary>
         /// Add an async tenant-aware repository as a scoped service.
         /// </summary>
-        public static IServiceCollection AddTenantAsyncRepositoryScoped<TStore, TRepository, TModel>(this IServiceCollection services)
+        public static IServiceCollection AddTenantAsyncRepositoryScoped<TStore, TRepository, TModel>(this IServiceCollection services, TenantIsolationMode mode = TenantIsolationMode.Permissive)
             where TStore : class, IAsyncStore<TModel>
             where TRepository : class, IBaseRepository
             where TModel : Data.Models.AbstractModel, ITenant
         {
-            return services.AddTenantAsyncRepository<TStore, TRepository, TModel>(ServiceLifetime.Scoped);
+            return services.AddTenantAsyncRepository<TStore, TRepository, TModel>(ServiceLifetime.Scoped, mode);
         }
     }
 }

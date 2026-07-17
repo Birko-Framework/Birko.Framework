@@ -17,14 +17,16 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
 {
     protected readonly TStore _innerStore;
     protected readonly ITenantContext _tenantContext;
+    protected readonly TenantIsolationMode _mode;
 
     /// <summary>
     /// Create a new tenant-aware store wrapper
     /// </summary>
-    public AsyncTenantStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null)
+    public AsyncTenantStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null, TenantIsolationMode mode = TenantIsolationMode.Permissive)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
         _tenantContext = tenantContext ?? Models.Tenant.Current;
+        _mode = mode;
     }
 
     /// <summary>
@@ -46,12 +48,12 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
 
     public async Task<T?> ReadAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
     {
-        return await _innerStore.ReadAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), cancellationToken);
+        return await _innerStore.ReadAsync(TenantFilter(filter).Filter(), cancellationToken);
     }
 
     public async Task<long> CountAsync(Expression<Func<T, bool>>? filter = null, CancellationToken cancellationToken = default)
     {
-        return await _innerStore.CountAsync((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter(), cancellationToken);
+        return await _innerStore.CountAsync(TenantFilter(filter).Filter(), cancellationToken);
     }
 
     /// <summary>
@@ -134,34 +136,78 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     }
 
     /// <summary>
+    /// Builds the tenant read filter. This is the single seam through which every read/count and
+    /// every filter-based write composes the tenant predicate — override it to supply a custom
+    /// filter strategy (STORY-044). In <see cref="TenantIsolationMode.Strict"/> it throws when no
+    /// tenant is in scope rather than returning the caller's unscoped filter (fail-closed).
+    /// </summary>
+    protected virtual IFilter<T> TenantFilter(Expression<Func<T, bool>>? filter)
+    {
+        EnsureTenantForStrict();
+        return new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter);
+    }
+
+    /// <summary>
+    /// In <see cref="TenantIsolationMode.Strict"/>, throws when no tenant is in scope. No-op in
+    /// <see cref="TenantIsolationMode.Permissive"/> (preserves the fail-open default).
+    /// </summary>
+    protected void EnsureTenantForStrict()
+    {
+        if (_mode == TenantIsolationMode.Strict && !_tenantContext.HasTenant && !_tenantContext.IsAllTenantsScope)
+        {
+            throw new InvalidOperationException(
+                "Tenant isolation is Strict but no tenant is in scope. Set a tenant, or wrap the " +
+                "operation in ITenantContext.WithAllTenants(...) for deliberate cross-tenant access.");
+        }
+    }
+
+    /// <summary>
     /// Check if an item belongs to the current tenant.
     /// </summary>
     /// <remarks>
-    /// DELIBERATE FAIL-OPEN (CR-L229): with no tenant set (<c>HasTenant == false</c>) this returns
-    /// true — "non-tenant (admin) mode" — so single and bulk Update/Delete operate across ALL
-    /// tenants. Intended for back-office/maintenance flows, but note the flip side: a mis-wired
-    /// context (e.g. falling back to the static <c>Models.Tenant.Current</c> singleton in the ctor
-    /// with no tenant ever set) opens cross-tenant writes rather than failing closed. Callers that
-    /// need fail-closed semantics must supply an <see cref="ITenantContext"/> with a tenant set, or
-    /// derive and override this check (virtual for exactly that reason). Behavior is pinned by
+    /// With no tenant set (<c>HasTenant == false</c>) the result depends on the isolation mode:
+    /// <see cref="TenantIsolationMode.Permissive"/> returns true ("non-tenant/admin mode" — single
+    /// and bulk Update/Delete operate across ALL tenants; deliberate fail-open, CR-L229), while
+    /// <see cref="TenantIsolationMode.Strict"/> returns false so the caller's guard rejects the
+    /// write (fail-closed). Virtual so consumers can derive and override. Behavior is pinned by
     /// explicit tests.
     /// </remarks>
     protected virtual bool BelongsToCurrentTenant(T item)
     {
-        // If no tenant is set, allow access (non-tenant mode)
+        // No tenant set: an explicit all-tenants scope always allows; otherwise Permissive is admin
+        // mode (allow) and Strict denies (the caller's guard then throws).
         if (!_tenantContext.HasTenant)
         {
-            return true;
+            return _tenantContext.IsAllTenantsScope || _mode != TenantIsolationMode.Strict;
         }
 
         return item.TenantGuid == _tenantContext.CurrentTenantGuid;
     }
 
     /// <summary>
-    /// Set the TenantGuid on an item if the property exists and no tenant is set
+    /// Set the TenantGuid on an item. In <see cref="TenantIsolationMode.Strict"/> with no tenant in
+    /// scope this throws rather than stamping <c>Guid.Empty</c> (which would create orphan rows
+    /// invisible to tenant-filtered reads). Inside an all-tenants (admin) scope it trusts the
+    /// caller's per-item TenantGuid and leaves it untouched.
     /// </summary>
     protected void SetTenantGuidIfNeeded(T item)
     {
+        if (!_tenantContext.HasTenant)
+        {
+            // Admin scope: the caller owns the per-item TenantGuid; don't stamp/overwrite it.
+            if (_tenantContext.IsAllTenantsScope)
+            {
+                return;
+            }
+
+            if (_mode == TenantIsolationMode.Strict)
+            {
+                throw new InvalidOperationException(
+                    "Tenant isolation is Strict but no tenant is in scope; refusing to stamp Guid.Empty. " +
+                    "Use ITenantContext.WithAllTenants(...) for deliberate cross-tenant writes.");
+            }
+        }
+
         item.TenantGuid = _tenantContext.CurrentTenantGuid ?? Guid.Empty;
         item.TenantName = _tenantContext.CurrentTenantName;
     }

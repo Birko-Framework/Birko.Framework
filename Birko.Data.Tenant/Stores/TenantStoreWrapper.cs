@@ -15,14 +15,16 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 {
     protected readonly TStore _innerStore;
     protected readonly ITenantContext _tenantContext;
+    protected readonly TenantIsolationMode _mode;
 
     /// <summary>
     /// Create a new tenant-aware store wrapper
     /// </summary>
-    public TenantStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null)
+    public TenantStoreWrapper(TStore innerStore, ITenantContext? tenantContext = null, TenantIsolationMode mode = TenantIsolationMode.Permissive)
     {
         _innerStore = innerStore ?? throw new ArgumentNullException(nameof(innerStore));
         _tenantContext = tenantContext ?? Models.Tenant.Current;
+        _mode = mode;
     }
 
     /// <summary>
@@ -44,7 +46,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public T? Read(Expression<Func<T, bool>>? filter = null)
     {
-        return _innerStore.Read((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter());
+        return _innerStore.Read(TenantFilter(filter).Filter());
     }
 
     public T? ReadOne(Expression<Func<T, bool>>? filter = null)
@@ -54,7 +56,7 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
 
     public long Count(Expression<Func<T, bool>>? filter = null)
     {
-        return _innerStore.Count((new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter)).Filter());
+        return _innerStore.Count(TenantFilter(filter).Filter());
     }
 
     /// <summary>
@@ -136,34 +138,72 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     }
 
     /// <summary>
+    /// Builds the tenant read filter — the single seam every read/count composes the tenant predicate
+    /// through (override to supply a custom strategy). In <see cref="TenantIsolationMode.Strict"/> it
+    /// throws when no tenant is in scope (unless inside an all-tenants scope) instead of returning
+    /// the caller's unscoped filter (STORY-044, sync parity with the async wrapper).
+    /// </summary>
+    protected virtual IFilter<T> TenantFilter(Expression<Func<T, bool>>? filter)
+    {
+        EnsureTenantForStrict();
+        return new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter);
+    }
+
+    /// <summary>
+    /// In <see cref="TenantIsolationMode.Strict"/>, throws when no tenant is in scope and no explicit
+    /// all-tenants scope is active. No-op in <see cref="TenantIsolationMode.Permissive"/>.
+    /// </summary>
+    protected void EnsureTenantForStrict()
+    {
+        if (_mode == TenantIsolationMode.Strict && !_tenantContext.HasTenant && !_tenantContext.IsAllTenantsScope)
+        {
+            throw new InvalidOperationException(
+                "Tenant isolation is Strict but no tenant is in scope. Set a tenant, or wrap the " +
+                "operation in ITenantContext.WithAllTenants(...) for deliberate cross-tenant access.");
+        }
+    }
+
+    /// <summary>
     /// Check if an item belongs to the current tenant.
     /// </summary>
     /// <remarks>
-    /// DELIBERATE FAIL-OPEN (CR-L229): with no tenant set (<c>HasTenant == false</c>) this returns
-    /// true — "non-tenant (admin) mode" — so single and bulk Update/Delete operate across ALL
-    /// tenants. Intended for back-office/maintenance flows, but note the flip side: a mis-wired
-    /// context (e.g. falling back to the static <c>Models.Tenant.Current</c> singleton in the ctor
-    /// with no tenant ever set) opens cross-tenant writes rather than failing closed. Callers that
-    /// need fail-closed semantics must supply an <see cref="ITenantContext"/> with a tenant set, or
-    /// derive and override this check (virtual for exactly that reason). Behavior is pinned by
-    /// explicit tests.
+    /// With no tenant set the result depends on the isolation mode:
+    /// <see cref="TenantIsolationMode.Permissive"/> returns true ("non-tenant/admin mode", CR-L229),
+    /// while <see cref="TenantIsolationMode.Strict"/> returns false (fail-closed) unless an explicit
+    /// all-tenants scope is active. Virtual so consumers can derive and override.
     /// </remarks>
     protected virtual bool BelongsToCurrentTenant(T item)
     {
-        // If no tenant is set, allow access (non-tenant mode)
         if (!_tenantContext.HasTenant)
         {
-            return true;
+            return _tenantContext.IsAllTenantsScope || _mode != TenantIsolationMode.Strict;
         }
 
         return item.TenantGuid == _tenantContext.CurrentTenantGuid;
     }
 
     /// <summary>
-    /// Set the TenantGuid on an item if the property exists and no tenant is set
+    /// Set the TenantGuid on an item. In <see cref="TenantIsolationMode.Strict"/> with no tenant in
+    /// scope this throws rather than stamping <c>Guid.Empty</c>; inside an all-tenants scope it trusts
+    /// the caller's per-item TenantGuid and leaves it untouched.
     /// </summary>
     protected void SetTenantGuidIfNeeded(T item)
     {
+        if (!_tenantContext.HasTenant)
+        {
+            if (_tenantContext.IsAllTenantsScope)
+            {
+                return;
+            }
+
+            if (_mode == TenantIsolationMode.Strict)
+            {
+                throw new InvalidOperationException(
+                    "Tenant isolation is Strict but no tenant is in scope; refusing to stamp Guid.Empty. " +
+                    "Use ITenantContext.WithAllTenants(...) for deliberate cross-tenant writes.");
+            }
+        }
+
         item.TenantGuid = _tenantContext.CurrentTenantGuid ?? Guid.Empty;
         item.TenantName = _tenantContext.CurrentTenantName;
     }
