@@ -8185,7 +8185,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Force-unwrap (!) of nullable deserialized Data masks a potential null
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.JSON\Models\JsonWorkflowInstanceModel.cs:40`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** ToInstance does `var data = s.Deserialize<TData>(DataJson)!;`. ISerializer.Deserialize<T>(string) returns T? (nullable), so the ! suppresses CS8602 on a value that is genuinely nullable: if DataJson is empty, "null", or otherwise deserializes to null, `data` is null and is passed into WorkflowInstance<TData>.Restore, whose `TData data` parameter and resulting `Data` property are non-nullable. The null is then deferred to every consumer that dereferences instance.Data. Note HistoryJson on the next line is handled correctly with `?? new List<StateChangeRecord>()`, so the inconsistency is visible. Per the framework 'no unjustified !' convention the suppression is not provably safe.
 - **Fix:** Guard the deserialized data, e.g. throw a clear InvalidOperationException when null (corrupt record) or require TData to provide a default, instead of `!`. At minimum mirror the History fallback pattern so the failure mode is explicit rather than a downstream NullReferenceException.
 
@@ -8193,7 +8193,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Read-then-write upsert in SaveAsync is not atomic
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.JSON\JsonWorkflowInstanceStore.cs:37`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SaveAsync does ReadAsync(by InstanceId) then conditionally UpdateAsync or CreateAsync. Two concurrent SaveAsync calls for the same instance can both observe existing == null and both hit CreateAsync, or interleave with the underlying AsyncJsonStore's full-file rewrite (SaveDataAsync deletes and recreates the file). This is acceptable for the documented use case (development/testing/single-process, per README and the class summary) but is worth being aware of; the JSON store is not safe for concurrent multi-writer workflow persistence.
 - **Fix:** No code change required given the stated single-process scope; optionally note the single-writer constraint in the README/CLAUDE.md so consumers do not reach for it in concurrent scenarios.
 

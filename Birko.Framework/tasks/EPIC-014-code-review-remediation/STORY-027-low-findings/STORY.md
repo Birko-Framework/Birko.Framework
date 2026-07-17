@@ -13,10 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**407 / 418 triaged** as of 2026-07-17. Next open is CR-L408 (Birko.Workflow.JSON cluster, L408–409).
-Remaining Workflow backends: JSON L408–409, MongoDB L410–412, RavenDB L413–414, SQL L415–417, XML L418.
+**409 / 418 triaged** as of 2026-07-17. Next open is CR-L410 (Birko.Workflow.MongoDB cluster, L410–412).
+Remaining Workflow backends: MongoDB L410–412, RavenDB L413–414, SQL L415–417, XML L418.
 The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the whole
 Birko.Serialization meta-cluster are DONE.
+
+**Batch DF — Birko.Workflow.JSON (CR-L408, CR-L409):** Birko.Workflow.JSON. **/code-review clean (no
+findings)**. **L408** (nullable): `JsonWorkflowInstanceModel.ToInstance` did `s.Deserialize<TData>(DataJson)!`
+— DataJson defaults to `string.Empty` (invalid JSON) and `ISerializer.Deserialize<T>` returns `T?`, so the `!`
+masked a genuinely-null payload (empty / `"null"` / deserialize-to-null), deferring an NRE to every consumer of
+`instance.Data`. Now guards empty/whitespace + null-deserialize with a clear `InvalidOperationException`; `!`
+removed (mirrors ES CR-L405 + the sibling History `??` fallback). **L409** (other): doc-only per the audit
+("no code change required given the single-process scope") — expanded the `JsonWorkflowInstanceStore` class
+`<remarks>` to spell out the read-then-write / full-file-rewrite non-atomic upsert and the single-writer
+constraint. Added 2 model tests (empty-DataJson / literal-null-DataJson throw clear errors). **Deferred
+analogue:** JSON `ToInstance` also has the `Guid ?? NewGuid()` fabrication (same as ES CR-L406 — not filed for
+JSON; fix in a future pass). JSON.Tests →7.
 
 **Batch DE — Birko.Workflow.ElasticSearch (CR-L405, CR-L406, CR-L407):** Birko.Workflow.ElasticSearch.
 **/code-review clean (no findings)**. **L405** (bug): `ElasticWorkflowInstanceModel.ToInstance` did
