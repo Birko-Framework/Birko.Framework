@@ -77,13 +77,16 @@ public class TenantEventScopeAccessorTests
     }
 
     [Fact]
-    public void AddEventTenantScope_registers_the_bridge_as_IEventScopeAccessor()
+    public void AddEventTenantScope_registers_both_bridge_halves()
     {
         var services = new ServiceCollection();
 
         services.AddEventTenantScope();
 
-        var accessor = services.BuildServiceProvider().GetService<IEventScopeAccessor>();
-        accessor.Should().BeOfType<TenantEventScopeAccessor>();
+        var provider = services.BuildServiceProvider();
+        provider.GetService<IEventScopeAccessor>().Should().BeOfType<TenantEventScopeAccessor>(
+            "consume side — restores scope before dispatch");
+        provider.GetService<Birko.EventBus.Enrichment.IEventEnricher>().Should().BeOfType<TenantEventEnricher>(
+            "publish side — stamps EventContext.TenantGuid from the ambient tenant");
     }
 }
