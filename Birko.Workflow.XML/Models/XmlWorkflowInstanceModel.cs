@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Xml.Serialization;
 using Birko.Data.Models;
 using Birko.Serialization;
@@ -11,6 +12,18 @@ namespace Birko.Workflow.XML.Models;
 [XmlRoot("WorkflowInstance")]
 public class XmlWorkflowInstanceModel : AbstractModel
 {
+    // CR-L418: history is persisted as a list of this XmlSerializer-friendly DTO. The core
+    // StateChangeRecord is a positional record (no parameterless ctor) and WorkflowInstance.History is
+    // typed IReadOnlyList<T> (an interface) — System.Xml.XmlSerializer can serialize neither, so
+    // FromInstance/UpdateFromInstance previously threw on EVERY save (the backend was never exercised
+    // because it had no tests). Map StateChangeRecord to/from this POCO and serialize a concrete list.
+    public class XmlStateChangeRecord
+    {
+        public string FromState { get; set; } = string.Empty;
+        public string ToState { get; set; } = string.Empty;
+        public string Trigger { get; set; } = string.Empty;
+        public DateTime OccurredAt { get; set; }
+    }
     [XmlElement("WorkflowName")]
     public string WorkflowName { get; set; } = string.Empty;
 
@@ -23,12 +36,13 @@ public class XmlWorkflowInstanceModel : AbstractModel
     [XmlElement("DataXml")]
     public string DataXml { get; set; } = string.Empty;
 
-    // CR-M275: the XmlSerializer root for List<StateChangeRecord> is <ArrayOfStateChangeRecord> (the
-    // .NET ArrayOf{TypeName} convention); the old "<ArrayOfTypeName />" placeholder matched no type and
-    // made ToInstance throw ("<ArrayOfTypeName> was not expected") on a model whose HistoryXml wasn't
-    // overwritten by FromInstance/UpdateFromInstance. Use a value that actually round-trips as empty.
+    // CR-M275 / CR-L418: the XmlSerializer root for List<XmlStateChangeRecord> is
+    // <ArrayOfXmlStateChangeRecord> (the .NET ArrayOf{TypeName} convention). The default must be the
+    // empty-array root for the DTO element name so ToInstance can deserialize a model whose HistoryXml
+    // was never overwritten by FromInstance/UpdateFromInstance (an unmatched root throws
+    // "<...> was not expected"). Use a value that actually round-trips as an empty list.
     [XmlElement("HistoryXml")]
-    public string HistoryXml { get; set; } = "<ArrayOfStateChangeRecord />";
+    public string HistoryXml { get; set; } = "<ArrayOfXmlStateChangeRecord />";
 
     [XmlElement("CreatedAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -44,9 +58,13 @@ public class XmlWorkflowInstanceModel : AbstractModel
         var data = s.Deserialize<TData>(DataXml)!;
         // CR-M275: guard against an empty/whitespace HistoryXml so the new-List fallback is reachable
         // regardless of the stored literal (System.Xml is quirky around empty collection roots).
-        var history = string.IsNullOrWhiteSpace(HistoryXml)
-                      ? new List<StateChangeRecord>()
-                      : s.Deserialize<List<StateChangeRecord>>(HistoryXml) ?? new List<StateChangeRecord>();
+        // CR-L418: deserialize into the XmlSerializer-friendly DTO list, then map back to StateChangeRecord.
+        var dtoHistory = string.IsNullOrWhiteSpace(HistoryXml)
+                         ? new List<XmlStateChangeRecord>()
+                         : s.Deserialize<List<XmlStateChangeRecord>>(HistoryXml) ?? new List<XmlStateChangeRecord>();
+        var history = dtoHistory
+            .Select(r => new StateChangeRecord(r.FromState, r.ToState, r.Trigger, r.OccurredAt))
+            .ToList();
 
         return WorkflowInstance<TData>.Restore(
             Guid ?? System.Guid.NewGuid(),
@@ -55,6 +73,17 @@ public class XmlWorkflowInstanceModel : AbstractModel
             data,
             history);
     }
+
+    // CR-L418: map the core positional-record history into XmlSerializer-friendly DTOs, materialized as a
+    // concrete List (WorkflowInstance.History is an IReadOnlyList<T> interface XmlSerializer cannot handle).
+    private static List<XmlStateChangeRecord> ToDtoHistory(IEnumerable<StateChangeRecord> history) =>
+        history.Select(r => new XmlStateChangeRecord
+        {
+            FromState = r.FromState,
+            ToState = r.ToState,
+            Trigger = r.Trigger,
+            OccurredAt = r.OccurredAt
+        }).ToList();
 
     public static XmlWorkflowInstanceModel FromInstance<TData>(string workflowName, WorkflowInstance<TData> instance, ISerializer? serializer = null)
         where TData : class
@@ -67,7 +96,7 @@ public class XmlWorkflowInstanceModel : AbstractModel
             CurrentState = instance.CurrentState,
             Status = (int)instance.Status,
             DataXml = s.Serialize(instance.Data),
-            HistoryXml = s.Serialize(instance.History),
+            HistoryXml = s.Serialize(ToDtoHistory(instance.History)),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -79,7 +108,7 @@ public class XmlWorkflowInstanceModel : AbstractModel
         CurrentState = instance.CurrentState;
         Status = (int)instance.Status;
         DataXml = s.Serialize(instance.Data);
-        HistoryXml = s.Serialize(instance.History);
+        HistoryXml = s.Serialize(ToDtoHistory(instance.History));
         UpdatedAt = DateTime.UtcNow;
     }
 }
