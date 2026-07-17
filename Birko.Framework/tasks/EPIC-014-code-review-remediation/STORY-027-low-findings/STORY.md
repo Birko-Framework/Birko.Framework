@@ -13,10 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**409 / 418 triaged** as of 2026-07-17. Next open is CR-L410 (Birko.Workflow.MongoDB cluster, L410–412).
-Remaining Workflow backends: MongoDB L410–412, RavenDB L413–414, SQL L415–417, XML L418.
+**412 / 418 triaged** as of 2026-07-17. Next open is CR-L413 (Birko.Workflow.RavenDB cluster, L413–414).
+Remaining Workflow backends: RavenDB L413–414, SQL L415–417, XML L418.
 The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the whole
 Birko.Serialization meta-cluster are DONE.
+
+**Batch DG — Birko.Workflow.MongoDB (CR-L410, CR-L411, CR-L412):** Birko.Workflow.MongoDB. **/code-review clean
+(no findings)**. **L410** (cleanup): removed the dead+misleading `[BsonIgnore] CollectionName =>
+"WorkflowInstances"` property — never read anywhere, and the real collection is `typeof(T).Name`
+(`MongoWorkflowInstanceModel`), so it contradicted reality. **L411** (nullable): `ToInstance` `Deserialize!`
+guarded (empty/whitespace DataJson + null-deserialize → clear `InvalidOperationException`), `!` removed —
+mirrors ES/JSON. **L412** (other): documented that `EnsureCreatedAsync` is an intentional no-op (MongoDB creates
+collections lazily, model declares no indexes; the store's InitCoreAsync is a no-op) kept for cross-backend API
+symmetry — it validates settings but provisions no schema/indexes (addresses the "false impression" concern
+without dropping a public API). Added 2 model tests (empty/literal-null DataJson throw clear errors).
+**Deferred analogue:** Mongo `ToInstance` also has the `Guid ?? NewGuid()` fabrication (ES CR-L406 pattern —
+not filed for Mongo). MongoDB.Tests →5 (pre-existing NU1903 Snappier dep-vuln warning, ignore).
 
 **Batch DF — Birko.Workflow.JSON (CR-L408, CR-L409):** Birko.Workflow.JSON. **/code-review clean (no
 findings)**. **L408** (nullable): `JsonWorkflowInstanceModel.ToInstance` did `s.Deserialize<TData>(DataJson)!`

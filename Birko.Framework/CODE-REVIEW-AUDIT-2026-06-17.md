@@ -8201,7 +8201,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Dead and misleading CollectionName property
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.MongoDB\Models/MongoWorkflowInstanceModel.cs:34-35`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** [BsonIgnore] public string CollectionName => "WorkflowInstances" is never read anywhere. The store resolves the collection via AsyncMongoDBStore -> MongoDBClient.GetCollection<T>(), which uses typeof(T).Name (= "MongoWorkflowInstanceModel"), and DestroyAsync drops typeof(T).Name as well. So the actual MongoDB collection is 'MongoWorkflowInstanceModel', not 'WorkflowInstances'. The property is both unused and contradicts reality, so it will mislead anyone reading the model expecting the data to live in a 'WorkflowInstances' collection.
 - **Fix:** Remove the CollectionName property. If a custom collection name is genuinely wanted, it must instead be plumbed through MongoDBClient.GetCollection<T>(name) (the store currently has no hook for that).
 
@@ -8209,7 +8209,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Null-suppression (!) masks a possible null deserialization result
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.MongoDB\Models/MongoWorkflowInstanceModel.cs:39`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** var data = JsonSerializer.Deserialize<TData>(DataJson)! uses the null-forgiving operator. If DataJson is empty, the literal string "null", or invalid, Deserialize returns null (or throws), and the ! launders the null into the non-nullable WorkflowInstance<TData>.Data, deferring a NullReferenceException to the first Data access by the caller. The History line just below correctly uses ?? new List<...>() as a fallback; Data has no equivalent guard. (Note: this same pattern exists in the JSON reference model, so it is a framework-wide habit rather than MongoDB-specific.)
 - **Fix:** Either validate/guard the deserialized value (throw a clear WorkflowException with the instance id when null) or document that DataJson is always a non-null TData payload so the ! is provably safe.
 
@@ -8217,7 +8217,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** EnsureCreatedAsync is effectively a no-op for MongoDB
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.MongoDB\MongoDBWorkflowInstanceSchema.cs:10-15`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** EnsureCreatedAsync constructs a store and calls InitAsync, but AsyncMongoDBStore.InitCoreAsync is an intentional no-op (MongoDB creates collections lazily on first write and the model declares no indexes). So this helper allocates a store/client and does nothing useful. It is harmless but gives a false impression that schema/indexes are being provisioned. Other backends' EnsureCreatedAsync do real work; here it does not.
 - **Fix:** Either drop the helper, or make it earn its name by ensuring the collection exists and creating indexes (e.g. on guid, workflowName, currentState, status, updatedAt) so the FindBy* queries are not collection scans.
 
