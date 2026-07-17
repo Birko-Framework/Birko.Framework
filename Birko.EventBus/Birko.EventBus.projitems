@@ -15,6 +15,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Core\EventContext.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEventHandler.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEventBus.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Core\IEventScopeAccessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Core\IEventSubscription.cs" />
     <!-- Local -->
     <Compile Include="$(MSBuildThisFileDirectory)Local\InProcessEventBus.cs" />
