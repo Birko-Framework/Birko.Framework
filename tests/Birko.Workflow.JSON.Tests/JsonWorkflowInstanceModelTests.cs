@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using Birko.Serialization.Json;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.JSON.Models;
@@ -137,5 +139,36 @@ public class JsonWorkflowInstanceModelTests
         var act = () => model.ToInstance<TestData>();
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*deserialized to null*");
+    }
+
+    // ── STORY-029: camelCase wire format + injectable seam + null-Guid guard ──
+
+    [Fact]
+    public void FromInstance_UsesCamelCaseWireFormat()
+    {
+        var model = JsonWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+
+        model.DataJson.Should().Contain("\"orderId\"");
+        model.DataJson.Should().NotContain("\"OrderId\"");
+    }
+
+    [Fact]
+    public void FromInstance_WithInjectedSerializer_OverridesFormat()
+    {
+        var pascal = new SystemJsonSerializer(new JsonSerializerOptions());
+        var model = JsonWorkflowInstanceModel.FromInstance("W", CreateTestInstance(), pascal);
+
+        model.DataJson.Should().Contain("\"OrderId\"");
+    }
+
+    [Fact]
+    public void ToInstance_NullGuid_Throws()
+    {
+        var model = JsonWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+        model.Guid = null;
+
+        var act = () => model.ToInstance<TestData>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*no Guid*");
     }
 }
