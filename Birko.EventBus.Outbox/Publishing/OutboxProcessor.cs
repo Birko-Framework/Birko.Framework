@@ -17,6 +17,7 @@ namespace Birko.EventBus.Outbox.Publishing
         private readonly IMessageSerializer _serializer;
         private readonly OutboxOptions _options;
         private readonly IDateTimeProvider _clock;
+        private readonly IEventScopeAccessor _scopeAccessor;
 
         // CR-L259: last time the retention cleanup actually ran, so CleanupIfDueAsync can throttle it to
         // OutboxOptions.CleanupInterval instead of every poll. Only touched from the single background loop
@@ -31,18 +32,27 @@ namespace Birko.EventBus.Outbox.Publishing
         /// <param name="options">Processor options.</param>
         /// <param name="serializer">Serializer for deserializing event payloads. Defaults to JsonMessageSerializer.</param>
         /// <param name="clock">Clock used for cleanup scheduling. Defaults to <see cref="SystemDateTimeProvider"/>.</param>
+        /// <param name="scopeAccessor">
+        /// Restores the ambient scope (tenant, correlation) each entry was published under before re-publishing
+        /// it, from the persisted <see cref="OutboxEntry.TenantGuid"/> (STORY-046). The processor runs OUTSIDE
+        /// the publishing request's async flow, so without this the inner bus re-enriches from an unset ambient
+        /// and handlers see no tenant — which throws under <c>TenantIsolationMode.Strict</c>. Defaults to
+        /// <see cref="NullEventScopeAccessor"/> (no-op — unchanged behaviour until a bridge is registered).
+        /// </param>
         public OutboxProcessor(
             IOutboxStore store,
             IEventBus publisher,
             OutboxOptions? options = null,
             IMessageSerializer? serializer = null,
-            IDateTimeProvider? clock = null)
+            IDateTimeProvider? clock = null,
+            IEventScopeAccessor? scopeAccessor = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
             _options = options ?? new OutboxOptions();
             _serializer = serializer ?? new JsonMessageSerializer();
             _clock = clock ?? new SystemDateTimeProvider();
+            _scopeAccessor = scopeAccessor ?? NullEventScopeAccessor.Instance;
         }
 
         /// <summary>
@@ -81,8 +91,18 @@ namespace Birko.EventBus.Outbox.Publishing
                         continue;
                     }
 
+                    // STORY-046: re-establish the ambient scope this entry was published under (from the
+                    // persisted TenantGuid) before re-publishing. The processor runs outside the original
+                    // request's async flow, so otherwise the inner bus re-enriches from an unset ambient and
+                    // handlers observe no tenant — which throws under TenantIsolationMode.Strict. No-op unless
+                    // a scope bridge is registered.
+                    var scopeContext = EventContext.From(@event, entry.TenantGuid, metadata: entry.Headers);
+                    scopeContext.CorrelationId = entry.CorrelationId;
+
                     // Publish via the inner bus (which sends to MessageQueue or dispatches in-process)
-                    await PublishEventAsync(@event, cancellationToken).ConfigureAwait(false);
+                    await _scopeAccessor
+                        .RunWithScopeAsync(scopeContext, () => PublishEventAsync(@event, cancellationToken), cancellationToken)
+                        .ConfigureAwait(false);
                     await _store.MarkPublishedAsync(entry.Id, cancellationToken).ConfigureAwait(false);
                     processed++;
                 }

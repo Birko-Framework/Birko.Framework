@@ -45,7 +45,10 @@ namespace Birko.EventBus.Outbox.Extensions
                 var bus = sp.GetRequiredService<IEventBus>();
                 var innerBus = bus is OutboxEventBus outboxBus ? outboxBus.Inner : bus;
                 var store = sp.GetRequiredService<IOutboxStore>();
-                return new OutboxProcessor(store, innerBus, options);
+                // STORY-046: optional scope bridge — when registered (e.g. a tenant bridge), the processor
+                // restores the entry's ambient scope before re-publishing. Absent → NullEventScopeAccessor.
+                var scopeAccessor = sp.GetService<IEventScopeAccessor>();
+                return new OutboxProcessor(store, innerBus, options, scopeAccessor: scopeAccessor);
             });
             services.AddSingleton<IHostedService, OutboxProcessorHostedService>();
 
