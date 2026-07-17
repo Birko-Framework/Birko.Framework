@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using Birko.Serialization.Json;
 using Birko.Workflow.Core;
 using Birko.Workflow.Execution;
 using Birko.Workflow.ElasticSearch.Models;
@@ -113,5 +115,25 @@ public class ElasticWorkflowInstanceModelTests
         var act = () => model.ToInstance<TestData>();
 
         act.Should().Throw<InvalidOperationException>().WithMessage("*deserialized to null*");
+    }
+
+    // ── STORY-029: ISerializer seam + camelCase wire format ──
+
+    [Fact]
+    public void FromInstance_UsesCamelCaseWireFormat()
+    {
+        var model = ElasticWorkflowInstanceModel.FromInstance("W", CreateTestInstance());
+
+        model.DataJson.Should().Contain("\"orderId\"");
+        model.DataJson.Should().NotContain("\"OrderId\"");
+    }
+
+    [Fact]
+    public void FromInstance_WithInjectedSerializer_OverridesFormat()
+    {
+        var pascal = new SystemJsonSerializer(new JsonSerializerOptions());
+        var model = ElasticWorkflowInstanceModel.FromInstance("W", CreateTestInstance(), pascal);
+
+        model.DataJson.Should().Contain("\"OrderId\"");
     }
 }
