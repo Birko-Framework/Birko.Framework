@@ -7953,7 +7953,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** StoreInstrumentationExtensions and TelemetryServiceExtensions have no tests
 - **Path:** `C:\Source\Birko\Framework\Birko.Telemetry\StoreInstrumentationExtensions.cs, TelemetryServiceExtensions.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The public fluent wrap helpers (WithInstrumentation / WithBulkInstrumentation / WithAsyncInstrumentation / WithAsyncBulkInstrumentation) and the DI/middleware registration extensions (AddBirkoTelemetry, UseBirkoCorrelationId) have no corresponding tests. These are the primary public entry points consumers use.
 - **Fix:** Add tests asserting the wrap helpers return the correct wrapper type wrapping the given store, and that AddBirkoTelemetry registers BirkoTelemetryOptions (and honors the configure delegate).
 
@@ -7961,7 +7961,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Correlation ID response header set before _next instead of via OnStarting
 - **Path:** `C:\Source\Birko\Framework\Birko.Telemetry\CorrelationIdMiddleware.cs:46`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** context.Response.Headers[headerName] = correlationId is set synchronously before awaiting _next. This works for the common case, but the idiomatic ASP.NET Core pattern for response headers in middleware that wraps the rest of the pipeline is context.Response.OnStarting(...). The current code is generally fine since it sets the header before the inner pipeline can start the response; flagging only as a robustness note, not a confirmed defect.
 - **Fix:** Optionally move the header write into context.Response.OnStarting to be safe against any future reordering; low priority.
 
@@ -7969,7 +7969,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** TenantTag convention defined but never applied to any metric or activity
 - **Path:** `C:\Source\Birko\Framework\Birko.Telemetry\BirkoTelemetryConventions.cs:33`
 - **Category:** cleanup · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** BirkoTelemetryConventions.TenantTag ("birko.store.tenant") is declared but never used — CreateTags and StartActivity in StoreInstrumentation.cs do not emit a tenant tag, and no code reads it. Either wire it up (the wrappers have access to nothing tenant-aware today, so this would need a source) or remove the dead constant to avoid implying tenant tagging exists.
 - **Fix:** Remove the unused TenantTag constant, or add tenant resolution and emit it in CreateTags/StartActivity.
 

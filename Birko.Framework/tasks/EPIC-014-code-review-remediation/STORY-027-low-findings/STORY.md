@@ -13,8 +13,25 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**378 / 418 triaged** as of 2026-07-17. Next open is CR-L379 (Birko.Telemetry cluster, L379–L381).
+**381 / 418 triaged** as of 2026-07-17. Next open is CR-L382 (Birko.Telemetry.OpenTelemetry cluster, L382–L383).
 The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+
+**Batch CV — Birko.Telemetry (CR-L379, CR-L380, CR-L381):** Birko.Telemetry. Closed; **/code-review clean (no
+new findings)**. **L379** (test-gap): the fluent wrap helpers and the DI/middleware registration extensions —
+the primary public entry points — were untested. Added `StoreInstrumentationExtensionsTests` (all four
+`With*Instrumentation` helpers return the right wrapper type wrapping the given store, via one `NoopStore`
+implementing `IBulkStore`+`IAsyncBulkStore` which — since bulk extends non-bulk — satisfies all four) and
+`TelemetryServiceExtensionsTests` (`AddBirkoTelemetry` registers `BirkoTelemetryOptions`, honors the configure
+delegate, returns the same collection; `UseBirkoCorrelationId` registers the middleware + returns the same
+builder). Telemetry.Tests →61. **L380** (robustness): **accept-as-is** — the audit itself flags it "not a
+confirmed defect… generally fine… optionally… low priority." `CorrelationIdMiddleware` writes the response
+header *before* awaiting `_next`, which structurally cannot hit the "response already started" exception that
+`OnStarting` guards against (that risk is only for header writes *after* `_next`); moving to `OnStarting` would
+change behavior (no header on responses that never start / on pre-`_next` throws) and churn 4 passing tests
+against `DefaultHttpContext`'s uncertain `OnStarting` semantics. Added a clarifying comment instead. **L381**
+(cleanup): removed the dead `BirkoTelemetryConventions.TenantTag` constant (declared but never emitted by any
+metric/activity — the wrappers have no tenant context to source it; grep confirmed no references beyond its own
+declaration + one test `InlineData`, both removed).
 
 **Batch CU — Birko.Structures (CR-L376, CR-L377, CR-L378):** Birko.Structures. Closed; **/code-review clean
 (no new findings)**. **L376** (bug): `BloomFilter.GetHashes` derived the second hash by bit-rotation
