@@ -33,6 +33,7 @@ the tree up front.
 - STORY-026 — Medium findings (275) — `CR-M001 …`
 - STORY-027 — Low findings (418) — `CR-L001 …`
 - STORY-028 — Integration-test tier (9, theme) — the Docker-gated findings pulled out of STORY-026: `CR-M089, M108, M109, M138, M159, M160, M164, M165, M166`
+- STORY-029 — Workflow serializer seam (theme) — follow-on from `CR-L416`: extend `Birko.Serialization.ISerializer` to all workflow backends (CosmosDB/ES/MongoDB/RavenDB) + unify wire format; not an audit-filed finding
 
 ## Success criteria
 
