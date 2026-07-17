@@ -30,6 +30,14 @@ namespace Birko.Workflow.ElasticSearch
 
         public AsyncElasticSearchStore<ElasticWorkflowInstanceModel> Store => _store;
 
+        /// <remarks>
+        /// CR-L407: this is a read-then-write upsert (Read → branch to Update/Create), not an atomic
+        /// operation. Two concurrent SaveAsync calls for the same new InstanceId can both observe
+        /// existing == null and both Create, producing duplicate ES documents (CreateAsync mints its
+        /// own _id rather than keying on Guid, so the duplicate is silent). This at-least-once /
+        /// possible-duplicate characteristic is shared with the MongoDB/RavenDB/CosmosDB siblings; for
+        /// exactly-once upsert, key the ES _id off InstanceId or use optimistic concurrency.
+        /// </remarks>
         public async Task<Guid> SaveAsync(string workflowName, WorkflowInstance<TData> instance, CancellationToken cancellationToken = default)
         {
             var existing = await _store.ReadAsync(m => m.Guid == instance.InstanceId, cancellationToken).ConfigureAwait(false);

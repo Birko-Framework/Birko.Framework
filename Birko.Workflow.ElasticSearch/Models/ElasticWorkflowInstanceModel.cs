@@ -35,12 +35,32 @@ public class ElasticWorkflowInstanceModel : AbstractModel
 
     public WorkflowInstance<TData> ToInstance<TData>() where TData : class
     {
-        var data = JsonSerializer.Deserialize<TData>(DataJson)!;
+        // CR-L406: a persisted document with no Guid is corrupt. Minting a random InstanceId here
+        // would diverge from the document id, so the next SaveAsync upsert (matched on Guid) would
+        // miss the row and create a duplicate — surface the bad record instead.
+        if (Guid == null)
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance document has no Guid and cannot be restored (workflow '{WorkflowName}').");
+        }
+
+        // CR-L405: DataJson defaults to string.Empty, which is invalid JSON — deserializing it would
+        // throw an opaque JsonException. Treat an unpopulated/cleared payload (or one that deserializes
+        // to null) as a corrupt record with a clear message rather than suppressing the null with `!`.
+        if (string.IsNullOrWhiteSpace(DataJson))
+        {
+            throw new InvalidOperationException(
+                $"Workflow instance '{Guid}' has empty DataJson and cannot be restored (workflow '{WorkflowName}').");
+        }
+
+        var data = JsonSerializer.Deserialize<TData>(DataJson)
+                   ?? throw new InvalidOperationException(
+                       $"Workflow instance '{Guid}' DataJson deserialized to null and cannot be restored (workflow '{WorkflowName}').");
         var history = JsonSerializer.Deserialize<List<StateChangeRecord>>(HistoryJson)
                       ?? new List<StateChangeRecord>();
 
         return WorkflowInstance<TData>.Restore(
-            Guid ?? System.Guid.NewGuid(),
+            Guid.Value,
             CurrentState,
             (WorkflowStatus)Status,
             data,
