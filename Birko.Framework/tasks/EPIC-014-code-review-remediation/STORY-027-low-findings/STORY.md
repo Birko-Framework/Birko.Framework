@@ -13,10 +13,17 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**412 / 418 triaged** as of 2026-07-17. Next open is CR-L413 (Birko.Workflow.RavenDB cluster, L413–414).
-Remaining Workflow backends: RavenDB L413–414, SQL L415–417, XML L418.
-The Birko.Workflow core (L399–403), the entire Birko.Web.* cluster (L392–398), and the whole
-Birko.Serialization meta-cluster are DONE.
+**414 / 418 triaged** as of 2026-07-17. Next open is CR-L415 (Birko.Workflow.SQL cluster, L415–417).
+Remaining Workflow backends: SQL L415–417, XML L418 (LAST). The Birko.Workflow core (L399–403), the entire
+Birko.Web.* cluster (L392–398), and the whole Birko.Serialization meta-cluster are DONE.
+
+**Batch DH — Birko.Workflow.RavenDB (CR-L413, CR-L414):** Birko.Workflow.RavenDB. **/code-review clean (no
+findings)**. **L413** (nullable): `ToInstance` `Deserialize<TData>(DataJson)!` guarded (empty/whitespace +
+null-deserialize → clear `InvalidOperationException`), `!` removed — mirrors ES/JSON/Mongo. **L414** (bug):
+documented the read-then-write (non-atomic) SaveAsync upsert — because documents are keyed by Guid, a concurrent
+double-save is last-writer-wins (lost update), NOT a duplicate; for concurrent edits use RavenDB optimistic
+concurrency/change-vector or the transactional store. Added 2 model tests (empty/literal-null DataJson throw
+clear errors). RavenDB.Tests →5.
 
 **Batch DG — Birko.Workflow.MongoDB (CR-L410, CR-L411, CR-L412):** Birko.Workflow.MongoDB. **/code-review clean
 (no findings)**. **L410** (cleanup): removed the dead+misleading `[BsonIgnore] CollectionName =>

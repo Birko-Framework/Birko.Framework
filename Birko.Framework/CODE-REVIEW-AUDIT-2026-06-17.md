@@ -8225,7 +8225,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** ToInstance suppresses null from JsonSerializer.Deserialize with ! and feeds it into a non-null contract
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.RavenDB\Models\RavenWorkflowInstanceModel.cs:28`
 - **Category:** nullable · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** var data = JsonSerializer.Deserialize<TData>(DataJson)!; uses the null-forgiveness operator. WorkflowInstance<TData>.Restore takes a non-null TData data and exposes a non-null Data property, so a null here would propagate a hidden null into a non-null surface. DataJson defaults to string.Empty (line 18); deserializing an empty string throws JsonException, and a literal "null" payload returns null — both edge cases are masked by the ! rather than handled.
 - **Fix:** Guard the deserialized value, e.g. throw a clear InvalidOperationException (or use a domain exception) when DataJson is empty or deserializes to null, instead of suppressing with !.
 
@@ -8233,7 +8233,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** SaveAsync read-then-write is not atomic
 - **Path:** `C:\Source\Birko\Framework\Birko.Workflow.RavenDB\RavenDBWorkflowInstanceStore.cs:34`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** SaveAsync reads the existing instance, then branches to UpdateAsync or CreateAsync in a separate round-trip with no transaction or optimistic concurrency. Two concurrent saves of the same new InstanceId could both observe null and both create; because the underlying store keys documents by Guid the second write overwrites rather than duplicating, so the impact is a lost update rather than a duplicate, but concurrent edits can still clobber each other. Low severity given the Guid keying, but worth noting since no concurrency control is applied.
 - **Fix:** If concurrent edits of the same instance are expected, consider RavenDB optimistic concurrency (change-vector) or wrap save in IAsyncTransactionalStore which AsyncRavenDBStore already supports.
 
