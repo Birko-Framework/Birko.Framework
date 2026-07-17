@@ -53,25 +53,61 @@ injectable serialization path, mirroring what SQL/JSON already do:
   still mint a random InstanceId on a null Guid, diverging from the document and duplicating on the
   next SaveAsync upsert. Throw on a null Guid instead.
 
-## Wire-format decision (proposed)
+## Codebase sweep (2026-07-17) — where else is a serializer used directly?
 
-**Recommended: unify all six to PascalCase.** Default every backend's fallback serializer to
-`new SystemJsonSerializer(new JsonSerializerOptions())` (PascalCase = System.Text.Json's own
-default), and **flip the JSON backend** camelCase→PascalCase. This:
-- changes only **one** backend's wire format (JSON), since the other five are already PascalCase;
-- gives all six the same seam **and** the same wire format;
-- is **safe** — verified no persisted workflow data exists anywhere (the only possible consumer,
-  Symbio, wires no workflow persistence backend), so no migration is required.
+Swept the whole framework for raw `System.Text.Json` / `XmlSerializer` / `JsonConvert` usage to check
+whether the "hardcoded serializer instead of the `ISerializer` abstraction" anti-pattern exists
+beyond the workflow backends. Result — **the four workflow backends above are the only genuine
+persistence-domain-data offenders.** Everything else is legitimate:
 
-Alternative (rejected unless a reason surfaces): unify everyone to camelCase — would change four
-backends' wire format instead of one. Confirm the PascalCase choice at execution time before
-touching the JSON backend, since the JSON model is the audit's cited reference.
+- **Already uses the abstraction (the intended pattern):**
+  - `Birko.BackgroundJobs` — `JobSerializationHelper` (shared across ALL job backends) wraps
+    `SystemJsonSerializer`. **camelCase.**
+  - `Birko.Data.JSON` store (`AbstractJsonStore`/`AbstractAsyncJsonStore`) — injectable `ISerializer`,
+    defaults to `SystemJsonSerializer`. **camelCase** (indented).
+  - `Birko.Workflow.JSON` + `Birko.Workflow.SQL` (SQL done under CR-L416).
+- **Legitimately direct (abstraction would be wrong or irrelevant) — leave as-is:**
+  - AI providers (`Birko.AI` / `Birko.AI.Providers` — Claude/OpenAI/Gemini/Ollama/Azure/etc.),
+    `Birko.Communication.NFC|IR|GraphQL` transports: these serialize to **external API wire
+    contracts** dictated by the remote service, not a Birko-chosen format.
+  - `Birko.Serialization*` implementations themselves (`SystemJsonSerializer`,
+    `SystemXmlSerializer`, `NewtonsoftJsonSerializer`) — they ARE the abstraction.
+  - `Birko.Data.CosmosDB/Serialization/CosmosGuidIdSerializer` — a custom Cosmos serializer.
+  - `Birko.Storage/Local/LocalFileStorage` — its private `FileMetadata` sidecar via a
+    **source-generated** `JsonSerializerContext` (a deliberate AOT/trimming choice, not user data).
+  - `Birko.Data.Sync.Tenant/TenantSyncProvider` — serializes only to feed a **SHA256 change-hash**
+    (never stored/round-tripped).
+  - `Birko.DesignTokens/Model.cs` — design-token config model.
+
+So STORY-029's scope (the 4 raw workflow backends) is **complete** — no other persistence layer needs
+migrating.
+
+## Wire-format decision (REVISED after the sweep)
+
+**Recommended: unify all six workflow backends to camelCase** — because that is the framework's
+**deliberate** convention wherever the `ISerializer` abstraction is actually used for persistence
+(`BackgroundJobs` `JobSerializationHelper`, the `Birko.Data.JSON` store, and the `Birko.Workflow.JSON`
+backend are all camelCase). The PascalCase on Cosmos/ES/Mongo/Raven is **incidental** (raw
+`System.Text.Json`'s default), not a designed choice.
+
+Concretely: default every workflow backend's fallback serializer to the plain
+`new SystemJsonSerializer()` (camelCase). This changes the wire format of the four raw backends
+PascalCase→camelCase **and means revisiting `Birko.Workflow.SQL`**, which CR-L416 pinned to PascalCase
+purely to preserve its *incidental* raw format — flip it to camelCase here so the whole family (all six
++ BackgroundJobs + Data.JSON store) shares one convention.
+
+This is **safe**: verified no persisted workflow data exists anywhere (the only possible consumer,
+Symbio, wires no workflow persistence backend), so no migration is required regardless of format.
+
+> Supersedes the earlier PascalCase proposal, which was based on majority-of-*incidental*-format
+> rather than the framework's *deliberate* convention. Confirm at execution time.
 
 ## Success criteria
 
 - All six workflow instance models (JSON, SQL, CosmosDB, ElasticSearch, MongoDB, RavenDB) route
   (de)serialization through `Birko.Serialization.ISerializer` with an injectable override.
-- All six share one wire format (PascalCase per the decision above).
+- All six share one wire format (camelCase per the revised decision above — matching the framework's
+  deliberate `ISerializer` convention; includes flipping the CR-L416 SQL backend from PascalCase).
 - Each backend's `ToInstance` throws a clear error on a null Guid (no random-InstanceId fabrication)
   and on empty/whitespace/null-deserialize `DataJson` (the corrupt-record guard already applied to
   ES/JSON/Mongo/Raven/SQL under STORY-027).
