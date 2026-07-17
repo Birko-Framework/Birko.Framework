@@ -167,4 +167,75 @@ public class OpenTelemetryServiceExtensionsTests
 
         result.Should().BeSameAs(services);
     }
+
+    // CR-L383: every other test disables AspNetCore instrumentation and OTLP, so these branches
+    // (AddAspNetCoreInstrumentation and AddOtlpExporter) were never exercised.
+
+    [Fact]
+    public void AddBirkoOpenTelemetry_WithAspNetCoreInstrumentation_Builds()
+    {
+        var services = new ServiceCollection();
+        services.AddBirkoOpenTelemetry(opts =>
+        {
+            opts.EnableAspNetCoreInstrumentation = true; // exercises AddAspNetCoreInstrumentation on both signals
+            opts.EnableOtlpTraceExporter = false;
+            opts.EnableOtlpMetricsExporter = false;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        provider.GetService<TracerProvider>().Should().NotBeNull();
+        provider.GetService<MeterProvider>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void AddBirkoOpenTelemetry_WithOtlpExporters_Builds()
+    {
+        var services = new ServiceCollection();
+        services.AddBirkoOpenTelemetry(opts =>
+        {
+            opts.EnableOtlpTraceExporter = true;
+            opts.EnableOtlpMetricsExporter = true;
+            opts.OtlpEndpoint = "http://localhost:4317";
+            opts.EnableAspNetCoreInstrumentation = false;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        provider.GetService<TracerProvider>().Should().NotBeNull();
+        provider.GetService<MeterProvider>().Should().NotBeNull();
+    }
+
+    // CR-L382: a malformed OTLP endpoint must fail fast with a clear ArgumentException at registration,
+    // not a UriFormatException from deep inside an OpenTelemetry builder callback.
+
+    [Fact]
+    public void AddBirkoOpenTelemetry_InvalidOtlpEndpoint_WithOtlpEnabled_ThrowsArgumentException()
+    {
+        var services = new ServiceCollection();
+
+        var act = () => services.AddBirkoOpenTelemetry(opts =>
+        {
+            opts.EnableOtlpTraceExporter = true;
+            opts.OtlpEndpoint = "not a valid uri";
+            opts.EnableAspNetCoreInstrumentation = false;
+        });
+
+        act.Should().Throw<ArgumentException>().WithMessage("*OtlpEndpoint*");
+    }
+
+    [Fact]
+    public void AddBirkoOpenTelemetry_InvalidOtlpEndpoint_WithOtlpDisabled_DoesNotThrow()
+    {
+        // The endpoint is only consumed when an OTLP exporter is enabled, so a bogus value is ignored otherwise.
+        var services = new ServiceCollection();
+
+        var act = () => services.AddBirkoOpenTelemetry(opts =>
+        {
+            opts.EnableOtlpTraceExporter = false;
+            opts.EnableOtlpMetricsExporter = false;
+            opts.OtlpEndpoint = "not a valid uri";
+            opts.EnableAspNetCoreInstrumentation = false;
+        });
+
+        act.Should().NotThrow();
+    }
 }
