@@ -13,8 +13,22 @@ finding-ids: CR-L001 …
 
 ## Progress
 
-**383 / 418 triaged** as of 2026-07-17. Next open is CR-L384 (Birko.Time cluster, L384–L387).
+**387 / 418 triaged** as of 2026-07-17. Next open is CR-L388 (Birko.Validation cluster, L388–…).
 The whole Birko.Serialization meta-cluster (5 sub-repos, L357–L366) is DONE.
+
+**Batch CX — Birko.Time (CR-L384, CR-L385, CR-L386, CR-L387):** Birko.Time. Closed; **/code-review clean (no
+new findings)**. **L384** (bug): `Holiday`'s ctor validated the day as a blanket 1..31 regardless of month, so
+`Holiday.Fixed("x", 2, 30)` / `("x", 4, 31)` were accepted but `FallsOn` could never match. Now validates the
+day against the month's real max — for a one-time holiday against the known year (`DateTime.DaysInMonth(year,
+month)`, so Feb 29 is rejected in non-leap years), for a recurring holiday against a leap-year reference (2000)
+so Feb 29 stays a legal recurring date. **L385** (other): documented that `DaySchedule.BreakDuration` models
+break *length* not *position* — it feeds `WorkingDuration` accounting only and does NOT carve a gap out of
+`IsWorkingAt`/`IsWorkingTime` (a time during the nominal break still reports working); model an explicit break
+window if mid-day exclusion is needed. **L386** (other): documented that `HolidayCalendar.GetHolidays(year)`
+returns recurring holidays *year-agnostic* (`Year` stays null, not projected) — callers resolve a concrete date
+via Month/Day. **L387** (test-gap): the DaySchedule/HolidayCalendar ctor guards were already covered; added the
+missing Holiday date-validation cases (impossible dates Feb 30 / Apr–Nov 31 + day 0 throw; recurring Feb 29
+allowed; valid end-of-month allowed; one-time Feb 29 throws in a non-leap year, allowed in a leap year). Time.Tests →92.
 
 **Batch CW — Birko.Telemetry.OpenTelemetry (CR-L382, CR-L383):** Birko.Telemetry.OpenTelemetry. Closed;
 **/code-review clean (no new findings)**. **L382** (robustness): `OtlpEndpoint` was fed straight into

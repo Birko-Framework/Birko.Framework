@@ -7993,7 +7993,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** Holiday.Fixed/OneTime accept impossible month/day combinations
 - **Path:** `C:\Source\Birko\Framework\Birko.Time\Calendars\Holiday.cs:28`
 - **Category:** bug · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** Day is validated only as 1..31 independent of Month, so Holiday.Fixed("x", 2, 30) or ("x", 4, 31) is accepted at construction but FallsOn() can never return true for it (no real date has Feb 30 / Apr 31). A caller gets a silently-useless holiday instead of an exception. Feb 29 is a legitimate edge for recurring holidays, so a strict per-month check would need care, but Apr 31 / Jun 31 / Feb 30 are unambiguously invalid.
 - **Fix:** Validate day against the maximum day for the given month (allowing Feb 29 for recurring holidays since the year is unknown), e.g. reject day > DateTime.DaysInMonth for a leap year of the relevant month.
 
@@ -8001,7 +8001,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** IsWorkingTime ignores BreakDuration
 - **Path:** `C:\Source\Birko\Framework\Birko.Time\Calendars\BusinessCalendar.cs:52`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** DaySchedule models a BreakDuration but stores no break position, and DaySchedule.IsWorkingAt only tests Start<=time<End. So IsWorkingTime() reports the lunch break as working time. This is an inherent limitation of the simple model (break length without placement) rather than a clear logic error, but the discrepancy between WorkingDuration (which subtracts the break) and IsWorkingTime (which does not) is a likely source of caller confusion.
 - **Fix:** Either document explicitly that breaks affect duration accounting only (not IsWorkingTime), or model an explicit break window (BreakStart/BreakEnd) if mid-day exclusion is intended.
 
@@ -8009,7 +8009,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** HolidayCalendar.GetHolidays(year) returns recurring holidays without year context
 - **Path:** `C:\Source\Birko\Framework\Birko.Time\Calendars\HolidayCalendar.cs:33`
 - **Category:** other · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** GetHolidays(int year) returns the original recurring Holiday instances (which carry Year == null) alongside year-matched one-time ones. Callers asking 'what holidays occur in 2026' get items they cannot resolve to a concrete 2026 date without re-deriving Month/Day themselves. Not incorrect given the model, but the API name implies year-resolved holidays.
 - **Fix:** Either document that recurring holidays are returned year-agnostic, or project recurring entries to the requested year before returning.
 
@@ -8017,7 +8017,7 @@ The finding also correctly notes the onopen handler at line 58 already resets th
 - **Title:** No tests for DaySchedule constructor validation and Holiday/HolidayCalendar argument guards
 - **Path:** `C:\Source\Birko\Framework.Tests\Birko.Time.Tests\DayScheduleTests.cs`
 - **Category:** test-gap · **Verification:** not individually verified
-- **Status:** open
+- **Status:** done
 - **Detail:** The .Tests sibling covers happy paths well, but the constructor guard clauses (DaySchedule end<=start, negative break, break>=working span; Holiday empty name / month 1..12 / day 1..31; HolidayCalendar empty name) are public throwing behavior with thin or no negative-case coverage. Note only, per scope.
 - **Fix:** Add xUnit+FluentAssertions cases asserting the ArgumentException/ArgumentOutOfRangeException paths for these constructors/factories.
 
