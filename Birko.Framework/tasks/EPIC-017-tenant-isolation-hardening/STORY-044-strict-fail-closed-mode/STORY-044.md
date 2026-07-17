@@ -1,13 +1,49 @@
 ---
 id: STORY-044
 parent: EPIC-017
-status: todo
+status: done
 created: 2026-07-17
+completed: 2026-07-17
 theme: strict-fail-closed-tenancy
 affects: [Birko.Data.Tenant, Birko.Data.Composition]
 ---
 
 # Opt-in strict (fail-closed) tenancy mode
+
+## Outcome (2026-07-17) — DONE
+
+Added `TenantIsolationMode { Permissive (default), Strict }` and made the tenant layer fail-closed
+on opt-in, with the permissive default byte-for-byte unchanged (backward compatible for all ~16
+consumers).
+
+- **Seam:** `TenantFilter(filter)` is now the single overridable choke point through which every
+  read/count and every filter-based write composes the tenant predicate (replaced all inline
+  `new ModelByTenant<T>(…)` sites in **both** async and sync wrappers). In Strict with no tenant it
+  throws instead of returning the caller's unscoped filter.
+- **Guards:** `BelongsToCurrentTenant` denies (→ `UnauthorizedAccessException`) and
+  `SetTenantGuidIfNeeded` throws rather than stamping `Guid.Empty` when Strict + no tenant.
+- **Both wrapper families:** async (`AsyncTenant[Bulk]StoreWrapper`) **and** sync
+  (`Tenant[Bulk]StoreWrapper`) are mode-aware (sync parity closed).
+- **Explicit admin scope:** `ITenantContext.IsAllTenantsScope` + `WithAllTenants` /
+  `WithAllTenantsAsync` (added as non-breaking **default interface methods**; `TenantContext` backs
+  them with `AsyncLocal<bool>`). In Strict, an active all-tenants scope allows deliberate
+  cross-tenant work and preserves the caller's per-item `TenantGuid` on create. This replaces
+  "no tenant = accidental admin" with "admin = a scope you typed."
+- **Opt-in surfaces:** `StoreWrapperBuilder.Build` gained `tenantMode` + a `tenantWrapperFactory`
+  escape hatch; `AsTenantAware` (both overloads) and all six `AddTenant[Async]Repository[Scoped]`
+  DI methods take `mode`. One-line opt-in — no consumer subclassing.
+
+Tests: `Birko.Data.Composition.Tests` 21/21 (strict read/create/filter-delete throw; permissive
+default still fails open; strict-with-tenant scopes; admin-scope read + create-preserve;
+`AsTenantAware` strict; sync-wrapper strict). `Birko.Data.Tenant.Tests` 23/23 unchanged.
+
+Known non-gap: a custom `ITenantContext` that doesn't override the new DIMs gets safe fail-closed
+behavior (no admin scope) — documented in the interface XML.
+
+Commits — Birko.Data.Tenant (source), Birko.Data.Composition (Build hook),
+Birko.Data.Composition.Tests (tests), Birko.Framework (this story).
+
+---
 
 ## Goal
 

@@ -1,7 +1,8 @@
 ---
 id: EPIC-017
-status: in-progress
+status: done
 created: 2026-07-17
+completed: 2026-07-17
 owner: ai
 affects: [Birko.Data.Tenant, Birko.Data.Composition]
 source: security-review (Symbio consumer) 2026-07-17
@@ -71,13 +72,12 @@ a multi-tenant framework.
 
 ## Stories
 
-- **STORY-044** — Opt-in strict (fail-closed) tenancy mode. Introduce `TenantIsolationMode`
-  { Permissive, Strict }; add a virtual `TenantFilter` factory seam to the wrappers (covers reads,
-  count, and the filter-based writes in one place); make `BelongsToCurrentTenant` /
-  `SetTenantGuidIfNeeded` mode-aware (Strict → throw on no-tenant instead of fail-open / `Guid.Empty`
-  stamp); thread a `tenantMode` param (and a `tenantWrapperFactory` escape hatch) through
-  `StoreWrapperBuilder.Build`. Optional: an explicit `WithAllTenants` / system scope so admin
-  access is intentional.
+- **STORY-044** (**done** 2026-07-17) — Opt-in strict (fail-closed) tenancy mode. `TenantIsolationMode`
+  { Permissive (default), Strict }; virtual `TenantFilter` seam across both async **and** sync
+  wrappers (reads/count/filter-writes); mode-aware `BelongsToCurrentTenant` / `SetTenantGuidIfNeeded`;
+  `tenantMode` + `tenantWrapperFactory` on `StoreWrapperBuilder.Build`, `mode` on `AsTenantAware` and
+  the DI repository extensions; explicit `WithAllTenants` admin scope on `ITenantContext` (non-breaking
+  DIMs). 9 strict/admin/parity tests. Permissive default unchanged.
 - **STORY-045** (**done** 2026-07-17) — Fix decorator ordering so per-tenant uniqueness probes are
   tenant-scoped. Relocated the Tenant wrapper to sit **inside** Default/Sluggable/SoftDelete but
   **outside** Audit/Timestamp/EventSourcing. 4 regression tests (Default + Sluggable per-tenant
