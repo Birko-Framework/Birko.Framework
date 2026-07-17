@@ -2,7 +2,7 @@
 id: TASK-040
 parent: STORY-028
 feature: null
-status: review  # todo | in-progress | review | blocked | done | cancelled
+status: done  # todo | in-progress | review | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-06-18
@@ -50,7 +50,7 @@ collapsible group out of the box. Follow the 10-step **New component checklist**
 
 ## Human test plan
 
-- [ ] Add `b-accordion` to the Birko.Web Playground gallery (Layout section) — it renders with a couple of sections.
-- [ ] Click + keyboard (Enter/Space, arrows) expand/collapse; `aria-expanded` flips.
-- [ ] `multiple` allows several open at once; default single-open closes the previous.
-- [ ] Restyles correctly under a non-light theme (token-driven).
+- [x] Add `b-accordion` to the Birko.Web Playground gallery (Layout section) — it renders with a couple of sections.
+- [x] Click + keyboard (Enter/Space, arrows) expand/collapse; `aria-expanded` flips.
+- [x] `multiple` allows several open at once; default single-open closes the previous. (Gallery card demos default single-open; the design-tokens editor panel dogfoods `multiple` + `openAll()`. Verified 2026-07-17.)
+- [x] Restyles correctly under a non-light theme (token-driven).

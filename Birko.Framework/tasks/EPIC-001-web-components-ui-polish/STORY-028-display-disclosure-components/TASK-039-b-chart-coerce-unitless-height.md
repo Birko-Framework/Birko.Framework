@@ -2,7 +2,7 @@
 id: TASK-039
 parent: STORY-028
 feature: null
-status: review  # todo | in-progress | review | blocked | done | cancelled
+status: done  # todo | in-progress | review | blocked | done | cancelled
 priority: P3
 assignee: ai
 created: 2026-06-18
@@ -50,5 +50,5 @@ Out of scope (not done here): the playground still passes `height="180px"`; reve
 
 ## Human test plan
 
-- [ ] In Birko.Web.Playground, the `b-chart` gallery item renders at a fixed height and does **not** stretch (revert the playground to `height="160"` to confirm the component now copes).
-- [ ] `height="20rem"` and the unset default both render at the expected size.
+- [x] In Birko.Web.Playground, the `b-chart` gallery item renders at a fixed height and does **not** stretch (gallery set to unitless `height="220"` — kept as an ongoing regression demo; verified 2026-07-17).
+- [x] `height="20rem"` and the unset default both render at the expected size.

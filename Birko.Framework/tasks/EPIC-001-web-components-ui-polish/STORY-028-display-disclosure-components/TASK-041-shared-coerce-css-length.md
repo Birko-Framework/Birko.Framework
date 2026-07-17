@@ -2,7 +2,7 @@
 id: TASK-041
 parent: STORY-028
 feature: null
-status: review  # todo | in-progress | review | blocked | done | cancelled
+status: done  # todo | in-progress | review | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-06-19
@@ -42,5 +42,5 @@ Affected: `b-chart` (`height`), `b-skeleton` (`width`/`height`/`size`), and `b-j
 
 ## Human test plan
 
-- [ ] Shared with [[TASK-039]]: in the playground, a `b-chart` / `b-skeleton` given a unitless size renders at a fixed size and does not stretch.
-- [ ] A viewer (`b-json-viewer` etc.) with `max-height="400"` scrolls its body at 400px.
+- [x] Shared with [[TASK-039]]: in the playground, a `b-chart` / `b-skeleton` given a unitless size renders at a fixed size and does not stretch. (Headless check 2026-07-17: `b-skeleton width="180"` → inner `width:180px`.)
+- [x] A viewer (`b-json-viewer` etc.) with `max-height="400"` scrolls its body at 400px. (Headless check 2026-07-17: unitless `max-height="400"` → inner `max-height:400px`, `overflow-y:auto`, clientHeight ~421 vs scrollHeight 3850.)
