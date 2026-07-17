@@ -15,8 +15,9 @@ published under — required for tenant-scoped event handlers to work under `Ten
 
 | File | Description |
 |------|-------------|
-| TenantEventScopeAccessor.cs | `IEventScopeAccessor` impl: maps `EventContext.TenantGuid` → `ITenantContext.WithTenantAsync` (set) / `WithAllTenantsAsync` (null/empty = system event) |
-| Extensions/EventTenantScopeServiceCollectionExtensions.cs | `AddEventTenantScope()` — registers the accessor over `Tenant.Current`; overload takes an explicit `ITenantContext` |
+| TenantEventEnricher.cs | **Publish side** — `IEventEnricher` impl: stamps `EventContext.TenantGuid` from the ambient `ITenantContext` (`Tenant.Current`) at publish time, so `OutboxEntry.TenantGuid` is correct for HTTP, jobs, and explicit `WithTenant` scopes. Runs synchronously in the publish flow → nested `WithTenant` inside `WithAllTenants` captures the specific tenant. Replaces hand-rolled HttpContext enrichers |
+| TenantEventScopeAccessor.cs | **Consume side** — `IEventScopeAccessor` impl: maps `EventContext.TenantGuid` → `ITenantContext.WithTenantAsync` (set) / `WithAllTenantsAsync` (null/empty = system event) |
+| Extensions/EventTenantScopeServiceCollectionExtensions.cs | `AddEventTenantScope()` — registers **both** the enricher (publish) and the accessor (consume) over `Tenant.Current`; overload takes an explicit `ITenantContext` |
 
 ## Why this project exists (layering)
 `Birko.EventBus` defines the transport-agnostic `IEventScopeAccessor` hook (no-op by default) and cannot

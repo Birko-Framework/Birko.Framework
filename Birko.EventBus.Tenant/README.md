@@ -4,12 +4,16 @@ Restores tenant scope for background event dispatch — the bridge between `Birk
 `Birko.Data.Tenant`.
 
 ## Features
-- `TenantEventScopeAccessor` — implements `Birko.EventBus.IEventScopeAccessor`, re-establishing the
-  ambient tenant an event was published under before its handlers run in a background flow (outbox
-  processor, message-queue consumer).
-- Maps `EventContext.TenantGuid` → `WithTenantAsync` (tenant set) or `WithAllTenantsAsync` (null/empty,
-  i.e. a system / cross-tenant event).
-- `AddEventTenantScope()` DI extension — one call to opt in, alongside `TenantIsolationMode.Strict`.
+- `TenantEventEnricher` (**publish side**) — implements `Birko.EventBus.Enrichment.IEventEnricher`,
+  stamping `EventContext.TenantGuid` from the ambient `Tenant.Current` so the outbox entry / envelope is
+  attributed to the right tenant in **every** flow (HTTP, background jobs, explicit `WithTenant` scopes)
+  — not just authenticated HTTP requests. Drop your hand-rolled HttpContext tenant enricher.
+- `TenantEventScopeAccessor` (**consume side**) — implements `Birko.EventBus.IEventScopeAccessor`,
+  re-establishing that tenant before handlers run in a background flow (outbox processor, MQ consumer).
+- Both map `EventContext.TenantGuid` ↔ `WithTenantAsync` (tenant set) / `WithAllTenantsAsync`
+  (null/empty = system / cross-tenant event).
+- `AddEventTenantScope()` DI extension — one call registers **both halves**, alongside adopting
+  `TenantIsolationMode.Strict`.
 
 ## Usage
 ```csharp
