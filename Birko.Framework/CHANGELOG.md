@@ -4,6 +4,18 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-07-18 — SQL translator: nullable-column `== nullVariable` now emits `IS NULL`
+
+`Birko.Data.SQL` `ParseConditionExpression`: a predicate `x.Col == v` where `v` is a **closure
+variable that holds null** compiled to `Col = NULL` (three-valued-logic UNKNOWN → silently zero rows),
+whereas a literal `x.Col == null` correctly emitted `IS NULL`. The closure-member branch set
+`Values=[null]` with `Type=Equal`; it now maps a null-valued variable to `ConditionType.IsNull` (and
+`IS NOT NULL` for `!=`), mirroring the literal-null branch. Dangerous because the in-memory store
+compiles the lambda (`null == null` → true), so unit/E2E tests pass while real SQL returns nothing —
+surfaced by a Symbio audit where `x.VariantId == variantId` for variant-less products returned zero
+rows (duplicate cart lines, false "no stock", missed dedup guards). Tests:
+`Birko.Data.SQL.Tests` +3 (`NullEqualityTranslationTests`); full SQL suite 302 + SQLite integration 43 green.
+
 ## 2026-07-18 — WithAllTenants now spans all tenants on reads (even with a tenant set)
 
 Follow-up to EPIC-017. `WithAllTenants(...)` bypassed the Strict no-tenant *throw* and the write-authorization guards (`BelongsToCurrentTenant` / `SetTenantGuidIfNeeded` both special-case `IsAllTenantsScope`), but the **read** seam did not: `TenantFilter` unconditionally built `ModelByTenant(CurrentTenantGuid, …)`. So from within a request scope (a tenant set), `WithAllTenants` reads/counts silently stayed scoped to the ambient tenant — contradicting its documented "operate across tenants on purpose" intent. Back-office/maintenance code reading global reference data (`TenantGuid == Guid.Empty`) or other tenants' rows saw only its own tenant. Fixed in both the async and sync `TenantFilter` (the STORY-044 single seam): while `IsAllTenantsScope` is active the effective tenant is treated as null, so reads span all tenants. `CurrentTenantGuid` is unchanged, so a nested `WithTenant(...)` used purely for event attribution still stamps that tenant. Surfaced by the Symbio Pricing "global FX rate + per-tenant override" model (needs to read global + own rows under Strict). Tests: `Birko.Data.Tenant.Tests` +1 (`Read_InsideAllTenantsScope_SpansAllTenants_EvenWithTenantSet`); adjacent tenant suites (Composition/Sync.Tenant/EventBus.Tenant/InMemory) green.
