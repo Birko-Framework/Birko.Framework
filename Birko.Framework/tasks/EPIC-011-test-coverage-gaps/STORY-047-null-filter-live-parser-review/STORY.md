@@ -24,26 +24,50 @@ parsers are hand-rolled and unit-tested in-process:
 
 Mongo / Cosmos / Raven have **no** hand-rolled parser — they forward the raw `Expression` to the
 driver / LINQ provider, so their behaviour can only be verified against a running backend. Env-var-gated
-live tests were added (no-op pass when the backend is absent):
-- `MongoNullFilterLiveTests` → `BIRKO_MONGO_HOST`
-- `CosmosNullFilterLiveTests` → `BIRKO_COSMOS_CONNECTION`
-- `RavenNullFilterLiveTests` → `BIRKO_RAVEN_URL`
+**oracle-based matrix** tests were added (no-op pass when the backend is absent):
+- `MongoFilterMatrixLiveTests` → `BIRKO_MONGO_HOST`
+- `CosmosFilterMatrixLiveTests` → `BIRKO_COSMOS_CONNECTION`
+- `RavenFilterMatrixLiveTests` → `BIRKO_RAVEN_URL`
 
-They have **not yet been executed against real backends** — that is this story.
+Each seeds a fixed dataset, reads it back, and for every shape compares `store.ReadAsync(expr)` against
+`expr.Compile()` over the read-back set (so serialization round-trips are neutralised and only genuine
+translation divergences surface). They have **not yet been executed against real backends** — that is this story.
+
+## Filter-shape matrix
+
+The live tests and the in-process parser tests share this catalogue:
+
+- **Comparisons / ranges:** `==`, `!=`, `<`, `<=`, `>`, `>=`; numeric ranges; `decimal` compare.
+- **Null:** `== null`, `!= null`, `HasValue` (provider null-vs-missing nuances noted below).
+- **Booleans:** bare bool `x.Active`, constant `x => true`/`false`, `&&`/`||`, bitwise `&`/`|`, `!`.
+- **Nested boolean grouping:** `(a || b) && (c || d)`, `(a && b) || (c && d)`, `!(a && b)` (De Morgan),
+  deep nesting, `A && !(B) && (C || D)` — precedence must be preserved, not flattened.
+- **Strings:** `StartsWith`, `EndsWith`, `Contains`, `ToLower()/ToUpper()` comparison (case-insensitivity).
+- **Collections:** IN via `collection.Contains(x.Member)`, array membership, nested `x.Items.Any(i => …)`.
+- **Serialized types:** `enum` equality, `Guid` equality, `DateTime` range + `.Date`.
+- **Structure:** nested member path `x.Address.City == …`, interface/base-typed `Convert(param, iface)`.
 
 ## Behaviour / acceptance criteria
 
 - Stand up MongoDB + Cosmos (emulator) + RavenDB (containers/emulator); set the three env vars and run the
-  `*NullFilterLiveTests` green.
-- Confirm `== null` matches the null docs, `!= null` / `HasValue` match only the non-null docs on each backend.
-- Record any provider-specific null-vs-missing nuances found — especially:
-  - Cosmos: LINQ `x.F == null` translation (`c.F = null` matches nothing in Cosmos SQL vs `IS_NULL(c.F)`).
-  - Mongo: `{F: null}` matches null **or** missing; `$ne: null` excludes both.
-  - Raven: indexing lag (the test already polls) and null/missing handling.
-- Extend the live matrix beyond null to the shapes the SQL/ES work covered (EndsWith, ToLower, IN,
-  bitwise `&`/`|`, bare/const bool, StartsWith) to confirm the native providers honour C# semantics.
+  `*FilterMatrixLiveTests` green (0 divergences).
+- Record any provider-specific nuances found — especially:
+  - Cosmos: LINQ `x.F == null` translation (`c.F = null` matches nothing in Cosmos SQL vs `IS_NULL(c.F)`);
+    `.Date`, `ToLower`, nested `Any` support.
+  - Mongo: `{F: null}` matches null **or** missing; `$ne: null` excludes both; enum int-vs-string storage.
+  - Raven: indexing lag (the test polls), enum stored as string, null/missing handling.
 - Decide the skip mechanism: adopt `Xunit.SkippableFact` (or Testcontainers, per EPIC-011) so these report
   as **Skipped** instead of a no-op **Pass** when infra is absent.
+
+## Findings
+
+- **SQL parser bug found + fixed (this session):** `AbstractConnectorBase.AppendConditionTo` applied
+  `Condition.IsNot` only on the leaf path — a negated **group** (`!(a && b)`, `!(a || b)`, or a negated
+  comparison that became a single-child sub-group) rendered as `(a AND b)` with the `NOT` **silently
+  dropped**, so the filter matched the OPPOSITE rows. Fixed in `AppendSubConditionsTo` (prefix `NOT` +
+  parenthesise negated groups). Caught by the new `grpAndOr`/`deMorgan`/`mixedNot` cases in
+  `SqlExpressionParityTests`. ElasticSearch nests correctly (verified structurally); Mongo/Cosmos/Raven
+  pending the live run.
 
 ## Provenance
 

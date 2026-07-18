@@ -20,9 +20,10 @@ Execute the env-var-gated live null-filter tests against real backends and revie
    - RavenDB: `docker run -p 8080:8080 ravendb/ravendb` → `BIRKO_RAVEN_URL=http://localhost:8080`
    - Cosmos: Azure Cosmos emulator (linux image or Azure) → `BIRKO_COSMOS_CONNECTION=<conn string>`
 2. Run each suite with its env var set:
-   - `dotnet test Birko.Data.MongoDB.Tests --filter MongoNullFilterLiveTests`
-   - `dotnet test Birko.Data.CosmosDB.Tests --filter CosmosNullFilterLiveTests`
-   - `dotnet test Birko.Data.RavenDB.Tests --filter RavenNullFilterLiveTests`
+   - `dotnet test Birko.Data.MongoDB.Tests --filter MongoFilterMatrixLiveTests`
+   - `dotnet test Birko.Data.CosmosDB.Tests --filter CosmosFilterMatrixLiveTests`
+   - `dotnet test Birko.Data.RavenDB.Tests --filter RavenFilterMatrixLiveTests`
+   Each runs the full shape matrix (STORY-047) and reports per-shape OK / DIVERGE / THROW on failure.
 3. If any fail, determine whether it is a real semantic divergence (e.g. Cosmos `= null` vs `IS_NULL`) or a
    serialization/indexing nuance, and record the finding; fix or document as appropriate.
 4. Follow-up (optional, per STORY-047): extend the live matrix beyond null, and adopt a real Skipped

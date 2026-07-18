@@ -163,3 +163,10 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Filter-parser parity: SQL negated-group fix + ElasticSearch gaps closed + cross-backend tests (2026-07-18)
+
+Audited the LINQ-`Expression` filter translators across backends. Fixed two hand-rolled parsers and added parity tests:
+- **SQL correctness bug:** a negated **group** (`!(a && b)`, `!(a || b)`, or a negated comparison that became a sub-group) rendered as `(a AND b)` with the `NOT` **silently dropped** — the filter matched the opposite rows. Fixed in `AbstractConnectorBase.AppendSubConditionsTo` (prefix `NOT` + parenthesise negated groups).
+- **ElasticSearch gaps** (separate commit): `EndsWith`/`ToLower`/IN-pattern threw, bitwise `&`/`|` was silently dropped, bare/const bool produced malformed queries — all brought to parity. See `Birko.Data.ElasticSearch` CLAUDE.md § "Filter translation".
+- **Tests:** `SqlExpressionParityTests` (SQLite oracle) + `ExpressionDivergenceTests` (ES structure) cover comparisons, null, strings, IN, and complex nested grouping in-process; env-var-gated `*FilterMatrixLiveTests` (Mongo/Cosmos/Raven) verify the native LINQ/driver translators against a compiled-delegate oracle when a live backend is available (tracked in `tasks/EPIC-011 STORY-047`).
