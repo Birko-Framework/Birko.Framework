@@ -164,6 +164,14 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Composite UNIQUE index support in attribute-driven SQL DDL (2026-07-18)
+
+`[IndexedField(name, order, IsUnique: true)]` now emits a composite `CREATE UNIQUE INDEX` — the storage-level backstop for per-tenant uniqueness such as `(TenantGuid, Number)` (two tenants may each issue `FV2026000001`; the pair must still be unique). Additive and provider-wide:
+- `IndexedField` gained `IsUnique` (default false); `Tables.IndexDefinition` gained `Unique`.
+- `LoadIndexes` sets `idx.Unique` when any contributing `[IndexedField]` for that name is unique (both the direct-cast and cross-assembly reflection paths).
+- `AbstractConnectorBase.CreateIndexSql` (all providers — SQLite/PostgreSQL/MySQL) and the `MSSqlConnector` override emit `CREATE UNIQUE INDEX` when `index.Unique`.
+- **Decision on the draft-empty case:** only a **full** unique index is emitted — partial/filtered unique indexes (`WHERE Number <> ''`, to allow multiple empty-string drafts) are **not** supported, because they are not portable (SQLite/PostgreSQL partial vs MSSQL filtered vs MySQL neither). Composite-unique therefore fits **always-populated** columns; columns left empty on drafts must rely on an application-level guarded allocator. Tests: `Birko.Data.SQL.Tests` `CompositeUniqueIndexTests` (DDL) + `Birko.Data.SQL.SqLite.Tests` `CompositeUniqueIndexEndToEndTests` (enforced end-to-end). Consumer follow-up tracked in Symbio `TASK-170`.
+
 ### Filter-parser parity: SQL negated-group fix + ElasticSearch gaps closed + cross-backend tests (2026-07-18)
 
 Audited the LINQ-`Expression` filter translators across backends. Fixed two hand-rolled parsers and added parity tests:
