@@ -146,7 +146,13 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     protected virtual IFilter<T> TenantFilter(Expression<Func<T, bool>>? filter)
     {
         EnsureTenantForStrict();
-        return new Filters.ModelByTenant<T>(_tenantContext.CurrentTenantGuid, filter);
+        // Inside an explicit all-tenants (admin) scope, reads span ALL tenants even when a tenant is
+        // also set — otherwise WithAllTenants(...) would silently keep scoping reads to the ambient
+        // tenant, contradicting its documented "operate across tenants on purpose" intent. Only the
+        // read/count/filter-write path flows through here; the write-authorization guards
+        // (BelongsToCurrentTenant / SetTenantGuidIfNeeded) already special-case all-tenants scope.
+        var effectiveTenant = _tenantContext.IsAllTenantsScope ? (Guid?)null : _tenantContext.CurrentTenantGuid;
+        return new Filters.ModelByTenant<T>(effectiveTenant, filter);
     }
 
     /// <summary>

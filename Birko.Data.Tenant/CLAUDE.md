@@ -79,6 +79,13 @@ Middleware/
 - **Wrapper/Decorator:** Store wrappers transparently add tenant filtering to any store
 - **AsyncLocal storage:** Thread-safe, async-aware tenant context without thread-local
 - **Nested scopes:** WithTenant/WithTenantAsync save/restore previous context
+- **All-tenants (admin) scope:** `WithAllTenants(...)` sets `IsAllTenantsScope`. Inside it, reads/counts
+  span **all** tenants even when a tenant is also set — `TenantFilter` treats the effective tenant as
+  null while the scope is active (so admin/maintenance code that reads global reference data
+  `TenantGuid == Guid.Empty` or other tenants' rows from within a request scope actually sees them, not
+  just the ambient tenant). It also suppresses the Strict no-tenant throw. Note it only changes the
+  filter seam — `CurrentTenantGuid` is unchanged, so a nested `WithTenant(...)` used purely for event
+  attribution still stamps that tenant.
 - **Filter composition:** ModelByTenant combines base filters with tenant predicate via Expression.AndAlso
 - **Authorization:** Update/Delete throw UnauthorizedAccessException for cross-tenant access —
   **only when a tenant is set.** With no tenant on the context (`HasTenant == false`) the wrappers
