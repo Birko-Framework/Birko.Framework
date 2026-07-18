@@ -98,6 +98,34 @@ public class ModelByTenantAndWrapperTests
     }
 
     [Fact]
+    public async Task Read_InsideAllTenantsScope_SpansAllTenants_EvenWithTenantSet()
+    {
+        // Regression: WithAllTenants(...) must give truly cross-tenant reads even when a tenant is in
+        // scope. Before the fix, TenantFilter unconditionally scoped to CurrentTenantGuid, so an admin
+        // reading global/reference rows (TenantGuid == Guid.Empty) or other tenants' rows from within a
+        // request scope silently saw only its own tenant.
+        var inner = new AsyncInMemoryStore<Doc>();
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        await inner.CreateAsync(new[]
+        {
+            new Doc { Guid = Guid.NewGuid(), TenantGuid = Guid.Empty, Name = "global" },
+            new Doc { Guid = Guid.NewGuid(), TenantGuid = tenantA, Name = "a" },
+            new Doc { Guid = Guid.NewGuid(), TenantGuid = tenantB, Name = "b" },
+        });
+
+        var ctx = new TenantContext();
+        ctx.SetTenant(tenantA); // a tenant IS in scope
+        var wrapper = Wrap(inner, ctx);
+
+        var results = await ctx.WithAllTenantsAsync(async () => (await wrapper.ReadAsync(filter: null)).ToList());
+
+        results!.Select(d => d.Name).Should().BeEquivalentTo("global", "a", "b");
+        // And the ambient tenant is restored once the scope exits.
+        (await wrapper.ReadAsync(filter: null)).Should().OnlyContain(d => d.TenantGuid == tenantA);
+    }
+
+    [Fact]
     public async Task Update_ForeignTenantItem_Throws()
     {
         var inner = new AsyncInMemoryStore<Doc>();
