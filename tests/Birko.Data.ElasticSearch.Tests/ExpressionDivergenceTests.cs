@@ -73,6 +73,43 @@ namespace Birko.Data.ElasticSearch.Tests
             q.Should.Should().HaveCount(2);
         }
 
+        // ---- Complex nested boolean grouping (precedence must be preserved, not flattened) ----
+
+        // (a || b) && (c || d)  →  bool.Must = [ bool.Should[a,b], bool.Should[c,d] ]
+        [Fact]
+        public void NestedOrAnd_PreservesGrouping()
+        {
+            var outer = Parse(x => (x.Count == 1 || x.Count == 2) && (x.Amount > 0m || x.Amount < -1m))
+                .Should().BeOfType<BoolQuery>().Subject;
+            outer.Must.Should().HaveCount(2);
+            outer.Should.Should().BeNullOrEmpty();
+            // each Must arm is itself an OR (bool.Should) — i.e. the parentheses were honoured
+            outer.Must.Select(qc => qc).Should().OnlyContain(qc => ((IQueryContainer)qc).Bool != null
+                && ((IQueryContainer)qc).Bool.Should != null);
+        }
+
+        // (a && b) || (c && d)  →  bool.Should = [ bool.Must[a,b], bool.Must[c,d] ]
+        [Fact]
+        public void NestedAndOr_PreservesGrouping()
+        {
+            var outer = Parse(x => (x.Count == 1 && x.IsTest) || (x.Count == 2 && x.Amount > 0m))
+                .Should().BeOfType<BoolQuery>().Subject;
+            outer.Should.Should().HaveCount(2);
+            outer.Must.Should().BeNullOrEmpty();
+            outer.Should.Should().OnlyContain(qc => ((IQueryContainer)qc).Bool != null
+                && ((IQueryContainer)qc).Bool.Must != null);
+        }
+
+        // !(a && b)  →  bool.MustNot = [ bool.Must[a,b] ]
+        [Fact]
+        public void NotOfAnd_ProducesMustNotOverBoolMust()
+        {
+            var outer = Parse(x => !(x.IsTest && x.Count > 0))
+                .Should().BeOfType<BoolQuery>().Subject;
+            outer.MustNot.Should().HaveCount(1);
+            ((IQueryContainer)outer.MustNot.Single()).Bool.Must.Should().HaveCount(2);
+        }
+
         // ---- Null / HasValue ----
 
         [Fact]
