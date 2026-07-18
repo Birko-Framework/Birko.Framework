@@ -280,8 +280,9 @@ namespace Birko.Data.SQL.Connectors
                 QuoteIdentifier(c.ColumnName) + (c.IsDescending ? " DESC" : "")));
 
             var indexName = index.Name.Replace("'", "''");
+            var unique = index.Unique ? "UNIQUE " : "";
             return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{tableName.Replace("'", "''")}')) "
-                 + $"CREATE INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+                 + $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
         }
 
         public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
