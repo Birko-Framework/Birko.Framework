@@ -97,6 +97,15 @@ public class SqlExpressionParityTests : IDisposable
             ("hasValue",      x => x.Score.HasValue),
             ("greaterThan",   x => x.Amount > 4),
             ("lessOrEqual",   x => x.Amount <= 5),
+
+            // Complex nested boolean grouping — verifies the hand-rolled parser preserves AND/OR
+            // precedence and does not flatten (a || b) && (c || d) into a || (b && c) || d etc.
+            ("grpOrAnd",      x => (x.Active || x.Amount > 6) && (x.Score == null || x.Name!.StartsWith("a"))),
+            ("grpAndOr",      x => (x.Active && x.Amount < 3) || (!x.Active && x.Amount > 6)),
+            ("deMorgan",      x => !(x.Active && x.Amount > 4)),
+            ("deepNest",      x => x.Active || (x.Amount > 4 && (x.Score != null || x.Name!.EndsWith("a")))),
+            ("mixedNot",      x => x.Score != null && !(x.Name == "beta") && (x.Amount <= 2 || x.Amount >= 7)),
+            ("orOfAnds",      x => (x.Active && x.Score != null) || (x.Amount == 9) || (x.Name!.StartsWith("b") && !x.Active)),
         };
         foreach (var c in cases)
             yield return new object[] { c.label, c.expr };
