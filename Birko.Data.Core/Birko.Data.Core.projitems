@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreException.cs" />
     <!-- Expressions -->
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionParameterReplacer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionNormalizer.cs" />
     <!-- Filters -->
     <Compile Include="$(MSBuildThisFileDirectory)Filters\IFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByGuid.cs" />
