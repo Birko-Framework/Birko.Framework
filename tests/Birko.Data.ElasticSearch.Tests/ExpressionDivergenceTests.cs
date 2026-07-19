@@ -163,6 +163,64 @@ namespace Birko.Data.ElasticSearch.Tests
         [Fact]
         public void ConstantFalse_ProducesMatchNone() => Parse(x => false).Should().BeOfType<MatchNoneQuery>();
 
+        // ---- Ternary / null-coalescing via the shared ExpressionNormalizer (STORY-047) ----
+
+        // A boolean ternary c ? t : f is desugared to (c && t) || (!c && f) by the normalizer, so ES
+        // sees a plain OR-of-ANDs. Previously ConditionalExpression was unhandled → the filter was dropped.
+        [Fact]
+        public void BooleanTernary_DesugarsToShouldOfMusts()
+        {
+            var outer = Parse(x => x.Count > 3 ? x.IsTest : x.Amount == null)
+                .Should().BeOfType<BoolQuery>().Subject;
+            outer.Should.Should().HaveCount(2);
+            outer.Must.Should().BeNullOrEmpty();
+            outer.Should.Should().OnlyContain(qc => ((IQueryContainer)qc).Bool != null
+                && ((IQueryContainer)qc).Bool.Must != null);
+        }
+
+        // A parameter-free ternary (constant/closure test) is funcletized: the surviving branch is all
+        // that reaches ES — here the whole predicate collapses to the bare-bool arm.
+        [Fact]
+        public void ParameterFreeTernary_FuncletizesToSurvivingBranch()
+        {
+            var flag = true;
+            var q = Parse(x => (flag ? x.IsTest : x.Count > 100)).Should().BeOfType<TermQuery>().Subject;
+            q.Field.Name.Should().Be("isTest");
+            q.Value.Should().Be(true);
+        }
+
+        // ---- Value-expression operands → Painless script query (STORY-047 follow-up) ----
+
+        [Fact]
+        public void ColumnArithmetic_ProducesGuardedScriptQuery()
+        {
+            var q = Parse(x => x.Count * 2 > 10).Should().BeOfType<ScriptQuery>().Subject;
+            var src = ((InlineScript)q.Script!).Source;
+            src.Should().Contain("(doc['count'].value * 2)");
+            src.Should().Contain("> 10");
+            src.Should().Contain("doc['count'].size() > 0"); // required-field existence guard
+        }
+
+        [Fact]
+        public void ValueCoalesce_ProducesScriptWithMissingFallback_NoGuardForCoalescedField()
+        {
+            var q = Parse(x => (x.Amount ?? 0m) > 5m).Should().BeOfType<ScriptQuery>().Subject;
+            var src = ((InlineScript)q.Script!).Source;
+            src.Should().Contain("doc['amount'].size() == 0 ? 0 : doc['amount'].value");
+            // The coalesced field handles its own absence, so it is NOT added to the required guard.
+            src.Should().NotContain("doc['amount'].size() > 0");
+        }
+
+        [Fact]
+        public void ValueTernary_ProducesScriptCase()
+        {
+            var q = Parse(x => (x.IsTest ? x.Count : 0) > 3).Should().BeOfType<ScriptQuery>().Subject;
+            var src = ((InlineScript)q.Script!).Source;
+            src.Should().Contain("doc['isTest'].value ?");
+            src.Should().Contain("doc['count'].value");
+            src.Should().Contain("> 3");
+        }
+
         // ---- IN pattern ----
 
         // FIXED: collection.Contains(x.Member) previously THREW; now a terms (IN) query.
