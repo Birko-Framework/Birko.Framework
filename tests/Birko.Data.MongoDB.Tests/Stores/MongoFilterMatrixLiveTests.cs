@@ -90,6 +90,15 @@ public class MongoFilterMatrixLiveTests
             ("deMorgan",     x => !(x.Active && x.Amount > 4)),
             ("deepNest",     x => x.Active || (x.Amount > 4 && (x.Status == Status.Active || x.Name!.StartsWith("z")))),
             ("mixedNot",     x => x.Score != null && !(x.Status == Status.Closed) && (x.Amount <= 2 || x.Amount >= 7)),
+
+            // STORY-047 follow-up: ternary / null-coalescing / column arithmetic. The document backends have
+            // no hand-rolled parser — the driver's LINQ translator handles these natively — so these shapes
+            // confirm the driver agrees with the compiled-delegate oracle. A THROW/DIVERGE here is a
+            // recordable per-backend finding (e.g. arithmetic-in-filter unsupported by the driver).
+            ("ternary",      x => (x.Amount > 4 ? x.Active : x.Score == null)),
+            ("coalesceCmp",  x => (x.Score ?? 0) > 15),
+            ("arithAdd",     x => x.Amount + (x.Score ?? 0) > 10),
+            ("arithMul",     x => x.Amount * 2 >= 10),
         };
     }
 
