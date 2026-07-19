@@ -69,6 +69,41 @@ The live tests and the in-process parser tests share this catalogue:
   `SqlExpressionParityTests`. ElasticSearch nests correctly (verified structurally); Mongo/Cosmos/Raven
   pending the live run.
 
+- **Follow-up shipped (this session): shared expression normalizer + SQL ternary/`??`/arithmetic.**
+  Added `Birko.Data.Expressions.ExpressionNormalizer` (in `Birko.Data.Core`) — a backend-agnostic
+  pre-pass every hand-rolled parser can run at the lambda boundary. It (1) **funcletizes** any
+  parameter-free subtree to a constant (collapsing parameter-free ternary / `??` / arithmetic and all
+  closures) and (2) **desugars** boolean-typed ternary `c ? t : f` → `(c && t) || (!c && f)` and
+  boolean-typed `a ?? b` → `(a == true) || (a == null && b)`. Wired into
+  `DataBase.ParseConditionExpression` (predicates) and `DataBase.ParseExpression` (value position).
+  SQL side additionally gained **value-expression operands in predicates**: column arithmetic
+  (`x.A + x.B > 5`, `x.Price * 2 >= 10`, `x.Total == x.A + x.B`, `%`), null-coalescing
+  (`(x.Score ?? 0) > 5`) and a value-position ternary compared to something
+  (`(x.Vip ? x.Premium : x.Score) > 100` — **CASE in WHERE**). The value side renders to a raw fragment
+  in `Condition.Name` (arithmetic / `COALESCE` / `CASE WHEN`), operator-flipped when the value is on the
+  left, `IsField` for column-vs-column; fragment-internal constants are inlined as portable SQL literals
+  (numeric / bool→1/0 / enum→int / escaped string), with `NotSupportedException` for non-portable types
+  (DateTime/Guid) instead of a silent drop. Value-position `ParseExpression` also gained
+  `COALESCE` / `CASE WHEN` / `IS [NOT] NULL`.
+- **ElasticSearch adopted the shared normalizer** (`ParseLambda` runs `ExpressionNormalizer` first), so
+  boolean ternary / `??` desugar to AND/OR/NOT and translate with no ES-specific code.
+- **ElasticSearch value-expression operands → Painless `ScriptQuery`** (`BuildScriptComparison` /
+  `ScriptValue` / `ScriptBool`): column arithmetic, value-`??` (missing-fallback via `doc['f'].size()`)
+  and value-position CASE compared to something now translate to a guarded Painless script
+  (`(existence-guard) ? (body) : false` so missing fields exclude the doc, matching C#). Non-scriptable
+  shapes throw instead of silently dropping. Also fixed ES `ContainsParameter` to recurse into
+  `ConditionalExpression` (it previously mis-classified a ternary-containing predicate as parameter-free).
+- **Live document-backend matrices extended** (`Mongo`/`Cosmos`/`Raven` `FilterMatrixLiveTests`): added
+  `ternary` / `coalesceCmp` / `arithAdd` / `arithMul` shapes so the driver LINQ translators are checked
+  against the compiled-delegate oracle when a live backend is present (still env-var-gated no-op otherwise).
+  A THROW/DIVERGE on these is a recordable per-backend finding (record below when the live run happens).
+
+  Tests: `Birko.Data.Core.Tests.ExpressionNormalizerTests` (12) +
+  `Birko.Data.SQL.SqLite.Tests.SqlPredicateNormalizationTests` (24, oracle-compared across
+  Where/Delete/Update + CASE-in-WHERE + value position) + `ExpressionDivergenceTests` (+5 ES cases:
+  2 ternary/funcletize, 3 script-query). Existing `SqlExpressionParityTests` (23) and full
+  SQL/SqLite/Core/ES suites green (312 / 75 / 29 / 102).
+
 ## Provenance
 
 Follows the ElasticSearch parser parity fix and the SQL/ES parity tests (this session). See

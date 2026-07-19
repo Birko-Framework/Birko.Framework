@@ -164,6 +164,33 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Shared expression normalizer — ternary / `??` / column-arithmetic in SQL predicates (2026-07-19)
+
+STORY-047 follow-up. Added `Birko.Data.Expressions.ExpressionNormalizer` (in `Birko.Data.Core`) — a
+backend-agnostic pre-pass the hand-rolled store parsers run at the lambda boundary. It **funcletizes**
+any parameter-free subtree to a constant (collapsing parameter-free ternary / `??` / arithmetic and all
+closures) and **desugars** boolean-typed ternary `c ? t : f` → `(c && t) || (!c && f)` and boolean-typed
+`a ?? b` → `(a == true) || (a == null && b)`, so predicate parsers only ever see AND/OR/NOT/comparisons.
+Wired into `DataBase.ParseConditionExpression` (Where/Delete/Update predicates) and `DataBase.ParseExpression`
+(value position). SQL parser additionally gained **value-expression operands in predicates** — column
+arithmetic (`x.A + x.B > 5`, `x.Price * 2 >= 10`, `x.Total == x.A + x.B`, `x.Bonus % 2 == 0`),
+null-coalescing (`(x.Score ?? 0) > 5`) and a value-position ternary compared to something
+(`(x.Vip ? x.Premium : x.Score) > 100`, i.e. **CASE in WHERE**). The value side renders to a raw fragment
+in `Condition.Name` (arithmetic / `COALESCE` / `CASE WHEN`), operator flipped when the value is on the left,
+`IsField` for column-vs-column; fragment-internal constants are inlined as portable SQL literals (numeric /
+bool→1/0 / enum→int / escaped string), with `NotSupportedException` for non-portable types (DateTime/Guid)
+instead of a silent drop. Value position also gained `COALESCE` / `CASE WHEN` / `IS [NOT] NULL`.
+**ElasticSearch adopted the same normalizer** (`ParseLambda` runs it first), so boolean ternary / `??`
+desugar to AND/OR/NOT with no ES-specific code; ES **value-expression operands** (arithmetic / value-`??` /
+value-CASE compared) now emit a guarded Painless `ScriptQuery` (`(existence-guard) ? (body) : false` so a
+missing field excludes the doc, matching C#) instead of being dropped, throwing on non-scriptable shapes
+(also fixed ES `ContainsParameter` to recurse into `ConditionalExpression`). The **live document-backend
+matrices** (Mongo/Cosmos/Raven `FilterMatrixLiveTests`) gained ternary/`??`/arithmetic shapes to check the
+driver LINQ translators against the oracle when a backend is present (env-gated no-op otherwise). Tests:
+`ExpressionNormalizerTests` (Core, 12) + `SqlPredicateNormalizationTests` (SqLite, 24, oracle-compared) +
+`ExpressionDivergenceTests` (+5 ES cases); existing `SqlExpressionParityTests` (23) and full
+SQL/SqLite/Core/ES suites green (312 / 75 / 29 / 102).
+
 ### Composite UNIQUE index support in attribute-driven SQL DDL (2026-07-18)
 
 `[IndexedField(name, order, IsUnique: true)]` now emits a composite `CREATE UNIQUE INDEX` — the storage-level backstop for per-tenant uniqueness such as `(TenantGuid, Number)` (two tenants may each issue `FV2026000001`; the pair must still be unique). Additive and provider-wide:
