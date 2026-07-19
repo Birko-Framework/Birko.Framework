@@ -4,7 +4,7 @@ parent: EPIC-011
 status: planned
 created: 2026-07-18
 owner: ai
-affects: [Birko.Data.MongoDB.Tests, Birko.Data.CosmosDB.Tests, Birko.Data.RavenDB.Tests]
+affects: [Birko.Data.MongoDB.Tests, Birko.Data.CosmosDB.Tests, Birko.Data.RavenDB.Tests, Birko.Data.ElasticSearch.Tests]
 ---
 
 # Review filter-parser behaviour on live document databases
@@ -50,7 +50,13 @@ The live tests and the in-process parser tests share this catalogue:
 ## Behaviour / acceptance criteria
 
 - Stand up MongoDB + Cosmos (emulator) + RavenDB (containers/emulator); set the three env vars and run the
-  `*FilterMatrixLiveTests` green (0 divergences).
+  `*FilterMatrixLiveTests` green (0 divergences). **Includes the normalizer follow-up shapes**
+  (`ternary` / `coalesceCmp` / `arithAdd` / `arithMul`) added to each matrix — a THROW/DIVERGE on those
+  (e.g. a driver that can't translate arithmetic-in-filter) is a recordable per-backend finding, not a regression.
+- **Live ElasticSearch round-trip** of the Painless `ScriptQuery` path (`BuildScriptComparison`): the
+  column-arithmetic / value-`??` / value-CASE script queries are currently only asserted **structurally**
+  (`ExpressionDivergenceTests`) — verify they actually execute and match the oracle against a running ES
+  (existence-guard excludes missing-field docs; `doc_values`/`.keyword` field requirements hold).
 - Record any provider-specific nuances found — especially:
   - Cosmos: LINQ `x.F == null` translation (`c.F = null` matches nothing in Cosmos SQL vs `IS_NULL(c.F)`);
     `.Date`, `ToLower`, nested `Any` support.
