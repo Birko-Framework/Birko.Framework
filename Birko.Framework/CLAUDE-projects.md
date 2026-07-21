@@ -122,6 +122,7 @@
 - **Birko.EventBus.MessageQueue** - Distributed event bus over Birko.MessageQueue
 - **Birko.EventBus.Outbox** - Transactional outbox pattern
 - **Birko.EventBus.EventSourcing** - EventStore-to-EventBus bridge
+- **Birko.EventBus.Tenant** - Tenant-scope bridge to Birko.Data.Tenant (TenantEventEnricher + TenantEventScopeAccessor for background dispatch under Strict isolation)
 
 ## Health
 - **Birko.Health** - IHealthCheck, HealthCheckRunner, DiskSpace/Memory checks

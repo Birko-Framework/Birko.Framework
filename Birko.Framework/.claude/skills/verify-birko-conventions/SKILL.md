@@ -1,6 +1,6 @@
 ---
 name: verify-birko-conventions
-description: Lint the staged or current diff against the conventions documented in `Birko.Framework/CLAUDE.md`. Use when the user says "verify conventions", "check birko rules", "lint pred commitom", "skontroluj zmeny", "are my changes following birko conventions", or before any commit on Birko.Framework. Catches nullable-warning regressions (CS8600–CS8625), concrete stores overriding public CRUD instead of `*Core`, missing tests for new public methods, hard-coded paths instead of `$(BirkoSrc)`, `RemoteSettings` constructed inline instead of via `base.SetSettings()`, missing `Recent Updates` entries for non-trivial changes, missing `CLAUDE.md` / `README.md` / `License.md` / `.gitignore` in new project directories, and missing registrations in `.slnx` / `.code-workspace` / `Birko.Framework.csproj`.
+description: Lint the staged or current diff against the conventions documented in `Birko.Framework/CLAUDE.md`. Use when the user says "verify conventions", "check birko rules", "lint pred commitom", "skontroluj zmeny", "are my changes following birko conventions", or before any commit on Birko.Framework. Catches nullable-warning regressions (CS8600–CS8625), concrete stores overriding public CRUD instead of `*Core`, missing tests for new public methods, hard-coded paths instead of `$(BirkoSrc)`, `RemoteSettings` constructed inline instead of via `base.SetSettings()`, missing `Recent Updates` entries for non-trivial changes, missing `CLAUDE.md` / `README.md` / `License.md` / `.gitignore` in new project directories, missing registrations in `.slnx` / `.code-workspace` / `Birko.Framework.csproj`, and new projects missing from the documentation index (`README.md` project table / `CLAUDE-projects.md` / `docs/`).
 ---
 
 # Birko Framework — Convention Verifier
@@ -19,7 +19,8 @@ These files are the source of truth. If they change, the checks below should ada
 - `CLAUDE.md` § "Conventions" — the full convention list.
 - `CLAUDE.md` § "Code Style" — guard clauses, no nullable warnings.
 - `CLAUDE-maintenance.md` § "New Project Checklist" — required files in every project directory.
-- `CLAUDE-maintenance.md` § "Solution & Workspace Registration" — required registrations for new projects.
+- `CLAUDE-maintenance.md` § "Solution & Workspace Registration" — required build-file registrations for new projects.
+- `CLAUDE-maintenance.md` § "Documentation Index Registration" — required doc-index membership (README table / CLAUDE-projects / docs/) for new projects.
 - `CLAUDE-maintenance.md` § "Test Requirements" — every new public method needs a test.
 - `CLAUDE-maintenance.md` § "Health Check Requirements" — every external-service project needs a health check.
 
@@ -103,6 +104,29 @@ For every new `.shproj` or `.csproj` in the diff:
 - Check `Birko.Framework.code-workspace` for a folder entry referencing `../NewName`. Report missing.
 - For shared projects (`.shproj`), check `Birko.Framework.csproj` for an `<Import Project="..\NewName\NewName.projitems" />` line. Report missing.
 
+### 7b. New project missing from the documentation index
+
+Per CLAUDE-maintenance.md § "Documentation Index Registration": a new non-test `.shproj` project must appear in **all three** doc-index locations, not just the build files. Build-file registration (check #7) makes it compile; this makes it discoverable. This is the exact gap that let `Birko.EventBus.Tenant` ship undocumented.
+
+For every new `.shproj` in the diff (excluding `.Tests`, `.ViewModel`, `.Views` companions — those inherit the parent's docs, but verify the parent is indexed):
+
+- **`README.md`** — grep for a table row containing the project name (`| Birko.X |`). Report missing.
+- **`CLAUDE-projects.md`** — grep for a bullet containing the project name. Report missing.
+- **`docs/*.md`** — grep the whole `docs/` folder for the project name; it should appear on the topic page for its area (e.g. a new `Birko.Workflow.X` in `docs/workflow.md`). Report missing, and suggest the likely topic page by matching the project's second name segment (`Birko.Workflow.X` → `docs/workflow.md`, `Birko.EventBus.X` → `docs/event-bus.md`).
+
+Quick full-repo drift sweep (catches pre-existing gaps, not just the current diff) — run from `C:\Source\Birko\Framework`:
+
+```bash
+cat Birko.Framework/README.md Birko.Framework/CLAUDE-projects.md Birko.Framework/CLAUDE.md Birko.Framework/docs/*.md > /tmp/alldocs.txt
+for d in Birko.*/; do d="${d%/}"
+  case "$d" in *.Tests|*.ViewModel|*.Views) continue;; esac
+  { ls "$d"/*.shproj >/dev/null 2>&1 || ls "$d"/*.projitems >/dev/null 2>&1; } || continue
+  grep -qF "$d" /tmp/alldocs.txt || echo "UNDOCUMENTED: $d"
+done
+```
+
+Report any `UNDOCUMENTED:` line as a blocker.
+
 ### 8. External-service project missing health check
 
 Per CLAUDE-maintenance.md § "Health Check Requirements": every project that connects to an external service must ship a health check.
@@ -129,7 +153,7 @@ if\s*\(\s*\w+\s*!=\s*null\s*\)\s*\{(?:[^}]*\{[^}]*\}[^}]*)*\}\s*$
 
 Group findings by severity:
 
-- **🛑 Blockers** — nullable warnings, missing `*Core` overrides, missing required files in new projects, missing registrations.
+- **🛑 Blockers** — nullable warnings, missing `*Core` overrides, missing required files in new projects, missing build-file registrations, new projects missing from the documentation index.
 - **⚠ Warnings** — missing tests for new public methods, hard-coded paths, missing health check.
 - **💡 Suggestions** — missing `Recent Updates` entry, guard-clause violations.
 

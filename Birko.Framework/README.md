@@ -277,6 +277,7 @@ A modular .NET framework providing data access, communication, AI, and model inf
 | Birko.EventBus.MessageQueue | Distributed event bus over MessageQueue providers |
 | Birko.EventBus.Outbox | Transactional outbox pattern (at-least-once delivery) |
 | Birko.EventBus.EventSourcing | EventStore-to-EventBus bridge and replay |
+| Birko.EventBus.Tenant | Tenant-scope bridge to Birko.Data.Tenant (enricher + scope accessor for background dispatch) |
 | Birko.Messaging | Email, SMS, push notification interfaces and SMTP sender |
 | Birko.Messaging.Razor | Razor template engine (RazorLight-based, .cshtml templates) |
 | Birko.Storage | File/blob storage abstraction (local filesystem) |

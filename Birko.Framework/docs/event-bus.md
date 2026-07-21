@@ -10,6 +10,7 @@ Birko.EventBus provides a publish-subscribe event bus with four composable layer
 | **Distributed** | Birko.EventBus.MessageQueue | Cross-process delivery via MessageQueue |
 | **Outbox** | Birko.EventBus.Outbox | At-least-once delivery with transactional consistency |
 | **Event Sourcing** | Birko.EventBus.EventSourcing | Bridge domain events from EventStore to EventBus |
+| **Tenant** | Birko.EventBus.Tenant | Restore tenant scope for background dispatch (outbox / MQ consumer) |
 
 ## Core Concepts
 
@@ -348,3 +349,4 @@ services.AddEventHandler<OrderPlaced, OrderPlacedHandler>();
 | Birko.EventBus.MessageQueue | Birko.EventBus, Birko.MessageQueue, MS.Extensions.Hosting.Abstractions |
 | Birko.EventBus.Outbox | Birko.EventBus, Birko.MessageQueue (serializer), MS.Extensions.Hosting.Abstractions |
 | Birko.EventBus.EventSourcing | Birko.EventBus, Birko.Data.EventSourcing |
+| Birko.EventBus.Tenant | Birko.EventBus, Birko.Data.Tenant, MS.Extensions.DependencyInjection.Abstractions |

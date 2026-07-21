@@ -62,10 +62,21 @@ Existing folder groups:
 - **Workflow/** — Birko.Workflow, Birko.Workflow.SQL/ElasticSearch/MongoDB/RavenDB/JSON/CosmosDB
 - **AI/** — Birko.AI.Contracts, Birko.AI, Birko.AI.Providers, Birko.AI.Agents, Birko.AI.Resilience, Birko.AI.Orchestration
 - **Data.Views/** — Birko.Data.Views, Birko.Data.SQL.Views, Birko.Data.MongoDB.Views, Birko.Data.ElasticSearch.Views, Birko.Data.RavenDB.Views, Birko.Data.CosmosDB.Views
-- **EventBus/** — Birko.EventBus, Birko.EventBus.MessageQueue, Birko.EventBus.Outbox, Birko.EventBus.EventSourcing
+- **EventBus/** — Birko.EventBus, Birko.EventBus.MessageQueue, Birko.EventBus.Outbox, Birko.EventBus.EventSourcing, Birko.EventBus.Tenant
 - **Localization/** — Birko.Localization, Birko.Localization.Data, Birko.Data.Localization
 - **Messaging/** — Birko.Messaging, Birko.Messaging.Razor
 - **Web/** — Birko.Web.Core, Birko.Web.Components, Birko.Web.Shell
+
+## Documentation Index Registration
+A new project is not "registered" until it appears in the framework's **documentation index**, not just the build files. `.slnx` / `.code-workspace` / `.csproj` make it compile; the doc index makes it discoverable. Every new non-test project (`.shproj`) must be added to **all three**:
+
+1. **`README.md`** — a row in the "Projects" table (`| Birko.X | one-line purpose |`), placed next to its siblings.
+2. **`CLAUDE-projects.md`** — a bullet in the appropriate category (`- **Birko.X** - short description`).
+3. **`docs/{topic}.md`** — the topic page for the project's area (e.g. a new EventBus variant → a row in `docs/event-bus.md`'s layer table **and** its dependency table). If the project opens a brand-new area with no existing topic page, add a new `docs/{topic}.md` and link it from `README.md`.
+
+Exclusions: `.Tests`, `.ViewModel`, `.Views` companions inherit their parent's documentation and need no separate index row (but confirm the parent is indexed). Test projects are never listed in the project index.
+
+This is the gap that build-file registration alone misses — a project can compile and ship yet be invisible in every human-facing doc. `verify-birko-conventions` check #11 lints for it.
 
 ## Test Requirements
 Every new public functionality must have corresponding unit tests:

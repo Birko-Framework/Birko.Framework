@@ -164,6 +164,17 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Doc-index registration is now a required, linted step (2026-07-21)
+
+`Birko.EventBus.Tenant` shipped fully built and build-registered yet invisible in every human-facing
+doc (README project table, `CLAUDE-projects.md`, `docs/event-bus.md`) — an audit found it was the only
+project of 175+ missing from the doc index. Added it there, and closed the gap structurally so it can't
+recur: new **`CLAUDE-maintenance.md` § "Documentation Index Registration"** makes doc-index membership a
+required registration step distinct from build-file registration (`.slnx`/`.code-workspace`/`.csproj`
+make it compile; the doc index makes it discoverable), and **`verify-birko-conventions` check #7b** lints
+new `.shproj` projects against all three index locations — including a full-repo drift sweep that catches
+pre-existing gaps, not just the current diff.
+
 ### Shared expression normalizer — ternary / `??` / column-arithmetic in SQL predicates (2026-07-19)
 
 STORY-047 follow-up. Added `Birko.Data.Expressions.ExpressionNormalizer` (in `Birko.Data.Core`) — a
