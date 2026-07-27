@@ -69,8 +69,17 @@ public class FilterQueryTests
     [Fact]
     public void UntranslatableFilter_Throws_DoesNotWidenToMatchAll()
     {
-        // A conditional (ternary) body is not a supported node type — ParseExpression returns null.
-        var act = () => BuildFilter(v => v.Category == "a" ? true : false);
+        // `Trim()` is not in ParseMethodCall's supported set and is parameter-dependent, so it cannot be
+        // constant-folded either — ParseExpression returns null. Verified against the parser, not assumed.
+        //
+        // This used to use a boolean ternary, on the stated premise that "a conditional body is not a
+        // supported node type". That went stale when STORY-047 added the shared ExpressionNormalizer, which
+        // desugars `c ? t : f` into (c && t) || (!c && f) — so the example became translatable, no exception
+        // was thrown, and this test sat RED (TASK-267). `.Length` is not a valid substitute either: it
+        // resolves too. The parser-level premise is now pinned by
+        // Birko.Data.ElasticSearch.Tests.FilterQueryGuardTests.Untranslatable_IsStillNullFromTheRawParser,
+        // so if `Trim()` ever becomes translatable this stops silently passing for the wrong reason.
+        var act = () => BuildFilter(v => v.Category!.Trim() == "a");
 
         act.Should().Throw<NotSupportedException>("CR-H047: an untranslatable filter must not silently match everything");
     }
