@@ -223,6 +223,9 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override DbCommand AddParameter(DbCommand command, string name, object? value)
         {
+            // Enums persist as INTEGER (IntegerField) — bind the underlying integral value, never the
+            // boxed enum, or the provider maps it to its own type and the comparison never matches.
+            value = NormalizeParameterValue(value);
             if (command.Parameters.Contains(name))
             {
                 ((MySqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
