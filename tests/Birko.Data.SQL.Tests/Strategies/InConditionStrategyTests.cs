@@ -101,8 +101,15 @@ namespace Birko.Data.SQL.Tests.Strategies
             sql.Should().Be("Category IN (@WHERECategory0_0)");
         }
 
+        // ── Empty value set ───────────────────────────────────────────────────────────────────────────
+        // These two tests previously asserted `Status IN ()`, i.e. they pinned the defect as the contract.
+        // `IN ()` is a syntax error on PostgreSQL and MSSQL. SQLite's grammar permits it and evaluates it
+        // as always-false, which is why the bug survived: the SQLite-backed suites agreed with it. An empty
+        // set is now rendered as a constant with the same semantics — and note the NOT IN case must be
+        // always-TRUE, since "not in the empty set" is true of every row.
+
         [Fact]
-        public void BuildSql_EmptyValues_ShouldReturnEmptyInClause()
+        public void BuildSql_EmptyValues_ShouldReturnAlwaysFalseConstant()
         {
             // Arrange
             var condition = Condition.Create("Status", Array.Empty<object?>(), ConditionType.In);
@@ -110,12 +117,14 @@ namespace Birko.Data.SQL.Tests.Strategies
             // Act
             var sql = _strategy.BuildSql(condition, _command, _context);
 
-            // Assert
-            sql.Should().Be("Status IN ()");
+            // Assert — never `IN ()`, which PostgreSQL/MSSQL reject outright.
+            sql.Should().Be("1 = 0");
+            sql.Should().NotContain("IN ()");
+            _command.Parameters.Count.Should().Be(0, "a constant predicate needs no parameters");
         }
 
         [Fact]
-        public void BuildSql_NullValues_ShouldReturnEmptyInClause()
+        public void BuildSql_NullValues_ShouldReturnAlwaysFalseConstant()
         {
             // Arrange
             var condition = Condition.Create("Status", null, ConditionType.In);
@@ -124,7 +133,69 @@ namespace Birko.Data.SQL.Tests.Strategies
             var sql = _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("Status IN ()");
+            sql.Should().Be("1 = 0");
+            sql.Should().NotContain("IN ()");
+        }
+
+        [Fact]
+        public void BuildSql_EmptyValues_WithIsNot_ShouldReturnAlwaysTrueConstant()
+        {
+            // Arrange — `NOT IN ()` must not silently invert to "matches nothing": every row is outside
+            // the empty set, so an empty NOT IN matches EVERYTHING.
+            var condition = Condition.Create("Status", Array.Empty<object?>(), ConditionType.In, isNot: true);
+
+            // Act
+            var sql = _strategy.BuildSql(condition, _command, _context);
+
+            // Assert
+            sql.Should().Be("1 = 1");
+            sql.Should().NotContain("NOT IN ()");
+        }
+
+        [Fact]
+        public void BuildSql_NullValues_WithIsNot_ShouldReturnAlwaysTrueConstant()
+        {
+            // Arrange
+            var condition = Condition.Create("Status", null, ConditionType.In, isNot: true);
+
+            // Act
+            var sql = _strategy.BuildSql(condition, _command, _context);
+
+            // Assert
+            sql.Should().Be("1 = 1");
+        }
+
+        [Fact]
+        public void BuildSql_SingleValue_IsUnaffectedByTheEmptySetGuard()
+        {
+            // Arrange — a one-element set must still render a real IN, not the constant. Guards against an
+            // over-eager emptiness check (e.g. one that mistook a single value for "no values").
+            var condition = Condition.Create("Status", new object[] { "active" }, ConditionType.In);
+
+            // Act
+            var sql = _strategy.BuildSql(condition, _command, _context);
+
+            // Assert
+            sql.Should().Contain(" IN (");
+            sql.Should().NotBe("1 = 0");
+            _command.Parameters.Count.Should().Be(1);
+        }
+
+        [Fact]
+        public void BuildSql_CollectionOfOnlyNulls_StillRendersARealInClause()
+        {
+            // Arrange — the strategy counts ELEMENTS, it does not filter nulls. A list of nulls is not an
+            // empty list, so it still renders `IN (@p)`; `Col IN (NULL)` is never true in SQL, so the
+            // result is the same "matches nothing" either way. Documents where the boundary sits, so the
+            // guard is not later "fixed" into filtering nulls here (the parser already does that upstream).
+            var condition = Condition.Create("Status", new object?[] { null }, ConditionType.In);
+
+            // Act
+            var sql = _strategy.BuildSql(condition, _command, _context);
+
+            // Assert
+            sql.Should().Contain(" IN (");
+            sql.Should().NotBe("1 = 0");
         }
 
         [Fact]
