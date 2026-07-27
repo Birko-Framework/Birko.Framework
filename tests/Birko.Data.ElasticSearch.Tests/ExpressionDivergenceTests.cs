@@ -232,5 +232,72 @@ namespace Birko.Data.ElasticSearch.Tests
             q.Field.Name.Should().Be("count");
             q.Terms.Should().BeEquivalentTo(new object[] { 1, 2, 3 });
         }
+
+        // ---- IN pattern: the EMPTY / NULL collection (regression, was silent-wrong-rows) ----
+        //
+        // Reference semantics (the native-LINQ backends this file measures against): an empty collection
+        // `Contains` nothing, so the predicate matches NO documents. ParseContains used to return `null`
+        // for that case, and CombineBool DROPS null sub-queries — so the membership filter silently
+        // vanished and the query returned everything matching the remaining clauses. An empty collection is
+        // a normal outcome of the canonical batch pattern (fetch parents, filter children by their ids),
+        // so this was reachable from ordinary code. Now it is an explicit match-none.
+        //
+        // The SQL parser had the same defect with a milder outcome — `Col IN ()`, accepted by SQLite as
+        // always-false, rejected outright by PostgreSQL/MSSQL — fixed in Birko.Data.SQL 0801738.
+
+        [Fact]
+        public void InPattern_EmptyCollection_MatchesNothing_NotEverything()
+        {
+            var ids = Array.Empty<int>();
+
+            // Must be an explicit match-none: `null` would be dropped by the clause combiner.
+            Parse(x => ids.Contains(x.Count)).Should().BeOfType<MatchNoneQuery>();
+        }
+
+        [Fact]
+        public void InPattern_NullCollection_MatchesNothing_NotEverything()
+        {
+            int[]? ids = null;
+
+            // A null collection is the same case as an empty one, one branch earlier in ParseContains.
+            Parse(x => ids!.Contains(x.Count)).Should().BeOfType<MatchNoneQuery>();
+        }
+
+        [Fact]
+        public void InPattern_EmptyCollection_SurvivesClauseCombination()
+        {
+            var ids = Array.Empty<int>();
+
+            // THE ACTUAL BUG: combined with another clause, the empty membership filter used to disappear
+            // and leave `x.Text == "a"` alone — matching rows it must not. Assert the combined query still
+            // carries BOTH clauses.
+            var q = Parse(x => ids.Contains(x.Count) && x.Text == "a").Should().BeOfType<BoolQuery>().Subject;
+
+            // HaveCount(2) is the whole point: pre-fix this was 1, because the empty clause was dropped.
+            q.Must.Should().HaveCount(2, "the empty membership clause must not be dropped");
+        }
+
+        [Fact]
+        public void InPattern_NegatedEmptyCollection_MatchesEverything()
+        {
+            var ids = Array.Empty<int>();
+
+            // The asymmetry that must not be got wrong: every document is NOT in the empty set, so a
+            // negated empty IN matches EVERYTHING. No special case is needed — ParseNot wraps the operand
+            // in MustNot, and "must not match nothing" is every document. This pins that reasoning.
+            var q = Parse(x => !ids.Contains(x.Count)).Should().BeOfType<BoolQuery>().Subject;
+            q.MustNot.Should().HaveCount(1);
+        }
+
+        [Fact]
+        public void InPattern_SingleElement_StillProducesARealTermsQuery()
+        {
+            var ids = new[] { 7 };
+
+            // Boundary: guards against an over-eager emptiness check turning a one-element set into
+            // match-none.
+            var q = Parse(x => ids.Contains(x.Count)).Should().BeOfType<TermsQuery>().Subject;
+            q.Terms.Should().BeEquivalentTo(new object[] { 7 });
+        }
     }
 }
