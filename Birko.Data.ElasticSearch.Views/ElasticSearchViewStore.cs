@@ -320,30 +320,18 @@ public class ElasticSearchViewStore<TView> : IViewStore<TView> where TView : cla
             return new MatchAllQuery();
         }
 
-        // Translate the expression via the shared parser (binary comparisons + &&/||). A supplied
-        // filter that can't be translated must NOT silently widen to match-all (CR-H047): that
-        // turns a filtered/existence/permission query into a false full-result set. Fail loudly.
-        QueryContainer? query;
-        try
-        {
-            query = Data.ElasticSearch.ElasticSearch.ParseExpression(filter);
-        }
-        catch (Exception ex)
-        {
-            throw new NotSupportedException(
-                $"The filter expression could not be translated to an ElasticSearch query: {filter}. " +
-                "Use a simpler filter (binary comparisons and && / || are supported).", ex);
-        }
+        // CR-H047 — a supplied filter that can't be translated must NOT silently widen to match-all: that
+        // turns a filtered/existence/permission query into a false full-result set. This used to be the
+        // ONLY place the invariant was enforced; the main entity stores assigned the parser's result
+        // straight to their requests, so the same null widened reads and, worse, reached
+        // _delete_by_query / _update_by_query unguarded (TASK-268). The logic now lives in one shared
+        // helper that every filter->query conversion routes through, so a new call site cannot forget it.
+        var query = Data.ElasticSearch.ElasticSearch.ParseFilterQuery(filter);
 
-        if (query == null)
-        {
-            // ParseExpression returns null (no throw) for node types it doesn't support.
-            throw new NotSupportedException(
-                $"The filter expression could not be translated to an ElasticSearch query: {filter}. " +
-                "Use a simpler filter (binary comparisons and && / || are supported).");
-        }
-
-        return query;
+        // Unreachable for a non-null filter (the helper throws instead of returning null); kept as a
+        // belt-and-braces assertion of this method's own non-null contract.
+        return query ?? throw new NotSupportedException(
+            $"The filter expression could not be translated to an ElasticSearch query: {filter}.");
     }
 
     #endregion
