@@ -164,6 +164,53 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### X-Tenant-Id must agree with the JWT tenant claim (2026-07-28)
+
+`Birko.Security.AspNetCore` gained **`TenantHeaderClaimGuardMiddleware`**, wired via
+`UseBirkoTenantHeaderGuard()`. `HeaderTenantResolver` parsed `X-Tenant-Id` with no comparison to the
+`tenant_id` claim — and *cannot* compare, because `TenantMiddleware` runs before `UseAuthentication()`, so
+`context.User` is unpopulated there. In a typical app the header and the claim feed **different** consumers
+(repository tenant scoping follows the header, permission resolution follows the token), so a caller could
+authenticate in their own tenant, send `X-Tenant-Id: {victim}`, keep their home-tenant permissions and point
+every tenant-scoped read **and write** at another tenant. Hence a separate post-authentication step, placed
+after `UseAuthentication()`/`UseAuthorization()` and before anything that scopes by tenant; a mismatch returns
+403 `Tenant.HeaderClaimMismatch`. **Secure by default** — `BirkoSecurityOptions.RequireTenantHeaderMatchesClaim
+= true`; an opt-*in* guard was rejected because a check nobody knows to enable protects nobody. Deliberate
+pass-throughs: no header (the claim is then the only source; SSE cannot set headers), unauthenticated
+(login/register/setup), wildcard `*` holders (cross-tenant reach is intentional), unparseable header (resolves
+to no tenant anyway). `BirkoSecurityOptions` is now registered as a singleton so middleware can read it.
+Docs: [docs/security.md](docs/security.md#tenant-headerclaim-guard), [docs/tenant.md](docs/tenant.md).
+
+### Empty-set and enum filter translation fixed across SQL + ElasticSearch (2026-07-27)
+
+Three defects in the same family — an operand the parser mis-read, and an empty collection with no explicit
+case — each of which made a filter match the **wrong rows** rather than fail:
+- **SQL, empty `IN`** — `InConditionStrategy` had no empty-set case and emitted `Col IN ()`. SQLite's grammar
+  permits it (always-false), which hid the defect from the SQLite-backed suites; PostgreSQL and MSSQL reject
+  it as a syntax error. Now renders set-faithful constants: empty `IN` → `1 = 0`, empty `NOT IN` → `1 = 1`
+  ("not in the empty set" is true of every row — always-false there would silently invert the predicate). All
+  four providers share the one strategy, so the single change covers them. `ParseConditionExpression` also
+  stopped degrading an empty materialization to `IsNull` (a different wrong answer: rows with a NULL column).
+- **SQL, `enumSet.Contains(x.EnumColumn)` matched zero rows** — on .NET 9+ an array `Contains` binds to
+  `MemoryExtensions.Contains(ReadOnlySpan<T>, T, IEqualityComparer<T>?)` when `T` isn't `IEquatable<T>` (every
+  enum), and the trailing `null` comparer was parsed as a value, flipping the condition to `IsNull`.
+  `IsNonOperandArgument` now skips comparer / `StringComparison` / `CultureInfo` arguments (same family as the
+  earlier `Contains(q, StringComparison…)` bug). Plus `NormalizeParameterValue` unwraps enums to their
+  underlying integer in all four provider connectors — Npgsql rejects an unmapped CLR enum.
+- **ElasticSearch, empty `Contains` DROPPED the clause** — `ParseContains` returned null and `CombineBool`
+  drops nulls, so `ids.Contains(x.Field) && x.Status == active` with an empty `ids` silently became
+  `x.Status == active`. Now `MatchNoneQuery` for both the empty and null collection (negation via `MustNot`
+  gives every document — the same asymmetry as SQL's empty `NOT IN`).
+
+Also **CR-H047 is now enforced at every ES filter→query boundary**, not just in `ElasticSearchViewStore`: the
+entity stores assigned the parser's output straight to their requests across 14 sites, and a NEST request with
+`Query = null` reads as match-all — so an untranslatable filter turned reads into "return everything" and
+reached `_delete_by_query`/`_update_by_query` unguarded. Two shared helpers own the invariant:
+`ParseFilterQuery` (optional filter — null filter means read-everything on purpose, untranslatable throws) and
+`ParseRequiredFilterQuery` (the four destructive paths — a null filter throws). Three outcomes stay distinct
+and only one is an error: no filter, matches-nothing (`MatchNoneQuery` — a legitimate translation), cannot be
+expressed. Details: `Birko.Data.SQL` / `Birko.Data.ElasticSearch` CLAUDE.md § "Filter translation".
+
 ### Doc-index registration is now a required, linted step (2026-07-21)
 
 `Birko.EventBus.Tenant` shipped fully built and build-registered yet invisible in every human-facing

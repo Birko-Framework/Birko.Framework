@@ -157,6 +157,14 @@ The middleware resolves tenant ID in this order (first match wins):
 3. Route parameter (if `TenantRouteKey` configured)
 4. Custom resolver (if `CustomTenantResolver` delegate provided)
 
+> **Security:** none of these sources is correlated with the caller's identity — the middleware runs before
+> authentication, so there is no claim to compare against. In an authenticated app, add
+> `UseBirkoTenantHeaderGuard()` from `Birko.Security.AspNetCore` after `UseAuthentication()`; it rejects an
+> `X-Tenant-Id` that names a tenant other than the one the JWT was issued for (403
+> `Tenant.HeaderClaimMismatch`) and is on by default. Without it a caller can keep their own permissions while
+> pointing tenant-scoped reads **and writes** at another tenant. See
+> [security.md § Tenant Header/Claim Guard](security.md#tenant-headerclaim-guard).
+
 ### Register Tenant-Aware Repositories
 
 ```csharp

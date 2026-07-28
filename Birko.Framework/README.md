@@ -10,13 +10,13 @@ A modular .NET framework providing data access, communication, AI, and model inf
 - ViewModel layer with model-to-viewmodel mapping
 - Database migrations framework (platform-agnostic — write once, run against any provider)
 - Data synchronization across stores
-- Multi-tenancy support
+- Multi-tenancy support (tenant-scoped stores/repositories, Permissive/Strict isolation modes, and a secure-by-default guard rejecting an `X-Tenant-Id` header that disagrees with the JWT tenant claim)
 - Event sourcing pattern
 - Communication layer (REST, SOAP, WebSocket, SSE, Bluetooth, Hardware, Network, Modbus, OAuth, **GraphQL** queries/mutations/subscriptions, **gRPC** client/server, Camera, IR, NFC)
 - Domain model libraries (Product, Category, SEO, Customers, Users, Inventory, Pricing) with domain contracts
 - Fluent validation framework
 - Caching with in-memory, Redis, and hybrid (L1+L2) backends
-- Security (password hashing with PBKDF2 and BCrypt, AES encryption, JWT tokens, RBAC, ASP.NET Core integration, HashiCorp Vault, Azure Key Vault, NFC authentication)
+- Security (password hashing with PBKDF2 and BCrypt, AES encryption, JWT tokens, RBAC, ASP.NET Core integration incl. tenant header/claim guard, HashiCorp Vault, Azure Key Vault, NFC authentication)
 - Message queue abstractions (pub/sub, point-to-point, serialization, retry, dead letter)
 - Event bus (in-process, distributed via MessageQueue, transactional outbox, event sourcing integration)
 - Messaging (email via SMTP, SMS and push notification interfaces, string and Razor template engines)

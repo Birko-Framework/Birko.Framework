@@ -290,6 +290,7 @@ Bridges Birko.Security into ASP.NET Core:
 - `RequirePermission()` - Minimal API endpoint filter
 - **Tenant Resolution** - Header (`X-Tenant-Id`), Subdomain, or Custom via `ITenantResolver`
 - `TenantMiddleware` - Per-request tenant resolution into scoped `ITenantContext`
+- `UseBirkoTenantHeaderGuard()` / `TenantHeaderClaimGuardMiddleware` - Post-authentication guard rejecting an `X-Tenant-Id` that disagrees with the JWT tenant claim (403 `Tenant.HeaderClaimMismatch`); on by default via `BirkoSecurityOptions.RequireTenantHeaderMatchesClaim`
 - `TokenServiceAdapter` - Structured request/response wrapper around ITokenProvider
 
 ### 14. Redis Infrastructure (Birko.Redis)

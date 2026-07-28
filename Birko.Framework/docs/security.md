@@ -239,6 +239,53 @@ Three built-in strategies:
 
 `TenantMiddleware` runs per-request to resolve the tenant and populate `ITenantContext` (scoped).
 
+### Tenant Header/Claim Guard
+
+`HeaderTenantResolver` only *parses* `X-Tenant-Id` — it does not compare it to the JWT `tenant_id` claim, and
+it cannot: `TenantMiddleware` runs **before** `UseAuthentication()`, so there is no claim to compare against
+yet. Left uncorrelated the header and the claim feed *different* consumers (repository tenant scoping follows
+the header, permission resolution follows the token), so a caller can authenticate in their own tenant, send
+another tenant's id in the header, keep their own permissions and point every tenant-scoped read **and write**
+at that tenant.
+
+`UseBirkoTenantHeaderGuard()` closes this as a separate post-authentication step:
+
+```csharp
+app.UseMiddleware<TenantMiddleware>();   // resolves the header
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseBirkoTenantHeaderGuard();         // ← header must agree with the claim
+// …tenant-scoped middleware and endpoints
+```
+
+Order matters in both directions: after `UseAuthentication()` because the claim only exists there, and before
+anything that scopes by tenant so every downstream consumer sees the same validated tenant. A mismatch
+short-circuits with `403` and `{"Error": "…", "Code": "Tenant.HeaderClaimMismatch"}`.
+
+**Secure by default.** `BirkoSecurityOptions.RequireTenantHeaderMatchesClaim` defaults to `true`; an opt-*in*
+guard was rejected as a design, since a check nobody knows to enable protects nobody. Set it false only for an
+app that genuinely wants header-only tenancy — which re-opens the escalation above. With the flag off the
+middleware is a pass-through, so the call is safe to make unconditionally.
+
+```csharp
+builder.Services.AddBirkoSecurity(options =>
+{
+    options.RequireTenantHeaderMatchesClaim = false; // header-only tenancy, no token correlation
+});
+```
+
+These requests pass through unchecked, each deliberately:
+
+| Case | Why it is safe |
+|------|----------------|
+| No header | The claim is then the only tenant source — and server-sent events cannot set headers |
+| Unauthenticated | Login / register / first-run setup carry no claim and are anonymous by design |
+| Wildcard `*` holder | A superadmin's cross-tenant reach is intentional |
+| Unparseable header | Resolves to no tenant in `HeaderTenantResolver` anyway, so it cannot scope anything |
+
+`Guid.Empty` (the system/no-tenant scope) is compared like any other value, so a non-wildcard caller whose
+token was issued for it cannot name a real tenant via the header.
+
 ### Token Service Adapter
 
 Wraps `ITokenProvider` with structured request/response:

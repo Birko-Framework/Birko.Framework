@@ -52,6 +52,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Platformovo-agnostické migrácie** — `IMigration` + `IMigrationContext` (`Schema`, `Data`, `Raw`, `ProviderName`); jednu migráciu napíšete raz a spustíte voči ktorémukoľvek providerovi (SQL, MongoDB, ElasticSearch, RavenDB, CosmosDB, InfluxDB, TimescaleDB). NoSQL providery ticho preskakujú nepoužiteľné operácie.
 - **Repository & Store pattern** s lazy-init a bulk operáciami (Create/Read/Update/Delete + filter-based Update/Delete s `PropertyUpdate<T>`)
 - **Agregácia na úrovni store** — `IAggregatableStore<T>` / `IAsyncAggregatableStore<T>` pre server-side GROUP BY, SUM, AVG, MIN, MAX, COUNT s time bucketing a stránkovaním
+- **Jednotný preklad LINQ filtrov naprieč backendmi** — spoločný `ExpressionNormalizer` (funkcletizácia + rozklad ternárneho operátora a `??`) plus preklad porovnaní, `IN`, reťazcových vzorov a stĺpcovej aritmetiky do SQL WHERE resp. ES query. Sémantika sa drží in-memory referencie (oracle testy): prázdna kolekcia v `Contains` nematchuje nič (`1 = 0` / `MatchNone`, negácia všetko), enum hodnoty sa viažu ako integer a filter, ktorý sa preložiť **nedá**, vyhodí výnimku namiesto tichého rozšírenia na „všetky riadky"
 
 ### 🔄 Vzory a funkcionality (8 feature + 8 migrations + 9 sync + 10 viewmodel + 5 views)
 - **Migrácie** – automatické vytváranie tabuliek, indexov a schémových zmien (base + 7 platforiem)
@@ -89,6 +90,7 @@ Framework je general-purpose – žiadna vrstva nie je viazaná na konkrétnu do
 - **Secret Management**: HashiCorp Vault (KV v1/v2), Azure Key Vault (OAuth2 + REST API), konfiguračný bridge (Microsoft.Extensions.Configuration)
 - **Configuration bridge**: `AddSecretConfiguration(any ISecretProvider)` — Vault, Azure Key Vault, čiľubovoľný provider do `IConfiguration`
 - **ASP.NET Core** integrácia – JWT Bearer, `ICurrentUser`, permissions, tenant middleware, RBAC
+- **Multi-tenant izolácia (secure by default)**: `UseBirkoTenantHeaderGuard()` odmietne hlavičku `X-Tenant-Id`, ktorá nesúhlasí s tenant claimom v JWT (403 `Tenant.HeaderClaimMismatch`) — bez tejto korelácie by volajúci s vlastnými oprávneniami mohol čítať **aj zapisovať** do cudzieho tenanta
 
 ### 📦 Infraštruktúra
 | Komponent | Počet projektov | Implementácie |
