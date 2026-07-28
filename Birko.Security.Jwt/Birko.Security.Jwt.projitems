@@ -10,6 +10,12 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)JwtTokenProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\OidcProviderOptions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\OidcVerificationResult.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\IOidcSigningKeySource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\HttpOidcSigningKeySource.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\IOidcIdTokenVerifier.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\OidcIdTokenVerifier.cs" />
   </ItemGroup>
 
 </Project>

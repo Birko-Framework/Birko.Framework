@@ -1,6 +1,6 @@
 # Birko.Security.Jwt
 
-JWT implementation of ITokenProvider for the Birko Framework.
+JWT token issuance and inbound OpenID Connect id-token verification for the Birko Framework.
 
 ## Features
 
@@ -8,6 +8,15 @@ JWT implementation of ITokenProvider for the Birko Framework.
 - Opaque refresh token support
 - Structured validation results
 - Configurable token settings (expiration, signing key, issuer, audience)
+- **Inbound OIDC verification** (`OpenIdConnect/`) — verify a third-party provider's id token before
+  trusting any identity it carries: JWKS signature, `iss`, `aud` (must be your client id), lifetime,
+  an asymmetric-only algorithm allow-list, and the `sub` claim. Fail-closed on unknown or incompletely
+  configured providers. Adds no new package dependency.
+
+> **Security rule.** A provider subject identifier (Google `sub`, GitHub id) is a *public* value, not a
+> secret. Never resolve an account from a provider key the caller sent — use
+> `VerifiedOidcIdentity.Subject` from a verified token. Trusting the request is a pre-authentication
+> account takeover.
 
 ## Installation
 
