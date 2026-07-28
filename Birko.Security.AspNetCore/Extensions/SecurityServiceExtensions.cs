@@ -45,6 +45,26 @@ public class BirkoSecurityOptions
 
     /// <summary>Enable wildcard "*" permission that grants all access. Default: true.</summary>
     public bool WildcardPermissionEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true (the default), <c>UseBirkoTenantHeaderGuard()</c> rejects a request whose
+    /// <c>X-Tenant-Id</c> header names a tenant other than the one its JWT was issued for.
+    ///
+    /// <para>
+    /// This is secure-by-default deliberately. <see cref="HeaderTenantResolver"/> accepts any parseable
+    /// header without comparing it to the <c>tenant_id</c> claim, and in a typical app the two feed
+    /// *different* consumers — repository tenant scoping follows the header while permission resolution
+    /// follows the token. A caller could therefore authenticate in their own tenant, send
+    /// <c>X-Tenant-Id: {victim}</c>, keep their home-tenant permissions and point tenant-scoped reads
+    /// <b>and writes</b> at another tenant.
+    /// </para>
+    /// <para>
+    /// Set false only for an app that genuinely wants header-only tenancy with no token correlation — and
+    /// note that doing so re-opens the above. An opt-<i>in</i> guard was rejected as the design: a check
+    /// nobody knows to enable protects nobody, which is exactly how this survived unnoticed.
+    /// </para>
+    /// </summary>
+    public bool RequireTenantHeaderMatchesClaim { get; set; } = true;
 }
 
 /// <summary>
@@ -76,6 +96,9 @@ public static class SecurityServiceExtensions
 
         // HttpContextAccessor (needed by ClaimsCurrentUser)
         services.AddHttpContextAccessor();
+
+        // The resolved options, so middleware can read them (e.g. TenantHeaderClaimGuardMiddleware).
+        services.AddSingleton(options);
 
         // ICurrentUser — reads from JWT claims
         services.AddScoped<ICurrentUser, ClaimsCurrentUser>();

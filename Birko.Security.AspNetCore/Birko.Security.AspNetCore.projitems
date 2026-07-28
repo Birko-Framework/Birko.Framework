@@ -27,11 +27,13 @@
     <!-- Tenant -->
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/ITenantResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/HeaderTenantResolver.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Tenant/TenantHeaderClaimGuardMiddleware.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/SubdomainTenantResolver.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/TenantContextAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Tenant/TenantMiddleware.cs" />
     <!-- Extensions -->
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/SecurityServiceExtensions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Extensions/PermissionResolutionExtensions.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Extensions/TenantHeaderGuardExtensions.cs" />
   </ItemGroup>
 </Project>
