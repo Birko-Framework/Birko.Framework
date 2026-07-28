@@ -10,6 +10,7 @@ ASP.NET Core integration for Birko.Security — JWT Bearer authentication, curre
 - Claims-based permission checking with wildcard superadmin support
 - Minimal API `RequirePermission()` endpoint filter
 - Multi-tenant middleware with header, subdomain, and custom resolution strategies
+- Tenant header/claim guard — rejects an `X-Tenant-Id` that disagrees with the JWT tenant claim (on by default)
 - `TokenServiceAdapter` for structured token generation and validation
 
 ## Dependencies
@@ -71,6 +72,39 @@ Three built-in strategies:
 | **Subdomain** | Hostname subdomain (e.g., `acme.myapp.com`) with optional async lookup |
 | **Custom** | Provide your own `ITenantResolver` implementation |
 
+### Tenant Header/Claim Guard
+
+`X-Tenant-Id` is only *parsed* by `HeaderTenantResolver` — it is not compared to the JWT `tenant_id` claim,
+and it cannot be, because `TenantMiddleware` runs before authentication. Without a correlation step a caller
+can authenticate in their own tenant, send another tenant's id in the header, keep their own permissions and
+point tenant-scoped reads **and writes** at that tenant. `UseBirkoTenantHeaderGuard()` closes this after
+authentication:
+
+```csharp
+app.UseMiddleware<TenantMiddleware>();   // resolves the header
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseBirkoTenantHeaderGuard();         // ← header must agree with the claim
+```
+
+A mismatch returns `403` with `{"Error": "…", "Code": "Tenant.HeaderClaimMismatch"}`.
+
+On by default (`BirkoSecurityOptions.RequireTenantHeaderMatchesClaim = true`); set it false only for an app
+that genuinely wants header-only tenancy. With the flag off the middleware is a pass-through, so the call is
+safe to make unconditionally.
+
+```csharp
+builder.Services.AddBirkoSecurity(options =>
+{
+    options.RequireTenantHeaderMatchesClaim = false; // header-only tenancy, no token correlation
+});
+```
+
+Requests pass through unchecked when there is no header (the claim is then the only tenant source — server-sent
+events cannot set headers), when the caller is unauthenticated (login/register/setup), when the caller holds the
+wildcard `*` permission (cross-tenant reach is intentional), or when the header is unparseable (it resolves to no
+tenant anyway).
+
 ### Token Service Adapter
 
 ```csharp
@@ -104,9 +138,11 @@ Birko.Security.AspNetCore/
 │   ├── HeaderTenantResolver.cs      - Header-based tenant resolution
 │   ├── SubdomainTenantResolver.cs   - Subdomain-based tenant resolution
 │   ├── TenantContextAdapter.cs      - Birko.Data.Tenant adapter for scoped DI
-│   └── TenantMiddleware.cs          - Request-scoped tenant middleware
+│   ├── TenantMiddleware.cs          - Request-scoped tenant middleware
+│   └── TenantHeaderClaimGuardMiddleware.cs - 403 when X-Tenant-Id disagrees with the JWT claim
 └── Extensions/
-    └── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI
+    ├── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI
+    └── TenantHeaderGuardExtensions.cs - UseBirkoTenantHeaderGuard() wiring
 ```
 
 ## Related Projects

@@ -26,9 +26,11 @@ Birko.Security.AspNetCore/
 │   ├── HeaderTenantResolver.cs      - X-Tenant-Id / X-Tenant-Name header resolution
 │   ├── SubdomainTenantResolver.cs   - Subdomain-based tenant with optional async lookup
 │   ├── TenantContextAdapter.cs      - Adapts Birko.Data.Tenant.Models.ITenantContext for scoped DI
-│   └── TenantMiddleware.cs          - Request-scoped tenant resolution middleware
+│   ├── TenantMiddleware.cs          - Request-scoped tenant resolution middleware
+│   └── TenantHeaderClaimGuardMiddleware.cs - Post-auth guard: 403 when X-Tenant-Id disagrees with the JWT tenant claim
 └── Extensions/
-    └── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI (JWT + User + Permissions + Tenant)
+    ├── SecurityServiceExtensions.cs - AddBirkoSecurity() one-line DI (JWT + User + Permissions + Tenant)
+    └── TenantHeaderGuardExtensions.cs - UseBirkoTenantHeaderGuard() middleware wiring
 ```
 
 ## Dependencies
@@ -45,6 +47,38 @@ Birko.Security.AspNetCore/
 - `PermissionEndpointFilter` works with Minimal API endpoint filters (not MVC attributes)
 - `TenantMiddleware` resolves tenant per-request and clears context after response
 - `TokenServiceAdapter` wraps raw `ITokenProvider` with structured `TokenRequest`/`TokenValidationInfo` records for type-safe claim handling
+- `BirkoSecurityOptions` is registered as a **singleton** so middleware (e.g. the header/claim guard) can read the resolved options
+
+### Tenant header/claim correlation (`TenantHeaderClaimGuardMiddleware`)
+
+`HeaderTenantResolver` only *parses* `X-Tenant-Id` — it never compares it to the `tenant_id` claim, and it
+cannot: `TenantMiddleware` runs **before** `UseAuthentication()`, so `context.User` is still unpopulated
+there. Left uncorrelated, the header and the claim feed *different* consumers (repository tenant scoping
+follows the header, permission resolution follows the token), so a caller can authenticate in their own
+tenant, send `X-Tenant-Id: {victim}`, keep their home-tenant permissions and point every tenant-scoped read
+**and write** at another tenant.
+
+The correlation is therefore a separate post-authentication step:
+
+```csharp
+app.UseMiddleware<TenantMiddleware>();   // resolves the header
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseBirkoTenantHeaderGuard();         // ← header must agree with the claim
+// …tenant-scoped middleware and endpoints
+```
+
+- **Secure by default** — `BirkoSecurityOptions.RequireTenantHeaderMatchesClaim = true`. An opt-*in* guard
+  was considered and rejected: a check nobody knows to enable protects nobody. Set it false only for an app
+  that genuinely wants header-only tenancy (which re-opens the above); with the flag off the middleware is a
+  pass-through, so `UseBirkoTenantHeaderGuard()` is safe to call unconditionally.
+- **Mismatch** → `403` with `{"Error": "…", "Code": "Tenant.HeaderClaimMismatch"}`.
+- **Deliberate pass-throughs**: no header (the claim is then the only source — SSE cannot set headers);
+  unauthenticated (login/register/first-run setup carry no claim); wildcard `*` holders (cross-tenant reach
+  is intentional); unparseable header (resolves to no tenant in `HeaderTenantResolver` anyway, so it cannot
+  scope anything).
+- `Guid.Empty` (the system/no-tenant scope) is compared like any other value — a non-wildcard caller whose
+  token was issued for it cannot name a real tenant via the header.
 
 ## Maintenance
 
