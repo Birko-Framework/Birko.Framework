@@ -164,6 +164,54 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Per-theme AXAML dictionaries — Avalonia themes are opt-in like the web ones (2026-07-29)
+
+Themes were opt-in on the web (one CSS file each, linked + `registerThemes`) but all-or-nothing on
+desktop: one 36 KB `Tokens.axaml` held all four `ThemeDictionaries`, and `BirkoTheme.axaml` pulled the
+lot. `Birko.DesignTokens` now emits **one file per theme** — `Themes/Tokens.{Light,Dark,Neon,Finstat}.axaml`
+plus a shared `Tokens.Brushes.axaml`, with `Tokens.axaml` kept as a back-compat aggregate merging all
+five (existing consumers unaffected). New `BirkoTheme.Core.axaml` ships light+dark; extra themes are
+merged per file. Core+extras is ~43% lighter than all-in (23 KB vs 41 KB).
+
+Three Avalonia behaviours were spike-verified first and are now pinned by `ThemeCompositionTests`,
+because the design rests on them: `ThemeDictionaries` entries **do** resolve from *merged*
+dictionaries (so the split is possible at all); an omitted custom variant degrades to its
+`InheritVariant` (so Neon/Finstat are safely omissible); **`ThemeVariant.Dark` has no
+`InheritVariant`**, so a light-only app resolves *nothing* under OS dark mode — which is why core is
+light+**dark**, not light alone.
+
+Themes are **detected, not listed twice.** Each generated dictionary declares
+`<x:String x:Key="BThemeId">` naming itself, and `AvaloniaThemeManager.DetectThemes(IResourceNode)`
+reads it, so `Available` is derived from what was actually merged and the switcher can never offer a
+theme whose tokens are missing. Presence probing cannot do this — an omitted variant inherits
+silently and would answer anyway; only a value that names its dictionary distinguishes the cases.
+This is the fix for the drift that bit the web side, where CSS-linking and `registerThemes` are two
+lists nobody reconciles.
+
+Also, while regenerating: **`tokens.json` was stale and `CssParityTests` had been red on main.**
+Generated CSS had been hand-edited — `--b-color-danger-text` (a WCAG contrast token, all four
+sheets), an AA-darkened finstat `--b-text-secondary`, `--b-modal-width-xxl`, `--b-modal-full-inset`,
+`--b-drawer-width-xxl`, `--b-input-font-size` — so `generate` would have silently deleted all of it.
+Recovered with `extract` (folds the live CSS back into the source and self-checks the round-trip);
+CSS is byte-identical again and the AXAML now carries those tokens too. `verify` gained an **AXAML**
+drift gate (it was CSS-only, so six generated dictionaries would have been unguarded). Three
+`ShellChromeTests` were also converted `[Fact]`→`[AvaloniaFact]`: they built an `AvaloniaThemeManager`
+with no `Application` and only passed when an earlier test happened to leave `Application.Current`
+set.
+
+Both gaps are now closed at the mechanism level rather than just fixed:
+- **`AxamlParityTests`** gates the six generated dictionaries from the *suite* (each must equal what
+  tokens.json regenerates, plus a check that `Themes/` holds exactly the generated set so a dropped
+  dictionary can't linger). The CSS always had a suite gate; AXAML had only the `verify` CLI verb, and
+  nothing runs a CLI verb by itself — which is precisely how the CSS drift went unnoticed. Verified to
+  actually fail by perturbing a generated file.
+- **Every one of the 32 Avalonia test classes now passes in isolation**, so order-dependence can no
+  longer mask a broken test. Swept the whole suite for the same ambient-`Application` pattern; the
+  five remaining plain `[Fact]`s are genuinely app-independent (pure VM/service logic).
+
+Tests: `Birko.DesignTokens.Tests` 42 (was 18 green / 12 red), `Birko.Xaml.Avalonia.Tests` 144,
+`Birko.Xaml.Core.Tests` 41.
+
 ### X-Tenant-Id must agree with the JWT tenant claim (2026-07-28)
 
 `Birko.Security.AspNetCore` gained **`TenantHeaderClaimGuardMiddleware`**, wired via
