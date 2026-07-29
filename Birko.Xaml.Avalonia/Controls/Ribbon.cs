@@ -660,12 +660,13 @@ public class Ribbon : ContentControl
     /// <c>Medium</c> and <c>Small</c> stack three per column and flow the columns horizontally, as Office
     /// does — which is what makes them narrower rather than merely smaller.
     /// </summary>
-    private Control BuildGroup(RibbonGroup group, RibbonGroupSize size, System.Action? onInvoke = null)
+    private Control BuildGroup(
+        RibbonGroup group, RibbonGroupSize size, System.Action? onInvoke = null, bool wrapItems = false)
     {
         if (size == RibbonGroupSize.Popup) return BuildChunk(group);
 
         Control items = size == RibbonGroupSize.Large
-            ? Row(group.Items, size, onInvoke)
+            ? Row(group.Items, size, onInvoke, wrapItems)
             : Columns(group.Items, size, perColumn: 3, onInvoke);
 
         var label = new TextBlock
@@ -691,8 +692,22 @@ public class Ribbon : ContentControl
         return box;
     }
 
-    private Control Row(IReadOnlyList<RibbonItem> items, RibbonGroupSize size, System.Action? onInvoke)
+    /// <summary>
+    /// Items in one horizontal run. <paramref name="wrap"/> lets it reflow onto further lines instead —
+    /// used inside a collapsed group's flyout, which has to fit a window narrow enough to have collapsed the
+    /// group in the first place. A single run of Large items is easily wider than the ribbon at that point,
+    /// and a flyout anchored near the right edge then has nowhere to go and gets cut off.
+    /// </summary>
+    private Control Row(
+        IReadOnlyList<RibbonItem> items, RibbonGroupSize size, System.Action? onInvoke, bool wrap = false)
     {
+        if (wrap)
+        {
+            var wrapped = new WrapPanel { Orientation = Orientation.Horizontal };
+            foreach (var item in items) wrapped.Children.Add(BuildItem(item, size, onInvoke));
+            return wrapped;
+        }
+
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         foreach (var item in items) row.Children.Add(BuildItem(item, size, onInvoke));
         return row;
@@ -777,6 +792,9 @@ public class Ribbon : ContentControl
     /// what separates this from a flat overflow menu that dumps every leftover command into one list. It is
     /// also what lets the ribbon body stop scrolling entirely: there is always something narrower to become.
     /// </remarks>
+    /// <summary>Border + padding a <c>FlyoutPresenter</c> adds around its content, measured from the theme.</summary>
+    private const double FlyoutChrome = 26;
+
     private Control BuildChunk(RibbonGroup group, bool labelled = true)
     {
         var icon = new TextBlock { Text = group.Icon ?? "▦", HorizontalAlignment = HorizontalAlignment.Center };
@@ -813,8 +831,28 @@ public class Ribbon : ContentControl
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office
         // closes a collapsed group's flyout as soon as a command runs.
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
+        flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide(), wrapItems: true);
         button.Flyout = flyout;
+
+        // Cap the flyout to the ribbon's width at open time, so the wrapping actually kicks in. A group only
+        // collapses when the ribbon is narrow, so its full-size contents are frequently wider than the
+        // ribbon itself — and left-aligned under a chunk near the right edge, the surplus is simply cut off.
+        flyout.Opened += (_, _) =>
+        {
+            if (flyout.Content is not Control content) return;
+
+            content.MaxWidth = System.Math.Max(120, Bounds.Width - 16);
+            content.Measure(new Size(content.MaxWidth, double.PositiveInfinity));
+
+            // Then keep it inside the ribbon horizontally. Left-aligned under a chunk near the right edge, a
+            // full-size group's flyout runs off the end and the surplus is simply cut off — which is what a
+            // reviewer hit on the Export chunk. Nudge it back by however much it would overrun; the anchor
+            // stays under its own chunk wherever there is room for it.
+            double chunkX = button.TranslatePoint(default, this)?.X ?? 0;
+            double needed = content.DesiredSize.Width + FlyoutChrome;
+            double overrun = chunkX + needed - Bounds.Width;
+            flyout.HorizontalOffset = overrun > 0 ? -overrun : 0;
+        };
 
         var box = new Border
         {
