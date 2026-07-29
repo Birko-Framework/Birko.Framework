@@ -203,6 +203,30 @@ public class RibbonTests
                 "the collapse chevron must stay pinned and never scroll out of reach");
     }
 
+    // ── TASK-098: the new model fields must not change rendering ──────────────────
+
+    [AvaloniaFact]
+    public void Setting_the_new_scaling_fields_does_not_change_what_renders_yet()
+    {
+        // TASK-098 is model + tokens only; the degrade pass is TASK-099. So a group carrying a
+        // priority and a floor must still render exactly like one that carries neither — otherwise
+        // the model landing would silently be a behaviour change.
+        var plain = new RibbonGroup { Label = "Clipboard", Items = new[] { new RibbonItem { Id = "cut", Label = "Cut", Icon = "✂" } } };
+        var annotated = new RibbonGroup
+        {
+            Label = "Clipboard",
+            Icon = "📋",
+            ScalingPriority = 10,
+            MinSize = RibbonGroupSize.Small,
+            Items = new[] { new RibbonItem { Id = "cut", Label = "Cut", Icon = "✂" } },
+        };
+
+        var before = Texts(Show(new Ribbon { Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { plain } } } })).ToList();
+        var after = Texts(Show(new Ribbon { Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { annotated } } } })).ToList();
+
+        after.Should().Equal(before, "the group icon is only drawn once a group collapses to Popup (TASK-100)");
+    }
+
     [AvaloniaFact]
     public void Capture_ribbon_screenshot()
     {
