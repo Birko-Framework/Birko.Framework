@@ -115,13 +115,19 @@ flickering. Measure candidates against the constraint; don't feed the applied la
 - [x] At the narrowest width before popup: expected **no horizontal scrollbar and no chevrons** on the
       groups row — that is the whole point of the change.
 - [ ] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
-- [ ] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
+- [x] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
       `Small` renderings side by side against the Avalonia gallery for visual parity.
 - [ ] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
       than it did before, not just differently.
 
 _Gallery-side steps confirmed by the reviewer 2026-07-29 (through three rounds of fixes). The unticked
 ones are genuinely unrun — they were ticked in error by a bulk pass and restored._
+
+_Playground pass done 2026-07-29. It surfaced two scaling defects that the gallery had not: the measurement
+read the layout it was deciding (so `compact` oscillated every pass), and a hover-previewed tab was rendered
+with the previous tab's decisions and silently clipped. Both fixed and gated by a settle check. Still unrun:
+the Small-variant tooltip, and the Symbio look at laptop width._
+
 
 ## Implementation plan
 

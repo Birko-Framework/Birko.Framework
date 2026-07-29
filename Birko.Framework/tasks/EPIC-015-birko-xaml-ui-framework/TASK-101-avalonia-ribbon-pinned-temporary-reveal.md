@@ -2,7 +2,7 @@
 id: TASK-101
 parent: EPIC-015
 feature: null
-status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -99,7 +99,7 @@ control in a `Panel` with the body z-above the page) rather than flipping a prop
 - [x] Press `Ctrl+F1`. Expected: collapse toggles.
 - [x] While temporarily revealed on a **narrow** window: expected the TASK-097 chevrons still appear and
       still scroll — the overlay must not clip or swallow them.
-- [ ] Compare side by side with `b-ribbon` unpinned in `Birko.Web.Playground`: the two should now *feel*
+- [x] Compare side by side with `b-ribbon` unpinned in `Birko.Web.Playground`: the two should now *feel*
       the same. That comparison is the actual point of the task.
 
 _Reviewer confirmed 2026-07-29: the unpinned temporary reveal, a command running (visible on the new
@@ -108,6 +108,11 @@ unreachable because it sat in `OnKeyDown` on a control that never holds focus, a
 no handlers at all so "it ran" was invisible. Remaining steps are genuinely unrun, not forgotten: the
 pinned baseline, click-away dismissal, chevrons while revealed on a narrow window, and the side-by-side
 Playground comparison — which is the one the parity claim actually rests on._
+
+
+_Playground comparison done 2026-07-29. It found two real gaps, which is what the exercise was for: the
+Avalonia reveal sized itself to its contents where b-ribbon spans the ribbon (the web matches Office), and
+Avalonia's group padding/item gap used magic numbers where the web reads tokens. Both fixed, then confirmed._
 
 
 ## Implementation plan

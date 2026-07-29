@@ -2,7 +2,7 @@
 id: TASK-102
 parent: EPIC-015
 feature: null
-status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -76,13 +76,17 @@ same chrome. Doing them together is probably cheaper than either alone.
 - [x] Pick a command. Expected: it runs and the overlay closes.
 - [x] Reopen, press `Escape`. Expected: it closes and focus returns to ☰.
 - [x] Widen again. Expected: the normal ribbon returns and scales as before.
-- [ ] Compare with `Birko.Web.Playground` below 768px: the two should now feel like the same component.
+- [x] Compare with `Birko.Web.Playground` below 768px: the two should now feel like the same component.
 
 _Reviewer confirmed 2026-07-29: ☰ appears at a narrow width, opens the menu, and `Escape` closes it with
 focus returned. `Escape` needed a fix first — a raw `Popup` does not handle it (`IsLightDismissEnabled` is
 pointer-only; Escape lives in `FlyoutBase`), and the test that "covered" it raised the key straight at the
 control. Still unrun: invoking a command from the ☰ menu specifically, widening back, and the Playground
 comparison below 768px._
+
+
+_Playground comparison done 2026-07-29: the hamburger appears in both skins and lists every tab, group and
+item. No parity gaps found here._
 
 
 ## Implementation plan
