@@ -91,16 +91,24 @@ control in a `Panel` with the body z-above the page) rather than flipping a prop
 
 - [ ] `Birko.Xaml.Gallery` → Chrome tab. **Pinned** (default): collapse with the chevron, click a
       different tab. Expected: today's behaviour — the ribbon expands and stays expanded.
-- [ ] Switch to **unpinned**, collapse, then click a tab. Expected: the body appears *over* the content
+- [x] Switch to **unpinned**, collapse, then click a tab. Expected: the body appears *over* the content
       below it (content does not shift down), and the ribbon is still logically collapsed.
-- [ ] From that temporarily-revealed state, click a command. Expected: it runs and the ribbon
+- [x] From that temporarily-revealed state, click a command. Expected: it runs and the ribbon
       re-collapses by itself.
 - [ ] Temporarily reveal again, then click somewhere else in the app. Expected: it re-collapses.
-- [ ] Press `Ctrl+F1`. Expected: collapse toggles.
+- [x] Press `Ctrl+F1`. Expected: collapse toggles.
 - [ ] While temporarily revealed on a **narrow** window: expected the TASK-097 chevrons still appear and
       still scroll — the overlay must not clip or swallow them.
 - [ ] Compare side by side with `b-ribbon` unpinned in `Birko.Web.Playground`: the two should now *feel*
       the same. That comparison is the actual point of the task.
+
+_Reviewer confirmed 2026-07-29: the unpinned temporary reveal, a command running (visible on the new
+"Last command" line) and re-collapsing, and `Ctrl+F1`. The last two needed a fix first — `Ctrl+F1` was
+unreachable because it sat in `OnKeyDown` on a control that never holds focus, and the demo commands had
+no handlers at all so "it ran" was invisible. Remaining steps are genuinely unrun, not forgotten: the
+pinned baseline, click-away dismissal, chevrons while revealed on a narrow window, and the side-by-side
+Playground comparison — which is the one the parity claim actually rests on._
+
 
 ## Implementation plan
 

@@ -70,13 +70,20 @@ same chrome. Doing them together is probably cheaper than either alone.
 
 ## Human test plan
 
-- [ ] `Birko.Xaml.Gallery` → Chrome tab. Drag narrower than the compact-chunk row can manage. Expected:
+- [x] `Birko.Xaml.Gallery` → Chrome tab. Drag narrower than the compact-chunk row can manage. Expected:
       the ribbon becomes ☰ + the active tab's name, with no clipped icons.
-- [ ] Click ☰. Expected: an overlay listing every tab with its groups and items; the active tab expanded.
+- [x] Click ☰. Expected: an overlay listing every tab with its groups and items; the active tab expanded.
 - [ ] Pick a command. Expected: it runs and the overlay closes.
-- [ ] Reopen, press `Escape`. Expected: it closes and focus returns to ☰.
+- [x] Reopen, press `Escape`. Expected: it closes and focus returns to ☰.
 - [ ] Widen again. Expected: the normal ribbon returns and scales as before.
 - [ ] Compare with `Birko.Web.Playground` below 768px: the two should now feel like the same component.
+
+_Reviewer confirmed 2026-07-29: ☰ appears at a narrow width, opens the menu, and `Escape` closes it with
+focus returned. `Escape` needed a fix first — a raw `Popup` does not handle it (`IsLightDismissEnabled` is
+pointer-only; Escape lives in `FlyoutBase`), and the test that "covered" it raised the key straight at the
+control. Still unrun: invoking a command from the ☰ menu specifically, widening back, and the Playground
+comparison below 768px._
+
 
 ## Implementation plan
 
