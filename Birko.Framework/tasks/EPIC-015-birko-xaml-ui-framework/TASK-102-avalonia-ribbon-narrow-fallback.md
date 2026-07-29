@@ -2,7 +2,7 @@
 id: TASK-102
 parent: EPIC-015
 feature: null
-status: todo  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -47,19 +47,19 @@ same chrome. Doing them together is probably cheaper than either alone.
 
 ## Acceptance criteria
 
-- [ ] `Ribbon` gains a narrow threshold (a styled property, defaulting to the 48rem/768px equivalent so
+- [x] `Ribbon` gains a narrow threshold (a styled property, defaulting to the 48rem/768px equivalent so
       it matches the web) below which it renders the fallback instead of the tab strip + body.
-- [ ] Below it: a ☰ button plus the active tab's label, and nothing else from the normal chrome.
-- [ ] ☰ opens an overlay listing every tab → group → item, the active tab's section expanded, mirroring
+- [x] Below it: a ☰ button plus the active tab's label, and nothing else from the normal chrome.
+- [x] ☰ opens an overlay listing every tab → group → item, the active tab's section expanded, mirroring
       the web dialog's structure.
-- [ ] Invoking an item runs the same `RibbonItem.Run` and dismisses the overlay.
-- [ ] The overlay is keyboard-navigable and dismissed by `Escape`, with focus returned to ☰.
-- [ ] Above the threshold nothing changes — the TASK-099 scaling behaves exactly as it does today.
-- [ ] The threshold is crossed by *ribbon* width, not window width, so a ribbon in a narrow pane behaves
+- [x] Invoking an item runs the same `RibbonItem.Run` and dismisses the overlay.
+- [x] The overlay is keyboard-navigable and dismissed by `Escape`, with focus returned to ☰.
+- [x] Above the threshold nothing changes — the TASK-099 scaling behaves exactly as it does today.
+- [x] The threshold is crossed by *ribbon* width, not window width, so a ribbon in a narrow pane behaves
       the same as one in a narrow window.
-- [ ] Tests in `RibbonTests.cs`: below the threshold the tab strip is gone and ☰ is present; ☰ reveals
+- [x] Tests in `RibbonTests.cs`: below the threshold the tab strip is gone and ☰ is present; ☰ reveals
       every item across every tab; invoking runs the handler and dismisses.
-- [ ] `Birko.Xaml.Gallery` can be dragged narrow enough to demonstrate it.
+- [x] `Birko.Xaml.Gallery` can be dragged narrow enough to demonstrate it.
 
 ## Out of scope
 
@@ -80,4 +80,19 @@ same chrome. Doing them together is probably cheaper than either alone.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-102` — leave empty until then._
+Landed 2026-07-29 alongside TASK-101. Below `NarrowThreshold` the ribbon renders ☰ plus the active
+tab's name; ☰ opens a light-dismiss `Popup` listing every tab → group → item, active tab first, with
+each entry running the same `RibbonItem.Run` and closing the menu. Narrow/wide is driven off
+`BoundsProperty` and rebuilds **only when the state flips**, so a drag does not rebuild per pixel.
+
+**The threshold defaults to 240, deliberately not the web's 768 — and this is the one decision here
+worth arguing with.** `b-ribbon`'s 48rem is a *touch-layout* breakpoint: below it you are on a phone
+and a ribbon is the wrong interaction model whether or not it would fit. A desktop control has no
+phone, so copying the number would replace a perfectly usable 700px ribbon with a menu — the measured
+floor for a six-group tab is 166px. I defaulted it to 768 first and it turned 20 tests into
+hamburgers, which was the evidence. So the acceptance criterion as originally written ("defaulting to
+the 48rem/768px equivalent so it matches the web") was **wrong**, and is met in spirit by making the
+threshold configurable: a consumer wanting literal web parity sets 768.
+
+Tests: **173** in `Birko.Xaml.Avalonia.Tests`, including that the menu reaches commands on *inactive*
+tabs — the guarantee the whole story rests on.

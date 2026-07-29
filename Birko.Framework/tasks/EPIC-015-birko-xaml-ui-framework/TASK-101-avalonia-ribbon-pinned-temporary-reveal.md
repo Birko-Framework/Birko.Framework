@@ -2,7 +2,7 @@
 id: TASK-101
 parent: EPIC-015
 feature: null
-status: todo  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -60,24 +60,24 @@ control in a `Panel` with the body z-above the page) rather than flipping a prop
 
 ## Acceptance criteria
 
-- [ ] `Ribbon` gains an `IsPinned` styled property (default **true**, so existing consumers are
+- [x] `Ribbon` gains an `IsPinned` styled property (default **true**, so existing consumers are
       unaffected — today's behaviour is effectively "always pinned").
-- [ ] When **pinned**, behaviour is exactly as today: the body is in flow, and the collapse chevron
+- [x] When **pinned**, behaviour is exactly as today: the body is in flow, and the collapse chevron
       toggles it.
-- [ ] When **unpinned and collapsed**, clicking a tab reveals the body **temporarily as an overlay**
+- [x] When **unpinned and collapsed**, clicking a tab reveals the body **temporarily as an overlay**
       over the page content — it does not push content down and does not change `IsCollapsed`
       permanently.
-- [ ] Invoking an item from a temporarily-revealed ribbon **runs the command and re-collapses**.
-- [ ] Clicking away / losing focus re-collapses a temporarily-revealed ribbon.
-- [ ] Clicking the **already-active** tab still toggles collapse (today's Office-style behaviour, kept).
-- [ ] A pin/unpin control sits in the tab strip alongside the collapse chevron, mirroring `b-ribbon`'s,
+- [x] Invoking an item from a temporarily-revealed ribbon **runs the command and re-collapses**.
+- [x] Clicking away / losing focus re-collapses a temporarily-revealed ribbon.
+- [x] Clicking the **already-active** tab still toggles collapse (today's Office-style behaviour, kept).
+- [x] A pin/unpin control sits in the tab strip alongside the collapse chevron, mirroring `b-ribbon`'s,
       with a tooltip and the correct toggled state.
-- [ ] `Ctrl+F1` toggles collapse, matching Office. (Cheap here and it is the shortcut users try.)
-- [ ] Overflow from TASK-097 still works in the overlay: the tab strip and groups row keep their
+- [x] `Ctrl+F1` toggles collapse, matching Office. (Cheap here and it is the shortcut users try.)
+- [x] Overflow from TASK-097 still works in the overlay: the tab strip and groups row keep their
       chevrons and stay reachable while temporarily revealed.
-- [ ] Tests in `RibbonTests.cs`: pinned keeps the body in the layout; unpinned + collapsed + tab click
+- [x] Tests in `RibbonTests.cs`: pinned keeps the body in the layout; unpinned + collapsed + tab click
       reveals without clearing `IsCollapsed`; item invoke re-collapses; active-tab click still toggles.
-- [ ] `Birko.Xaml.Gallery` demonstrates both modes so the difference is reviewable by hand.
+- [x] `Birko.Xaml.Gallery` demonstrates both modes so the difference is reviewable by hand.
 
 ## Out of scope
 
@@ -104,4 +104,25 @@ control in a `Panel` with the body z-above the page) rather than flipping a prop
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-101` — leave empty until then._
+Landed 2026-07-29 alongside TASK-102 — same chrome, and cheaper together as predicted.
+
+`IsPinned` (default **true**, so an existing app is untouched: that is exactly what the control did
+before). Unpinned, the body is never added to the `DockPanel`; a tab click calls `RevealTemporarily`,
+which builds the groups row into a light-dismiss `Popup` anchored under the ribbon and leaves
+`IsCollapsed` alone. Invoking a command closes it (the `onInvoke` callback already threaded through
+`BuildGroup` for TASK-100's flyout). A pin toggle sits beside the collapse chevron; `Ctrl+F1` toggles
+collapse via `OnKeyDown`.
+
+The groups-row construction was extracted to `BuildGroupsRow(tab, onInvoke)` so the in-flow body and
+the temporary reveal share one path — otherwise the scaling behaviour would have had two
+implementations, which is the drift this story has spent its whole life avoiding.
+
+A `Popup` rather than a re-parented body: overlaying instead of participating in layout is the entire
+point, and light dismiss plus `Escape` come free rather than being hand-written.
+
+Also added `OpenOverlay` / `CloseOverlay`. A shell has real cause to reach an open ribbon overlay, and
+it is the only route to a `Popup`'s child from outside — which is what finally made **TASK-100's last
+unchecked criterion** (a collapsed group's flyout runs its command) assertable.
+
+Tests: `Birko.Xaml.Avalonia.Tests` **173**. Gallery gained a pin toggle so the two modes are
+comparable by hand.
