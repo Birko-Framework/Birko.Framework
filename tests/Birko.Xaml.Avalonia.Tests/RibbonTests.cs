@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Threading;
@@ -93,6 +94,22 @@ public class RibbonTests
 
     private static IEnumerable<string?> Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
+
+    /// <summary>
+    /// Text inside the ribbon's open overlay (the narrow menu, or an unpinned temporary reveal).
+    /// </summary>
+    /// <remarks>
+    /// A <c>Popup</c> hosts its child in a separate visual root, so <c>GetVisualDescendants</c> on the ribbon
+    /// never reaches it. The ribbon sets itself as the popup's LOGICAL parent, which is what makes the
+    /// content reachable from a test at all.
+    /// </remarks>
+    private static IEnumerable<Control> OverlayControls(Ribbon ribbon) =>
+        ribbon.OpenOverlay is { } overlay
+            ? overlay.GetVisualDescendants().OfType<Control>().Prepend(overlay)
+            : Enumerable.Empty<Control>();
+
+    private static IEnumerable<string?> OverlayTexts(Ribbon ribbon) =>
+        OverlayControls(ribbon).OfType<TextBlock>().Select(t => t.Text);
 
     [AvaloniaFact]
     public void Renders_tabs_and_active_group_items()
@@ -525,6 +542,184 @@ public class RibbonTests
         visibleItemButtons.Should().OnlyContain(
             b => b.GetVisualDescendants().OfType<TextBlock>().Count() == 1,
             "a Small item draws its icon only — no label TextBlock");
+    }
+
+    // ── TASK-101: pinned vs temporary reveal ──────────────────────────────────────
+
+    [AvaloniaFact]
+    public void Pinned_is_the_default_so_an_existing_app_is_unaffected()
+    {
+        var ribbon = Show(Build(out _));
+        ribbon.IsPinned.Should().BeTrue();
+        Texts(ribbon).Should().Contain("Clipboard", "the body is in the layout, exactly as before");
+    }
+
+    [AvaloniaFact]
+    public void Unpinned_keeps_the_body_out_of_the_layout()
+    {
+        // The whole point of unpinned: the body must not push page content down. So it is not in the tree
+        // at all until a tab is clicked, and then only as an overlay.
+        var ribbon = Build(out _);
+        ribbon.IsPinned = false;
+        Show(ribbon);
+
+        Texts(ribbon).Should().Contain("Home", "the tab strip stays");
+        Texts(ribbon).Should().NotContain("Clipboard", "but the groups row is not in flow");
+        ribbon.ResolvedGroupSizes.Should().BeEmpty("there is no in-flow groups row to report on");
+    }
+
+    [AvaloniaFact]
+    public void Clicking_a_tab_while_unpinned_does_not_expand_the_ribbon_permanently()
+    {
+        // Office: "Show Tabs" is a mode you leave by pinning, not by clicking a tab. Before TASK-101 this
+        // set IsCollapsed = false and the ribbon stayed open for good.
+        var ribbon = Build(out _);
+        ribbon.IsPinned = false;
+        ribbon.IsCollapsed = true;
+        Show(ribbon);
+
+        var view = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "View"));
+        view.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        ribbon.SelectedIndex.Should().Be(1, "the tab still becomes active");
+        ribbon.IsCollapsed.Should().BeTrue("but the reveal is temporary — the ribbon is still minimised");
+    }
+
+    [AvaloniaFact]
+    public void Ctrl_F1_toggles_collapse()
+    {
+        var ribbon = Show(Build(out _));
+        bool before = ribbon.IsCollapsed;
+
+        ribbon.RaiseEvent(new global::Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = global::Avalonia.Input.Key.F1,
+            KeyModifiers = global::Avalonia.Input.KeyModifiers.Control,
+        });
+
+        ribbon.IsCollapsed.Should().Be(!before, "Ctrl+F1 is the shortcut users try, and Office has it");
+    }
+
+    // ── TASK-102: the narrow fallback ─────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void Below_the_narrow_threshold_the_ribbon_becomes_a_menu()
+    {
+        // Scaling has nothing left to give this far down, so drawing a tab strip and a groups row would only
+        // clip them. b-ribbon has done this below 48rem all along; the XAML skin never had it (TASK-102).
+        var ribbon = Show(BuildCrowded(), width: 200);
+
+        Texts(ribbon).Should().Contain("☰", "the hamburger replaces the chrome");
+        Texts(ribbon).Should().Contain("Home", "alongside the active tab's name");
+        Texts(ribbon).Should().NotContain("Clipboard", "no groups row is drawn");
+        ribbon.GetVisualDescendants().OfType<ScrollViewer>()
+            .Should().BeEmpty("and no tab scroller either — there is no tab strip to scroll");
+    }
+
+    [AvaloniaFact]
+    public void Above_the_narrow_threshold_nothing_changes()
+    {
+        var ribbon = Show(BuildCrowded(), width: 900);
+
+        Texts(ribbon).Should().NotContain("☰");
+        Texts(ribbon).Should().Contain("Clipboard", "the normal scaling ribbon is intact");
+        ribbon.ResolvedGroupSizes.Should().NotBeEmpty();
+    }
+
+    [AvaloniaFact]
+    public void The_narrow_menu_reaches_every_command_across_every_tab()
+    {
+        // The guarantee the whole story rests on: no width makes a command unreachable. At this size the
+        // menu is the only route, so it has to carry everything — not just the active tab.
+        var ran = false;
+        var ribbon = new Ribbon
+        {
+            Tabs = new[]
+            {
+                new RibbonTab { Id = "home", Label = "Home", Groups = new[]
+                    { new RibbonGroup { Label = "Clipboard", Items = new[] { new RibbonItem { Id = "cut", Label = "Cut" } } } } },
+                new RibbonTab { Id = "view", Label = "View", Groups = new[]
+                    { new RibbonGroup { Label = "Zoom", Items = new[]
+                        { new RibbonItem { Id = "zin", Label = "Zoom In", Run = () => ran = true } } } } },
+            },
+        };
+        Show(ribbon, width: 200);
+
+        var burger = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "☰"));
+        burger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        var entries = OverlayTexts(ribbon).ToList();
+        entries.Should().Contain("Cut", "the inactive tab's commands are in the menu too");
+        entries.Should().Contain("Zoom In");
+
+        // And invoking one runs the same handler the ribbon would have.
+        var zoom = OverlayControls(ribbon).OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => (t.Text ?? "").Contains("Zoom In")));
+        zoom.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        ran.Should().BeTrue();
+    }
+
+    [AvaloniaFact]
+    public void An_unpinned_tab_click_reveals_the_groups_as_an_overlay()
+    {
+        // Closes the other half of TASK-101: not just "IsCollapsed is untouched", but that the body really
+        // does appear — over the page, not in it.
+        var ribbon = Build(out _);
+        ribbon.IsPinned = false;
+        ribbon.IsCollapsed = true;
+        Show(ribbon);
+
+        ribbon.OpenOverlay.Should().BeNull("nothing is revealed until a tab is clicked");
+
+        var view = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "View"));
+        view.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        ribbon.OpenOverlay.Should().NotBeNull("the reveal is an overlay, so it is not in the ribbon's own tree");
+        OverlayTexts(ribbon).Should().Contain("Zoom", "and it holds the newly-selected tab's groups");
+        Texts(ribbon).Should().NotContain("Zoom", "while the ribbon itself still has no in-flow body");
+    }
+
+    [AvaloniaFact]
+    public void A_collapsed_group_flyout_runs_its_command_and_dismisses()
+    {
+        // TASK-100's last unchecked criterion. Previously untestable: a Popup's child lives in its own
+        // visual root, so there was no route to it until OpenOverlay existed.
+        bool ran = false;
+        var group = new RibbonGroup
+        {
+            Label = "Clipboard",
+            Icon = "📋",
+            Items = new[] { new RibbonItem { Id = "cut", Label = "Cut", Icon = "✂", Run = () => ran = true } },
+        };
+        var ribbon = new Ribbon
+        {
+            PreferredGroupSize = RibbonGroupSize.Popup,
+            Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { group } } },
+        };
+        Show(ribbon, width: 900);
+
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Popup);
+
+        var chunk = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => (b.GetValue(ToolTip.TipProperty) as string) == "Clipboard" && b.IsHitTestVisible);
+        chunk.Flyout.Should().NotBeNull("the chunk button opens the group's items in a flyout");
+
+        chunk.Flyout!.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+
+        var flyoutContent = (Control)((Flyout)chunk.Flyout!).Content!;
+        var item = flyoutContent.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Cut"));
+        item.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        ran.Should().BeTrue("invoking from the flyout runs the same handler as the uncollapsed item");
     }
 
     [AvaloniaFact]
