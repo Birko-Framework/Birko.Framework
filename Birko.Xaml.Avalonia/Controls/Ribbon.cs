@@ -29,6 +29,7 @@ public class Ribbon : ContentControl
         TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
     }
 
     public IEnumerable<RibbonTab>? Tabs { get => GetValue(TabsProperty); set => SetValue(TabsProperty, value); }
@@ -37,6 +38,24 @@ public class Ribbon : ContentControl
     /// <summary>When true, only the tab strip shows (the "tabs-only" / minimized ribbon). The chevron
     /// at the strip's end toggles it; clicking the active tab also toggles.</summary>
     public bool IsCollapsed { get => GetValue(IsCollapsedProperty); set => SetValue(IsCollapsedProperty, value); }
+
+    public static readonly StyledProperty<RibbonGroupSize> PreferredGroupSizeProperty =
+        AvaloniaProperty.Register<Ribbon, RibbonGroupSize>(nameof(PreferredGroupSize), RibbonGroupSize.Medium);
+
+    /// <summary>
+    /// The roomiest variant groups may take — the ribbon's look at full width. Groups degrade from here as
+    /// the window narrows (STORY-049).
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see cref="RibbonGroupSize.Medium"/>: it matches what both skins rendered before the
+    /// scaling pass existed, so an existing app's ribbon does not change height on upgrade.
+    /// <see cref="RibbonGroupSize.Large"/> is the Office-like look and is opt-in.
+    /// </remarks>
+    public RibbonGroupSize PreferredGroupSize
+    {
+        get => GetValue(PreferredGroupSizeProperty);
+        set => SetValue(PreferredGroupSizeProperty, value);
+    }
 
     private void Rebuild()
     {
@@ -95,21 +114,55 @@ public class Ribbon : ContentControl
         // Active tab groups — hidden when collapsed (tabs-only mode)
         if (!IsCollapsed)
         {
-            var groupsPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8) };
+            // Progressive scaling (TASK-099): each group is built at every variant and the panel picks
+            // per group, so narrowing degrades Medium -> Small rather than clipping.
+            var groupsPanel = new RibbonGroupsPanel { Margin = new Thickness(8), Preferred = PreferredGroupSize };
+            groupsPanel.Bind(RibbonGroupsPanel.GapProperty, groupsPanel.GetResourceObservable("BRibbonGroupGap"));
             if (selected >= 0)
                 foreach (var group in tabs[selected].Groups)
-                    groupsPanel.Children.Add(BuildGroup(group));
-            // INTERIM (TASK-097): groups scroll so no command is unreachable at a narrow width.
-            // TASK-099 replaces this with progressive group scaling and removes the scroller — a
-            // scrolling ribbon body destroys the spatial memory the ribbon exists to provide.
-            body.Children.Add(WrapScrollable(groupsPanel, "Scroll groups left", "Scroll groups right", _groupRow, out _));
+                    groupsPanel.AddGroup(new RibbonGroupsPanel.GroupVariants
+                    {
+                        Controls = new Dictionary<RibbonGroupSize, Control>
+                        {
+                            [RibbonGroupSize.Large] = BuildGroup(group, RibbonGroupSize.Large),
+                            [RibbonGroupSize.Medium] = BuildGroup(group, RibbonGroupSize.Medium),
+                            [RibbonGroupSize.Small] = BuildGroup(group, RibbonGroupSize.Small),
+                            [RibbonGroupSize.Popup] = BuildGroup(group, RibbonGroupSize.Popup),
+                        },
+                        ScalingPriority = group.ScalingPriority,
+                        MinSize = group.MinSize,
+                    });
+
+            // No scroller here, deliberately: the ribbon BODY resizes, it never scrolls. With the Popup
+            // variant in place there is always something narrower for a group to become, so nothing can be
+            // unreachable — and the panel now measures against the real constraint instead of a
+            // ScrollViewer's infinite width. Keeping a scroller also made the scaling history-dependent,
+            // because the chevrons' hysteresis fed back into the viewport the pass scales against.
+            body.Children.Add(groupsPanel);
+            _groupsPanel = groupsPanel;
         }
+
+        if (IsCollapsed) _groupsPanel = null; // no groups row exists, so report no variants
 
         var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
         chrome.Bind(Border.BorderBrushProperty, chrome.GetResourceObservable("BBorderBrush"));
         Content = chrome;
     }
+
+    /// <summary>
+    /// The variant each group of the active tab currently renders at, left to right — the outcome of the
+    /// progressive-scaling pass. Empty while collapsed or before the first layout.
+    /// </summary>
+    /// <remarks>
+    /// Public because it is genuinely useful to a consumer (a shell might surface "compact ribbon", or key
+    /// a tutorial overlay off whether labels are showing) and because it lets the behaviour be asserted
+    /// without a test-only back door into the panel.
+    /// </remarks>
+    public IReadOnlyList<RibbonGroupSize> ResolvedGroupSizes =>
+        _groupsPanel?.Chosen ?? (IReadOnlyList<RibbonGroupSize>)System.Array.Empty<RibbonGroupSize>();
+
+    private RibbonGroupsPanel? _groupsPanel;
 
     /// <summary>Tab-strip scroll offset, carried across <see cref="Rebuild"/> (which discards the tree).</summary>
     private double _tabOffsetX;
@@ -123,7 +176,6 @@ public class Ribbon : ContentControl
     private sealed class RowScrollState { public bool Overflowing; }
 
     private readonly RowScrollState _tabRow = new();
-    private readonly RowScrollState _groupRow = new();
 
     private int _lastSelected = -1;
 
@@ -278,10 +330,18 @@ public class Ribbon : ContentControl
         return button;
     }
 
-    private Control BuildGroup(RibbonGroup group)
+    /// <summary>
+    /// One group at one variant. <c>Large</c> lays items out in a single row of icon-above-label buttons;
+    /// <c>Medium</c> and <c>Small</c> stack three per column and flow the columns horizontally, as Office
+    /// does — which is what makes them narrower rather than merely smaller.
+    /// </summary>
+    private Control BuildGroup(RibbonGroup group, RibbonGroupSize size, System.Action? onInvoke = null)
     {
-        var items = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        foreach (var item in group.Items) items.Children.Add(BuildItem(item));
+        if (size == RibbonGroupSize.Popup) return BuildChunk(group);
+
+        Control items = size == RibbonGroupSize.Large
+            ? Row(group.Items, size, onInvoke)
+            : Columns(group.Items, size, perColumn: 3, onInvoke);
 
         var label = new TextBlock
         {
@@ -306,23 +366,104 @@ public class Ribbon : ContentControl
         return box;
     }
 
-    private Control BuildItem(RibbonItem item)
+    private Control Row(IReadOnlyList<RibbonItem> items, RibbonGroupSize size, System.Action? onInvoke)
     {
-        var content = new StackPanel { Spacing = 2, MinWidth = 52 };
-        var icon = new TextBlock
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        foreach (var item in items) row.Children.Add(BuildItem(item, size, onInvoke));
+        return row;
+    }
+
+    /// <summary>Items in columns of <paramref name="perColumn"/>, columns flowing left to right.</summary>
+    private Control Columns(IReadOnlyList<RibbonItem> items, RibbonGroupSize size, int perColumn, System.Action? onInvoke)
+    {
+        var host = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        StackPanel? column = null;
+        for (int i = 0; i < items.Count; i++)
         {
-            Text = item.Icon ?? "•",
-            FontSize = 18,
-            HorizontalAlignment = HorizontalAlignment.Center,
+            if (i % perColumn == 0)
+            {
+                column = new StackPanel { Spacing = 1 };
+                host.Children.Add(column);
+            }
+            column!.Children.Add(BuildItem(items[i], size, onInvoke));
+        }
+        return host;
+    }
+
+    private Control BuildItem(RibbonItem item, RibbonGroupSize size, System.Action? onInvoke = null)
+    {
+        var button = new Button
+        {
+            Background = Brushes.Transparent,
+            Padding = new Thickness(6, 4),
         };
+        button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
+        button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
+
+        var icon = new TextBlock { Text = item.Icon ?? "•" };
+        icon.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable(
+            size == RibbonGroupSize.Large ? "BRibbonIconLarge" : "BRibbonIconSmall"));
+
+        if (size == RibbonGroupSize.Small)
+        {
+            // Icon only. The label is not drawn, so the tooltip has to carry the name — an icon-only
+            // command with no tooltip is unidentifiable, which would trade one accessibility problem
+            // (unreachable) for another (unnameable).
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            button.Content = icon;
+            ToolTip.SetTip(button, item.Label);
+            return button;
+        }
+
+        var label = new TextBlock { Text = item.Label, FontSize = 11 };
+
+        if (size == RibbonGroupSize.Large)
+        {
+            icon.HorizontalAlignment = HorizontalAlignment.Center;
+            label.HorizontalAlignment = HorizontalAlignment.Center;
+            label.TextWrapping = TextWrapping.Wrap;
+            label.TextAlignment = TextAlignment.Center;
+            var stacked = new StackPanel { Spacing = 2, MinWidth = 52 };
+            stacked.Children.Add(icon);
+            stacked.Children.Add(label);
+            button.Content = stacked;
+            return button;
+        }
+
+        // Medium — icon then label on one line.
+        var inline = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 4,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        inline.Children.Add(icon);
+        inline.Children.Add(label);
+        button.Content = inline;
+        return button;
+    }
+
+    /// <summary>
+    /// The <see cref="RibbonGroupSize.Popup"/> variant: the whole group folded into one button whose flyout
+    /// holds its items at <see cref="RibbonGroupSize.Large"/>.
+    /// </summary>
+    /// <remarks>
+    /// Lossless, and that is the point — the group keeps its identity and its position in the row, which is
+    /// what separates this from a flat overflow menu that dumps every leftover command into one list. It is
+    /// also what lets the ribbon body stop scrolling entirely: there is always something narrower to become.
+    /// </remarks>
+    private Control BuildChunk(RibbonGroup group)
+    {
+        var icon = new TextBlock { Text = group.Icon ?? "▦", HorizontalAlignment = HorizontalAlignment.Center };
         var label = new TextBlock
         {
-            Text = item.Label,
+            Text = group.Label + " ⌄",
             FontSize = 11,
             HorizontalAlignment = HorizontalAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
             TextAlignment = TextAlignment.Center,
         };
+
+        var content = new StackPanel { Spacing = 2 };
         content.Children.Add(icon);
         content.Children.Add(label);
 
@@ -333,7 +474,18 @@ public class Ribbon : ContentControl
             Padding = new Thickness(6, 4),
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
-        button.Click += (_, _) => item.Run?.Invoke();
-        return button;
+        button.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable("BRibbonIconSmall"));
+        button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonChunkWidth"));
+        ToolTip.SetTip(button, group.Label);
+
+        // Declared before the content so the items can dismiss the flyout they were invoked from — Office
+        // closes a collapsed group's flyout as soon as a command runs.
+        var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
+        flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
+        button.Flyout = flyout;
+
+        var box = new Border { Padding = new Thickness(8, 4), BorderThickness = new Thickness(0, 0, 1, 0), Child = button };
+        box.Bind(Border.BorderBrushProperty, box.GetResourceObservable("BBorderBrush"));
+        return box;
     }
 }
