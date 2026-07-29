@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Birko.Xaml.Core.Ribbon;
@@ -24,13 +25,65 @@ public class Ribbon : ContentControl
     public static readonly StyledProperty<bool> IsCollapsedProperty =
         AvaloniaProperty.Register<Ribbon, bool>(nameof(IsCollapsed));
 
+    public static readonly StyledProperty<bool> IsPinnedProperty =
+        AvaloniaProperty.Register<Ribbon, bool>(nameof(IsPinned), true);
+
+    /// <summary>
+    /// Whether the body stays in the layout (<c>true</c>, the default) or is revealed **temporarily as an
+    /// overlay** when a tab is clicked (<c>false</c>) — Office's "Show Tabs" mode, which `b-ribbon` has had
+    /// as its <c>pinned</c> attribute all along.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <c>true</c> because that is exactly what this control did before TASK-101: an existing
+    /// app is unaffected. Unpinned, the body never pushes page content down, and it re-collapses as soon as
+    /// a command runs or focus goes elsewhere.
+    /// </remarks>
+    public bool IsPinned { get => GetValue(IsPinnedProperty); set => SetValue(IsPinnedProperty, value); }
+
+    public static readonly StyledProperty<double> NarrowThresholdProperty =
+        AvaloniaProperty.Register<Ribbon, double>(nameof(NarrowThreshold), 240);
+
+    /// <summary>
+    /// Below this width the ribbon stops being a ribbon and becomes a menu: a ☰ button plus the active
+    /// tab's name, whose overlay lists every tab, group and item (TASK-102).
+    /// </summary>
+    /// <remarks>
+    /// Measured against the <b>ribbon's own</b> width, not the window's, so a ribbon in a narrow pane
+    /// behaves like one in a narrow window. Scaling (TASK-099) handles everything above it; this is only
+    /// what happens once scaling has nothing left to give.
+    /// <para>
+    /// <b>Deliberately 240, not the web's 768.</b> <c>b-ribbon</c>'s 48rem is a *touch-layout* breakpoint —
+    /// below it you are on a phone and a ribbon is the wrong interaction model regardless of whether it
+    /// would fit. A desktop control has no phone, so copying that number would replace a perfectly usable
+    /// 700px ribbon with a menu; the measured floor for a six-group tab is 166px. This threshold answers
+    /// "can this still work as a ribbon", which is a different question. Set it to 768 for literal web
+    /// parity if a consumer wants it.
+    /// </para>
+    /// </remarks>
+    public double NarrowThreshold { get => GetValue(NarrowThresholdProperty); set => SetValue(NarrowThresholdProperty, value); }
+
     static Ribbon()
     {
         TabsProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         SelectedIndexProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         IsCollapsedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
         PreferredGroupSizeProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+        IsPinnedProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.Rebuild());
+
+        // Narrow/wide is a rebuild, so it is driven off the size change rather than polled — and only when
+        // the state actually flips, otherwise every pixel of a drag would rebuild the whole chrome.
+        BoundsProperty.Changed.AddClassHandler<Ribbon>((r, _) => r.OnWidthChanged());
     }
+
+    private void OnWidthChanged()
+    {
+        bool narrow = Bounds.Width > 0 && Bounds.Width < NarrowThreshold;
+        if (narrow == _isNarrow) return;
+        _isNarrow = narrow;
+        Rebuild();
+    }
+
+    private bool _isNarrow;
 
     public IEnumerable<RibbonTab>? Tabs { get => GetValue(TabsProperty); set => SetValue(TabsProperty, value); }
     public int SelectedIndex { get => GetValue(SelectedIndexProperty); set => SetValue(SelectedIndexProperty, value); }
@@ -62,6 +115,14 @@ public class Ribbon : ContentControl
         var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
         int selected = tabs.Count == 0 ? -1 : System.Math.Clamp(SelectedIndex, 0, tabs.Count - 1);
 
+        // Below the threshold the ribbon stops being a ribbon (TASK-102). Scaling has nothing left to give
+        // by then, so continuing to draw a tab strip and a groups row would only clip them.
+        if (_isNarrow && tabs.Count > 0)
+        {
+            Content = BuildNarrowChrome(tabs, selected);
+            return;
+        }
+
         // Tab strip (tabs on the left, a collapse chevron on the right)
         var tabButtons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
         for (int i = 0; i < tabs.Count; i++)
@@ -75,11 +136,16 @@ public class Ribbon : ContentControl
             };
             tabButton.Bind(ForegroundProperty, tabButton.GetResourceObservable(
                 i == selected ? "BColorPrimaryBrush" : "BTextSecondaryBrush"));
-            // Selecting a tab shows it; clicking the already-active tab toggles collapse (Office-style).
+            // Clicking the already-active tab toggles collapse (Office-style). Otherwise: pinned selects
+            // and expands for good; UNPINNED selects and reveals only temporarily, leaving IsCollapsed
+            // alone — "Show Tabs" is a mode you leave by pinning, not by clicking a tab (TASK-101).
             tabButton.Click += (_, _) =>
             {
-                if (index == SelectedIndex) IsCollapsed = !IsCollapsed;
-                else { SelectedIndex = index; IsCollapsed = false; }
+                if (index == SelectedIndex && IsPinned) { IsCollapsed = !IsCollapsed; return; }
+
+                SelectedIndex = index;
+                if (IsPinned) IsCollapsed = false;
+                else RevealTemporarily();
             };
             tabButtons.Children.Add(tabButton);
         }
@@ -101,49 +167,41 @@ public class Ribbon : ContentControl
         var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
         CarryTabScrollAcrossRebuild(tabScrollViewer, tabButtons, selected);
 
-        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 4, 8, 0) };
+        var pin = new Button
+        {
+            Content = new TextBlock { Text = IsPinned ? "\U0001F4CC" : "\U0001F4CD" },
+            Background = Brushes.Transparent,
+            Padding = new Thickness(8, 6),
+            [ToolTip.TipProperty] = IsPinned ? "Unpin the ribbon" : "Pin the ribbon open",
+        };
+        pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
+        pin.Click += (_, _) => IsPinned = !IsPinned;
+
+        var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
         Grid.SetColumn(tabScroller, 0);
         Grid.SetColumn(chevron, 1);
+        Grid.SetColumn(pin, 2);
         strip.Children.Add(tabScroller);
         strip.Children.Add(chevron);
+        strip.Children.Add(pin);
 
         var body = new DockPanel();
         DockPanel.SetDock(strip, Dock.Top);
         body.Children.Add(strip);
 
-        // Active tab groups — hidden when collapsed (tabs-only mode)
-        if (!IsCollapsed)
+        // Active tab groups — in flow only when PINNED. Unpinned, the body must not push page content
+        // down, so it is built into the reveal popup instead (RevealTemporarily).
+        _revealTabs = tabs;
+        _revealSelected = selected;
+        if (!IsPinned) _reveal?.Close();
+        if (!IsCollapsed && IsPinned && selected >= 0)
         {
-            // Progressive scaling (TASK-099): each group is built at every variant and the panel picks
-            // per group, so narrowing degrades Medium -> Small rather than clipping.
-            var groupsPanel = new RibbonGroupsPanel { Margin = new Thickness(8), Preferred = PreferredGroupSize };
-            groupsPanel.Bind(RibbonGroupsPanel.GapProperty, groupsPanel.GetResourceObservable("BRibbonGroupGap"));
-            if (selected >= 0)
-                foreach (var group in tabs[selected].Groups)
-                    groupsPanel.AddGroup(new RibbonGroupsPanel.GroupVariants
-                    {
-                        Controls = new Dictionary<RibbonGroupSize, Control>
-                        {
-                            [RibbonGroupSize.Large] = BuildGroup(group, RibbonGroupSize.Large),
-                            [RibbonGroupSize.Medium] = BuildGroup(group, RibbonGroupSize.Medium),
-                            [RibbonGroupSize.Small] = BuildGroup(group, RibbonGroupSize.Small),
-                            [RibbonGroupSize.Popup] = BuildGroup(group, RibbonGroupSize.Popup),
-                        },
-                        CompactPopup = BuildChunk(group, labelled: false),
-                        ScalingPriority = group.ScalingPriority,
-                        MinSize = group.MinSize,
-                    });
-
-            // No scroller here, deliberately: the ribbon BODY resizes, it never scrolls. With the Popup
-            // variant in place there is always something narrower for a group to become, so nothing can be
-            // unreachable — and the panel now measures against the real constraint instead of a
-            // ScrollViewer's infinite width. Keeping a scroller also made the scaling history-dependent,
-            // because the chevrons' hysteresis fed back into the viewport the pass scales against.
+            var groupsPanel = BuildGroupsRow(tabs[selected], onInvoke: null);
             body.Children.Add(groupsPanel);
             _groupsPanel = groupsPanel;
         }
 
-        if (IsCollapsed) _groupsPanel = null; // no groups row exists, so report no variants
+        if (IsCollapsed || !IsPinned) _groupsPanel = null; // no in-flow groups row, so report no variants
 
         var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
@@ -164,6 +222,204 @@ public class Ribbon : ContentControl
         _groupsPanel?.Chosen ?? (IReadOnlyList<RibbonGroupSize>)System.Array.Empty<RibbonGroupSize>();
 
     private RibbonGroupsPanel? _groupsPanel;
+
+    /// <summary>
+    /// The active tab's groups, with progressive scaling applied (TASK-099): each group is built at every
+    /// variant and <see cref="RibbonGroupsPanel"/> picks per group, so narrowing degrades
+    /// <c>Medium → Small → Popup</c> rather than clipping.
+    /// </summary>
+    /// <param name="onInvoke">Ran after a command, so a temporary reveal can close itself.</param>
+    /// <remarks>
+    /// No scroller, deliberately: the ribbon body resizes, it never scrolls. With the Popup variant there is
+    /// always something narrower for a group to become, so nothing is unreachable — and the panel measures
+    /// against the real constraint instead of a ScrollViewer's infinite width.
+    /// </remarks>
+    private RibbonGroupsPanel BuildGroupsRow(RibbonTab tab, System.Action? onInvoke)
+    {
+        var panel = new RibbonGroupsPanel { Margin = new Thickness(8), Preferred = PreferredGroupSize };
+        panel.Bind(RibbonGroupsPanel.GapProperty, panel.GetResourceObservable("BRibbonGroupGap"));
+
+        foreach (var group in tab.Groups)
+            panel.AddGroup(new RibbonGroupsPanel.GroupVariants
+            {
+                Controls = new Dictionary<RibbonGroupSize, Control>
+                {
+                    [RibbonGroupSize.Large] = BuildGroup(group, RibbonGroupSize.Large, onInvoke),
+                    [RibbonGroupSize.Medium] = BuildGroup(group, RibbonGroupSize.Medium, onInvoke),
+                    [RibbonGroupSize.Small] = BuildGroup(group, RibbonGroupSize.Small, onInvoke),
+                    [RibbonGroupSize.Popup] = BuildGroup(group, RibbonGroupSize.Popup, onInvoke),
+                },
+                CompactPopup = BuildChunk(group, labelled: false),
+                ScalingPriority = group.ScalingPriority,
+                MinSize = group.MinSize,
+            });
+
+        return panel;
+    }
+
+    /// <summary>
+    /// The narrow fallback (TASK-102): ☰ plus the active tab's name, whose overlay lists every tab, group
+    /// and item — mirroring <c>b-ribbon</c>'s sub-48rem hamburger dialog.
+    /// </summary>
+    /// <remarks>
+    /// Below <see cref="NarrowThreshold"/> a ribbon is the wrong shape entirely: scaling has nothing left to
+    /// give, so drawing a tab strip and a groups row would only clip them. Becoming a menu keeps every
+    /// command reachable at any width, which is the guarantee the whole story rests on.
+    /// </remarks>
+    private Control BuildNarrowChrome(List<RibbonTab> tabs, int selected)
+    {
+        var burger = new Button
+        {
+            Content = new TextBlock { Text = "☰", FontSize = 18 },
+            Background = Brushes.Transparent,
+            Padding = new Thickness(10, 6),
+            [ToolTip.TipProperty] = "Open the ribbon menu",
+        };
+        burger.Bind(ForegroundProperty, burger.GetResourceObservable("BTextBrush"));
+
+        var active = new TextBlock
+        {
+            Text = selected >= 0 ? tabs[selected].Label : string.Empty,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        active.Bind(TextBlock.ForegroundProperty, active.GetResourceObservable("BTextBrush"));
+
+        burger.Click += (_, _) => OpenNarrowMenu(tabs, selected, burger);
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(4, 2) };
+        row.Children.Add(burger);
+        row.Children.Add(active);
+
+        var chrome = new Border { Child = row, BorderThickness = new Thickness(0, 0, 0, 1) };
+        chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
+        chrome.Bind(Border.BorderBrushProperty, chrome.GetResourceObservable("BBorderBrush"));
+        return chrome;
+    }
+
+    /// <summary>Every tab → group → item as a flat scrollable menu, the active tab first.</summary>
+    private void OpenNarrowMenu(List<RibbonTab> tabs, int selected, Control anchor)
+    {
+        _reveal?.Close();
+
+        var list = new StackPanel { Margin = new Thickness(8), Spacing = 2 };
+        // Active tab first: it is what the ☰ label says you are looking at, so it should not need scrolling to.
+        foreach (var tab in tabs.OrderByDescending(t => selected >= 0 && t == tabs[selected]))
+        {
+            var heading = new TextBlock { Text = tab.Label, FontSize = 12, Margin = new Thickness(0, 6, 0, 2) };
+            heading.Bind(TextBlock.ForegroundProperty, heading.GetResourceObservable("BColorPrimaryBrush"));
+            list.Children.Add(heading);
+
+            foreach (var group in tab.Groups)
+            {
+                var groupLabel = new TextBlock { Text = group.Label, FontSize = 11, Margin = new Thickness(8, 2, 0, 0) };
+                groupLabel.Bind(TextBlock.ForegroundProperty, groupLabel.GetResourceObservable("BTextMutedBrush"));
+                list.Children.Add(groupLabel);
+
+                foreach (var item in group.Items)
+                {
+                    var entry = new Button
+                    {
+                        Content = new TextBlock { Text = (item.Icon is null ? "" : item.Icon + "  ") + item.Label },
+                        Background = Brushes.Transparent,
+                        Padding = new Thickness(16, 6),
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        HorizontalContentAlignment = HorizontalAlignment.Left,
+                    };
+                    entry.Bind(ForegroundProperty, entry.GetResourceObservable("BTextBrush"));
+                    var captured = item;
+                    entry.Click += (_, _) => { captured.Run?.Invoke(); _reveal?.Close(); };
+                    list.Children.Add(entry);
+                }
+            }
+        }
+
+        var scroller = new ScrollViewer
+        {
+            Content = list,
+            MaxHeight = 420,
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+        };
+        var surface = new Border { Child = scroller, BorderThickness = new Thickness(1), MinWidth = 220 };
+        surface.Bind(Border.BackgroundProperty, surface.GetResourceObservable("BBgElevatedBrush"));
+        surface.Bind(Border.BorderBrushProperty, surface.GetResourceObservable("BBorderBrush"));
+
+        _reveal = new Popup
+        {
+            Child = surface,
+            PlacementTarget = anchor,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            IsLightDismissEnabled = true,
+        };
+        ((ISetLogicalParent)_reveal).SetParent(this);
+        // Light dismiss covers click-away and Escape; returning focus to the anchor is the part it does not do.
+        _reveal.Closed += (_, _) => anchor.Focus();
+        _reveal.Open();
+    }
+
+    /// <inheritdoc/>
+    protected override void OnKeyDown(global::Avalonia.Input.KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        // Ctrl+F1 is the shortcut users actually try, and Office has had it for two decades.
+        if (e.Key == global::Avalonia.Input.Key.F1
+            && e.KeyModifiers.HasFlag(global::Avalonia.Input.KeyModifiers.Control))
+        {
+            IsCollapsed = !IsCollapsed;
+            e.Handled = true;
+        }
+    }
+
+    private Popup? _reveal;
+
+    /// <summary>
+    /// The overlay currently shown over the page — the narrow menu, or an unpinned ribbon's temporary
+    /// reveal — or <c>null</c> when nothing is open.
+    /// </summary>
+    /// <remarks>
+    /// Public for the same reason as <see cref="ResolvedGroupSizes"/>: a shell has real cause to reach it
+    /// (dismiss ribbon overlays when navigating, or when opening a dialog), and it lets the behaviour be
+    /// asserted without a test-only back door. A <c>Popup</c> hosts its child in a separate visual root, so
+    /// there is otherwise no route to it from the ribbon.
+    /// </remarks>
+    public Control? OpenOverlay => _reveal?.IsOpen == true ? _reveal.Child as Control : null;
+
+    /// <summary>Dismiss the narrow menu or temporary reveal, if one is open.</summary>
+    public void CloseOverlay() => _reveal?.Close();
+    private List<RibbonTab> _revealTabs = new();
+    private int _revealSelected = -1;
+
+    /// <summary>
+    /// Show the active tab's groups **over** the page, without changing <see cref="IsCollapsed"/> — Office's
+    /// temporary reveal for an unpinned ribbon. Light-dismiss closes it, and so does invoking a command.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Popup"/> rather than a re-parented body: it overlays instead of participating in layout
+    /// (the whole point), and it brings light dismiss and Escape with it rather than needing hit-testing and
+    /// key handling written by hand.
+    /// </remarks>
+    private void RevealTemporarily()
+    {
+        if (_revealSelected < 0 || _revealSelected >= _revealTabs.Count) return;
+
+        _reveal?.Close();
+        var groups = BuildGroupsRow(_revealTabs[_revealSelected], () => _reveal?.Close());
+
+        var surface = new Border { Child = groups, BorderThickness = new Thickness(1) };
+        surface.Bind(Border.BackgroundProperty, surface.GetResourceObservable("BBgElevatedBrush"));
+        surface.Bind(Border.BorderBrushProperty, surface.GetResourceObservable("BBorderBrush"));
+
+        _reveal = new Popup
+        {
+            Child = surface,
+            PlacementTarget = this,
+            Placement = PlacementMode.BottomEdgeAlignedLeft,
+            IsLightDismissEnabled = true,
+        };
+        ((ISetLogicalParent)_reveal).SetParent(this);
+        _reveal.Open();
+    }
 
     /// <summary>Tab-strip scroll offset, carried across <see cref="Rebuild"/> (which discards the tree).</summary>
     private double _tabOffsetX;
