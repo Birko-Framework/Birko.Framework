@@ -114,11 +114,14 @@ flickering. Measure candidates against the constraint; don't feed the applied la
       (This is the stability criterion; it is much easier to see by hand than to assert.)
 - [x] At the narrowest width before popup: expected **no horizontal scrollbar and no chevrons** on the
       groups row — that is the whole point of the change.
-- [x] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
-- [x] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
+- [ ] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
+- [ ] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
       `Small` renderings side by side against the Avalonia gallery for visual parity.
-- [x] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
+- [ ] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
       than it did before, not just differently.
+
+_Gallery-side steps confirmed by the reviewer 2026-07-29 (through three rounds of fixes). The unticked
+ones are genuinely unrun — they were ticked in error by a bulk pass and restored._
 
 ## Implementation plan
 
