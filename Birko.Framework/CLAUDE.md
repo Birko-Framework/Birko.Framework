@@ -164,6 +164,30 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Ribbon overflow: the ribbon body scales, it does not scroll (2026-07-29)
+
+A field report — on a narrow window the ribbon shows fewer commands with no way to reach the rest — turned
+out to be true in **both** skins, failing differently. `Birko.Xaml.Avalonia`'s `Ribbon` clipped its tab strip
+*and* its groups row with no `ScrollViewer` at all. `b-ribbon` had working tab-strip chevrons but its panel
+was `overflow-x: auto` with `scrollbar-width: none` and no buttons — scrollable in theory, invisible in
+practice, so an overflowing group was unreachable by mouse. Its tab arrows also only re-evaluated on `scroll`
+and on re-render, so narrowing the window left the arrow hidden while the tabs overflowed.
+
+The **standing design rule** this establishes, recorded here because it constrains all future ribbon work:
+the ribbon *body* **resizes, it never scrolls.** Office degrades each group `Large → Medium → Small → Popup`
+in an author-declared priority order (`scalingPriority`), collapsing a whole group to one chunk button with a
+full-size flyout rather than moving commands offscreen. A scroll offset destroys the spatial memory the ribbon
+exists to provide ("Cut is top-left of Clipboard") — the exact failure the ribbon was invented to fix over
+Office 2003's toolbars. The `»` overflow chevron *is* an Office pattern, but it belongs to **toolbars**
+(Fluent `CommandBar`/`OverflowSet`), not the ribbon body. **Ribbon tabs are the deliberate exception** and do
+scroll, as in Office Web / Fluent.
+
+TASK-097 shipped the interim reachability fix in both skins (chevron affordance on every overflowing track,
+`ResizeObserver`/`LayoutUpdated`-driven so a resize alone updates it, scrollbars hidden so the ribbon's height
+never changes with the window width). STORY-049's remaining tasks add the size-variant + scaling-priority
+model to `RibbonModels.cs` **and** `b-ribbon.ts` together, then the degrade pass — which removes the
+groups-row scroller again. Per-skin detail lives in the two sub-project CLAUDE.mds.
+
 ### Per-theme AXAML dictionaries — Avalonia themes are opt-in like the web ones (2026-07-29)
 
 Themes were opt-in on the web (one CSS file each, linked + `registerThemes`) but all-or-nothing on

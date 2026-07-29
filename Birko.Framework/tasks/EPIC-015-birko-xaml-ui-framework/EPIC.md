@@ -1,11 +1,35 @@
 ---
 id: EPIC-015
-status: done
+status: in-progress
 created: 2026-06-25
 closed: 2026-07-06
 owner: both
 affects: [Birko.Xaml.Core, Birko.Xaml.Avalonia, Birko.Xaml.Shell, Birko.DesignTokens, Birko.Web.Components]
 ---
+
+## Reopened (2026-07-29) — STORY-048 (Avalonia 12 / .NET 10) + STORY-049 (ribbon overflow)
+
+The delivery below is unchanged and still complete; the epic is `in-progress` again only because
+**STORY-048** and **STORY-049** added new work to this area.
+
+**STORY-049** came out of a field report the same day: on a narrow window the ribbon shows fewer
+items with no way to reach the rest. Confirmed in both skins, failing differently — the Avalonia
+`Ribbon` clips tabs *and* groups with no scroll at all, while `b-ribbon` scrolls its panel with
+`scrollbar-width: none` and no arrows, i.e. reachable in theory and invisible in practice. The fix is
+the Office model — **progressive group scaling (`Large→Medium→Small→Popup`) in author-declared
+priority order, never a scrolling ribbon body** — which needs matching size/priority additions to
+`RibbonModels.cs` and `b-ribbon.ts`. (Ribbon tabs are the exception and do scroll, as in Office Web.)
+
+`Birko.Xaml.{Core,Avalonia,Shell}` shipped on **Avalonia
+11.2.3 / `net8.0`** and are now the .NET 8 island in an otherwise `net10.0` repo — Avalonia **12.1.0**
+is the current line and the only one shipping a `net10.0` build.
+
+Scouted 2026-07-29 (real build + suite run in a scratchpad, repos untouched): the migration is
+**small and measured** — 144/144 tests green on 12.1.0 / `net10.0` / xunit v3, with two hard code
+breaks (Kanban drag-drop → `DataTransfer`; `LostFocus` → `FocusChangedEventArgs`) and 28 obsolete
+warnings. All AXAML — including the six generated theme dictionaries and `ThemeDictionaries` —
+compiles untouched. The real blockers are **LiveCharts** (no stable Avalonia-12 release, TASK-093) and
+the fact that the suite **compares no pixels**, so green does not mean visually unchanged (TASK-095).
 
 ## Completion (2026-07-06)
 
@@ -143,6 +167,15 @@ Decomposed into 8 stories (dependency-ordered):
 8. **STORY-036** — Tier 3: `Birko.Xaml.Shell` — page bases + app chrome + navigation.
 
 (STORY-032 can land any time after STORY-031; STORY-033 depends on Tier-0 + much of Tier-1; STORY-036 is last — it sits on 032/033/034/035.)
+
+**Added after the original 8 (post-delivery maintenance, not part of the build order):**
+
+9. **STORY-048** — Avalonia 12 / `net10.0` upgrade for the whole XAML stack. Gated on the LiveCharts
+   Avalonia-12 story (TASK-093) and on giving the suite a pixel baseline first (TASK-095).
+10. **STORY-049** — Office-style ribbon overflow: progressive group scaling + group-to-popup collapse,
+    in both `Birko.Xaml.Avalonia`'s `Ribbon` and `Birko.Web.Components`' `b-ribbon`. Starts with an
+    interim "make overflow reachable" fix, then the shared model change (size variant + scaling
+    priority, added to both models at once) before the degrade pass itself.
 
 ## WPF addendum — adding WPF after Avalonia
 
