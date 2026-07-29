@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -779,6 +780,50 @@ public class RibbonTests
 
         ribbon.OpenOverlay.Should().BeNull("Escape dismisses a temporary reveal as well as the menu");
         ribbon.IsCollapsed.Should().BeTrue("and the ribbon stays minimised, as it was");
+    }
+
+    [AvaloniaFact]
+    public void Clicking_away_dismisses_the_temporary_reveal()
+    {
+        // Reported from the gallery: it did not. Popup.IsLightDismissEnabled had already failed to deliver
+        // Escape; it does not deliver click-away either, so the ribbon now owns dismissal outright.
+        // Driven through the headless input pipeline rather than by raising a synthetic event, because the
+        // whole class of bug here is "the handler works but nothing reaches it".
+        var ribbon = Build(out _);
+        ribbon.IsPinned = false;
+        ribbon.IsCollapsed = true;
+
+        var page = new StackPanel();
+        var below = new Button { Content = "Something else on the page", Height = 40 };
+        page.Children.Add(ribbon);
+        page.Children.Add(below);
+
+        var window = new Window { Content = page, Width = 700, Height = 300 };
+        window.Show();
+        window.Measure(new Size(700, 300));
+        window.Arrange(new Rect(0, 0, 700, 300));
+        Dispatcher.UIThread.RunJobs();
+
+        var view = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "View"));
+        view.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        ribbon.OpenOverlay.Should().NotBeNull("precondition: the reveal is showing");
+
+        // A pointer press on the page below the ribbon, routed through the tree so the tunnel handler on the
+        // TopLevel sees it exactly as it would in the app. (Headless MouseDown does not deliver here.)
+        var pointer = new Pointer(1, PointerType.Mouse, isPrimary: true);
+        below.RaiseEvent(new PointerPressedEventArgs(
+            below, pointer, window, new Point(4, 4), 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None)
+        {
+            RoutedEvent = InputElement.PointerPressedEvent,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        ribbon.OpenOverlay.Should().BeNull("pressing elsewhere in the app dismisses the reveal");
+        ribbon.IsCollapsed.Should().BeTrue("and the ribbon is still minimised, as it was");
     }
 
     [AvaloniaFact]
