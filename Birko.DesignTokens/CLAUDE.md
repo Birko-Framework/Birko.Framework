@@ -12,9 +12,25 @@ See `README.md` for usage. This file records the conventions and non-obvious dec
   `generate` / `verify`).
 - **Writes into (does not own):**
   - `../../Web/Birko.Web.Components/css/{tokens.css, themes/*.css}` — the byte-identical parity gate.
-  - `../Birko.Xaml.Avalonia/Themes/{Tokens.axaml, Theme.{Light,Dark,Neon,Finstat}.axaml}` — the
-    `Birko.Xaml.Avalonia` project itself is created in **STORY-030**; STORY-029 only lays down the
-    generated dictionaries in its `Themes/` folder.
+  - `../Birko.Xaml.Avalonia/Themes/` — six files: `Tokens.{Light,Dark,Neon,Finstat}.axaml` (one
+    `ThemeDictionaries` entry each), `Tokens.Brushes.axaml` (shared brushes), and `Tokens.axaml`
+    (back-compat aggregate merging all five). One file per theme so a consumer ships only the themes
+    it offers — see `Birko.Xaml.Avalonia/CLAUDE.md` § "Theme system" for the composition rules.
+
+## `verify` covers BOTH targets
+
+`verify` diffs the regenerated CSS **and** AXAML against what is on disk, and exits non-zero on any
+drift or missing file. Run it before committing anything that touches tokens. It was CSS-only until
+the AXAML split turned one generated dictionary into six — six hand-editable files with no gate is
+exactly how a stale generated tree goes unnoticed.
+
+**A stale `tokens.json` is the failure mode to watch.** If someone hand-edits the generated CSS (or
+AXAML) instead of `tokens.json`, the next `generate` silently *deletes* their edit — this happened:
+`--b-color-danger-text` (a WCAG contrast token, all four sheets), an AA-darkened finstat
+`--b-text-secondary`, `--b-modal-width-xxl`, `--b-modal-full-inset`, `--b-drawer-width-xxl` and
+`--b-input-font-size` had all been hand-added, leaving `CssParityTests` red. The recovery is
+`extract` (it folds the live CSS back into `tokens.json` and self-checks the round-trip), then
+`generate`. Prevention is running `verify`.
 
 ## Convention deviations (deliberate — do not "fix")
 
@@ -49,7 +65,13 @@ See `README.md` for usage. This file records the conventions and non-obvious dec
 
 - STORY-029 maps only the unambiguous, high-value tokens: colors (`Color`+`SolidColorBrush`),
   lengths (rem→px baked at 16), fonts (`FontFamily`), simple numerics. `var()` refs resolve
-  per-theme so each theme dictionary is full & self-contained.
+  per-theme so each theme dictionary is full & self-contained — which is precisely what makes the
+  per-theme file split work: any subset can be merged without pulling in the others.
+- **`ThemeIdKey` (`BThemeId`)** is emitted into every theme dictionary, naming its own theme. It is
+  an AXAML-only mechanism (not a design token, absent from the CSS and from `tokens.json`) that lets
+  `AvaloniaThemeManager` detect which themes were actually merged. Do not "clean it up": presence
+  probing cannot substitute for it, because an omitted variant resolves through its `InheritVariant`
+  and would answer anyway.
 - Composite/motion tokens (shadows, focus rings, transitions, easings, durations, gradients) and
   the `ThemeVariant`/`DynamicResource` wiring are **STORY-030**. The `inverse` CSS theme (a scoped
   partial) is intentionally **not** emitted to AXAML yet.
@@ -67,3 +89,9 @@ Never hand-edit the generated CSS or AXAML. Adding a theme = add a `Sheet`; addi
 parity per sheet, extractor round-trip on the live files, single-source/uniqueness checks, AXAML
 well-formedness, per-theme resolution, color/length/key-name conversion unit tests, and
 cross-theme key-set parity (swap safety).
+
+**Both generated trees are gated by the suite, not just by the `verify` verb.** `CssParityTests`
+covers the CSS; `AxamlParityTests` covers the six AXAML dictionaries (each file must equal what
+tokens.json regenerates, plus a check that `Themes/` holds *exactly* the generated set, so a renamed
+or dropped dictionary can't linger and keep serving tokens that left the source). AXAML had only the
+CLI verb before, and nothing runs a CLI verb on its own — which is how the CSS went stale unnoticed.
