@@ -144,14 +144,31 @@ public class Ribbon : ContentControl
         left.Click += (_, _) => Step(-1);
         right.Click += (_, _) => Step(1);
 
+        bool overflowing = false;
+
         void Sync()
         {
             // Extent and Viewport both change when the window resizes, so reacting to them covers a
             // narrowing window with no rebuild — the gap that made overflow silently unreachable.
-            bool canLeft = scroller.Offset.X > 1;
-            bool canRight = scroller.Offset.X + scroller.Viewport.Width < scroller.Extent.Width - 1;
-            if (left.IsVisible != canLeft) left.IsVisible = canLeft;
-            if (right.IsVisible != canRight) right.IsVisible = canRight;
+            double over = scroller.Extent.Width - scroller.Viewport.Width;
+
+            // Hysteresis on "does this row overflow at all", with a dead zone the width of the two
+            // reserved slots. Revealing them shrinks the viewport, which would otherwise let the slots'
+            // own width decide whether they are needed — a bistable boundary that can oscillate while
+            // the user drags the window edge. The slots are given back only once the content fits with
+            // more room to spare than they occupy.
+            double reserved = overflowing ? left.Bounds.Width + right.Bounds.Width : 0;
+            if (reserved <= 0) reserved = 40;
+            overflowing = overflowing ? over > -reserved : over > 1;
+
+            // Once overflowing, BOTH slots stay in the layout and only their opacity / hit-testing
+            // changes — so scrolling to either end never reflows the row and never moves the click
+            // target. Collapsing a chevron's box let the adjacent content slide into its slot, which is
+            // how the web side ended up swallowing clicks on an unpinned ribbon.
+            if (left.IsVisible != overflowing) left.IsVisible = overflowing;
+            if (right.IsVisible != overflowing) right.IsVisible = overflowing;
+            SetActive(left, overflowing && scroller.Offset.X > 1);
+            SetActive(right, overflowing && scroller.Offset.X + scroller.Viewport.Width < scroller.Extent.Width - 1);
         }
 
         scroller.ScrollChanged += (_, _) => Sync();
@@ -165,6 +182,16 @@ public class Ribbon : ContentControl
         host.Children.Add(scroller);
         host.Children.Add(right);
         return host;
+    }
+
+    /// <summary>
+    /// A reserved-but-inactive chevron keeps its box so the row never reflows; only its opacity and
+    /// hit-testing change. <see cref="Visual.IsVisible"/> would collapse the box.
+    /// </summary>
+    private static void SetActive(Button chevron, bool active)
+    {
+        chevron.Opacity = active ? 1 : 0;
+        chevron.IsHitTestVisible = active;
     }
 
     private Button ScrollChevron(string glyph, string tip)
