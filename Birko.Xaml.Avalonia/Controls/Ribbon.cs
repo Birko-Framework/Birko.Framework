@@ -831,28 +831,8 @@ public class Ribbon : ContentControl
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office
         // closes a collapsed group's flyout as soon as a command runs.
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide(), wrapItems: true);
+        flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
         button.Flyout = flyout;
-
-        // Cap the flyout to the ribbon's width at open time, so the wrapping actually kicks in. A group only
-        // collapses when the ribbon is narrow, so its full-size contents are frequently wider than the
-        // ribbon itself — and left-aligned under a chunk near the right edge, the surplus is simply cut off.
-        flyout.Opened += (_, _) =>
-        {
-            if (flyout.Content is not Control content) return;
-
-            content.MaxWidth = System.Math.Max(120, Bounds.Width - 16);
-            content.Measure(new Size(content.MaxWidth, double.PositiveInfinity));
-
-            // Then keep it inside the ribbon horizontally. Left-aligned under a chunk near the right edge, a
-            // full-size group's flyout runs off the end and the surplus is simply cut off — which is what a
-            // reviewer hit on the Export chunk. Nudge it back by however much it would overrun; the anchor
-            // stays under its own chunk wherever there is room for it.
-            double chunkX = button.TranslatePoint(default, this)?.X ?? 0;
-            double needed = content.DesiredSize.Width + FlyoutChrome;
-            double overrun = chunkX + needed - Bounds.Width;
-            flyout.HorizontalOffset = overrun > 0 ? -overrun : 0;
-        };
 
         var box = new Border
         {
