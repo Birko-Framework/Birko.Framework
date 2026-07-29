@@ -199,6 +199,51 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Selecting_a_scrolled_tab_does_not_snap_the_strip_back_to_the_start()
+    {
+        // Reported from the gallery: scroll the strip to reach a far-right tab, click it — the tab opens
+        // correctly but the strip jumps back to the first tab, so the tab just picked is off-screen.
+        // Rebuild() discards the tree, so the new ScrollViewer started at offset 0 every time.
+        var ribbon = Show(BuildCrowded(), width: 320);
+        var scroller = ScrollerContaining(ribbon, "Home");
+
+        var right = ChevronByTip(ribbon, "Scroll tabs right");
+        for (int i = 0; i < 6; i++) // scroll to the far end
+        {
+            right.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+        }
+        double scrolledTo = scroller.Offset.X;
+        scrolledTo.Should().BeGreaterThan(0, "precondition: the strip is scrolled away from the start");
+
+        var lastTab = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Developer"));
+        lastTab.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        // Rebuild() replaced the tree, so re-resolve the scroller rather than reusing the stale one.
+        var after = ScrollerContaining(ribbon, "Home");
+        after.Offset.X.Should().BeApproximately(scrolledTo, 1.0,
+            "the strip must stay where the user left it across the rebuild");
+    }
+
+    [AvaloniaFact]
+    public void A_selection_made_from_offscreen_is_scrolled_into_view()
+    {
+        // The other half: restoring the offset alone would leave a keyboard/programmatic selection
+        // off-screen, so a changed selection is brought into view (a no-op after a click, since the tab
+        // clicked is already visible).
+        var ribbon = Show(BuildCrowded(), width: 320);
+
+        ribbon.SelectedIndex = 8; // "Developer" — the last tab, off-screen at 320px
+        Dispatcher.UIThread.RunJobs();
+
+        var scroller = ScrollerContaining(ribbon, "Home");
+        scroller.Offset.X.Should().BeGreaterThan(0,
+            "selecting an off-screen tab must scroll it into view, not leave it hidden");
+    }
+
+    [AvaloniaFact]
     public void No_chevrons_and_no_vertical_scrollbar_when_everything_fits()
     {
         var ribbon = Show(Build(out _), width: 900);
