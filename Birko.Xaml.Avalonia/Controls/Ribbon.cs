@@ -129,6 +129,7 @@ public class Ribbon : ContentControl
                             [RibbonGroupSize.Small] = BuildGroup(group, RibbonGroupSize.Small),
                             [RibbonGroupSize.Popup] = BuildGroup(group, RibbonGroupSize.Popup),
                         },
+                        CompactPopup = BuildChunk(group, labelled: false),
                         ScalingPriority = group.ScalingPriority,
                         MinSize = group.MinSize,
                     });
@@ -452,7 +453,7 @@ public class Ribbon : ContentControl
     /// what separates this from a flat overflow menu that dumps every leftover command into one list. It is
     /// also what lets the ribbon body stop scrolling entirely: there is always something narrower to become.
     /// </remarks>
-    private Control BuildChunk(RibbonGroup group)
+    private Control BuildChunk(RibbonGroup group, bool labelled = true)
     {
         var icon = new TextBlock { Text = group.Icon ?? "▦", HorizontalAlignment = HorizontalAlignment.Center };
         var label = new TextBlock
@@ -465,7 +466,11 @@ public class Ribbon : ContentControl
 
         var content = new StackPanel { Spacing = 2 };
         content.Children.Add(icon);
-        content.Children.Add(label);
+        // The extreme: even a row of labelled chunk buttons can be too wide, because a chunk shows
+        // its group NAME and a name has a minimum width. Dropping it takes the six-group minimum from
+        // ~500px to ~250px. The tooltip still carries the name, so the command is never anonymous —
+        // the same trade the Small variant already makes for items.
+        if (labelled) content.Children.Add(label);
 
         var button = new Button
         {
@@ -475,7 +480,7 @@ public class Ribbon : ContentControl
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable("BRibbonIconSmall"));
-        button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonChunkWidth"));
+        if (labelled) button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonChunkWidth"));
         ToolTip.SetTip(button, group.Label);
 
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office

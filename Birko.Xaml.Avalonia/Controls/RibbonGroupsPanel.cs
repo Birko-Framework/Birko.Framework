@@ -38,12 +38,22 @@ internal sealed class RibbonGroupsPanel : Panel
     internal sealed class GroupVariants
     {
         public required IReadOnlyDictionary<RibbonGroupSize, Control> Controls { get; init; }
+
+        /// <summary>
+        /// The chunk button without its group name, used only when even a row of labelled chunks is
+        /// too wide. Deliberately NOT a fifth <see cref="RibbonGroupSize"/>: it is the same Popup
+        /// variant drawn tighter, so the shared enum — and the policy both skins agree on — stays at
+        /// Office's four.
+        /// </summary>
+        public Control? CompactPopup { get; init; }
+
         public int ScalingPriority { get; init; }
         public RibbonGroupSize MinSize { get; init; } = RibbonGroupSize.Popup;
     }
 
     private readonly List<GroupVariants> _groups = new();
     private RibbonGroupSize[] _chosen = System.Array.Empty<RibbonGroupSize>();
+    private bool _compact;
 
     /// <summary>The roomiest variant any group may take — the ribbon's look at full width.</summary>
     public RibbonGroupSize Preferred { get; set; } = RibbonGroupSize.Medium;
@@ -67,6 +77,7 @@ internal sealed class RibbonGroupsPanel : Panel
         ClipToBounds = true; // parked variants live off-screen; do not let them paint
         _groups.Add(group);
         foreach (var control in group.Controls.Values) Children.Add(control);
+        if (group.CompactPopup is not null) Children.Add(group.CompactPopup);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -101,13 +112,30 @@ internal sealed class RibbonGroupsPanel : Panel
         _chosen = RibbonScaling.Resolve(metrics, available, Preferred, Gap);
         double gap = EffectiveGap(_chosen);
 
+        // Last resort, below even an all-Popup row: drop the group name from every chunk button.
+        // Decided here rather than in the policy because it is a rendering choice, not a variant —
+        // and it stays a pure function of the width, so determinism holds.
+        _compact = false;
+        if (System.Array.TrueForAll(_chosen, size => size == RibbonGroupSize.Popup)
+            && _groups.TrueForAll(g => g.CompactPopup is not null))
+        {
+            double labelled = 0;
+            for (int i = 0; i < _groups.Count; i++)
+            {
+                var chunk = _groups[i].Controls[RibbonGroupSize.Popup];
+                chunk.Measure(Size.Infinity);
+                labelled += chunk.DesiredSize.Width + (i > 0 ? gap : 0);
+            }
+            _compact = labelled > available;
+        }
+
         double width = 0, height = 0;
         for (int i = 0; i < _groups.Count; i++)
         {
-            foreach (var pair in _groups[i].Controls)
-                pair.Value.IsHitTestVisible = pair.Key == _chosen[i];
+            var picked = Picked(i);
+            foreach (var control in AllControls(_groups[i]))
+                control.IsHitTestVisible = control == picked;
 
-            var picked = _groups[i].Controls[_chosen[i]];
             picked.Measure(availableSize);
             if (i > 0) width += gap;
             width += picked.DesiredSize.Width;
@@ -123,21 +151,36 @@ internal sealed class RibbonGroupsPanel : Panel
         double x = 0;
         for (int i = 0; i < _groups.Count && i < _chosen.Length; i++)
         {
-            foreach (var pair in _groups[i].Controls)
+            var picked = Picked(i);
+            foreach (var control in AllControls(_groups[i]))
             {
-                if (pair.Key == _chosen[i]) continue;
-                // Parked far off-screen rather than hidden: it must stay measurable (see the class remarks).
-                // ClipToBounds stops it painting and IsHitTestVisible stops it being clicked.
-                pair.Value.Arrange(new Rect(-100_000, 0, pair.Value.DesiredSize.Width, pair.Value.DesiredSize.Height));
+                if (control == picked) continue;
+                // Parked far off-screen rather than hidden: it must stay measurable (see the class
+                // remarks). ClipToBounds stops it painting, IsHitTestVisible stops it being clicked.
+                control.Arrange(new Rect(-100_000, 0, control.DesiredSize.Width, control.DesiredSize.Height));
             }
 
-            var picked = _groups[i].Controls[_chosen[i]];
             if (i > 0) x += gap;
             picked.Arrange(new Rect(x, 0, picked.DesiredSize.Width, finalSize.Height));
             x += picked.DesiredSize.Width;
         }
         return finalSize;
     }
+
+    /// <summary>The control actually shown for a group — the compact chunk at the row's extreme.</summary>
+    private Control Picked(int i) =>
+        _compact && _chosen[i] == RibbonGroupSize.Popup && _groups[i].CompactPopup is not null
+            ? _groups[i].CompactPopup!
+            : _groups[i].Controls[_chosen[i]];
+
+    private static IEnumerable<Control> AllControls(GroupVariants group)
+    {
+        foreach (var control in group.Controls.Values) yield return control;
+        if (group.CompactPopup is not null) yield return group.CompactPopup;
+    }
+
+    /// <summary>Whether chunk buttons are drawn without their group names — the narrowest row possible.</summary>
+    internal bool IsCompact => _compact;
 
     /// <summary>
     /// Space between groups, tightened as the row does. A collapsed group is a single button, and sitting
