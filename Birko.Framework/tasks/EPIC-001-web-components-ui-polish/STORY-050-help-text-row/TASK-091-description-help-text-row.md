@@ -1,6 +1,6 @@
 ---
 id: TASK-091
-parent: STORY-029
+parent: STORY-050
 status: review
 priority: P2
 assignee: ai

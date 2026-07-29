@@ -1,7 +1,7 @@
 ---
-id: STORY-029
+id: STORY-050
 parent: EPIC-001
-status: review
+status: in-progress
 created: 2026-07-29
 ---
 
