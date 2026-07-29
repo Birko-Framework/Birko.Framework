@@ -27,9 +27,19 @@ Three variants here; `Popup` is TASK-100.
 
 | Variant | Rendering |
 |---|---|
-| `Large` | 32px icon, label underneath, one item per column — today's only rendering |
+| `Large` | 32px icon, label underneath, one item per column |
 | `Medium` | 16px icon + label to its right, 3 items stacked per column |
 | `Small` | 16px icon only, no label (tooltip carries the name), 3 per column |
+
+**Found during TASK-098 — the two skins do not currently render the same variant, so this task builds
+more than it chooses between.** The Avalonia `Ribbon.BuildItem` stacks an 18px icon above a centred
+wrapping label with `MinWidth = 52` — that is **`Large`**. The web `.ribbon-item` is
+`inline-flex; align-items: center` with a `--b-icon-base` (16px) icon and the label to its right — that
+is **`Medium`**. So the web side has no `Large` to degrade *from*, and Avalonia has no `Medium` to
+degrade *to*; each skin needs one rendering built rather than just re-parameterised. Budget for it, and
+settle the "which is the ribbon's default look" question explicitly — the answer decides whether the web
+ribbon gets visually *taller* at wide widths (`Large` as default, Office-like) or Avalonia gets *denser*
+(`Medium` as default, matching today's web). Both enums' docs already name the gap.
 
 **Degrade in author-declared priority order, not uniformly.** A low-priority group must reach `Small`
 before a high-priority one leaves `Large`. Uniform shrinking is the failure mode that turns the ribbon
