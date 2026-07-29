@@ -848,6 +848,100 @@ public class RibbonTests
             "the reveal spans the ribbon rather than hugging its contents");
     }
 
+    // ── TASK-100: a collapsed group must be reachable and announced ───────────────
+
+    /// <summary>One collapsed group, plus the chunk button actually on display for it.</summary>
+    private static (Ribbon Ribbon, Button Chunk) CollapsedGroup(out bool[] ran, double width = 900)
+    {
+        var flags = new bool[1];
+        var group = new RibbonGroup
+        {
+            Label = "Clipboard",
+            Icon = "📋",
+            Items = new[]
+            {
+                new RibbonItem { Id = "cut", Label = "Cut", Icon = "✂", Run = () => flags[0] = true },
+                new RibbonItem { Id = "copy", Label = "Copy", Icon = "📄" },
+            },
+        };
+        var ribbon = new Ribbon
+        {
+            PreferredGroupSize = RibbonGroupSize.Popup,
+            Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { group } } },
+        };
+        Show(ribbon, width);
+        ran = flags;
+
+        var chunk = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => (b.GetValue(ToolTip.TipProperty) as string) == "Clipboard")
+            .First(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
+        return (ribbon, chunk);
+    }
+
+    [AvaloniaFact]
+    public void A_collapsed_group_announces_its_name_and_that_it_expands()
+    {
+        // Without KeyTips, a collapsed group is the ONLY route to its commands — so announcing as a bare
+        // "button" would remove them from screen-reader users specifically, which is the same defect this
+        // story removes for sighted mouse users. b-ribbon gets this from aria-expanded + aria-haspopup.
+        var (_, chunk) = CollapsedGroup(out _);
+
+        global::Avalonia.Automation.AutomationProperties.GetName(chunk).Should().Be("Clipboard",
+            "the accessible name is the group's, not the empty content of a compact chunk");
+
+        var peer = global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(chunk);
+        peer.Should().BeAssignableTo<global::Avalonia.Automation.Provider.IExpandCollapseProvider>(
+            "a collapsed group is an expandable thing, and should say so");
+
+        var expand = (global::Avalonia.Automation.Provider.IExpandCollapseProvider)peer;
+        expand.ExpandCollapseState.Should().Be(global::Avalonia.Automation.ExpandCollapseState.Collapsed);
+
+        expand.Expand();
+        Dispatcher.UIThread.RunJobs();
+        expand.ExpandCollapseState.Should().Be(global::Avalonia.Automation.ExpandCollapseState.Expanded,
+            "and the state must track the flyout, or assistive tech reports whatever it saw first");
+
+        expand.Collapse();
+        Dispatcher.UIThread.RunJobs();
+        expand.ExpandCollapseState.Should().Be(global::Avalonia.Automation.ExpandCollapseState.Collapsed);
+    }
+
+    [AvaloniaFact]
+    public void A_collapsed_group_is_keyboard_reachable_and_parked_variants_are_not()
+    {
+        // The parked variants sit off-screen but were still FOCUSABLE, so Tab walked through invisible
+        // controls — extra stops on commands a keyboard user cannot see. Disabling takes the whole subtree
+        // out of the tab order, which IsHitTestVisible alone does not.
+        var (ribbon, chunk) = CollapsedGroup(out _);
+
+        chunk.IsEffectivelyEnabled.Should().BeTrue("the shown chunk is reachable by Tab");
+        chunk.Focusable.Should().BeTrue();
+
+        var parked = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.TranslatePoint(default, ribbon) is { X: < -1000 })
+            .ToList();
+
+        parked.Should().NotBeEmpty("the unchosen variants are parked off-screen by design");
+        parked.Should().OnlyContain(b => !b.IsEffectivelyEnabled,
+            "and none of them may be in the tab order");
+    }
+
+    [AvaloniaFact]
+    public void Escape_closes_a_collapsed_groups_flyout()
+    {
+        // The criterion TASK-100 could not tick: it relied on Flyout's own behaviour, unverified.
+        var (ribbon, chunk) = CollapsedGroup(out _, width: 900);
+        var window = (Window)ribbon.GetVisualRoot()!;
+
+        chunk.Flyout!.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+        chunk.Flyout!.IsOpen.Should().BeTrue("precondition");
+
+        PressKey(window, Key.Escape);
+
+        chunk.Flyout!.IsOpen.Should().BeFalse("Escape dismisses the flyout");
+    }
+
     [AvaloniaFact]
     public void Capture_ribbon_screenshot()
     {
