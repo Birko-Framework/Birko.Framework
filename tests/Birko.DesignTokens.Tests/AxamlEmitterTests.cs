@@ -12,27 +12,75 @@ public class AxamlEmitterTests
     private static readonly TokenSet Tokens =
         TokenSet.Load(Paths.Resolve(Array.Empty<string>()).TokensJson);
 
-    private static readonly string Tokax = AxamlEmitter.Generate(Tokens)["Tokens.axaml"];
-    private static readonly XDocument Doc = XDocument.Parse(Tokax);
+    private static readonly Dictionary<string, string> Files = AxamlEmitter.Generate(Tokens);
+
+    private static readonly string[] Variants = { "Light", "Dark", "Neon", "Finstat" };
 
     [Fact]
-    public void Emits_a_single_tokens_file() =>
-        AxamlEmitter.Generate(Tokens).Keys.Should().BeEquivalentTo(new[] { "Tokens.axaml" });
+    public void Emits_one_file_per_theme_plus_brushes_and_a_back_compat_aggregate() =>
+        Files.Keys.Should().BeEquivalentTo(new[]
+        {
+            "Tokens.Light.axaml", "Tokens.Dark.axaml", "Tokens.Neon.axaml", "Tokens.Finstat.axaml",
+            AxamlEmitter.BrushesFile, AxamlEmitter.AggregateFile,
+        });
 
     [Fact]
-    public void Is_well_formed_xml()
+    public void Every_emitted_file_is_well_formed_xml()
     {
-        Action parse = () => XDocument.Parse(Tokax);
-        parse.Should().NotThrow();
+        foreach (var (name, content) in Files)
+        {
+            Action parse = () => XDocument.Parse(content);
+            parse.Should().NotThrow($"{name} must be well-formed");
+        }
     }
 
     [Fact]
-    public void Has_a_theme_dictionary_per_variant()
+    public void Each_theme_file_holds_exactly_its_own_variant()
     {
-        VariantDicts().Should().HaveCount(4, "light, dark, neon, finstat");
-        // Built-ins via {x:Static ...Light/Dark}; custom via {x:Static ...Neon/Finstat}.
-        foreach (var v in new[] { "Light", "Dark", "Neon", "Finstat" })
-            VariantDict(v).Should().NotBeNull($"a ThemeDictionaries entry for {v} must exist");
+        foreach (var v in Variants)
+        {
+            var dicts = VariantDicts(v).ToList();
+            dicts.Should().HaveCount(1, $"Tokens.{v}.axaml must declare only the {v} entry, so it can be omitted independently");
+            KeyOf(dicts[0]).Should().Contain(v);
+        }
+    }
+
+    [Fact]
+    public void Each_theme_file_names_itself_via_the_theme_id_sentinel()
+    {
+        // Presence cannot reveal which themes are loaded — an omitted variant inherits its base
+        // silently — so each dictionary states its own id for AvaloniaThemeManager to detect.
+        foreach (var (variant, theme) in Variants.Zip(new[] { "light", "dark", "neon", "finstat" }))
+        {
+            var sentinel = VariantDict(variant)!.Elements()
+                .FirstOrDefault(e => e.Attribute(X + "Key")?.Value == AxamlEmitter.ThemeIdKey);
+            sentinel.Should().NotBeNull($"{variant} must declare {AxamlEmitter.ThemeIdKey}");
+            sentinel!.Value.Should().Be(theme);
+        }
+    }
+
+    [Fact]
+    public void Theme_files_carry_no_brushes_so_the_shared_sheet_is_the_only_source()
+    {
+        foreach (var v in Variants)
+            XDocument.Parse(Files[$"Tokens.{v}.axaml"]).Descendants()
+                .Where(e => e.Name.LocalName == "SolidColorBrush")
+                .Should().BeEmpty($"Tokens.{v}.axaml must not duplicate brushes — {AxamlEmitter.BrushesFile} owns them");
+    }
+
+    [Fact]
+    public void Aggregate_merges_the_brushes_and_all_four_themes()
+    {
+        var sources = XDocument.Parse(Files[AxamlEmitter.AggregateFile]).Descendants()
+            .Where(e => e.Name.LocalName == "ResourceInclude")
+            .Select(e => e.Attribute("Source")!.Value.Split('/').Last())
+            .ToList();
+
+        sources.Should().BeEquivalentTo(new[]
+        {
+            AxamlEmitter.BrushesFile,
+            "Tokens.Light.axaml", "Tokens.Dark.axaml", "Tokens.Neon.axaml", "Tokens.Finstat.axaml",
+        });
     }
 
     [Fact]
@@ -63,16 +111,16 @@ public class AxamlEmitterTests
     [Fact]
     public void All_variant_dictionaries_expose_the_same_key_set()
     {
-        var sets = new[] { "Light", "Dark", "Neon", "Finstat" }.Select(v => KeysIn(VariantDict(v)!)).ToList();
+        var sets = Variants.Select(v => KeysIn(VariantDict(v)!)).ToList();
         foreach (var set in sets)
             set.Should().BeEquivalentTo(sets[0], "every variant must expose the same keys (swap safety)");
     }
 
     [Fact]
-    public void Every_color_has_a_root_brush_linked_by_dynamic_resource()
+    public void Every_color_has_a_shared_brush_linked_by_dynamic_resource()
     {
         var colorKeys = KeysOfElements(VariantDict("Light")!, "Color");
-        var rootBrushes = Doc.Root!.Elements()
+        var rootBrushes = XDocument.Parse(Files[AxamlEmitter.BrushesFile]).Root!.Elements()
             .Where(e => e.Name.LocalName == "SolidColorBrush")
             .ToDictionary(e => e.Attribute(X + "Key")!.Value, e => e.Attribute("Color")!.Value);
 
@@ -110,6 +158,13 @@ public class AxamlEmitterTests
     }
 
     [Theory]
+    [InlineData("Light", "Tokens.Light.axaml")]
+    [InlineData("Neon", "Tokens.Neon.axaml")]
+    public void ThemeFile_names_the_per_theme_dictionary(string variant, string file) =>
+        // Consumers hard-code these names in their ResourceInclude URIs — renaming is breaking.
+        AxamlEmitter.ThemeFile(variant).Should().Be(file);
+
+    [Theory]
     [InlineData("--b-color-primary", "BColorPrimary")]
     [InlineData("--b-bg", "BBg")]
     [InlineData("--b-space-2xs", "BSpace2xs")]
@@ -117,12 +172,14 @@ public class AxamlEmitterTests
         AxamlEmitter.ToKey(varName).Should().Be(key);
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-    private static IEnumerable<XElement> VariantDicts() =>
-        Doc.Descendants().First(e => e.Name.LocalName == "ResourceDictionary.ThemeDictionaries")
+    /// <summary>The ThemeDictionaries entries declared by that theme's own file.</summary>
+    private static IEnumerable<XElement> VariantDicts(string variant) =>
+        XDocument.Parse(Files[$"Tokens.{variant}.axaml"]).Descendants()
+            .First(e => e.Name.LocalName == "ResourceDictionary.ThemeDictionaries")
             .Elements().Where(e => e.Name.LocalName == "ResourceDictionary");
 
     private static XElement? VariantDict(string variant) =>
-        VariantDicts().FirstOrDefault(e => KeyOf(e).Contains(variant, StringComparison.Ordinal));
+        VariantDicts(variant).FirstOrDefault(e => KeyOf(e).Contains(variant, StringComparison.Ordinal));
 
     private static string KeyOf(XElement dict) => dict.Attribute(X + "Key")!.Value;
 
