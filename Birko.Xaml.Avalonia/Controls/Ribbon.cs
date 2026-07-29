@@ -474,7 +474,15 @@ public class Ribbon : ContentControl
         _reveal?.Close();
         var groups = BuildGroupsRow(_revealTabs[_revealSelected], () => _reveal?.Close());
 
-        var surface = new Border { Child = groups, BorderThickness = new Thickness(1) };
+        var surface = new Border
+        {
+            Child = groups,
+            BorderThickness = new Thickness(1),
+            // Full ribbon width, matching b-ribbon's `left: 0; right: 0` and Office: a temporary reveal
+            // should read as the ribbon body appearing, not as a dropdown sized to its contents. MinWidth
+            // rather than Width so unusually wide content can still grow past it.
+            MinWidth = Bounds.Width,
+        };
         surface.Bind(Border.BackgroundProperty, surface.GetResourceObservable("BBgElevatedBrush"));
         surface.Bind(Border.BorderBrushProperty, surface.GetResourceObservable("BBorderBrush"));
 
@@ -684,7 +692,10 @@ public class Ribbon : ContentControl
 
         var box = new Border
         {
-            Padding = new Thickness(8, 4),
+            // BSpaceXs horizontally, none vertically — b-ribbon's .ribbon-group is
+            // `padding: 0 var(--b-space-xs)`. The old 8/4 gave every group extra inner padding the web
+            // side does not have, which is what made the two look differently spaced inside a group.
+            Padding = new Thickness(4, 0),
             BorderThickness = new Thickness(0, 0, 1, 0),
             Child = stack,
         };
@@ -708,7 +719,8 @@ public class Ribbon : ContentControl
             return wrapped;
         }
 
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Bind(StackPanel.SpacingProperty, row.GetResourceObservable("BRibbonItemGap"));
         foreach (var item in items) row.Children.Add(BuildItem(item, size, onInvoke));
         return row;
     }
@@ -716,7 +728,8 @@ public class Ribbon : ContentControl
     /// <summary>Items in columns of <paramref name="perColumn"/>, columns flowing left to right.</summary>
     private Control Columns(IReadOnlyList<RibbonItem> items, RibbonGroupSize size, int perColumn, System.Action? onInvoke)
     {
-        var host = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var host = new StackPanel { Orientation = Orientation.Horizontal };
+        host.Bind(StackPanel.SpacingProperty, host.GetResourceObservable("BRibbonItemGap"));
         StackPanel? column = null;
         for (int i = 0; i < items.Count; i++)
         {
@@ -735,7 +748,10 @@ public class Ribbon : ContentControl
         var button = new Button
         {
             Background = Brushes.Transparent,
-            Padding = new Thickness(6, 4),
+            // BSpaceSm / BSpaceXs — the same pair b-ribbon's .ribbon-item uses
+            // (padding: var(--b-space-xs) var(--b-space-sm)). Was 6/4, which read as visibly tighter
+            // than the web side when the two were compared directly.
+            Padding = new Thickness(8, 4),
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
