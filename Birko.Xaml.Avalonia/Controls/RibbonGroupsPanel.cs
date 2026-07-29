@@ -93,7 +93,13 @@ internal sealed class RibbonGroupsPanel : Panel
         }
 
         double available = double.IsInfinity(availableSize.Width) ? double.MaxValue : availableSize.Width;
+
+        // The decision uses the FULL gap, the layout uses the effective one. Deciding against the larger
+        // value is deliberately conservative: the row it picks then fits with room to spare, whereas
+        // deciding against the smaller value could under-degrade and clip. Determinism is unaffected — both
+        // gaps are pure functions of the width and the chosen set.
         _chosen = RibbonScaling.Resolve(metrics, available, Preferred, Gap);
+        double gap = EffectiveGap(_chosen);
 
         double width = 0, height = 0;
         for (int i = 0; i < _groups.Count; i++)
@@ -103,7 +109,7 @@ internal sealed class RibbonGroupsPanel : Panel
 
             var picked = _groups[i].Controls[_chosen[i]];
             picked.Measure(availableSize);
-            if (i > 0) width += Gap;
+            if (i > 0) width += gap;
             width += picked.DesiredSize.Width;
             height = System.Math.Max(height, picked.DesiredSize.Height);
         }
@@ -113,6 +119,7 @@ internal sealed class RibbonGroupsPanel : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
+        double gap = EffectiveGap(_chosen);
         double x = 0;
         for (int i = 0; i < _groups.Count && i < _chosen.Length; i++)
         {
@@ -125,11 +132,31 @@ internal sealed class RibbonGroupsPanel : Panel
             }
 
             var picked = _groups[i].Controls[_chosen[i]];
-            if (i > 0) x += Gap;
+            if (i > 0) x += gap;
             picked.Arrange(new Rect(x, 0, picked.DesiredSize.Width, finalSize.Height));
             x += picked.DesiredSize.Width;
         }
         return finalSize;
+    }
+
+    /// <summary>
+    /// Space between groups, tightened as the row does. A collapsed group is a single button, and sitting
+    /// those a full group-gap apart wastes the width the collapse just bought — Office packs them close.
+    /// This matters more than it sounds: the gap sets the row's hard minimum, so six groups at
+    /// <see cref="RibbonGroupSize.Popup"/> with a 24px gap could not fit under ~550px, and everything
+    /// narrower than that clipped.
+    /// </summary>
+    private double EffectiveGap(IReadOnlyList<RibbonGroupSize> chosen)
+    {
+        var tightest = RibbonGroupSize.Large;
+        foreach (var size in chosen) if (size > tightest) tightest = size;
+
+        return tightest switch
+        {
+            RibbonGroupSize.Popup => Gap * 0.25,
+            RibbonGroupSize.Small => Gap * 0.5,
+            _ => Gap,
+        };
     }
 
     /// <summary>The variant each group ended up at — for tests and for the ribbon's own diagnostics.</summary>
