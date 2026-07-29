@@ -38,9 +38,23 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
   importance — a LOWER value degrades FIRST**, which is Birko's convention and deliberately *not* an
   assertion about RibbonX's numeric sense; say so wherever it's re-documented. Defaults
   (`ScalingPriority = 0`, `MinSize = Popup`) reproduce pre-TASK-098 rendering exactly. The fields are
-  inert until TASK-099/TASK-100 implement the degrade pass and the flyout. Keep in step with the
-  `RibbonGroupSize` / `RibbonGroup` mirror in web `b-ribbon.ts` — the two are designed together, never
-  retrofitted one side at a time.
+  consumed by the degrade pass below. Keep in step with the `RibbonGroupSize` / `RibbonGroup` mirror in
+  web `b-ribbon.ts` — the two are designed together, never retrofitted one side at a time.
+- **Ribbon scaling policy (STORY-049/TASK-099):** `Ribbon.RibbonScaling.Resolve(groups, available,
+  preferred, gap)` + `Ribbon.RibbonGroupMetrics`. Given each group's width per variant, its priority and
+  its floor, it picks a variant per group so the row fits, degrading the **least important first, one step
+  at a time**. Renderer-free on purpose: the *rendering* is forked (AXAML vs CSS) but the *policy* must
+  not be, so both skins call the same algorithm — `Birko.Web.Components/src/nav/ribbon-scaling.ts` mirrors
+  it and the playground's `ribbon-scaling-smoke` asserts the **same numeric table** as
+  `RibbonScalingTests` so the two cannot drift. Three properties are load-bearing:
+  - **Deterministic** — a pure function of the arguments, never of the currently-applied layout. Feeding
+    the applied layout back in is what makes a scaling ribbon oscillate at a boundary; a test walks widths
+    down and back up and compares.
+  - **`MinSize` is a preference, not a guarantee** — breached least-important-first rather than letting the
+    row overflow, because unreachable commands are worse than a group being less legible than its author
+    wanted. (Office has no hard floor either.) Still honoured whenever any arrangement fits.
+  - **An unmeasured variant costs the nearest roomier one**, so a renderer that measured only some variants
+    over-estimates instead of letting the row "fit" by accident and clip.
 - **Forms (STORY-033; field types EPIC-016/TASK-055):** `Forms.FormField` + `FieldType` (21 types:
   Text/TextArea/Number/Percent/Range/Password/Email/Search/Checkbox/Switch/Select/MultiSelect/Radio/OptionGroup/Tags/File/Markdown/Date/Time/DateTime/DateRange;
   `Forms.DateRange` is the value type for the DateRange field).
