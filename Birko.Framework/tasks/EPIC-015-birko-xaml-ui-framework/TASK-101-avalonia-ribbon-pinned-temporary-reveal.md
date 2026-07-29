@@ -89,15 +89,15 @@ control in a `Panel` with the body z-above the page) rather than flipping a prop
 
 ## Human test plan
 
-- [ ] `Birko.Xaml.Gallery` → Chrome tab. **Pinned** (default): collapse with the chevron, click a
+- [x] `Birko.Xaml.Gallery` → Chrome tab. **Pinned** (default): collapse with the chevron, click a
       different tab. Expected: today's behaviour — the ribbon expands and stays expanded.
 - [x] Switch to **unpinned**, collapse, then click a tab. Expected: the body appears *over* the content
       below it (content does not shift down), and the ribbon is still logically collapsed.
 - [x] From that temporarily-revealed state, click a command. Expected: it runs and the ribbon
       re-collapses by itself.
-- [ ] Temporarily reveal again, then click somewhere else in the app. Expected: it re-collapses.
+- [x] Temporarily reveal again, then click somewhere else in the app. Expected: it re-collapses.
 - [x] Press `Ctrl+F1`. Expected: collapse toggles.
-- [ ] While temporarily revealed on a **narrow** window: expected the TASK-097 chevrons still appear and
+- [x] While temporarily revealed on a **narrow** window: expected the TASK-097 chevrons still appear and
       still scroll — the overlay must not clip or swallow them.
 - [ ] Compare side by side with `b-ribbon` unpinned in `Birko.Web.Playground`: the two should now *feel*
       the same. That comparison is the actual point of the task.

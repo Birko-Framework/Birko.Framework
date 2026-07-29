@@ -73,9 +73,9 @@ same chrome. Doing them together is probably cheaper than either alone.
 - [x] `Birko.Xaml.Gallery` → Chrome tab. Drag narrower than the compact-chunk row can manage. Expected:
       the ribbon becomes ☰ + the active tab's name, with no clipped icons.
 - [x] Click ☰. Expected: an overlay listing every tab with its groups and items; the active tab expanded.
-- [ ] Pick a command. Expected: it runs and the overlay closes.
+- [x] Pick a command. Expected: it runs and the overlay closes.
 - [x] Reopen, press `Escape`. Expected: it closes and focus returns to ☰.
-- [ ] Widen again. Expected: the normal ribbon returns and scales as before.
+- [x] Widen again. Expected: the normal ribbon returns and scales as before.
 - [ ] Compare with `Birko.Web.Playground` below 768px: the two should now feel like the same component.
 
 _Reviewer confirmed 2026-07-29: ☰ appears at a narrow width, opens the menu, and `Escape` closes it with
