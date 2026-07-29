@@ -161,14 +161,19 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
-    public void Groups_row_scrolls_when_the_groups_overflow()
+    public void The_groups_row_degrades_instead_of_scrolling()
     {
+        // The design rule on record: the ribbon BODY resizes, it never scrolls. A scroll offset destroys
+        // the spatial memory the ribbon exists to provide, so there must be no groups scroller at all --
+        // only the tab strip scrolls (the deliberate exception).
         var ribbon = Show(BuildCrowded(), width: 320);
-        var scroller = ScrollerContaining(ribbon, "Clipboard");
 
-        scroller.Extent.Width.Should().BeGreaterThan(scroller.Viewport.Width);
-        IsShown(ChevronByTip(ribbon, "Scroll groups right")).Should().BeTrue();
-        Texts(ribbon).Should().Contain("Export", "every group stays in the tree and is reachable by scrolling");
+        ribbon.GetVisualDescendants().OfType<ScrollViewer>()
+            .Should().HaveCount(1, "only the tab strip scrolls; the groups row degrades instead");
+
+        ribbon.ResolvedGroupSizes.Should().NotBeEmpty();
+        ribbon.ResolvedGroupSizes.Should().NotContain(RibbonGroupSize.Large,
+            "6 groups cannot sit at their roomiest in 320px");
     }
 
     [AvaloniaFact]
@@ -250,8 +255,9 @@ public class RibbonTests
 
         IsReserved(ChevronByTip(ribbon, "Scroll tabs right")).Should().BeFalse("a row that fits reserves no slots");
         IsReserved(ChevronByTip(ribbon, "Scroll tabs left")).Should().BeFalse();
-        IsReserved(ChevronByTip(ribbon, "Scroll groups right")).Should().BeFalse(
-            "chevrons must cost no layout at a wide width");
+        ribbon.GetVisualDescendants().OfType<Button>()
+            .Should().NotContain(b => (b.GetValue(ToolTip.TipProperty) as string) == "Scroll groups right",
+                "the groups row has no scroller at all — it degrades instead");
 
         ribbon.GetVisualDescendants().OfType<ScrollViewer>().Should()
             .OnlyContain(s => s.VerticalScrollBarVisibility == global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
@@ -291,6 +297,141 @@ public class RibbonTests
         var after = Texts(Show(new Ribbon { Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { annotated } } } })).ToList();
 
         after.Should().Equal(before, "the group icon is only drawn once a group collapses to Popup (TASK-100)");
+    }
+
+    // ── TASK-099: progressive group scaling ───────────────────────────────────────
+
+    /// <summary>Two groups with differing importance, so priority order is observable.</summary>
+    private static Ribbon BuildPrioritised()
+    {
+        RibbonItem I(string label) => new() { Id = label, Label = label, Icon = "●" };
+        RibbonGroup G(string label, int priority) => new()
+        {
+            Label = label,
+            ScalingPriority = priority,
+            Items = new[] { I(label + " One"), I(label + " Two"), I(label + " Three") },
+        };
+
+        return new Ribbon
+        {
+            Tabs = new[]
+            {
+                new RibbonTab { Id = "home", Label = "Home", Groups = new[] { G("Clipboard", 10), G("Export", 0) } },
+            },
+        };
+    }
+
+    [AvaloniaFact]
+    public void Groups_sit_at_Medium_by_default_when_there_is_room()
+    {
+        var ribbon = Show(BuildPrioritised(), width: 1400);
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Medium,
+            "Medium is the default look, so an existing app's ribbon does not change height on upgrade");
+    }
+
+    [AvaloniaFact]
+    public void Large_is_available_as_an_opt_in()
+    {
+        var ribbon = BuildPrioritised();
+        ribbon.PreferredGroupSize = RibbonGroupSize.Large;
+        Show(ribbon, width: 1400);
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Large);
+    }
+
+    [AvaloniaFact]
+    public void The_least_important_group_degrades_first_as_the_window_narrows()
+    {
+        var ribbon = BuildPrioritised(); // Clipboard priority 10, Export priority 0
+        ribbon.PreferredGroupSize = RibbonGroupSize.Large;
+        Show(ribbon, width: 320);
+
+        var sizes = ribbon.ResolvedGroupSizes;
+        sizes.Should().HaveCount(2);
+        ((int)sizes[1]).Should().BeGreaterThan((int)sizes[0],
+            "Export is the least important, so it must be tighter than Clipboard — degrading uniformly " +
+            "would leave both the same and is the failure this pass exists to avoid");
+    }
+
+    [AvaloniaFact]
+    public void Widening_promotes_the_groups_back_up()
+    {
+        var ribbon = BuildPrioritised();
+        ribbon.PreferredGroupSize = RibbonGroupSize.Large;
+        var window = new Window { Content = ribbon, Width = 320, Height = 240 };
+        window.Show();
+
+        static void LayoutAt(Window w, double width)
+        {
+            w.Width = width;
+            w.Measure(new Size(width, 240));
+            w.Arrange(new Rect(0, 0, width, 240));
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        LayoutAt(window, 320);
+        // Not "nothing is Large" — with only two groups the important one legitimately keeps Large while
+        // the incidental one gives way. The point is that SOMETHING degraded.
+        ribbon.ResolvedGroupSizes.Should().Contain(size => size != RibbonGroupSize.Large,
+            "320px is not enough for both groups at their roomiest");
+
+        LayoutAt(window, 1400);
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Large, "room again at 1400px");
+    }
+
+    [AvaloniaFact]
+    public void The_same_width_yields_the_same_variants_whichever_direction_it_was_reached_from()
+    {
+        // The stability criterion, end to end through the real measure pass rather than just the policy.
+        var ribbon = BuildPrioritised();
+        ribbon.PreferredGroupSize = RibbonGroupSize.Large;
+        var window = new Window { Content = ribbon, Width = 900, Height = 240 };
+        window.Show();
+
+        var seen = new Dictionary<double, string>();
+        void Visit(double width)
+        {
+            // Settled state, not the first frame. The row sits in a ScrollViewer (the interim last resort
+            // until TASK-100), whose viewport width is only known once a pass has run — so the decision
+            // lands one pass later. Imperceptible while dragging, but a single Measure/Arrange would read a
+            // stale variant set and make this assertion about frame timing rather than about determinism.
+            for (int pass = 0; pass < 3; pass++)
+            {
+                window.Width = width;
+                window.Measure(new Size(width, 240));
+                window.Arrange(new Rect(0, 0, width, 240));
+                Dispatcher.UIThread.RunJobs();
+            }
+            string key = string.Join(",", ribbon.ResolvedGroupSizes);
+            if (seen.TryGetValue(width, out var previous))
+                key.Should().Be(previous, $"width {width} must resolve identically in both directions");
+            else
+                seen[width] = key;
+        }
+
+        for (double w = 900; w >= 300; w -= 50) Visit(w);
+        for (double w = 300; w <= 900; w += 50) Visit(w);
+    }
+
+    [AvaloniaFact]
+    public void Small_drops_the_labels_but_keeps_the_name_in_a_tooltip()
+    {
+        // An icon-only command with no tooltip is unidentifiable — that would trade "unreachable" for
+        // "unnameable", so the tooltip is part of the variant, not a nicety.
+        var ribbon = BuildPrioritised();
+        ribbon.PreferredGroupSize = RibbonGroupSize.Small;
+        Show(ribbon, width: 1400);
+
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Small);
+
+        // Only inspect the VISIBLE variant: all three are in the tree by design.
+        var visibleItemButtons = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.IsVisible && ToolTip.GetTip(b) is string tip && tip.StartsWith("Clipboard "))
+            .ToList();
+
+        visibleItemButtons.Should().NotBeEmpty("every Small item carries its label as a tooltip");
+        visibleItemButtons.Should().OnlyContain(
+            b => b.GetVisualDescendants().OfType<TextBlock>().Count() == 1,
+            "a Small item draws its icon only — no label TextBlock");
     }
 
     [AvaloniaFact]
