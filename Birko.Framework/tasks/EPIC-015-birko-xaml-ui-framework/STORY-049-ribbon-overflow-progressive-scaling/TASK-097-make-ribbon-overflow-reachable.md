@@ -2,7 +2,7 @@
 id: TASK-097
 parent: STORY-049
 feature: null
-status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P1
 assignee: ai
 created: 2026-07-29
@@ -69,9 +69,9 @@ second copy.
       `updateArrows`.
 - [x] Arrow visibility re-evaluates on **resize** (`ResizeObserver` on the scroll container), not only
       on `scroll` and re-render — for both the tab strip and the panel.
-- [ ] Below the 48rem breakpoint nothing regresses: the hamburger dialog still takes over and no
+- [x] Below the 48rem breakpoint nothing regresses: the hamburger dialog still takes over and no
       scroll buttons appear (the existing `!important` rule at `b-ribbon.ts:276`).
-      **Not automated** — the media query keys off *viewport* width, which the smoke (which resizes the
+      **Human-verified 2026-07-29 — not automated** — the media query keys off *viewport* width, which the smoke (which resizes the
       host element) cannot exercise. Reasoned safe from CSS order: the `@media (max-width: 48rem)` block
       is last in the sheet, so its `.ribbon-scroll-btn { display: none !important }` covers the two new
       buttons (same class) and its `.ribbon-panel { display: none }` beats the base rule's new
@@ -113,6 +113,13 @@ concept and a collapsed ribbon permanently re-expands when you click a tab, wher
 
 ## Review log
 
+- **2026-07-29 — SIGNED OFF.** Reviewer confirmed correct behaviour across the gallery and the
+  Playground after three rounds of fixes. **The review found three defects the automated suites had
+  missed, all in one family — state that did not survive a re-render:** the unpinned chevron strobe,
+  the container-jitter reflow that let a tab swallow the click, and the tab-strip scroll snapping back
+  to the start on `Rebuild()`. Each is now pinned by a mutation-checked test. Two supporting gaps also
+  came out of it: the demo ribbons were too thin to overflow at all, and the Playground stage's
+  `overflow: auto` was manufacturing the width jitter.
 - **2026-07-29, web (unpinned) — PASSED.** Reviewer confirmed the chevron is steady and clickable after
   the reserve-both-slots fix. This was the reported defect and the hardest part of the plan; it took
   three rounds (imperative-class blanking → layout reflow on toggle → the demo stage creating the
@@ -120,17 +127,17 @@ concept and a collapsed ribbon permanently re-expands when you click a tab, wher
 
 ## Human test plan
 
-- [ ] `Birko.Xaml.Gallery` — open the ribbon showcase, drag the window narrow enough to cut off the
+- [x] `Birko.Xaml.Gallery` — open the ribbon showcase, drag the window narrow enough to cut off the
       last tab. Expected: the tab strip scrolls and every tab is reachable; the collapse chevron stays
       visible at the right edge.
-- [ ] Same window, still narrow, on a tab with several groups: expected every group reachable by
+- [x] Same window, still narrow, on a tab with several groups: expected every group reachable by
       scrolling the groups row, and no vertical scrollbar appears.
-- [ ] `Birko.Web.Playground` — narrow the browser to ~900px on a ribbon with enough groups to
+- [x] `Birko.Web.Playground` — narrow the browser to ~900px on a ribbon with enough groups to
       overflow. Expected: chevrons appear on the panel; clicking scrolls; they disappear again when
       widened. **Then narrow further without reloading** — the arrows must update on resize alone
       (this is the specific bug being fixed; a reload would mask it).
-- [ ] Narrow past 48rem: expected the hamburger dialog takes over and **no** chevrons are visible.
-- [ ] Symbio UI (real consumer, many ribbon tabs) — confirm nothing shifted at normal desktop width.
+- [x] Narrow past 48rem: expected the hamburger dialog takes over and **no** chevrons are visible.
+- [x] Symbio UI (real consumer, many ribbon tabs) — confirm nothing shifted at normal desktop width.
 
 ## Implementation plan
 
