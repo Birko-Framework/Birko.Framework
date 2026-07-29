@@ -78,7 +78,8 @@ public class RibbonScalingTests
 
         var result = RibbonScaling.Resolve(new[] { protectedGroup, other }, available: 95, preferred: RibbonGroupSize.Large);
 
-        result[0].Should().Be(RibbonGroupSize.Medium, "its floor stops it, despite being least important");
+        result[0].Should().Be(RibbonGroupSize.Medium,
+            "its floor stops it, despite being least important — and 60+30 fits 95, so the floor need not break");
         result[1].Should().Be(RibbonGroupSize.Small, "so the cost lands on the group that still can give");
     }
 
@@ -116,6 +117,36 @@ public class RibbonScalingTests
         ascending.Reverse();
 
         descending.Should().BeEquivalentTo(ascending, "the result depends only on the width, not the history");
+    }
+
+    [Fact]
+    public void A_floor_gives_way_rather_than_letting_the_row_overflow()
+    {
+        // Found in review: a hero group floored at Small kept its width and pushed the last group clean off
+        // the edge. A floor is a preference — "keep this legible" — while reachability is a guarantee, so
+        // when the two conflict the floor loses. Office has no hard floor either; groups always collapse.
+        var floored = G(priority: 100, min: RibbonGroupSize.Small);
+        var other = G(priority: 0);
+
+        // 30 (floored at Small) + 10 (other at Popup) = 40 still exceeds 25, so the floor has to break.
+        var result = RibbonScaling.Resolve(new[] { floored, other }, available: 25, preferred: RibbonGroupSize.Large);
+
+        result[1].Should().Be(RibbonGroupSize.Popup, "the least important group bottomed out first");
+        result[0].Should().Be(RibbonGroupSize.Popup, "and then the floor gave way rather than clipping the row");
+    }
+
+    [Fact]
+    public void A_floor_is_still_honoured_whenever_the_row_can_fit_without_breaking_it()
+    {
+        // The other side of the same coin: the floor is not decorative. While there is any arrangement that
+        // fits, it holds.
+        var floored = G(priority: 100, min: RibbonGroupSize.Small);
+        var other = G(priority: 0);
+
+        var result = RibbonScaling.Resolve(new[] { floored, other }, available: 45, preferred: RibbonGroupSize.Large);
+
+        result[0].Should().Be(RibbonGroupSize.Small, "its floor, not past it");
+        result[1].Should().Be(RibbonGroupSize.Popup);
     }
 
     [Fact]
