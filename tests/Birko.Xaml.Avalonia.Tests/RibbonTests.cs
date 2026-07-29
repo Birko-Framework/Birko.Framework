@@ -358,6 +358,46 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void At_the_extreme_the_chunk_buttons_drop_their_group_names_and_the_row_still_fits()
+    {
+        // The last resort. A labelled chunk button cannot be narrower than its group's NAME, which put the
+        // six-group minimum around 500px — everything below that clipped. Dropping the name takes it to
+        // roughly half that. The name stays in the tooltip, so no command becomes anonymous: the same trade
+        // the Small variant already makes for items.
+        // Both minima are MEASURED, not guessed — I got a hardcoded threshold wrong three times in this
+        // file, because every one of them depends on the demo's label text.
+        var labelledProbe = new Ribbon { PreferredGroupSize = RibbonGroupSize.Popup, Tabs = BuildCrowded().Tabs };
+        Show(labelledProbe, 2000); // roomy, so the chunks keep their names
+        double labelledMinimum = PanelOf(labelledProbe).DesiredSize.Width;
+
+        // A width comfortably below what a labelled row can manage — i.e. one that used to clip.
+        double target = System.Math.Ceiling(labelledMinimum * 0.6);
+        var ribbon = Show(BuildCrowded(), target);
+
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Popup);
+        PanelOf(ribbon).DesiredSize.Width.Should().BeLessThanOrEqualTo(target + 0.5,
+            $"at {target}px — 60% of the {labelledMinimum}px a labelled row needs — the names come off and "
+            + "the row fits, where before it overflowed and the last group was unreachable");
+
+        // The labelled chunks are still in the tree (parked, so they stay measurable), so assert on what is
+        // actually SHOWN. Identified by position, not IsHitTestVisible: that flag is set on the wrapping
+        // Border, so reading it off the inner Button matches both copies.
+        var chunks = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => (b.GetValue(ToolTip.TipProperty) as string) == "Export")
+            .ToList();
+        chunks.Should().HaveCount(2, "both the labelled and the compact chunk exist; one of them is parked");
+
+        var shown = chunks
+            .Where(b => b.TranslatePoint(default, ribbon) is { X: > -1000 })
+            .ToList();
+
+        shown.Should().HaveCount(1, "exactly one chunk button per collapsed group is on-screen");
+        Texts(shown[0]).Should().NotContain("Export ⌄", "the name is dropped from the face of the button");
+        (shown[0].GetValue(ToolTip.TipProperty) as string).Should().Be("Export",
+            "but it stays reachable as a tooltip, so the button is not anonymous");
+    }
+
+    [AvaloniaFact]
     public void Below_the_narrowest_possible_row_every_group_is_at_its_floor()
     {
         // The honest limit. Six groups at Popup are still ~500px (a chunk button has a minimum width and
