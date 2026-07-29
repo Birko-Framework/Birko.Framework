@@ -79,7 +79,8 @@ public class Ribbon : ContentControl
         // The tab strip scrolls when the tabs overflow (Office Web / Fluent do this; the ribbon *body*
         // deliberately does not — see TASK-099). The collapse chevron lives outside the scroller so it
         // stays pinned at the right edge and can never scroll out of reach.
-        var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right");
+        var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
+        CarryTabScrollAcrossRebuild(tabScrollViewer, tabButtons, selected);
 
         var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 4, 8, 0) };
         Grid.SetColumn(tabScroller, 0);
@@ -101,13 +102,82 @@ public class Ribbon : ContentControl
             // INTERIM (TASK-097): groups scroll so no command is unreachable at a narrow width.
             // TASK-099 replaces this with progressive group scaling and removes the scroller — a
             // scrolling ribbon body destroys the spatial memory the ribbon exists to provide.
-            body.Children.Add(WrapScrollable(groupsPanel, "Scroll groups left", "Scroll groups right"));
+            body.Children.Add(WrapScrollable(groupsPanel, "Scroll groups left", "Scroll groups right", _groupRow, out _));
         }
 
         var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
         chrome.Bind(Border.BorderBrushProperty, chrome.GetResourceObservable("BBorderBrush"));
         Content = chrome;
+    }
+
+    /// <summary>Tab-strip scroll offset, carried across <see cref="Rebuild"/> (which discards the tree).</summary>
+    private double _tabOffsetX;
+
+    /// <summary>
+    /// Whether a row overflows, carried across <see cref="Rebuild"/> for the same reason as the offset.
+    /// Re-deriving it per rebuild un-reserved the chevron slots for a frame — so the row reflowed on
+    /// every rebuild (the very flicker the reservation exists to prevent), and the restored scroll offset
+    /// was clamped against a viewport 40px too wide.
+    /// </summary>
+    private sealed class RowScrollState { public bool Overflowing; }
+
+    private readonly RowScrollState _tabRow = new();
+    private readonly RowScrollState _groupRow = new();
+
+    private int _lastSelected = -1;
+
+    /// <summary>
+    /// Keep the tab strip where the user left it across a <see cref="Rebuild"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Rebuild"/> throws the whole visual tree away, so every rebuild produced a brand-new
+    /// <see cref="ScrollViewer"/> sitting at offset 0. Selecting a tab you had scrolled to therefore
+    /// snapped the strip back to the first tab, leaving the tab you had just clicked off-screen. (The web
+    /// <c>b-ribbon</c> never had this: it morphs the DOM, so the track element and its <c>scrollLeft</c>
+    /// survive.)
+    /// <para>
+    /// Restoring the offset is not enough on its own — a selection made from off-screen (keyboard, or
+    /// code setting <see cref="SelectedIndex"/>) must still scroll into view. So the remembered offset is
+    /// restored first, and the active tab is brought into view only when the selection actually changed:
+    /// after a click it is already visible, so that call is a no-op and the strip does not jump. On a
+    /// rebuild with the same selection (a collapse toggle, say) nothing moves at all.
+    /// </para>
+    /// </remarks>
+    private void CarryTabScrollAcrossRebuild(ScrollViewer scroller, Panel tabButtons, int selected)
+    {
+        bool selectionChanged = selected != _lastSelected;
+        _lastSelected = selected;
+
+        // Captured now: the pre-restore layout pass raises ScrollChanged at offset 0, which would
+        // otherwise overwrite the very value being restored.
+        double desired = _tabOffsetX;
+
+        // Retried across layout passes, not done once: Sync() re-reserves the chevron slots on the first
+        // pass, but that only narrows the viewport on a LATER pass — so a single attempt clamps `desired`
+        // against a viewport ~40px too wide and lands short of where the user actually was. Bounded, so a
+        // genuinely unreachable offset (the tab set shrank) cannot keep the handler alive.
+        int attempts = 0;
+        EventHandler? restore = null;
+        restore = (_, _) =>
+        {
+            double max = System.Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
+            double target = System.Math.Clamp(desired, 0, max);
+            if (System.Math.Abs(scroller.Offset.X - target) > 0.5)
+                scroller.Offset = new Vector(target, 0);
+
+            bool reached = target >= desired - 0.5;
+            if (!reached && ++attempts < 4) return;
+
+            scroller.LayoutUpdated -= restore;
+
+            if (selectionChanged && selected >= 0 && selected < tabButtons.Children.Count)
+                tabButtons.Children[selected].BringIntoView();
+
+            // Only start remembering once the restore has settled, for the same reason.
+            scroller.ScrollChanged += (_, _) => _tabOffsetX = scroller.Offset.X;
+        };
+        scroller.LayoutUpdated += restore;
     }
 
     /// <summary>
@@ -121,7 +191,7 @@ public class Ribbon : ContentControl
     /// with the window width. Chevrons live in <c>Auto</c> columns and are collapsed while invisible, so
     /// they cost no layout at a wide width.
     /// </remarks>
-    private Control WrapScrollable(Control content, string leftTip, string rightTip)
+    private Control WrapScrollable(Control content, string leftTip, string rightTip, RowScrollState state, out ScrollViewer scrollViewer)
     {
         var scroller = new ScrollViewer
         {
@@ -144,8 +214,6 @@ public class Ribbon : ContentControl
         left.Click += (_, _) => Step(-1);
         right.Click += (_, _) => Step(1);
 
-        bool overflowing = false;
-
         void Sync()
         {
             // Extent and Viewport both change when the window resizes, so reacting to them covers a
@@ -157,18 +225,18 @@ public class Ribbon : ContentControl
             // own width decide whether they are needed — a bistable boundary that can oscillate while
             // the user drags the window edge. The slots are given back only once the content fits with
             // more room to spare than they occupy.
-            double reserved = overflowing ? left.Bounds.Width + right.Bounds.Width : 0;
+            double reserved = state.Overflowing ? left.Bounds.Width + right.Bounds.Width : 0;
             if (reserved <= 0) reserved = 40;
-            overflowing = overflowing ? over > -reserved : over > 1;
+            state.Overflowing = state.Overflowing ? over > -reserved : over > 1;
 
             // Once overflowing, BOTH slots stay in the layout and only their opacity / hit-testing
             // changes — so scrolling to either end never reflows the row and never moves the click
             // target. Collapsing a chevron's box let the adjacent content slide into its slot, which is
             // how the web side ended up swallowing clicks on an unpinned ribbon.
-            if (left.IsVisible != overflowing) left.IsVisible = overflowing;
-            if (right.IsVisible != overflowing) right.IsVisible = overflowing;
-            SetActive(left, overflowing && scroller.Offset.X > 1);
-            SetActive(right, overflowing && scroller.Offset.X + scroller.Viewport.Width < scroller.Extent.Width - 1);
+            if (left.IsVisible != state.Overflowing) left.IsVisible = state.Overflowing;
+            if (right.IsVisible != state.Overflowing) right.IsVisible = state.Overflowing;
+            SetActive(left, state.Overflowing && scroller.Offset.X > 1);
+            SetActive(right, state.Overflowing && scroller.Offset.X + scroller.Viewport.Width < scroller.Extent.Width - 1);
         }
 
         scroller.ScrollChanged += (_, _) => Sync();
@@ -181,6 +249,7 @@ public class Ribbon : ContentControl
         host.Children.Add(left);
         host.Children.Add(scroller);
         host.Children.Add(right);
+        scrollViewer = scroller;
         return host;
     }
 
