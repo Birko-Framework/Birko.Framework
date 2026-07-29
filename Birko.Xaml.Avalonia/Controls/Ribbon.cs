@@ -353,15 +353,53 @@ public class Ribbon : ContentControl
             IsLightDismissEnabled = true,
         };
         ((ISetLogicalParent)_reveal).SetParent(this);
-        // Light dismiss covers click-away and Escape; returning focus to the anchor is the part it does not do.
+        // Light dismiss covers click-away only. Escape is handled at the top level (OnTopLevelKeyDown),
+        // because a Popup is not a FlyoutBase and does not bring Escape with it.
         _reveal.Closed += (_, _) => anchor.Focus();
         _reveal.Open();
     }
 
     /// <inheritdoc/>
-    protected override void OnKeyDown(global::Avalonia.Input.KeyEventArgs e)
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        base.OnKeyDown(e);
+        base.OnAttachedToVisualTree(e);
+
+        // Ribbon shortcuts are WINDOW shortcuts, so they are handled at the top level rather than in
+        // OnKeyDown. A ContentControl is not focusable, so the ribbon never has keyboard focus and an
+        // OnKeyDown override was simply unreachable — Ctrl+F1 did nothing in the gallery, and Escape never
+        // closed the narrow menu. (Both were "covered" by tests that raised the event straight at the
+        // control, which proved the handler ran and nothing about whether a keystroke could reach it.)
+        _topLevel = TopLevel.GetTopLevel(this);
+        _topLevel?.AddHandler(
+            global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown,
+            global::Avalonia.Interactivity.RoutingStrategies.Tunnel | global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+    }
+
+    /// <inheritdoc/>
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _topLevel?.RemoveHandler(global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown);
+        _topLevel = null;
+        _reveal?.Close();
+    }
+
+    private TopLevel? _topLevel;
+
+    private void OnTopLevelKeyDown(object? sender, global::Avalonia.Input.KeyEventArgs e)
+    {
+        // Escape closes an open overlay first: while the narrow menu or a temporary reveal is showing, that
+        // is what Escape means. A raw Popup does NOT do this for you — IsLightDismissEnabled is
+        // pointer-only; Escape handling lives in FlyoutBase, which a Popup is not.
+        if (e.Key == global::Avalonia.Input.Key.Escape && _reveal?.IsOpen == true)
+        {
+            var anchor = _reveal.PlacementTarget;
+            _reveal.Close();
+            anchor?.Focus();
+            e.Handled = true;
+            return;
+        }
+
         // Ctrl+F1 is the shortcut users actually try, and Office has had it for two decades.
         if (e.Key == global::Avalonia.Input.Key.F1
             && e.KeyModifiers.HasFlag(global::Avalonia.Input.KeyModifiers.Control))
