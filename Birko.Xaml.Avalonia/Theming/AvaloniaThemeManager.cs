@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Styling;
 using Birko.Xaml.Core.Theming;
 
@@ -13,13 +14,46 @@ public sealed class AvaloniaThemeManager : IThemeManager
 {
     private readonly Application _app;
 
-    /// <summary>Create a manager over an explicit application (defaults to <see cref="Application.Current"/>).</summary>
+    /// <summary>The resource key each generated theme dictionary uses to name itself. Mirrors
+    /// <c>AxamlEmitter.ThemeIdKey</c> (the generator writes it; this reads it).</summary>
+    private const string ThemeIdKey = "BThemeId";
+
+    /// <summary>Create a manager over an explicit application (defaults to <see cref="Application.Current"/>).
+    /// <paramref name="available"/> overrides the theme list; when omitted it is <b>detected</b> from
+    /// the dictionaries actually merged into the app, so the switcher cannot offer a theme whose
+    /// tokens were not shipped.</summary>
     public AvaloniaThemeManager(Application? app = null, IReadOnlyList<ThemeInfo>? available = null)
     {
         _app = app ?? Application.Current
                ?? throw new InvalidOperationException(
                    "No Avalonia Application is running; construct AvaloniaThemeManager after the app is initialized.");
-        Available = available ?? BirkoThemes.All;
+        Available = available ?? DetectThemes(_app);
+    }
+
+    /// <summary>
+    /// Which Birko themes the given resources actually ship. A theme's <i>presence</i> cannot be
+    /// probed directly: an omitted custom variant silently resolves through its
+    /// <c>InheritVariant</c> (Neon→Dark), so any key would still be found. Instead each generated
+    /// dictionary declares <c>BThemeId</c> naming itself, so the value tells us which dictionary
+    /// actually answered — if a Neon lookup replies "dark", Neon was not shipped.
+    /// <para>Public so a consumer can ask what its own composition offers (and so this is testable
+    /// against a bare <see cref="ResourceDictionary"/> without standing up an Application).</para>
+    /// </summary>
+    public static IReadOnlyList<ThemeInfo> DetectThemes(IResourceNode resources)
+    {
+        ArgumentNullException.ThrowIfNull(resources);
+
+        var found = new List<ThemeInfo>();
+        foreach (var info in BirkoThemes.All)
+        {
+            if (resources.TryGetResource(ThemeIdKey, BirkoThemeVariants.ForId(info.Id), out var id)
+                && id as string == info.Id)
+                found.Add(info);
+        }
+
+        // No Birko tokens merged at all (or a consumer on a hand-rolled dictionary): keep the
+        // switcher coherent with light, which is the base theme everywhere.
+        return found.Count > 0 ? found : new[] { BirkoThemes.LightTheme };
     }
 
     public IReadOnlyList<ThemeInfo> Available { get; }
