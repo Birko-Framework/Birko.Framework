@@ -117,6 +117,15 @@ verified, and has no automation-peer assertions. That is what the unchecked crit
 - [ ] `Birko.Web.Playground` — repeat the click, `Escape`, keyboard-only and screen-reader passes in the
       browser, and compare the flyout's rendering against the Avalonia gallery for parity.
 
+_Reviewer confirmed 2026-07-29 (web only): a collapsed group's flyout opens and is **fully visible** — no
+clipping. Nothing else in this plan is signed off; every step below is written around the Avalonia gallery
+or bundles an Escape / keyboard / screen-reader pass that has not been run, so none of them can be ticked
+off the back of that one observation. It took a
+fix first — the flyout was `position: absolute` inside two `overflow: hidden` ancestors and was cut off on
+the right and the bottom; it is now a popover in the top layer. Note the reviewer found this in the
+**Playground**, and I initially "fixed" it in Avalonia, where native popups cannot be clipped at all —
+that change is reverted._
+
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-100` — leave empty until then._
