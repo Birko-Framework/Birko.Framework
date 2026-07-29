@@ -41,14 +41,34 @@ public class RibbonTests
         return new Ribbon { Tabs = new[] { home, view } };
     }
 
-    private static T Show<T>(T control, double width = 700) where T : Control
+    private static T Show<T>(T control, double width = 700) where T : Control =>
+        Show(control, out _, width);
+
+    /// <summary>
+    /// Show the control and hand back its window. Keyboard tests must raise at the WINDOW, not the control:
+    /// the ribbon's shortcuts are window shortcuts, and a test that raises straight at the control proves the
+    /// handler runs while saying nothing about whether a keystroke can reach it. That is exactly how a
+    /// non-functional Ctrl+F1 and a dead Escape both shipped "covered".
+    /// </summary>
+    private static T Show<T>(T control, out Window window, double width = 700) where T : Control
     {
-        var window = new Window { Content = control, Width = width, Height = 200 };
+        window = new Window { Content = control, Width = width, Height = 200 };
         window.Show();
         window.Measure(new Size(width, 200));
         window.Arrange(new Rect(0, 0, width, 200));
         Dispatcher.UIThread.RunJobs();
         return control;
+    }
+
+    private static void PressKey(Window window, Key key, KeyModifiers modifiers = KeyModifiers.None)
+    {
+        window.RaiseEvent(new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = key,
+            KeyModifiers = modifiers,
+        });
+        Dispatcher.UIThread.RunJobs();
     }
 
     /// <summary>A ribbon with far more tabs and groups than fit a narrow window (TASK-097 overflow).</summary>
@@ -590,17 +610,17 @@ public class RibbonTests
     [AvaloniaFact]
     public void Ctrl_F1_toggles_collapse()
     {
-        var ribbon = Show(Build(out _));
+        var ribbon = Show(Build(out _), out var window);
         bool before = ribbon.IsCollapsed;
 
-        ribbon.RaiseEvent(new global::Avalonia.Input.KeyEventArgs
-        {
-            RoutedEvent = InputElement.KeyDownEvent,
-            Key = global::Avalonia.Input.Key.F1,
-            KeyModifiers = global::Avalonia.Input.KeyModifiers.Control,
-        });
+        // At the WINDOW, because that is where the keystroke actually arrives. The ribbon is a
+        // ContentControl and never holds focus, so an OnKeyDown override could not have worked.
+        PressKey(window, Key.F1, KeyModifiers.Control);
 
         ribbon.IsCollapsed.Should().Be(!before, "Ctrl+F1 is the shortcut users try, and Office has it");
+
+        PressKey(window, Key.F1, KeyModifiers.Control);
+        ribbon.IsCollapsed.Should().Be(before, "and it toggles back");
     }
 
     // ── TASK-102: the narrow fallback ─────────────────────────────────────────────
@@ -720,6 +740,45 @@ public class RibbonTests
         item.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
         ran.Should().BeTrue("invoking from the flyout runs the same handler as the uncollapsed item");
+    }
+
+    [AvaloniaFact]
+    public void Escape_closes_the_narrow_menu()
+    {
+        // Reported from the gallery: Escape did nothing. A raw Popup does not handle it —
+        // IsLightDismissEnabled is pointer-only, and Escape handling lives in FlyoutBase, which a Popup is
+        // not. Raised at the WINDOW, because that is where a keystroke actually arrives.
+        var ribbon = Show(BuildCrowded(), out var window, width: 200);
+
+        var burger = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "☰"));
+        burger.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        ribbon.OpenOverlay.Should().NotBeNull("precondition: the menu is open");
+
+        PressKey(window, Key.Escape);
+
+        ribbon.OpenOverlay.Should().BeNull("Escape closes the menu");
+    }
+
+    [AvaloniaFact]
+    public void Escape_closes_an_unpinned_temporary_reveal_too()
+    {
+        var ribbon = Build(out _);
+        ribbon.IsPinned = false;
+        ribbon.IsCollapsed = true;
+        Show(ribbon, out var window);
+
+        var view = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "View"));
+        view.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        ribbon.OpenOverlay.Should().NotBeNull("precondition: the reveal is showing");
+
+        PressKey(window, Key.Escape);
+
+        ribbon.OpenOverlay.Should().BeNull("Escape dismisses a temporary reveal as well as the menu");
+        ribbon.IsCollapsed.Should().BeTrue("and the ribbon stays minimised, as it was");
     }
 
     [AvaloniaFact]
