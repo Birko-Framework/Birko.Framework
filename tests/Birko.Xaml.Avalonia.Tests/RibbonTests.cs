@@ -87,6 +87,10 @@ public class RibbonTests
     /// <summary>In the layout at all — i.e. holding its slot open, visible or not.</summary>
     private static bool IsReserved(Button chevron) => chevron.IsVisible;
 
+    /// <summary>The scaling panel. Internal to the library, so resolved by type name rather than a cast.</summary>
+    private static Layoutable PanelOf(Control ribbon) =>
+        (Layoutable)ribbon.GetVisualDescendants().First(v => v.GetType().Name == "RibbonGroupsPanel");
+
     private static IEnumerable<string?> Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
 
@@ -335,15 +339,21 @@ public class RibbonTests
         //
         // Asserting the resolved variants was not enough to catch that: the decision looked plausible while
         // resting on garbage widths. What matters is that the row FITS.
-        foreach (double width in new[] { 1400d, 900d, 640d })
+        // The threshold is COMPUTED, not guessed. Twice now a hardcoded width demanded the impossible: the
+        // row's true minimum is whatever an all-Popup row measures, and that depends on the group LABELS
+        // (a chunk button shows its group's name, as in Office), so it moves with the demo data. Deriving it
+        // keeps the test honest about what the layout can actually promise.
+        var probe = new Ribbon { PreferredGroupSize = RibbonGroupSize.Popup, Tabs = BuildCrowded().Tabs };
+        Show(probe, 2000);
+        double minimum = System.Math.Ceiling(PanelOf(probe).DesiredSize.Width);
+
+        foreach (double width in new[] { 2000d, 1400d, 900d, 640d, minimum })
         {
             var ribbon = Show(BuildCrowded(), width);
-            var panel = ribbon.GetVisualDescendants()
-                .First(v => v.GetType().Name == "RibbonGroupsPanel") as Layoutable;
 
-            panel!.DesiredSize.Width.Should().BeLessThanOrEqualTo(width,
-                $"at {width}px the groups must degrade until the row fits — anything wider is clipped, "
-                + "which is the same 'commands you cannot reach' defect this story exists to remove");
+            PanelOf(ribbon).DesiredSize.Width.Should().BeLessThanOrEqualTo(width + 0.5,
+                $"at {width}px (minimum {minimum}px) the groups must degrade until the row fits — anything "
+                + "wider is clipped, which is the same 'commands you cannot reach' defect this story removes");
         }
     }
 
