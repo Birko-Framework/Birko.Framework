@@ -31,6 +31,16 @@ skins reference one shared assembly. Not in the `Birko.Framework.csproj` aggrega
   `DetailPageViewModel<T>` on CommunityToolkit.Mvvm (the ONLY dependency Core takes — platform-neutral).
 - **Data port (STORY-032):** `Data.ICrudDataSource<T>`.
 - **Navigation:** `Navigation.{ModuleDefinition, INavigationService, NavigationService, MobileNavItem}` + `Navigation.BreadcrumbItem` (crumb model — `Label`/`Href`/`Run`; the Avalonia `Breadcrumb` makes non-last items with a target clickable, web `b-breadcrumb` parity).
+- **Ribbon (STORY-036; scaling model STORY-049/TASK-098):** `Ribbon.{RibbonTab, RibbonGroup, RibbonItem}`
+  + `Ribbon.RibbonGroupSize` (`Large`/`Medium`/`Small`/`Popup`, declared roomiest-first so a measure pass
+  can compare with `<`/`>`). `RibbonGroup` carries `Icon` (drawn only on the collapsed `Popup` chunk
+  button), `ScalingPriority` and `MinSize` for Office-style progressive scaling. **`ScalingPriority` is
+  importance — a LOWER value degrades FIRST**, which is Birko's convention and deliberately *not* an
+  assertion about RibbonX's numeric sense; say so wherever it's re-documented. Defaults
+  (`ScalingPriority = 0`, `MinSize = Popup`) reproduce pre-TASK-098 rendering exactly. The fields are
+  inert until TASK-099/TASK-100 implement the degrade pass and the flyout. Keep in step with the
+  `RibbonGroupSize` / `RibbonGroup` mirror in web `b-ribbon.ts` — the two are designed together, never
+  retrofitted one side at a time.
 - **Forms (STORY-033; field types EPIC-016/TASK-055):** `Forms.FormField` + `FieldType` (21 types:
   Text/TextArea/Number/Percent/Range/Password/Email/Search/Checkbox/Switch/Select/MultiSelect/Radio/OptionGroup/Tags/File/Markdown/Date/Time/DateTime/DateRange;
   `Forms.DateRange` is the value type for the DateRange field).
