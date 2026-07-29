@@ -60,20 +60,34 @@ public class TenantEventScopeAccessorTests
         tenantCtx.IsAllTenantsScope.Should().BeFalse("the scope is restored after the body completes");
     }
 
+    /// <summary>
+    /// Supersedes <c>Empty_tenant_is_treated_as_system_event</c>, which asserted the opposite
+    /// (<c>IsAllTenantsScope == true</c>) on the reasoning that "Guid.Empty is not a real tenant".
+    /// That folded a zero tenant into the <b>widening</b> branch: an event published inside a
+    /// <c>Guid.Empty</c> scope was dispatched across every tenant. Symbio TASK-295 retired the
+    /// "empty means unset" idiom across tenant scoping — <c>null</c> is the only "no tenant", and
+    /// <see cref="EventContext.TenantGuid"/> is nullable end-to-end (outbox entry + MQ envelope), so a
+    /// genuine system event still arrives as <c>null</c> and keeps the cross-tenant dispatch asserted by
+    /// <see cref="Null_tenant_runs_in_all_tenants_scope"/>.
+    /// </summary>
     [Fact]
-    public async Task Empty_tenant_is_treated_as_system_event()
+    public async Task Empty_tenant_scopes_to_that_tenant_rather_than_widening_to_all()
     {
         var tenantCtx = new TenantContext();
         var accessor = new TenantEventScopeAccessor(tenantCtx);
 
-        var observedAllTenants = false;
+        var observedAllTenants = true;
+        Guid? observed = null;
         await accessor.RunWithScopeAsync(Ctx(Guid.Empty), () =>
         {
+            observed = tenantCtx.CurrentTenantGuid;
             observedAllTenants = tenantCtx.IsAllTenantsScope;
             return Task.CompletedTask;
         });
 
-        observedAllTenants.Should().BeTrue("Guid.Empty is not a real tenant — treated as a system/cross-tenant event");
+        observedAllTenants.Should().BeFalse(
+            "a zero tenant must not widen dispatch to every tenant — that is the fail-open direction");
+        observed.Should().Be(Guid.Empty, "Guid.Empty is a tenant value; the body runs scoped to it");
     }
 
     [Fact]
