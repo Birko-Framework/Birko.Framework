@@ -16,7 +16,11 @@ public sealed class RibbonGroupMetrics
     /// <summary>Importance — a <b>lower</b> value degrades <b>first</b>. See <see cref="RibbonGroup.ScalingPriority"/>.</summary>
     public int ScalingPriority { get; init; }
 
-    /// <summary>The tightest variant this group may reach. See <see cref="RibbonGroup.MinSize"/>.</summary>
+    /// <summary>
+    /// The tightest variant this group should reach. A <b>preference, not a guarantee</b>: it is breached
+    /// (least-important-first) rather than letting the row overflow, because unreachable commands are worse
+    /// than a group being less legible than its author wanted.
+    /// </summary>
     public RibbonGroupSize MinSize { get; init; } = RibbonGroupSize.Popup;
 }
 
@@ -82,8 +86,20 @@ public static class RibbonScaling
         // result feel authored: the row gives up the least it can to fit.
         while (Total(groups, chosen) + gaps > available)
         {
-            int victim = NextToDegrade(groups, chosen);
-            if (victim < 0) break; // nothing left to give — the caller must clip or scroll
+            int victim = NextToDegrade(groups, chosen, respectFloors: true);
+            if (victim < 0) break;
+            chosen[victim] = Next(chosen[victim]);
+        }
+
+        // Floors are a PREFERENCE, not a guarantee. If honouring every floor leaves the row too wide, the
+        // floors give way rather than the row overflowing — because an overflowing row means commands the
+        // user cannot see or click, and that is strictly worse than a group being less legible than its
+        // author wanted. (Found in review: a hero group floored at Small kept its width and pushed the
+        // last group off the edge entirely. Office has no hard floor either; groups always collapse.)
+        while (Total(groups, chosen) + gaps > available)
+        {
+            int victim = NextToDegrade(groups, chosen, respectFloors: false);
+            if (victim < 0) break; // everything is at Popup — the row simply cannot be narrower
             chosen[victim] = Next(chosen[victim]);
         }
 
@@ -91,20 +107,23 @@ public static class RibbonScaling
     }
 
     /// <summary>
-    /// The group that should give up room next: lowest <see cref="RibbonGroupMetrics.ScalingPriority"/>
-    /// among those not yet at their floor, leftmost on a tie. Returns -1 when every group is at its floor.
+    /// The group that should give up room next: lowest <see cref="RibbonGroupMetrics.ScalingPriority"/>,
+    /// leftmost on a tie. With <paramref name="respectFloors"/> it skips groups already at their
+    /// <see cref="RibbonGroupMetrics.MinSize"/>; without it, only <see cref="RibbonGroupSize.Popup"/> stops a
+    /// group. Returns -1 when nothing can give any more.
     /// </summary>
     /// <remarks>
     /// This is the whole point of the pass. Degrading uniformly is easier and worse — it turns the ribbon
     /// into a row of anonymous icons instead of keeping the primary group legible.
     /// </remarks>
-    private static int NextToDegrade(IReadOnlyList<RibbonGroupMetrics> groups, RibbonGroupSize[] chosen)
+    private static int NextToDegrade(
+        IReadOnlyList<RibbonGroupMetrics> groups, RibbonGroupSize[] chosen, bool respectFloors)
     {
         int best = -1;
         for (int i = 0; i < groups.Count; i++)
         {
-            if (chosen[i] >= groups[i].MinSize) continue;        // already at (or past) its floor
-            if (chosen[i] == RibbonGroupSize.Popup) continue;    // nothing tighter exists
+            if (respectFloors && chosen[i] >= groups[i].MinSize) continue; // at (or past) its floor
+            if (chosen[i] == RibbonGroupSize.Popup) continue;              // nothing tighter exists
             if (best < 0 || groups[i].ScalingPriority < groups[best].ScalingPriority) best = i;
         }
         return best;
