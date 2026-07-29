@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Birko.Data.InMemory.Stores;
@@ -151,6 +151,50 @@ public class ModelByTenantAndWrapperTests
 
         await wrapper.Invoking(w => w.DeleteAsync(new[] { foreign }))
             .Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    /// <summary>
+    /// The refusal must be a <see cref="TenantMismatchException"/> — a host cannot otherwise tell "this row
+    /// belongs to another tenant" apart from "you lack a permission", and reported them identically (a bare
+    /// 403) until a Symbio consumer spent an hour hunting a permission for a tenancy problem. It still IS an
+    /// <see cref="UnauthorizedAccessException"/>, so existing handlers keep working — asserted above.
+    /// </summary>
+    [Fact]
+    public async Task Update_ForeignTenantItem_ThrowsTenantMismatchCarryingBothTenants()
+    {
+        var inner = new AsyncInMemoryStore<Doc>();
+        var ctx = new TenantContext();
+        var current = Guid.NewGuid();
+        var owner = Guid.NewGuid();
+        ctx.SetTenant(current);
+        var wrapper = Wrap(inner, ctx);
+
+        var foreign = new Doc { Guid = Guid.NewGuid(), TenantGuid = owner, Name = "foreign" };
+
+        var thrown = await wrapper.Invoking(w => w.UpdateAsync(new[] { foreign }))
+            .Should().ThrowAsync<TenantMismatchException>();
+
+        thrown.Which.Should().BeAssignableTo<UnauthorizedAccessException>(
+            "every existing catch (UnauthorizedAccessException) must keep working");
+        thrown.Which.Operation.Should().Be("update");
+        thrown.Which.EntityType.Should().Be(nameof(Doc));
+        thrown.Which.ExpectedTenantGuid.Should().Be(current);
+        thrown.Which.ActualTenantGuid.Should().Be(owner, "the log needs to name the owning tenant");
+    }
+
+    [Fact]
+    public async Task Delete_ForeignTenantItem_ThrowsTenantMismatchNamingTheOperation()
+    {
+        var inner = new AsyncInMemoryStore<Doc>();
+        var ctx = new TenantContext();
+        ctx.SetTenant(Guid.NewGuid());
+        var wrapper = Wrap(inner, ctx);
+
+        var thrown = await wrapper
+            .Invoking(w => w.DeleteAsync(new[] { new Doc { Guid = Guid.NewGuid(), TenantGuid = Guid.NewGuid() } }))
+            .Should().ThrowAsync<TenantMismatchException>();
+
+        thrown.Which.Operation.Should().Be("delete");
     }
 
     [Fact]
