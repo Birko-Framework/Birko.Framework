@@ -15,9 +15,16 @@ namespace Birko.EventBus.Tenant
     /// Maps <see cref="EventContext.TenantGuid"/> onto the tenant scope, mirroring how the STORY-044
     /// background jobs opt into explicit cross-tenant access:
     /// <list type="bullet">
-    /// <item>set (non-empty) → runs the body inside <see cref="ITenantContext.WithTenantAsync(Guid, string?, Func{Task})"/>;</item>
-    /// <item>null / <see cref="Guid.Empty"/> → runs inside <see cref="ITenantContext.WithAllTenantsAsync(Func{Task})"/> (system / cross-tenant event).</item>
+    /// <item>set → runs the body inside <see cref="ITenantContext.WithTenantAsync(Guid, string?, Func{Task})"/>,
+    /// <b>including <see cref="Guid.Empty"/></b> — it is a tenant value, not "unset";</item>
+    /// <item>null → runs inside <see cref="ITenantContext.WithAllTenantsAsync(Func{Task})"/> (system / cross-tenant event).</item>
     /// </list>
+    /// <see cref="Guid.Empty"/> used to be folded into the null branch, so an event published inside a
+    /// <c>Guid.Empty</c> tenant scope was <i>dispatched across every tenant</i> — the widening direction, and
+    /// the same "empty means unset" idiom that made <c>ModelByTenant.Filter()</c> read every tenant's rows
+    /// (Symbio TASK-295). <see cref="EventContext.TenantGuid"/> is nullable and stays nullable through the
+    /// outbox and the message-queue envelope, so a genuine system event still arrives here as <c>null</c> and
+    /// keeps its cross-tenant dispatch; only an explicitly-zero tenant now scopes instead of widening.
     /// Assumes the supplied <see cref="ITenantContext"/> is the AsyncLocal-backed context the handlers'
     /// repositories also observe (as <c>AddBirkoSecurity</c> / <c>AddTenantContext*</c> register it) — the
     /// per-flow AsyncLocal state set here is what the dispatched handlers read.
@@ -42,12 +49,13 @@ namespace Birko.EventBus.Tenant
                 throw new ArgumentNullException(nameof(body));
             }
 
-            if (context?.TenantGuid is Guid tenant && tenant != Guid.Empty)
+            // Guid.Empty is a tenant value, not "unset" — scope to it rather than widening to all tenants.
+            if (context?.TenantGuid is Guid tenant)
             {
                 return _tenantContext.WithTenantAsync(tenant, null, body);
             }
 
-            // No tenant on the event → deliberate cross-tenant (system) dispatch.
+            // NO tenant on the event (null) → deliberate cross-tenant (system) dispatch.
             return _tenantContext.WithAllTenantsAsync(body);
         }
     }

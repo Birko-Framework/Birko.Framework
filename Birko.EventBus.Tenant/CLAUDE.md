@@ -16,7 +16,7 @@ published under — required for tenant-scoped event handlers to work under `Ten
 | File | Description |
 |------|-------------|
 | TenantEventEnricher.cs | **Publish side** — `IEventEnricher` impl: stamps `EventContext.TenantGuid` from the ambient `ITenantContext` (`Tenant.Current`) at publish time, so `OutboxEntry.TenantGuid` is correct for HTTP, jobs, and explicit `WithTenant` scopes. Runs synchronously in the publish flow → nested `WithTenant` inside `WithAllTenants` captures the specific tenant. Replaces hand-rolled HttpContext enrichers |
-| TenantEventScopeAccessor.cs | **Consume side** — `IEventScopeAccessor` impl: maps `EventContext.TenantGuid` → `ITenantContext.WithTenantAsync` (set) / `WithAllTenantsAsync` (null/empty = system event) |
+| TenantEventScopeAccessor.cs | **Consume side** — `IEventScopeAccessor` impl: maps `EventContext.TenantGuid` → `ITenantContext.WithTenantAsync` (set, **incl. `Guid.Empty`** — a tenant value, not "unset") / `WithAllTenantsAsync` (**`null` only** = system event). `Guid.Empty` previously fell into the all-tenants branch, widening dispatch across every tenant; `TenantGuid` is nullable through the outbox + MQ envelope, so real system events still arrive as `null` |
 | Extensions/EventTenantScopeServiceCollectionExtensions.cs | `AddEventTenantScope()` — registers **both** the enricher (publish) and the accessor (consume) over `Tenant.Current`; overload takes an explicit `ITenantContext` |
 
 ## Why this project exists (layering)
