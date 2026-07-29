@@ -111,6 +111,13 @@ Also filed from this review, **not** fixed here: **TASK-101** — the Avalonia `
 concept and a collapsed ribbon permanently re-expands when you click a tab, where Office (and
 `b-ribbon`) reveal it temporarily as an overlay and re-collapse after a command.
 
+## Review log
+
+- **2026-07-29, web (unpinned) — PASSED.** Reviewer confirmed the chevron is steady and clickable after
+  the reserve-both-slots fix. This was the reported defect and the hardest part of the plan; it took
+  three rounds (imperative-class blanking → layout reflow on toggle → the demo stage creating the
+  jitter). Remaining unrun: the Avalonia gallery pass and the sub-48rem hamburger check.
+
 ## Human test plan
 
 - [ ] `Birko.Xaml.Gallery` — open the ribbon showcase, drag the window narrow enough to cut off the
