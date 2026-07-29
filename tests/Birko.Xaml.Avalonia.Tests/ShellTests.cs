@@ -172,17 +172,20 @@ public class ShellChromeTests
         return new ShellViewModel(nav, new AvaloniaThemeManager()) { Title = "Demo" };
     }
 
-    [Fact]
+    // Shell() builds an AvaloniaThemeManager, which needs a running Application — so these are
+    // AvaloniaFacts. As plain Facts they only passed when some earlier test in the run happened to
+    // leave Application.Current set, and failed whenever run in isolation.
+    [AvaloniaFact]
     public void Palette_commands_come_from_modules_and_themes()
     {
         var shell = Shell();
-        // 2 modules + 4 themes
+        // 2 modules + 4 themes (the test app merges the all-in BirkoTheme.axaml)
         shell.PaletteCommands.Should().HaveCount(6);
         shell.PaletteCommands.Should().Contain(c => c.Label == "Go to Contacts");
         shell.PaletteCommands.Should().Contain(c => c.Label == "Theme: Neon");
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void Tenant_switcher_visibility_tracks_tenant_count()
     {
         var shell = Shell();
@@ -191,7 +194,7 @@ public class ShellChromeTests
         shell.HasMultipleTenants.Should().BeTrue();
     }
 
-    [Fact]
+    [AvaloniaFact]
     public void OpenPalette_command_opens_the_palette()
     {
         var shell = Shell();
