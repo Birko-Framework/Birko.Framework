@@ -476,7 +476,10 @@ public class Ribbon : ContentControl
         {
             Content = content,
             Background = Brushes.Transparent,
-            Padding = new Thickness(6, 4),
+            // A compact chunk is already at the row's last resort, so it sheds every spare pixel: the
+            // wrapper padding and the group separator below go too. Each one is multiplied by the group
+            // count, so trimming ~20px per chunk moves the six-group floor by well over 100px.
+            Padding = labelled ? new Thickness(6, 4) : new Thickness(2, 4),
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable("BRibbonIconSmall"));
@@ -489,7 +492,12 @@ public class Ribbon : ContentControl
         flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
         button.Flyout = flyout;
 
-        var box = new Border { Padding = new Thickness(8, 4), BorderThickness = new Thickness(0, 0, 1, 0), Child = button };
+        var box = new Border
+        {
+            Padding = labelled ? new Thickness(8, 4) : new Thickness(1, 4),
+            BorderThickness = labelled ? new Thickness(0, 0, 1, 0) : default,
+            Child = button,
+        };
         box.Bind(Border.BorderBrushProperty, box.GetResourceObservable("BBorderBrush"));
         return box;
     }
