@@ -39,15 +39,41 @@ public class RibbonTests
         return new Ribbon { Tabs = new[] { home, view } };
     }
 
-    private static T Show<T>(T control) where T : Control
+    private static T Show<T>(T control, double width = 700) where T : Control
     {
-        var window = new Window { Content = control, Width = 700, Height = 200 };
+        var window = new Window { Content = control, Width = width, Height = 200 };
         window.Show();
-        window.Measure(new Size(700, 200));
-        window.Arrange(new Rect(0, 0, 700, 200));
+        window.Measure(new Size(width, 200));
+        window.Arrange(new Rect(0, 0, width, 200));
         Dispatcher.UIThread.RunJobs();
         return control;
     }
+
+    /// <summary>A ribbon with far more tabs and groups than fit a narrow window (TASK-097 overflow).</summary>
+    private static Ribbon BuildCrowded()
+    {
+        RibbonItem I(string label) => new() { Id = label, Label = label, Icon = "●" };
+        RibbonGroup G(string label) => new() { Label = label, Items = new[] { I(label + " A"), I(label + " B") } };
+
+        var home = new RibbonTab
+        {
+            Id = "home", Label = "Home",
+            Groups = new[] { G("Clipboard"), G("Records"), G("Layout"), G("Styles"), G("Review"), G("Export") },
+        };
+        var others = new[] { "Insert", "Design", "Transitions", "Animations", "SlideShow", "Review", "View", "Developer" }
+            .Select(n => new RibbonTab { Id = n.ToLowerInvariant(), Label = n, Groups = new[] { G(n) } });
+
+        return new Ribbon { Tabs = new[] { home }.Concat(others).ToArray() };
+    }
+
+    /// <summary>The scroller whose content holds <paramref name="text"/> — tab strip vs groups row.</summary>
+    private static ScrollViewer ScrollerContaining(Control root, string text) =>
+        root.GetVisualDescendants().OfType<ScrollViewer>()
+            .First(s => s.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == text));
+
+    private static Button ChevronByTip(Control root, string tip) =>
+        root.GetVisualDescendants().OfType<Button>()
+            .First(b => (b.GetValue(ToolTip.TipProperty) as string) == tip);
 
     private static IEnumerable<string?> Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
@@ -107,6 +133,74 @@ public class RibbonTests
 
         home.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         ribbon.IsCollapsed.Should().BeTrue("clicking the active tab collapses the ribbon");
+    }
+
+    // ── TASK-097: overflow must stay reachable at a narrow width ──────────────────
+
+    [AvaloniaFact]
+    public void Tab_strip_scrolls_when_the_tabs_overflow()
+    {
+        var ribbon = Show(BuildCrowded(), width: 320);
+        var scroller = ScrollerContaining(ribbon, "Home");
+
+        scroller.Extent.Width.Should().BeGreaterThan(scroller.Viewport.Width,
+            "9 tabs cannot fit 320px, so the strip must be scrollable rather than clipped");
+        ChevronByTip(ribbon, "Scroll tabs right").IsVisible.Should().BeTrue(
+            "an invisible overflow is the defect — there must be a visible affordance");
+    }
+
+    [AvaloniaFact]
+    public void Groups_row_scrolls_when_the_groups_overflow()
+    {
+        var ribbon = Show(BuildCrowded(), width: 320);
+        var scroller = ScrollerContaining(ribbon, "Clipboard");
+
+        scroller.Extent.Width.Should().BeGreaterThan(scroller.Viewport.Width);
+        ChevronByTip(ribbon, "Scroll groups right").IsVisible.Should().BeTrue();
+        Texts(ribbon).Should().Contain("Export", "every group stays in the tree and is reachable by scrolling");
+    }
+
+    [AvaloniaFact]
+    public void Clicking_the_chevron_scrolls_and_reveals_the_back_chevron()
+    {
+        var ribbon = Show(BuildCrowded(), width: 320);
+        var scroller = ScrollerContaining(ribbon, "Home");
+        var right = ChevronByTip(ribbon, "Scroll tabs right");
+        var left = ChevronByTip(ribbon, "Scroll tabs left");
+
+        left.IsVisible.Should().BeFalse("nothing is scrolled off to the left yet");
+
+        right.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        scroller.Offset.X.Should().BeGreaterThan(0);
+        left.IsVisible.Should().BeTrue("scrolled content to the left is now reachable back");
+    }
+
+    [AvaloniaFact]
+    public void No_chevrons_and_no_vertical_scrollbar_when_everything_fits()
+    {
+        var ribbon = Show(Build(out _), width: 900);
+
+        ChevronByTip(ribbon, "Scroll tabs right").IsVisible.Should().BeFalse();
+        ChevronByTip(ribbon, "Scroll tabs left").IsVisible.Should().BeFalse();
+        ChevronByTip(ribbon, "Scroll groups right").IsVisible.Should().BeFalse(
+            "chevrons must cost no layout at a wide width");
+
+        ribbon.GetVisualDescendants().OfType<ScrollViewer>().Should()
+            .OnlyContain(s => s.VerticalScrollBarVisibility == global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                "a vertical bar would change the ribbon's height with the window width");
+    }
+
+    [AvaloniaFact]
+    public void Collapse_chevron_stays_outside_the_tab_scroller()
+    {
+        var ribbon = Show(BuildCrowded(), width: 320);
+        var tabScroller = ScrollerContaining(ribbon, "Home");
+
+        tabScroller.GetVisualDescendants().OfType<Button>()
+            .Should().NotContain(b => (b.GetValue(ToolTip.TipProperty) as string) == "Collapse the ribbon",
+                "the collapse chevron must stay pinned and never scroll out of reach");
     }
 
     [AvaloniaFact]
