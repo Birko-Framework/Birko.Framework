@@ -2,7 +2,7 @@
 id: TASK-100
 parent: STORY-049
 feature: null
-status: todo  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: in-progress  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -40,30 +40,54 @@ is reachable by ordinary keyboard navigation and announced correctly — otherwi
 silently removes commands from keyboard and screen-reader users specifically. The web panel already
 has arrow-key navigation and Escape-to-tab-row handling to extend (`b-ribbon.ts:562-580`).
 
+## Pulled forward into TASK-099 (2026-07-29)
+
+**Most of this task shipped early, deliberately.** TASK-099 could not remove the interim groups-row
+scroller without a `Popup` variant to degrade into, and could not keep the scroller either: a
+`ScrollViewer` measures its content with infinite width, so the scaling pass saw no constraint, and
+feeding it the viewport instead let the scroll chevrons' hysteresis feed back into the width being scaled
+against — the same window width then resolved differently depending on drag direction. Removing the
+scroller fixed determinism with no other change, and that required `Popup`. The reviewer chose this over
+the alternatives (accept a clipping window, or accept non-deterministic scaling).
+
+**Landed with TASK-099:** the chunk button and its flyout in both skins, invoke-dismisses-flyout, the
+group `Icon` on the chunk face, and a **compact** chunk that drops the group name at the extreme (an
+addition to the original scope — a labelled chunk cannot be narrower than its group's name, which left a
+clipping window). Web accessibility is done: `aria-expanded`/`aria-haspopup`, `Escape` closes and returns
+focus, keyboard reachable.
+
+**What remains is the Avalonia accessibility half** — it leans on `Flyout` defaults that have not been
+verified, and has no automation-peer assertions. That is what the unchecked criteria below cover.
+
 ## Acceptance criteria
 
-- [ ] A group that cannot fit at `Small` renders as **one** chunk button: group icon + group label +
+- [x] A group that cannot fit at `Small` renders as **one** chunk button: group icon + group label +
       a ▾ affordance, in the group's original position in the row.
-- [ ] Clicking (or `Enter`/`Space` on) the chunk button opens a flyout containing that group's items at
+- [x] Clicking (or `Enter`/`Space` on) the chunk button opens a flyout containing that group's items at
       `Large`, laid out as the group would render when uncollapsed.
-- [ ] Invoking an item from the flyout runs **the same handler** as the uncollapsed item
+- [x] Invoking an item from the flyout runs **the same handler** as the uncollapsed item
       (`RibbonItem.Run` / the `item-click` event with the same `tabId`/`groupId`/`itemId`) and dismisses
       the flyout.
 - [ ] The flyout dismisses on `Escape` and on click/focus outside, returning focus to the chunk button.
-- [ ] A group with a variant **floor** above `Popup` (TASK-098) never collapses, even if that forces
+      **Web: done. Avalonia: unverified** — it relies on `Flyout`'s own light-dismiss behaviour.
+- [x] A group with a variant **floor** above `Popup` (TASK-098) never collapses, even if that forces
       another group to collapse instead.
-- [ ] **Keyboard reachable:** the chunk button is in the tab order in place of the group's items, and
+- [ ] **Web: done. Avalonia: unverified.** **Keyboard reachable:** the chunk button is in the tab order in place of the group's items, and
       the flyout's items are arrow-navigable — consistent with the existing panel keyboard handling
       (`b-ribbon.ts:562-580`).
-- [ ] **Screen-reader correct:** the chunk button exposes the group's name and its expanded/collapsed
+- [ ] **Web: done (`aria-expanded` + `aria-haspopup`). Avalonia: not started.** **Screen-reader correct:** the chunk button exposes the group's name and its expanded/collapsed
       state, and the flyout is associated with it (web: `aria-expanded` + `aria-haspopup` and the
       flyout labelled by the chunk button; Avalonia: the equivalent automation peer properties).
-- [ ] With this landed, the groups row has **no scroll fallback at any width** in either skin.
-- [ ] Widening promotes a collapsed group back to `Small`/`Medium`/`Large`, and an open flyout closes
+- [x] With this landed, the groups row has **no scroll fallback at any width** in either skin.
+- [x] Widening promotes a collapsed group back to `Small`/`Medium`/`Large`, and an open flyout closes
       when its group is promoted (it must not linger over a now-expanded group).
 - [ ] Avalonia coverage in `RibbonTests.cs`: measure at a width that forces collapse, assert one chunk
       button per collapsed group, open it and assert the items are present and their handler runs.
-- [ ] Web side verified by building + headless-running `Birko.Web.Playground`.
+      **Partly done** — collapse, the chunk button, its icon and the compact form are covered; *opening the
+      flyout and running an item from it* is not, which is the same gap as the accessibility criteria above.
+- [x] Web side verified by building + headless-running `Birko.Web.Playground`.
+      `ribbon-scaling-smoke` covers the chunk button, `aria-expanded`, the flyout's contents, dismissal on
+      invoke, and the compact form (36 checks).
 
 ## Out of scope
 

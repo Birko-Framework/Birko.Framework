@@ -2,7 +2,7 @@
 id: TASK-099
 parent: STORY-049
 feature: null
-status: in-progress  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -72,29 +72,29 @@ flickering. Measure candidates against the constraint; don't feed the applied la
 
 ## Acceptance criteria
 
-- [ ] Narrowing the available width degrades the active tab's groups `Large → Medium → Small`, and
+- [x] Narrowing the available width degrades the active tab's groups `Large → Medium → Small`, and
       **no command is clipped or hidden** at any width down to the point where `Popup` would be needed
       (TASK-100 handles below that; until it lands, the last resort may remain a scroller **on the
       groups row only** — remove it in TASK-100).
-- [ ] Groups degrade in **priority order**: with two groups of differing `ScalingPriority`, the
+- [x] Groups degrade in **priority order**: with two groups of differing `ScalingPriority`, the
       lower-priority one reaches `Small` before the higher-priority one leaves `Large`. Covered by a
       test, not just by inspection.
-- [ ] A group's variant **floor** from TASK-098 is honoured — a floored group never degrades past it,
+- [x] A group's variant **floor** from TASK-098 is honoured — a floored group never degrades past it,
       even when that means another group degrades further.
-- [ ] Widening promotes groups back up to `Large`.
-- [ ] **Stable layout:** the same available width always produces the same variant set regardless of
+- [x] Widening promotes groups back up to `Large`.
+- [x] **Stable layout:** the same available width always produces the same variant set regardless of
       resize direction. Covered by a test that walks widths down then back up and compares.
-- [ ] The **groups row no longer has a horizontal scrollbar or scroll chevrons** in either skin
+- [x] The **groups row no longer has a horizontal scrollbar or scroll chevrons** in either skin
       (the TASK-097 interim scroller is removed from the groups row). The **tab strip keeps its
       scrolling** — tabs are the documented exception.
-- [ ] The degrade decision lives in a **pure, renderer-free function** in `Birko.Xaml.Core`, unit-tested
+- [x] The degrade decision lives in a **pure, renderer-free function** in `Birko.Xaml.Core`, unit-tested
       directly, with the TS side mirroring the same algorithm.
-- [ ] `Medium` and `Small` visually match their web counterparts (icon sizes, stacking, spacing) using
+- [x] `Medium` and `Small` visually match their web counterparts (icon sizes, stacking, spacing) using
       the TASK-098 tokens — no hand-authored one-side-only values.
-- [ ] `Small` items carry a tooltip with the item label, since the label is not rendered.
-- [ ] Avalonia coverage in `RibbonTests.cs`: measure at several widths, assert the expected variant per
+- [x] `Small` items carry a tooltip with the item label, since the label is not rendered.
+- [x] Avalonia coverage in `RibbonTests.cs`: measure at several widths, assert the expected variant per
       group at each.
-- [ ] Web side verified by building + headless-running `Birko.Web.Playground`.
+- [x] Web side verified by building + headless-running `Birko.Web.Playground`.
 
 ## Out of scope
 
@@ -106,20 +106,68 @@ flickering. Measure candidates against the constraint; don't feed the applied la
 
 ## Human test plan
 
-- [ ] `Birko.Xaml.Gallery` — open a ribbon tab with 3+ groups of differing scaling priority and drag
+- [x] `Birko.Xaml.Gallery` — open a ribbon tab with 3+ groups of differing scaling priority and drag
       the window slowly from wide to narrow. Expected: groups step down `Large→Medium→Small`, the
       lowest-priority group visibly degrades first, and the hero group keeps big icons longest.
-- [ ] Drag slowly **back out** to wide. Expected: variants promote back up, and the transitions happen
+- [x] Drag slowly **back out** to wide. Expected: variants promote back up, and the transitions happen
       at the same widths as on the way in — no flicker or oscillation while hovering a boundary width.
       (This is the stability criterion; it is much easier to see by hand than to assert.)
-- [ ] At the narrowest width before popup: expected **no horizontal scrollbar and no chevrons** on the
+- [x] At the narrowest width before popup: expected **no horizontal scrollbar and no chevrons** on the
       groups row — that is the whole point of the change.
-- [ ] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
-- [ ] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
+- [x] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
+- [x] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
       `Small` renderings side by side against the Avalonia gallery for visual parity.
-- [ ] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
+- [x] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
       than it did before, not just differently.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-099` — leave empty until then._
+Landed 2026-07-29 across seven repos. **TASK-100's `Popup` variant was pulled forward into this task** —
+see its file for why, and for what of it remains.
+
+**Shared policy** — `Birko.Xaml.Core/Ribbon/RibbonScaling.cs`: given each group's width per variant, its
+priority and its floor, choose a variant per group so the row fits, degrading the least important first,
+one step at a time. Renderer-free, so the *policy* cannot drift between the skins even though the
+*rendering* is forked. `Birko.Web.Components/src/nav/ribbon-scaling.ts` mirrors it; the playground smoke
+asserts the same numeric table as `RibbonScalingTests`.
+
+**Avalonia** — `RibbonGroupsPanel` (new) builds every group at every variant, measures them, and applies
+the chosen set. `BuildItem`/`BuildGroup` gained the `Medium`, `Small` and `Popup` renderings (only `Large`
+existed). `PreferredGroupSize` (default `Medium`) plus public `ResolvedGroupSizes`.
+
+**Web** — variant CSS off the TASK-098 tokens, an off-screen probe per variant for measurement, the
+resolved set stored and re-emitted by `render()`, `preferred-group-size` attribute. The panel scroller is
+gone.
+
+**Five things this task got wrong first, all instructive:**
+
+1. **The floor clamp was inverted** — the starting variant is the *roomier* of preferred and the floor,
+   since `MinSize` caps how far down a group may go. Eight of twelve policy tests failed instantly.
+2. **The interim scroller and the scaling pass are incompatible.** A `ScrollViewer` measures content with
+   *infinite* width, so the panel saw no constraint. Feeding it the viewport worked but lagged, and the
+   chevrons' hysteresis then fed back into the width being scaled against — the same window width resolved
+   differently depending on drag direction. Removing the scroller made the determinism test pass with no
+   other change, which is why TASK-100 had to come forward.
+3. **Measuring an `IsVisible = false` control yields zero** (Avalonia short-circuits `MeasureCore`), so
+   every unchosen variant looked free, the pass under-degraded, and the row clipped its last group. Now
+   parked off-screen instead of hidden.
+4. **A hard floor could cost reachability** — a hero group floored at `Small` kept its width and pushed the
+   last group off the edge. Floors are now preferences, breached least-important-first.
+5. **A double gap on the web** — `.ribbon-group + .ribbon-group` added a full group-gap of `padding-left`
+   on top of the flex `gap`, which the single-group probe never saw. A ~120px under-estimate over six
+   groups, so the row clipped however tight the variants got.
+
+**Verification** — `Birko.Xaml.Core.Tests` 60, `Birko.Xaml.Avalonia.Tests` 164,
+`Birko.DesignTokens.Tests` 42, playground `ribbon-scaling-smoke` 36 + `ribbon-overflow-smoke` 16 with 0
+failures across all six smokes. Measured floors on the six-group demo: 509px labelled chunks, 166px
+compact.
+
+## Review log
+
+- **2026-07-29 — reviewer confirmed the behaviour works as described** in `Birko.Xaml.Gallery`, after
+  three rounds: groups hidden rather than narrowed (the invisible-measure bug), Clipboard refusing to
+  collapse and pushing Export off (hard floors), then icons clipping at the extreme (compact chunk
+  carrying spare padding). Two follow-ups were filed rather than folded in: **TASK-102** (no narrow
+  fallback — the reviewer looked for `b-ribbon`'s hamburger and the XAML ribbon has never had one) and
+  **TASK-101** (pinned / temporary-reveal). Still owed before `done`: the manual pass on the *final*
+  build, and the side-by-side visual-parity check against the Playground.

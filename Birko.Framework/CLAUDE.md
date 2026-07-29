@@ -164,7 +164,7 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
-### Ribbon overflow: the ribbon body scales, it does not scroll (2026-07-29)
+### Ribbon overflow: the ribbon body scales, it does not scroll — delivered in both skins (2026-07-29)
 
 A field report — on a narrow window the ribbon shows fewer commands with no way to reach the rest — turned
 out to be true in **both** skins, failing differently. `Birko.Xaml.Avalonia`'s `Ribbon` clipped its tab strip
@@ -182,11 +182,30 @@ Office 2003's toolbars. The `»` overflow chevron *is* an Office pattern, but it
 (Fluent `CommandBar`/`OverflowSet`), not the ribbon body. **Ribbon tabs are the deliberate exception** and do
 scroll, as in Office Web / Fluent.
 
-TASK-097 shipped the interim reachability fix in both skins (chevron affordance on every overflowing track,
-`ResizeObserver`/`LayoutUpdated`-driven so a resize alone updates it, scrollbars hidden so the ribbon's height
-never changes with the window width). STORY-049's remaining tasks add the size-variant + scaling-priority
-model to `RibbonModels.cs` **and** `b-ribbon.ts` together, then the degrade pass — which removes the
-groups-row scroller again. Per-skin detail lives in the two sub-project CLAUDE.mds.
+**Delivered (TASK-097 → TASK-100).** Both skins now scale: `Large` → `Medium` → `Small` → `Popup` (the whole
+group as one chunk button with a flyout), plus a **compact** chunk that drops the group name at the extreme.
+The groups row has **no scroller in either skin**; only the tab strip scrolls. `RibbonScaling` in
+`Birko.Xaml.Core` owns the policy and `b-ribbon`'s `ribbon-scaling.ts` mirrors it, with the playground smoke
+asserting the *same numeric table* as the C# unit tests so the two cannot drift. Default look is `Medium`
+(what both skins already rendered, so no consumer's ribbon changed height); `Large`/`Small` are opt-in.
+
+Two model-level decisions worth knowing beyond the ribbon:
+- **`MinSize` is a preference, not a guarantee** — breached least-important-first rather than letting the row
+  overflow. Unreachable commands are worse than a group being less legible than its author wanted.
+- **The scaling decision must never be a function of the applied layout**, or it oscillates at a boundary.
+  Proven the hard way: while the groups row still had a scroller, the scroll chevrons' hysteresis fed back
+  into the width being scaled against and the same window width resolved differently depending on drag
+  direction. Removing the scroller fixed it with no other change.
+
+Review found five defects the automated suites had missed, four of them one species — **state that did not
+survive a re-render** (an imperative CSS class wiped by a synchronous morph; chevron visibility that changed
+*layout*, letting a tab swallow the click; a tab-strip scroll offset discarded by `Rebuild()`; flyout wiring
+applied only in `onUpdated` while the measure pass re-rendered). The fifth was subtler and is now a documented
+Avalonia gotcha: **measuring an `IsVisible = false` control yields zero**, so a panel that hid its
+alternatives before measuring them under-degraded and clipped its last group — while the tests, which asserted
+the *decision* rather than whether the row *fits*, stayed green. Per-skin detail lives in the two sub-project
+CLAUDE.mds. Remaining Avalonia parity gaps are tracked as TASK-101 (pinned / temporary-reveal) and TASK-102
+(narrow fallback — `b-ribbon` has a hamburger, the XAML ribbon has never had one).
 
 ### Per-theme AXAML dictionaries — Avalonia themes are opt-in like the web ones (2026-07-29)
 
