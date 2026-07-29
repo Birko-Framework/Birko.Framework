@@ -32,9 +32,9 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
         var items = data as IReadOnlyCollection<T> ?? data.ToList();
         if (!items.All(BelongsToCurrentTenant))
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot delete item: it does not belong to the current tenant"
-            );
+            throw new TenantMismatchException(
+                "delete", typeof(T).Name, _tenantContext.CurrentTenantGuid,
+                items.FirstOrDefault(i => !BelongsToCurrentTenant(i))?.TenantGuid);
         }
 
         await _innerStore.DeleteAsync(items, cancellationToken);
@@ -58,9 +58,9 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
         var items = data as IReadOnlyCollection<T> ?? data.ToList(); // CR-M173: materialize once
         if (!items.All(BelongsToCurrentTenant))
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot update item: it does not belong to the current tenant"
-            );
+            throw new TenantMismatchException(
+                "update", typeof(T).Name, _tenantContext.CurrentTenantGuid,
+                items.FirstOrDefault(i => !BelongsToCurrentTenant(i))?.TenantGuid);
         }
 
         await _innerStore.UpdateAsync(items, storeDelegate, cancellationToken);

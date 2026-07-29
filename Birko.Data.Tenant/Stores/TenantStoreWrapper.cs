@@ -66,9 +66,8 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     {
         if (!BelongsToCurrentTenant(data))
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot update item: it does not belong to the current tenant"
-            );
+            throw new TenantMismatchException(
+                "update", typeof(T).Name, _tenantContext.CurrentTenantGuid, data?.TenantGuid);
         }
         _innerStore.Update(data, processDelegate);
     }
@@ -80,9 +79,8 @@ public class TenantStoreWrapper<TStore, T> : IStore<T>, IStoreWrapper<T>
     {
         if (!BelongsToCurrentTenant(item))
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot delete item: it does not belong to the current tenant"
-            );
+            throw new TenantMismatchException(
+                "delete", typeof(T).Name, _tenantContext.CurrentTenantGuid, item?.TenantGuid);
         }
 
         _innerStore.Delete(item);

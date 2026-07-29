@@ -18,7 +18,8 @@ Multi-tenancy support for the Birko data layer. Provides tenant context manageme
 - **ModelByTenant\<TModel\>** — `IFilter<TModel>` where `TModel : AbstractModel, ITenant`. Combines optional base filter with tenant GUID check via `Expression.AndAlso`
 
 ### Stores (`Birko.Data.Tenant.Stores`)
-- **TenantStoreWrapper\<TStore, T\>** — Sync `IStore<T>` wrapper. Auto-filters reads by tenant, auto-assigns tenant on create, throws `UnauthorizedAccessException` on cross-tenant update/delete (when a tenant is set — see **Authorization** below for the no-tenant fail-open mode)
+- **TenantStoreWrapper\<TStore, T\>** — Sync `IStore<T>` wrapper. Auto-filters reads by tenant, auto-assigns tenant on create, throws `TenantMismatchException` on cross-tenant update/delete (when a tenant is set — see **Authorization** below for the no-tenant fail-open mode)
+- **TenantMismatchException** — `UnauthorizedAccessException` subclass carrying `Operation`, `EntityType`, `ExpectedTenantGuid`, `ActualTenantGuid`. Lets a host report "this row is another tenant's" distinctly from "you lack a permission" — the two used to be indistinguishable, so hosts reported a tenant-scope refusal as a generic 403 authorization failure. Subclassing keeps every existing `catch (UnauthorizedAccessException)` working. **Do not echo the tenant ids to callers** — they are for the server log
 - **TenantBulkStoreWrapper\<TStore, T\>** — Extends TenantStoreWrapper, implements `IBulkStore<T>` with bulk CRUD + ordering/paging
 - **AsyncTenantStoreWrapper\<TStore, T\>** — Async `IAsyncStore<T>` wrapper (same semantics as sync)
 - **AsyncTenantBulkStoreWrapper\<TStore, T\>** — Extends AsyncTenantStoreWrapper, implements `IAsyncBulkStore<T>`
@@ -87,7 +88,7 @@ Middleware/
   filter seam — `CurrentTenantGuid` is unchanged, so a nested `WithTenant(...)` used purely for event
   attribution still stamps that tenant.
 - **Filter composition:** ModelByTenant combines base filters with tenant predicate via Expression.AndAlso
-- **Authorization:** Update/Delete throw UnauthorizedAccessException for cross-tenant access —
+- **Authorization:** Update/Delete throw `TenantMismatchException` (an `UnauthorizedAccessException`) for cross-tenant access —
   **only when a tenant is set.** With no tenant on the context (`HasTenant == false`) the wrappers
   deliberately FAIL OPEN ("non-tenant/admin mode": reads unfiltered, writes allowed across tenants;
   CR-L229, test-pinned). Fail-closed callers must set a tenant or override the virtual

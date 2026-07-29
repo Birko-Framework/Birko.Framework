@@ -63,9 +63,8 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     {
         if (!BelongsToCurrentTenant(data))
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot update item: it does not belong to the current tenant"
-            );
+            throw new TenantMismatchException(
+                "update", typeof(T).Name, _tenantContext.CurrentTenantGuid, data?.TenantGuid);
         }
         await _innerStore.UpdateAsync(data, processDelegate, ct);
     }
@@ -77,9 +76,8 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     {
         if (!BelongsToCurrentTenant(item))
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot delete item: it does not belong to the current tenant"
-            );
+            throw new TenantMismatchException(
+                "delete", typeof(T).Name, _tenantContext.CurrentTenantGuid, item?.TenantGuid);
         }
 
         await _innerStore.DeleteAsync(item, cancellationToken);
