@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Birko.Xaml.Avalonia.Controls;
@@ -278,25 +279,28 @@ public class RibbonTests
     // ── TASK-098: the new model fields must not change rendering ──────────────────
 
     [AvaloniaFact]
-    public void Setting_the_new_scaling_fields_does_not_change_what_renders_yet()
+    public void The_group_icon_reaches_the_collapsed_chunk_button()
     {
-        // TASK-098 is model + tokens only; the degrade pass is TASK-099. So a group carrying a
-        // priority and a floor must still render exactly like one that carries neither — otherwise
-        // the model landing would silently be a behaviour change.
-        var plain = new RibbonGroup { Label = "Clipboard", Items = new[] { new RibbonItem { Id = "cut", Label = "Cut", Icon = "✂" } } };
-        var annotated = new RibbonGroup
+        // Supersedes the TASK-098 "the new fields change nothing visible" guard, deliberately: they DO
+        // change something now that TASK-099/100 consume them. RibbonGroup.Icon exists precisely to label a
+        // group once it collapses, so this asserts it arrives there.
+        var group = new RibbonGroup
         {
             Label = "Clipboard",
             Icon = "📋",
             ScalingPriority = 10,
-            MinSize = RibbonGroupSize.Small,
+            MinSize = RibbonGroupSize.Popup,
             Items = new[] { new RibbonItem { Id = "cut", Label = "Cut", Icon = "✂" } },
         };
+        var ribbon = Show(new Ribbon
+        {
+            PreferredGroupSize = RibbonGroupSize.Popup,
+            Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { group } } },
+        });
 
-        var before = Texts(Show(new Ribbon { Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { plain } } } })).ToList();
-        var after = Texts(Show(new Ribbon { Tabs = new[] { new RibbonTab { Id = "h", Label = "Home", Groups = new[] { annotated } } } })).ToList();
-
-        after.Should().Equal(before, "the group icon is only drawn once a group collapses to Popup (TASK-100)");
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Popup);
+        Texts(ribbon).Should().Contain("📋", "the group icon labels its chunk button");
+        Texts(ribbon).Should().Contain("Clipboard ⌄", "and the chunk button signals that it opens a flyout");
     }
 
     // ── TASK-099: progressive group scaling ───────────────────────────────────────
@@ -319,6 +323,45 @@ public class RibbonTests
                 new RibbonTab { Id = "home", Label = "Home", Groups = new[] { G("Clipboard", 10), G("Export", 0) } },
             },
         };
+    }
+
+    [AvaloniaFact]
+    public void The_degraded_row_actually_fits_so_no_group_is_clipped()
+    {
+        // Reported from the gallery: narrowing degrades the groups, but the rightmost one (Export) is
+        // simply not visible. The variants were being MEASURED WHILE INVISIBLE, and Avalonia's MeasureCore
+        // short-circuits for IsVisible == false — so every non-chosen variant reported zero width, tighter
+        // variants looked free, the pass under-degraded, and the row overflowed its slot and got clipped.
+        //
+        // Asserting the resolved variants was not enough to catch that: the decision looked plausible while
+        // resting on garbage widths. What matters is that the row FITS.
+        foreach (double width in new[] { 1400d, 900d, 640d })
+        {
+            var ribbon = Show(BuildCrowded(), width);
+            var panel = ribbon.GetVisualDescendants()
+                .First(v => v.GetType().Name == "RibbonGroupsPanel") as Layoutable;
+
+            panel!.DesiredSize.Width.Should().BeLessThanOrEqualTo(width,
+                $"at {width}px the groups must degrade until the row fits — anything wider is clipped, "
+                + "which is the same 'commands you cannot reach' defect this story exists to remove");
+        }
+    }
+
+    [AvaloniaFact]
+    public void Below_the_narrowest_possible_row_every_group_is_at_its_floor()
+    {
+        // The honest limit. Six groups at Popup are still ~500px (a chunk button has a minimum width and
+        // the groups have gaps), so below that the row cannot fit however hard the pass tries. What must
+        // hold is that it TRIED everything — nothing is left roomier than it had to be.
+        //
+        // Office's answer below the minimum is its fourth mechanism: hide the body entirely and fall back
+        // to tabs-only. We have that state (IsCollapsed) but only as a manual toggle, never automatic. Left
+        // unimplemented deliberately — auto-collapsing a ribbon is a behaviour change that deserves its own
+        // decision rather than being smuggled in with a scaling fix.
+        var ribbon = Show(BuildCrowded(), width: 360);
+
+        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Popup,
+            "the pass degraded everything as far as it could");
     }
 
     [AvaloniaFact]
