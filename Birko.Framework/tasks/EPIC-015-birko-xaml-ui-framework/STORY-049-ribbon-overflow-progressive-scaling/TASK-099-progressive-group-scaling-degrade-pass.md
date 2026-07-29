@@ -114,7 +114,7 @@ flickering. Measure candidates against the constraint; don't feed the applied la
       (This is the stability criterion; it is much easier to see by hand than to assert.)
 - [x] At the narrowest width before popup: expected **no horizontal scrollbar and no chevrons** on the
       groups row — that is the whole point of the change.
-- [ ] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
+- [x] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
 - [x] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
       `Small` renderings side by side against the Avalonia gallery for visual parity.
 - [ ] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
