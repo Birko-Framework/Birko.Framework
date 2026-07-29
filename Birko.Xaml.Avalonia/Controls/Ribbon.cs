@@ -416,8 +416,21 @@ public class Ribbon : ContentControl
         _reveal.Close();
     }
 
+    private FlyoutBase? _openChunkFlyout;
+    private Button? _openChunkButton;
+
     private void OnTopLevelKeyDown(object? sender, global::Avalonia.Input.KeyEventArgs e)
     {
+        // A collapsed group's flyout first: while it is open, that is what Escape means.
+        if (e.Key == global::Avalonia.Input.Key.Escape && _openChunkFlyout is { } chunkFlyout)
+        {
+            var owner = _openChunkButton;
+            chunkFlyout.Hide();
+            owner?.Focus();
+            e.Handled = true;
+            return;
+        }
+
         // Escape closes an open overlay first: while the narrow menu or a temporary reveal is showing, that
         // is what Escape means. A raw Popup does NOT do this for you — IsLightDismissEnabled is
         // pointer-only; Escape handling lives in FlyoutBase, which a Popup is not.
@@ -830,7 +843,7 @@ public class Ribbon : ContentControl
         // the same trade the Small variant already makes for items.
         if (labelled) content.Children.Add(label);
 
-        var button = new Button
+        var button = new RibbonChunkButton
         {
             Content = content,
             Background = Brushes.Transparent,
@@ -844,11 +857,27 @@ public class Ribbon : ContentControl
         if (labelled) button.Bind(MinWidthProperty, button.GetResourceObservable("BRibbonChunkWidth"));
         ToolTip.SetTip(button, group.Label);
 
+        // The accessible name is the GROUP's name. A compact chunk draws no label at all, so without this a
+        // screen reader would announce "button" and nothing more; RibbonChunkButton's peer adds the
+        // collapsed/expandable state alongside it.
+        global::Avalonia.Automation.AutomationProperties.SetName(button, group.Label);
+
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office
         // closes a collapsed group's flyout as soon as a command runs.
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
         flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
         button.Flyout = flyout;
+
+        // Remembered so Escape can close it. A Flyout does NOT dismiss on Escape by itself — verified, not
+        // assumed, after light dismiss failed to deliver both Escape and click-away for the reveal popup.
+        // Without this, a keyboard user who opens a collapsed group has no way back out.
+        flyout.Opened += (_, _) => { _openChunkFlyout = flyout; _openChunkButton = button; };
+        flyout.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_openChunkFlyout, flyout)) return;
+            _openChunkFlyout = null;
+            _openChunkButton = null;
+        };
 
         var box = new Border
         {

@@ -134,7 +134,15 @@ internal sealed class RibbonGroupsPanel : Panel
         {
             var picked = Picked(i);
             foreach (var control in AllControls(_groups[i]))
-                control.IsHitTestVisible = control == picked;
+            {
+                bool shown = control == picked;
+                control.IsHitTestVisible = shown;
+                // IsEnabled, not just hit-testing: a parked variant is off-screen but still FOCUSABLE, so
+                // Tab walked into invisible controls — three extra stops per group for a keyboard user, on
+                // commands they cannot see. Disabling takes the whole subtree out of the tab order, which
+                // hit-testing alone does not do. It does not affect measurement.
+                if (control.IsEnabled != shown) control.IsEnabled = shown;
+            }
 
             picked.Measure(availableSize);
             if (i > 0) width += gap;
