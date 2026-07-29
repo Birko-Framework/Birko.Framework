@@ -2,7 +2,7 @@
 id: TASK-099
 parent: STORY-049
 feature: null
-status: todo  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: in-progress  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29

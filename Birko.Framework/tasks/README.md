@@ -7,7 +7,7 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 25                 | —                   |
-| todo         | —                  | —                  | 41                  |
+| todo         | —                  | —                  | 42                  |
 | in-progress  | 6                  | 5                  | 1                   |
 | review       | —                  | —                  | 5                   |
 | blocked      | —                  | —                  | 0                   |
@@ -113,12 +113,13 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (6/14 tasks done)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (6/15 tasks done)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3, ai) — **done**
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2, ai) — **done**
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2, ai) — **done**
   - [x] [TASK-057](EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md) Xaml Form field types: MultiSelect / Tags / File (P2, ai) — **done**
   - [ ] [TASK-101](EPIC-015-birko-xaml-ui-framework/TASK-101-avalonia-ribbon-pinned-temporary-reveal.md) Avalonia `Ribbon`: pinned vs temporary-reveal collapse, to match `b-ribbon` and Office (P2, ai)
+  - [ ] [TASK-102](EPIC-015-birko-xaml-ui-framework/TASK-102-avalonia-ribbon-narrow-fallback.md) Avalonia `Ribbon`: a narrow fallback, mirroring `b-ribbon`'s hamburger (P2, ai)
   - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (0/0)
   - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (0/0)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (0/0)
