@@ -827,6 +827,28 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void An_unpinned_reveal_spans_the_ribbon_width()
+    {
+        // Parity finding from the side-by-side review: b-ribbon's unpinned panel is `left: 0; right: 0`, so
+        // it spans the ribbon, while Avalonia's popup sized itself to its contents. The web matches Office --
+        // a temporary reveal should read as the ribbon body appearing, not as a dropdown.
+        var ribbon = Build(out _);
+        ribbon.IsPinned = false;
+        ribbon.IsCollapsed = true;
+        Show(ribbon, width: 900);
+
+        var view = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "View"));
+        view.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        var overlay = ribbon.OpenOverlay;
+        overlay.Should().NotBeNull();
+        overlay!.MinWidth.Should().BeApproximately(ribbon.Bounds.Width, 0.5,
+            "the reveal spans the ribbon rather than hugging its contents");
+    }
+
+    [AvaloniaFact]
     public void Capture_ribbon_screenshot()
     {
         Application.Current!.RequestedThemeVariant = BirkoThemeVariants.Light;
