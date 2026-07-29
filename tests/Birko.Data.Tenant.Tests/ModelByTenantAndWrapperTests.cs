@@ -258,6 +258,45 @@ public class ModelByTenantAndWrapperTests
         thrown.Which.Operation.Should().Be("delete");
     }
 
+    /// <summary>
+    /// Under <see cref="TenantIsolationMode.Strict"/> with NO tenant in scope, the refusal must be a
+    /// <see cref="TenantScopeRequiredException"/> — not a bare <see cref="InvalidOperationException"/>, which
+    /// a host cannot tell apart from any other invalid-state bug and therefore reports as a blanket 500.
+    /// "No tenant in scope" is a request-shaped problem (a missing tenant header) and deserves a 4xx naming
+    /// the cause; measured in a consumer (Symbio TASK-271), <b>115 of 170</b> parameterless GET routes
+    /// answered 500 to a header-less call for exactly this reason.
+    ///
+    /// <para>Distinct from <see cref="TenantMismatchException"/> (403): that one means a tenant IS in scope and
+    /// the row belongs to another. Conflating them sends a caller missing a header hunting for a permission.</para>
+    /// </summary>
+    [Fact]
+    public async Task Strict_NoTenantInScope_ThrowsTenantScopeRequired_OnReadAndOnCreate()
+    {
+        var inner = new AsyncInMemoryStore<Doc>();
+        var ctx = new TenantContext();   // no tenant, no all-tenants scope
+        var strict = new AsyncTenantBulkStoreWrapper<AsyncInMemoryStore<Doc>, Doc>(
+            inner, ctx, TenantIsolationMode.Strict);
+
+        var read = await strict.Invoking(w => w.ReadAsync(filter: null))
+            .Should().ThrowAsync<TenantScopeRequiredException>();
+        read.Which.Should().BeAssignableTo<InvalidOperationException>(
+            "every existing catch (InvalidOperationException) must keep working");
+        read.Which.Operation.Should().Be("read");
+        read.Which.EntityType.Should().Be(nameof(Doc));
+
+        var create = await strict.Invoking(w => w.CreateAsync(new[] { new Doc { Guid = Guid.NewGuid() } }))
+            .Should().ThrowAsync<TenantScopeRequiredException>(
+                "refusing to stamp Guid.Empty is the same 'needs a tenant' condition");
+        create.Which.Operation.Should().Be("create");
+
+        // And it does NOT fire when the caller says cross-tenant out loud, nor in Permissive mode —
+        // otherwise this would be pinning a blanket refusal rather than the Strict contract.
+        await ctx.WithAllTenantsAsync(async () =>
+            (await strict.ReadAsync(filter: null)).Should().BeEmpty());
+        var permissive = new AsyncTenantBulkStoreWrapper<AsyncInMemoryStore<Doc>, Doc>(inner, ctx);
+        await permissive.Invoking(w => w.ReadAsync(filter: null)).Should().NotThrowAsync();
+    }
+
     [Fact]
     public async Task Update_OwnTenantItem_Succeeds()
     {
