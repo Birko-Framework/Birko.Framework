@@ -2,7 +2,7 @@
 id: TASK-100
 parent: STORY-049
 feature: null
-status: in-progress  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -56,8 +56,11 @@ addition to the original scope — a labelled chunk cannot be narrower than its 
 clipping window). Web accessibility is done: `aria-expanded`/`aria-haspopup`, `Escape` closes and returns
 focus, keyboard reachable.
 
-**What remains is the Avalonia accessibility half** — it leans on `Flyout` defaults that have not been
-verified, and has no automation-peer assertions. That is what the unchecked criteria below cover.
+**The Avalonia accessibility half is now done too** (2026-07-29). Three things, each verified rather than
+assumed: a `RibbonChunkButton` peer exposing `IExpandCollapseProvider` with state that tracks the flyout;
+parked variants taken out of the tab order (they were off-screen but still focusable, so Tab walked through
+invisible controls); and `Escape` closing the flyout, which a `Flyout` does **not** do by itself — the test
+failed when written, which is why the criterion had stayed unticked. Both fixes are mutation-checked.
 
 ## Acceptance criteria
 
@@ -68,23 +71,23 @@ verified, and has no automation-peer assertions. That is what the unchecked crit
 - [x] Invoking an item from the flyout runs **the same handler** as the uncollapsed item
       (`RibbonItem.Run` / the `item-click` event with the same `tabId`/`groupId`/`itemId`) and dismisses
       the flyout.
-- [ ] The flyout dismisses on `Escape` and on click/focus outside, returning focus to the chunk button.
-      **Web: done. Avalonia: unverified** — it relies on `Flyout`'s own light-dismiss behaviour.
+- [x] The flyout dismisses on `Escape` and on click/focus outside, returning focus to the chunk button.
+      Avalonia needed explicit handling: a `Flyout` does **not** dismiss on `Escape` by itself — the test
+      failed when first written, which is exactly why this criterion had stayed unticked.
 - [x] A group with a variant **floor** above `Popup` (TASK-098) never collapses, even if that forces
       another group to collapse instead.
-- [ ] **Web: done. Avalonia: unverified.** **Keyboard reachable:** the chunk button is in the tab order in place of the group's items, and
+- [x] **Keyboard reachable:** the chunk button is in the tab order in place of the group's items, and
       the flyout's items are arrow-navigable — consistent with the existing panel keyboard handling
       (`b-ribbon.ts:562-580`).
-- [ ] **Web: done (`aria-expanded` + `aria-haspopup`). Avalonia: not started.** **Screen-reader correct:** the chunk button exposes the group's name and its expanded/collapsed
+- [x] **Screen-reader correct** (web: `aria-expanded`/`aria-haspopup`; Avalonia: `RibbonChunkButton`'s
+      `IExpandCollapseProvider` peer + `AutomationProperties.Name`)**:** the chunk button exposes the group's name and its expanded/collapsed
       state, and the flyout is associated with it (web: `aria-expanded` + `aria-haspopup` and the
       flyout labelled by the chunk button; Avalonia: the equivalent automation peer properties).
 - [x] With this landed, the groups row has **no scroll fallback at any width** in either skin.
 - [x] Widening promotes a collapsed group back to `Small`/`Medium`/`Large`, and an open flyout closes
       when its group is promoted (it must not linger over a now-expanded group).
-- [ ] Avalonia coverage in `RibbonTests.cs`: measure at a width that forces collapse, assert one chunk
+- [x] Avalonia coverage in `RibbonTests.cs`: measure at a width that forces collapse, assert one chunk
       button per collapsed group, open it and assert the items are present and their handler runs.
-      **Partly done** — collapse, the chunk button, its icon and the compact form are covered; *opening the
-      flyout and running an item from it* is not, which is the same gap as the accessibility criteria above.
 - [x] Web side verified by building + headless-running `Birko.Web.Playground`.
       `ribbon-scaling-smoke` covers the chunk button, `aria-expanded`, the flyout's contents, dismissal on
       invoke, and the compact form (36 checks).

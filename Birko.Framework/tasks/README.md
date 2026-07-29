@@ -8,8 +8,8 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 25                 | —                   |
 | todo         | —                  | —                  | 38                  |
-| in-progress  | 6                  | 5                  | 2                   |
-| review       | —                  | —                  | 5                   |
+| in-progress  | 6                  | 5                  | 1                   |
+| review       | —                  | —                  | 6                   |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 21                 | 27                  |
 | cancelled    | 0                  | 0                  | 0                   |
@@ -138,7 +138,7 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
     - [x] [TASK-097](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-097-make-ribbon-overflow-reachable.md) Make the existing ribbon overflow reachable (interim fix, both skins) (P1, ai) — **done**
     - [x] [TASK-098](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-098-ribbon-size-variant-scaling-priority-model.md) Ribbon model + tokens: size variant, scaling priority, group icon (XAML **and** web together) (P2, ai) — **done**
     - [x] [TASK-099](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-099-progressive-group-scaling-degrade-pass.md) The degrade pass — measure and scale groups Large → Medium → Small in priority order (P2, ai) — **done**
-    - [ ] [TASK-100](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-100-group-collapse-to-popup.md) Group-collapse-to-popup — the chunk button and its flyout (P2, ai) ← in-progress
+    - [ ] [TASK-100](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-100-group-collapse-to-popup.md) Group-collapse-to-popup — the chunk button and its flyout (P2, ai) 🔍 review
 - **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (9/11 tasks done)
   - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
   - STORY-037 [Backend / SQL framework backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-037-backend-sql-backports/STORY.md) — done (0/0)
