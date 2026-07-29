@@ -26,6 +26,11 @@ public class ObjectTreeTests
     private static IEnumerable<string?> Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
 
+    /// <summary>Texts of a node's OWN header row only — <see cref="Texts"/> walks the whole subtree,
+    /// so a parent would also match its descendants' values.</summary>
+    private static IEnumerable<string?> HeaderTexts(TreeViewItem item) =>
+        item.Header is Control header ? Texts(header) : Enumerable.Empty<string?>();
+
     [AvaloniaFact]
     public void Renders_json_as_a_tree()
     {
@@ -51,6 +56,59 @@ public class ObjectTreeTests
         var tree = Show(new ObjectTree { Json = "{ not valid" });
         // Doesn't throw; shows the raw text as a leaf.
         tree.GetVisualDescendants().OfType<TreeViewItem>().Should().NotBeEmpty();
+    }
+
+    [AvaloniaFact]
+    public void Selecting_a_node_exposes_its_value_and_path()
+    {
+        var tree = Show(new ObjectTree { Json = "{\"user\":{\"name\":\"Ada\"},\"roles\":[\"admin\"]}" });
+
+        tree.SelectedValue.Should().BeNull("nothing is selected yet");
+        tree.SelectedPath.Should().BeNull();
+
+        var raised = 0;
+        tree.SelectionChanged += (_, _) => raised++;
+
+        // Drill to roles[0] — the deepest leaf under the second root node.
+        var items = tree.GetVisualDescendants().OfType<TreeViewItem>().ToList();
+        var leaf = items.Single(i => HeaderTexts(i).Contains("\"admin\""));
+        leaf.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+
+        tree.SelectedPath.Should().Be("roles[0]");
+        tree.SelectedValue?.ToString().Should().Be("admin");
+        raised.Should().Be(1);
+    }
+
+    [AvaloniaFact]
+    public void A_selected_null_node_is_distinguishable_from_no_selection()
+    {
+        var tree = Show(new ObjectTree { Json = "{\"lastLogin\":null}" });
+
+        var leaf = tree.GetVisualDescendants().OfType<TreeViewItem>()
+            .Single(i => HeaderTexts(i).Contains("lastLogin:"));
+        leaf.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+
+        // Both are null-valued, so the path is what says "a node IS selected".
+        tree.SelectedValue.Should().BeNull();
+        tree.SelectedPath.Should().Be("lastLogin");
+    }
+
+    [AvaloniaFact]
+    public void Rebuilding_clears_the_selection()
+    {
+        var tree = Show(new ObjectTree { Source = new Contact { Name = "Grace", Active = true } });
+        tree.GetVisualDescendants().OfType<TreeViewItem>()
+            .Single(i => HeaderTexts(i).Contains("Name:")).IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+        tree.SelectedPath.Should().Be("Name");
+
+        tree.Source = new Contact { Name = "Ada", Active = false };
+        Dispatcher.UIThread.RunJobs();
+
+        tree.SelectedPath.Should().BeNull("the nodes the selection pointed at no longer exist");
+        tree.SelectedValue.Should().BeNull();
     }
 
     [AvaloniaFact]
