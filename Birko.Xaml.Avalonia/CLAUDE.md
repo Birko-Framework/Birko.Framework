@@ -14,20 +14,40 @@ non-obvious theme-system decisions.
 
 ## Theme system — how and why
 
-- **`Themes/Tokens.axaml` is GENERATED** by `Birko.DesignTokens` — never hand-edit. To change a
-  token, edit `Birko.DesignTokens/tokens.json` and run its `generate` command.
-- **ThemeDictionaries, not swapped MergedDictionaries.** A single `ResourceDictionary` with a
-  `ThemeDictionaries` entry per theme. Setting `RequestedThemeVariant` re-resolves every
-  `DynamicResource` live (proven in tests). This is what STORY-030's "wired to ThemeVariant" means.
+- **Everything under `Themes/` is GENERATED** by `Birko.DesignTokens` — never hand-edit. To change a
+  token, edit `Birko.DesignTokens/tokens.json` and run its `generate` command (`verify` fails on
+  drift for the AXAML as well as the CSS).
+- **One file per theme, so consumers ship only what they offer.** `Themes/Tokens.{Light,Dark,Neon,Finstat}.axaml`
+  each hold a single `ThemeDictionaries` entry; `Themes/Tokens.Brushes.axaml` holds the shared
+  brushes; `Themes/Tokens.axaml` is the back-compat aggregate merging all five. Two includes:
+  - `BirkoTheme.axaml` — all four themes (unchanged; what existing consumers use).
+  - `BirkoTheme.Core.axaml` — light + dark only; add `Themes/Tokens.<Theme>.axaml` per extra theme.
+
+  Core+extras beats all-in by ~43% of token payload (23 KB vs 41 KB). Mirrors the web side, where
+  each alternate theme is its own opt-in CSS file.
+- **Light + Dark are BOTH mandatory in any composition.** `ThemeVariant.Dark` has no
+  `InheritVariant`, so a light-only app resolves *nothing* under OS dark mode. Neon/Finstat are
+  safely omissible because they inherit Dark/Light. Pinned by `ThemeCompositionTests`.
+- **ThemeDictionaries, not swapped MergedDictionaries.** Setting `RequestedThemeVariant` re-resolves
+  every `DynamicResource` live (proven in tests). This is what STORY-030's "wired to ThemeVariant"
+  means. Splitting across files is safe because Avalonia resolves `ThemeDictionaries` entries found
+  in *merged* dictionaries — also pinned by `ThemeCompositionTests`, since the whole split rests on it.
+- **`BThemeId` is how the loaded themes are detected.** Each generated dictionary declares
+  `<x:String x:Key="BThemeId">` naming itself, and `AvaloniaThemeManager.DetectThemes` reads it, so
+  `Available` is *derived* from what was merged instead of a second hand-maintained list that can
+  drift. Presence alone cannot work: an omitted variant inherits silently, so any key would still
+  resolve — the value has to say which dictionary answered. Pass `available:` explicitly to override.
 - **Custom variants work.** Spike-verified that Avalonia resolves arbitrary `ThemeVariant` keys
   (not just Light/Dark) via `TryGetResource(key, variant)`, falling back to the variant's
   `InheritVariant`. `BirkoThemeVariants.Neon` inherits Dark, `.Finstat` inherits Light.
 - **Key identity matters.** The `ThemeDictionaries` keys are `{x:Static themes:BirkoThemeVariants.X}`
   — the *same* static instances used for `RequestedThemeVariant`. Do NOT switch to bare string
   keys for the custom variants; identity is what makes the lookup match.
-- **Brushes live at the root**, one per color token, `Color="{DynamicResource BColorX}"`. Colors
-  live per-variant in `ThemeDictionaries`. So one brush instance tracks the active variant — no
-  per-theme brush duplication. Controls bind to `{DynamicResource BColorXBrush}`.
+- **Brushes live in their own sheet** (`Themes/Tokens.Brushes.axaml`), one per color token,
+  `Color="{DynamicResource BColorX}"`. Colors live per-variant in `ThemeDictionaries`. So one brush
+  instance tracks the active variant — no per-theme brush duplication. Controls bind to
+  `{DynamicResource BColorXBrush}`. Being theme-independent, this sheet is required alongside *any*
+  theme subset — omit it and every `B*Brush` key breaks.
 
 ## Controls (`Controls/`)
 

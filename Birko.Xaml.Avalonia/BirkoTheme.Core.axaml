@@ -1,0 +1,28 @@
+<!--
+  Light + Dark only Birko theme include — the opt-in counterpart to BirkoTheme.axaml (all four):
+
+    <Application.Resources>
+      <ResourceInclude Source="avares://Birko.Xaml.Avalonia/BirkoTheme.Core.axaml" />
+    </Application.Resources>
+
+  Merge AFTER the Fluent base theme. To offer another theme, merge its dictionary alongside:
+
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/BirkoTheme.Core.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Themes/Tokens.Neon.axaml" />
+
+  Light AND Dark are both in the core set on purpose: ThemeVariant.Dark has no InheritVariant, so a
+  light-only app resolves NOTHING under OS dark mode (verified in ThemeCompositionTests). Neon and
+  Finstat are safely omissible — they inherit Dark and Light respectively.
+
+  AvaloniaThemeManager derives its theme list from what is actually merged here, so the switcher
+  never offers a theme whose dictionary is missing.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Themes/Tokens.Brushes.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Themes/Tokens.Light.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Themes/Tokens.Dark.axaml" />
+    <ResourceInclude Source="avares://Birko.Xaml.Avalonia/Controls/Controls.axaml" />
+  </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

@@ -7,6 +7,9 @@
 
   Merge AFTER the Fluent base theme. Bundles the generated design tokens (Tokens.axaml) and the
   Birko restyled ControlThemes (Controls.axaml). Switch theme with AvaloniaThemeManager / RequestedThemeVariant.
+
+  This is the ALL-IN bundle (light + dark + neon + finstat). To ship only some themes, use
+  BirkoTheme.Core.axaml (light + dark) and merge the Themes/Tokens.<Theme>.axaml files you want.
 -->
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
