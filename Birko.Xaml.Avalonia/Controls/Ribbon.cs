@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Birko.Xaml.Core.Ribbon;
 
 namespace Birko.Xaml.Avalonia.Controls;
@@ -373,6 +374,13 @@ public class Ribbon : ContentControl
         _topLevel?.AddHandler(
             global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown,
             global::Avalonia.Interactivity.RoutingStrategies.Tunnel | global::Avalonia.Interactivity.RoutingStrategies.Bubble);
+
+        // Click-away is handled here too, for the same reason as Escape: Popup.IsLightDismissEnabled did
+        // not actually dismiss on a press elsewhere in the app. Between this and Escape, light dismiss has
+        // now failed to deliver twice — so the overlay's dismissal is owned outright rather than assumed.
+        _topLevel?.AddHandler(
+            global::Avalonia.Input.InputElement.PointerPressedEvent, OnTopLevelPointerPressed,
+            global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
     /// <inheritdoc/>
@@ -380,11 +388,33 @@ public class Ribbon : ContentControl
     {
         base.OnDetachedFromVisualTree(e);
         _topLevel?.RemoveHandler(global::Avalonia.Input.InputElement.KeyDownEvent, OnTopLevelKeyDown);
+        _topLevel?.RemoveHandler(global::Avalonia.Input.InputElement.PointerPressedEvent, OnTopLevelPointerPressed);
         _topLevel = null;
         _reveal?.Close();
     }
 
     private TopLevel? _topLevel;
+
+    /// <summary>
+    /// Dismiss an open overlay when the press lands outside it — and outside the ribbon, whose own click
+    /// handlers decide what a press on a tab or on ☰ means.
+    /// </summary>
+    private void OnTopLevelPointerPressed(object? sender, global::Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (_reveal?.IsOpen != true) return;
+        if (e.Source is not Visual source) return;
+
+        // Inside the overlay: a press on a command is handled by the command; a press on empty space in it
+        // should not dismiss. (With a native popup host these events never reach here anyway — defensive.)
+        if (_reveal.Child is Visual content
+            && (ReferenceEquals(source, content) || source.GetVisualAncestors().Contains(content)))
+            return;
+
+        // On the ribbon itself: the tab button or ☰ decides, otherwise a re-open would fight this close.
+        if (ReferenceEquals(source, this) || source.GetVisualAncestors().Contains(this)) return;
+
+        _reveal.Close();
+    }
 
     private void OnTopLevelKeyDown(object? sender, global::Avalonia.Input.KeyEventArgs e)
     {
