@@ -13,10 +13,18 @@ namespace Birko.Xaml.Avalonia.Controls;
 /// The degrade pass cannot live in <c>Ribbon.Rebuild()</c>: that runs with no width constraint at all, so
 /// it has nothing to reason about. Hence a real panel with <see cref="MeasureOverride"/>.
 /// <para>
-/// Every variant of every group is built up front and kept as a child; only the chosen one is visible and
-/// arranged. That costs tree size (three controls per group) and buys two things worth more: widths can be
+/// Every variant of every group is built up front and kept as a child; only the chosen one is arranged
+/// on-screen. That costs tree size (four controls per group) and buys two things worth more: widths can be
 /// measured without constructing controls during layout, and the decision needs no re-render — which is
 /// the mistake that produced three separate flicker bugs in TASK-097.
+/// </para>
+/// <para>
+/// <b>The unchosen variants stay <see cref="Visual.IsVisible"/> = true and are parked off-screen instead.</b>
+/// Avalonia's <c>MeasureCore</c> short-circuits for an invisible control, leaving its
+/// <c>DesiredSize</c> at zero — so hiding them made every tighter variant measure as free, the pass
+/// under-degraded, and the row overflowed its slot and clipped the rightmost group. Flipping visibility
+/// per pass is also not an option: it invalidates measure, so the panel would re-layout forever.
+/// <see cref="ClipToBounds"/> keeps the parked controls from painting.
 /// </para>
 /// <para>
 /// Convergence: <see cref="RibbonScaling.Resolve"/> is a pure function of the measured widths and the
@@ -56,12 +64,9 @@ internal sealed class RibbonGroupsPanel : Panel
 
     public void AddGroup(GroupVariants group)
     {
+        ClipToBounds = true; // parked variants live off-screen; do not let them paint
         _groups.Add(group);
-        foreach (var control in group.Controls.Values)
-        {
-            control.IsVisible = false; // MeasureOverride reveals exactly one
-            Children.Add(control);
-        }
+        foreach (var control in group.Controls.Values) Children.Add(control);
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -94,10 +99,7 @@ internal sealed class RibbonGroupsPanel : Panel
         for (int i = 0; i < _groups.Count; i++)
         {
             foreach (var pair in _groups[i].Controls)
-            {
-                bool on = pair.Key == _chosen[i];
-                if (pair.Value.IsVisible != on) pair.Value.IsVisible = on;
-            }
+                pair.Value.IsHitTestVisible = pair.Key == _chosen[i];
 
             var picked = _groups[i].Controls[_chosen[i]];
             picked.Measure(availableSize);
@@ -117,7 +119,9 @@ internal sealed class RibbonGroupsPanel : Panel
             foreach (var pair in _groups[i].Controls)
             {
                 if (pair.Key == _chosen[i]) continue;
-                pair.Value.Arrange(default); // parked; invisible, so it neither draws nor hit-tests
+                // Parked far off-screen rather than hidden: it must stay measurable (see the class remarks).
+                // ClipToBounds stops it painting and IsHitTestVisible stops it being clicked.
+                pair.Value.Arrange(new Rect(-100_000, 0, pair.Value.DesiredSize.Width, pair.Value.DesiredSize.Height));
             }
 
             var picked = _groups[i].Controls[_chosen[i]];
