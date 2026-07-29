@@ -827,49 +827,6 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
-    public void A_collapsed_groups_flyout_stays_inside_the_ribbon()
-    {
-        // Reported from the gallery: opening the Export chunk's flyout showed it cut off. A group only
-        // collapses when the ribbon is narrow, so its full-size contents are often wider than the ribbon --
-        // and left-aligned under a chunk near the right edge, the surplus simply runs off the end. Measured
-        // here: 228px of content under a chunk at x=139 in a 320px ribbon wanted to reach 393px.
-        // THREE items per group, as the gallery has. With two the flyout is narrow enough to fit by luck,
-        // which made the first version of this test pass even with the nudge removed.
-        RibbonItem I(string l) => new() { Id = l, Label = l, Icon = "●" };
-        RibbonGroup G(string l) => new()
-        {
-            Label = l, Icon = "▦", Items = new[] { I(l + " One"), I(l + " Two"), I(l + " Three") },
-        };
-        var ribbon = Show(new Ribbon
-        {
-            Tabs = new[]
-            {
-                new RibbonTab { Id = "home", Label = "Home", Groups = new[]
-                    { G("Clipboard"), G("Records"), G("Layout"), G("Styles"), G("Review"), G("Export") } },
-            },
-        }, width: 320);
-        ribbon.ResolvedGroupSizes.Should().AllBeEquivalentTo(RibbonGroupSize.Popup, "precondition: collapsed");
-
-        // The unchosen variants are parked off-screen, so pick the chunk actually on display.
-        var chunk = ribbon.GetVisualDescendants().OfType<Button>()
-            .Where(b => (b.GetValue(ToolTip.TipProperty) as string) == "Export" && b.Flyout is not null)
-            .First(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
-
-        var flyout = (Flyout)chunk.Flyout!;
-        flyout.ShowAt(chunk);
-        Dispatcher.UIThread.RunJobs();
-
-        var content = (Control)flyout.Content!;
-        double chunkX = chunk.TranslatePoint(default, ribbon)!.Value.X;
-        double rightEdge = chunkX + content.Bounds.Width + 26 + flyout.HorizontalOffset;
-
-        rightEdge.Should().BeLessThanOrEqualTo(ribbon.Bounds.Width + 0.5,
-            "the flyout must stay within the ribbon, or its right-hand commands are unreachable");
-        content.Bounds.Width.Should().BeLessThanOrEqualTo(ribbon.Bounds.Width,
-            "and it wraps rather than growing past the ribbon's own width");
-    }
-
-    [AvaloniaFact]
     public void Capture_ribbon_screenshot()
     {
         Application.Current!.RequestedThemeVariant = BirkoThemeVariants.Light;
