@@ -2,7 +2,7 @@
 id: TASK-099
 parent: STORY-049
 feature: null
-status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -117,8 +117,11 @@ flickering. Measure candidates against the constraint; don't feed the applied la
 - [x] At `Small`: hover an icon-only item. Expected a tooltip with the command's label.
 - [x] `Birko.Web.Playground` — same slow narrow/widen pass in the browser; compare the `Medium` and
       `Small` renderings side by side against the Avalonia gallery for visual parity.
-- [ ] Symbio UI — check a real, densely populated ribbon tab at laptop width (~1366px) reads better
-      than it did before, not just differently.
+- [~] **DEFERRED** — Symbio UI at laptop width (~1366px), to see whether a real densely-populated tab
+      reads better rather than merely differently. Deferred by decision 2026-07-29: it needs the Symbio
+      stack up, and the risk it guards (a dense real-world tab reading worse) is now covered by the
+      priority-ordering behaviour verified by hand in the gallery. Worth doing opportunistically the next
+      time Symbio is running — it is the only check against a real consumer's ribbon rather than demo data.
 
 _Gallery-side steps confirmed by the reviewer 2026-07-29 (through three rounds of fixes). The unticked
 ones are genuinely unrun — they were ticked in error by a bulk pass and restored._
