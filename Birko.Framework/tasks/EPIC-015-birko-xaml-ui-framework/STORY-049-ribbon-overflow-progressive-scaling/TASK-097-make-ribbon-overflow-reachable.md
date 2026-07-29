@@ -91,6 +91,26 @@ second copy.
 - New `--b-ribbon-*` tokens — reuse what exists; TASK-098 adds tokens if the variants need them.
 - The `<48rem` mobile hamburger dialog — already works, unaffected.
 
+## Found during review (2026-07-29)
+
+Two things the manual pass turned up, both fixed under this task:
+
+- **The demo ribbons were too thin to review.** Both `Birko.Xaml.Gallery` and `Birko.Web.Playground`
+  had 2 tabs / 2 groups, which never overflows at any sane width — so the test plan below had nothing
+  to observe. Both now carry Office-sized data (8 tabs, 5–6 groups on the active tab).
+- **The chevron strobed on an *unpinned* web ribbon and the click landed on a tab.** `visible` was
+  applied only imperatively by `sync()`, but `update()` morphs synchronously and the template's `class`
+  attribute overwrote it — so after every re-render the button was `display: none` until the next
+  animation frame. While hidden, the flex row reflowed and a tab slid under the cursor. Unpinned makes
+  it constant, because hover expand/collapse re-renders on nearly every mouse move across the strip.
+  Fixed by making the overflow state real state (`_tabScroll` / `_panelScroll`) that `render()`
+  re-emits — the same hazard `_hoverTabId` already documents in that file. Two new smoke checks assert
+  the class survives an observed-attribute change synchronously; both fail before the fix.
+
+Also filed from this review, **not** fixed here: **TASK-101** — the Avalonia `Ribbon` has no pinned
+concept and a collapsed ribbon permanently re-expands when you click a tab, where Office (and
+`b-ribbon`) reveal it temporarily as an overlay and re-collapse after a command.
+
 ## Human test plan
 
 - [ ] `Birko.Xaml.Gallery` — open the ribbon showcase, drag the window narrow enough to cut off the
