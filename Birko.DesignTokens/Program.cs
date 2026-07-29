@@ -97,6 +97,28 @@ int Verify()
             Console.Error.WriteLine($"DRIFT: {sheet.File} differs from tokens.json regeneration.");
         }
     }
-    if (drift == 0) Console.WriteLine($"OK — all {set.Sheets.Count} CSS file(s) match tokens.json exactly.");
+    // AXAML too. The split into per-theme dictionaries turned one generated file into six, each
+    // hand-editable and — until now — unguarded, so drift here was invisible to `verify`.
+    var axaml = AxamlEmitter.Generate(set);
+    foreach (var (name, content) in axaml)
+    {
+        string outPath = Path.Combine(paths.XamlThemes, name);
+        if (!File.Exists(outPath))
+        {
+            drift++;
+            Console.Error.WriteLine($"MISSING: {name} has not been generated into {paths.XamlThemes}.");
+            continue;
+        }
+        // Compare EOL-normalized, matching the CSS gate — generation must not depend on a
+        // machine's autocrlf checkout settings.
+        if (CssIo.Normalize(CssIo.Read(outPath)) != CssIo.Normalize(content))
+        {
+            drift++;
+            Console.Error.WriteLine($"DRIFT: {name} differs from tokens.json regeneration.");
+        }
+    }
+
+    if (drift == 0)
+        Console.WriteLine($"OK — all {set.Sheets.Count} CSS + {axaml.Count} AXAML file(s) match tokens.json exactly.");
     return drift == 0 ? 0 : 1;
 }
