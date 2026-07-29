@@ -75,6 +75,17 @@ public class RibbonTests
         root.GetVisualDescendants().OfType<Button>()
             .First(b => (b.GetValue(ToolTip.TipProperty) as string) == tip);
 
+    /// <summary>
+    /// A chevron is *shown* only when it is both in the layout and active. Once a row overflows, both
+    /// slots stay in the layout (reserved) so the row never reflows; only opacity / hit-testing change.
+    /// So IsVisible alone no longer answers "can the user see and click this".
+    /// </summary>
+    private static bool IsShown(Button chevron) =>
+        chevron.IsVisible && chevron.Opacity > 0 && chevron.IsHitTestVisible;
+
+    /// <summary>In the layout at all — i.e. holding its slot open, visible or not.</summary>
+    private static bool IsReserved(Button chevron) => chevron.IsVisible;
+
     private static IEnumerable<string?> Texts(Control c) =>
         c.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
 
@@ -145,7 +156,7 @@ public class RibbonTests
 
         scroller.Extent.Width.Should().BeGreaterThan(scroller.Viewport.Width,
             "9 tabs cannot fit 320px, so the strip must be scrollable rather than clipped");
-        ChevronByTip(ribbon, "Scroll tabs right").IsVisible.Should().BeTrue(
+        IsShown(ChevronByTip(ribbon, "Scroll tabs right")).Should().BeTrue(
             "an invisible overflow is the defect — there must be a visible affordance");
     }
 
@@ -156,7 +167,7 @@ public class RibbonTests
         var scroller = ScrollerContaining(ribbon, "Clipboard");
 
         scroller.Extent.Width.Should().BeGreaterThan(scroller.Viewport.Width);
-        ChevronByTip(ribbon, "Scroll groups right").IsVisible.Should().BeTrue();
+        IsShown(ChevronByTip(ribbon, "Scroll groups right")).Should().BeTrue();
         Texts(ribbon).Should().Contain("Export", "every group stays in the tree and is reachable by scrolling");
     }
 
@@ -168,13 +179,23 @@ public class RibbonTests
         var right = ChevronByTip(ribbon, "Scroll tabs right");
         var left = ChevronByTip(ribbon, "Scroll tabs left");
 
-        left.IsVisible.Should().BeFalse("nothing is scrolled off to the left yet");
+        IsShown(left).Should().BeFalse("nothing is scrolled off to the left yet");
+        IsReserved(left).Should().BeTrue("but its slot is held open, so revealing it cannot reflow the row");
+
+        double viewportBefore = scroller.Viewport.Width;
+        double rightEdgeBefore = right.Bounds.X;
 
         right.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
 
         scroller.Offset.X.Should().BeGreaterThan(0);
-        left.IsVisible.Should().BeTrue("scrolled content to the left is now reachable back");
+        IsShown(left).Should().BeTrue("scrolled content to the left is now reachable back");
+
+        // The stability property: activating the back chevron must not reflow the row, or the forward
+        // chevron moves out from under the pointer mid-click — the defect reported on the web side.
+        scroller.Viewport.Width.Should().BeApproximately(viewportBefore, 0.5,
+            "both slots were already reserved, so nothing resized");
+        right.Bounds.X.Should().BeApproximately(rightEdgeBefore, 0.5, "the click target did not move");
     }
 
     [AvaloniaFact]
@@ -182,9 +203,9 @@ public class RibbonTests
     {
         var ribbon = Show(Build(out _), width: 900);
 
-        ChevronByTip(ribbon, "Scroll tabs right").IsVisible.Should().BeFalse();
-        ChevronByTip(ribbon, "Scroll tabs left").IsVisible.Should().BeFalse();
-        ChevronByTip(ribbon, "Scroll groups right").IsVisible.Should().BeFalse(
+        IsReserved(ChevronByTip(ribbon, "Scroll tabs right")).Should().BeFalse("a row that fits reserves no slots");
+        IsReserved(ChevronByTip(ribbon, "Scroll tabs left")).Should().BeFalse();
+        IsReserved(ChevronByTip(ribbon, "Scroll groups right")).Should().BeFalse(
             "chevrons must cost no layout at a wide width");
 
         ribbon.GetVisualDescendants().OfType<ScrollViewer>().Should()
