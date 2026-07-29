@@ -76,10 +76,15 @@ public class Ribbon : ContentControl
         chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
         chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
 
+        // The tab strip scrolls when the tabs overflow (Office Web / Fluent do this; the ribbon *body*
+        // deliberately does not — see TASK-099). The collapse chevron lives outside the scroller so it
+        // stays pinned at the right edge and can never scroll out of reach.
+        var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right");
+
         var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 4, 8, 0) };
-        Grid.SetColumn(tabButtons, 0);
+        Grid.SetColumn(tabScroller, 0);
         Grid.SetColumn(chevron, 1);
-        strip.Children.Add(tabButtons);
+        strip.Children.Add(tabScroller);
         strip.Children.Add(chevron);
 
         var body = new DockPanel();
@@ -93,13 +98,88 @@ public class Ribbon : ContentControl
             if (selected >= 0)
                 foreach (var group in tabs[selected].Groups)
                     groupsPanel.Children.Add(BuildGroup(group));
-            body.Children.Add(groupsPanel);
+            // INTERIM (TASK-097): groups scroll so no command is unreachable at a narrow width.
+            // TASK-099 replaces this with progressive group scaling and removes the scroller — a
+            // scrolling ribbon body destroys the spatial memory the ribbon exists to provide.
+            body.Children.Add(WrapScrollable(groupsPanel, "Scroll groups left", "Scroll groups right"));
         }
 
         var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
         chrome.Bind(Border.BorderBrushProperty, chrome.GetResourceObservable("BBorderBrush"));
         Content = chrome;
+    }
+
+    /// <summary>
+    /// Wraps a horizontally-overflowing row in a hidden-scrollbar <see cref="ScrollViewer"/> flanked by
+    /// chevron buttons that show only while there is more content in that direction — the same affordance
+    /// <c>b-ribbon</c> uses on the web.
+    /// </summary>
+    /// <remarks>
+    /// The scrollbar is <c>Hidden</c> rather than <c>Auto</c> on purpose: a visible horizontal bar would
+    /// add its own height to a 34px tab strip and to the ribbon body, so the ribbon's height would change
+    /// with the window width. Chevrons live in <c>Auto</c> columns and are collapsed while invisible, so
+    /// they cost no layout at a wide width.
+    /// </remarks>
+    private Control WrapScrollable(Control content, string leftTip, string rightTip)
+    {
+        var scroller = new ScrollViewer
+        {
+            Content = content,
+            HorizontalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
+            VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+        };
+
+        var left = ScrollChevron("◂", leftTip);
+        var right = ScrollChevron("▸", rightTip);
+
+        void Step(double direction)
+        {
+            // Half a viewport per click, matching b-ribbon's `clientWidth * 0.5`.
+            double by = System.Math.Max(48, scroller.Viewport.Width * 0.5);
+            double max = System.Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
+            scroller.Offset = new Vector(System.Math.Clamp(scroller.Offset.X + (direction * by), 0, max), scroller.Offset.Y);
+        }
+
+        left.Click += (_, _) => Step(-1);
+        right.Click += (_, _) => Step(1);
+
+        void Sync()
+        {
+            // Extent and Viewport both change when the window resizes, so reacting to them covers a
+            // narrowing window with no rebuild — the gap that made overflow silently unreachable.
+            bool canLeft = scroller.Offset.X > 1;
+            bool canRight = scroller.Offset.X + scroller.Viewport.Width < scroller.Extent.Width - 1;
+            if (left.IsVisible != canLeft) left.IsVisible = canLeft;
+            if (right.IsVisible != canRight) right.IsVisible = canRight;
+        }
+
+        scroller.ScrollChanged += (_, _) => Sync();
+        scroller.LayoutUpdated += (_, _) => Sync();
+
+        var host = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        Grid.SetColumn(left, 0);
+        Grid.SetColumn(scroller, 1);
+        Grid.SetColumn(right, 2);
+        host.Children.Add(left);
+        host.Children.Add(scroller);
+        host.Children.Add(right);
+        return host;
+    }
+
+    private Button ScrollChevron(string glyph, string tip)
+    {
+        var button = new Button
+        {
+            Content = new TextBlock { Text = glyph, FontSize = 11 },
+            Background = Brushes.Transparent,
+            Padding = new Thickness(4, 0),
+            VerticalAlignment = VerticalAlignment.Stretch,
+            IsVisible = false, // Sync() reveals it once layout proves the row overflows.
+            [ToolTip.TipProperty] = tip,
+        };
+        button.Bind(ForegroundProperty, button.GetResourceObservable("BTextSecondaryBrush"));
+        return button;
     }
 
     private Control BuildGroup(RibbonGroup group)
