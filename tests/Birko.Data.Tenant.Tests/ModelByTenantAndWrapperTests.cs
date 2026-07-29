@@ -26,11 +26,42 @@ public class ModelByTenantAndWrapperTests
 
     // ---- ModelByTenant.Filter ----
 
+    /// <summary>
+    /// Only <c>null</c> means "no tenant in scope". Rewritten from
+    /// <c>Filter_NullOrEmptyTenant_ReturnsBaseFilterOnly</c>, which also asserted
+    /// <c>new ModelByTenant&lt;Doc&gt;(Guid.Empty).Filter().Should().BeNull()</c> — i.e. it recorded the
+    /// <c>Guid.Empty</c> short-circuit as <i>intended</i>. See
+    /// <see cref="Filter_EmptyTenant_IsFilteredOnLikeAnyOtherTenant"/> for why that was wrong. The
+    /// <c>null</c> half stays correct: "no tenant" really is unfiltered, and
+    /// <c>TenantStoreWrapper.EnsureTenantForStrict</c> is what refuses it under Strict.
+    /// </summary>
     [Fact]
-    public void Filter_NullOrEmptyTenant_ReturnsBaseFilterOnly()
+    public void Filter_NullTenant_ReturnsBaseFilterOnly()
     {
         new ModelByTenant<Doc>(null).Filter().Should().BeNull();
-        new ModelByTenant<Doc>(Guid.Empty).Filter().Should().BeNull();
+        new ModelByTenant<Doc>(null, d => d.Name == "keep").Filter()!.Compile()(
+            new Doc { TenantGuid = Guid.NewGuid(), Name = "keep" })
+            .Should().BeTrue("with no tenant in scope only the caller's own predicate applies");
+    }
+
+    /// <summary>
+    /// Symbio TASK-295: <c>Guid.Empty</c> used to short-circuit to the base filter alongside <c>null</c>, so a
+    /// caller scoped to <c>Guid.Empty</c> read <b>every</b> tenant's rows while <c>BelongsToCurrentTenant</c>
+    /// still compared writes against <c>Guid.Empty</c> — reads failed open, writes failed closed. Measured in
+    /// Symbio: a list read under an ambient <c>Guid.Empty</c> scope returned another tenant's rows, and the
+    /// <c>PUT</c> that followed refused them as <c>Tenant.Mismatch</c>. "No tenant" was already expressible as
+    /// <c>null</c>, so the special case bought nothing and cost isolation.
+    /// </summary>
+    [Fact]
+    public void Filter_EmptyTenant_IsFilteredOnLikeAnyOtherTenant()
+    {
+        var predicate = new ModelByTenant<Doc>(Guid.Empty).Filter();
+
+        predicate.Should().NotBeNull("a zero tenant is a tenant value, not 'unset' — it must still filter");
+        var compiled = predicate!.Compile();
+        compiled(new Doc { TenantGuid = Guid.Empty }).Should().BeTrue();
+        compiled(new Doc { TenantGuid = Guid.NewGuid() }).Should().BeFalse(
+            "this is the leak: another tenant's row must not be visible to a Guid.Empty scope");
     }
 
     [Fact]
@@ -95,6 +126,36 @@ public class ModelByTenantAndWrapperTests
 
         results.Should().OnlyContain(d => d.TenantGuid == tenantA);
         results.Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// The store-level counterpart of <see cref="Filter_EmptyTenant_IsFilteredOnLikeAnyOtherTenant"/>, and the
+    /// shape the defect was actually measured in (Symbio TASK-295): a wrapper whose ambient scope is
+    /// <c>Guid.Empty</c> returned <b>every</b> tenant's rows. Asserted bidirectionally — the zero-tenant row
+    /// IS returned (so this is a scoping change, not a blanket "return nothing") and the foreign rows are NOT.
+    /// </summary>
+    [Fact]
+    public async Task Read_UnderEmptyTenantScope_DoesNotReturnOtherTenantsRows()
+    {
+        var inner = new AsyncInMemoryStore<Doc>();
+        var tenantA = Guid.NewGuid();
+        var tenantB = Guid.NewGuid();
+        await inner.CreateAsync(new[]
+        {
+            new Doc { Guid = Guid.NewGuid(), TenantGuid = Guid.Empty, Name = "zero-tenant" },
+            new Doc { Guid = Guid.NewGuid(), TenantGuid = tenantA, Name = "a" },
+            new Doc { Guid = Guid.NewGuid(), TenantGuid = tenantB, Name = "b" },
+        });
+
+        var ctx = new TenantContext();
+        ctx.SetTenant(Guid.Empty); // HasTenant is true — Guid.Empty is a value, so Strict does not throw
+        var wrapper = Wrap(inner, ctx);
+
+        var results = (await wrapper.ReadAsync(filter: null)).ToList();
+
+        results.Select(d => d.Name).Should().BeEquivalentTo(["zero-tenant"],
+            "a Guid.Empty scope sees Guid.Empty rows and nothing else — it used to see all three");
+        (await wrapper.CountAsync()).Should().Be(1, "CountAsync composes the same tenant filter");
     }
 
     [Fact]
