@@ -10,6 +10,12 @@ Multi-tenancy support for the Birko Framework providing tenant-aware data access
   handlers keep working) on cross-tenant update/delete (only when a
   tenant is set: with no tenant on the context the wrappers deliberately fail open, "admin mode" —
   override the virtual `BelongsToCurrentTenant` for fail-closed semantics)
+- Under `TenantIsolationMode.Strict`, operations needing a tenant when none is in scope throw
+  `TenantScopeRequiredException` (an `InvalidOperationException`, so existing handlers keep working). It is a
+  distinct type so a host can answer **400** "send a tenant" instead of a blanket **500** — a bare
+  `InvalidOperationException` is indistinguishable from any other invalid-state bug, which cost one consumer
+  115 routes' worth of spurious 500s. Distinct from `TenantMismatchException` (403) on purpose: "no tenant in
+  scope" is a request problem, "the row is another tenant's" is an authorization one
 - ASP.NET Core middleware for tenant resolution (header, query string, route, custom delegate)
 - DI extensions for registering tenant-aware repositories
 - Filter composition combining base filters with tenant predicates

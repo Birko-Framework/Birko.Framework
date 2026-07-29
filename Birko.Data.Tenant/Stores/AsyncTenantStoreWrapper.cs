@@ -152,14 +152,15 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
     }
 
     /// <summary>
-    /// In <see cref="TenantIsolationMode.Strict"/>, throws when no tenant is in scope. No-op in
-    /// <see cref="TenantIsolationMode.Permissive"/> (preserves the fail-open default).
+    /// In <see cref="TenantIsolationMode.Strict"/>, throws <see cref="TenantScopeRequiredException"/> when no
+    /// tenant is in scope. No-op in <see cref="TenantIsolationMode.Permissive"/> (preserves the fail-open
+    /// default).
     /// </summary>
     protected void EnsureTenantForStrict()
     {
         if (_mode == TenantIsolationMode.Strict && !_tenantContext.HasTenant && !_tenantContext.IsAllTenantsScope)
         {
-            throw new InvalidOperationException(
+            throw new TenantScopeRequiredException("read", typeof(T).Name,
                 "Tenant isolation is Strict but no tenant is in scope. Set a tenant, or wrap the " +
                 "operation in ITenantContext.WithAllTenants(...) for deliberate cross-tenant access.");
         }
@@ -206,7 +207,7 @@ public class AsyncTenantStoreWrapper<TStore, T> : IAsyncStore<T>, IStoreWrapper<
 
             if (_mode == TenantIsolationMode.Strict)
             {
-                throw new InvalidOperationException(
+                throw new TenantScopeRequiredException("create", typeof(T).Name,
                     "Tenant isolation is Strict but no tenant is in scope; refusing to stamp Guid.Empty. " +
                     "Use ITenantContext.WithAllTenants(...) for deliberate cross-tenant writes.");
             }

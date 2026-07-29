@@ -16,10 +16,13 @@ public enum TenantIsolationMode
     /// <summary>
     /// Fail-CLOSED. With no tenant set, every tenant-scoped operation throws instead of silently
     /// operating across all tenants: reads/counts/filter-writes throw
-    /// <see cref="System.InvalidOperationException"/>, item writes throw
-    /// (<see cref="System.UnauthorizedAccessException"/> via the belongs-to-tenant guard), and
-    /// creates throw rather than stamping <c>Guid.Empty</c>. Cross-tenant/admin access must be an
-    /// explicit, deliberate scope — never the accident of an unset context.
+    /// <see cref="Stores.TenantScopeRequiredException"/> (an <see cref="System.InvalidOperationException"/>,
+    /// so existing catches still work — the dedicated type lets a host answer <c>400</c> instead of a
+    /// blanket <c>500</c>), item writes throw <see cref="Stores.TenantMismatchException"/>
+    /// (an <see cref="System.UnauthorizedAccessException"/> via the belongs-to-tenant guard), and
+    /// creates throw <see cref="Stores.TenantScopeRequiredException"/> rather than stamping
+    /// <c>Guid.Empty</c>. Cross-tenant/admin access must be an explicit, deliberate scope — never the
+    /// accident of an unset context.
     /// </summary>
     Strict = 1,
 }

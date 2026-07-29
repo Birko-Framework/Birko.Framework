@@ -19,6 +19,7 @@ Multi-tenancy support for the Birko data layer. Provides tenant context manageme
 
 ### Stores (`Birko.Data.Tenant.Stores`)
 - **TenantStoreWrapper\<TStore, T\>** — Sync `IStore<T>` wrapper. Auto-filters reads by tenant, auto-assigns tenant on create, throws `TenantMismatchException` on cross-tenant update/delete (when a tenant is set — see **Authorization** below for the no-tenant fail-open mode)
+- **TenantScopeRequiredException** — `InvalidOperationException` subclass carrying `Operation` (`read`/`create`) and `EntityType`, thrown by `EnsureTenantForStrict` / `SetTenantGuidIfNeeded` under `TenantIsolationMode.Strict` when no tenant is in scope. Lets a host answer **400 "send a tenant"** instead of the blanket **500** a bare `InvalidOperationException` gets — measured on a consumer (Symbio TASK-271): 115 of 170 parameterless GET routes returned 500 to a header-less call, purely because the type carried no signal. Subclassing keeps every existing `catch (InvalidOperationException)` working. **Distinct from `TenantMismatchException` on purpose**: "no tenant in scope" is a request-shaped problem (400), "the row belongs to another tenant" is authorization-shaped (403) — conflating them sends a caller missing a header hunting for a permission
 - **TenantMismatchException** — `UnauthorizedAccessException` subclass carrying `Operation`, `EntityType`, `ExpectedTenantGuid`, `ActualTenantGuid`. Lets a host report "this row is another tenant's" distinctly from "you lack a permission" — the two used to be indistinguishable, so hosts reported a tenant-scope refusal as a generic 403 authorization failure. Subclassing keeps every existing `catch (UnauthorizedAccessException)` working. **Do not echo the tenant ids to callers** — they are for the server log
 - **TenantBulkStoreWrapper\<TStore, T\>** — Extends TenantStoreWrapper, implements `IBulkStore<T>` with bulk CRUD + ordering/paging
 - **AsyncTenantStoreWrapper\<TStore, T\>** — Async `IAsyncStore<T>` wrapper (same semantics as sync)
@@ -88,6 +89,10 @@ Middleware/
   filter seam — `CurrentTenantGuid` is unchanged, so a nested `WithTenant(...)` used purely for event
   attribution still stamps that tenant.
 - **Filter composition:** ModelByTenant combines base filters with tenant predicate via Expression.AndAlso
+- **Typed refusals:** every tenancy refusal has its own exception type, each subclassing the one hosts already
+  catch, so a host can map it to the right status instead of a generic 500/403 — `TenantScopeRequiredException`
+  (no tenant in scope → 400) and `TenantMismatchException` (wrong tenant → 403). A new tenancy condition gets a
+  new type; never make hosts match on message text
 - **Authorization:** Update/Delete throw `TenantMismatchException` (an `UnauthorizedAccessException`) for cross-tenant access —
   **only when a tenant is set.** With no tenant on the context (`HasTenant == false`) the wrappers
   deliberately FAIL OPEN ("non-tenant/admin mode": reads unfiltered, writes allowed across tenants;
