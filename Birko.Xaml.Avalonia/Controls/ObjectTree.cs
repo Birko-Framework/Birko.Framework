@@ -22,6 +22,14 @@ public class ObjectTree : ContentControl
     public static readonly StyledProperty<string?> JsonProperty =
         AvaloniaProperty.Register<ObjectTree, string?>(nameof(Json));
 
+    public static readonly DirectProperty<ObjectTree, object?> SelectedValueProperty =
+        AvaloniaProperty.RegisterDirect<ObjectTree, object?>(
+            nameof(SelectedValue), o => o.SelectedValue);
+
+    public static readonly DirectProperty<ObjectTree, string?> SelectedPathProperty =
+        AvaloniaProperty.RegisterDirect<ObjectTree, string?>(
+            nameof(SelectedPath), o => o.SelectedPath);
+
     static ObjectTree()
     {
         SourceProperty.Changed.AddClassHandler<ObjectTree>((t, _) => t.Rebuild());
@@ -34,6 +42,32 @@ public class ObjectTree : ContentControl
     /// <summary>A JSON string to parse and display (takes precedence over <see cref="Source"/>).</summary>
     public string? Json { get => GetValue(JsonProperty); set => SetValue(JsonProperty, value); }
 
+    private object? _selectedValue;
+    private string? _selectedPath;
+
+    /// <summary>
+    /// The value behind the selected node — the graph object/JSON node itself, not its rendered row,
+    /// so a host can act on it (copy, serialize, drill in). <c>null</c> when nothing is selected
+    /// <b>and</b> when the selected node's own value is null; pair with <see cref="SelectedPath"/>
+    /// to tell those apart.
+    /// </summary>
+    public object? SelectedValue
+    {
+        get => _selectedValue;
+        private set => SetAndRaise(SelectedValueProperty, ref _selectedValue, value);
+    }
+
+    /// <summary>Dotted path of the selected node (e.g. <c>user.roles[0]</c>), or <c>null</c> when
+    /// nothing is selected. Useful as a label and to disambiguate a null <see cref="SelectedValue"/>.</summary>
+    public string? SelectedPath
+    {
+        get => _selectedPath;
+        private set => SetAndRaise(SelectedPathProperty, ref _selectedPath, value);
+    }
+
+    /// <summary>Raised after <see cref="SelectedValue"/> / <see cref="SelectedPath"/> change.</summary>
+    public event EventHandler? SelectionChanged;
+
     private void Rebuild()
     {
         object? root = !string.IsNullOrWhiteSpace(Json) ? SafeParse(Json!) : Source;
@@ -42,20 +76,46 @@ public class ObjectTree : ContentControl
 
         if (root is null)
         {
-            tree.Items.Add(Leaf(null, null));
+            tree.Items.Add(Leaf(null, null, null));
         }
         else if (IsContainer(root))
         {
             foreach (var (name, value) in Enumerate(root))
-                tree.Items.Add(BuildNode(name, value, 1));
+                tree.Items.Add(BuildNode(name, value, 1, name));
         }
         else
         {
-            tree.Items.Add(Leaf(null, root));
+            tree.Items.Add(Leaf(null, root, null));
         }
 
+        // A rebuild replaces every node, so any previous selection is gone.
+        tree.SelectionChanged += OnTreeSelectionChanged;
+        SetSelection(null, null);
         Content = tree;
     }
+
+    private void OnTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        var node = (sender as TreeView)?.SelectedItem as TreeViewItem;
+        // Tag carries (path, value) for every node; see BuildNode / Leaf.
+        var tag = node?.Tag as NodeRef;
+        SetSelection(tag?.Value, tag?.Path);
+    }
+
+    private void SetSelection(object? value, string? path)
+    {
+        if (Equals(_selectedValue, value) && _selectedPath == path) return;
+        SelectedValue = value;
+        SelectedPath = path;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>What each node carries so a selection can be resolved back to the graph. A record
+    /// rather than the bare value, because a null value must stay distinguishable from "no node".</summary>
+    private sealed record NodeRef(string? Path, object? Value);
+
+    private static string Join(string? parent, string name) =>
+        parent is null ? name : name.StartsWith('[') ? parent + name : parent + "." + name;
 
     private static object? SafeParse(string json)
     {
@@ -63,19 +123,28 @@ public class ObjectTree : ContentControl
         catch { return json; } // not valid JSON → show the raw string as a leaf
     }
 
-    private TreeViewItem BuildNode(string name, object? value, int depth)
+    private TreeViewItem BuildNode(string name, object? value, int depth, string? path)
     {
         if (!IsContainer(value))
-            return Leaf(name, value);
+            return Leaf(name, value, path);
 
-        var item = new TreeViewItem { Header = Row(name, Summary(value), "BTextMutedBrush"), IsExpanded = depth < 2 };
+        var item = new TreeViewItem
+        {
+            Header = Row(name, Summary(value), "BTextMutedBrush"),
+            IsExpanded = depth < 2,
+            Tag = new NodeRef(path, value),
+        };
         foreach (var (childName, childValue) in Enumerate(value!))
-            item.Items.Add(BuildNode(childName, childValue, depth + 1));
+            item.Items.Add(BuildNode(childName, childValue, depth + 1, Join(path, childName)));
         return item;
     }
 
-    private TreeViewItem Leaf(string? name, object? value) =>
-        new() { Header = Row(name, LeafText(value), ValueTokenFor(value)) };
+    private TreeViewItem Leaf(string? name, object? value, string? path) =>
+        new()
+        {
+            Header = Row(name, LeafText(value), ValueTokenFor(value)),
+            Tag = new NodeRef(path, value),
+        };
 
     // ── Header row: "name: value", name secondary, value type-colored ──
     private Control Row(string? name, string valueText, string valueTokenKey)
