@@ -15,7 +15,7 @@ Multi-tenancy support for the Birko data layer. Provides tenant context manageme
 - **Tenant** — Static singleton accessor: `Tenant.Current` (ITenantContext), `Tenant.Id`, `Tenant.Name`, `Tenant.IsSet`, `Tenant.Set()`, `Tenant.Clear()`
 
 ### Filters (`Birko.Data.Tenant.Filters`)
-- **ModelByTenant\<TModel\>** — `IFilter<TModel>` where `TModel : AbstractModel, ITenant`. Combines optional base filter with tenant GUID check via `Expression.AndAlso`
+- **ModelByTenant\<TModel\>** — `IFilter<TModel>` where `TModel : AbstractModel, ITenant`. Combines optional base filter with tenant GUID check via `Expression.AndAlso`. **Contract: only `null` means "no tenant in scope"** and yields the base filter alone; `Guid.Empty` is a tenant *value* and is filtered on like any other id. It used to short-circuit alongside `null`, so a `Guid.Empty` scope read **every** tenant's rows while the store wrapper still refused writes against `Guid.Empty` — reads failed open, writes failed closed. Deliberately does not throw on `Guid.Empty`: the value can come off an `X-Tenant-Id` header, so throwing would be a client-triggerable 500; `EnsureTenantForStrict` is what throws for the genuinely-unset `null` case
 
 ### Stores (`Birko.Data.Tenant.Stores`)
 - **TenantStoreWrapper\<TStore, T\>** — Sync `IStore<T>` wrapper. Auto-filters reads by tenant, auto-assigns tenant on create, throws `TenantMismatchException` on cross-tenant update/delete (when a tenant is set — see **Authorization** below for the no-tenant fail-open mode)

@@ -140,7 +140,7 @@ services.AddTenantAsyncRepository<CustomerRepository, Customer>(
 
 | Filter | Description |
 |--------|-------------|
-| **ModelByTenant\<T\>** | Combines base filter with tenant GUID predicate |
+| **ModelByTenant\<T\>** | Combines base filter with tenant GUID predicate. **Only `null` means "no tenant"** (unfiltered — `Strict` refuses it via the wrapper); `Guid.Empty` is a tenant *value* and is filtered on like any other id |
 
 ### Middleware
 
