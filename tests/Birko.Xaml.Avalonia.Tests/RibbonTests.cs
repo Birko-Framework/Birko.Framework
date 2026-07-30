@@ -989,6 +989,68 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Activating_a_tab_by_keyboard_leaves_focus_on_that_tab()
+    {
+        // Reported by hand: Space on a ribbon tab opened the right groups, but the NEXT Tab restarted from the
+        // top of the window and the groups were unreachable. Rebuild() discards the whole tree, so the focused
+        // control was destroyed and focus fell back to the window root. Asserts the OUTCOME a keyboard user
+        // depends on — focus still inside the ribbon, on the tab that was activated — not that a restore ran.
+        var ribbon = Show(BuildCrowded(), out var window, 900);
+        var tabs = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Home" || t.Text == "Insert"))
+            .ToList();
+        var insert = tabs.First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Insert"));
+
+        insert.Focus(NavigationMethod.Tab).Should().BeTrue("the tab must be keyboard-focusable at all");
+        Dispatcher.UIThread.RunJobs();
+
+        // Space on a focused Button is the exact path the reviewer took. It needs KeyUp as well as KeyDown —
+        // Avalonia's Button presses on Space-down and only CLICKS on Space-up (unlike Enter, which fires on
+        // down). Down alone selected nothing, which is how this test first failed.
+        insert.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Space });
+        insert.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.Space });
+        Dispatcher.UIThread.RunJobs();
+        window.Measure(new Size(900, 400));
+        window.Arrange(new Rect(0, 0, 900, 400));
+        Dispatcher.UIThread.RunJobs();
+
+        ribbon.SelectedIndex.Should().Be(1, "Space must activate the tab in the first place");
+
+        var focused = window.FocusManager?.GetFocusedElement() as Visual;
+        focused.Should().NotBeNull();
+        focused!.GetVisualAncestors().Should().Contain(ribbon,
+            "activating a tab must not throw focus out of the ribbon — the groups it just opened would be unreachable");
+        focused.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+            .Should().Contain("Insert", "and focus belongs on the tab that was activated, so Tab continues from there");
+    }
+
+    [AvaloniaFact]
+    public void A_reserved_but_invisible_scroll_chevron_is_not_in_the_tab_order()
+    {
+        // Reported by hand: Tab landed on a button that could not be seen. The chevrons reserve BOTH slots once
+        // the strip overflows (so showing one cannot reflow the row and let a tab swallow the click), and the
+        // inactive one was Opacity 0 + IsHitTestVisible false — which hides it from the MOUSE only. Same
+        // species as the parked size variants.
+        var ribbon = Show(BuildCrowded(), out _, 420);
+        var left = ChevronByTip(ribbon, "Scroll tabs left");
+
+        IsReserved(left).Should().BeTrue("this test is meaningless unless the left chevron is reserved-but-hidden");
+        IsShown(left).Should().BeFalse("at scroll offset 0 there is nothing to scroll left to");
+
+        var reachable = new List<IInputElement>();
+        IInputElement? cur = ribbon.GetVisualDescendants().OfType<Button>().First(b => b.IsEffectivelyEnabled);
+        for (int i = 0; i < 40 && cur is not null; i++)
+        {
+            reachable.Add(cur);
+            cur = KeyboardNavigationHandler.GetNext(cur, NavigationDirection.Next);
+            if (reachable.Contains(cur!)) break;
+        }
+
+        reachable.Should().NotContain(left,
+            "a keyboard user must not land on an invisible chevron whose activation does nothing");
+    }
+
+    [AvaloniaFact]
     public void Escape_inside_a_collapsed_groups_flyout_closes_it()
     {
         // The case the earlier Escape test missed: a popup is its own visual root, so once focus is INSIDE
