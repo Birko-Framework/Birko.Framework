@@ -295,8 +295,10 @@ index definition, which replaces any existing index of that name.
 
 ### Requirement: View manager name validation and idempotent teardown
 
-The system SHALL, in every backend's `DropAsync`, `ExistsAsync` and (where present)
-`RefreshAsync`, throw `ArgumentException` for a null, empty or whitespace view name, and
+The system SHALL, in every backend's `DropAsync` and `ExistsAsync`, throw `ArgumentException`
+for a null, empty or whitespace view name; of the five `RefreshAsync` implementations only
+`ElasticSearchViewManager`'s validates the name, the SQL, MongoDB, RavenDB and Cosmos DB
+no-ops returning `Task.CompletedTask` without inspecting it. The system
 SHALL throw `InvalidOperationException` with the message "View name is required for
 persistent views." from `EnsureAsync` when a non-`OnTheFly` definition resolves to no name
 (SQL, MongoDB, ElasticSearch, RavenDB). `DropAsync` SHALL treat a missing artifact as
@@ -412,6 +414,12 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 - **When** `TranslateQueryMode` runs
 - **Then** `Birko.Data.SQL.ViewQueryMode.OnTheFly` is produced
 
+#### Scenario: A single-source definition translates to a view that cannot be selected from
+
+- **Given** the minimal definition `From<Order>().Select<Order,string>(o => o.Number, v => v.Number)` with no `Join`/`LeftJoin` calls
+- **When** `SqlViewTranslator.Translate` runs and the resulting view is used
+- **Then** `View.Join` is `null` — joins are only ever added inside the `definition.Joins` loop — so `AbstractConnector.CreateSelectCommand` throws `ArgumentNullException` for `view.Join` on every `QueryAsync`/`QueryFirstAsync` and `ViewSelectSqlBuilder` throws `InvalidOperationException("View must have at least one join definition.")` from `EnsureAsync`; only multi-source definitions are queryable on this backend
+
 ### Requirement: SQL view store execution
 
 The system SHALL execute SQL view queries through the connector, preferring genuine async
@@ -446,6 +454,18 @@ before each operation; and SHALL materialize each row by reading reader columns
 - **Given** a select that yields an object that is not a `TView`
 - **When** the async path runs
 - **Then** the item is skipped by the `item is TView` test; on the synchronous path the same object causes `.Cast<TView>()` to throw `InvalidCastException`
+
+#### Scenario: A non-null filter is resolved against TView's own SQL mapping, not the view's fields
+
+- **Given** a `SqlViewStore<OrderSummary>` built from a portable definition and the filter `v => v.Status == 3`
+- **When** `DataBase.ParseConditionExpression` resolves `Status` against the lambda's parameter type `OrderSummary`
+- **Then** resolution goes through `LoadTable(typeof(OrderSummary))` and then the `ResolveFieldSelectName` view hook, both of which require SQL mapping attributes on `TView`; the definition's `FieldSelector` list is never consulted, so for a plain portable view POCO the condition is left with no name and the query fails with `InvalidOperationException("Condition name cannot be null or empty")`
+
+#### Scenario: Order-by keys are interpolated verbatim while aggregate columns are aliased by function name
+
+- **Given** an aggregate view whose `Sum` of `Order.Total` targets `TView.Total`, queried with `OrderBy<TView>.By(v => v.Total)`
+- **When** the on-the-fly select command is built
+- **Then** `ORDER BY Total ASC` is appended from the order dictionary key unchanged, while the SELECT list emits `SUM(Order.Total) as SUM` — the alias is the `table.Fields` dictionary key, which `SqlViewTranslator` sets to the SQL function name — and plain fields emit `Table.Column`, so neither an aggregate nor a renamed view property matches an emitted column; the persistent-view path instead names aggregate columns by view property (`GetPersistentViewSelectFields`)
 
 ### Requirement: MongoDB pipeline translation
 
@@ -719,6 +739,12 @@ bucket `size` of 10000. Extracted metric values SHALL always be surfaced as `dou
 - **Given** a response parsed with `hasGroupBy == true`, more than one `GroupByFields` entry, and a `group_by` **terms** aggregation
 - **When** `ParseAggregateResponse` runs
 - **Then** the `if (query.GroupByFields.Count == 1)` guard skips key assignment and each row carries only metric values
+
+#### Scenario: Min/Max on a non-numeric field is surfaced as a double and then dropped
+
+- **Given** the aggregate `Min<Order,DateTime>(o => o.Created, v => v.Earliest)` — a shape `ViewDefinitionBuilder` permits — and a `min` aggregation whose value NEST reports as epoch milliseconds
+- **When** `ExtractMetricValues` returns it as a `double?` and `ElasticSearchViewStore.SetPropertyValue` assigns it
+- **Then** `Convert.ChangeType(double, typeof(DateTime))` throws inside `ConvertValue`, which returns `false`, and `TView.Earliest` is left at `default(DateTime)` with no error — the `double?` surface makes date and string `Min`/`Max` unreachable on this backend
 
 ### Requirement: Cosmos DB view store execution
 
@@ -1026,7 +1052,10 @@ unchanged when parsing yields zero.
 ### Requirement: Paged view result container
 
 The system SHALL provide `ViewResult<TView>` as an immutable pair of `Items` and an optional
-`TotalCount`, with a shared `Empty` instance holding no items and a total of `0`.
+`TotalCount`, with a shared `Empty` instance holding no items and a total of `0`. No
+`IViewStore<TView>` member returns it — the query contract returns `IEnumerable<TView>` plus a
+separate `long` count — and no backend in this capability constructs one, so the type is
+unreferenced outside its own declaration.
 
 #### Scenario: Empty singleton
 

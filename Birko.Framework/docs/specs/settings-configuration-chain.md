@@ -137,6 +137,36 @@ The system SHALL exclude `PasswordSettings.Password`, `InfluxDB` `Token`, and `R
 - **When** `GetId()` is called on each
 - **Then** both return the same `"{Location}:{Organization}:{Bucket}"` string
 
+### Requirement: The identity string is the store-cache key, so two configurations it cannot tell apart share one store
+
+The system SHALL key the `StoreLocator.GetStore<TStore, TSettings>` cache on `settings.GetId()` plus
+the store type, and SHALL call `SetSettings` only on the branch that constructs the store — never on
+a cache hit, so the second caller's settings object is discarded. Consequently every field a
+`GetId()` implementation leaves out SHALL be incapable of distinguishing two configurations:
+`CosmosDB.Stores.Settings` leaves out `PartitionKeyPath`, `RequestTimeout` and `AllowBulkExecution`;
+`MongoDB.Stores.Settings` leaves out `AuthDatabase`, `ReplicaSet` and `UseSecure` (all three of which
+`GetConnectionString()` does encode); `RedisSettings` leaves out `RawConnectionString` and
+`KeyPrefix`; `SqlSettings` and all four SQL providers leave out both timeouts and every
+provider-specific field; and `ElasticSearch.Stores.Settings` leaves out `IndexSettings`.
+
+#### Scenario: A second request with equal identity receives the first store, settings unapplied
+
+- **Given** a store already constructed through `StoreLocator.GetStore<TStore, TSettings>` for a settings object whose `GetId()` is `"srv:0:db:u"`
+- **When** `GetStore` is called again for the same store type with a different settings instance whose `GetId()` is also `"srv:0:db:u"`
+- **Then** the cached instance is returned and `SetSettings` is not called, so the store keeps running on the first settings object
+
+#### Scenario: Two Cosmos settings differing only in partition key path are one identity
+
+- **Given** two `CosmosDB.Stores.Settings` identical except `PartitionKeyPath = "/id"` on one and `PartitionKeyPath = "/tenantId"` on the other
+- **When** `GetId()` is called on each
+- **Then** both return the same `"{Location}:{Name}:{UserName}"` string
+
+#### Scenario: A replica-set, TLS Mongo configuration shares an identity with a direct plaintext one
+
+- **Given** two `MongoDB.Stores.Settings` with the same `Location`, `Port`, `Name` and `UserName`, one with `ReplicaSet = "rs0"` and `UseSecure = true` and one with neither
+- **When** `GetId()` is called on each
+- **Then** both return the same `"{Location}:{Port}:{Name}:{UserName}"` string, even though their connection strings differ by `replicaSet=rs0` and `tls=true`
+
 ### Requirement: A settings object copies from another via a virtual LoadFrom(Settings) hook
 
 The system SHALL declare `Settings.LoadFrom(Settings data)` as `virtual`, SHALL make it a no-op when
@@ -664,8 +694,10 @@ constructors, including the parameterless one); `RedisSettings` 6379 with `useSs
 The system SHALL default `PasswordSettings.Password` to `string.Empty`, and SHALL coerce a null
 `password` argument to `string.Empty` in `PasswordSettings`, `SqlSettings`, `SqLiteSettings`,
 `MongoDB.Stores.Settings`, `RavenDB.Stores.Settings`, `CosmosDB.Stores.Settings` and
-`RedisSettings` — while `RemoteSettings`' own parameterized constructor takes a non-nullable
-`password` and assigns it through without a check.
+`RedisSettings` — `RemoteSettings`' own parameterized constructor takes a non-nullable `password`
+and forwards it to the `PasswordSettings` constructor, which applies the same coercion, but it
+assigns `username` straight into `UserName` with no coercion, so that non-nullable property (whose
+field initializer is `null!`) can hold a null.
 
 #### Scenario: A null password argument becomes empty
 
@@ -684,6 +716,12 @@ The system SHALL default `PasswordSettings.Password` to `string.Empty`, and SHAL
 - **Given** `new RedisSettings("srv")`
 - **When** `Name`, `UserName` and `Password` are read
 - **Then** all three are `string.Empty`, which `GetId()` and `GetConnectionString()` both treat as "unset"
+
+#### Scenario: RemoteSettings coerces the password it forwards but not the username
+
+- **Given** `new RemoteSettings("L", "N", null!, null!, 1433)`, whose `username` and `password` parameters are both declared non-nullable
+- **When** `UserName` and `Password` are read
+- **Then** `Password` is `string.Empty`, coerced by the `PasswordSettings` constructor it forwards to, while `UserName` is `null`, assigned straight through into a property annotated non-nullable
 
 ### Requirement: ElasticSearch settings carry per-type index configuration with an unset result window
 

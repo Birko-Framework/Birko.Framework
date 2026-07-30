@@ -286,7 +286,7 @@ bind a parameter.
 #### Scenario: A closure variable holding null becomes IS NULL, not `= NULL`
 
 - **Given** `x => x.ConfigId == configId` where the captured `configId` evaluates to `null`
-- **When** the closure member is evaluated
+- **When** the normalizer has folded that closure member to `Constant(null)` and the constant branch finds a parent whose `Type` is not `In`
 - **Then** `parent.Type` becomes `ConditionType.IsNull`, avoiding a `Col = NULL` predicate that SQL would evaluate as UNKNOWN for every row
 
 #### Scenario: Bare HasValue becomes IS NOT NULL
@@ -415,11 +415,11 @@ A collection operand whose materialised, null-filtered contents are empty SHALL 
 - **When** `InvokeExpression` filters nulls and the materialised array is empty while `parent.Type == In`
 - **Then** `parent.Values` is set to `Array.Empty<object>()` and the clause renders `1 = 0` instead of `Col IS NULL`
 
-#### Scenario: A NULL collection variable becomes IS NULL, not matches-nothing
+#### Scenario: A NULL collection variable also matches nothing
 
 - **Given** `x => ids.Contains(x.Guid)` where `ids` is a captured local whose value is `null`
-- **When** the collection operand — a closure `MemberExpression` — is parsed under the `In` parent condition and `EvaluateExpression` yields `null`
-- **Then** the closure-null branch sets `parent.Type = ConditionType.IsNull` and returns immediately, so the rendered SQL is `Guid IS NULL` rather than the `1 = 0` produced for an empty collection
+- **When** the normalizer has already folded that closure `MemberExpression` to `Constant(null)` at the lambda boundary, so the collection operand reaches the `ConstantExpression` branch under the `In` parent condition and `InvokeExpression` yields `null`
+- **Then** `parent.Values` is set to `Array.Empty<object>()` and the rendered SQL is `1 = 0`, exactly as for an empty collection and as ElasticSearch's `MatchNoneQuery` — the closure `MemberExpression` branch's `IsNull` path is not reached, because every entry point hands `ParseConditionExpression` a lambda and the normalizer folds every evaluatable closure operand before the parser sees it
 
 #### Scenario: Empty inline array literal
 
@@ -671,8 +671,10 @@ backticks with `` ` `` doubled; SQLite and PostgreSQL SHALL keep the default.
 `AbstractConnectorBase.AddWhere` SHALL append ` WHERE ` plus the rendered clause only when both the
 command and the condition sequence are non-null AND the rendered clause is non-empty.
 `LimitOffsetDefinition` SHALL emit ` LIMIT @LIMIT[ OFFSET @OFFSET]` by default and `MSSqlConnector`
-SHALL override it to ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY`; both SHALL emit nothing when
-`limit` is null.
+SHALL override it to `[ OFFSET @OFFSET ROWS] FETCH NEXT @LIMIT ROWS ONLY` — appending the
+` OFFSET @OFFSET ROWS` half only when `offset` is non-null, so a limit-only read renders a bare
+` FETCH NEXT @LIMIT ROWS ONLY`, which T-SQL rejects without a preceding `OFFSET`; both SHALL emit
+nothing when `limit` is null.
 
 #### Scenario: Empty rendered clause appends nothing
 
@@ -691,6 +693,12 @@ SHALL override it to ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY`; both SH
 - **Given** `limit = 10`, `offset = 20` on `MSSqlConnector`
 - **When** `LimitOffsetDefinition` runs
 - **Then** the fragment is ` OFFSET @OFFSET ROWS FETCH NEXT @LIMIT ROWS ONLY` with both parameters bound
+
+#### Scenario: MSSQL limit without offset omits the OFFSET T-SQL requires
+
+- **Given** `limit = 10`, `offset = null` on `MSSqlConnector`
+- **When** `LimitOffsetDefinition` runs
+- **Then** the fragment is ` FETCH NEXT @LIMIT ROWS ONLY` with only `@LIMIT` bound — no ` OFFSET @OFFSET ROWS` precedes it, so the statement is invalid T-SQL
 
 ### Requirement: SQL join condition assembly
 

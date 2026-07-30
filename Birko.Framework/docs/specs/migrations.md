@@ -450,7 +450,11 @@ The system SHALL default `SqlMigrationSettings.MigrationsTable` to `"__Migration
 quoted table name alone when `Schema` is null or empty, and `"{quotedSchema}.{quotedTable}"`
 otherwise. `QuoteIdentifier` SHALL wrap the identifier in ANSI double quotes and double any embedded
 double quote. `SqlMigrationStore` SHALL take its own `quoteOpen`/`quoteClose` for the tracking
-table's column identifiers, both defaulting to `"` .
+table's column identifiers, both defaulting to `"` — and no shipped code path supplies anything else:
+`SqlMigrationRunner` constructs the store as `new SqlMigrationStore(factory, settings)` with both
+quote arguments left at their defaults, and no provider-specific `SqlMigrationSettings` subclass
+overriding the `protected virtual QuoteIdentifier` exists, so the tracking table is ANSI
+double-quoted on every provider regardless of the connector's own quoting.
 
 #### Scenario: Schema-qualified table name
 
@@ -470,6 +474,16 @@ table's column identifiers, both defaulting to `"` .
 - **When** `new SqlMigrationStore(factory, remoteSettings)` is constructed
 - **Then** the whole inherited settings chain is copied via `settings.LoadFrom(remoteSettings)`
   rather than by hand-listing properties
+
+#### Scenario: The tracking table DDL does not vary by provider
+
+- **Given** a `SqlMigrationRunner` built over a `MySQLConnector` (backtick quoting) or an
+  `MSSqlConnector`
+- **When** `Initialize()` provisions the tracking table
+- **Then** the emitted DDL is the same ANSI-double-quoted `CREATE TABLE "__Migrations" ("Version"
+  BIGINT PRIMARY KEY, … "AppliedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)` as on SQLite —
+  neither the connector's `QuoteIdentifier` nor any provider type mapping is consulted, so the
+  statement is only valid on providers that accept ANSI quotes and that `TIMESTAMP` spelling
 
 ### Requirement: SqlScriptMigration executes raw scripts on the runner's connection
 
@@ -634,7 +648,9 @@ when the collection handle is still null.
 ### Requirement: The ElasticSearch migration store refreshes on write and treats a failed search as "nothing applied"
 
 The system SHALL create the migrations index when `Indices.Exists` reports it absent, using
-`ElasticSearchMigrationSettings.NumberOfShards ?? 1` and `NumberOfReplicas ?? 0`, with `Version`
+`ElasticSearchMigrationSettings.NumberOfShards ?? 1` and `NumberOfReplicas ?? 0` (both settings
+default to `1`, so the `?? 0` arm is reached only when a caller explicitly assigns `null` — a
+default-configured migrations index therefore gets **one** replica, not zero), with `Version`
 mapped as a keyword and `Name`/`Description` as text and `CreatedAt`/`AppliedAt` as dates. Index name
 SHALL be `MigrationsIndex` (default `"__migrations"`), prefixed with `"{Settings.Name}_"` when
 `Name` is non-empty, lower-cased. `RecordMigration` SHALL index the document with `Refresh.True` and

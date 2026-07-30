@@ -232,7 +232,10 @@ decorators, which returns `_innerStore as TInner` (null when the cast fails).
 
 The system SHALL throw `ArgumentNullException` from a decorator's constructor when the inner store is null,
 and likewise when a required context (`IAuditContext` for the Audit decorators, `IDateTimeProvider` for the
-Timestamp and SoftDelete decorators) is null.
+Timestamp and SoftDelete decorators) is null. Because `StoreWrapperBuilder` constructs every decorator through
+`Activator.CreateInstance`, that `ArgumentNullException` is observable as such only on direct construction: a
+caller of `Build` receives it wrapped in a `TargetInvocationException`, so the parameter name is not on the
+top-level exception.
 
 #### Scenario: Null inner store
 
@@ -257,6 +260,12 @@ Timestamp and SoftDelete decorators) is null.
 - **Given** a call to `new SluggableStoreWrapper<IStore<T>, T>(inner)` or `new DefaultStoreWrapper<IBulkStore<T>, T>(inner)`
 - **When** the constructor runs
 - **Then** only the inner store is validated — these decorators have no second constructor parameter
+
+#### Scenario: The same validation reached through the builder
+
+- **Given** `T` implements `ITimestamped` and `StoreWrapperBuilder.Build<T>(null)` is called
+- **When** `Wrap` invokes `Activator.CreateInstance` for `AsyncTimestampBulkStoreWrapper<IAsyncBulkStore<T>, T>` with the null store as the first constructor argument
+- **Then** the constructor's `ArgumentNullException` naming `innerStore` is raised but reaches the caller of `Build` as the `InnerException` of a `TargetInvocationException` — a `catch (ArgumentNullException)` around `Build` does not match
 
 ### Requirement: Timestamp stamping on single-entity writes
 

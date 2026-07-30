@@ -60,7 +60,10 @@ optional filter, optional `OrderBy<T>`, optional limit and optional offset, plus
 - **Given** a `DataBaseBulkStore<DB,T>` with a non-null `Connector`
 - **When** `Read(filter, orderBy, limit, offset)` is called
 - **Then** `ReadCore` calls `Connector.Select(typeof(T), filter as LambdaExpression,
-  orderBy?.ToDictionary(), limit, offset)` and returns `.OfType<T>()` of the result
+  orderBy?.ToDictionary(), limit, offset)` and returns `.OfType<T>()` of the result — unmaterialised:
+  `Select` is an iterator method, so no query has run when `Read` returns, and the connection and
+  `DbDataReader` are opened inside `RunReaderCommand` on the thread that later enumerates the sequence
+  and closed only when that enumerator is disposed
 
 #### Scenario: SQL bulk read with no connector returns an empty sequence
 
@@ -93,7 +96,11 @@ inherited single-result `Read(filter)` from C# member lookup on bulk-store types
 - **Given** an `AsyncDataBaseBulkStore<DB,T>`
 - **When** `ReadFirstAsync(filter)` is called
 - **Then** it invokes `base.ReadAsync(filter, ct)` on `AsyncDataBaseStore<DB,T>`, whose single-result
-  core selects with `limit = 1` and returns `FirstOrDefault()`
+  `ReadCoreAsync` passes `limit = 1` **only** on the `AsyncConnector` branch; with a sync-only connector
+  it calls `Connector.Select(typeof(T), filter as LambdaExpression)` with no limit, no order and no
+  offset and returns the first item that is a `T`. The store's own comment on `ReadFirstAsync` states
+  "LIMIT 1 via ReadCoreAsync" for both paths. The synchronous `DataBaseBulkStore<DB,T>.ReadFirst` does
+  select with `limit = 1` and `FirstOrDefault()`
 
 #### Scenario: Interface default implementation casts through IReadStore
 
@@ -314,7 +321,10 @@ connector delete against the translated filter without reading anything.
 
 The system SHALL, on the SQL native filter paths, emit no WHERE clause when
 `DataBase.ParseConditionExpression` yields an empty condition set — so such an update or delete SHALL
-affect every row of the table.
+affect every row of the table. Three distinct inputs yield that empty set: the constant-true predicate
+(an explicit early return), a null filter (the whole method body is skipped), and any predicate shape
+the parser has no branch for (the method's final statement is an unconditional
+`return Array.Empty<Condition>()`). The three are therefore indistinguishable at this boundary.
 
 #### Scenario: A constant-true predicate deletes the whole table
 
@@ -329,6 +339,24 @@ affect every row of the table.
 - **When** `Delete(x => false)` is called
 - **Then** `ParseConditionExpression` returns a single condition rendering `1 = 0`, so the statement
   matches no rows
+
+#### Scenario: A predicate the parser cannot translate also affects every row
+
+- **Given** a `DataBaseBulkStore<DB,T>` and a predicate whose body is a shape `ParseConditionExpression`
+  has no branch for — for example the `InvocationExpression` of `x => pred(x)` over a captured
+  `Func<T,bool>`, which `ExpressionNormalizer` cannot funcletize because it references the parameter
+- **When** `Delete(filter)` or `Update(filter, PropertyUpdate<T>)` is called
+- **Then** the parse falls through to the final `return Array.Empty<Condition>()`, `AddWhere` appends
+  nothing, and the statement is issued as `DELETE FROM <table>` / `UPDATE <table> SET …` with no WHERE —
+  every row is deleted or updated, with no exception and no signal that the predicate was dropped
+
+#### Scenario: A null filter reaches the same fall-through
+
+- **Given** a SQL bulk store called as `Delete(null!)` / `Update(null!, updates)` — the `filter`
+  parameter is declared non-nullable and is not checked
+- **When** the filter is translated
+- **Then** `filter as LambdaExpression` is null, `ParseConditionExpression` skips its entire body and
+  returns `Array.Empty<Condition>()`, and the emitted statement carries no WHERE — every row is affected
 
 ### Requirement: Bulk collection operations initialise lazily and default to per-item loops
 
@@ -367,7 +395,9 @@ operation.
 
 The system SHALL, in `AsyncDataBaseBulkStore<DB,T>.ReadCoreAsync`, return an empty sequence when
 `Connector` is null, stream through `AsyncConnector.SelectAsync` when an async connector is present,
-and otherwise offload the synchronous `Connector.Select` onto `Task.Run` with the cancellation token.
+and otherwise wrap the synchronous `Connector.Select` in `Task.Run` with the cancellation token — which,
+because `Select` is an iterator method, offloads only the construction of the enumerator: the query
+itself still runs on whichever thread enumerates the returned sequence.
 
 #### Scenario: Async connector results are streamed and type-filtered
 
@@ -376,12 +406,15 @@ and otherwise offload the synchronous `Connector.Select` onto `Task.Run` with th
 - **Then** `AsyncConnector.SelectAsync(typeof(T), filter as LambdaExpression, orderBy?.ToDictionary(),
   limit, offset, ct)` is enumerated with `await foreach` and only items that are `T` are collected
 
-#### Scenario: Sync-only connector is offloaded
+#### Scenario: Sync-only connector is wrapped in Task.Run
 
 - **Given** an `AsyncDataBaseBulkStore<DB,T>` with a non-null `Connector` and a null `AsyncConnector`
 - **When** `ReadAsync(filter, …, ct)` is called
 - **Then** `Task.Run(() => Connector!.Select(…), ct)` is awaited, a null result maps to
-  `Enumerable.Empty<T>()`, and a non-null result is returned as `results.OfType<T>()`
+  `Enumerable.Empty<T>()`, and a non-null result is returned as `results.OfType<T>()` — still
+  unenumerated, so unlike the `AsyncConnector` branch (which materialises a `List<T>` inside the
+  method) this path returns before any row is read, and the connection is opened, `ct` unobserved, on
+  the caller's thread when the awaited result is enumerated
 
 #### Scenario: No connector at all yields an empty result
 
