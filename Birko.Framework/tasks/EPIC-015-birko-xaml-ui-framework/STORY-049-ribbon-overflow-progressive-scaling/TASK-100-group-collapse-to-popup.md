@@ -129,6 +129,35 @@ the right and the bottom; it is now a popover in the top layer. Note the reviewe
 **Playground**, and I initially "fixed" it in Avalonia, where native popups cannot be clipped at all —
 that change is reverted._
 
+## Review log
+
+- **2026-07-29/30 — the keyboard-only pass found three defects, and the first was hiding the other two.**
+  The reviewer reported Tab appearing stuck on the page's theme buttons. It was not stuck: the **Avalonia
+  skin has no focus visual on `Button` at all** (only `Inputs.axaml` styles `:focus`, and `--b-focus-ring`
+  was never emitted to AXAML), so focus was moving invisibly across the whole ribbon. Reachable but
+  invisible is a WCAG 2.4.7 failure in its own right; the ribbon's buttons now draw a focus ring with
+  **constant border thickness** (only the brush changes, so focus cannot reflow the scaled row) and a
+  hardcoded fallback colour, because the test proved the ring vanished entirely when no theme was merged.
+  With focus visible, two real navigation defects appeared immediately:
+  - **Activating a tab by keyboard threw focus out of the ribbon.** `Rebuild()` discards the whole tree, so
+    the focused tab button was destroyed and focus fell back to the window root — the next Tab restarted
+    from the top of the page and the groups that tab had just opened were unreachable. Focus is now
+    restored to the newly selected tab.
+  - **Tab landed on an invisible chevron.** The reserved-but-inactive scroll chevron was hidden with
+    `Opacity = 0` + `IsHitTestVisible = false`, which hides a control from the *mouse* only. This is the
+    **third instance of one mistake in this story** — off-screen, transparent and non-hit-testable all
+    leave a control in the tab order, and only `IsEnabled = false` removes it (the parked size variants and
+    the flyout alternatives had the same bug).
+
+  All three are mutation-checked. Note that the *automated* keyboard test added earlier
+  (`Tab_walks_through_the_ribbon_and_skips_the_parked_variants`) was green throughout: it asserted the
+  traversal order, which was always correct, while the thing that made the ribbon unusable by keyboard was
+  that you could not see where you were and that activating a tab lost your place. Same species as the rest
+  of this story — the mechanism was tested, the outcome was not.
+
+  Scoping note: the focus ring is on the **ribbon's** buttons only. `Buttons.axaml` having no focus visual
+  affects every button in every consumer, which is a broader visual change deserving its own task.
+
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-100` — leave empty until then._
