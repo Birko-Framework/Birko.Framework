@@ -155,6 +155,25 @@ that change is reverted._
   that you could not see where you were and that activating a tab lost your place. Same species as the rest
   of this story — the mechanism was tested, the outcome was not.
 
+- **2026-07-30 — no ribbon button had an accessible name at all, which was the real defect here.** With the
+  chunk button announcing correctly, the reviewer listened to the *commands* and heard a generic control type
+  with no command name — no way to tell which command focus was on. Avalonia derives a button's name from its
+  content only when that content is a **string**, and a ribbon item's content is a panel holding an icon and
+  a label, so the peer fell back to `Content.ToString()`: assistive tech was handed
+  **`"Avalonia.Controls.StackPanel"`** at `Medium`/`Large` and the bare glyph **`"●"`** at `Small`. An unnamed
+  command is unusable, not merely under-described — so the two rounds of chunk-button announcement work above
+  were polish on top of a broken foundation.
+
+  Every focusable button in the ribbon is now named through one helper (items in all four variants, tab
+  buttons, collapse chevron, pin, hamburger, and the tab scroll chevrons, whose `◂`/`▸` announced as nothing
+  useful either), and each decorative glyph is marked `AccessibilityView.Raw` so an emoji is not read out
+  beside the name it decorates.
+
+  **The test for this was vacuous when first written, in a way worth remembering:** it asked for a *non-empty*
+  name, which `Content.ToString()` satisfies, so it passed with the fix removed. It now requires the name to
+  be one of the model's own strings, and carries a non-vacuity guard because an over-strict reachability
+  filter made "no unnamed buttons" trivially true of an empty set. Mutation-checked in all four variants.
+
 - **2026-07-30 — Narrator said "button" and the group's name, and nothing about the state.** The
   `IExpandCollapseProvider` peer was correct all along (the Win32 bridge does expose the pattern — checked
   rather than assumed); it simply was not *spoken*. Narrator voices expand/collapse state for the control
