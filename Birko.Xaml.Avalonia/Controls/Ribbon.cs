@@ -814,9 +814,18 @@ public class Ribbon : ContentControl
             && TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Visual focused
             && (ReferenceEquals(focused, content) || focused.GetVisualAncestors().Contains(content));
 
+        var chunk = _openChunkButton; // cleared by the flyout's Closed handler, so capture it first
         flyout.Hide();
-        if (focusWasInFlyout && _groupsPanel is { } panel)
-            NavigableButtons(panel).FirstOrDefault()?.Focus(NavigationMethod.Directional);
+        if (!focusWasInFlyout) return;
+
+        // Into the group that was just promoted — NOT the first button in the row. Focusing the row's start
+        // teleported the user from Export's flyout to Clipboard's first command, losing their place in a
+        // control whose entire purpose is that commands stay where you remember them.
+        var scope = chunk is not null && _groupsPanel is RibbonGroupsPanel scaling
+            ? scaling.AppliedFor(chunk)
+            : null;
+        var landing = scope ?? _groupsPanel;
+        if (landing is not null) NavigableButtons(landing).FirstOrDefault()?.Focus(NavigationMethod.Directional);
     }
 
     /// <summary>Whether keyboard focus is currently on this ribbon or inside it.</summary>

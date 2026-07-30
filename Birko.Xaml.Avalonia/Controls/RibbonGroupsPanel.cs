@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Birko.Xaml.Core.Ribbon;
 
 namespace Birko.Xaml.Avalonia.Controls;
@@ -185,6 +186,32 @@ internal sealed class RibbonGroupsPanel : Panel
             x += picked.DesiredSize.Width;
         }
         return finalSize;
+    }
+
+    /// <summary>
+    /// The control currently on display for the group whose chunk button is <paramref name="chunk"/> — i.e.
+    /// "what took the place of this collapsed group". Null if the control belongs to no group here.
+    /// </summary>
+    /// <remarks>
+    /// Exists so that closing a promoted group's flyout can put focus back into <b>that</b> group rather than
+    /// wherever the row happens to start. The panel is the only thing that knows which control stands for
+    /// which group at the current width.
+    /// </remarks>
+    internal Control? AppliedFor(Control chunk)
+    {
+        // CONTAINMENT, not identity: a group's per-variant control is a Border wrapping the group's content,
+        // so the chunk Button is a descendant of it rather than the control itself. Comparing references
+        // directly matched nothing and silently fell back to the start of the row.
+        var ancestors = new List<Visual>(chunk.GetVisualAncestors());
+        bool Holds(Control? candidate) =>
+            candidate is not null && (ReferenceEquals(candidate, chunk) || ancestors.Contains(candidate));
+
+        for (int i = 0; i < _groups.Count && i < _chosen.Length; i++)
+        {
+            _groups[i].Controls.TryGetValue(RibbonGroupSize.Popup, out var popup);
+            if (Holds(_groups[i].CompactPopup) || Holds(popup)) return Picked(i);
+        }
+        return null;
     }
 
     /// <summary>The control actually shown for a group — the compact chunk at the row's extreme.</summary>
