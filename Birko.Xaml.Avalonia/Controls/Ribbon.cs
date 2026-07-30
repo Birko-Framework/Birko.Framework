@@ -148,6 +148,7 @@ public class Ribbon : ContentControl
                 if (IsPinned) IsCollapsed = false;
                 else RevealTemporarily();
             };
+            AddFocusRing(tabButton);
             tabButtons.Children.Add(tabButton);
         }
 
@@ -161,6 +162,7 @@ public class Ribbon : ContentControl
         };
         chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
         chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
+        AddFocusRing(chevron);
 
         // The tab strip scrolls when the tabs overflow (Office Web / Fluent do this; the ribbon *body*
         // deliberately does not — see TASK-099). The collapse chevron lives outside the scroller so it
@@ -177,6 +179,7 @@ public class Ribbon : ContentControl
         };
         pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
         pin.Click += (_, _) => IsPinned = !IsPinned;
+        AddFocusRing(pin);
 
         var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
         Grid.SetColumn(tabScroller, 0);
@@ -659,6 +662,39 @@ public class Ribbon : ContentControl
     }
 
     /// <summary>
+    /// Give a ribbon button a visible focus indicator.
+    /// </summary>
+    /// <remarks>
+    /// The Avalonia skin has no focus visual on <c>Button</c> at all — only <c>Inputs.axaml</c> styles
+    /// <c>:focus</c> — so keyboard focus was invisible on every ribbon command. "Keyboard reachable" is
+    /// worth nothing if the user cannot see where they are (WCAG 2.4.7), and it is what made a keyboard pass
+    /// look like Tab was stuck. The web side has had <c>--b-focus-ring</c> on its tabs and items throughout.
+    /// <para>
+    /// The border thickness is constant and only the BRUSH changes, so gaining focus cannot reflow the row —
+    /// a focus ring that shifts layout would be its own bug, and this row is measured for scaling.
+    /// </para>
+    /// </remarks>
+    /// <summary>Last-resort focus colour, for when no theme is merged. Matches the light theme's primary.</summary>
+    private static readonly IBrush FocusRingFallback = new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB));
+
+    private static void AddFocusRing(Button button)
+    {
+        button.BorderThickness = new Thickness(2);
+        button.BorderBrush = Brushes.Transparent;
+
+        button.GotFocus += (_, _) =>
+        {
+            // Token first, but NEVER nothing: a focus indicator that disappears because a theme did not load
+            // is an accessibility failure dressed up as a styling detail. Caught by a test running without
+            // the Birko theme merged, where the resource lookup yields null.
+            button.BorderBrush = button.TryFindResource("BColorPrimaryBrush", out var brush) && brush is IBrush b
+                ? b
+                : FocusRingFallback;
+        };
+        button.LostFocus += (_, _) => button.BorderBrush = Brushes.Transparent;
+    }
+
+    /// <summary>
     /// A reserved-but-inactive chevron keeps its box so the row never reflows; only its opacity and
     /// hit-testing change. <see cref="Visual.IsVisible"/> would collapse the box.
     /// </summary>
@@ -775,6 +811,7 @@ public class Ribbon : ContentControl
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextBrush"));
         button.Click += (_, _) => { item.Run?.Invoke(); onInvoke?.Invoke(); };
+        AddFocusRing(button);
 
         var icon = new TextBlock { Text = item.Icon ?? "•" };
         icon.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable(
@@ -868,6 +905,7 @@ public class Ribbon : ContentControl
         // screen reader would announce "button" and nothing more; RibbonChunkButton's peer adds the
         // collapsed/expandable state alongside it.
         global::Avalonia.Automation.AutomationProperties.SetName(button, group.Label);
+        AddFocusRing(button);
 
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office
         // closes a collapsed group's flyout as soon as a command runs.
