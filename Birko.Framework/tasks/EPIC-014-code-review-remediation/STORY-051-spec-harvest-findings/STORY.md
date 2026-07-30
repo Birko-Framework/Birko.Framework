@@ -5,15 +5,15 @@ status: todo
 created: 2026-07-30
 source: FINDINGS.md
 severity: mixed
-finding-count: 749
-finding-ids: SH-H001 … SH-H057, SH-M001 … SH-M365, SH-L001 … SH-L327
+finding-count: 824
+finding-ids: SH-H001 … SH-H057, SH-M001 … SH-M399, SH-L001 … SH-L368
 ---
 
 # Spec-harvest findings
 
 ## Progress
 
-**0 / 749 closed.** 15 of the 57 high findings are hand-verified (13 CONFIRMED, 2 of those with corrected
+**0 / 824 closed.** 15 of the 57 high findings are hand-verified (13 CONFIRMED, 2 of those with corrected
 scope, plus 1 CONFIRMED-NARROWER on a wrong trigger); the rest are unverified harvester claims. Per-finding
 detail — including the verdicts — is in [`FINDINGS.md`](FINDINGS.md).
 
@@ -31,7 +31,7 @@ story is the queue for changing it. That is a different provenance from STORY-02
 
 ## Scope
 
-`FINDINGS.md` holds all 749 with file:line and reasoning, grouped by severity then area. Severity is by
+`FINDINGS.md` holds all 824 with file:line and reasoning, grouped by severity then area. Severity is by
 blast radius: **high** = silent data loss, cross-tenant leakage, auth bypass, a destructive op on the wrong
 rows, or a predicate degrading to match-all on a write path.
 
@@ -61,8 +61,11 @@ Exact IDs are in `FINDINGS.md`; the table names them by defect because IDs are a
 
 Not to be mistaken for a complete audit:
 
-- **3 areas are absent**: `serialization`, `validation-and-rules`, `llm-provider-and-agents` were only ever
-  swept under an 8-per-area cap. Their true counts are unknown and their capped lists are excluded.
+- **1 area is absent**: `validation-and-rules`. Its uncapped sweep failed the structured-output schema five
+  times running — an over-tight per-item bound of mine, not a code problem — so only an 8-item capped list
+  ever existed for it, and that list is excluded. Re-run with relaxed bounds is outstanding.
+- `serialization` (24) and `llm-provider-and-agents` (51) were swept uncapped later than the rest and are
+  included. Neither produced a single **high** finding, so the high table below is unaffected by them.
 - **3 areas predate severity rating** and so appear in no severity section: `core-model-contracts` (4),
   `store-lazy-initialization` (6), `unit-of-work-and-transactions` (6).
 - **42 of the 57 highs are unverified.** Of the 15 checked, 3 needed their scope corrected and 1 had the
@@ -73,6 +76,6 @@ Not to be mistaken for a complete audit:
 
 - [ ] The 42 unverified high findings are each confirmed, narrowed, or refuted against the code
 - [ ] Every CONFIRMED high is fixed with a regression test, or explicitly waived with a reason
-- [ ] The 3 absent areas are swept uncapped and their findings folded in
+- [ ] `validation-and-rules` is swept uncapped and its findings folded in
 - [ ] Any finding whose fix changes behaviour triggers a `/specs regen` of its area, and the resulting spec
       diff is reviewed — the specs currently document the defective behaviour as shipped

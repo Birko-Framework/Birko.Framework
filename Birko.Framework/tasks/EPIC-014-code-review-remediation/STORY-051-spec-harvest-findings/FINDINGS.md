@@ -3,7 +3,7 @@
 Per-finding detail for **STORY-051**. Produced by the `/specs` harvest of the 25 cross-cutting
 areas in `docs/specs/.map.yml`, at code HEAD `f3ac675`.
 
-**57 high · 365 medium · 327 low = 749 findings** across 19 areas.
+**57 high · 399 medium · 368 low = 824 findings** across 21 areas.
 
 ## How to read this
 
@@ -17,9 +17,10 @@ Findings are **harvester claims, not confirmed defects**, except where a `Verdic
 
 ## Coverage gaps — do not read this as exhaustive
 
-- **3 of 25 areas are missing entirely**: `serialization`, `validation-and-rules` and
-  `llm-provider-and-agents` were swept only under an 8-item-per-area cap, so their real finding
-  counts are unknown. Their capped lists are NOT included below.
+- **1 of 25 areas is missing**: `validation-and-rules`. Its uncapped sweep failed the output
+  schema five times running (an over-tight per-item length bound of mine, not a code problem), so
+  only an 8-item capped list ever existed for it and that list is NOT included below. A re-run with
+  relaxed bounds is outstanding.
 - **3 areas were never capped** and are complete, but predate the severity rating, so they carry no
   high/medium/low split: `core-model-contracts` (4), `store-lazy-initialization` (6),
   `unit-of-work-and-transactions` (6).
@@ -1363,201 +1364,323 @@ The recursion covers only Lambda/Parameter/Member/MethodCall/Unary/Binary/Condit
 
 `_expressionCache` is a static ConcurrentDictionary<string, Func<object>> keyed by `expr.ToString()`, never trimmed, so long-lived processes accumulate one entry (plus a compiled delegate and its DynamicMethod) per distinct predicate text. Worse, ToString() is not identity: two closures over the same display-class field render identically (`value(C+<>c__DisplayClass0_0).ids`), so a cache hit can return the first closure's captured value. DataBase.cs:37 uses a ConditionalWeakTable keyed by reference specifically to avoid both problems.
 
+### area: llm-provider-and-agents
+
+#### SH-M152 — Streaming fallback re-runs the whole task, re-executing every tool side effect already performed
+
+`../Birko.AI/Agents/Agent.cs:178`
+
+The catch-when wraps the ENTIRE streaming loop, but only iteration 1 streams — iterations 2..N call SendMessageAsync. So any later failure (provider HttpRequestException on iteration 5, or a custom tool throwing) is caught, the conversation is rewound to the pre-streaming snapshot and RunWithHistorySyncAsync re-runs the task from the original prompt. The snapshot restores only the message list; files already written by write_file/edit_file and commands already run by run_command are executed a second time with no record that the first pass happened.
+
+#### SH-M153 — Tool failure counter only matches "Error:", so every exception-path tool failure counts as success
+
+`../Birko.AI/Agents/Agent.cs:338`
+
+errorCount increments only when the result starts with "Error:". Every built-in tool's exception path returns a different prefix — "Error reading file:", "Error writing file:", "Error editing file:", "Error appending to file:", "Error listing files:", "Error searching code:", "Error running command:", "Error getting user input:" — none of which match. A batch where all three tools threw is therefore treated as fully successful, the "All tool executions failed" guard never fires, and the loop burns iterations retrying against silent failures.
+
+#### SH-M154 — A tool_use response with no tool_use blocks appends a user message whose content is an empty array
+
+`../Birko.AI/Agents/Agent.cs:352`
+
+conversation.Add(new Message { Role = "user", Content = toolResults }) runs unconditionally, even when the filtered tool_use loop produced nothing. BuildOpenAiStyleMessages then hits `m.Content is IEnumerable<object> objs && objs.Any()` == false, falls through every branch and emits `{role:"user", content:[]}`. OpenAI-shaped and Anthropic-shaped endpoints both reject an empty content array on a user turn, so the next iteration fails on a message the agent itself fabricated.
+
+#### SH-M155 — Agent constructor unconditionally overwrites the shared provider's MessageCallback
+
+`../Birko.AI/Agents/Agent.cs:22`
+
+`_llmProvider.MessageCallback = messageCallback;` runs with no null check and no save/restore. Providers are created once via LlmProviderFactory and commonly shared across agents: constructing a second Agent over the same provider silently re-points every provider-level retry warning and API-error message at the second agent's callback, and constructing one with messageCallback = null discards the previously configured sink entirely, so retry/error telemetry disappears.
+
+#### SH-M156 — AgentFactory uses a plain Dictionary and hands out live key collections, unlike LlmProviderFactory
+
+`../Birko.AI/Factories/AgentFactory.cs:13`
+
+_factories and _aliases are plain Dictionary instances mutated by Register/RegisterAlias and read by Create/IsRegistered with no synchronization — the exact hazard LlmProviderFactory was deliberately converted to ConcurrentDictionary to remove (CR-L006 comment, LlmProviderFactory.cs:12). A Register racing a Create can corrupt the buckets or spin forever. GetRegisteredAgentTypes()/GetRegisteredAliases() also return the live collections, so enumerating them while another thread registers throws InvalidOperationException.
+
+#### SH-M157 — A JSON-null `error` property turns every valid completion into an error response
+
+`../Birko.AI/Providers/LlmProviderBase.cs:397`
+
+`result.TryGetProperty("error", out var error)` returns true for `"error": null` (the property exists), then `error.TryGetProperty("message", ...)` throws InvalidOperationException because the element is Null, not Object. The outer catch converts the whole thing into LlmResponse.Error("Error parsing OpenAI-style response: …"). Any OpenAI-compatible gateway that always includes `"error": null` alongside a good `choices` array has 100% of its responses discarded. ExtractErrorFromResponseBody guards the same probe with a ValueKind check; this path does not.
+
+#### SH-M158 — `"tool_calls": null` throws out of ParseOpenAiStyleResponse and discards the completion
+
+`../Birko.AI/Providers/LlmProviderBase.cs:411`
+
+`toolCalls.GetArrayLength()` requires ValueKind == Array; providers that emit `"tool_calls": null` on plain text turns make TryGetProperty succeed and GetArrayLength throw InvalidOperationException. The outer catch turns a perfectly good text answer into StopReason "error", which the agent reports as "LLM request failed" and stops on. Every other property probe in this method is shape-guarded except this one.
+
+#### SH-M159 — Unguarded usage GetInt32 discards an otherwise valid response when a token count is null or fractional
+
+`../Birko.AI/Providers/LlmProviderBase.cs:439`
+
+`pt.GetInt32()` / `ct.GetInt32()` are only guarded for property presence, not ValueKind. `"usage": {"prompt_tokens": null}` throws InvalidOperationException and a fractional count throws FormatException; either way the outer catch replaces the already-parsed content and tool calls with LlmResponse.Error. Telemetry that could not be parsed destroys the payload the caller actually needed.
+
+#### SH-M160 — Sync parser ignores finish_reason, so a truncated or filtered completion is reported as "end_turn"
+
+`../Birko.AI/Providers/LlmProviderBase.cs:430`
+
+ParseOpenAiStyleResponse derives StopReason purely from the presence of tool_calls; `choices[0].finish_reason` is never read (grep confirms the only finish_reason read is line 643, in the streaming parser). A response cut off by max_tokens (`finish_reason: "length"`) or blocked (`content_filter`) therefore arrives as "end_turn", the agent emits it as assistant_final and stops as if the task completed. The streaming parser surfaces the raw finish_reason, so the two paths disagree on the same server response.
+
+#### SH-M161 — Streaming forces StopReason "tool_use" even when finish_reason is "length", executing truncated tool arguments
+
+`../Birko.AI/Providers/LlmProviderBase.cs:713`
+
+`if (toolCalls.Count > 0) stopReason = "tool_use";` is checked before finishReason, so a stream truncated mid-arguments still reports a tool call. The accumulated fragment fails to deserialize and becomes `Input = {"_raw": "…"}` (line 700), and the agent executes the tool with that dictionary. Tools with all-optional inputs then run on defaults — list_files with no `directory` lists the workspace root and returns a normal listing — so a corrupted, truncated tool call is reported to the model as a successful execution.
+
+#### SH-M162 — Unguarded usage GetInt32 inside the streaming enumerator throws mid-stream
+
+`../Birko.AI/Providers/LlmProviderBase.cs:632`
+
+The try/catch at line 625 guards only JsonSerializer.Deserialize; `pt.GetInt32()` at 632-633 sits outside it. A usage chunk carrying a null or fractional token count throws InvalidOperationException/FormatException out of the async enumerator, which surfaces in Agent's `await foreach` (Agent.cs:219). With StreamingFallbackToSync on (the default) that triggers the full re-run at Agent.cs:178 — a second billed request plus repeated tool side effects, all because a usage field had an unexpected shape.
+
+#### SH-M163 — ParseOpenAiStreamChunks throws KeyNotFoundException on a chunk whose choice has no `delta`
+
+`../Birko.AI/Providers/LlmProviderBase.cs:595`  ·  _restates a first-pass finding_
+
+`choices[0].GetProperty("delta")` is outside the try/catch (which guards only deserialization), so a final usage/finish-only chunk — a shape the sibling ParseOpenAiStreamChunksWithToolCapture explicitly guards with TryGetProperty at line 646 — throws out of the async enumerator mid-stream, aborting the response after partial text was already yielded to the caller.
+
+#### SH-M164 — SendStreamingWithRetryAsync never disposes the HttpRequestMessage it builds per attempt
+
+`../Birko.AI/Providers/LlmProviderBase.cs:473`
+
+`var request = requestFactory();` with no `using`, whereas SendWithRetryAsync at line 61 uses `using var request`. Every attempt — up to MaxRetries + 1 per streaming call — leaks the request and its HttpContent (the serialized prompt body, which for a long conversation is large) until GC; the terminal non-retryable and exhausted-retry paths dispose the response but never the request. Same helper family, opposite disposal discipline.
+
+#### SH-M165 — BuildOpenAiStyleMessages drops all but the first text block on an assistant tool_use turn
+
+`../Birko.AI/Providers/LlmProviderBase.cs:238`  ·  _restates a first-pass finding_
+
+In the tool_calls branch only textBlocks[0].Text is carried into `content`. An assistant turn whose content is [text "plan…", text "note…", tool_use] silently loses "note…" when replayed, so part of the model's own reasoning disappears from the history on every subsequent turn — while the non-tool branch at line 259 newline-joins all text blocks.
+
+#### SH-M166 — BuildOpenAiStyleMessages silently drops a whole message when an object-list's items lack tool_use_id/content
+
+`../Birko.AI/Providers/LlmProviderBase.cs:281`  ·  _restates a first-pass finding_
+
+Once the first element of an IEnumerable<object> content exposes a `type` property the branch is entered and ends with `continue`. If no element carries BOTH tool_use_id and content (e.g. results supplied as Dictionary<string,object> instead of anonymous objects, where GetProperty returns null), nothing is appended and the message vanishes from the request — leaving the preceding assistant tool_use unanswered, which providers reject.
+
+#### SH-M167 — search_code ignores Options.AllowedExternalPaths, unlike every other file tool
+
+`../Birko.AI/Tools/SearchCodeTool.cs:41`  ·  _restates a first-pass finding_
+
+It calls the two-argument PathHelper.IsPathSafe(targetDir, workingDirectory) while read/write/edit/append/list all pass Options?.AllowedExternalPaths. An agent explicitly granted an external path can read and even write files there but cannot search them, and the error text ("Directory must be in {workingDirectory}") contradicts the granted configuration.
+
+#### SH-M168 — search_code compiles a model-supplied Regex with no match timeout and never checks the cancellation token
+
+`../Birko.AI/Tools/SearchCodeTool.cs:52`
+
+`new Regex(query, …)` is constructed without a matchTimeout, and rx.IsMatch is then applied to every line of every file (lines 64-75) with no cancellationToken check anywhere in the tool. A catastrophically backtracking pattern the model invented (e.g. `(a+)+$` against a long line) pins a CPU indefinitely, and because the token is ignored neither the agent's cancellation nor the caller's can stop it — the whole RunAsync hangs.
+
+#### SH-M169 — run_command reports caller cancellation as "Error: Process timed out" and never inspects the exit code
+
+`../Birko.AI/Tools/RunCommandTool.cs:65`  ·  _restates a first-pass finding_
+
+The linked CTS conflates the caller's cancellation with the timeout, so a cancelled agent run yields a misleading timeout string and the OperationCanceledException is swallowed instead of propagating. Separately (line 74) the exit code is never read: a command failing with empty stderr and empty stdout returns the empty string, which does not start with "Error:", so the agent's failure counter is not incremented and the model is told nothing went wrong.
+
+#### SH-M170 — ask_user reports cancellation as a prompt timeout and leaves the prompt task unobserved
+
+`../Birko.AI/Tools/AskUserTool.cs:53`  ·  _restates a first-pass finding_
+
+Task.Delay is created with the cancellationToken, so on cancellation the delay task wins the WhenAny race and the code returns "Error: Prompt timed out after N seconds." instead of surfacing cancellation. The abandoned promptTask is never awaited, so a later fault on it becomes an unobserved task exception.
+
+#### SH-M171 — AgentOptions.Merge resets scalar settings to the other instance's defaults
+
+`../Birko.AI.Contracts/AgentOptions.cs:101`  ·  _restates a first-pass finding_
+
+Reference/collection fields are guarded (copy only if non-empty/non-null) but every value-typed field is copied unconditionally. Merging a partially populated AgentOptions (e.g. one that only sets WorkingDirectory) silently resets MaxIterations to 10, Verbose to true, Interactive to true and PromptTimeout to 300 on the target — the opposite of the merge semantics the guarded fields imply.
+
 ### area: migrations
 
-#### SH-M152 — SQL transactional runner indexes past the end of the list when Commit() throws
+#### SH-M172 — SQL transactional runner indexes past the end of the list when Commit() throws
 
 `../Birko.Data.Migrations.SQL/SqlMigrationRunner.cs:113`  ·  _restates a first-pass finding_
 
 transaction.Commit() (line 99) is inside the try. If it throws, executed.Count == migrations.Count, so `migrations[executed.Count]` raises ArgumentOutOfRangeException from inside the catch — the commit failure is replaced by an index error and no MigrationException is built. MongoMigrationRunner guards exactly this (line 104); SQL and ExecuteWithoutTransaction (line 141) kept the unguarded form.
 
-#### SH-M153 — SqlIndexBuilder discards Unique() on the connector path
+#### SH-M173 — SqlIndexBuilder discards Unique() on the connector path
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:320`  ·  _restates a first-pass finding_
 
 The connector path builds `new IndexDefinition { Name = _indexName }` and never sets Unique, although AbstractConnectorBase.CreateIndexSql:342 honours `index.Unique`. The raw-SQL fallback (line 336) does emit CREATE UNIQUE INDEX. So CreateIndex(...).Unique().Build() yields a non-unique index whenever a connector is supplied — and SqlMigrationRunner always supplies one, so the constraint is silently absent in production.
 
-#### SH-M154 — CosmosCollectionBuilder records a partition key that can never be applied
+#### SH-M174 — CosmosCollectionBuilder records a partition key that can never be applied
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBSchemaBuilder.cs:146`  ·  _restates a first-pass finding_
 
 CreateCollection creates the container with the hard-coded path "/id" (line 22) BEFORE returning the builder, and CosmosCollectionBuilder never overrides Build(). `_partitionKeyPath` is written by both WithField overloads (lines 164, 173) and read by nothing, so WithField(..., isPrimary: true) silently yields a container partitioned on /id — and a Cosmos partition key cannot be changed afterwards.
 
-#### SH-M155 — Unrecognised filter operators degrade to equality instead of failing
+#### SH-M175 — Unrecognised filter operators degrade to equality instead of failing
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:163`  ·  _restates a first-pass finding_
 
 `_ => "="` appears in SqlDataMigrator:163, ElasticSearchDataMigrator:208, RavenDBDataMigrator:156 and CosmosDBDataMigrator:227. Combined with ExtractValue's `_ => element.ToString()` for arrays, {"tags":{"$in":["a","b"]}} becomes tags = '["a","b"]' (matches nothing), while $exists/$regex/$not become equality against their operand. UpdateDocuments/DeleteDocuments then hit the wrong rows with no error.
 
-#### SH-M156 — SQL $ne against null emits `col <> NULL`, which is never true
+#### SH-M176 — SQL $ne against null emits `col <> NULL`, which is never true
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:162`  ·  _restates a first-pass finding_
 
 ParseFilterToWhere maps $ne to `<>` and AddParameter turns null into DBNull.Value, so {"deletedAt":{"$ne":null}} renders `"deletedAt" <> @p0` bound to NULL — three-valued logic matches zero rows instead of IS NOT NULL. MongoDB handles $ne null natively and CosmosDB's `!= null` evaluates correctly, so the identical filter means different things per backend.
 
-#### SH-M157 — SQL tracking table is ANSI-double-quoted on every provider, breaking MySQL
+#### SH-M177 — SQL tracking table is ANSI-double-quoted on every provider, breaking MySQL
 
 `../Birko.Data.Migrations.SQL/Settings/SqlMigrationSettings.cs:56`
 
 SqlMigrationSettings.QuoteIdentifier hardcodes `"` and is never overridden (no provider-specific migration settings type exists); SqlMigrationStore's _quoteOpen/_quoteClose also default to `"` and SqlMigrationRunner:46 builds the store without provider quotes, though AbstractConnectorBase.QuoteIdentifier is available and MySQLConnector:89 uses backticks. On MySQL (ANSI_QUOTES off by default) `CREATE TABLE "__Migrations" ("Version" ...)` is a syntax error, so Initialize() cannot provision the table.
 
-#### SH-M158 — Tracking-table DDL uses non-portable types (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+#### SH-M178 — Tracking-table DDL uses non-portable types (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
 
 `../Birko.Data.Migrations.SQL/SqlMigrationStore.cs:266`
 
 CreateMigrationsTable emits `CreatedAt TIMESTAMP NOT NULL` / `AppliedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP` for every provider. On MSSql, TIMESTAMP is a synonym for rowversion — it cannot be NOT NULL with a CURRENT_TIMESTAMP default — so the CREATE TABLE fails and MSSql consumers cannot initialize the store, despite SqlMigrationRunner accepting any AbstractConnector. The DDL is only valid on SQLite/PostgreSQL.
 
-#### SH-M159 — SqlSchemaBuilder sets the connector's external transaction and never clears it
+#### SH-M179 — SqlSchemaBuilder sets the connector's external transaction and never clears it
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:116`
 
 EnsureExternalTransaction (also called from SqlCollectionBuilder.Build:225 and SqlIndexBuilder.Build:319) calls _connector.SetExternalTransaction(connection, transaction), which stores connector-wide state (AbstractConnector.cs:85). Nothing resets it. The connector is the shared instance from the caller's store, so after the runner disposes its connection/transaction, every later connector command takes the RunCommandWithExternalTransaction path against a disposed connection — normal store CRUD then fails for the rest of the process.
 
-#### SH-M160 — Fallback DDL literal formatting is culture-sensitive
+#### SH-M180 — Fallback DDL literal formatting is culture-sensitive
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:162`
 
 FormatValue falls through to `value.ToString()` for numerics, so a decimal/double DefaultValue renders as "1,5" under a comma-decimal culture (this repo's own machine is sk-SK), producing `DEFAULT 1,5` — a syntax error or a two-column parse. The DateTime branch (line 160) uses `:` in the custom format, which is the culture's TimeSeparator placeholder, so the timestamp literal also varies by culture. No CultureInfo.InvariantCulture anywhere.
 
-#### SH-M161 — CollectionExists queries INFORMATION_SCHEMA.TABLES with no schema/catalog filter
+#### SH-M181 — CollectionExists queries INFORMATION_SCHEMA.TABLES with no schema/catalog filter
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:53`
 
 `SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tableName` matches any schema (MSSql/PostgreSQL) or any database on the server (MySQL, where INFORMATION_SCHEMA spans all schemas). A migration guarded by `if (!Schema.CollectionExists("Orders")) CreateCollection(...)` skips creation because an unrelated database has an Orders table, then records the migration as applied with no table created.
 
-#### SH-M162 — Version-range selection means a back-dated pending migration is never applied
+#### SH-M182 — Version-range selection means a back-dated pending migration is never applied
 
 `../Birko.Data.Migrations/AbstractMigrationRunner.cs:239`
 
 GetMigrationsToExecute selects `Version > fromVersion && Version <= toVersion` where fromVersion is Store.GetCurrentVersion() (the MAX applied version). With applied {1,5} and a newly added migration v3, GetPendingMigrations() (line 203, computed against the applied SET) lists v3, but Migrate() computes current=5, target=5 and returns the already-at-target success result — v3 never executes. The two selection rules in the same class disagree.
 
-#### SH-M163 — Rollback executes Down for migrations that were never applied
+#### SH-M183 — Rollback executes Down for migrations that were never applied
 
 `../Birko.Data.Migrations/AbstractMigrationRunner.cs:240`
 
 The Down branch selects `Version <= fromVersion && Version > toVersion` and never consults Store.GetAppliedVersions(). With applied {1,5} and registered {1,3,5}, Rollback(0) runs Down for 5, 3 and 1 — v3's Down executes destructive DDL/deletes for changes its Up never made, and on backends with no batch atomicity (ES/Raven/Cosmos/Influx, and Mongo outside a replica set) the earlier steps stay committed.
 
-#### SH-M164 — CosmosDB CountDocuments reads only the first page and can silently return 0
+#### SH-M184 — CosmosDB CountDocuments reads only the first page and can silently return 0
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs:138`
 
 It calls iterator.ReadNextAsync() exactly once (no `while (iterator.HasMoreResults)` loop, unlike every other method in the file) and returns response.FirstOrDefault(). A cross-partition `SELECT VALUE COUNT(1)` aggregate can return an empty first page while the query pipeline drains partitions, so the count silently comes back 0 and a migration guarded by `if (CountDocuments(...) == 0)` proceeds as though the container were empty.
 
-#### SH-M165 — CosmosDB SQL literals use SQL-style '' escaping and culture-sensitive numbers
+#### SH-M185 — CosmosDB SQL literals use SQL-style '' escaping and culture-sensitive numbers
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs:246`
 
 FormatSqlValue escapes a quote by doubling it (`s.Replace("'", "''")`), but Cosmos DB SQL follows JSON string rules and escapes with a backslash — `'O''Brien'` parses as two adjacent literals and the query fails. Line 249 falls through to `value.ToString()` for the long/double produced by ExtractValue, so a non-invariant culture emits `c["x"] = 1,5`. Both paths feed the WHERE clause of DeleteDocuments/UpdateDocuments.
 
-#### SH-M166 — CosmosDB migration state is read-modify-written with no ETag, losing version records
+#### SH-M186 — CosmosDB migration state is read-modify-written with no ETag, losing version records
 
 `../Birko.Data.Migrations.CosmosDB/CosmosMigrationStore.cs:136`
 
 RecordMigration reads the state item, mutates the dictionary and calls ReplaceItemAsync with no ItemRequestOptions.IfMatchEtag. Two processes (or two pods at startup) recording different versions concurrently overwrite each other's document wholesale, so one applied version is lost and that migration is re-executed on the next Migrate(). RemoveMigration (line 166) has the same hole.
 
-#### SH-M167 — RavenDB migration state is saved without optimistic concurrency, losing records
+#### SH-M187 — RavenDB migration state is saved without optimistic concurrency, losing records
 
 `../Birko.Data.Migrations.RavenDB/RavenMigrationStore.cs:120`
 
 RecordMigration loads the single MigrationsStateDocument, sets one key and SaveChanges() without enabling session.Advanced.UseOptimisticConcurrency or passing a change vector (Raven's default is last-write-wins). Two concurrent recorders each write the document they loaded, so one version silently disappears from AppliedMigrations and that migration is re-run.
 
-#### SH-M168 — InfluxDB RemoveMigration deletes over a window that excludes the recorded point
+#### SH-M188 — InfluxDB RemoveMigration deletes over a window that excludes the recorded point
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:176`
 
 The delete range is [migration.CreatedAt - 1 minute, UtcNow], but AbstractMigration.CreatedAt is DateTime.UtcNow at object construction — in a later process (the normal rollback case) that is "now", while the point was written with the original run's CreatedAt, days earlier. The delete matches nothing, RemoveMigration reports success, and the version stays applied so Rollback can never progress past it (and re-running Rollback re-executes Down).
 
-#### SH-M169 — InfluxDB version points are keyed by name tag, not version, so records collide
+#### SH-M189 — InfluxDB version points are keyed by name tag, not version, so records collide
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:146`
 
 RecordMigration puts `name` in a tag and `version` in a field, so point identity is measurement+name+timestamp. Only Version must be unique across registered migrations (AbstractMigrationRunner:58 checks Version only), so two migrations sharing a Name and constructed in the same millisecond overwrite each other and one applied version is silently lost. Conversely RemoveMigration's predicate filters on `name` alone (line 174), deleting the records of every version sharing that name.
 
-#### SH-M170 — InfluxDB RemoveMigration swallows InfluxException, so a failed delete reports success
+#### SH-M190 — InfluxDB RemoveMigration swallows InfluxException, so a failed delete reports success
 
 `../Birko.Data.Migrations.InfluxDB/InfluxMigrationStore.cs:183`
 
 The catch is justified as "already deleted", but an auth failure, missing bucket or server error is the same exception type. On rollback the runner treats the removal as done, so the version row survives while Down has already run — the database is downgraded but still reports the migration as applied, and the next Migrate() will not re-apply it.
 
-#### SH-M171 — InfluxDB UpdateDocuments is a silent no-op that records the migration as applied
+#### SH-M191 — InfluxDB UpdateDocuments is a silent no-op that records the migration as applied
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:22`
 
 The method body is only a comment. A data migration written against the neutral IDataMigrator contract (`context.Data.UpdateDocuments(...)`) performs no write, throws nothing, and InfluxMigrationRunner then records the version — so the migration is permanently marked applied with none of its effect. Every other backend either performs the update or throws (RavenDB.CopyData and ElasticSearch.CopyData use NotSupportedException for exactly this reason).
 
-#### SH-M172 — InfluxDB CountDocuments ignores filterJson entirely
+#### SH-M192 — InfluxDB CountDocuments ignores filterJson entirely
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:56`
 
 The Flux query hardcodes `filter(fn: (r) => true)` and the filterJson parameter is never read, so CountDocuments("readings", "{\"host\":\"a\"}") returns the total record count of the bucket. A migration branching on that count ("only backfill if the filtered set is empty") takes the wrong branch with no error. DeleteDocuments in the same class throws NotSupportedException for a JSON filter rather than ignoring it, so the class is internally inconsistent.
 
-#### SH-M173 — InfluxDB DeleteDocuments silently does nothing when the bucket is not found
+#### SH-M193 — InfluxDB DeleteDocuments silently does nothing when the bucket is not found
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:38`
 
 `if (bucket != null)` wraps the entire delete; a misspelled or not-yet-created collection name means the whole call is skipped with no exception, and the runner records the migration as applied. The bucket lookup is an exact-name FirstOrDefault over FindBucketsAsync(), so any lookup shortfall reads as "nothing to delete" — a destructive step reporting success without acting.
 
-#### SH-M174 — InfluxDB CopyData copies Flux metadata columns and loses the original field names
+#### SH-M194 — InfluxDB CopyData copies Flux metadata columns and loses the original field names
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:108`
 
 The loop over record.Values skips only _measurement/_time/_start/_stop, so `_field` (a string) is written as a TAG named "_field", `_value` becomes a field literally named "_value", and the pivot columns `result`/`table` are copied too. The target bucket ends up with points whose real field name is a tag value under a reserved key rather than a reconstruction of the source series. BulkInsert (line 151) correctly skips every key starting with "_"; CopyData does not.
 
-#### SH-M175 — InfluxDB BulkInsert silently drops documents whose values are all strings
+#### SH-M195 — InfluxDB BulkInsert silently drops documents whose values are all strings
 
 `../Birko.Data.Migrations.InfluxDB/Context/InfluxDBDataMigrator.cs:175`
 
 ApplyValue maps every string to point.Tag(...) and only bool/integral/floating values to Field(...). A document of purely string values therefore produces a point with tags and no fields, which the InfluxDB client renders as no line protocol at all — the document is dropped with no exception and the migration is recorded as applied. Every other backend writes a string-only document intact.
 
-#### SH-M176 — CopyData silently discards transformJson on SQL, CosmosDB and InfluxDB
+#### SH-M196 — CopyData silently discards transformJson on SQL, CosmosDB and InfluxDB
 
 `../Birko.Data.Migrations.SQL/Context/SqlDataMigrator.cs:86`
 
 SqlDataMigrator.CopyData accepts transformJson and never reads it (emitting a plain INSERT INTO ... SELECT *); CosmosDBDataMigrator:142 and InfluxDBDataMigrator:83 do the same. MongoDataMigrator:56 honours it and ElasticSearch/RavenDB throw NotSupportedException. So the identical neutral call yields transformed data, an exception, or untransformed data presented as success depending on backend — the third case writes wrong data and records the migration as applied.
 
-#### SH-M177 — ElasticSearch CountDocuments returns 0 on an invalid response
+#### SH-M197 — ElasticSearch CountDocuments returns 0 on an invalid response
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchDataMigrator.cs:85`
 
 `return response.Count;` is the only call in the file that skips EnsureValid. A missing index, auth failure or malformed query yields an invalid response whose Count is 0, so a migration guarded by `if (context.Data.CountDocuments(...) == 0)` proceeds as though the index were empty — e.g. re-seeding data that already exists.
 
-#### SH-M178 — ElasticSearch by-query calls ignore VersionConflicts and per-document Failures
+#### SH-M198 — ElasticSearch by-query calls ignore VersionConflicts and per-document Failures
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchDataMigrator.cs:47`
 
 EnsureValid only checks response.IsValid. An _update_by_query / _delete_by_query that completes with version conflicts or shard-level Failures returns a VALID response with a non-empty Failures list, so a partially-applied bulk mutation passes the check and the migration is recorded as applied. BulkInsert (line 132) explicitly inspects Errors/ItemsWithErrors, so the same file enforces the invariant on one path and not the others.
 
-#### SH-M179 — ElasticSearch RenameField discards the _update_by_query response
+#### SH-M199 — ElasticSearch RenameField discards the _update_by_query response
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchSchemaBuilder.cs:72`
 
 The UpdateByQuery result is never assigned or checked for IsValid, so a rejected script (missing index, mapping conflict, painless compile error) leaves every document unrenamed while the migration completes and its version is recorded. ElasticSearchDataMigrator.EnsureValid exists for exactly this reason but the schema builder does not use it. The field names are also interpolated raw into the Painless source, so a name containing a quote breaks or alters the script.
 
-#### SH-M180 — CreateIndex(...).Build() creates nothing on ES, RavenDB, CosmosDB and InfluxDB
+#### SH-M200 — CreateIndex(...).Build() creates nothing on ES, RavenDB, CosmosDB and InfluxDB
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchSchemaBuilder.cs:146`
 
 IIndexBuilder.Build() is a default no-op interface method (Birko.Data.Patterns/Schema/IIndexBuilder.cs:19) and none of ElasticIndexBuilder, RavenIndexBuilder (RavenDBSchemaBuilder.cs:142), CosmosIndexBuilder (CosmosDBSchemaBuilder.cs:216) or InfluxIndexBuilder (InfluxDBSchemaBuilder.cs:131) overrides it. A migration that declares an index runs to completion, records its version, and creates nothing; the _fields list and Unique() flag go into an `internal bool IsUnique` nothing reads.
 
-#### SH-M181 — Migrations index maps Version as keyword, so the descending sort is lexicographic
+#### SH-M201 — Migrations index maps Version as keyword, so the descending sort is lexicographic
 
 `../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationStore.cs:45`
 
 `.Keyword(k => k.Name(n => n.Version))` maps the long Version as a string, so the `.Sort(sort => sort.Descending(f => f.Version))` at line 85 orders "9" above "10". The CR-M105 comment states the sort exists so a Size(10000) truncation keeps the NEWEST versions; with keyword ordering it keeps the lexicographically largest instead, so past 10 000 applied migrations GetCurrentVersion() can report a lower version and Migrate() re-runs the gap.
 
-#### SH-M182 — A failed Indices.Exists probe is read as "index absent" in the ES store
+#### SH-M202 — A failed Indices.Exists probe is read as "index absent" in the ES store
 
 `../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationStore.cs:73`
 
 `_client.Indices.Exists(indexName).Exists` returns false both when the index is missing and when the request itself fails (auth, cluster unavailable), because Nest surfaces failures as an invalid response with Exists == false. GetAppliedVersions then returns an empty set (a second path to the same wrong answer as line 88), and Initialize() at line 35 attempts to create an index that already exists.
 
-#### SH-M183 — MongoDB index builder discards Sparse(), WithProperty() and the field type
+#### SH-M203 — MongoDB index builder discards Sparse(), WithProperty() and the field type
 
 `../Birko.Data.Migrations.MongoDB/Context/MongoSchemaBuilder.cs:131`
 
 Sparse() and WithProperty() are `=> this` and IndexFieldType is recorded but never used (Build at line 147 only sets Name and Unique, always Ascending/Descending). MongoDB natively supports sparse, TTL, partial and text/geo/hashed indexes, so `CreateIndex(...).WithField("email").Unique().Sparse().Build()` silently produces a DENSE unique index — which then rejects every second document missing that field with a duplicate-key error on null.
 
-#### SH-M184 — Continuous-aggregate DDL hardcodes a bucket column literally named "time"
+#### SH-M204 — Continuous-aggregate DDL hardcodes a bucket column literally named "time"
 
 `../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigration.cs:139`
 
@@ -1565,97 +1688,97 @@ BuildContinuousAggregateSql emits `time_bucket('{timeBucket}', time)` with no pa
 
 ### area: repository-contract
 
-#### SH-M185 — ReadOne extension also bypasses the store's lazy Init, so it can query an uncreated table
+#### SH-M205 — ReadOne extension also bypasses the store's lazy Init, so it can query an uncreated table
 
 `../Birko.Data.SQL.ViewModel/Extensions/IDataBaseRepository.cs:20`
 
 Every store CRUD entry point runs EnsureInitialized() → InitCore(), which for SQL is Connector?.CreateTable(new[]{typeof(T)}) plus Connector?.DoInit() (DataBaseStore.cs:95-99). ReadOne never touches the store, so on a repository whose store has not been used yet the SELECT runs against a table that was never created (provider error, e.g. "no such table") and the OnInit hooks registered via the repository's own AddOnInit have not fired. Order-dependent: the same call succeeds if any other repository operation ran first.
 
-#### SH-M186 — _modelHash is a plain Dictionary mutated with no synchronization on singleton repositories
+#### SH-M206 — _modelHash is a plain Dictionary mutated with no synchronization on singleton repositories
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:24`
 
 _modelHash is a plain Dictionary written from StoreHash (83), RemoveHash (96) and CheckHashChange (115) and cleared from the ReadMode setter (39) with no lock. AddRepositorySingleton and RepositoryLocator hand one repository instance to all callers, and LoadInstance → StoreHash runs on every read, so two concurrent reads can resize the Dictionary simultaneously — corrupted buckets / lost entries / spin, not an exception. _isReadMode (23) is a non-volatile bool read by every write guard. Identical in AbstractAsyncViewModelRepository.cs:26, where concurrency is the norm.
 
-#### SH-M187 — _modelHash is never pruned: RemoveHash is dead code and Delete does not untrack
+#### SH-M207 — _modelHash is never pruned: RemoveHash is dead code and Delete does not untrack
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:92`
 
 RemoveHash has no call site anywhere in Birko.Data.ViewModel / Birko.Data.SQL.ViewModel / Birko.Data.Repositories (grepped), and Delete/DeleteAsync do not remove the deleted model's entry; the only pruning is the ReadMode=true setter. Every read adds a SHA-256 entry, including bulk reads (AbstractBulkViewModelRepository.cs:48, AbstractAsyncBulkViewModelRepository.cs:91 call LoadInstance per row), so paging a large table through a scoped or singleton repository hashes every row and retains one entry per Guid for the repository's lifetime, unbounded.
 
-#### SH-M188 — DataBaseRepository accepts a non-bulk wrapper its own bulk methods then reject at runtime
+#### SH-M208 — DataBaseRepository accepts a non-bulk wrapper its own bulk methods then reject at runtime
 
 `../Birko.Data.SQL.ViewModel/Repositories/DataBaseRepository.cs:29`
 
 The constructor validates via IsStoreOfType, which inspects the INNERMOST store (StoreExtensions.cs:63-87), while every inherited bulk method tests the OUTERMOST reference (Store is not IBulkStore<TModel> — AbstractBulkViewModelRepository.cs:41/60/80/96/107/118/129). TenantStoreWrapper<TStore,T> implements only IStore<T>/IStoreWrapper<T> (TenantStoreWrapper.cs:12), so a repository wrapping a DataBaseBulkStore in it constructs fine and then throws ArgumentException from Read/Create/Update/Delete. The async sibling can't: its parameter is IAsyncBulkStore (AsyncDataBaseRepository.cs:54).
 
-#### SH-M189 — Async bulk repositories swallow a wrong-store-type misconfiguration the sync ones throw on
+#### SH-M209 — Async bulk repositories swallow a wrong-store-type misconfiguration the sync ones throw on
 
 `../Birko.Data.Repositories/AbstractAsyncBulkRepository.cs:46`  ·  _restates a first-pass finding_
 
 BulkStore is `Store as IAsyncBulkStore<T>` (24); when the cast fails every method returns early — ReadAsync yields Array.Empty<T>(), ReadFirstAsync null, and CreateAsync/UpdateAsync/DeleteAsync including the filter overloads (87/94/112) complete successfully having done nothing. AbstractBulkRepository throws InvalidOperationException for the identical state. A bulk delete-by-filter that silently deletes nothing is indistinguishable from one that matched no rows. Same in AbstractAsyncBulkViewModelRepository.cs:58/105/120/130/140/150.
 
-#### SH-M190 — RepositoryLocator default keys don't match between create and destroy — cached repositories leak
+#### SH-M210 — RepositoryLocator default keys don't match between create and destroy — cached repositories leak
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:158`  ·  _restates a first-pass finding_
 
 GetRepository<TStore,TRepository>(store) defaults its key to typeof(TStore).FullName (34) but Destroy<TRepository>() defaults to typeof(TRepository).FullName (158). A repository created through the common no-key overload can never be found by the no-key Destroy: TryGetValue misses, the method returns silently, and the repository plus its store/connection stays in the static cache for the process lifetime.
 
-#### SH-M191 — GetRepository<TStore,TRepository> silently discards the store argument on a cache hit
+#### SH-M211 — GetRepository<TStore,TRepository> silently discards the store argument on a cache hit
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:44`  ·  _restates a first-pass finding_
 
 The cache key is the store TYPE, not the instance, and the store parameter is consulted only inside the `if (!ContainsKey(type))` miss branch. GetRepository<MyStore,MyRepo>(storeB) after GetRepository<MyStore,MyRepo>(storeA) returns the repository built around storeA with no signal that storeB was ignored, so two differently configured stores of the same type (different tenant, connection or settings) silently collapse onto whichever was seen first.
 
-#### SH-M192 — Destroy<TRepoA>(key) destroys the store shared by every repository cached under that key
+#### SH-M212 — Destroy<TRepoA>(key) destroys the store shared by every repository cached under that key
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:172`
 
 The cache is key → (repository type → instance), so GetRepository<MyStore,RepoA>(store) and GetRepository<MyStore,RepoB>(store) share one key and one store instance. Destroy<RepoA>(key) removes only RepoA's entry and then calls repository.Destroy() (172), which is Store?.Destroy() (AbstractRepository.cs:119) — for SQL that is Connector.DropTable (DataBaseStore.cs:104). RepoB remains cached pointing at a destroyed store and its next call fails or no-ops with no indication why.
 
-#### SH-M193 — Destroy() is documented as releasing resources but DROPs the SQL table
+#### SH-M213 — Destroy() is documented as releasing resources but DROPs the SQL table
 
 `../Birko.Data.Repositories/IBaseRepository.cs:27`
 
 IBaseRepository.Destroy is documented "Destroys the repository and releases all resources" and AbstractRepository.Destroy (117) / AbstractViewModelRepository.Destroy forward to Store?.Destroy(). For the SQL family that is DataBaseStore.Destroy → Connector?.DropTable(new[]{typeof(T)}) (DataBaseStore.cs:102-105). A consumer calling repository.Destroy() from a Dispose/teardown path — or RepositoryLocator.Destroy<TRepository>(), whose doc frames it as cache eviction — drops the entity's table and all its rows. No repository-layer doc says the call destroys data.
 
-#### SH-M194 — Bulk ViewModel paging cannot express an order, so limit/offset pages are unstable
+#### SH-M214 — Bulk ViewModel paging cannot express an order, so limit/offset pages are unstable
 
 `../Birko.Data.ViewModel/Repositories/AbstractBulkViewModelRepository.cs:46`
 
 Read hard-codes null for the store's orderBy — Read(filter?.Filter(), null, limit, offset) — and IBulkViewModelReadRepository.Read (IBulkViewModelRepository.cs:26) has no orderBy parameter, so callers cannot supply one. SQL/ES/Mongo return unordered rows for an unordered query, so successive pages (offset 0 then 20) can repeat and skip rows. The plain model bulk repository can pass Stores.OrderBy<T> (IBulkRepository.cs:31) and the ReadOne extension can pass orderByExpr, so only the ViewModel bulk family cannot. Same at AbstractAsyncBulkViewModelRepository.cs:85.
 
-#### SH-M195 — AbstractBulkViewModelRepository.Read defers its store-type validation to enumeration
+#### SH-M215 — AbstractBulkViewModelRepository.Read defers its store-type validation to enumeration
 
 `../Birko.Data.ViewModel/Repositories/AbstractBulkViewModelRepository.cs:41`  ·  _restates a first-pass finding_
 
 Read is a `yield return` iterator, so the `Store is not IBulkStore<TModel>` guard and its ArgumentException do not execute when Read is called — they execute on the first MoveNext(). A caller that builds the sequence in one place and enumerates it elsewhere gets the exception from an unexpected frame, and a caller that never enumerates never learns the store is wrong.
 
-#### SH-M196 — ViewModel Delete has no null-argument guard while Create and Update do
+#### SH-M216 — ViewModel Delete has no null-argument guard while Create and Update do
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:232`  ·  _restates a first-pass finding_
 
 Create (190) and Update (213) return early on data == null; Delete checks only Store, then calls LoadModelInstance(data) → MapToModel(null, target), so any MapToModel reading source members throws NullReferenceException instead of the siblings' no-op. Same asymmetry in AbstractAsyncViewModelRepository.DeleteAsync:241 and in sync bulk Create(IEnumerable):57, Update(IEnumerable):77, Delete(IEnumerable):126, which reach data.Select(...) unguarded while every async bulk twin checks data == null (AbstractAsyncBulkViewModelRepository.cs:58/105/150).
 
-#### SH-M197 — Update signals "skip" by returning null! from a StoreDataDelegate<T> declared to return T
+#### SH-M217 — Update signals "skip" by returning null! from a StoreDataDelegate<T> declared to return T
 
 `../Birko.Data.ViewModel/Repositories/AbstractViewModelRepository.cs:226`  ·  _restates a first-pass finding_
 
 When CheckHashChange reports no change the delegate returns null! through a non-nullable T, relying on every store to null-check a result none of them even read; a store that did dereference it would throw NullReferenceException. data.LoadFrom(item) on the next line runs unconditionally, so the caller's ViewModel is refreshed from a model whose persistence was nominally skipped. CheckHashChange also defaults update:true, advancing the stored hash before the store persists. Same shape in AbstractAsyncViewModelRepository.cs:232.
 
-#### SH-M198 — AddRepository overloads capture one shared store instance regardless of requested lifetime
+#### SH-M218 — AddRepository overloads capture one shared store instance regardless of requested lifetime
 
 `../Birko.Data.Repositories/ServiceCollectionExtensions.cs:49`  ·  _restates a first-pass finding_
 
 AddRepository<TRepository>(IBaseStore store, lifetime) closes over the single instance passed at registration, so even a Scoped or Transient repository gets the same store on every resolution — defeating per-scope isolation for stateful stores (open connection, change tracking, tenant scoping). All three overloads use services.Add rather than a TryAdd variant, so repeated registration silently duplicates descriptors, and the store passed to this overload is never registered in the container, so nothing ever disposes it or calls its Destroy().
 
-#### SH-M199 — A null store makes every repository write a silent no-op that reports success
+#### SH-M219 — A null store makes every repository write a silent no-op that reports success
 
 `../Birko.Data.Repositories/AbstractRepository.cs:55`
 
 With Store == null, Create returns Guid.Empty (55), Save returns Guid.Empty (97), Update/Delete/Destroy are Store?.X(...) no-ops (66/76/119) and Count returns 0 (86); the async family is identical (AbstractAsyncRepository.cs:59/70/81/103/125). Guid.Empty is exactly what a caller sees for "nothing persisted", so a mis-wired repository — e.g. DataBaseRepository constructed with an explicit null, which does NOT self-provision a store — accepts and discards every write while reporting success.
 
-#### SH-M200 — Async single-item DeleteAsync bypasses the LoadModelInstance extension point
+#### SH-M220 — Async single-item DeleteAsync bypasses the LoadModelInstance extension point
 
 `../Birko.Data.ViewModel/Repositories/AbstractAsyncViewModelRepository.cs:242`
 
@@ -1663,151 +1786,151 @@ DeleteAsync inlines `TModel item = CreateModelInstance(); MapToModel(data, item)
 
 ### area: schema-index-and-ddl
 
-#### SH-M201 — CharField reads a string into a `char` property, so any `char` column throws at materialisation
+#### SH-M221 — CharField reads a string into a `char` property, so any `char` column throws at materialisation
 
 `../Birko.Data.SQL/SQL/Fields/CharField.cs:26`  ·  _restates a first-pass finding_
 
 CreateAbstractField maps typeof(char) to `new CharField(property, name, primary, unique, 1)` (AbstractField.cs:199), but CharField.Read does `Property.SetValue(value, reader.GetString(index))`. Assigning a string to a char property fails inside reflection. CharField only round-trips string properties; the one CLR type it is named for cannot be read back.
 
-#### SH-M202 — DataBase.LoadTable returns null through a non-nullable return type for any unmapped type
+#### SH-M222 — DataBase.LoadTable returns null through a non-nullable return type for any unmapped type
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:68`  ·  _restates a first-pass finding_
 
 ComputeTable returns null when the type has neither a table attribute nor a RegisterTableName override (or when its Fields come out empty); LoadTable then does `return table!`, laundering the null past nullable analysis. Callers that do not null-check (unlike GetPrimaryFields, which does) dereference it, so a model missing [Table] fails with an opaque NullReferenceException instead of a TableAttributeException. The null is also not cached, so every call re-reflects.
 
-#### SH-M203 — [IndexedField] on an unmapped property emits an index over a column that does not exist
+#### SH-M223 — [IndexedField] on an unmapped property emits an index over a column that does not exist
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:191`  ·  _restates a first-pass finding_
 
 `var columnName = field?.Name ?? prop.Name;` — when no field matched (property carries [IgnoreField], or has an unsupported CLR type such as `long` and was skipped by CreateAbstractField), the index silently names the property. CREATE INDEX then fails at DDL time far from the declaration. The [CompositeIndex] path (line 250) throws TableAttributeException for exactly this case, so the inconsistency looks unintentional.
 
-#### SH-M204 — Composite index column order is nondeterministic when Order values tie
+#### SH-M224 — Composite index column order is nondeterministic when Order values tie
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:266`  ·  _restates a first-pass finding_
 
 `idx.Columns.Sort((a, b) => a.Order.CompareTo(b.Order))` uses List<T>.Sort, an unstable introsort. [IndexedField(name)] defaults Order to 0, so the attribute on two properties yields two columns with Order 0 whose emitted order is unspecified — and column order determines which queries the index can serve. OrderBy would at least pin it to reflection order.
 
-#### SH-M205 — SqLiteIndexManager.ExistsAsync ignores the table name, so an index on any table reports as existing
+#### SH-M225 — SqLiteIndexManager.ExistsAsync ignores the table name, so an index on any table reports as existing
 
 `../Birko.Data.SQL.SqLite/IndexManagement/SqLiteIndexManager.cs:24`  ·  _restates a first-pass finding_
 
 The query is `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = '<index>'` — the tableName parameter is accepted and never used, unlike ListAsync (line 48) which does filter on tbl_name. A migration guarding CREATE INDEX with ExistsAsync will skip creating an index on table B because a same-named index exists on table A.
 
-#### SH-M206 — SQLite infers index uniqueness from `sql LIKE '%UNIQUE%'`
+#### SH-M226 — SQLite infers index uniqueness from `sql LIKE '%UNIQUE%'`
 
 `../Birko.Data.SQL.SqLite/IndexManagement/SqLiteIndexManager.cs:48`  ·  _restates a first-pass finding_
 
 Any index whose stored DDL text contains the substring UNIQUE — including inside a column or index identifier such as IX_UNIQUE_CODE — is reported Unique == true by both ListAsync and the (dead) ListIndexesSql. PRAGMA index_list exposes a real `unique` column and would be exact. A drift check comparing desired against actual uniqueness gets the wrong answer.
 
-#### SH-M207 — MySQL/PostgreSQL index existence and listing queries are not schema-qualified
+#### SH-M227 — MySQL/PostgreSQL index existence and listing queries are not schema-qualified
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:157`  ·  _restates a first-pass finding_
 
 IndexExistsSql filters information_schema.statistics only by table_name and index_name (PostgreSqlIndexManager.cs:21 likewise filters pg_indexes only by tablename/indexname, and its ListIndexesSql filters only t.relname). With several schemas reachable from the connection, an index on a same-named table in another schema satisfies the count and ExistsAsync returns a false positive. ListIndexesSql has the same gap and no primary-key filter, so MySQL reports PRIMARY while the others exclude it.
 
-#### SH-M208 — IndexManager.UpdateMapping validates indexName then never uses it
+#### SH-M228 — IndexManager.UpdateMapping validates indexName then never uses it
 
 `../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs:304`  ·  _restates a first-pass finding_
 
 `_client.Map(mappingDescriptor)` / `MapAsync` is called with no `.Index(indexName)`, so the mapping lands on whatever index the caller's descriptor or the ElasticClient default resolves — not the one named in the argument. The parameter only ever reaches the failure message, which makes a mapping applied to the wrong index look like a success.
 
-#### SH-M209 — CREATE UNIQUE INDEX IF NOT EXISTS is invalid on MySQL and MySqlIndexManager does not override it
+#### SH-M229 — CREATE UNIQUE INDEX IF NOT EXISTS is invalid on MySQL and MySqlIndexManager does not override it
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:181`
 
 The base CreateUniqueIndexSql emits `CREATE UNIQUE INDEX IF NOT EXISTS ...`. MySQL has no IF NOT EXISTS clause for CREATE INDEX. MSSqlIndexManager and PostgreSqlIndexManager override this method; MySqlIndexManager.cs:17 declares only a constructor and comments that the base implementation 'is already correct'. Every CreateAsync with definition.Unique == true against MySQL therefore fails with a parse error wrapped in IndexManagementException — the one flag SqlIndexManager branches on is unusable on that provider.
 
-#### SH-M210 — DropAsync emits `DROP INDEX IF EXISTS <name>` with no ON clause — invalid on MySQL
+#### SH-M230 — DropAsync emits `DROP INDEX IF EXISTS <name>` with no ON clause — invalid on MySQL
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:84`
 
 DropAsync builds a name-only Tables.IndexDefinition and delegates to Connector.DropIndexSql. The base implementation (AbstractConnectorBase.cs:352) returns `DROP INDEX IF EXISTS "<name>"` — no table. MySQL requires `DROP INDEX <name> ON <table>` and rejects IF EXISTS; MSSqlConnector overrides DropIndexSql to add `ON <table>`, MySQLConnector does not override it at all. So DropAsync (and DropIndexes) can never drop an index on MySQL; every call fails, wrapped as IndexManagementException.
 
-#### SH-M211 — MSSQL ListAsync reads the tinyint key_ordinal with GetInt32, which SqlClient rejects
+#### SH-M231 — MSSQL ListAsync reads the tinyint key_ordinal with GetInt32, which SqlClient rejects
 
 `../Birko.Data.SQL.MSSql/IndexManagement/MSSqlIndexManager.cs:32`
 
 ListIndexesSql selects `ic.key_ordinal AS ordinal_position`; sys.index_columns.key_ordinal is tinyint. The shared reader loop at SqlIndexManager.cs:115 calls `reader.GetInt32(4)`, and Microsoft.Data.SqlClient's GetInt32 performs no widening — a tinyint column raises InvalidCastException. ListAsync (and GetInfoAsync, which delegates to it) therefore throws for any MSSQL table with at least one non-primary index, and since inspection paths are deliberately unwrapped the caller sees a raw cast error.
 
-#### SH-M212 — PostgreSQL descending detection subscripts indoption by table attnum instead of index position
+#### SH-M232 — PostgreSQL descending detection subscripts indoption by table attnum instead of index position
 
 `../Birko.Data.SQL.PostgreSQL/IndexManagement/PostgreSqlIndexManager.cs:30`
 
 `pg_index.indoption[a.attnum - 1] & 1 = 1` indexes indoption by the column's position in the *table*, but indoption is a per-index vector ordered by position in the *index*. For a descending index on the table's 5th column, indoption has one element and indoption[4] is NULL, so the CASE yields 0 and IsDescending reports false; for multi-column indexes the flags are read off the wrong slots and can report DESC for an ascending column. PostgreSQL is one of only two dialects claimed to report real direction.
 
-#### SH-M213 — ES existence checks ignore response validity, so a failed request answers 'does not exist'
+#### SH-M233 — ES existence checks ignore response validity, so a failed request answers 'does not exist'
 
 `../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs:44`
 
 IndexExists/IndexExistsAsync return `response.Exists` without ValidateResponse. On a transport failure, auth rejection or unreachable node, Exists is false. So DeleteIndexAsync (line 144) short-circuits and returns as though the index were deleted — a destructive op reporting success having done nothing; CreateIndexAsync (line 76) skips its already-exists guard; and ElasticSearchIndexManagerAdapter.ExistsAsync surfaces the same false to IIndexManager callers guarding migrations.
 
-#### SH-M214 — Reindex with waitForCompletion:false reports Success and 0 documents while the copy still runs
+#### SH-M234 — Reindex with waitForCompletion:false reports Success and 0 documents while the copy still runs
 
 `../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs:69`
 
 With waitForCompletion=false ES returns immediately with a task handle and response.Created == 0; IsValid is true, so the method refreshes the target and returns ReindexResult.Successful(source, target, 0, elapsed). The caller cannot distinguish 'copied nothing' from 'still copying' and gets no task id to poll, so any follow-up step (alias swap, dropping the source) runs against a partially populated index.
 
-#### SH-M215 — ReindexWithAlias reports Failed after a successful alias swap when the cleanup step throws
+#### SH-M235 — ReindexWithAlias reports Failed after a successful alias swap when the cleanup step throws
 
 `../Birko.Data.ElasticSearch/IndexManagement/ReindexHelper.cs:264`
 
 Steps 3 and 4 (SwapAlias, then DeleteIndex(oldIndexName) when deleteOldIndex is true) run inside the same try. If the delete throws — old index closed, in-flight snapshot, permissions — the catch returns ReindexResult.Failed even though the alias already points at the new index and the migration is complete. A caller that retries on failure then dies at step 1 with "Index '<new>' already exists."
 
-#### SH-M216 — Adapter ListAsync returns an empty list when the _cat request fails
+#### SH-M236 — Adapter ListAsync returns an empty list when the _cat request fails
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:111`
 
 `if (!catResponse.IsValid) return Array.Empty<IndexInfo>();` — a rejected, unauthorised or timed-out _cat/indices call is indistinguishable from a cluster with no indexes, with no exception and no diagnostic. SqlIndexManager.ListAsync lets provider failures propagate, so the same IIndexManager contract fails loudly on SQL and silently on ES; a reconciliation loop reading ES would conclude every index is missing and try to recreate them.
 
-#### SH-M217 — Adapter GetInfoAsync collapses every InvalidOperationException to null
+#### SH-M237 — Adapter GetInfoAsync collapses every InvalidOperationException to null
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:155`
 
 The catch is untyped by cause: IndexManager.ValidateResponse throws InvalidOperationException for a missing index, a cluster error, a bad request and an auth failure alike, so all of them return null. The caller reads 'index absent' and may create or recreate an index that in fact exists, and no context (DebugInformation, inner exception) survives.
 
-#### SH-M218 — ES adapter CreateAsync silently drops Unique/Sparse/ExpireAfter/Fields
+#### SH-M238 — ES adapter CreateAsync silently drops Unique/Sparse/ExpireAfter/Fields
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:51`
 
 Only Properties["NumberOfShards"]/["NumberOfReplicas"] are read, and only when boxed as int (a "3" string is ignored with no error). definition.Fields, Unique, Sparse and ExpireAfter are never inspected. SqlIndexManager.CreateAsync branches on Unique and rejects an empty Fields list, so the same IIndexManager call that creates an enforced unique constraint on SQL creates an unconstrained container on ES and reports success — a divergence a portable migration cannot detect at runtime.
 
-#### SH-M219 — BuildIndexInfo keys stats/settings by the requested name, so querying via an alias yields all zeros
+#### SH-M239 — BuildIndexInfo keys stats/settings by the requested name, so querying via an alias yields all zeros
 
 `../Birko.Data.ElasticSearch/IndexManagement/IndexManager.cs:271`
 
 `statsResponse.Indices.TryGetValue(indexName, ...)` and the settings equivalent look up the argument string, but ES keys both responses by the concrete index name. Call GetIndexInfoAsync("invoices") where `invoices` is an alias for `invoices_v3` and both TryGetValue calls miss: DocumentCount, SizeInBytes, NumberOfShards and NumberOfReplicas stay 0 and RefreshInterval stays null, with IsValid true and no exception. The adapter republishes those zeros as portable IndexInfo.
 
-#### SH-M220 — Get-only computed properties become columns and break row materialisation
+#### SH-M240 — Get-only computed properties become columns and break row materialisation
 
 `../Birko.Data.SQL/SQL/DataBase_Field.cs:22`
 
 LoadFields enumerates via DataBase.GetProperties (DataBase.cs:80), which accepts a property when any public accessor is non-static — a getter alone qualifies. So `public string Display => First + " " + Last;` on a [Table] model is mapped to a StringField, appears in CREATE TABLE and in the SELECT list, and then AbstractField.Read calls Property.SetValue on a property with no setter, throwing ArgumentException for every row read. Only [IgnoreField]/[NotMapped] avoid it, and nothing warns.
 
-#### SH-M221 — IntegerField.Write unboxes any enum to int, throwing for non-int-backed enums
+#### SH-M241 — IntegerField.Write unboxes any enum to int, throwing for non-int-backed enums
 
 `../Birko.Data.SQL/SQL/Fields/IntegerField.cs:32`
 
 CreateAbstractField (AbstractField.cs:227) maps every enum — whatever its underlying type — to IntegerField/NullableIntegerField. Write then does `return (int)val;` on the boxed value. The CLR permits unboxing a boxed enum only to its exact underlying type, so `enum Status : byte` or `: long` raises InvalidCastException on every INSERT/UPDATE of that entity. Read is safe (Enum.ToObject), so the failure is write-only and provider-independent.
 
-#### SH-M222 — Base-class [IndexedField] yields one global index name per derived table; IF NOT EXISTS skips all but the first
+#### SH-M242 — Base-class [IndexedField] yields one global index name per derived table; IF NOT EXISTS skips all but the first
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:144`
 
 LoadIndexes scans `type.GetProperties(Public|Instance)`, which includes inherited properties, and [IndexedField] is Inherited = true — so `[IndexedField("IX_Tenant")]` on a shared base property produces an index literally named IX_Tenant in every derived table. AbstractConnector_Create.CreateIndexes feeds each to CreateIndexSql, which emits `CREATE INDEX IF NOT EXISTS`. Index names are schema-global on PostgreSQL/SQLite/MSSQL, so the first table wins and later tables silently ship without the index their model declares.
 
-#### SH-M223 — Table.Fields keys and Table.Indexes columns freeze at load and go stale when a mapping renames a column
+#### SH-M243 — Table.Fields keys and Table.Indexes columns freeze at load and go stale when a mapping renames a column
 
 `../Birko.Data.SQL/SQL/Tables/Table.cs:59`
 
 ComputeTable keys Fields by the load-time column name and resolves index column names in the same pass (DataBase_Table.cs:104/112). ModelMapRegistry.ApplyToDatabase (Birko.Models.SQL/Mapping/ModelMapRegistry.cs:112) later mutates `sqlField.Name` in place for HasColumnName. After that GetField("<mapped column>") returns null while GetField("<original>") returns a field whose Name is the mapped one, and Table.Indexes still names the pre-rename column so CREATE INDEX references a column the table lacks.
 
-#### SH-M224 — MySQL and SQLite listing hard-code IsDescending=false, so direction never round-trips
+#### SH-M244 — MySQL and SQLite listing hard-code IsDescending=false, so direction never round-trips
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:167`
 
 The default (MySQL) ListIndexesSql selects the literal `0 AS is_descending` and SqLiteIndexManager.ListAsync sets `IsDescending = false` unconditionally (SqLiteIndexManager.cs:72), while CreateAsync/CreateUniqueIndexSql do emit DESC from IndexField.IsDescending. Code that lists the actual index and compares it against the desired IndexDefinition — the natural idempotency check in a migration — sees a permanent mismatch on those two providers and drops/recreates on every run, while being stable on MSSQL and PostgreSQL.
 
-#### SH-M225 — An unterminated builder chain performs no DDL and the migration reports success
+#### SH-M245 — An unterminated builder chain performs no DDL and the migration reports success
 
 `../Birko.Data.Patterns/Schema/IIndexBuilder.cs:19`
 
@@ -1815,183 +1938,269 @@ Build() is a default interface method with an empty body on both IIndexBuilder a
 
 ### area: security-and-authorization
 
-#### SH-M226 — Pbkdf2 Verify trusts the stored iteration segment unbounded — throws for 0/negative, hangs for int.MaxValue
+#### SH-M246 — Pbkdf2 Verify trusts the stored iteration segment unbounded — throws for 0/negative, hangs for int.MaxValue
 
 `../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs:50`
 
 int.TryParse at line 50 accepts 0 and negatives, and the value is handed straight to Rfc2898DeriveBytes.Pbkdf2 at line 68. Verified: iterations 0 and -5 both throw ArgumentOutOfRangeException("iterations must be a non-negative and non-zero value"), which escapes Verify — contradicting the CR-M233 contract in the comment at line 53 that Verify be total over arbitrary stored strings. A stored 2147483647 instead burns CPU for hours per login attempt. The FormatException path is caught; this one is not.
 
-#### SH-M227 — BCrypt Verify throws ArgumentException for a shaped hash whose cost is unparseable or out of range
+#### SH-M247 — BCrypt Verify throws ArgumentException for a shaped hash whose cost is unparseable or out of range
 
 `../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs:277`
 
 IsValidBCryptHash only checks that indices 7..59 are in the BCrypt-Base64 alphabet — digits and letters both are — so "$2a$99$<53 valid chars>" and "$2a$ab$…" pass it. HashPassword then throws ArgumentException("Invalid BCrypt cost factor") out of Verify (line 69) instead of returning false. NeedsRehash on the identical input returns true without throwing, and the PBKDF2 sibling catches its analogous FormatException, so the two hashers and the two BCrypt entry points disagree on a corrupt stored value.
 
-#### SH-M228 — JwtTokenProvider.ValidateToken rejects any token carrying two claims of the same type
+#### SH-M248 — JwtTokenProvider.ValidateToken rejects any token carrying two claims of the same type
 
 `../Birko.Security.Jwt/JwtTokenProvider.cs:102`
 
 `principal.Claims.ToDictionary(c => c.Type, c => c.Value)` throws ArgumentException on a duplicate key, caught by the general handler at line 114 and reported as "Unexpected error: …". Repeated claims are normal JWT (an `aud` array, multiple `role`/`permission` claims — a shape ClaimsCurrentUser explicitly documents supporting at line 54), and JwtSecurityTokenHandler's inbound mapping also collapses "sub" and ClaimTypes.NameIdentifier onto one type. Such a token is reported invalid rather than validated.
 
-#### SH-M229 — IP-bound tokens are bypassable: GetClientIpAddress trusts X-Forwarded-For with no trusted-proxy check
+#### SH-M249 — IP-bound tokens are bypassable: GetClientIpAddress trusts X-Forwarded-For with no trusted-proxy check
 
 `../Birko.Security/Authentication/AuthenticationService.cs:154`  ·  _restates a first-pass finding_
 
 GetClientIpAddress returns the first entry of a caller-supplied X-Forwarded-For, then X-Real-IP, then CF-Connecting-IP, before falling back to the real socket IP — with no list of trusted proxies and no verification that the app is behind one. The value it returns is exactly what ValidateToken compares against binding.AllowedIps (line 105), so a client holding the token can send `X-Forwarded-For: 10.0.0.1` and satisfy an allow-list it is not on, defeating the only purpose TokenBinding has.
 
-#### SH-M230 — Binding match short-circuits the plain-token fallback; an empty AllowedIps rejects every request
+#### SH-M250 — Binding match short-circuits the plain-token fallback; an empty AllowedIps rejects every request
 
 `../Birko.Security/Authentication/AuthenticationService.cs:96`  ·  _restates a first-pass finding_
 
 The loop returns from inside the `binding.Token == token` branch, so a token listed in both TokenBindings (with a non-matching IP) and Tokens is rejected outright — the `_expandedTokens` fallback at line 120 is unreachable. A binding whose AllowedIps expanded to empty rejects every IP while still making IsAuthenticationEnabled() true, indistinguishable at the call site from a wrong token.
 
-#### SH-M231 — Vault request paths interpolate the caller's key unescaped — '../' traversal and query injection, incl. delete
+#### SH-M251 — Vault request paths interpolate the caller's key unescaped — '../' traversal and query injection, incl. delete
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:62`
 
 `new Uri(_baseUri, relativePath)` with relativePath built by raw interpolation (BuildDataPath line 252, DeleteSecretAsync line 136, ListSecretsAsync line 151). Uri resolution normalises `..`, so key = "../../sys/policy/x" retargets the request at a different Vault endpoint, and a key containing '?' or '#' rewrites the query (ListSecretsAsync appends "?list=true" after the interpolated path). DeleteSecretAsync is a destructive path reachable this way. No Uri.EscapeDataString anywhere.
 
-#### SH-M232 — Azure Key Vault request paths interpolate the caller's key unescaped, including on DeleteSecretAsync
+#### SH-M252 — Azure Key Vault request paths interpolate the caller's key unescaped, including on DeleteSecretAsync
 
 `../Birko.Security.AzureKeyVault/AzureKeyVaultSecretProvider.cs:75`
 
 `$"{BaseUri}secrets/{key}?api-version={ApiVersion}"` at lines 75, 96 and 109 embeds the key with no escaping. A key containing '/' silently becomes the *version* segment of the REST route (secrets/{name}/{version}), '..' collapses to a different route, and '?' or '&' injects query parameters ahead of api-version. Line 109 is a delete. Same species as the Vault provider, so neither backend escapes.
 
-#### SH-M233 — OidcIdTokenVerifier looks the provider up by the raw name, not the canonical one, so " Google " is refused
+#### SH-M253 — OidcIdTokenVerifier looks the provider up by the raw name, not the canonical one, so " Google " is refused
 
 `../Birko.Security.Jwt/OpenIdConnect/OidcIdTokenVerifier.cs:95`
 
 `_providers.TryGetValue(provider, …)` runs at line 95 while Canonical(provider) (trim + lower-case) is only computed at line 118, after the lookup. The re-keyed dictionary is OrdinalIgnoreCase but not trim-insensitive, so a provider name with surrounding whitespace — from a config file or a form post — returns ProviderNotConfigured even though it is configured. Canonical IS used for the key-source cache key and the returned Identity, so the code is inconsistent with itself.
 
-#### SH-M234 — Recursive secret→config traversal assumes relative child names; Azure Key Vault returns absolute ones
+#### SH-M254 — Recursive secret→config traversal assumes relative child names; Azure Key Vault returns absolute ones
 
 `../Birko.Security.Vault.Configuration/SecretConfigurationProvider.cs:89`
 
 `childPath = path + "/" + childName` treats ListSecretsAsync's output as names relative to `path`. Vault returns KV folder children (relative), but AzureKeyVaultSecretProvider.ListSecretsAsync (line 120) enumerates the whole vault and filters by StartsWith, returning FULL secret names — so with path "app" the recursion queries "app/app-db", which resolves to a nonexistent version route, yields null, and is swallowed by the fail-open catch at line 66. Each level also re-enumerates the entire vault.
 
-#### SH-M235 — UseResolvedPermissions is order-dependent and silently reverts to claim-borne permissions
+#### SH-M255 — UseResolvedPermissions is order-dependent and silently reverts to claim-borne permissions
 
 `../Birko.Security.AspNetCore/Extensions/PermissionResolutionExtensions.cs:27`
 
 It removes only the FIRST ICurrentUser descriptor and then appends ResolvedPermissionsCurrentUser. Since DI resolves the last registration, calling UseResolvedPermissions() before AddBirkoSecurity leaves ClaimsCurrentUser registered afterwards and winning — the app silently keeps reading permissions out of the token instead of resolving them server-side, which is the wider grant of the two. No ordering guard, no throw, and nothing observable at startup.
 
-#### SH-M236 — JWT bearer accepts ?token= on every request, putting the credential in URLs, logs and history
+#### SH-M256 — JWT bearer accepts ?token= on every request, putting the credential in URLs, logs and history
 
 `../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs:74`
 
 OnMessageReceived copies Request.Query["token"] into context.Token whenever present, for any path and any method — the comment names SSE/WebSocket but nothing restricts it to those. Query strings are written to reverse-proxy and Kestrel access logs, browser history and Referer headers, so a bearer token good for ExpirationMinutes leaks wherever the URL is recorded. A path predicate would keep the SSE affordance without applying it to every endpoint.
 
-#### SH-M237 — JwtTokenProvider.ValidateToken skips issuer/audience validation when they are unconfigured
+#### SH-M257 — JwtTokenProvider.ValidateToken skips issuer/audience validation when they are unconfigured
 
 `../Birko.Security.Jwt/JwtTokenProvider.cs:93`  ·  _restates a first-pass finding_
 
 ValidateIssuer = !IsNullOrEmpty(opts.Issuer) and the same for audience, so a TokenOptions carrying only a Secret accepts any correctly signed token whatever iss/aud it names — including one minted by a sibling service that shares the secret. AddBirkoJwtBearer (JwtBearerExtensions.cs:58) always validates both, so the same token is judged differently depending on which entry point sees it.
 
-#### SH-M238 — VaultSecretProvider.ParseKv1Response throws KeyNotFoundException on a malformed 200 body
+#### SH-M258 — VaultSecretProvider.ParseKv1Response throws KeyNotFoundException on a malformed 200 body
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:292`  ·  _restates a first-pass finding_
 
 `root.GetProperty("data")` is unguarded, so a KV v1 200 response lacking `data` raises KeyNotFoundException out of GetSecretWithMetadataAsync. The KV v2 sibling was explicitly hardened for exactly this case (CR-M240, lines 258-261) to return an empty value, so the two engine versions behave differently on the same malformed input.
 
-#### SH-M239 — HttpOidcSigningKeySource serves stale signing keys indefinitely while JWKS is unreachable
+#### SH-M259 — HttpOidcSigningKeySource serves stale signing keys indefinitely while JWKS is unreachable
 
 `../Birko.Security.Jwt/OpenIdConnect/HttpOidcSigningKeySource.cs:84`  ·  _restates a first-pass finding_
 
 On any non-cancellation exception the cached entry is returned unchanged and FetchedAt is never advanced or bounded, so a provider that revokes a compromised key keeps having tokens signed by it accepted for as long as the endpoint is down. The tradeoff is documented at line 82 but there is no maximum stale age and no staleness signal to the verifier, which cannot distinguish fresh keys from week-old ones.
 
-#### SH-M240 — AzureKeyVault ListSecretsAsync enumerates the whole vault and never follows nextLink
+#### SH-M260 — AzureKeyVault ListSecretsAsync enumerates the whole vault and never follows nextLink
 
 `../Birko.Security.AzureKeyVault/AzureKeyVaultSecretProvider.cs:123`  ·  _restates a first-pass finding_
 
 The request is always `secrets?api-version=7.4` with `path` applied only as a client-side StartsWith filter at line 145, and the `nextLink` Key Vault returns for large vaults is never followed. On a vault with more secrets than one page, secrets beyond page 1 are silently missing from both the list and SecretConfigurationProvider's traversal, and each configuration source costs a full-vault enumeration.
 
+### area: serialization
+
+#### SH-M261 — Caller-supplied XmlReaderSettings silently discard the DTD/XXE hardening
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:31`  ·  _restates a first-pass finding_
+
+`DtdProcessing = Prohibit` and `XmlResolver = null` exist only inside the `readerSettings ?? new XmlReaderSettings{…}` fallback. Any caller who supplies reader settings — including the common `new SystemXmlSerializer(new XmlWriterSettings{Indent=true}, new XmlReaderSettings())` when they only wanted indented output — gets DTD-capable defaults with the default resolver on all four read paths (lines 68, 77, 109, 118, 147, 155, 189, 199), re-enabling external-entity resolution and billion-laughs expansion on untrusted XML. Nothing re-applies it and nothing warns.
+
+#### SH-M262 — MessagePack default pairs a contractless resolver with the trusted-data profile
+
+`../Birko.Serialization.MessagePack/MessagePackBinarySerializer.cs:23`  ·  _restates a first-pass finding_
+
+`_options = MessagePackSerializerOptions.Standard.WithResolver(ContractlessStandardResolver.Instance)`; there is no `.WithSecurity(MessagePackSecurity.UntrustedData)` in the file. Standard is the trusted profile (no hash-collision mitigation, no depth limit) and contractless binds arbitrary incoming maps to members by name. Every read member (50, 57, 76, 82, 105, 111, 134, 140) uses it, and this is the intended queue/job payload codec, i.e. it is fed externally produced bytes. Supplying `options` to add security also discards the resolver choice.
+
+#### SH-M263 — Newtonsoft stream writes emit a UTF-8 BOM its byte path neither writes nor strips
+
+`../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs:87`  ·  _restates a first-pass finding_
+
+Stream writes (87, 98, 131, 144) use `new StreamWriter(stream, Encoding.UTF8, 1024, leaveOpen:true)`; static `Encoding.UTF8` emits `EF BB BF` at position 0. `SerializeToBytes` (60) uses `Encoding.UTF8.GetBytes` (no preamble) and `DeserializeFromBytes` (72, 79) uses `Encoding.UTF8.GetString`, which does not strip a BOM. Bytes captured from `Serialize(stream, v)` then passed to `DeserializeFromBytes<T>` yield a leading U+FEFF and a parse failure, while `Deserialize<T>(stream)` accepts them (`detectEncodingFromByteOrderMarks: true`).
+
+#### SH-M264 — YamlDotNet has the identical BOM asymmetry between its stream and byte paths
+
+`../Birko.Serialization.Yaml/YamlDotNetSerializer.cs:97`  ·  _restates a first-pass finding_
+
+`Serialize(Stream,…)` (97) and `Serialize<T>(Stream,…)` (106) write through `new StreamWriter(stream, Encoding.UTF8, bufferSize:1024, leaveOpen:true)` → BOM at position 0, while `SerializeToBytes` (70, 76) uses `Encoding.UTF8.GetBytes` and `DeserializeFromBytes` (82, 89) uses `Encoding.UTF8.GetString` with no BOM strip. A document round-tripped stream→bytes carries U+FEFF into the parser. Same species as the Newtonsoft defect, fixable the same way (`new UTF8Encoding(false)`, as SystemXmlSerializer already does).
+
+#### SH-M265 — Generic write overloads honour typeof(T) in three impls and erase it in two
+
+`../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs:41`
+
+`Serialize<TBase>(derived)` resolves five ways. STJ (SystemJsonSerializer.cs:43) and MessagePack (:69) serialize the declared type, silently dropping members declared only on the runtime type; XML (:55 `new XmlSerializer(typeof(T))`) throws for an unregistered derived instance; Newtonsoft (:41, whose only matching overload takes `object?`) and YAML (:51 `Serialize(value!)`) emit the derived shape. Overload resolution always prefers `Serialize<T>` over `Serialize(object)`, so this is the path consumers hit: persisting a base-typed reference loses fields under two impls, throws under a third.
+
+#### SH-M266 — An empty payload deserializes five different ways, three of them silently
+
+`../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs:54`
+
+`Deserialize<T>("")` / `DeserializeFromBytes<T>(Array.Empty<byte>())` guard only for null (51-55, 76-81), so an empty payload reaches the library. `JsonConvert.DeserializeObject<T>` returns null for empty/whitespace input, so the caller gets `default(T)` and cannot tell an empty payload from a JSON `null` from a truncated read. STJ (SystemJsonSerializer.cs:56, 81) throws JsonException, MessagePack (:57, :82) throws, and Protobuf (ProtobufBinarySerializer.cs:83) returns a fully default-constructed non-null instance. One member, five outcomes.
+
+#### SH-M267 — Byte-path text decoding silently substitutes U+FFFD for invalid UTF-8
+
+`../Birko.Serialization.Yaml/YamlDotNetSerializer.cs:82`
+
+`DeserializeFromBytes` (82, 89) decodes with `Encoding.UTF8.GetString(data)`, whose default decoder fallback is replacement, not throw. A payload from a non-UTF-8 producer, or one truncated mid multi-byte sequence, decodes without error into text containing U+FFFD and deserializes 'successfully' with corrupted string values — no exception anywhere. Identical at NewtonsoftJsonSerializer.cs:72 and :79. STJ instead hands raw bytes to System.Text.Json (SystemJsonSerializer.cs:75, 81), which rejects invalid UTF-8.
+
+#### SH-M268 — No implementation can serialize a null graph although every read returns T?
+
+`../Birko.Serialization/Core/ISerializer.cs:32`
+
+Every write member of all six impls opens with `ArgumentNullException.ThrowIfNull(value)` (SystemJsonSerializer.cs:42, SystemXmlSerializer.cs:54, MessagePackBinarySerializer.cs:40, ProtobufBinarySerializer.cs:32, YamlDotNetSerializer.cs:50; Newtonsoft's byte members inherit it by delegation). So `Serialize<Payload?>(null)` throws instead of emitting the format's null literal, while every read member is declared `T?`/`object?` and can read a null back. A legitimately null queue/job/workflow payload is unrepresentable and no member or option expresses it, forcing callers to invent a sentinel.
+
+#### SH-M269 — Async members throw synchronously in three impls and fault the Task in the others
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:159`
+
+SystemXmlSerializer (all four, 159-201), ProtobufBinarySerializer (all four, 113-146), YamlDotNetSerializer (all four, 128-158) and MessagePack's SerializeAsync/SerializeAsync<T> (116, 123) are plain Task-returning, so ArgumentNullException/OperationCanceledException are raised at the call site; STJ (all four), Newtonsoft (all four) and MessagePack's two DeserializeAsync are `async`, so the same misuse arrives as a faulted Task. `var t = s.SerializeAsync(...); try { await t; } catch {}` catches it for half the impls and crashes outside the try for the rest.
+
+#### SH-M270 — JsonWriterOptions govern exactly one SystemJsonSerializer overload; indentation diverges
+
+`../Birko.Serialization/Json/SystemJsonSerializer.cs:95`  ·  _restates a first-pass finding_
+
+`_writerOptions` is read only by `Serialize<T>(Stream,T)` (95, `new Utf8JsonWriter(stream,_writerOptions)`); every other member formats from `_options`. `new SystemJsonSerializer(new JsonSerializerOptions{WriteIndented=true})` (writerOptions omitted → Indented=false) makes `Serialize(value)`, `SerializeToBytes(value)` and `Serialize(stream,(object)value)` indent while `Serialize<T>(stream,value)` stays compact — and conversely `new SystemJsonSerializer(null, new JsonWriterOptions{Indented=true})` affects only that one member. The two objects are never reconciled.
+
+#### SH-M271 — Newtonsoft's NullValueHandling.Ignore default makes the two Format.Json impls non-interchangeable
+
+`../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs:23`  ·  _restates a first-pass finding_
+
+The default `_settings` (20-25) adds `NullValueHandling.Ignore` on top of camelCase, dropping null-valued properties; SystemJsonSerializer's default (19-23) sets only camelCase + `WriteIndented=false` and emits `"description":null`. Both report `SerializationFormat.Json` and `application/json` (28-30 vs 30-32), so a component persisting with one and reading with the other — the substitution the shared Format enum invites — sees an asymmetric wire format, and a Newtonsoft round-trip cannot distinguish absent from explicit null.
+
+#### SH-M272 — Protobuf untyped writes pass no runtime type while the read path names the Type
+
+`../Birko.Serialization.Protobuf/ProtobufBinarySerializer.cs:26`  ·  _restates a first-pass finding_
+
+All four untyped reads call `Serializer.Deserialize(type, stream)` with the caller's Type (44, 76, 104, 139), but all four untyped writes call `Serializer.Serialize(stream, value)` with `value` declared `object` and no type argument (26, 59, 90, 118), so protobuf-net's generic parameter binds to System.Object rather than `value.GetType()`. Every other impl passes `value.GetType()` here. The shared project declares no PackageReference (CLAUDE.md defers it to the consumer), so the same code can round-trip on one consumer and throw on another major version.
+
+#### SH-M273 — Base64 string overloads contradict the ContentType the same instance advertises
+
+`../Birko.Serialization.MessagePack/MessagePackBinarySerializer.cs:27`
+
+`Serialize`/`Serialize<T>` return `Convert.ToBase64String(bytes)` (35, 42; ProtobufBinarySerializer.cs:27, 35), yet `ContentType` is the constant `application/x-msgpack` / `application/x-protobuf` (27; Protobuf 18) with no per-member variant. The README documents `serializer.ContentType` as the HTTP header value, so `new StringContent(s.Serialize(v), Encoding.UTF8, s.ContentType)` ships base64 ASCII labelled as raw binary msgpack; a receiver decoding by content type fails, and the mismatch is invisible to the sender.
+
+#### SH-M274 — Newtonsoft DeserializeAsync skips the up-front token check its SerializeAsync added
+
+`../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs:158`  ·  _restates a first-pass finding_
+
+`SerializeAsync`/`SerializeAsync<T>` call `ThrowIfCancellationRequested()` with an explicit CR-L361 comment (130, 143); both DeserializeAsync overloads omit it and wrap the read in `Task.Run(() => serializer.Deserialize(...), cancellationToken)` (158, 167). With a pre-cancelled token the readers are still built and the caller sees TaskCanceledException where every other impl raises OperationCanceledException; a token cancelled after the delegate starts cannot interrupt the read. It is also the only member that moves work to a pool thread.
+
 ### area: settings-configuration-chain
 
-#### SH-M241 — RedisSettings.LoadFrom(Settings) silently discards ALL fields for a non-RedisSettings source
+#### SH-M275 — RedisSettings.LoadFrom(Settings) silently discards ALL fields for a non-RedisSettings source
 
 `../Birko.Redis/RedisSettings.cs:146`  ·  _restates a first-pass finding_
 
 The override is `if (data is RedisSettings redisData) LoadFrom(redisData);` with no `else base.LoadFrom(data)`. Every other override in the family (SqlSettings:56, MSSql:45, MySql:44, PostgreSql:56, SqLite:54, Mongo:116, Raven:58, Cosmos:67) has that else-branch. Loading from a plain Settings/RemoteSettings copies nothing, so a target built by the parameterless ctor stays at localhost:6379 and every cache/job-queue read and write silently goes to a local Redis instead of the configured host.
 
-#### SH-M242 — TimescaleDBSettings never overrides LoadFrom(Settings), so TimeColumn/ChunkTimeInterval are dropped
+#### SH-M276 — TimescaleDBSettings never overrides LoadFrom(Settings), so TimeColumn/ChunkTimeInterval are dropped
 
 `../Birko.Data.TimescaleDB/Stores/Settings.cs:70`  ·  _restates a first-pass finding_
 
 Only `LoadFrom(TimescaleDBSettings)` is declared — a different signature from the virtual Settings.LoadFrom(Settings), so it is an overload, not an override. A copy through any base-typed reference (including the LoadFrom(ISettings) bridge) dispatches to SqlSettings.LoadFrom(Settings) and leaves TimeColumn/ChunkTimeInterval untouched. TimescaleDBConnector.cs:96-98 feeds exactly these two into CreateHypertable, so the hypertable is partitioned on the wrong column/interval with no error.
 
-#### SH-M243 — InfluxDB Settings never overrides LoadFrom(Settings), so Token and Organization are dropped
+#### SH-M277 — InfluxDB Settings never overrides LoadFrom(Settings), so Token and Organization are dropped
 
 `../Birko.Data.InfluxDB/Stores/Settings.cs:99`  ·  _restates a first-pass finding_
 
 `LoadFrom(Settings data)` here takes its OWN type (Birko.Data.InfluxDB.Stores.Settings), so the inherited virtual Birko.Configuration.Settings.LoadFrom is never overridden. A base-typed copy reaches the base body and transfers only Location and Name; Token and Organization keep the target's previous values (null! on a fresh instance), surfacing as a 401 from InfluxDB far from the configuration site.
 
-#### SH-M244 — ElasticSearch Settings declares no ILoadable and no override, so IndexSettings is never copied
+#### SH-M278 — ElasticSearch Settings declares no ILoadable and no override, so IndexSettings is never copied
 
 `../Birko.Data.ElasticSearch/Stores/Settings.cs:18`  ·  _restates a first-pass finding_
 
 The class adds `IEnumerable<IndexSettings> IndexSettings { get; set; } = null!` but declares no LoadFrom override, no ILoadable<Settings> and no GetId override — the only settings class in the family with none of the three. Every LoadFrom lands on the base body (Location/Name only), so the per-type index-name and MaxResultWindow mapping is lost on copy and ElasticSearchStoreHelper.cs:32 falls back to `type.Name` as the index.
 
-#### SH-M245 — TimescaleDBSettings.GetConnectionString builds an Npgsql string by raw interpolation
+#### SH-M279 — TimescaleDBSettings.GetConnectionString builds an Npgsql string by raw interpolation
 
 `../Birko.Data.TimescaleDB/Stores/Settings.cs:54`  ·  _restates a first-pass finding_
 
 PostgreSqlSettings.cs:26-30 was explicitly changed (comment cites CR-L189) to compose via NpgsqlConnectionStringBuilder so values containing ';' or '=' are quoted rather than breaking key=value parsing. TimescaleDB uses the same driver but still interpolates. Password `pa;ss` yields `Password=pa;ss;`, making `ss` a bare keyword; a password containing `SSL Mode=Disable;` silently downgrades transport security. The fix reached one of the two Npgsql providers.
 
-#### SH-M246 — MSSql and MySQL connection strings interpolate Password/UserName/Location without escaping
+#### SH-M280 — MSSql and MySQL connection strings interpolate Password/UserName/Location without escaping
 
 `../Birko.Data.SQL.MSSql/Stores/MSSqlSettings.cs:32`  ·  _restates a first-pass finding_
 
 Both compose by plain interpolation (MSSqlSettings.cs:32, MySqlSettings.cs:27). A password containing ';' terminates the value early and the remainder parses as further keywords; a value containing '=' corrupts the pair. Worse than a loud failure: an injected `TrustServerCertificate=True` or `Encrypt=False` fragment silently weakens transport security on a connection the settings object claims is secure. SqlClient and MySqlConnector both ship a builder that quotes correctly; neither is used.
 
-#### SH-M247 — MongoDB URI does not URL-encode credentials and drops a username that has no password
+#### SH-M281 — MongoDB URI does not URL-encode credentials and drops a username that has no password
 
 `../Birko.Data.MongoDB/Stores/Settings.cs:52`  ·  _restates a first-pass finding_
 
 Credentials are appended as `$"{UserName}:{Password}@"` with no percent-encoding, so a password containing '@', ':', '/' or '?' produces an ambiguous or invalid mongodb:// URI (`p@ss` yields two '@'). Separately the guard requires BOTH UserName and Password non-empty, so a configuration with a username but an empty password omits the credential segment entirely and connects anonymously — the operator sees an authorization error on first query, not a configuration error.
 
-#### SH-M248 — RavenDB CreateDocumentStore ignores the UserName/Password/UseSecure its constructor accepts
+#### SH-M282 — RavenDB CreateDocumentStore ignores the UserName/Password/UseSecure its constructor accepts
 
 `../Birko.Data.RavenDB/Stores/Settings.cs:29`  ·  _restates a first-pass finding_
 
 CreateDocumentStore sets only Urls, Database and Conventions.RequestTimeout — no Certificate, no credential wiring — yet the ctor (line 23) takes username and password and forwards them into inherited slots nothing reads. A secured RavenDB cluster is unreachable while the configuration looks complete. Compounded by GetId() (line 44) returning only "{Location}:{Name}", so two Raven configs differing only in credentials are indistinguishable to the StoreLocator cache.
 
-#### SH-M249 — Settings.LoadFrom overwrites the target's Location/Name with nulls from a sparser source
+#### SH-M283 — Settings.LoadFrom overwrites the target's Location/Name with nulls from a sparser source
 
 `../Birko.Configuration/Settings.cs:84`
 
 The CR-H037/H038 fix made every override delegate to base unconditionally before its type guard, and the base body assigns Location/Name with no emptiness check. Both default to `null!`, so `configuredSqlSettings.LoadFrom(new Birko.Configuration.Settings())` — or from any source whose Location/Name were never assigned, e.g. a RedisSettings whose ctor passes string.Empty for Name — wipes the target's server and database. Result is not an exception but `Server=tcp:,0;Initial Catalog=;`.
 
-#### SH-M250 — SqLiteSettings embeds Password in the connection string unescaped
+#### SH-M284 — SqLiteSettings embeds Password in the connection string unescaped
 
 `../Birko.Data.SQL.SqLite/Stores/SqLiteSettings.cs:39`
 
 `cs += $";Password={Password}"` with no quoting. A password containing ';' injects further keywords: `pw;Mode=Memory` yields `Data Source=...;Password=pw;Mode=Memory;Default Timeout=30`, which opens an in-memory database instead of the file, so every write is silently discarded at process exit. Same escaping defect as MSSql/MySQL/TimescaleDB, on a third provider the earlier fix also missed.
 
-#### SH-M251 — ElasticSearch Settings has no GetId override, so different index mappings collide in the store cache
+#### SH-M285 — ElasticSearch Settings has no GetId override, so different index mappings collide in the store cache
 
 `../Birko.Data.ElasticSearch/Stores/Settings.cs:10`
 
 It inherits GetId() = "{Location}:{Name}", which excludes IndexSettings. StoreLocator.cs:25-44 keys its cache on GetId()+store type and on a cache hit does NOT call SetSettings, so a second request with the same cluster/name but a different per-type index mapping receives the store built from the first settings. ElasticSearchStoreHelper.cs:32 resolves the index name from that stale mapping, so reads and writes land in the wrong index — crossing tenants wherever indices are the tenant boundary.
 
-#### SH-M252 — CosmosDB GetId omits PartitionKeyPath, so a cached store uses the wrong partition key path
+#### SH-M286 — CosmosDB GetId omits PartitionKeyPath, so a cached store uses the wrong partition key path
 
 `../Birko.Data.CosmosDB/Stores/Settings.cs:51`
 
 GetId() returns "{Location}:{Name}:{UserName}" — PartitionKeyPath, the one field that changes document addressing, is absent. Two settings differing only in it produce the same id, and StoreLocator.cs:35-44 returns the first-built store without re-applying settings. CosmosDBStore.cs:370 / AsyncCosmosDBStore.cs:462 then create and address the container with the first config's path, so point reads keyed by guid resolve against a partition key the caller never configured and return nothing.
 
-#### SH-M253 — MongoDB GetId omits AuthDatabase and ReplicaSet, so different clusters share an identity
+#### SH-M287 — MongoDB GetId omits AuthDatabase and ReplicaSet, so different clusters share an identity
 
 `../Birko.Data.MongoDB/Stores/Settings.cs:97`
 
 GetId() is "{Location}:{Port}:{Name}:{UserName}" while GetConnectionString (lines 69-82) additionally encodes AuthDatabase, ReplicaSet and tls. Two settings differing only in ReplicaSet (a different cluster topology), AuthDatabase (a different credential store) or UseSecure (plaintext vs TLS) return the same id, and StoreLocator returns the first store built — so a caller asking for the replica-set/TLS configuration silently gets a direct unencrypted connection to the other one.
 
-#### SH-M254 — RedisSettings GetId omits RawConnectionString and KeyPrefix, the fields that redefine the target
+#### SH-M288 — RedisSettings GetId omits RawConnectionString and KeyPrefix, the fields that redefine the target
 
 `../Birko.Redis/RedisSettings.cs:122`
 
 GetId() = base.GetId() + Database. RawConnectionString is ignored, yet GetConnectionString (line 74) returns it verbatim and ignores Location/Port — so a plain instance and one whose RawConnectionString names an entirely different cluster both yield "localhost:::6379:0". KeyPrefix, documented at lines 22-23 as the namespace-isolation mechanism, is likewise absent. Any GetId-keyed reuse hands back a client for the wrong server or the wrong key namespace.
 
-#### SH-M255 — MSSqlConnector rebuilds MSSqlSettings from a RemoteSettings, discarding configured timeouts and flags
+#### SH-M289 — MSSqlConnector rebuilds MSSqlSettings from a RemoteSettings, discarding configured timeouts and flags
 
 `../Birko.Data.SQL.MSSql/Database/Connector/MSSqlConnector.cs:116`
 
@@ -1999,73 +2208,73 @@ When settings is a RemoteSettings/SqlSettings but not an MSSqlSettings, the conn
 
 ### area: specifications-and-paging
 
-#### SH-M256 — IsNull/IsNotNull on a non-nullable value-type property throws ArgumentException out of ToExpression()
+#### SH-M290 — IsNull/IsNotNull on a non-nullable value-type property throws ArgumentException out of ToExpression()
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:108`  ·  _restates a first-pass finding_
 
 BuildNullCheck calls Expression.Constant(null, member.Type) with no nullability guard, outside any try. Verified by running it: Expression.Constant(null, typeof(int)) throws ArgumentException "Argument types do not match" (typeof(int?) is fine). A rule `Qty IsNull` on `int Qty` therefore throws from ToExpression() while every sibling path degrades gracefully and IsSatisfiedBy handles it (ComparisonHelper.IsNull => actual is null). RuleExpressionConverter.BuildIsNull returns Constant(false) for this case.
 
-#### SH-M257 — Ordering comparisons on string/bool/non-comparable members throw InvalidOperationException from ToExpression()
+#### SH-M291 — Ordering comparisons on string/bool/non-comparable members throw InvalidOperationException from ToExpression()
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:124`
 
 BuildComparison calls comparison(member, constant) outside the conversion try-block. Verified: Expression.GreaterThan on two strings throws InvalidOperationException "The binary operator GreaterThan is not defined for the types 'System.String'", likewise GreaterThanOrEqual on bool and Equal on a struct with no op_Equality. So `Name GreaterThan "a"`, or any Between on a string property (BuildBetween line 132-134), throws out of ToExpression() — while ComparisonHelper.CompareValues falls back to string.Compare and evaluates it fine in memory.
 
-#### SH-M258 — Guid and enum-name string values fail Convert.ChangeType, silently degrading the leaf to match-nothing
+#### SH-M292 — Guid and enum-name string values fail Convert.ChangeType, silently degrading the leaf to match-nothing
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:182`
 
 TryConvertConstant falls through to Convert.ChangeType for any value not already the member type. Verified: ChangeType("<valid guid>", typeof(Guid)) and ChangeType("Open", typeof(SomeEnum)) both throw InvalidCastException, which the catch at line 188 swallows into Constant(false). Since rule values normally arrive as strings from JSON/a UI rule builder, `Guid Equal "<guid>"` on the AbstractModel key matches zero rows with no error — while ComparisonHelper.AreEqual compares ToString() and matches. RuleExpressionConverter.ConvertValue parses Guid/DateTime/enum explicitly.
 
-#### SH-M259 — Convert.ChangeType is called with no IFormatProvider, so rule values are parsed in the server's current culture
+#### SH-M293 — Convert.ChangeType is called with no IFormatProvider, so rule values are parsed in the server's current culture
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:182`
 
 `Convert.ChangeType(value, underlying)` uses CurrentCulture. Verified under this machine's sk-SK: ChangeType("1.5", typeof(decimal)) throws FormatException and is swallowed into Constant(false) (a price rule matches nothing), and ChangeType("02/03/2026", typeof(DateTime)) yields 2 March, not 3 February — so the same stored rule filters different rows on differently-localised hosts. RuleExpressionConverter.ConvertValue passes CultureInfo.InvariantCulture for exactly this reason.
 
-#### SH-M260 — Convert.ChangeType silently rounds a fractional value to an integer member, matching rows in-memory evaluation rejects
+#### SH-M294 — Convert.ChangeType silently rounds a fractional value to an integer member, matching rows in-memory evaluation rejects
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:182`
 
 Verified: Convert.ChangeType(10.7, typeof(int)) returns 11, so a rule `Qty Equal 10.7` on `int Qty` emits `x.Qty == 11` and the store filter selects rows with Qty 11 — a value the rule never named. ComparisonHelper.AreEqual(11, 10.7) returns false (both promoted to double, diff 0.3 exceeds the relative tolerance), so in-memory evaluation rejects the same entity. On Update(filter,...)/Delete(filter) this mutates rows that do not satisfy the rule.
 
-#### SH-M261 — String Equal/NotEqual are case-sensitive at the store but case-insensitive in memory
+#### SH-M295 — String Equal/NotEqual are case-sensitive at the store but case-insensitive in memory
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:86`
 
 The Equal/NotEqual arms go through BuildComparison → Expression.Equal, i.e. ordinal string equality. Verified compiled: `x.Name == "open"` against Name="Open" returns false. ComparisonHelper.AreEqual (ComparisonHelper.cs:68) ends with string.Equals(..., OrdinalIgnoreCase) and returns true for the same pair, so IsSatisfiedBy and ToExpression select different rows for the commonest rule shape of all. RuleExpressionConverter.BuildComparison special-cases string equality to string.Equals(OrdinalIgnoreCase) precisely to avoid this.
 
-#### SH-M262 — A null rule value turns Contains/StartsWith/EndsWith into match-all (and NotContains into match-none)
+#### SH-M296 — A null rule value turns Contains/StartsWith/EndsWith into match-all (and NotContains into match-none)
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:145`  ·  _restates a first-pass finding_
 
 BuildStringMethod builds the needle as `value?.ToString() ?? string.Empty`, so a null Value yields "" and `x.Name.Contains("", OrdinalIgnoreCase)` is true for every non-null string — a whole-table filter on Read/Update/Delete. ComparisonHelper.ContainsString/StartsWithString return false when expected is null, so the same rule is match-all at the store and match-none in memory; the NotContains arm inverts both, giving match-none at the store and match-all in memory.
 
-#### SH-M263 — An unresolvable or nested field with IsNull/IsNotNull matches every entity in memory but no row at the store
+#### SH-M297 — An unresolvable or nested field with IsNull/IsNotNull matches every entity in memory but no row at the store
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:47`
 
 BuildLeafExpression returns Constant(false) when typeof(T).GetProperty fails (line 77-78) — including any dotted field such as "Address.City", which this translator does not support. IsSatisfiedBy takes the other path: RuleEvaluator.EvaluateLeaf lines 48-53 ignore the TryGetValue result for IsNull/IsNotNull, so Compare(null, IsNull, null) returns true and EVERY entity satisfies a null-check on a field that does not exist. A typo'd or nested field therefore reports 0 rows from the store and 100% match in memory.
 
-#### SH-M264 — Composing a RuleSpecification routes in-memory evaluation back through the divergent LINQ path, defeating CR-H074
+#### SH-M298 — Composing a RuleSpecification routes in-memory evaluation back through the divergent LINQ path, defeating CR-H074
 
 `../Birko.Data.Patterns/Specification/AndSpecification.cs:25`
 
 AndSpecification/OrSpecification/NotSpecification do not override IsSatisfiedBy, so the base (Specification.cs:23) compiles ToExpression() — the hand-built rule tree — instead of dispatching to RuleSpecification's evaluator override. `ruleSpec.IsSatisfiedBy(e)` and `(ruleSpec & other).IsSatisfiedBy(e)` therefore disagree wherever the two halves diverge (In/Like match-all, string casing, null needle), and a composite's IsSatisfiedBy can even throw (IsNull on int, GreaterThan on string) where the operand alone succeeds — the exact dispatch problem the override's comment claims to have fixed.
 
-#### SH-M265 — RuleSpecification hand-rolls a second rule→LINQ translator instead of using Birko.Rules.RuleExpressionConverter
+#### SH-M299 — RuleSpecification hand-rolls a second rule→LINQ translator instead of using Birko.Rules.RuleExpressionConverter
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:31`
 
 Birko.Rules/Expressions/RuleExpressionConverter.cs is a complete public converter for the same IRule/RuleSet model, and it is correct on every point this file gets wrong: In/NotIn/Like, group IsNegated, IsNull on a non-nullable value type, nested "A.B" fields with null guards, invariant-culture and Guid/DateTime/enum conversion, case-insensitive string equality. Two translators for one model means the store filter a caller gets depends on which entry point they picked — and a disabled RuleSet is match-nothing here versus no-filter (match-everything) there.
 
-#### SH-M266 — Offset multiply is unchecked int arithmetic, so a large page number produces a negative offset
+#### SH-M300 — Offset multiply is unchecked int arithmetic, so a large page number produces a negative offset
 
 `../Birko.Data.Patterns/Paging/PagedRepositoryWrapper.cs:40`  ·  _restates a first-pass finding_
 
 `(page - 1) * pageSize` is unchecked and page is clamped only at the low end, so page=int.MaxValue with pageSize=20 wraps to a negative offset handed straight to IBulkReadRepository.Read(filter, orderBy, limit, offset) and on to the backend's OFFSET clause — provider-specific failure or wrong window instead of an empty page. AsyncPagedRepositoryWrapper.cs:43 is identical.
 
-#### SH-M267 — Paging with orderBy = null produces non-deterministic page windows (rows repeated or skipped)
+#### SH-M301 — Paging with orderBy = null produces non-deterministic page windows (rows repeated or skipped)
 
 `../Birko.Data.Patterns/Paging/PagedRepositoryWrapper.cs:41`
 
@@ -2073,91 +2282,91 @@ orderBy defaults to null in both wrappers and interfaces and is forwarded unchan
 
 ### area: store-crud-contract
 
-#### SH-M268 — IsStoreOfType returns false for any 2+ layer wrapper chain, so backend repository ctors reject composed stores
+#### SH-M302 — IsStoreOfType returns false for any 2+ layer wrapper chain, so backend repository ctors reject composed stores
 
 `../Birko.Data.Stores/StoreExtensions.cs:79`
 
 `if (store is IStoreWrapper<T> w) return w.GetInnerStoreAs<TStore>() != null;` returns directly, never reaching the chain walk at line 85. Every wrapper implements GetInnerStoreAs as a SINGLE-level `_innerStore as TInner` (AuditStoreWrapper.cs:62, SoftDeleteStoreWrapper.cs:82, DefaultStoreWrapper.cs:129, + async twins). On the chain StoreWrapperBuilder builds, the inner store is another wrapper, so the cast is null and the answer is false. ElasticSearchModelRepository.cs:25 then throws ArgumentException; ~20 backend repositories gate identically.
 
-#### SH-M269 — StoreLocator returns the cached instance by indexing the Dictionary outside the lock
+#### SH-M303 — StoreLocator returns the cached instance by indexing the Dictionary outside the lock
 
 `../Birko.Data.Stores/StoreLocator.cs:44`  ·  _restates a first-pass finding_
 
 `return (TStore)_stores[id][type];` sits after the `lock (_lockObject)` block. Both `_stores` and the inner per-id map are plain non-thread-safe Dictionary. A thread reaching that return while another is inside the lock doing `_stores.Add` / `_stores[id].Add` can observe a resize in progress, yielding InvalidOperationException or a spurious KeyNotFoundException. Moving the return inside the lock fixes it.
 
-#### SH-M270 — StoreLocator cannot serve async stores — the constraint is IBaseStore, which IAsyncBaseStore does not extend
+#### SH-M304 — StoreLocator cannot serve async stores — the constraint is IBaseStore, which IAsyncBaseStore does not extend
 
 `../Birko.Data.Stores/StoreLocator.cs:22`
 
 Both overloads constrain `where TStore : IBaseStore` (lines 14, 22). IAsyncBaseStore (IAsyncStore.cs:13) is standalone and does not derive from IBaseStore, and AbstractAsyncStore<T>/AbstractAsyncBulkStore<T> pull in only IAsyncBaseStore. So `GetStore<AsyncInMemoryStore<Invoice>>()` does not compile and the entire async half of the store family is excluded from the process-wide cache, with no async locator anywhere.
 
-#### SH-M271 — StoreLocator silently discards the settings argument on a cache hit
+#### SH-M305 — StoreLocator silently discards the settings argument on a cache hit
 
 `../Birko.Data.Stores/StoreLocator.cs:35`
 
 SetSettings runs only inside `if (!_stores[id].ContainsKey(type))`. The bucket key is settings.GetId(), and several providers omit fields from it — RavenDB Settings.GetId() returns only "{Location}:{Name}", dropping UserName/Password/UseSecure. Two settings instances differing only in credentials therefore collapse onto whichever was constructed first, with no error: the second caller gets a store configured with someone else's credentials and cannot tell.
 
-#### SH-M272 — Save returns a Guid for an entity that was never persisted
+#### SH-M306 — Save returns a Guid for an entity that was never persisted
 
 `../Birko.Data.Stores/AbstractStore.cs:145`  ·  _restates a first-pass finding_
 
 Save routes to Update whenever data.Guid is non-empty, then returns data.Guid!.Value. Update returns void and — in AbstractInMemoryStore.UpdateCore, which no-ops when the key is absent — cannot report that nothing was written. Save(entityWithFabricatedGuid) reports success and hands back a plausible identifier for data that does not exist. Same in AbstractAsyncStore.SaveAsync line 161.
 
-#### SH-M273 — Destroy does not reset the initialization latch, so torn-down storage is never re-provisioned
+#### SH-M307 — Destroy does not reset the initialization latch, so torn-down storage is never re-provisioned
 
 `../Birko.Data.Stores/AbstractStore.cs:48`  ·  _restates a first-pass finding_
 
 Destroy()/DestroyAsync() are abstract and the private `_initialized` field is never cleared. For a store whose InitCore provisions backend structures and whose Destroy removes them — RavenDBStore drops the database, CosmosDBStore deletes the container, MongoDBStore drops the collection, JsonStore deletes the file — the next CRUD call sees _initialized == true, skips InitCore, and operates against storage that no longer exists.
 
-#### SH-M274 — In-memory UpdateCore's ContainsKey-then-indexer is a non-atomic check-then-act that resurrects deleted entities
+#### SH-M308 — In-memory UpdateCore's ContainsKey-then-indexer is a non-atomic check-then-act that resurrects deleted entities
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:90`
 
 `if (data?.Guid != null && _items.ContainsKey(data.Guid.Value)) { ...; _items[data.Guid.Value] = data; }` — ConcurrentDictionary makes each call atomic but not the pair. If another thread removes the key between the ContainsKey and the indexer assignment, the update writes the entity back and a deleted row reappears. TryUpdate/AddOrUpdate exists for this. Same shape in the bulk override at line 171 (Where evaluates ContainsKey lazily while the loop body writes) and in AbstractAsyncInMemoryStore.cs:94 and :182.
 
-#### SH-M275 — In-memory UpdateCore silently drops the write when the key is absent, with no channel to report it
+#### SH-M309 — In-memory UpdateCore silently drops the write when the key is absent, with no channel to report it
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:88`
 
 The whole body is guarded by `data?.Guid != null && _items.ContainsKey(...)`; updating an entity whose Guid is null, or absent from _items, returns successfully with nothing written and the delegate never invoked. Update returns void so there is no result to inspect, and StoreException exists for exactly this failure but is never thrown. The bulk override (line 171) additionally applies partially — some items written, some skipped, no report of which. This is the mechanism behind Save's bogus success return.
 
-#### SH-M276 — In-memory CreateCore silently upserts over an existing key where a real backend's primary key would reject
+#### SH-M310 — In-memory CreateCore silently upserts over an existing key where a real backend's primary key would reject
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:63`
 
 `_items[data.Guid.Value] = data;` is an indexer assignment with no duplicate-key detection. Create(entityWithExistingGuid) silently replaces the stored entity and reports success, whereas a SQL store with a Guid primary key raises a unique-constraint violation and Mongo/Cosmos reject the duplicate id. Since InMemory is the canonical test double, a create path that can repeat an identifier passes in tests and destroys a row in production. Same at AbstractAsyncInMemoryStore.cs:67 and both bulk create paths (160 / 170).
 
-#### SH-M277 — In-memory store persists the caller's reference, not a snapshot, so post-write mutation silently changes stored state
+#### SH-M311 — In-memory store persists the caller's reference, not a snapshot, so post-write mutation silently changes stored state
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:63`
 
 `_items[data.Guid.Value] = data` stores the live object, and ReadCore/Read(Guid)/the bulk ReadCore hand the same reference back. Every serializing backend (SQL, JSON, XML, Mongo, ES) takes a value copy at write time. So `store.Create(e); e.Name = "x";` leaves the InMemory store holding "x" with no second write, and a read-modify-without-Update sequence appears to persist. AbstractModel exposes CopyTo for exactly this and it is unused, so the test double gives false-green for the whole class of missing-Update bugs.
 
-#### SH-M278 — In-memory Delete(filter) overrides the public member and bypasses DeleteCore entirely
+#### SH-M312 — In-memory Delete(filter) overrides the public member and bypasses DeleteCore entirely
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:194`
 
 AbstractBulkStore.Delete(filter) (AbstractBulkStore.cs:97-101) reads the matches then routes them through Delete(items) -> DeleteCore(IEnumerable<T>). This override goes straight to `_items.TryRemove`, so a subclass overriding DeleteCore — the documented extension point — never sees filter-based deletes and any logging/auditing it adds is skipped on the destructive path only. Also violates the convention that concrete stores override protected *Core, not public CRUD (MongoDBStore.cs:99 records CR-M117 removing such overrides). Same at AbstractAsyncInMemoryStore.cs:207.
 
-#### SH-M279 — In-memory Read(Guid) makes an entity stored under Guid.Empty unreachable by identifier, unlike other backends
+#### SH-M313 — In-memory Read(Guid) makes an entity stored under Guid.Empty unreachable by identifier, unlike other backends
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:77`
 
 The base AbstractStore.Read(Guid) (lines 79-82) builds ModelByGuid<T>(guid).Filter() = `x => x.Guid == guid`, which matches an entity whose Guid is explicitly Guid.Empty. This override short-circuits on `guid != Guid.Empty` and returns null. Since CreateCore's `??=` (line 61) happily stores an entity under the Guid.Empty key, InMemory can hold a row it can never return by identifier while SQL/Mongo/ES, which use the inherited Read(Guid), return it. Same at AbstractAsyncInMemoryStore.cs:81.
 
-#### SH-M280 — CreateCore's `??=` lets Guid.Empty survive, colliding with the null-data failure return
+#### SH-M314 — CreateCore's `??=` lets Guid.Empty survive, colliding with the null-data failure return
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:61`  ·  _restates a first-pass finding_
 
 `data.Guid ??= Guid.NewGuid()` only replaces a NULL Guid. An entity arriving with Guid.Empty is stored under the Guid.Empty key and CreateCore returns Guid.Empty — the exact value returned when data was null (line 59), so success is indistinguishable from failure. Worse, the Read(Guid) override at line 80 rejects Guid.Empty, so the entity is unreachable by identifier. Same at AbstractAsyncInMemoryStore.cs:65 and in both bulk create paths.
 
-#### SH-M281 — StoreDataDelegate<T> returns T but every invocation discards the return value
+#### SH-M315 — StoreDataDelegate<T> returns T but every invocation discards the return value
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:62`  ·  _restates a first-pass finding_
 
 The delegate is declared `public delegate T StoreDataDelegate<T>(T data)` (IStore.cs:13), yet all call sites are `storeDelegate?.Invoke(data);` followed by persisting the original `data` reference (AbstractInMemoryStore.cs:62/92/159/173, AbstractAsyncInMemoryStore.cs:66/96/169/184). A delegate written in the natural functional style — returning a modified copy rather than mutating in place — is silently ignored and the unmodified entity is stored. Either honour the return or declare it as Action<T>.
 
-#### SH-M282 — InitCore re-entrancy fails two different ways in the sync and async bases for identical subclass code
+#### SH-M316 — InitCore re-entrancy fails two different ways in the sync and async bases for identical subclass code
 
 `../Birko.Data.Stores/AbstractStore.cs:27`
 
@@ -2165,121 +2374,121 @@ The delegate is declared `public delegate T StoreDataDelegate<T>(T data)` (IStor
 
 ### area: store-decorator-composition
 
-#### SH-M283 — PropertyUpdate assignments bind to the marker INTERFACE member, so the SQL SET clause ignores column remaps
+#### SH-M317 — PropertyUpdate assignments bind to the marker INTERFACE member, so the SQL SET clause ignores column remaps
 
 `../Birko.Data.Patterns/Decorators/AuditBulkStoreWrapper.cs:60`
 
 In `updates.Set(x => x.UpdatedBy, ...)` T is constrained `AbstractModel, IAuditable`; AbstractModel has no UpdatedBy so the member binds to IAuditable.UpdatedBy, making Member.ReflectedType typeof(IAuditable). GetFieldFromLambda (DataBase_Field.cs:158-165) only remaps AbstractModel/AbstractLogModel, so LoadField runs on the interface property, which has no [NamedField], and CreateAbstractField (AbstractField.cs:68) falls back to property.Name. DataBaseBulkStore.cs:125 uses that as the SET column, so a renamed column yields an UPDATE against a column that does not exist.
 
-#### SH-M284 — Async Audit/Timestamp/SoftDelete SaveAsync discard the created Guid and can return Guid.Empty
+#### SH-M318 — Async Audit/Timestamp/SoftDelete SaveAsync discard the created Guid and can return Guid.Empty
 
 `../Birko.Data.Patterns/Decorators/AsyncAuditStoreWrapper.cs:46`  ·  _restates a first-pass finding_
 
 `await CreateAsync(data, processDelegate, ct)` at line 50 discards its result and line 56 returns `data.Guid ?? Guid.Empty`. An inner store that generates the Guid and returns it without assigning it back gives the caller Guid.Empty for a row that was created. Same at AsyncTimestampStoreWrapper.cs:54/60 and AsyncSoftDeleteStoreWrapper.cs:68/74. The sync twins (AuditStoreWrapper.cs:48, TimestampStoreWrapper.cs:52, SoftDeleteStoreWrapper.cs:68) all `return Create(...)`, as do Sluggable/Default/Versioned, so Save's result depends on the flavour used.
 
-#### SH-M285 — SluggableBulkStoreWrapper.Update omits the in-batch slug set, allowing duplicate slugs in one batch
+#### SH-M319 — SluggableBulkStoreWrapper.Update omits the in-batch slug set, allowing duplicate slugs in one batch
 
 `../Birko.Data.Patterns/Decorators/SluggableBulkStoreWrapper.cs:41`  ·  _restates a first-pass finding_
 
 `ResolveSlug(item, item.Guid)` is called with no batchSlugs argument, so uniqueness is checked only against the inner store. Two rows in one batch both re-resolving to "widget" both keep "widget". Its own Create (line 31) passes a batch set and AsyncSluggableBulkStoreWrapper.UpdateAsync (line 53) does too, with a CR-H075 comment naming missing per-batch tracking as the defect being fixed. The sync Update was left behind.
 
-#### SH-M286 — Default wrappers forward PropertyUpdate<T> untouched, so the single-default invariant can be violated
+#### SH-M320 — Default wrappers forward PropertyUpdate<T> untouched, so the single-default invariant can be violated
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:104`  ·  _restates a first-pass finding_
 
 `UpdateAsync(filter, PropertyUpdate<T>)` is a straight pass-through (same at DefaultStoreWrapper.cs:100). `updates.Set(x => x.IsDefault, true)` with a filter matching N rows yields N rows with IsDefault=true, exactly what the decorator exists to prevent, while the Action<T> overload directly above (line 90) does enforce it.
 
-#### SH-M287 — Timestamp PropertyUpdate overload sets UpdatedAt but never PrevUpdatedAt
+#### SH-M321 — Timestamp PropertyUpdate overload sets UpdatedAt but never PrevUpdatedAt
 
 `../Birko.Data.Patterns/Decorators/TimestampBulkStoreWrapper.cs:64`  ·  _restates a first-pass finding_
 
 `Update(filter, PropertyUpdate<T>)` appends only `Set(x => x.UpdatedAt, now)`, breaking the previous-timestamp chain the class maintains everywhere else: PrevUpdatedAt keeps the value from two writes ago. The Action<T> overload above (line 57) sets both. Same at AsyncTimestampBulkStoreWrapper.cs:66. Consumers using PrevUpdatedAt for change detection or sync watermarks read a stale value.
 
-#### SH-M288 — Audit and Timestamp bulk wrappers mutate the caller's PropertyUpdate<T> instance in place
+#### SH-M322 — Audit and Timestamp bulk wrappers mutate the caller's PropertyUpdate<T> instance in place
 
 `../Birko.Data.Patterns/Decorators/AsyncAuditBulkStoreWrapper.cs:62`  ·  _restates a first-pass finding_
 
 `updates.Set(...)` appends to the caller-owned Assignments list (PropertyUpdate.cs:27 mutates and returns this), not a copy. Same at AuditBulkStoreWrapper.cs:60, TimestampBulkStoreWrapper.cs:64, AsyncTimestampBulkStoreWrapper.cs:66. Reusing one PropertyUpdate for a second call carries the first call's assignments forward, and a chain with both decorators appends one per decorator per call; the SQL path then throws ArgumentException on the duplicate dictionary key (DataBaseBulkStore.cs:125).
 
-#### SH-M289 — Audit/Timestamp/SoftDelete bulk wrappers mutate entities inside a lazy Select, re-stamping on double enumeration
+#### SH-M323 — Audit/Timestamp/SoftDelete bulk wrappers mutate entities inside a lazy Select, re-stamping on double enumeration
 
 `../Birko.Data.Patterns/Decorators/AsyncTimestampBulkStoreWrapper.cs:45`  ·  _restates a first-pass finding_
 
 The mutation lambda lives in `data.Select(...)`, so it runs whenever the inner store enumerates. An inner store that enumerates twice (count-then-write, retry) sets PrevUpdatedAt to the UpdatedAt the first pass just wrote, leaving both equal. AsyncSluggableBulkStoreWrapper.cs:31 materializes first for exactly this species (CR-M124); Audit (32, 43), Timestamp (33, 45) and SoftDelete (35, 59) plus their sync twins never got the same fix.
 
-#### SH-M290 — UnsetOtherDefaults with excludeGuid == null skips existing default rows whose Guid is null
+#### SH-M324 — UnsetOtherDefaults with excludeGuid == null skips existing default rows whose Guid is null
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:141`  ·  _restates a first-pass finding_
 
 `allDefaults.Where(e => e.Guid != excludeGuid)` degenerates to `e.Guid != null` when excludeGuid is null, so a stored row with IsDefault=true and a null Guid is filtered out of the clearing pass and keeps the flag, leaving two defaults. Reached from batch create (line 53 passes literal null), CreateAsync(T) line 43 (Guid is null on create) and SaveAsync line 114. The alsoExcludeGuids HashSet at 85/144 has the same hole for a batch with a null-Guid item. Same at DefaultStoreWrapper.cs:136/51/41/110/83.
 
-#### SH-M291 — Soft-delete entity-based delete paths re-stamp DeletedAt on already-deleted rows
+#### SH-M325 — Soft-delete entity-based delete paths re-stamp DeletedAt on already-deleted rows
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteBulkStoreWrapper.cs:57`  ·  _restates a first-pass finding_
 
 `Delete(IEnumerable<T>)` and `Delete(T)` (SoftDeleteStoreWrapper.cs:60) assign `DeletedAt = _clock.UtcNow` unconditionally, overwriting the original deletion instant. The filter-based Delete(filter) on the same class (line 67) does guard via CombineWithNotDeleted. Whether the true deletion time survives depends on which overload the caller reaches, so retention/audit logic keyed on DeletedAt loses it. Same at AsyncSoftDeleteBulkStoreWrapper.cs:59 and AsyncSoftDeleteStoreWrapper.cs:60.
 
-#### SH-M292 — Slug uniqueness probe reads only ONE row, so an update lets an existing duplicate slug survive
+#### SH-M326 — Slug uniqueness probe reads only ONE row, so an update lets an existing duplicate slug survive
 
 `../Birko.Data.Patterns/Decorators/SluggableStoreWrapper.cs:73`
 
 `var existing = _innerStore.Read(BuildSlugFilter(slug)); return existing is not null && existing.Guid != excludeId;` asks whether THE returned row has a different Guid, not whether ANY other row holds the slug. With rows A and B both holding "widget" (reachable via the sync bulk-update defect, or a pre-existing dataset), updating A probes "widget", the store returns A, the Guid comparison is false, the candidate is reported free, A keeps "widget" and the duplicate is silently preserved and never repaired. Identical at AsyncSluggableStoreWrapper.cs:79.
 
-#### SH-M293 — Slug resolution is an unguarded read-then-write, so concurrent creates assign the same slug
+#### SH-M327 — Slug resolution is an unguarded read-then-write, so concurrent creates assign the same slug
 
 `../Birko.Data.Patterns/Decorators/AsyncSluggableStoreWrapper.cs:78`
 
 ResolveSlugAsync probes with `_innerStore.ReadAsync(entity => entity.Slug == slug, ct)` and the caller then writes; nothing holds a lock, opens a transaction or relies on a unique index. Two requests creating entities whose slug source is "widget" both observe the slug free and both persist Slug="widget". The in-batch HashSet closes only the single-call window. Same at SluggableStoreWrapper.cs:72. Neither the decorator nor ISluggable documents that a storage-level unique index is required.
 
-#### SH-M294 — UnsetOtherDefaults is an unguarded read-then-write, so concurrent promotions leave two default rows
+#### SH-M328 — UnsetOtherDefaults is an unguarded read-then-write, so concurrent promotions leave two default rows
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:140`
 
 `ReadAsync(e => e.IsDefault)` then `UpdateAsync(toUpdate)` then the caller's own create/update: three round trips with no lock, transaction or conditional predicate. Two callers each writing an entity with IsDefault=true interleave so both read the same default set, both clear it, and both persist their own default. The invariant the decorator exists to enforce is violated with no error. Same at DefaultStoreWrapper.cs:136-152, and the builder emits no compensating storage constraint.
 
-#### SH-M295 — DefaultStoreWrapper.Update(filter, action) re-enters the inner store from inside its own update callback
+#### SH-M329 — DefaultStoreWrapper.Update(filter, action) re-enters the inner store from inside its own update callback
 
 `../Birko.Data.Patterns/Decorators/DefaultStoreWrapper.cs:90`
 
 The callback passed to `_innerStore.Update(filter, item => {...})` calls UnsetOtherDefaults(item.Guid), issuing an inner-store bulk Read plus bulk Update while the inner store is mid-iteration of its own filter-update. DataBaseBulkStore.Update(filter, Action<T>) (line 103) materializes with ToList() so SQL survives, but file-backed backends that rewrite the whole document per write (JSON/XML) and connection- or transaction-stateful stores see a nested write inside an in-flight operation. The async sibling reads first and writes after (AsyncDefaultStoreWrapper.cs:92-101).
 
-#### SH-M296 — Default filter-update diverges sync vs async: one native filter-update vs N individual writes
+#### SH-M330 — Default filter-update diverges sync vs async: one native filter-update vs N individual writes
 
 `../Birko.Data.Patterns/Decorators/AsyncDefaultStoreWrapper.cs:92`
 
 `UpdateAsync(filter, action)` reads all matches into a list then issues one `_innerStore.UpdateAsync(item)` per row, so the inner store's native filter-update path is never used and the call is N+1 round trips with no atomicity. `DefaultStoreWrapper.Update(filter, action)` (line 90) instead forwards to `_innerStore.Update(filter, callback)`. The same logical call is one statement on the sync chain and N on the async chain, and a mid-loop failure on the async path leaves an arbitrary prefix updated.
 
-#### SH-M297 — Soft-delete entity Update forwards unguarded, so resurrecting a row re-introduces duplicate slugs/defaults
+#### SH-M331 — Soft-delete entity Update forwards unguarded, so resurrecting a row re-introduces duplicate slugs/defaults
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteStoreWrapper.cs:50`
 
 `Update(T)` (and AsyncSoftDeleteStoreWrapper.cs:50, SoftDeleteBulkStoreWrapper.cs:38) pass straight through with no DeletedAt == null check, while the filter-based overloads do combine it. Setting DeletedAt back to null restores the row; because the Sluggable probe (AsyncSluggableStoreWrapper.cs:78) and the Default probe (AsyncDefaultStoreWrapper.cs:140) read through the SoftDelete wrapper and never see deleted rows, the restored row still holds its old Slug and IsDefault=true, yielding two rows with one slug and/or two defaults, with no error on either write.
 
-#### SH-M298 — A null filter turns soft-delete Delete(filter) into "soft-delete every active row"
+#### SH-M332 — A null filter turns soft-delete Delete(filter) into "soft-delete every active row"
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteBulkStoreWrapper.cs:67`
 
 CombineWithNotDeleted returns the right-hand lambda unchanged when filter is null (ExpressionParameterReplacer.cs:33), so `Delete(null)` becomes `_innerStore.Update(x => x.DeletedAt == null, item => item.DeletedAt = now)`, a destructive operation over the whole table. Neither Delete(filter) nor Update(filter, updates) (line 48) null-checks its filter, and the decorator actively converts the null into a match-all-active predicate instead of rejecting it. Same at AsyncSoftDeleteBulkStoreWrapper.cs:69 and 50.
 
-#### SH-M299 — Bulk soft delete by filter is a per-row read-modify-write, so it applies partially on failure
+#### SH-M333 — Bulk soft delete by filter is a per-row read-modify-write, so it applies partially on failure
 
 `../Birko.Data.Patterns/Decorators/AsyncSoftDeleteBulkStoreWrapper.cs:69`
 
 `DeleteAsync(filter)` routes through `_innerStore.UpdateAsync(filter, Action<T>)`, which backends implement as read-then-update-each-row (DataBaseBulkStore.cs:102-109), rather than the PropertyUpdate<T> overload that exists to become one native UPDATE ... SET DeletedAt WHERE. A failure or cancellation halfway leaves some matched rows flagged deleted and others not, with no indication of progress and no affected-count returned. Same at SoftDeleteBulkStoreWrapper.cs:67.
 
-#### SH-M300 — StoreWrapperBuilder silently ignores IVersioned, so composed chains never enforce optimistic concurrency
+#### SH-M334 — StoreWrapperBuilder silently ignores IVersioned, so composed chains never enforce optimistic concurrency
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:100`
 
 Build probes IEventSourced, ITimestamped, IAuditable, ITenant, ISoftDeletable, ISluggable and IDefault but never IVersioned, and neither VersionedStoreWrapper nor AsyncVersionedStoreWrapper is referenced in the file. An entity declaring IVersioned gets a chain that treats Version as an ordinary column with no conflict detection, so lost updates occur while the marker suggests they cannot. There is also no sync Build overload, so the whole sync decorator family has no supported composition path.
 
-#### SH-M301 — Versioned Update increments Version before the inner write, turning a transient failure into a permanent conflict
+#### SH-M335 — Versioned Update increments Version before the inner write, turning a transient failure into a permanent conflict
 
 `../Birko.Data.Patterns/Concurrency/VersionedStoreWrapper.cs:50`
 
 `data.Version++` runs at line 50 and `_inner.Update(data, storeDelegate)` at line 51. If the inner write throws (timeout, deadlock, dropped connection) the caller's entity is at Version+1 while storage is still at Version, so the obvious retry fails the `existing.Version != data.Version` check at line 45 and throws ConcurrentUpdateException forever. A transient I/O error is reported as a concurrency conflict the caller cannot resolve without re-reading. Same at AsyncVersionedStoreWrapper.cs:54-55.
 
-#### SH-M302 — Composed chains silently drop capabilities outside IStore/IBulkStore, including aggregation and transactions
+#### SH-M336 — Composed chains silently drop capabilities outside IStore/IBulkStore, including aggregation and transactions
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:26`
 
@@ -2287,109 +2496,109 @@ Build takes and returns IAsyncBulkStore<T>, and every decorator implements only 
 
 ### area: tenant-isolation
 
-#### SH-M303 — Filter-based bulk Delete/Update forward Filter()! so a null filter with no tenant hits every tenant's rows
+#### SH-M337 — Filter-based bulk Delete/Update forward Filter()! so a null filter with no tenant hits every tenant's rows
 
 `../Birko.Data.Tenant/Stores/TenantBulkStoreWrapper.cs:78`
 
 `_innerStore.Delete(TenantFilter(filter).Filter()!)` suppresses a genuinely nullable return: ModelByTenant.Filter() returns BaseFilter unchanged when the effective tenant is null (Permissive with no tenant, or inside an all-tenants scope). A caller passing a nullable expression through the non-nullable parameter (`store.Delete(f!)`) reaches DataBaseBulkStore.Delete(filter) with null, which calls `Connector.Delete(typeof(T), null)` — an unqualified DELETE. Same `!` at lines 68 and 73 and at AsyncTenantBulkStoreWrapper.cs:71, 76, 81.
 
-#### SH-M304 — All-tenants scope widens reads but item writes are still tenant-compared, contradicting the comment at the seam
+#### SH-M338 — All-tenants scope widens reads but item writes are still tenant-compared, contradicting the comment at the seam
 
 `../Birko.Data.Tenant/Stores/TenantStoreWrapper.cs:152`
 
 TenantFilter's comment claims 'the write-authorization guards already special-case all-tenants scope', but BelongsToCurrentTenant (line 180) consults IsAllTenantsScope only inside `if (!HasTenant)`. With tenant t set, entering WithAllTenants widens reads to every tenant yet Update/Delete of any row so read throws TenantMismatchException. This is the reads-fail-open / writes-fail-closed split that ModelByTenant's own remarks record as the Guid.Empty bug (Symbio TASK-295), reintroduced for the admin scope.
 
-#### SH-M305 — Tenant repository registration always wraps with the non-bulk wrapper, breaking or unscoping bulk stores
+#### SH-M339 — Tenant repository registration always wraps with the non-bulk wrapper, breaking or unscoping bulk stores
 
 `../Birko.Data.Tenant/Repositories/RepositoryServiceCollectionExtensions.cs:42`
 
 All four factories build TenantStoreWrapper<,> / AsyncTenantStoreWrapper<,> even when TStore implements IBulkStore/IAsyncBulkStore, diverging from AsTenantAware which picks the bulk wrapper. A TRepository whose constructor takes IAsyncBulkStore<TModel> (any AbstractAsyncBulkRepository) cannot be built from the non-bulk wrapper, so Activator.CreateInstance throws MissingMethodException at resolve time — also making the `?? throw new InvalidOperationException` arm unreachable. Where it does construct, the repository loses tenant-composed filter-based Update/Delete.
 
-#### SH-M306 — ApplyTenantFiltering mutates the caller's SyncFilterOptions, accumulating one tenant predicate per run
+#### SH-M340 — ApplyTenantFiltering mutates the caller's SyncFilterOptions, accumulating one tenant predicate per run
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:155`
 
 The method assigns filterOptions.CanSaveToLocal/CanSaveToRemote on the instance the caller passed in, capturing the previous delegate. Reusing one SyncFilterOptions across two syncs under tenants t then u yields `BelongsToTenant(u) && BelongsToTenant(t)` — no item satisfies both, so every save is silently skipped and the run reports success with zero writes. Same escaping-mutation defect CR-M168 fixed for Direction, at a second site.
 
-#### SH-M307 — ApplyTenantContext mutates the caller-supplied TenantSyncOptions instance
+#### SH-M341 — ApplyTenantContext mutates the caller-supplied TenantSyncOptions instance
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:102`  ·  _restates a first-pass finding_
 
 For a TenantSyncOptions with a null TenantGuid it sets `tenantOptions.TenantGuid = CurrentTenantGuid` on that same instance and returns it, so the mutation escapes the call. Reusing one options object across two tenant scopes pins every later sync to the first tenant. CR-M168 fixed exactly this leak for Direction via an effectiveDirection local but left TenantGuid mutating in place.
 
-#### SH-M308 — OnBatchCompleted reports every error so far, not the current batch's
+#### SH-M342 — OnBatchCompleted reports every error so far, not the current batch's
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:528`  ·  _restates a first-pass finding_
 
 `result.Errors.Skip(result.Errors.Count - progress.Errors)` takes the last progress.Errors entries, but progress.Errors is cumulative across batches and never reset per batch. With one error in batch 1 and one in batch 2, batch 2's callback receives both, so a consumer using the callback for per-batch alerting or retry double-reports earlier failures.
 
-#### SH-M309 — Bidirectional SyncAction.Create is a silent no-op that still counts as processed and records knowledge
+#### SH-M343 — Bidirectional SyncAction.Create is a silent no-op that still counts as processed and records knowledge
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:429`
 
 The Create arm acts only when effectiveDirection is Download or Upload, but DetermineSyncAction returns Create for one-sided items in the Bidirectional branch (lines 667, 682) and effectiveDirection is then Bidirectional. Nothing is written, no counter moves (not even SkippedItems), totalProcessed++ runs and CreateKnowledgeItem records the item as synced. Bidirectional is the default Direction, so the default configuration drops every one-sided create while reporting Success == true, and the recorded knowledge later turns the missing side into a spurious deleted-remotely conflict.
 
-#### SH-M310 — Preview and Sync disagree: AnalyzeItem ignores Direction and can never report a conflict
+#### SH-M344 — Preview and Sync disagree: AnalyzeItem ignores Direction and can never report a conflict
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:202`
 
 AnalyzeItem re-implements the decision independently of DetermineSyncAction: it never reads options.Direction (so a Download-only run previews local-only items as ToCreate although the sync Skips them), and returns only Create/Update/Delete/Skip, so preview.Conflicts is always 0 and an item the sync will treat as a conflict is previewed as a plain Update. A caller using PreviewAsync as a dry run sees counts the following SyncAsync will not honour.
 
-#### SH-M311 — A tenant-blocked Update is dropped with no counter and no error, unlike the Create branch
+#### SH-M345 — A tenant-blocked Update is dropped with no counter and no error, unlike the Create branch
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:459`
 
 In the Update arm `if (CanSaveToLocal?.Invoke(remoteItem) != false)` has no else, so when the tenant predicate rejects a cross-tenant item nothing is incremented — not UpdatedItems, not SkippedItems, no SyncError. The Create arm (lines 436-439, 448-451) increments SkippedItems for the identical condition. The item is still counted in totalProcessed and written to the knowledge store as synced, so the skip is invisible in SyncResult and never retried.
 
-#### SH-M312 — Knowledge is recorded for items whose write was skipped, stamping foreign entity guids into the tenant's scope
+#### SH-M346 — Knowledge is recorded for items whose write was skipped, stamping foreign entity guids into the tenant's scope
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:504`
 
 CreateKnowledgeItem runs for every item reaching the end of the try, whether or not the save predicate blocked the write. Because the fetch side is unscoped that includes other tenants' items: a TenantSyncKnowledgeItem carrying another tenant's EntityGuid is persisted with TenantGuid = the current tenant. The next run reads it as prior knowledge and infers IsLocalDeleted/IsRemoteDeleted from the item's absence, driving deletes and conflicts for rows this tenant never owned.
 
-#### SH-M313 — Last-sync-time is written even when the run was cancelled or every item failed
+#### SH-M347 — Last-sync-time is written even when the run was cancelled or every item failed
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:534`
 
 SetLastSyncTimeAsync(scope, tenant, DateTime.UtcNow) runs unconditionally after the batch loop, including when the loop broke on options.CancellationToken.IsCancellationRequested (line 408) and when result.Errors is non-empty. The next run then reports IsInitialSync == false, skipping the initial-download path that would have re-fetched the unprocessed items. A cancelled first sync permanently marks itself complete.
 
-#### SH-M314 — TenantSyncProvider ignores OnSaveFilterBlock and OnError, so ThrowException on a tenant-blocked save is silently skipped
+#### SH-M348 — TenantSyncProvider ignores OnSaveFilterBlock and OnError, so ThrowException on a tenant-blocked save is silently skipped
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:431`
 
 Every save gate calls `filterOptions.CanSaveToLocal?.Invoke(item) != false` directly. The non-tenant siblings route the same decision through SyncProviderBase.CanSaveToLocal/HandleSaveFilterBlock (SyncProviderBase.cs:301), honouring SaveFilterBlockAction.ThrowException / LogAsError / MarkConflict and firing options.OnError / OnConflict. Here those settings are read by nothing, so a cross-tenant item — the exact case the tenant predicate blocks — can never be surfaced as an error or made to fail the sync.
 
-#### SH-M315 — TenantSyncProvider ignores options.MaxItems and OnBatchStarting, which both non-tenant providers honour
+#### SH-M349 — TenantSyncProvider ignores options.MaxItems and OnBatchStarting, which both non-tenant providers honour
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:402`
 
 The batch loop iterates all of allGuids with no cap. SyncProvider.cs:61 and AsyncSyncProvider.cs:62 both truncate allGuids to options.MaxItems (CR-L207). A caller who limits a tenant sync to N items — the documented way to bound a first run — syncs the entire (cross-tenant) set instead. options.OnBatchStarting is likewise never invoked here while the siblings call it at AsyncSyncProvider.cs:156.
 
-#### SH-M316 — TenantSyncQueue's per-tenant key does not give per-tenant concurrency — one semaphore serializes all tenants
+#### SH-M350 — TenantSyncQueue's per-tenant key does not give per-tenant concurrency — one semaphore serializes all tenants
 
 `../Birko.Data.Sync.Tenant/TenantSyncQueue.cs:43`
 
 GetQueueKey scopes only the bookkeeping Dictionary<string, Queue<QueuedSync>>. The actual gate is the single SyncQueue._semaphore created with maxConcurrentSyncs (default 1) and awaited in EnqueueWithKeyAsync regardless of key, so tenant t's sync blocks tenant u's for its whole duration. The class summary ('uses current tenant for queue scoping') and the spec scenario 'the two tenants do not serialize against one another' describe behaviour the code does not implement.
 
-#### SH-M317 — ToDictionary(GetGuid) throws on duplicate or unset guids, aborting the sync as an opaque "Sync failed"
+#### SH-M351 — ToDictionary(GetGuid) throws on duplicate or unset guids, aborting the sync as an opaque "Sync failed"
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:392`
 
 GetGuid returns Guid.Empty whenever the reflected `Guid` property is null or not a Guid, so any two unsaved/unkeyed entities on one side collide and ToDictionary raises ArgumentException. In ExecuteSyncAsync the outer catch swallows it into one SyncError { Message = "Sync failed" } naming no item; in ExecutePreviewAsync it propagates raw. The two entry points fail differently for the same input and neither points at the offending rows.
 
-#### SH-M318 — ISyncProvider entry points silently drop a mismatched filterOptions via `as`
+#### SH-M352 — ISyncProvider entry points silently drop a mismatched filterOptions via `as`
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:904`
 
 Both explicit interface implementations do `filterOptions as SyncFilterOptions<T>`, yielding null for any other type. A caller passing SyncFilterOptions<TOther> (easy through the non-generic ISyncProvider surface) loses LocalFetchPredicate/RemoteFetchPredicate and CanSaveTo* with no exception, and the run proceeds as a full unfiltered sync of both stores instead of reporting the mistake.
 
-#### SH-M319 — An unattributed event dispatches with IsAllTenantsScope true, so Strict handlers operate across all tenants
+#### SH-M353 — An unattributed event dispatches with IsAllTenantsScope true, so Strict handlers operate across all tenants
 
 `../Birko.EventBus.Tenant/TenantEventScopeAccessor.cs:59`
 
 When EventContext is null or its TenantGuid is null, RunWithScopeAsync runs the handler inside WithAllTenantsAsync. Any publish path that missed the enricher — a hand-rolled EventContext, or the DI mismatch above — therefore escalates the handler to cross-tenant scope rather than failing closed. The fail direction is open: NullEventScopeAccessor (no scope at all) would leave Strict operations throwing instead of silently succeeding across tenants.
 
-#### SH-M320 — RequireTenantHeaderMatchesClaim defaults true but is enforced only if the app also calls UseBirkoTenantHeaderGuard
+#### SH-M354 — RequireTenantHeaderMatchesClaim defaults true but is enforced only if the app also calls UseBirkoTenantHeaderGuard
 
 `../Birko.Security.AspNetCore/Extensions/TenantHeaderGuardExtensions.cs:34`
 
@@ -2397,217 +2606,217 @@ The option is read exclusively by TenantHeaderClaimGuardMiddleware, which nothin
 
 ### area: views-and-aggregation
 
-#### SH-M321 — AggregateHelper mislabels group keys when a GroupByFields name does not resolve to a property
+#### SH-M355 — AggregateHelper mislabels group keys when a GroupByFields name does not resolve to a property
 
 `../Birko.Data.Stores/AggregateHelper.cs:96`  ·  _restates a first-pass finding_
 
 keyProperties is built with `.Where(p => p != null)`, so an unresolvable name shortens the array, but the row-labelling loop indexes `query.GroupByFields[i]` by position in the SHORTENED array. With GroupByFields == ["Bogus", "Status"] the Status value is written under the key "Bogus"; every downstream GetValue reads the wrong column and no error is raised.
 
-#### SH-M322 — BuildCountAggregateSql emits SQL Cosmos cannot run and deserializes into the wrong shape
+#### SH-M356 — BuildCountAggregateSql emits SQL Cosmos cannot run and deserializes into the wrong shape
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:262`  ·  _restates a first-pass finding_
 
 It builds `SELECT VALUE COUNT(1) FROM (SELECT c.id FROM c ... GROUP BY c.X)` while its own comment states Cosmos does not support sub-queries in FROM; the inner query also projects non-grouped `c.id` alongside GROUP BY. Even if it executed, `SELECT VALUE COUNT(1)` returns a bare number, not an object with a `Count` member, so the private `CountResult` binding yields 0 — CountAsync would report zero rows for a populated view.
 
-#### SH-M323 — CosmosViewStore.QueryFirstAsync/CountAsync branch on HasAggregates only, contradicting QueryAsync
+#### SH-M357 — CosmosViewStore.QueryFirstAsync/CountAsync branch on HasAggregates only, contradicting QueryAsync
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:61`  ·  _restates a first-pass finding_
 
 CR-L110 made QueryAsync take the SQL path for `HasAggregates || HasGroupBy`, but QueryFirstAsync (61) and CountAsync (75) still test HasAggregates alone. For a group-by-only (distinct) view, QueryAsync returns grouped rows while QueryFirstAsync returns a raw ungrouped document and CountAsync returns the raw document count — the same store answers three inconsistent questions about one definition.
 
-#### SH-M324 — ElasticSearchViewStore.CountAsync ignores grouping and aggregation entirely
+#### SH-M358 — ElasticSearchViewStore.CountAsync ignores grouping and aggregation entirely
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:73`  ·  _restates a first-pass finding_
 
 It issues a plain CountRequest against the resolved index with only the filter. For an aggregate/grouped view it returns the number of source DOCUMENTS, not the number of result rows QueryAsync produces on the same definition: 1,000,000 vs 12 status buckets. Any caller paging on Count/Query pages over a phantom result set.
 
-#### SH-M325 — ElasticSearchViewStore aggregate path silently discards orderBy and offset
+#### SH-M359 — ElasticSearchViewStore aggregate path silently discards orderBy and offset
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:57`  ·  _restates a first-pass finding_
 
 QueryAsync forwards only (filter, limit, ct) to ExecuteAggregateQueryAsync. A caller supplying OrderBy or offset for an aggregate view gets unordered, unpaged buckets with no error, and `limit` silently changes meaning from page size to terms-bucket size (line 188), so limit:10 caps the number of GROUPS rather than rows.
 
-#### SH-M326 — ElasticSearchViewStore non-aggregate path never maps SourceProperty to ViewProperty
+#### SH-M360 — ElasticSearchViewStore non-aggregate path never maps SourceProperty to ViewProperty
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:343`  ·  _restates a first-pass finding_
 
 _sourceFields is built from FieldSelector.SourceProperty and used only as a `_source` include filter; the hits are deserialized straight into TView by NEST name mapping. There is no projection/rename step, so `Select(o => o.StatusCode, v => v.Status)` leaves TView.Status at its default. The same names are used for FieldSort (line 136), so ordering by a renamed property targets a field the index does not have.
 
-#### SH-M327 — LinqAggregateAsync's raw-rows shortcut ignores OrderBy, Limit, Offset and TimeBucketInterval
+#### SH-M361 — LinqAggregateAsync's raw-rows shortcut ignores OrderBy, Limit, Offset and TimeBucketInterval
 
 `../Birko.Data.Stores/AggregateHelper.cs:50`
 
 When `Aggregates.Count == 0 && GroupByFields.Count == 0` the method returns every filtered row and never reaches ApplyOrderingAndPaging (line 126) or the bucketing code. `new AggregateQuery<Order> { Limit = 10, Offset = 100, OrderBy = ..., TimeBucketInterval = "1 hour", TimeColumn = "Created" }` therefore returns the entire table, unordered and unbucketed, reporting success — a caller paging a large store gets everything.
 
-#### SH-M328 — Composite group key is a "|"-joined ToString(), so distinct key tuples collide into one group
+#### SH-M362 — Composite group key is a "|"-joined ToString(), so distinct key tuples collide into one group
 
 `../Birko.Data.Stores/AggregateHelper.cs:86`
 
 `string.Join("|", key.Select(k => k?.ToString() ?? ""))` is the group key. Values ("a|b", "c") and ("a", "b|c") produce the identical key "a|b|c" and are summed into one row; null and "" also collide, as do any two values with equal ToString() (e.g. two enums of different types). Rows are silently merged and the emitted key columns come from `group.First()`, so one of the real key tuples disappears from the result.
 
-#### SH-M329 — ComputeSum/ComputeAvg return null for short, byte, sbyte, ushort, uint and ulong properties
+#### SH-M363 — ComputeSum/ComputeAvg return null for short, byte, sbyte, ushort, uint and ulong properties
 
 `../Birko.Data.Stores/AggregateMath.cs:36`
 
 Both methods only branch on decimal/double/float/int/long and fall through to `return null`. A Sum or Avg over a `short`/`byte`/`uint`/`ulong` column silently yields a null cell with no error, while a native backend (SQL SUM, ES SumAggregation) returns a number for the same query — so the LINQ fallback and the server-side path disagree. ViewDefinitionBuilder.ValidateAggregates (line 210) explicitly accepts all of those types as valid Sum/Avg targets.
 
-#### SH-M330 — TimeIntervalParser parses the numeric part with the current culture, so "1.5 hours" fails under a comma-decimal locale
+#### SH-M364 — TimeIntervalParser parses the numeric part with the current culture, so "1.5 hours" fails under a comma-decimal locale
 
 `../Birko.Data.Stores/TimeIntervalParser.cs:29`
 
 `double.TryParse(parts[0], out var value)` (and `TimeSpan.TryParse` on line 23) use CurrentCulture. On sk-SK/de-DE, "1.5 hours" fails to parse and Parse returns TimeSpan.Zero, which AggregateHelper reads as "bucketing disabled" (no bucket_time key at all) and StoreAggregationHelper.ParseToTime silently rewrites to "1h". The same query therefore buckets differently depending on the process locale, with no error.
 
-#### SH-M331 — ES grouped aggregate parsing writes group keys under the SOURCE property name, so renamed keys are dropped
+#### SH-M365 — ES grouped aggregate parsing writes group keys under the SOURCE property name, so renamed keys are dropped
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:240`
 
 Both the composite branch (240) and the terms branch (264) call `SetPropertyValue(item, viewType, groupBy.PropertyName, ...)` with the GroupByClause's SOURCE property name. With `GroupBy<Order>(o => o.StatusCode)` and `Select(o => o.StatusCode, v => v.Status)`, GetProperty("StatusCode") on TView returns null and SetPropertyValue returns silently, so every returned row carries metric values with a default (null/0) group key — the buckets become indistinguishable.
 
-#### SH-M332 — ES metric extraction forces every value to double?, so Min/Max on a date or string field is silently dropped
+#### SH-M366 — ES metric extraction forces every value to double?, so Min/Max on a date or string field is silently dropped
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:120`
 
 ExtractMetricValues returns Dictionary<string,double?>, so a MinAggregation over a date field surfaces as epoch-millis double. ElasticSearchViewStore.SetPropertyValue then calls ConvertValue for a DateTime target, Convert.ChangeType(double, DateTime) throws, the catch returns false and the property is left at default with no error. `Min<Order,DateTime>(o => o.Created, v => v.Earliest)` — which ViewDefinitionBuilder explicitly permits — therefore always yields default(DateTime) on ES while SQL/Mongo/Raven return the real value.
 
-#### SH-M333 — ES multi-field terms grouping discards all group keys
+#### SH-M367 — ES multi-field terms grouping discards all group keys
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:209`
 
 In ParseAggregateResponse (209) and ParseGroupedBuckets (276) the terms branch assigns a key only `if (query.GroupByFields.Count == 1)`. If a response carries a terms `group_by` while the query groups by two or more fields (e.g. a hand-built request, or a cached/older mapping), each row is emitted with metric values and NO key columns at all, so rows are indistinguishable and silently unattributable.
 
-#### SH-M334 — Group-by aggregations default to size 10000 with no bucket-truncation detection
+#### SH-M368 — Group-by aggregations default to size 10000 with no bucket-truncation detection
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:62`
 
 BuildGroupByAggregation caps both the terms and composite aggregation at `size = 10000` and neither caller inspects `DocCountErrorUpperBound`, `SumOtherDocCount` or the composite `AfterKey`. A view grouping by a high-cardinality field (customer, SKU) silently returns only the 10000 largest buckets — the caller sees a complete-looking result set that omits groups, and ElasticSearchViewStore passes `limit ?? 10000` here so a page size of 10 caps it at ten groups.
 
-#### SH-M335 — ElasticSearchViewManager.EnsureAsync for an Auto-mode view creates the PRIMARY SOURCE index, not the view's
+#### SH-M369 — ElasticSearchViewManager.EnsureAsync for an Auto-mode view creates the PRIMARY SOURCE index, not the view's
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewManager.cs:57`
 
 ResolveIndexName delegates to ElasticSearchViewIndexResolver, which returns `definition.Name` only for Persistent mode; for an `Auto` definition named "order_summary" it returns "order". EnsureAsync then probes and, if missing, CREATEs the source-data index "order" with dynamic mapping — a lifecycle call for a view mutating the entity index. DropAsync("order_summary") afterwards targets a different index, so ensure/drop are not inverses for Auto views.
 
-#### SH-M336 — MongoViewStore Persistent mode queries the named view unconditionally; a missing view returns empty, not an error
+#### SH-M370 — MongoViewStore Persistent mode queries the named view unconditionally; a missing view returns empty, not an error
 
 `../Birko.Data.MongoDB.Views/MongoViewStore.cs:134`
 
 `useView` is true for Persistent without any existence check, and the CR-M122 comment on the very next lines records that aggregating against a non-existent MongoDB view/collection returns an EMPTY cursor rather than throwing. So a Persistent definition whose view was never created (or was dropped) makes QueryAsync return no rows and CountAsync return 0 — indistinguishable from a genuinely empty view. Auto mode was fixed; Persistent still fails silently.
 
-#### SH-M337 — MongoViewManager.DropAsync drops any collection with the given name, view or not
+#### SH-M371 — MongoViewManager.DropAsync drops any collection with the given name, view or not
 
 `../Birko.Data.MongoDB.Views/MongoViewManager.cs:70`
 
 It calls `_database.DropCollectionAsync(viewName)` with no check that the target is a view (ExistsAsync just above deliberately relies on views appearing in the collection-name listing, so the two are indistinguishable here). `DropAsync("Order")` — the primary-source collection name, which SqlViewTranslator-style name derivation and the ES resolver both produce for unnamed/Auto views — destroys the real collection and every document in it.
 
-#### SH-M338 — MongoViewTranslator translates a Cross join identically to Inner, so no cartesian product is produced
+#### SH-M372 — MongoViewTranslator translates a Cross join identically to Inner, so no cartesian product is produced
 
 `../Birko.Data.MongoDB.Views/MongoViewTranslator.cs:47`
 
 `preserveNullAndEmptyArrays` is added only for JoinType.LeftOuter, and the $lookup always joins on localField/foreignField. A definition declaring JoinType.Cross therefore produces an equality join, not a cross product — SQL honours Cross via CROSS JOIN (SqlViewTranslator.TranslateJoinType), so the same ViewDefinition returns different row sets on the two backends with no error or warning.
 
-#### SH-M339 — RavenViewStore OnTheFly mode ignores the ViewDefinition and queries a TView collection that need not exist
+#### SH-M373 — RavenViewStore OnTheFly mode ignores the ViewDefinition and queries a TView collection that need not exist
 
 `../Birko.Data.RavenDB.Views/RavenViewStore.cs:114`
 
 For ViewQueryMode.OnTheFly, BuildQuery returns `session.Query<TView>()` — a dynamic query over the collection Raven infers from TView. Fields, Joins, Aggregates and GroupBy are never consulted and RavenViewTranslator is never invoked, so an OnTheFly view over Order projecting into OrderSummary queries an "OrderSummaries" collection and returns an empty list (or unrelated documents) while reporting success. OnTheFly is the builder's default mode.
 
-#### SH-M340 — RavenViewStore Auto mode queries the static index with no existence check, so it cannot fall back
+#### SH-M374 — RavenViewStore Auto mode queries the static index with no existence check, so it cannot fall back
 
 `../Birko.Data.RavenDB.Views/RavenViewStore.cs:119`
 
 Auto is documented as "try persistent, fall back to on-the-fly", but the branch only checks whether `_indexName` is non-empty and then returns `session.Query<TView>(_indexName)`. If the index does not exist, Raven fails the query (IndexDoesNotExistException) instead of degrading to the dynamic query — MongoViewStore performs an explicit existence probe for the identical mode (CR-M122), so Auto means two different things across backends.
 
-#### SH-M341 — RavenDB Avg reduce uses integer division, truncating the average for integer source columns
+#### SH-M375 — RavenDB Avg reduce uses integer division, truncating the average for integer source columns
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:219`
 
 The reduce emits `{View} = g.Sum(x => x.{View}_Sum) / g.Sum(x => x.{View}_Count)`. When the source property is an int/long, both operands are integers and Raven's compiled index performs integer division: an Avg over values 10 and 15 yields 12, not 12.5. AggregateHelper.ComputeAvg returns a double for the same int column, so the Raven view and the LINQ fallback disagree on every non-integral average, silently.
 
-#### SH-M342 — RavenDB join translation ignores RightProperty and JoinType and assumes the left key is a document id
+#### SH-M376 — RavenDB join translation ignores RightProperty and JoinType and assumes the left key is a document id
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:49`
 
 The map emits `let joined = LoadDocument<Customer>(entity.CustomerGuid)`. A LeftJoin on `(o => o.CustomerGuid, c => c.Guid)` is thus resolved by treating the raw Guid as a Raven document id: LoadDocument returns null, and the select's `joined.Name` then errors or yields null inside the index. JoinType is discarded too, so an Inner join keeps unmatched parents. The definition builds and the index is put successfully — the wrongness only shows up in the index's output.
 
-#### SH-M343 — A Raven map-only index stores no fields, so a Persistent non-aggregate view loses every Select rename
+#### SH-M377 — A Raven map-only index stores no fields, so a Persistent non-aggregate view loses every Select rename
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:28`
 
 For a non-aggregate definition the translator returns reduce == null and RavenViewManager puts an IndexDefinition with only `Maps` — no Fields/FieldStorage configuration. RavenViewStore then queries it with `session.Query<TView>(indexName)` and no ProjectInto (RavenViewStore.cs:124/137), so Raven returns the matched SOURCE documents rather than the map's projection; a `Select(o => o.Number, v => v.OrderNumber)` rename never reaches TView.
 
-#### SH-M344 — SqlViewTranslator keys aggregate fields by the SQL function name, so a second SUM on a table is silently dropped
+#### SH-M378 — SqlViewTranslator keys aggregate fields by the SQL function name, so a second SUM on a table is silently dropped
 
 `../Birko.Data.SQL.Views/SqlViewTranslator.cs:150`
 
 FunctionField.Name is the function ("SUM"/"COUNT"/…) and the field is added as `view.AddField(table.Name, table.Type, functionField, functionField.Name)`. View.AddField ignores an add whose key already exists (`if (!table.Fields.ContainsKey(fieldName))`), so `Sum(o.Total → v.Total)` plus `Sum(o.Tax → v.Tax)` keeps only the first: the generated SELECT has one SUM column and TView.Tax stays at its default, with no exception. Non-aggregate fields collide the same way on the source column name (line 99).
 
-#### SH-M345 — A SQL view with no joins cannot be queried or created — the connector requires at least one join
+#### SH-M379 — A SQL view with no joins cannot be queried or created — the connector requires at least one join
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:63`
 
 Translate only calls AddJoin inside the `definition.Joins` loop (SqlViewTranslator.cs:156), so a single-source definition (`From<Order>().Select(...)`, the minimal documented shape) produces a View with Join == null. AbstractConnector.CreateSelectCommand then throws ArgumentNullException("view.Join") on every QueryAsync/QueryFirstAsync, and ViewSelectSqlBuilder throws InvalidOperationException("View must have at least one join definition") from EnsureAsync.
 
-#### SH-M346 — SqlViewStore orders by TView property names, but the SQL exposes source column names and "SUM"/"COUNT" aliases
+#### SH-M380 — SqlViewStore orders by TView property names, but the SQL exposes source column names and "SUM"/"COUNT" aliases
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:137`
 
 TranslateOrderBy copies `field.PropertyName` (the view property) into the order dictionary, and the connector interpolates the key verbatim (AbstractConnectorBase.cs:558; CreatePersistentViewSelectCommand does the same). The on-the-fly SELECT emits `Table.Column` for plain fields and aliases aggregates as the Fields-dictionary key ("SUM"), so ordering by a renamed field or by any aggregate property is invalid SQL — or, if a same-named column exists on another joined table, sorts the wrong column.
 
-#### SH-M347 — SqlViewStore drops the offset when no limit is supplied, returning page 1 instead of the requested page
+#### SH-M381 — SqlViewStore drops the offset when no limit is supplied, returning page 1 instead of the requested page
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:63`
 
 Both the on-the-fly and persistent command builders apply paging only inside `if (limit != null)` (AbstractConnectorBase.cs:560, AbstractConnectorBase_View.cs:95), so `QueryAsync(filter, orderBy, limit: null, offset: 20)` silently returns rows from the start of the result set. MongoViewStore emits `$skip` for the same call and CosmosViewStore emits `OFFSET 20 LIMIT 2147483647`, so the same arguments page correctly there and wrongly on SQL.
 
-#### SH-M348 — SqlViewStore.CountAsync counts joined source rows, not view rows, for aggregate/grouped views
+#### SH-M382 — SqlViewStore.CountAsync counts joined source rows, not view rows, for aggregate/grouped views
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:98`
 
 It calls SelectCount(view, conditions), whose on-the-fly path is `SelectCount(view.Tables…, view.Join, conditions)` — a COUNT over the joined tables with no GROUP BY (AbstractConnector_SelectViewCount.cs:41). For a view grouping 1,000,000 orders into 12 buckets, CountAsync returns 1,000,000 while QueryAsync returns 12 rows. MongoViewStore.CountAsync counts post-$group documents, so the same contract means different things per backend.
 
-#### SH-M349 — SqlViewStore filters resolve TView property names through LoadTable/LoadView, neither of which knows portable views
+#### SH-M383 — SqlViewStore filters resolve TView property names through LoadTable/LoadView, neither of which knows portable views
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:51`
 
 DataBase.ParseConditionExpression resolves a column via ResolveColumnName(TView, prop) → LoadTable(TView), which returns null for a TView with no [Table] attribute, then falls back to the ResolveFieldSelectName hook → LoadView(TView), which throws TableAttributeException("No view attributes in type") for a type with no [View] attribute. If the hook was never registered the name stays empty and AbstractConnectorBase throws "Condition name cannot be null or empty". Either way every filtered query fails, and which exception you get depends on unrelated global state.
 
-#### SH-M350 — SQL and MongoDB EnsureAsync never update an existing view, contradicting the "Creates or updates" contract
+#### SH-M384 — SQL and MongoDB EnsureAsync never update an existing view, contradicting the "Creates or updates" contract
 
 `../Birko.Data.SQL.Views/SqlViewManager.cs:42`
 
 IViewManager.EnsureAsync is documented as "Creates or updates the persistent view", but SqlViewManager returns as soon as ViewExists/ViewExistsAsync is true and MongoViewManager returns as soon as ExistsAsync is true (MongoViewManager.cs:44). After a ViewDefinition changes (a new column, a changed join), Ensure reports success while every subsequent query keeps reading the stale artifact. RavenViewManager, by contrast, always replaces the index.
 
-#### SH-M351 — CosmosViewManager.EnsureAsync reports success for a Persistent definition without creating anything
+#### SH-M385 — CosmosViewManager.EnsureAsync reports success for a Persistent definition without creating anything
 
 `../Birko.Data.CosmosDB.Views/CosmosViewManager.cs:35`
 
 It returns Task.CompletedTask for every mode, including Persistent — no validation of the definition, no name check, no error. A caller that follows the documented lifecycle (EnsureAsync then query) gets a successful ensure and then CosmosViewStore computes everything on the fly against the source container; ExistsAsync(definition.Name) afterwards returns false, so the manager contradicts itself. The other four managers throw InvalidOperationException when a non-OnTheFly definition has no name.
 
-#### SH-M352 — CosmosViewManager.DropAsync deletes a real container with no check that it backs a view
+#### SH-M386 — CosmosViewManager.DropAsync deletes a real container with no check that it backs a view
 
 `../Birko.Data.CosmosDB.Views/CosmosViewManager.cs:54`
 
 `_database.GetContainer(viewName).DeleteContainerAsync()` destroys whatever container carries that name, and since Cosmos has no views at all (EnsureAsync is a no-op) no container this class created can ever exist. Passing the primary-source name — e.g. the name derived for an unnamed view — deletes the live data container and all its documents, and the NotFound catch means a wrong-name call is indistinguishable from a successful teardown.
 
-#### SH-M353 — Cosmos filter values are inlined into SQL text with a backslash escape that does not protect the closing quote
+#### SH-M387 — Cosmos filter values are inlined into SQL text with a backslash escape that does not protect the closing quote
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:457`
 
 `string s => $"'{s.Replace("'", "\\'")}'"` concatenates the value straight into the query; no QueryDefinition parameter is ever created. A value ending in a backslash ("C:\\") renders as 'C:\' — the escape consumes the terminating quote and the rest of the generated SQL (GROUP BY / ORDER BY / OFFSET) is swallowed into the literal, so an attacker-influenced search term can alter or widen the predicate. Non-listed types fall through to `value.ToString()` unquoted (line 470), emitting invalid SQL for char/TimeSpan.
 
-#### SH-M354 — Cosmos non-aggregate views ignore Fields entirely, so no projection or rename is applied
+#### SH-M388 — Cosmos non-aggregate views ignore Fields entirely, so no projection or rename is applied
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:92`
 
 QueryLinqAsync/QueryFirstLinqAsync/CountLinqAsync use `_container.GetItemLinqQueryable<TView>()` and never consult `_definition.Fields`; the raw documents are deserialized into TView by the Cosmos serializer's own name matching. `Select(o => o.StatusCode, v => v.Status)` therefore leaves Status at its default, and the filter/order expressions the LINQ path sends use TView names (MapViewPropertyToSource is only wired into the aggregate SQL path), so they target non-existent document fields and match nothing.
 
-#### SH-M355 — Cosmos and ElasticSearch accept join clauses and then ignore them silently
+#### SH-M389 — Cosmos and ElasticSearch accept join clauses and then ignore them silently
 
 `../Birko.Data.CosmosDB.Views/CosmosViewStore.cs:48`
 
 CosmosViewStore never reads `_definition.Joins` on either path, and ElasticSearchViewStore only documents that it "ignores join clauses" (ElasticSearchViewStore.cs:20). A definition built with `LeftJoin<Order, Customer, Guid>(...)` is accepted by the builder, materialized by these stores as an unjoined single-source query, and returns rows whose joined-source view properties are all default — no NotSupportedException, no warning, and SQL/Mongo/Raven return joined data for the identical definition.
 
-#### SH-M356 — ViewDefinitionBuilder.Build never rejects a GroupBy field that is not also Selected
+#### SH-M390 — ViewDefinitionBuilder.Build never rejects a GroupBy field that is not also Selected
 
 `../Birko.Data.Views/ViewDefinitionBuilder.cs:175`
 
@@ -2615,55 +2824,55 @@ Validation checks selected-implies-grouped but not the converse, so `From<Order>
 
 ### area: workflow-state-machine
 
-#### SH-M357 — State-changed callback exception faults a transition that already succeeded
+#### SH-M391 — State-changed callback exception faults a transition that already succeeded
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:105`  ·  _restates a first-pass finding_
 
 _onStateChanged is invoked inside the try block, after AddHistoryRecord. If a subscriber throws, the catch at line 109 rolls CurrentState back to fromState and sets Status=Faulted even though the transition completed and its history record is already appended — producing exactly the history/CurrentState inconsistency the CR-M267 rollback exists to prevent, plus a permanently Faulted instance for a successful transition. The notification belongs outside the try, or guarded.
 
-#### SH-M358 — Cancellation during an action is swallowed into WorkflowActionException and permanently faults the instance
+#### SH-M392 — Cancellation during an action is swallowed into WorkflowActionException and permanently faults the instance
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:109`  ·  _restates a first-pass finding_
 
 The filter is `when (ex is not WorkflowException)`, and the token is passed to every exit/transition/entry action. An OperationCanceledException from a cooperatively-cancelling action is therefore caught, sets Status=Faulted, and is rethrown wrapped — a routine cancellation permanently kills the instance (every later FireAsync throws WorkflowFaultedException) and callers can only tell cancellation from a real fault via InnerException. Contradicts the leading ThrowIfCancellationRequested at line 24.
 
-#### SH-M359 — A WorkflowException from a user action escapes the rollback, leaving state advanced with no history
+#### SH-M393 — A WorkflowException from a user action escapes the rollback, leaving state advanced with no history
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:109`  ·  _restates a first-pass finding_
 
 The filter excludes WorkflowException, presumably to let the engine's own Completed/Faulted throws pass — but those are thrown at lines 33/37, before the try. The only exceptions it can actually exclude are WorkflowExceptions raised by user code (e.g. an OnEntry action firing a trigger on a completed child instance). Such an exception propagates with CurrentState already assigned to ToState (line 86), Status still Active and no history record appended — the CR-M267 inconsistency, still reachable.
 
-#### SH-M360 — Guarded alternative transitions on one trigger are unreachable
+#### SH-M394 — Guarded alternative transitions on one trigger are unreachable
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:40`  ·  _restates a first-pass finding_
 
 FireAsync selects with FirstOrDefault(FromState && Trigger) and, if that candidate's guards deny, returns Denied without considering any later transition with the same trigger. The standard idiom `submit -> Fast when amount<100` declared before an unguarded `submit -> Slow` never reaches Slow: firing with amount=500 returns Denied. Build() emits no warning for a duplicate (trigger, fromState) pair and GetPermittedTriggers (line 143, g.First()) mirrors the limitation rather than fixing it.
 
-#### SH-M361 — Build accepts duplicate state names; the second declaration's actions never run
+#### SH-M395 — Build accepts duplicate state names; the second declaration's actions never run
 
 `../Birko.Workflow/Definition/WorkflowBuilder.cs:64`  ·  _restates a first-pass finding_
 
 stateNames (line 65) is a HashSet used only for validation; `states` keeps every StateBuilder result. Declaring State("Draft") twice builds successfully with two StateDefinition entries, and the engine's FirstOrDefault(s => s.Name == ...) at WorkflowEngine lines 63-64 always picks the first — so OnEntry/OnExit actions declared on the second are silently dead, and IsFinal() on the second never completes the instance (`toStateDef?.IsFinal` reads the first).
 
-#### SH-M362 — Cosmos scopes state/status queries by the constructor's workflow name, not the saved one
+#### SH-M396 — Cosmos scopes state/status queries by the constructor's workflow name, not the saved one
 
 `../Birko.Workflow.CosmosDB/CosmosDBWorkflowInstanceStore.cs:91`  ·  _restates a first-pass finding_
 
 FindByStateAsync/FindByStatusAsync add `m.WorkflowName == _workflowName` (the ctor argument) while SaveAsync line 58 overwrites the document's WorkflowName with whatever the caller passed. Saving through the same store under a different name silently makes the instance invisible to that store's state/status queries — and only on this backend. FindByWorkflowNameAsync (line 118) applies no scope at all, so the class is internally inconsistent as well as divergent from its six siblings.
 
-#### SH-M363 — FireAsync has no per-instance mutual exclusion and History is a plain List
+#### SH-M397 — FireAsync has no per-instance mutual exclusion and History is a plain List
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:86`
 
 FireAsync is a read-then-write claim on the instance (read CurrentState at line 41, evaluate guards, await actions, assign CurrentState at 86, append history at 103) with no lock or CAS. Two concurrent fires on the same WorkflowInstance both pass the status checks, both resolve against the same CurrentState, interleave their awaits and both append — producing a history describing no valid path, and concurrently mutating WorkflowInstance._history (List<T>, line 13). Nothing documents a single-writer requirement.
 
-#### SH-M364 — Find* return a lazy Select on six backends but a materialized list on Cosmos
+#### SH-M398 — Find* return a lazy Select on six backends but a materialized list on Cosmos
 
 `../Birko.Workflow.SQL/SqlWorkflowInstanceStore.cs:85`
 
 SQL/JSON/XML/ES/Mongo/Raven all end with `return models.Select(m => m.ToInstance<TData>());` — deferred. ToInstance throws InvalidOperationException for a null Guid or empty payload, so one corrupt or foreign row surfaces its exception inside the consumer's foreach after part of the sequence was yielded, not from the awaited call; re-enumerating re-deserializes every row. CosmosDBWorkflowInstanceStore lines 97/111/124 append .ToList(), so the same contract throws in a different place.
 
-#### SH-M365 — SaveAsync can report success while writing nothing (Guid.Empty / silent no-op update)
+#### SH-M399 — SaveAsync can report success while writing nothing (Guid.Empty / silent no-op update)
 
 `../Birko.Workflow.SQL/SqlWorkflowInstanceStore.cs:58`
 
@@ -3545,135 +3754,323 @@ The only call site passes `isOr: false` (line 24), so `if (isOr) return new Cond
 
 `catch (Exception ex)` wraps everything ParseExpression can throw — including OperationCanceledException from a token observed inside an evaluated closure member, and any TargetInvocationException from EvaluateExpression's reflective Invoke (824) — in a NotSupportedException whose message says the filter shape is unsupported. Callers cannot distinguish an untranslatable predicate from a cancelled or faulted evaluation, and cancellation stops propagating as cancellation.
 
+### area: llm-provider-and-agents
+
+#### SH-L144 — AgentOptions.CheckpointInterval is documented and plumbed but never read by the agent loop
+
+`../Birko.AI.Contracts/AgentOptions.cs:70`  ·  _restates a first-pass finding_
+
+The XML doc states it is the interval between self-reflection checkpoints and that 0 disables checkpoint prompts, and it round-trips through Clone/Merge/FromDictionary/ToDictionary — but a grep of Birko.AI finds no reference to it, so no checkpoint is ever injected at any value. Consumers configuring it get a silent no-op.
+
+#### SH-L145 — Unguarded GetArrayLength/GetProperty on `choices` and `tool_calls[].index` in both stream parsers
+
+`../Birko.AI/Providers/LlmProviderBase.cs:663`
+
+`toolCallDelta.GetProperty("index").GetInt32()` is the only unguarded probe in the otherwise TryGetProperty-disciplined tool-capture parser; an OpenAI-compatible server that omits `index` on a single tool call throws KeyNotFoundException out of the enumerator. Likewise `choices.GetArrayLength()` at lines 592 and 638 throws InvalidOperationException for `"choices": null`. All three sit outside the deserialize-only try/catch, so the stream dies mid-response.
+
+#### SH-L146 — Streaming retry discards the error body it read, reporting only the status code
+
+`../Birko.AI/Providers/LlmProviderBase.cs:479`
+
+`var responseBody = await response.Content.ReadAsStringAsync(...)` is assigned and then never used: the non-retryable and exhausted-retry messages are `"{provider} API Error: {status}"` with no detail, while SendWithRetryAsync runs the same body through ExtractErrorFromResponseBody and includes the provider's message. A streaming 400 (bad model name, context overflow) therefore surfaces as a bare status code even though the explanation was fetched and thrown away.
+
+#### SH-L147 — `throw lastException` rethrows a captured exception, destroying its original stack trace
+
+`../Birko.AI/Providers/LlmProviderBase.cs:139`
+
+The stored exception is rethrown with `throw ex` semantics rather than ExceptionDispatchInfo.Capture(...).Throw(), so the caller sees a stack rooted at SendWithRetryAsync instead of the failing SendAsync. The line is also effectively unreachable for MaxRetries >= 0 (both catch blocks throw at the last attempt), so the dead-ish code hides rather than helps.
+
+#### SH-L148 — SendWithRetryAsync returns the sentinel (null, null) when MaxRetries is negative — no request attempted
+
+`../Birko.AI/Providers/LlmProviderBase.cs:142`
+
+A RetryPolicy with MaxRetries = -1 skips the while body entirely and returns (null, null) with no message emitted. Callers that follow the normal pattern (`if (!response.IsSuccessStatusCode)`) NullReference, and the ones that null-check cannot distinguish "nothing was sent" from "the provider returned nothing". There is no validation of MaxRetries anywhere.
+
+#### SH-L149 — SendWithRetryAsync returns an already-disposed HttpResponseMessage on every path
+
+`../Birko.AI/Providers/LlmProviderBase.cs:71`
+
+`response.Dispose(); return (response, responseBody);` hands back a disposed object, so a caller reading Headers (rate-limit headers, request-id) or Content gets ObjectDisposedException — only StatusCode/IsSuccessStatusCode survive. The sibling SendStreamingWithRetryAsync returns a live response, so the two protected helpers in the same base class have opposite ownership contracts with nothing in the signature to distinguish them.
+
+#### SH-L150 — ParseSseStream requires the optional space in `data: ` and drops frames that omit it
+
+`../Birko.AI/Providers/LlmProviderBase.cs:563`
+
+`line.StartsWith("data: ")` (also culture-sensitive — no StringComparison) skips any `data:{...}` line, which the SSE grammar explicitly permits since the space is optional. Against such a provider the enumeration yields zero chunks, no error is raised, and Agent.cs:225 synthesises a response with StopReason "end_turn" and empty text — a silent empty success rather than a failure.
+
+#### SH-L151 — Dead `[DONE]` check on the flushed SSE buffer can never match
+
+`../Birko.AI/Providers/LlmProviderBase.cs:555`
+
+The buffer is filled with `buffer.AppendLine(data)` (line 570), so its ToString() always ends with a newline and `data == "[DONE]"` at line 555 is never true. Only the pre-buffer check at 567 works. Consequently a `[DONE]` frame followed by a blank line — or a residual `[DONE]` buffer at line 574 — is yielded to the chunk parser as data instead of terminating the stream.
+
+#### SH-L152 — Abstract IsConfigured() is declared but never consulted by the base class
+
+`../Birko.AI/Providers/LlmProviderBase.cs:42`
+
+Every provider is forced to implement `protected abstract bool IsConfigured()`, yet a grep of Birko.AI shows no call site: neither SendWithRetryAsync nor SendStreamingWithRetryAsync checks it, and NotConfigured() is only reachable if a derived provider remembers to call both itself. An unconfigured provider therefore issues a real HTTP request with a missing API key and surfaces a 401 instead of the "NotConfigured" stop reason the agent has a dedicated branch for.
+
+#### SH-L153 — Request builder matches block types case-insensitively while the agent dispatches case-sensitively
+
+`../Birko.AI/Providers/LlmProviderBase.cs:233`
+
+BuildOpenAiStyleMessages compares `b.Type?.ToLowerInvariant()` against "text"/"tool_use", but Agent.HandleToolUse (Agent.cs:326) and the end_turn branch (Agent.cs:299) use ordinal `b.Type == "tool_use"` / `== "text"`. A block typed "Tool_Use" is serialized into the request as a tool call yet never executed by the agent, so the model sees its call echoed back with no result.
+
+#### SH-L154 — Assistant/user messages are emitted with a null `role` when Message.Role is unset
+
+`../Birko.AI/Providers/LlmProviderBase.cs:301`
+
+`list.Add(new { role = m.Role, content })` passes `string?` straight through with no default, so a Message constructed without Role (the property is nullable and has no default) serializes as `"role": null` and the provider rejects the whole request with a 400 that names no offending turn. Content is defaulted (`m.Content ?? ""` at line 228) but Role is not.
+
+#### SH-L155 — Cancellation mid-tool-batch discards completed tool results and leaves a dangling tool_use turn
+
+`../Birko.AI/Agents/Agent.cs:328`
+
+ThrowIfCancellationRequested at the top of the per-block loop throws after earlier tools in the same batch already ran (files written, commands executed) but before line 352 appends their results. The conversation returned to the caller — or reused via ContinueAsync — ends with an assistant turn carrying tool_use blocks and no matching tool_result, which providers reject, and the completed work is not recorded anywhere.
+
+#### SH-L156 — OnLlmResponseReceived fires before any streamed token arrives, on failures, and again on fallback
+
+`../Birko.AI/Agents/Agent.cs:208`
+
+Its XML doc (AgentOptions.cs:73) says "invoked after each successful LLM response", but in the streaming loop it is invoked immediately after SendMessageStreamingAsync returns — before GetStreamAsync is even called and before the `streamingResponse.Error` check at line 210, so it fires for a provider that does not support streaming at all. The sync fallback then fires it again for the same logical turn, double-counting for any cost/usage tracker hung off it.
+
+#### SH-L157 — No per-tool try/catch: one throwing tool aborts the entire agent run
+
+`../Birko.AI/Agents/Agent.cs:335`
+
+`await tool.ExecuteAsync(...)` is unguarded, so a custom tool added via AddTool that throws (the built-ins all catch internally, which is convention only — Tool declares no such contract) propagates out of RunAsync, discarding the whole conversation and any results collected in the current batch. The framework's own error channel (a string starting with "Error") is never reached.
+
+#### SH-L158 — AddTool/RemoveTool mutate the live tool list with no null check and no synchronization
+
+`../Birko.AI/Agents/Agent.cs:85`
+
+AddTool dereferences `tool` before any null check (NullReferenceException on tool.MessageCallback rather than ArgumentNullException), and both AddTool and RemoveTool mutate the same List<Tool> that an in-flight RunAsync passes to the provider and enumerates at line 333 — a mutation during a run throws InvalidOperationException out of the LINQ scan or changes the advertised tool set mid-conversation.
+
+#### SH-L159 — RunAsync returns the same List<Message> shape for success, LLM error, not-configured and exhaustion
+
+`../Birko.AI/Agents/Agent.cs:262`
+
+Every terminal path in HandleResponse returns true and RunWithHistorySyncAsync returns `conversation`; there is no status, exception or flag. A caller cannot distinguish a completed task from "provider not configured", "LLM request failed" or "max iterations reached" except by string-matching the injected "Error: …" text or counting messages — and the unknown-stop-reason branch (line 314) injects nothing at all when Verbose is false.
+
+#### SH-L160 — MaxIterations <= 0 makes RunAsync return without ever calling the provider
+
+`../Birko.AI.Contracts/AgentOptions.cs:16`
+
+Nothing validates MaxIterations, and FromDictionary happily parses "0" or "-1". The for loop at Agent.cs:262 then never executes: RunAsync returns the seed conversation, having made no LLM call, and the only signal is a "Maximum iterations (0) reached" message that is suppressed when Verbose is false. To the caller this is indistinguishable from a task that produced no output.
+
+#### SH-L161 — Merge's parameter is non-nullable yet the body null-checks it (banned-warning annotation gap)
+
+`../Birko.AI.Contracts/AgentOptions.cs:97`
+
+`public void Merge(AgentOptions other)` is declared non-nullable but line 99 is `if (other == null) return;`, so the method is runtime-null-tolerant while the signature tells callers null is illegal. Under the project's no-nullable-warnings rule the parameter should be `AgentOptions?`. Callers passing a `AgentOptions?` get a CS8604 they will suppress with `!`.
+
+#### SH-L162 — FromDictionary accepts an empty workingDirectory, breaking every file tool at run time
+
+`../Birko.AI.Contracts/AgentOptions.cs:135`
+
+workingDirectory is the one field copied with no validation (`if (config.TryGetValue("workingDirectory", out var workingDirectory)) options.WorkingDirectory = workingDirectory;`), so `{"workingDirectory":""}` overwrites the "./" default with "". Every tool then calls Path.GetFullPath("") or Path.Combine("", …) and returns "Error reading file: The path is empty." for every operation — while Merge (line 105) guards the identical assignment with IsNullOrEmpty. There is also no null guard on `config` itself.
+
+#### SH-L163 — LlmStreamingResponse has no disposal guard or finalizer, and SuppressFinalize is a no-op
+
+`../Birko.AI.Contracts/Models/LlmStreamingResponse.cs:57`
+
+Dispose() relies on nulling Resource for idempotence (fine) but the type declares no finalizer, so GC.SuppressFinalize is dead, and a response that is never disposed — any provider path that returns before the agent's `await using`, e.g. the Error-set early return at Agent.cs:213 constructed outside a using — leaks the HTTP connection until the HttpResponseMessage itself is finalized. There is also no ObjectDisposedException on later GetStreamAsync use.
+
+#### SH-L164 — AgentFactory resolves only one alias hop and never validates that an alias target exists
+
+`../Birko.AI/Factories/AgentFactory.cs:45`
+
+RegisterAlias accepts any primaryType without checking _factories, and ResolveAgentType does a single lookup. So RegisterAlias("docs","writer") with no "writer" factory registers cleanly and fails only at Create, with a message naming "docs" (line 78) rather than the missing "writer" — pointing the operator at the wrong name. IsRegistered("docs") also returns false with no hint that the alias itself exists.
+
+#### SH-L165 — ResolveAgentType throws ArgumentNullException from a Dictionary lookup on a null agentType
+
+`../Birko.AI/Factories/AgentFactory.cs:54`
+
+`_aliases.TryGetValue(agentType, …)` throws ArgumentNullException("key") when agentType is null, so Create(provider, options, null!) surfaces an exception naming "key" instead of the ArgumentException naming the registered types that the guarded paths produce. Register/RegisterAlias/IsRegistered all guard with IsNullOrWhiteSpace; Create and ResolveAgentType do not.
+
+#### SH-L166 — run_command discards all buffered output on timeout and leaves the reader tasks unobserved
+
+`../Birko.AI/Tools/RunCommandTool.cs:64`
+
+The timeout catch kills the tree and returns "Error: Process timed out" without awaiting stdoutTask/stderrTask, so everything the process printed before the timeout — usually the most diagnostic part (a build log up to the hang) — is thrown away, and the two abandoned ReadToEndAsync tasks can fault after the fact as unobserved task exceptions.
+
+#### SH-L167 — A negative timeout_seconds throws after the process starts, orphaning the child
+
+`../Birko.AI/Tools/RunCommandTool.cs:57`
+
+`cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds))` throws ArgumentOutOfRangeException for a negative value (and 0 cancels instantly). The throw happens after Process.Start, and the outer catch returns "Error running command: …" without killing the process — `using var proc` disposes the wrapper, not the child — so a model-supplied `timeout_seconds: -1` leaves a detached process running for the lifetime of the host.
+
+#### SH-L168 — run_command advertises "shell command" but runs with UseShellExecute = false
+
+`../Birko.AI/Tools/RunCommandTool.cs:14`
+
+The schema description says "Executable or shell command to run" while FileName is set to the raw `command` with UseShellExecute = false, so shell builtins, pipes and redirection (`dir`, `cd x && y`, `a | b`) fail with a Win32Exception surfaced as "Error running command: The system cannot find the file specified." The model is told a capability the tool does not have and burns iterations rediscovering it.
+
+#### SH-L169 — ask_user leaves the timeout Task.Delay running for its full duration when the prompt wins
+
+`../Birko.AI/Tools/AskUserTool.cs:53`
+
+timeoutTask is created directly from Task.Delay with no CancellationTokenSource, so when promptTask wins the race the timer stays armed for the remaining PromptTimeout (300s by default). Every ask_user call leaves a live timer plus its captured continuation until it fires — unbounded for an interactive agent that asks repeatedly.
+
+#### SH-L170 — display_text reports success even when no message callback is attached
+
+`../Birko.AI/Tools/DisplayTextTool.cs:31`
+
+SendMessage is a no-op when MessageCallback is null (Tool.cs:19), yet the tool unconditionally returns "Text displayed successfully". An agent constructed with messageCallback: null therefore tells the model its output reached the user when it went nowhere — the same silent-sink problem applies to ask_user's "prompt_console" emission at AskUserTool.cs:67.
+
+#### SH-L171 — write_file/edit_file/append_to_file skip the leading-'/' normalization read_file and list_files apply
+
+`../Birko.AI/Tools/WriteFileTool.cs:34`
+
+These three do a bare `Path.Combine(workingDirectory, filePath)` with no GetFullPath and no leading-slash strip, whereas ReadFileTool.cs:29 and ListFilesTool.cs:35 strip a single '/' and treat the path as workspace-relative. So `file_path: "/src/x.cs"` is read successfully by read_file but denied by write_file (Combine discards the workspace for a rooted path, and IsPathSafe then rejects it) — identical model intent, opposite outcome, with an access-denied message that misdescribes the cause.
+
+#### SH-L172 — A mid-enumeration UnauthorizedAccessException aborts the whole search, discarding matches found
+
+`../Birko.AI/Tools/SearchCodeTool.cs:47`
+
+Directory.EnumerateFiles with AllDirectories throws when it hits an unreadable subdirectory. The per-file guard only wraps File.ReadAllLines (line 61), so the enumeration throw escapes to the outer catch and the tool returns "Error searching code: Access to the path … is denied" with every match already collected in `results` thrown away. ListFilesTool.cs:47 has the same unprotected enumeration.
+
+#### SH-L173 — search_code returns the empty string for both "no matches" and a scan that examined nothing
+
+`../Birko.AI/Tools/SearchCodeTool.cs:78`
+
+`string.Join(NewLine, results)` on an empty list yields "" with no explanatory text, so the model cannot distinguish "the query genuinely does not occur" from "the glob matched no files" (a `pattern` of "*.cs" in a directory with none) or "every file was skipped as binary". Every sibling tool has an explicit empty case — list_files returns "No files found in: …".
+
+#### SH-L174 — list_files null-checks a non-nullable input parameter, diverging from every other tool
+
+`../Birko.AI/Tools/ListFilesTool.cs:23`
+
+`input != null && input.TryGetValue(...)` guards a parameter declared `Dictionary<string, object> input` on Tool.ExecuteAsync, so the signature and the body disagree (the annotation gap the project's no-CS86xx rule targets). It is also the only tool that tolerates a null dictionary — the other eight dereference it immediately — so the same caller mistake is silently absorbed by one tool and thrown by the rest.
+
 ### area: migrations
 
-#### SH-L144 — Fallback CREATE TABLE emits a bare AUTOINCREMENT keyword no provider accepts
+#### SH-L175 — Fallback CREATE TABLE emits a bare AUTOINCREMENT keyword no provider accepts
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:262`
 
 FormatColumn appends " AUTOINCREMENT" detached from PRIMARY KEY (the PK is emitted as a separate table constraint at line 247). SQLite requires exactly `INTEGER PRIMARY KEY AUTOINCREMENT` adjacent, MySQL wants AUTO_INCREMENT, PostgreSQL SERIAL/IDENTITY, MSSql IDENTITY — so an isAutoIncrement field makes the fallback DDL invalid everywhere. SqLiteConnector.FieldDefinition:148 documents this exact trap and handles it; the migration fallback does not.
 
-#### SH-L145 — Fallback DropIndex emits `DROP INDEX ... ON ...`, invalid on SQLite and PostgreSQL
+#### SH-L176 — Fallback DropIndex emits `DROP INDEX ... ON ...`, invalid on SQLite and PostgreSQL
 
 `../Birko.Data.Migrations.SQL/Context/SqlSchemaBuilder.cs:77`
 
 Without a connector, DropIndex emits `DROP INDEX IF EXISTS "IX" ON "T"` — MySQL/MSSql syntax. SQLite and PostgreSQL reject the ON clause, so the statement throws and the migration fails; the connector path (line 73) uses the dialect-correct DropIndexSql. Reachable whenever SqlMigrationContext is built with connector == null (its default).
 
-#### SH-L146 — SqlMigrationSettings.TransactionTimeout is plumbed and documented but never read
+#### SH-L177 — SqlMigrationSettings.TransactionTimeout is plumbed and documented but never read
 
 `../Birko.Data.Migrations.SQL/Settings/SqlMigrationSettings.cs:35`
 
 TransactionTimeout (default 30) is not referenced anywhere in Birko.Data.Migrations.SQL — SqlMigrationRunner calls connection.BeginTransaction() with no timeout and no command sets CommandTimeout either. A consumer raising it for a long DDL migration gets no effect, silently.
 
-#### SH-L147 — _isInitialized is a non-volatile flag read and written with no synchronization
+#### SH-L178 — _isInitialized is a non-volatile flag read and written with no synchronization
 
 `../Birko.Data.Migrations/AbstractMigrationRunner.cs:16`
 
 Initialize() and the virtual InitializeAsync() both test-then-set `_isInitialized` outside any lock, and it is not volatile. Two concurrent InitializeAsync() calls both run Store.InitializeAsync (double CREATE TABLE / CreateContainerIfNotExists / bucket create), and EnsureInitialized can observe a stale false. Same pattern in RavenMigrationStore._initialized:25, CosmosMigrationStore._initialized:26, MongoMigrationStore._collection:20, InfluxMigrationStore._migrationsBucket:22.
 
-#### SH-L148 — RegisterMigrations leaves partially-registered, unsorted state when it throws
+#### SH-L179 — RegisterMigrations leaves partially-registered, unsorted state when it throws
 
 `../Birko.Data.Migrations/AbstractMigrationRunner.cs:58`
 
 The duplicate-version check throws mid-loop, after earlier elements of the same array were already added to _migrations, and the `_migrations.Sort(...)` at line 67 is skipped by the exception. RegisterMigrations(new[]{ v7, v3dup }) therefore leaves v7 registered and the list out of order, so a caller that catches the InvalidOperationException and retries hits a second duplicate error for v7.
 
-#### SH-L149 — CosmosDB BulkInsert loses every failure but the first
+#### SH-L180 — CosmosDB BulkInsert loses every failure but the first
 
 `../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs:197`
 
 All CreateItemAsync calls are started eagerly and awaited via `Task.WhenAll(tasks).GetAwaiter().GetResult()`, which rethrows only the first exception of the AggregateException. If 50 of 1000 documents fail (409 conflict, 429 throttle), one error surfaces and the other 49 are discarded, so the caller cannot tell how much of the batch landed. ElasticSearchDataMigrator:132 explicitly reports item-level errors; Cosmos does not.
 
-#### SH-L150 — CosmosMigrationStore.RecordMigration dereferences a possibly-null Resource
+#### SH-L181 — CosmosMigrationStore.RecordMigration dereferences a possibly-null Resource
 
 `../Birko.Data.Migrations.CosmosDB/CosmosMigrationStore.cs:125`
 
 `var state = response.Resource; state.AppliedMigrations ??= ...` has no null guard, while GetAppliedVersions (line 91) and RemoveMigration (line 163) both use `state?.`. A state item that deserializes to null (schema drift, empty body) throws NullReferenceException instead of a diagnosable error, and the project bans nullable-warning suppressions of this kind.
 
-#### SH-L151 — ElasticSearch schema builder hardcodes 1 shard / 0 replicas, ignoring the settings
+#### SH-L182 — ElasticSearch schema builder hardcodes 1 shard / 0 replicas, ignoring the settings
 
 `../Birko.Data.Migrations.ElasticSearch/Context/ElasticSearchSchemaBuilder.cs:25`
 
 CreateCollection always creates data indices with NumberOfShards(1)/NumberOfReplicas(0); ElasticSearchMigrationSettings.NumberOfShards/NumberOfReplicas are honoured only for the internal migrations index (ElasticSearchMigrationStore.cs:40) because the schema builder is never handed the settings object. A consumer configuring 5 shards silently gets 1, and shard count cannot be changed after creation.
 
-#### SH-L152 — ElasticSearchMigrationSettings.UseAliases is dead configuration
+#### SH-L183 — ElasticSearchMigrationSettings.UseAliases is dead configuration
 
 `../Birko.Data.Migrations.ElasticSearch/Settings/ElasticSearchMigrationSettings.cs:25`
 
 UseAliases (default true) is not read anywhere in Birko.Data.Migrations.ElasticSearch — its own XML doc concedes "reserved / not yet wired". A consumer that leaves it true expecting zero-downtime alias switching gets plain in-place index operations with no warning.
 
-#### SH-L153 — MongoDB store creates the unique version index only when it creates the collection
+#### SH-L184 — MongoDB store creates the unique version index only when it creates the collection
 
 `../Birko.Data.Migrations.MongoDB/MongoMigrationStore.cs:54`
 
 The CreateIndexModel call sits inside the `if (!collections.Any())` branch. If the __migrations collection already exists without the index (created by an older build, by a restore, or by a manual insert), Initialize() takes the else path and the unique index on `version` is never created — duplicate version documents become possible and GetAppliedVersions silently returns duplicates.
 
-#### SH-L154 — MongoMigrationRunner throws NullReferenceException instead of ArgumentNullException
+#### SH-L185 — MongoMigrationRunner throws NullReferenceException instead of ArgumentNullException
 
 `../Birko.Data.Migrations.MongoDB/MongoMigrationRunner.cs:34`
 
 The base initializer evaluates `mongoClient.Database` before the constructor body's `?? throw new ArgumentNullException(nameof(mongoClient))` guards can run, so passing null yields an unhelpful NRE from the base call. The guards at lines 36-37 also both blame `mongoClient` when it is its Client/Database members that were null.
 
-#### SH-L155 — MongoDB uses a transaction only on a replica set, never on a sharded cluster
+#### SH-L186 — MongoDB uses a transaction only on a replica set, never on a sharded cluster
 
 `../Birko.Data.Migrations.MongoDB/MongoMigrationRunner.cs:60`
 
 The guard is `_client.Cluster.Description.Type == ClusterType.ReplicaSet`. MongoDB 4.2+ supports multi-document transactions on ClusterType.Sharded as well, so on a sharded deployment with UseSession = true the runner silently executes with a null session: a mid-batch failure leaves earlier migrations applied even though the deployment could have rolled them back.
 
-#### SH-L156 — TimescaleDB introspection helpers omit the active transaction
+#### SH-L187 — TimescaleDB introspection helpers omit the active transaction
 
 `../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigration.cs:162`
 
 IsHypertable and GetChunkInterval (line 175) discard the transaction from GetSqlConnection (`var (connection, _) = ...`) and never assign command.Transaction, unlike every DDL helper in the class and ExecuteScript at line 198. Under the default UseTransaction = true they read outside the migration's transaction, so a hypertable created earlier in the same batch is invisible to IsHypertable — and on a provider enforcing the pending-local-transaction rule the command throws InvalidOperationException.
 
-#### SH-L157 — TimescaleDBMigration bypasses AbstractMigration, losing its metadata defaults
+#### SH-L188 — TimescaleDBMigration bypasses AbstractMigration, losing its metadata defaults
 
 `../Birko.Data.Migrations.TimescaleDB/TimescaleDBMigration.cs:22`
 
 It implements IMigration directly, so Description and CreatedAt are abstract: every TimescaleDB migration must hand-write `Description => Name` and `CreatedAt => DateTime.UtcNow`, and a subclass returning a fixed CreatedAt or an empty Description silently changes what SqlMigrationStore records. It also loses AbstractMigration's NotImplementedException default for Down, contradicting the framework's one-migration-base-class convention.
 
-#### SH-L158 — RavenDB DropIndex ignores the collection name it is given
+#### SH-L189 — RavenDB DropIndex ignores the collection name it is given
 
 `../Birko.Data.Migrations.RavenDB/Context/RavenDBSchemaBuilder.cs:56`
 
 `DropIndex(collectionName, indexName)` sends DeleteIndexOperation(indexName) and never uses collectionName, so a migration dropping index "ByName" on collection Orders also deletes the identically-named index defined over Customers. Index names are database-scoped in Raven, so the collectionName parameter is misleading rather than merely unused.
 
-#### SH-L159 — RavenDB CollectionExists reports false for an existing but empty collection
+#### SH-L190 — RavenDB CollectionExists reports false for an existing but empty collection
 
 `../Birko.Data.Migrations.RavenDB/Context/RavenDBSchemaBuilder.cs:46`
 
 It requires `count > 0` from GetCollectionStatisticsOperation, so a collection that has been created and then emptied answers false. A migration written as `if (!CollectionExists(x)) Seed(x)` re-seeds after a data purge, and the same neutral call means "container/table exists" on SQL/ES/Cosmos but "holds at least one document" here.
 
-#### SH-L160 — RavenDB uses two different filter translators for the same JSON dialect
+#### SH-L191 — RavenDB uses two different filter translators for the same JSON dialect
 
 `../Birko.Data.Migrations.RavenDB/Context/RavenDBDataMigrator.cs:174`
 
 UpdateDocuments/DeleteDocuments translate via ParseFilterToRql (raw RQL text with $pN parameters, line 131) while CountDocuments translates via ApplyFilterToQuery (IDocumentQuery.Where* calls). The two disagree on field-name handling — the RQL path interpolates the field name unescaped while the query path hands it to the driver — so CountDocuments and DeleteDocuments can select different documents for the same filterJson.
 
-#### SH-L161 — RavenDB interpolates collection and field names straight into RQL
+#### SH-L192 — RavenDB interpolates collection and field names straight into RQL
 
 `../Birko.Data.Migrations.RavenDB/Context/RavenDBSchemaBuilder.cs:74`
 
 RenameField builds `FROM '{collectionName}' UPDATE { this.{newName} = this.{oldName}; ... }` and DropCollection (line 34) builds `FROM '{name}'` with no escaping or validation, as does RavenDBDataMigrator.ParseFilterToRql:159 for field names. A name containing a quote or brace produces a malformed patch script — or, with a crafted name, a patch/delete over a different collection. CR-M114 parameterised the values but left the identifiers raw.
 
-#### SH-L162 — Nullability annotations diverge from runtime tolerance in the migrator contract
+#### SH-L193 — Nullability annotations diverge from runtime tolerance in the migrator contract
 
 `../Birko.Data.Migrations/Context/IDataMigrator.cs:7`
 
 IDataMigrator declares `string filterJson` (non-nullable) on UpdateDocuments/DeleteDocuments but `string? filterJson` on CountDocuments/CopyData, while every implementation explicitly tolerates null (SqlDataMigrator:142, MongoDataMigrator:112, CosmosDBDataMigrator:203). Separately SchemaField (../Birko.Data.Migrations.SQL/Context/SchemaField.cs:11) passes `null!` for AbstractField's PropertyInfo and leaves the non-nullable `Table` null, so GetSelectName(withName: true) or Write() would NRE on such a field.
 
-#### SH-L163 — SQL store INSERTs version rows while every other backend upserts
+#### SH-L194 — SQL store INSERTs version rows while every other backend upserts
 
 `../Birko.Data.Migrations.SQL/SqlMigrationStore.cs:341`
 
 RecordMigration issues a plain INSERT against a Version PRIMARY KEY, so re-recording an already-applied version throws a duplicate-key DbException. MongoMigrationStore uses ReplaceOne with IsUpsert, ElasticSearch indexes by id, RavenDB and CosmosDB overwrite the dictionary entry. The same IMigrationStore.RecordMigration call is therefore idempotent on four backends and fatal on SQL — a retry after a partially-failed non-transactional batch fails on the version row rather than converging.
 
-#### SH-L164 — CreateTablesMigration provisions on a second connection, outside the transaction
+#### SH-L195 — CreateTablesMigration provisions on a second connection, outside the transaction
 
 `../Birko.Data.Migrations.SQL/CreateTablesMigration.cs:69`
 
 Up/Down ignore the IMigrationContext entirely and call _connector.CreateTable/DropTable, which opens the connector's own connection. Under the default UseTransaction = true the DDL commits independently of the runner's transaction while the version row rolls back (so a failure leaves tables created but unrecorded), and on single-writer SQLite the second connection deadlocks against the runner's write lock. The remedy is in the remarks but nothing enforces it — no guard checks that a transaction is absent.
 
-#### SH-L165 — Dead code in the SQL and ElasticSearch migration stores
+#### SH-L196 — Dead code in the SQL and ElasticSearch migration stores
 
 `../Birko.Data.Migrations.ElasticSearch/ElasticSearchMigrationStore.cs:17`
 
@@ -3681,61 +4078,61 @@ Up/Down ignore the IMigrationContext entirely and call _connector.CreateTable/Dr
 
 ### area: repository-contract
 
-#### SH-L166 — Comment claims the base constructor substitutes a default store; it does not
+#### SH-L197 — Comment claims the base constructor substitutes a default store; it does not
 
 `../Birko.Data.SQL.ViewModel/Repositories/DataBaseRepository.cs:35`  ·  _restates a first-pass finding_
 
 `DataBaseRepository(IStore<TModel>? store) : base(null)` is annotated "base constructor handles null by creating default", but AbstractViewModelRepository's constructor only does Store = store (AbstractViewModelRepository.cs:54). Passing an explicit null therefore yields a store-less repository: reads return default, Count 0, Create Guid.Empty, writes silent no-ops. Identical comment and behaviour in AsyncDataBaseRepository.cs:63.
 
-#### SH-L167 — Async bulk ReadAsync returns IAsyncEnumerable but materializes the whole result set first
+#### SH-L198 — Async bulk ReadAsync returns IAsyncEnumerable but materializes the whole result set first
 
 `../Birko.Data.ViewModel/Repositories/AbstractAsyncBulkViewModelRepository.cs:85`
 
 `var models = await BulkStore.ReadAsync(filter, null, limit, offset, ct);` completes the entire underlying read before the first yield return, so the IAsyncEnumerable signature promises streaming the implementation does not provide: with no limit the full table is buffered, and LoadInstance hashes and retains every row in _modelHash before the consumer sees element one. A consumer that breaks after N items has already paid for all of them.
 
-#### SH-L168 — Settings-keyed create/destroy keys diverge when settings or GetId() is null
+#### SH-L199 — Settings-keyed create/destroy keys diverge when settings or GetId() is null
 
 `../Birko.Data.Repositories/RepositoryLocator.cs:185`
 
 GetRepository<TRepository,TSettings>(settings) keys on `settings?.GetId() ?? string.Empty` (103), but Destroy<TRepository,TSettings>(settings) forwards settings?.GetId() unchanged and Destroy<TRepository>(key) resolves a null key to typeof(TRepository).FullName (158). For null settings — or any ISettings whose GetId() returns null — creation caches under "" while destruction looks under the repository's FullName, finds nothing, and silently leaves the instance cached.
 
-#### SH-L169 — IViewModelCreateRepository lacks the ILoadable<TModel> constraint every sibling declares
+#### SH-L200 — IViewModelCreateRepository lacks the ILoadable<TModel> constraint every sibling declares
 
 `../Birko.Data.ViewModel/Repositories/IViewModelRepository.cs:53`
 
 IViewModelCreateRepository<T,TModel> constrains only TModel : AbstractModel, while IViewModelReadRepository (33), IViewModelUpdateRepository (74), IViewModelDeleteRepository (94) and the aggregate IViewModelRepository (122) all also require T : Models.ILoadable<TModel>. A create-only ViewModel repository can therefore be declared over a T that cannot be loaded from TModel — a constraint set inconsistent within one interface family.
 
-#### SH-L170 — AddOnInit/RemoveOnInit take a non-nullable hook they null-check at runtime
+#### SH-L201 — AddOnInit/RemoveOnInit take a non-nullable hook they null-check at runtime
 
 `../Birko.Data.SQL.ViewModel/Repositories/DataBaseRepository.cs:42`
 
 AddOnInit(SQL.Connectors.InitConnector onInit) tests onInit != null (43/53) although the parameter is not annotated nullable, so the documented "a null hook is ignored" behaviour is unreachable from nullable-enabled callers without CS8625 — which the project's no-nullable-warnings rule forbids. Same in AsyncDataBaseRepository.cs:74/85 and in the interface declaration IDataBaseRepository.cs:14-15.
 
-#### SH-L171 — ViewModel LoadFrom overloads are null-tolerant but declare non-nullable parameters
+#### SH-L202 — ViewModel LoadFrom overloads are null-tolerant but declare non-nullable parameters
 
 `../Birko.Data.Core/ViewModels/ModelViewModel.cs:26`
 
 LoadFrom(IGuidEntity data) and LoadFrom(ModelViewModel data) wrap their bodies in `if (data != null)` while declaring the parameter non-nullable (26, 34); same in LogViewModel.cs:56/67 and AbstractLogViewModel.cs:68/79. The tolerated null is part of the observable contract (the repositories' LoadInstance path relies on nothing being thrown) but a nullable-enabled caller passing a TModel? gets CS8604, which the project bans.
 
-#### SH-L172 — ReadMode is declared only on the async ViewModel interface
+#### SH-L203 — ReadMode is declared only on the async ViewModel interface
 
 `../Birko.Data.ViewModel/Repositories/IViewModelRepository.cs:114`
 
 IAsyncViewModelRepository declares `bool ReadMode { get; set; }` (IAsyncViewModelRepository.cs:136) but IViewModelRepository declares nothing, even though AbstractViewModelRepository implements it as a public virtual property (31) and every sync write enforces it (186/209/235 plus all six bulk overloads). A caller holding the sync interface can be rejected with InvalidOperationException("Repository is in Read Mode") yet has no way to read or clear the flag that caused it.
 
-#### SH-L173 — AsyncDataBaseRepository implements no interface, so its SQL surface is class-only
+#### SH-L204 — AsyncDataBaseRepository implements no interface, so its SQL surface is class-only
 
 `../Birko.Data.SQL.ViewModel/Repositories/AsyncDataBaseRepository.cs:25`
 
 The sync family exposes Connector/AddOnInit/RemoveOnInit through IDataBaseRepository<TConnector,TViewModel,TModel>, but AsyncDataBaseRepository derives only from AbstractAsyncBulkViewModelRepository and declares no interface, so DataBaseStore, Connector, AddOnInit and RemoveOnInit are reachable only through the concrete type. Registration or substitution against an abstraction is impossible for the async half.
 
-#### SH-L174 — ReadOne extension's four type parameters cannot be inferred, so its defaults are unusable
+#### SH-L205 — ReadOne extension's four type parameters cannot be inferred, so its defaults are unusable
 
 `../Birko.Data.SQL.ViewModel/Extensions/IDataBaseRepository.cs:12`
 
 ReadOne<TRepository,TConnector,TViewModel,TModel> can infer only TRepository (from the receiver) and TModel (only from a non-null IFilter<TModel>); C# never infers type arguments from constraints, so TConnector and TViewModel must always be spelled out: repo.ReadOne<MyRepo, SqLiteConnector, MyVm, MyModel>(filter). The `filter = null` / `orderByExpr = null` defaults therefore cannot be used, and the natural repo.ReadOne(filter) form the signature suggests does not compile.
 
-#### SH-L175 — Model repository Create(null) throws NRE while Save(null) returns Guid.Empty
+#### SH-L206 — Model repository Create(null) throws NRE while Save(null) returns Guid.Empty
 
 `../Birko.Data.Repositories/AbstractRepository.cs:53`
 
@@ -3743,61 +4140,61 @@ Create forwards straight to Store.Create(data) with no null check, and DataBaseS
 
 ### area: schema-index-and-ddl
 
-#### SH-L176 — A zero [MaxLengthField] suppresses the [MaxLength]/[StringLength] fallback
+#### SH-L207 — A zero [MaxLengthField] suppresses the [MaxLength]/[StringLength] fallback
 
 `../Birko.Data.SQL/SQL/Fields/AbstractField.cs:105`
 
 `maxLength = maxLengthField.MaxLength;` assigns unconditionally and MaxLengthField's constructor defaults to 0. The DataAnnotations fallbacks are gated on `if (maxLength == null)` (lines 142/149), so a property carrying bare `[MaxLengthField]` plus `[MaxLength(50)]` ends with maxLength == 0; the later `length > 0` test then yields a length-less StringField, i.e. TEXT instead of the declared VARCHAR(50). Treating 0 as 'unset' would fix it.
 
-#### SH-L177 — Mixing [IndexedField] and [CompositeIndex] on one index name appends duplicate columns
+#### SH-L208 — Mixing [IndexedField] and [CompositeIndex] on one index name appends duplicate columns
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:254`
 
 Both discovery passes write into the same `indexes[name]` entry and only ever Add columns — there is no dedup by ColumnName. `[IndexedField("IX_A")] TenantGuid` plus `[CompositeIndex("IX_A", nameof(TenantGuid), nameof(Number))]` yields three IndexColumns with TenantGuid twice, and the emitted `CREATE INDEX ... ("TenantGuid", "TenantGuid", "Number")` is rejected as a duplicate key column. The competing Order values also make the surviving order arbitrary.
 
-#### SH-L178 — ParseSizeToBytes returns -1 for tb/pb sizes because the 'b' branch swallows the suffix
+#### SH-L209 — ParseSizeToBytes returns -1 for tb/pb sizes because the 'b' branch swallows the suffix
 
 `../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs:188`
 
 The chain tests gb, mb, kb, then a bare `EndsWith("b")`. `_cat/indices` reports "1.2tb" for a large index; that matches the last branch, leaving numPart = "1.2t", which double.TryParse rejects, so SizeInBytes is -1 ('not available') for exactly the indexes whose size matters most. Same for "pb".
 
-#### SH-L179 — Duplicate column names abort table load with an opaque dictionary error
+#### SH-L210 — Duplicate column names abort table load with an opaque dictionary error
 
 `../Birko.Data.SQL/SQL/DataBase_Table.cs:104`
 
 `LoadFields(type).ToDictionary(x => x.Name)` throws ArgumentException('An item with the same key has already been added. Key: Code') when two properties resolve to the same column — e.g. `[NamedField("Code")] Sku` alongside a property literally named `Code`. Unlike the [CompositeIndex] mis-declaration path, which raises TableAttributeException naming attribute, property and type, this surfaces as a bare framework exception from inside LoadTable with no indication of which model or properties collided.
 
-#### SH-L180 — GetField/GetFieldFromLambda dereference a possibly-null PropertyInfo after the AbstractModel remap
+#### SH-L211 — GetField/GetFieldFromLambda dereference a possibly-null PropertyInfo after the AbstractModel remap
 
 `../Birko.Data.SQL/SQL/DataBase_Field.cs:136`
 
 After `propInfo = typeof(Models.AbstractDatabaseLogModel).GetProperty(propInfo.Name)` (and the AbstractModel branch at 134) the result is nullable but is passed as `LoadField(propInfo!)`, whose first statement calls `field.GetCustomAttributes(...)`. A property present on AbstractLogModel/AbstractModel but not re-declared on the database counterpart yields a NullReferenceException instead of the descriptive ArgumentException raised three lines earlier. Duplicated in GetFieldFromLambda (line 167); both `!` suppressions can be null.
 
-#### SH-L181 — DataBase.Write launders nulls into a Dictionary<string, object> with the null-forgiving operator
+#### SH-L212 — DataBase.Write launders nulls into a Dictionary<string, object> with the null-forgiving operator
 
 `../Birko.Data.SQL/SQL/DataBase_Field.cs:209`
 
 `result.Add(tableField.Name, tableField.Write(data)!)` stores null values in a dictionary whose declared value type is non-nullable `object`, so every consumer that enumerates it is told the values cannot be null while many can (Write returns null for any null property — IntegerField.cs:29 explicitly). The declared type should be Dictionary<string, object?>; the `!` hides the case rather than handling it.
 
-#### SH-L182 — AbstractField.GetSelectName(withName: true) dereferences the null! Table back-reference
+#### SH-L213 — AbstractField.GetSelectName(withName: true) dereferences the null! Table back-reference
 
 `../Birko.Data.SQL/SQL/Fields/AbstractField.cs:38`
 
 `Table` is declared `Tables.Table = null!` and is assigned only by ComputeTable (DataBase_Table.cs:110). Fields produced through the LoadField/GetField<T,P>/GetFieldFromLambda path — the ones bulk PropertyUpdate and filter translation use — never get a Table, so any call to GetSelectName(withName: true) or the aggregate branch's `Table.Name + "."` on such a field raises NullReferenceException. The `null!` initialiser suppresses the warning that would have flagged it.
 
-#### SH-L183 — SqLiteIndexManager.ListIndexesSql is dead code returning empty column names and zero ordinals
+#### SH-L214 — SqLiteIndexManager.ListIndexesSql is dead code returning empty column names and zero ordinals
 
 `../Birko.Data.SQL.SqLite/IndexManagement/SqLiteIndexManager.cs:32`
 
 The override selects a literal `''` for column_name and `0` for ordinal_position, and its own comment says it exists only to satisfy the base contract because ListAsync is overridden. Any subclass that overrides ListAsync back to the base behaviour — or any future base-class call site — silently produces IndexInfos whose Fields are empty-named columns instead of failing. Throwing NotSupportedException would be safe; returning plausible-looking wrong data is not.
 
-#### SH-L184 — Index-management DDL runs on its own connection, so CREATE INDEX survives a failed migration transaction
+#### SH-L215 — Index-management DDL runs on its own connection, so CREATE INDEX survives a failed migration transaction
 
 `../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs:220`
 
 ExecuteNonQueryAsync/ExecuteReaderAsync each open a fresh connection from Connector.CreateConnection(Connector.Settings), so CreateAsync/DropAsync never join an ambient store or migration transaction. A migration that creates an index then fails leaves the index behind; on a re-run the create is masked by IF NOT EXISTS, so the schema silently diverges from the migration ledger. ExistsAsync also cannot see uncommitted DDL from the transaction driving the migration.
 
-#### SH-L185 — Portable IndexDefinition carries flags no shipped manager reads
+#### SH-L216 — Portable IndexDefinition carries flags no shipped manager reads
 
 `../Birko.Data.Patterns/IndexManagement/IndexDefinition.cs:30`
 
@@ -3805,249 +4202,311 @@ Sparse, ExpireAfter and IndexField.FieldType (Text/Geo2d/Geo2dSphere/Hashed, wit
 
 ### area: security-and-authorization
 
-#### SH-L186 — BirkoSecurityOptions.WildcardPermissionEnabled is a dead option — no code reads it
+#### SH-L217 — BirkoSecurityOptions.WildcardPermissionEnabled is a dead option — no code reads it
 
 `../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs:47`  ·  _restates a first-pass finding_
 
 Documented as "Enable wildcard \"*\" permission that grants all access. Default: true", but nothing in the area references it. PermissionEndpointFilter (line 28) and ClaimsPermissionChecker (line 30) honour "*" unconditionally, so an operator setting it false to close the superadmin bypass gets no behaviour change and no warning.
 
-#### SH-L187 — TokenServiceAdapter emits ClaimTypes URIs, not the JwtClaimNames the module advertises
+#### SH-L218 — TokenServiceAdapter emits ClaimTypes URIs, not the JwtClaimNames the module advertises
 
 `../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs:51`  ·  _restates a first-pass finding_
 
 GenerateAccessToken writes ClaimTypes.NameIdentifier and ClaimTypes.Email, while JwtClaimNames declares UserId = "sub" and Email = "email" and is referenced by nothing except ClaimMappingOptions.TenantGuidClaim/Permission. A consumer reading "sub"/"email" directly, as JwtClaimNames advertises, sees no user id and no email; JwtClaimNames.UserId, .Email and .Role are read nowhere in the module.
 
-#### SH-L188 — ClaimsPermissionChecker grants permissions without requiring IsAuthenticated, unlike the endpoint filter
+#### SH-L219 — ClaimsPermissionChecker grants permissions without requiring IsAuthenticated, unlike the endpoint filter
 
 `../Birko.Security.AspNetCore/Authorization/ClaimsPermissionChecker.cs:26`
 
 HasPermissionAsync only compares userId to ICurrentUser.UserId and then reads Permissions — it never consults IsAuthenticated, while PermissionEndpointFilter.InvokeAsync (line 25) treats an unauthenticated caller as 401 before looking at permissions. ClaimsCurrentUser likewise reads UserId/Permissions off the principal regardless of Identity.IsAuthenticated (lines 28-62). A principal populated with claims by a non-authenticating middleware therefore passes IPermissionChecker (including via "*") but is rejected by the filter.
 
-#### SH-L189 — Static bearer tokens are compared with ordinary ordinal equality, not a fixed-time comparison
+#### SH-L220 — Static bearer tokens are compared with ordinary ordinal equality, not a fixed-time comparison
 
 `../Birko.Security/Authentication/AuthenticationService.cs:122`
 
 `_expandedTokens.Contains(token)` (HashSet, StringComparer.Ordinal) and `binding.Token == token` at line 96 both short-circuit on the first differing character, while the password hashers in the same area deliberately use CryptographicOperations.FixedTimeEquals. These are long-lived shared secrets compared on a request path, so the one primitive that exists for exactly this comparison is not used here.
 
-#### SH-L190 — No ValidAlgorithms allow-list on either symmetric JWT validation path
+#### SH-L221 — No ValidAlgorithms allow-list on either symmetric JWT validation path
 
 `../Birko.Security.Jwt/JwtTokenProvider.cs:89`
 
 The TokenValidationParameters built at line 89 (and in AddBirkoJwtBearer, JwtBearerExtensions.cs:56) omit ValidAlgorithms, so a token signed HS384 or HS512 with the same secret validates even though GenerateToken only ever emits HS256. OidcIdTokenVerifier pins an explicit allow-list (line 35) and documents why; the symmetric paths inherit whatever the handler defaults to instead of asserting the one algorithm they mint.
 
-#### SH-L191 — AddBirkoJwtBearer validates only that Secret is non-empty, so a 4-character HMAC key passes startup
+#### SH-L222 — AddBirkoJwtBearer validates only that Secret is non-empty, so a 4-character HMAC key passes startup
 
 `../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs:25`
 
 The guard is `string.IsNullOrEmpty(options.Secret)` while JwtAuthenticationOptions.Secret's own doc says "minimum 32 characters recommended". A short secret survives registration and fails later inside IdentityModel at the first token signing (its own 128-bit floor), or — at 16-31 characters — signs successfully with a guessable key. The documented recommendation is enforced nowhere.
 
-#### SH-L192 — AzureKeyVaultSettings launders null through `value!` into non-nullable base properties
+#### SH-L223 — AzureKeyVaultSettings launders null through `value!` into non-nullable base properties
 
 `../Birko.Security.AzureKeyVault/AzureKeyVaultSettings.cs:23`
 
 TenantId/ClientId/ClientSecret are `string?` whose setters do `Name = value!` / `UserName = value!` / `Password = value!` (lines 23, 30, 37) over Settings.Name and RemoteSettings.UserName (both `= null!` non-nullable) and PasswordSettings.Password (non-nullable). Assigning null stores a null the type system promises cannot be one. This is the exact CR-L094/CR-L353 pattern already fixed in PasswordSettings (`password ?? string.Empty`) and in VaultSettings.Token.
 
-#### SH-L193 — BCrypt verification rejects the widely used $2y$ prefix, locking out imported hashes
+#### SH-L224 — BCrypt verification rejects the widely used $2y$ prefix, locking out imported hashes
 
 `../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs:431`
 
 IsValidBCryptHash accepts only 'a' or 'b' at index 2. $2y$ is what PHP's password_hash and much of the ecosystem emit, and it is semantically identical to $2b$ for the <=72-byte inputs this class enforces — the class comment even argues that case for $2a$/$2b$. A migrated user store full of $2y$ hashes returns false from Verify (and true from NeedsRehash), which reads as a wrong password rather than an unsupported format.
 
-#### SH-L194 — BCrypt Verify honours a stored cost up to 31, so one hostile row costs 2^31 key schedules
+#### SH-L225 — BCrypt Verify honours a stored cost up to 31, so one hostile row costs 2^31 key schedules
 
 `../Birko.Security.BCrypt/Hashing/BCryptPasswordHasher.cs:344`
 
 `long rounds = 1L << cost` uses the cost parsed from the stored hash, not the hasher's configured work factor; HashPassword accepts anything in 4..31 (line 277). A single `$2a$31$…` row — from a corrupt migration or an attacker with write access to the password column — makes every login attempt against that account run ~2 billion ExpandKey pairs, pinning a CPU indefinitely. No verification-time ceiling exists, and the PBKDF2 sibling has the same shape with its iteration count.
 
-#### SH-L195 — Pbkdf2PasswordHasher exposes no NeedsRehash, so IPasswordHasher consumers cannot upgrade parameters
+#### SH-L226 — Pbkdf2PasswordHasher exposes no NeedsRehash, so IPasswordHasher consumers cannot upgrade parameters
 
 `../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs:41`
 
 BCryptPasswordHasher ships NeedsRehash (line 81) but it is not on IPasswordHasher and Pbkdf2PasswordHasher has no equivalent. Verify also recomputes with the iteration count taken from the stored string with no floor (the constructor's 10,000 minimum is construction-only), so a hash written at 1,000 iterations verifies forever and nothing in the contract lets a caller detect it. Two implementations of one interface, two different upgrade stories.
 
-#### SH-L196 — AddBirkoSecurity and AddBirkoJwtBearer invoke `configure` with no null guard
+#### SH-L227 — AddBirkoSecurity and AddBirkoJwtBearer invoke `configure` with no null guard
 
 `../Birko.Security.AspNetCore/Extensions/SecurityServiceExtensions.cs:83`
 
 `configure(options)` at SecurityServiceExtensions.cs:83 and JwtBearerExtensions.cs:23 dereference the delegate directly, so AddBirkoSecurity(null!) throws a bare NullReferenceException from inside the framework rather than the ArgumentNullException every other guarded member in the area raises (PermissionEndpointFilter:19, JwtTokenProvider:25, OidcIdTokenVerifier:66, all three configuration sources).
 
-#### SH-L197 — AddBirkoJwtBearer news up JwtTokenProvider, so a registered IDateTimeProvider is ignored
+#### SH-L228 — AddBirkoJwtBearer news up JwtTokenProvider, so a registered IDateTimeProvider is ignored
 
 `../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs:41`
 
 `services.AddSingleton<ITokenProvider>(new Jwt.JwtTokenProvider(tokenOptions))` constructs the instance at registration time with the optional clock left null, so JwtTokenProvider falls back to SystemDateTimeProvider (line 26). An application that registers a TestDateTimeProvider or any custom IDateTimeProvider — the seam the constructor exists to offer, and which CR-L344 relies on for a single consistent iat/exp read — silently has no effect on issued tokens.
 
-#### SH-L198 — PermissionResolutionMiddleware guards neither its RequestDelegate nor a null resolver result
+#### SH-L229 — PermissionResolutionMiddleware guards neither its RequestDelegate nor a null resolver result
 
 `../Birko.Security.AspNetCore/Authorization/PermissionResolutionMiddleware.cs:30`
 
 `public PermissionResolutionMiddleware(RequestDelegate next) => _next = next;` has no null check, and the resolver results stored at lines 43 and 48 are never validated against IUserPermissionResolver's documented "never null" contract. A resolver returning null stores null in HttpContext.Items, ResolvedPermissionsCurrentUser's `as IReadOnlySet<string>` falls through to an empty set, and the caller sees a user with no permissions rather than a broken resolver.
 
-#### SH-L199 — AES key generation is a static on the concrete class, unreachable through IEncryptionProvider
+#### SH-L230 — AES key generation is a static on the concrete class, unreachable through IEncryptionProvider
 
 `../Birko.Security/Encryption/AesEncryptionProvider.cs:72`
 
 `public static byte[] GenerateKey()` is the only supported way to produce the 32-byte key that Encrypt/Decrypt demand (ValidateKey line 82), but IEncryptionProvider declares no key-generation member. A consumer injected with IEncryptionProvider must either hard-cast to AesEncryptionProvider or hand-roll RandomNumberGenerator.GetBytes(32), so the abstraction cannot be used without knowing its implementation.
 
-#### SH-L200 — ResolveOptions mutates the caller's LocalVaultOptions instance in place
+#### SH-L231 — ResolveOptions mutates the caller's LocalVaultOptions instance in place
 
 `../Birko.Security.Vault.Configuration/LocalVaultConfigurationExtensions.cs:117`
 
 `var o = seed ?? new LocalVaultOptions();` then assigns Token/Url/User/Domain/Environment on it (lines 119-127). The caller's object is silently rewritten: environment-variable values are baked in and User/Domain/Environment are lower-cased, so a caller that reuses one options instance for a second call (or inspects it afterwards) sees values it never set. `FirstNonEmpty(o.Token, env, o.Token)` also passes the current value as its own fallback, which is dead.
 
-#### SH-L201 — AddLocalVaultConfiguration creates a disposable VaultSecretProvider that nothing ever disposes
+#### SH-L232 — AddLocalVaultConfiguration creates a disposable VaultSecretProvider that nothing ever disposes
 
 `../Birko.Security.Vault.Configuration/LocalVaultConfigurationExtensions.cs:57`
 
 `new VaultSecretProvider(new VaultSettings {…})` owns the HttpClient it allocates (VaultSecretProvider.cs:39-40) and implements IDisposable, but the instance is only captured by the configuration sources and never disposed — neither the extension nor LocalVaultConfigurationSource/Provider holds a disposal path. Each call to the extension leaks one HttpClient and its handler for the process lifetime.
 
-#### SH-L202 — VaultSecretProvider silently treats any KvVersion other than 2 as KV v1
+#### SH-L233 — VaultSecretProvider silently treats any KvVersion other than 2 as KV v1
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:251`
 
 Every branch is `_settings.KvVersion == 2 ? … : …` (lines 121, 135, 150, 251 and the parse selection at 104). KvVersion is a plain int with no validation, so a typo'd 3 or a 0 from a bound configuration section quietly issues v1 paths and runs ParseKv1Response — which then throws KeyNotFoundException on the v2 body shape it gets back. The documented "1 or 2" domain is enforced nowhere.
 
-#### SH-L203 — IsHealthyAsync swallows OperationCanceledException and reports the server unhealthy
+#### SH-L234 — IsHealthyAsync swallows OperationCanceledException and reports the server unhealthy
 
 `../Birko.Security.Vault/VaultSecretProvider.cs:233`
 
 The bare `catch { return false; }` also catches cancellation of the supplied token, so a caller that cancels (shutdown, request abort) receives "Vault is unhealthy" instead of an OperationCanceledException. HttpOidcSigningKeySource in the same area deliberately excludes OperationCanceledException from its catch (line 78) for exactly this reason.
 
-#### SH-L204 — AuthorizationContext ignores the "*" wildcard that the rest of the area treats as all-access
+#### SH-L235 — AuthorizationContext ignores the "*" wildcard that the rest of the area treats as all-access
 
 `../Birko.Security/Authorization/IRoleProvider.cs:38`
 
 `HasPermission(string permission) => Permissions.Contains(permission)` is plain membership, whereas ClaimsPermissionChecker (line 29) and PermissionEndpointFilter (line 28) both accept "*" as granting everything. The same permission list therefore authorises a superadmin through one type and denies them through the other, with nothing in either type's docs marking the difference.
 
-#### SH-L205 — Roles/permissions are joined with ';' but read back split on both ',' and ';', corrupting values
+#### SH-L236 — Roles/permissions are joined with ';' but read back split on both ',' and ';', corrupting values
 
 `../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs:63`
 
 GenerateAccessToken joins with ';' (lines 63, 66) with no escaping or rejection of members containing a separator. ClaimsCurrentUser splits on both ',' and ';' (line 64) and ResolvedPermissionsCurrentUser splits roles the same way, while TokenServiceAdapter.ValidateToken splits on ';' only (lines 108, 112). A role or permission code containing either character is silently fragmented into two grants by one reader and kept whole by another.
 
-#### SH-L206 — TokenServiceAdapter guards neither its constructor arguments nor a null TokenRequest.Email
+#### SH-L237 — TokenServiceAdapter guards neither its constructor arguments nor a null TokenRequest.Email
 
 `../Birko.Security.AspNetCore/Authentication/TokenServiceAdapter.cs:38`
 
 The constructor assigns _tokenProvider and _options unchecked, unlike JwtTokenProvider (line 25) and OidcIdTokenVerifier (line 66). GenerateAccessToken then writes `claims[ClaimTypes.Email] = request.Email` (line 52) — TokenRequest's positional parameter is non-nullable but nothing enforces it, and a null value reaches `new Claim(type, value)` inside JwtTokenProvider, throwing ArgumentNullException from a frame that names neither Email nor the request.
 
-#### SH-L207 — AuthenticationService._disposed is a non-volatile flag checked outside any synchronisation
+#### SH-L238 — AuthenticationService._disposed is a non-volatile flag checked outside any synchronisation
 
 `../Birko.Security/Authentication/AuthenticationService.cs:266`
 
 Dispose reads and writes the plain bool `_disposed` with no lock, Interlocked or volatile, while every other field access in the class is guarded by _lock. Two concurrent Dispose calls can both pass the check and double-dispose the ReaderWriterLockSlim, and a Dispose racing an in-flight ValidateToken leaves the latter throwing ObjectDisposedException from EnterReadLock rather than returning a decision.
 
-#### SH-L208 — JWKS cache is keyed only by provider name and has no single-flight guard
+#### SH-L239 — JWKS cache is keyed only by provider name and has no single-flight guard
 
 `../Birko.Security.Jwt/OpenIdConnect/HttpOidcSigningKeySource.cs:53`
 
 The ConcurrentDictionary is keyed by provider with OidcProviderOptions.JwksUri excluded, so reconfiguring a provider's JWKS endpoint keeps serving keys fetched from the old URI for up to the cache duration. There is also no per-provider lock around the fetch, so every concurrent login at expiry issues its own GET — the two behaviours together mean the cache neither invalidates on configuration change nor collapses a burst.
 
+### area: serialization
+
+#### SH-L240 — Caller-supplied XmlWriterSettings reintroduce a BOM and can close the caller's stream
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:25`
+
+`Encoding = new UTF8Encoding(false)` lives only in the `writerSettings ?? …` fallback (25). `XmlWriterSettings.Encoding` defaults to preamble-emitting `Encoding.UTF8`, so `new SystemXmlSerializer(new XmlWriterSettings{Indent=true})` makes `SerializeToBytes` (86, 97) and `Serialize(Stream,…)` (127, 137) emit `EF BB BF` while the string overloads stay BOM-free — the very stream-vs-string asymmetry the class fixed for the declaration. The same wholesale replacement lets `CloseOutput=true` reach `XmlWriter.Create`, so `using var xmlWriter` closes the caller's stream.
+
+#### SH-L241 — XML/Protobuf/YAML async members do all their blocking work before returning the Task
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:163`
+
+The async members of SystemXmlSerializer (163-201), ProtobufBinarySerializer (117-146) and YamlDotNetSerializer (132-158) check the token once, then run the whole synchronous serialize/deserialize — including every blocking Stream.Write/Read — on the calling thread before returning `Task.CompletedTask`/`Task.FromResult`. `await SerializeAsync(...)` on a request thread blocks for the entire payload, and a token cancelled one instruction after the check has no effect, so the members advertise async semantics they do not provide.
+
+#### SH-L242 — Newtonsoft SerializeAsync performs blocking stream writes; only the final flush is awaited
+
+`../Birko.Serialization.Newtonsoft/NewtonsoftJsonSerializer.cs:134`
+
+`SerializeAsync`/`SerializeAsync<T>` call `serializer.Serialize(jsonWriter, value)` synchronously (134, 147) over a StreamWriter with a 1024-byte buffer (131, 144), so every kilobyte triggers a blocking `Stream.Write` on the caller's thread; only `await jsonWriter.FlushAsync(cancellationToken)` (135, 148) is asynchronous. For a large payload on a slow stream this is sync-over-async on a request thread, and the token is unobservable for all but the last flush.
+
+#### SH-L243 — XML string overloads declare an encoding the returned string does not have
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:46`
+
+`EncodedStringWriter` (46, 56, 211-216) forces the `<?xml … encoding="…"?>` declaration to name `_writerSettings.Encoding` (utf-8 by default) on a value that is a UTF-16 .NET string. The declaration is then correct only if the caller happens to persist the string as UTF-8: `File.WriteAllText(path, serializer.Serialize(v), Encoding.Unicode)` yields a document whose declaration contradicts its bytes and which strict parsers reject. The usual remedy for string output — OmitXmlDeclaration on that path — is not applied; line 28 hard-codes `OmitXmlDeclaration = false`.
+
+#### SH-L244 — EncodedStringWriter takes a non-nullable Encoding from a settable-to-null property
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:214`
+
+`EncodedStringWriter(Encoding encoding)` (214) declares the parameter non-nullable and stores it in a non-nullable field, but its only call sites pass `_writerSettings.Encoding` (46, 56). `XmlWriterSettings.Encoding` has no null validation, so `new SystemXmlSerializer(new XmlWriterSettings { Encoding = null! })` puts null into a non-nullable field and makes the `Encoding` override hand null to `XmlWriter.Create`. The project bans CS8600-CS8625; this is exactly the annotation gap that ban exists to catch.
+
+#### SH-L245 — XML's (T?) cast turns a nil document into NullReferenceException for value-type T
+
+`../Birko.Serialization/Xml/SystemXmlSerializer.cs:78`
+
+`Deserialize<T>`, `DeserializeFromBytes<T>`, `Deserialize<T>(Stream)` and `DeserializeAsync<T>` cast with `(T?)serializer.Deserialize(xmlReader)` (78, 119, 156, 200). For an unconstrained T the compiler emits `unbox.any T`, so when `XmlSerializer.Deserialize` returns null — as it does for an `xsi:nil="true"` root — and T is a value type, the call throws NullReferenceException instead of yielding `default(T)`, despite the declared `T?` promising a null result is representable. STJ and Newtonsoft return `default(T)` for the equivalent input.
+
+#### SH-L246 — SerializationFormat is a label nothing in the area can resolve to an implementation
+
+`../Birko.Serialization/Core/SerializationFormat.cs:6`
+
+The enum is exposed via `ISerializer.Format` (ISerializer.cs:22) and every impl returns a hard-coded member, but no file in the area holds a factory, registry, DI extension or switch mapping a `SerializationFormat` to an `ISerializer` — it can only be read, never used to select or validate one. It also cannot discriminate the two JSON impls (both `Json` + `application/json`) whose wire formats differ, so even a hand-written selector on it would be ambiguous. Plumbed and documented configuration with no consumer.
+
+#### SH-L247 — ProtobufBinarySerializer exposes no configuration surface at all
+
+`../Birko.Serialization.Protobuf/ProtobufBinarySerializer.cs:16`
+
+The type has no constructor and no fields; all sixteen members dispatch to the static `ProtoBuf.Serializer` facade. The other five impls all take optional configuration (JsonSerializerOptions, JsonSerializerSettings, MessagePackSerializerOptions, Xml*Settings, YamlDotNet ISerializer/IDeserializer), so the abstraction's replaceable-configuration shape has a hole: the only lever — e.g. registering an unannotated type — is mutating protobuf-net's process-global default RuntimeTypeModel, shared with every other consumer in the process.
+
+#### SH-L248 — YAML's default deserializer silently ignores keys with no matching member
+
+`../Birko.Serialization.Yaml/YamlDotNetSerializer.cs:34`
+
+The default `_yamlDeserializer` is built with `.IgnoreUnmatchedProperties()` (34), overriding YamlDotNet's own throw-on-unmatched default. The class doc (12-13) targets 'configuration files, CI manifests', where a misspelled key is precisely the failure a strict reader is wanted for: the property silently keeps its default and the load reports success. The opt-in is not mentioned in the remarks (17 lists only 'camelCase naming, default scalar style'), so a caller must read the constructor to find it.
+
+#### SH-L249 — YamlDotNetSerializer's class remark points its ISerializer cref at the wrong interface
+
+`../Birko.Serialization.Yaml/YamlDotNetSerializer.cs:17`
+
+The remarks say "pass custom <see cref="ISerializer"/> / <see cref="IDeserializer"/> via the constructor" (17-18). Inside `namespace Birko.Serialization.Yaml` with `using YamlDotNet.Serialization;` present, `ISerializer` matches both `Birko.Serialization.ISerializer` (enclosing namespace, and the interface this class implements) and `YamlDotNet.Serialization.ISerializer`; the cref is ambiguous (CS0419) and reads as the Birko one, while the ctor params at 26-27 are explicitly YamlDotNet's — which is why every other reference in the file is fully qualified.
+
 ### area: settings-configuration-chain
 
-#### SH-L209 — SqlSettings.GetId and its subclasses omit every provider-specific field and the password
+#### SH-L250 — SqlSettings.GetId and its subclasses omit every provider-specific field and the password
 
 `../Birko.Data.SQL/Stores/SqlSettings.cs:41`
 
 GetId() = "{Location}:{Port}:{Name}:{UserName}" is not overridden by MSSql, MySql, PostgreSql, TimescaleDB or SqLite, so CommandTimeout, ConnectionTimeout, MultipleActiveResultSets, TrustServerCertificate, BulkInsertBatchSize, UseBinaryImport, TimeColumn and ChunkTimeInterval never participate in identity; SqLiteSettings also omits Password. With StoreLocator not re-applying settings on a cache hit, the second caller for a server/database inherits the first's tuning — notably TimescaleDB's hypertable column.
 
-#### SH-L210 — SqlSettings.CommandTimeout is dead configuration for MSSql and MySQL
+#### SH-L251 — SqlSettings.CommandTimeout is dead configuration for MSSql and MySQL
 
 `../Birko.Data.SQL/Stores/SqlSettings.cs:16`
 
 Documented as "command timeout in seconds. Default is 30", copied by LoadFrom and surfaced as MSSqlStoreFactoryOptions/MySQLStoreFactoryOptions.CommandTimeout — but neither provider emits a command-timeout keyword (MSSqlSettings.cs:32 emits only `Connection Timeout`; MySqlSettings.cs:27 likewise) and a full-tree search finds no `command.CommandTimeout =` in any SQL connector. PostgreSql, TimescaleDB and SqLite all honour it, so the option is inert on exactly two of five providers.
 
-#### SH-L211 — PostgreSqlSettings.UseBinaryImport is plumbed and documented but never read
+#### SH-L252 — PostgreSqlSettings.UseBinaryImport is plumbed and documented but never read
 
 `../Birko.Data.SQL.PostgreSQL/Stores/PostgreSqlSettings.cs:17`
 
 Documented as "whether to use binary import (COPY protocol) for bulk operations", copied by LoadFrom and exposed as PostgreSQLStoreFactoryOptions.UseBinaryImport, yet nothing reads it: PostgreSQLConnector.cs:314 and :360 call BeginBinaryImport/BeginBinaryImportAsync unconditionally. Setting it false to work around a COPY-incompatible type or a permission restriction has no effect and gives no signal. Contrast MySqlSettings.BulkInsertBatchSize, which MySQLConnector.cs:283/360 genuinely reads.
 
-#### SH-L212 — TimescaleDBSettings' ctor exposes no useSecure, so a ctor-built instance can never emit SSL Mode=Require
+#### SH-L253 — TimescaleDBSettings' ctor exposes no useSecure, so a ctor-built instance can never emit SSL Mode=Require
 
 `../Birko.Data.TimescaleDB/Stores/Settings.cs:45`
 
 The parameterized ctor calls `base(location, name, username, password, port)`, omitting the useSecure argument MSSqlSettings, MySqlSettings and PostgreSqlSettings all expose, so UseSecure is always false. GetConnectionString (line 55) appends "SSL Mode=Require;" only when UseSecure, so `new TimescaleDBSettings(...)` always produces a plaintext PostgreSQL connection string; TLS is reachable only by mutating the property afterwards, which no sibling provider requires.
 
-#### SH-L213 — MongoDB's parameterized constructor hard-codes port 27017 and exposes no useSecure
+#### SH-L254 — MongoDB's parameterized constructor hard-codes port 27017 and exposes no useSecure
 
 `../Birko.Data.MongoDB/Stores/Settings.cs:38`
 
 `Settings(location, name, username, password)` passes a literal 27017 to base and accepts neither a port nor a useSecure flag, so a Mongo instance on a non-default port or requiring TLS cannot be configured through the constructor — the caller must know to assign Port/UseSecure afterwards. Every SQL provider and Redis accept both as optional ctor arguments, and only GetConnectionString (line 79) consults UseSecure, so the omission is silent.
 
-#### SH-L214 — Provider default ports are applied only by parameterized ctors, so config binding yields Port 0
+#### SH-L255 — Provider default ports are applied only by parameterized ctors, so config binding yields Port 0
 
 `../Birko.Data.SQL.MSSql/Stores/MSSqlSettings.cs:25`
 
 `MSSqlSettings() : base() {}` leaves Port at RemoteSettings' 0; the 1433 default lives only in the parameterized ctor signature (line 27). Same for MySql (3306), PostgreSql (5432), TimescaleDB. IConfiguration/IOptions binding uses the parameterless ctor plus property assignment, so a section omitting Port produces `Server=tcp:host,0`. MongoDB Settings:26-29 and RedisSettings:40-44 DO assign their defaults in the parameterless ctor — an inconsistency, not a shared rule.
 
-#### SH-L215 — Settings.LoadFrom(ISettings) is a silent no-op for any ISettings outside the Settings hierarchy
+#### SH-L256 — Settings.LoadFrom(ISettings) is a silent no-op for any ISettings outside the Settings hierarchy
 
 `../Birko.Configuration/Settings.cs:93`
 
 The bridge is `if (data is Settings settings) LoadFrom(settings);` with no else and a void return. ISettings is public and requires only GetId, so a caller passing a custom implementation gets no copy, no exception and no signal that the load was skipped; the target keeps its previous configuration and the misconfiguration surfaces later as a connection failure.
 
-#### SH-L216 — Location, Name and UserName are non-nullable but default to null!, unlike the fixed Password
+#### SH-L257 — Location, Name and UserName are non-nullable but default to null!, unlike the fixed Password
 
 `../Birko.Configuration/Settings.cs:35`
 
 Location/Name (lines 35, 40) and RemoteSettings.UserName (line 187) are `string` initialized to `null!` — exactly the pattern the CR-L094 comment at lines 137-139 says was removed from Password because "a null Password the type system claims is non-null is a latent NRE". The nulls then flow out: RavenDB CreateDocumentStore does `Urls = new[] { Location }` unchecked, and MSSqlSettings interpolates them into a connection string. The project bans CS8600-CS8625.
 
-#### SH-L217 — InfluxDB Token/Organization default to null! and GetConnectionString can return null
+#### SH-L258 — InfluxDB Token/Organization default to null! and GetConnectionString can return null
 
 `../Birko.Data.InfluxDB/Stores/Settings.cs:23`
 
 Token (line 23) and Organization (line 28) are `string` = `null!`; only the parameterized ctor coerces them with `?? string.Empty`, so a parameterless or config-bound instance holds nulls behind a non-nullable annotation. GetConnectionString (line 71) returns the bare Location, itself `null!` by default — a null returned through a non-nullable `string` return type straight into the InfluxDB client.
 
-#### SH-L218 — InfluxDB IsTransientException classifies by bare message substring, retrying non-transient failures
+#### SH-L259 — InfluxDB IsTransientException classifies by bare message substring, retrying non-transient failures
 
 `../Birko.Data.InfluxDB/Stores/Settings.cs:85`
 
 `ex.Message.Contains("429") || Contains("503") || Contains("unavailable")` with no status-code parsing, so any message containing those digits — a record id, a measurement value, a timestamp fragment — is classified transient. InfluxDBStore.cs:497 and AsyncInfluxDBStore.cs:592 use this in a `when` filter to retry writes, so a deterministic parse failure on a batch containing "503" is retried MaxRetries times and can duplicate partially-applied points. The HttpRequestException branch (line 82) likewise retries 401/404.
 
-#### SH-L219 — ElasticSearch IndexSettings members default to null! and MaxResultWindow's doc contradicts its default
+#### SH-L260 — ElasticSearch IndexSettings members default to null! and MaxResultWindow's doc contradicts its default
 
 `../Birko.Data.ElasticSearch/Stores/Settings.cs:47`
 
 IndexSettings (line 18), IndexSettings.TypeName (line 34) and IndexSettings.Name (line 40) are non-nullable but initialized to `null!`, so the annotation is false for any default-constructed instance — consumers such as ElasticSearchStoreHelper.cs:32 defensively use `?.`, which is the tell. Separately the XML doc on MaxResultWindow states "Default is 10,000" while the property is `int?` defaulting to null; the 10,000 is the server default, not a value this object supplies.
 
-#### SH-L220 — RemoteSettings' constructor coerces nothing for username, unlike every provider constructor
+#### SH-L261 — RemoteSettings' constructor coerces nothing for username, unlike every provider constructor
 
 `../Birko.Configuration/Settings.cs:219`
 
 `UserName = username` assigns straight through, while PasswordSettings' ctor (line 139) coerces `password ?? string.Empty` and every provider ctor forwards `username ?? string.Empty` (SqlSettings.cs:26, Mongo:39, Raven:24, Cosmos:34). So `new RemoteSettings(loc, name, null!, pw, port)` leaves a null in the non-nullable UserName, which then reaches `User ID={UserName}` in MSSql/MySQL and `{UserName}:{Password}@` in Mongo as an empty segment rather than being recognised as unset.
 
-#### SH-L221 — RedisSettings.GetConnectionString is non-virtual while every sibling declares it virtual
+#### SH-L262 — RedisSettings.GetConnectionString is non-virtual while every sibling declares it virtual
 
 `../Birko.Redis/RedisSettings.cs:70`
 
 SqlSettings:35, SqLiteSettings:34, MongoDB Settings:47 and InfluxDB Settings:71 all declare `virtual GetConnectionString()`; Redis alone does not. RedisStreamSettings (Birko.MessageQueue.Redis/RedisStreamSettings.cs:9) already derives from RedisSettings, so a subclass needing different composition can only hide the method with `new`, and every call through a RedisSettings-typed reference — how RedisCache, RedisJobQueue and RedisConnectionManager all hold it — would silently bypass the override.
 
-#### SH-L222 — RedisSettings.GetConnectionString guards a null Location but not an empty one, unlike its Port guard
+#### SH-L263 — RedisSettings.GetConnectionString guards a null Location but not an empty one, unlike its Port guard
 
 `../Birko.Redis/RedisSettings.cs:80`
 
 `sb.Append(Location ?? "localhost")` handles null but not string.Empty, while the very next line handles a bad port with a value check (`Port > 0 ? Port : 6379`). An instance whose Location was cleared — by LoadFrom from a source with an unassigned Location, or by binding an empty string — yields ":6379", which StackExchange.Redis rejects, instead of falling back to localhost as the adjacent line does. The same `?? "localhost"` at line 99 puts the empty value into sslHost.
 
-#### SH-L223 — MSSql/MySQL/TimescaleDB always emit User ID and Password even when empty
+#### SH-L264 — MSSql/MySQL/TimescaleDB always emit User ID and Password even when empty
 
 `../Birko.Data.SQL.MySQL/Stores/MySqlSettings.cs:27`
 
 `User ID={UserName};Password={Password};` is unconditional, so a settings object holding the string.Empty defaults produces `User ID=;Password=;`, which SqlClient/MySqlConnector read as SQL authentication with a blank user rather than "no credentials supplied" — there is no path to integrated security or socket/peer auth. MongoDB (Settings.cs:52), SqLite (SqLiteSettings.cs:37) and Redis (RedisSettings.cs:84,90) all omit the fragment when empty, so the chain holds two contradictory conventions for the same unset state.
 
-#### SH-L224 — SqLiteSettings.Path collapses a partial configuration to null and yields an empty Data Source
+#### SH-L265 — SqLiteSettings.Path collapses a partial configuration to null and yields an empty Data Source
 
 `../Birko.Data.SQL.SqLite/Stores/SqLiteSettings.cs:27`
 
 Path returns null unless BOTH Location and Name are non-empty, and GetConnectionString (line 36) interpolates it regardless, producing `Data Source=;Default Timeout=30`. A settings object carrying only Name = "app.db" (a plausible relative-path configuration) therefore yields no data source at all rather than a relative file, and the returned string looks well-formed — it only fails when the driver opens it.
 
-#### SH-L225 — SqlSettings' NotSupportedException message names a type that does not exist
+#### SH-L266 — SqlSettings' NotSupportedException message names a type that does not exist
 
 `../Birko.Data.SQL/Stores/SqlSettings.cs:38`
 
 The base GetConnectionString throw lists the provider subclasses as "(PostgreSqlSettings, MsSqlSettings, MySqlSettings, TimescaleDBSettings)"; the actual type is MSSqlSettings (Birko.Data.SQL.MSSql.Stores.MSSqlSettings). A developer hitting this exception and searching the tree for MsSqlSettings finds nothing.
 
-#### SH-L226 — RedisSettings.Database is documented as a 0-15 range but never validated
+#### SH-L267 — RedisSettings.Database is documented as a 0-15 range but never validated
 
 `../Birko.Redis/RedisSettings.cs:19`
 
@@ -4055,79 +4514,79 @@ The XML doc says "Redis database index (0-15)" and the ctor parameter repeats it
 
 ### area: specifications-and-paging
 
-#### SH-L227 — RuleSpecification does not null-check its rule or rule set, unlike every sibling combinator
+#### SH-L268 — RuleSpecification does not null-check its rule or rule set, unlike every sibling combinator
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:22`  ·  _restates a first-pass finding_
 
 And/Or/NotSpecification all throw ArgumentNullException in their constructors. RuleSpecification assigns `_rule = rule` unguarded, so new RuleSpecification<T>((IRule)null) succeeds and the NullReferenceException surfaces later at the first ToExpression()/IsSatisfiedBy call. The RuleSet overload is worse: WrapRuleSet (line 53) dereferences ruleSet.IsEnabled inside a constructor initializer, so the NRE has no parameter name at all.
 
-#### SH-L228 — WrapRuleSet shares the caller's rule List by reference and contains a dead IsEnabled assignment
+#### SH-L269 — WrapRuleSet shares the caller's rule List by reference and contains a dead IsEnabled assignment
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:56`
 
 `new RuleGroup(LogicOperator.And, ruleSet.Rules)` stores the same List<IRule> instance (RuleGroup.cs:25-29 assigns without copying), so adding or disabling a rule on the RuleSet after construction silently changes what an already-built specification filters. The `{ IsEnabled = ruleSet.IsEnabled }` initializer on the same line is unreachable-false: the branch is only taken when ruleSet.IsEnabled is true, which is also RuleGroup's default.
 
-#### SH-L229 — RuleSpecification.IsSatisfiedBy(null) throws ArgumentNullException where the base implementation tolerates null
+#### SH-L270 — RuleSpecification.IsSatisfiedBy(null) throws ArgumentNullException where the base implementation tolerates null
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:46`
 
 The override wraps the entity in ObjectRuleContext<T>, whose constructor throws ArgumentNullException(nameof(instance)). ISpecification<T>.IsSatisfiedBy(T entity) declares no nullable annotation and no class constraint, and Specification<T>'s base implementation just invokes the compiled delegate (which for a null-tolerant predicate returns a value), so swapping in a RuleSpecification behind an ISpecification<T> reference changes a returned bool into a thrown exception.
 
-#### SH-L230 — Compiled-expression cache is published without a fence and never invalidated
+#### SH-L271 — Compiled-expression cache is published without a fence and never invalidated
 
 `../Birko.Data.Patterns/Specification/Specification.cs:23`
 
 `_compiledExpression ??= ToExpression().Compile()` on a non-volatile field: the reference write is not release-fenced, so on a weak memory model (arm64) another thread can observe the field non-null before the delegate's own state is visible. It is also never invalidated, so any subclass whose ToExpression() depends on mutable state (a settable filter value) keeps returning the first compiled answer from IsSatisfiedBy while ToExpression() reflects the new state — the two halves of the interface then disagree permanently.
 
-#### SH-L231 — The &, | and ! operator overloads dereference their operands with no null check
+#### SH-L272 — The &, | and ! operator overloads dereference their operands with no null check
 
 `../Birko.Data.Patterns/Specification/Specification.cs:45`
 
 `operator &` does `left.And(right)`, so `null & spec` (legal C# for a reference type, and reachable when a specification comes from a lookup that can miss) throws NullReferenceException from inside the operator rather than an ArgumentNullException naming the operand; `!` at line 51 has the same problem. The right-hand side is the only side that gets a named exception, from the composite constructor.
 
-#### SH-L232 — And/Or/Not return ISpecification<T>, which declares no composition members, so composites cannot be chained
+#### SH-L273 — And/Or/Not return ISpecification<T>, which declares no composition members, so composites cannot be chained
 
 `../Birko.Data.Patterns/Specification/Specification.cs:30`
 
 And/Or/Not and the &,|,! operators are declared on Specification<T> but typed to return ISpecification<T> (lines 30-52), while ISpecification<T> exposes only IsSatisfiedBy/ToExpression. So `a.And(b).Or(c)` and `(a & b) & c` do not compile and callers must downcast to the concrete AndSpecification<T>/OrSpecification<T> to keep composing — the pattern's whole point. Returning Specification<T> would be source-compatible.
 
-#### SH-L233 — AndSpecification silently drops the left operand if an operand's ToExpression() returns null
+#### SH-L274 — AndSpecification silently drops the left operand if an operand's ToExpression() returns null
 
 `../Birko.Data.Patterns/Specification/AndSpecification.cs:25`
 
 ExpressionParameterReplacer.AndAlso takes a nullable left (ExpressionParameterReplacer.cs:30-34) and returns `right` unchanged when it is null. ISpecification<T>.ToExpression() is typed non-nullable but nothing enforces it (a nullable-oblivious or `null!` implementation compiles), and the result is an AND that quietly loses one conjunct — a widened filter on Read/Update/Delete rather than an exception. A null right operand instead NREs at right.Parameters[0], so the two sides fail differently. OrSpecification.cs:25 is identical.
 
-#### SH-L234 — PagedResult accepts a null Items list and stores the caller's list by reference
+#### SH-L275 — PagedResult accepts a null Items list and stores the caller's list by reference
 
 `../Birko.Data.Patterns/Paging/PagedResult.cs:46`  ·  _restates a first-pass finding_
 
 The constructor performs no null check and no defensive copy. `new PagedResult<T>(null!, 0, 1, 20)` constructs happily and only fails when a consumer (serializer, grid) enumerates the non-nullable-typed Items property; and passing a mutable List<T> leaves the page's contents changeable behind the IReadOnlyList<T> facade after construction.
 
-#### SH-L235 — TotalPages casts a double to int unchecked, so a huge TotalCount yields a negative page count
+#### SH-L276 — TotalPages casts a double to int unchecked, so a huge TotalCount yields a negative page count
 
 `../Birko.Data.Patterns/Paging/PagedResult.cs:34`
 
 `(int)Math.Ceiling((double)TotalCount / PageSize)` with TotalCount long: for TotalCount above int.MaxValue*PageSize (e.g. 3e9 rows with PageSize 1, reachable since the wrappers clamp pageSize only at the low end) the double is out of int range and the unchecked conversion produces int.MinValue, so TotalPages is negative and HasNextPage (Page < TotalPages) is false on page 1 — the UI reports no further pages while billions of rows remain.
 
-#### SH-L236 — PagedResult.Empty applies none of the wrappers' clamping, so Page can be 0 or negative
+#### SH-L277 — PagedResult.Empty applies none of the wrappers' clamping, so Page can be 0 or negative
 
 `../Birko.Data.Patterns/Paging/PagedResult.cs:57`
 
 Empty(page = 1, pageSize = 20) forwards both arguments verbatim to the constructor, so PagedResult<T>.Empty(0, 0) yields Page 0 / PageSize 0 and a result whose HasPreviousPage is false on what a caller believes is a later page. Every other paging entry point in this area normalises page/pageSize to >= 1 (PagedRepositoryWrapper.cs:37-38), so the factory is the one way to build a PagedResult that violates the 1-based contract its own XML doc states.
 
-#### SH-L237 — pageSize is clamped only at the low end, so an unbounded page size is forwarded as the read limit
+#### SH-L278 — pageSize is clamped only at the low end, so an unbounded page size is forwarded as the read limit
 
 `../Birko.Data.Patterns/Paging/PagedRepositoryWrapper.cs:38`
 
 `if (pageSize < 1) pageSize = 1;` has no upper counterpart, so pageSize = int.MaxValue passes straight through as the repository's limit and materialises the whole result set with .ToList() (line 41) — the wrapper is the natural place for the cap since it is what an API layer binds a query-string page size to. AsyncPagedRepositoryWrapper.cs:41 is identical, and neither interface doc mentions a bound or the clamping that does happen.
 
-#### SH-L238 — Birko.Data.Patterns/CLAUDE.md documents the async wrapper as running Read and Count in parallel; it is sequential by design
+#### SH-L279 — Birko.Data.Patterns/CLAUDE.md documents the async wrapper as running Read and Count in parallel; it is sequential by design
 
 `../Birko.Data.Patterns/Paging/AsyncPagedRepositoryWrapper.cs:45`
 
 The code awaits ReadAsync fully before CountAsync and the comment explains why (CR-L159: the wrapped repository may be a non-thread-safe store that cannot service two in-flight calls). Birko.Data.Patterns/CLAUDE.md:48 states "AsyncPagedRepositoryWrapper<T> - Wraps IAsyncBulkRepository<T>, runs Read and Count in parallel" — a reader trusting the doc would consider the sequential await a bug and "fix" it, reintroducing the concurrency hazard. The same doc's Specification section also omits RuleSpecification<T> entirely.
 
-#### SH-L239 — A rule whose Field is null throws ArgumentNullException from GetProperty with no indication which rule failed
+#### SH-L280 — A rule whose Field is null throws ArgumentNullException from GetProperty with no indication which rule failed
 
 `../Birko.Data.Patterns/Specification/RuleSpecification.cs:74`
 
@@ -4135,115 +4594,115 @@ Rule.Field is a settable non-nullable string, so a deserialized rule missing "fi
 
 ### area: store-crud-contract
 
-#### SH-L240 — StoreLocator skips SetSettings when GetId() is empty, and that bucket collides with the no-settings overload
+#### SH-L281 — StoreLocator skips SetSettings when GetId() is empty, and that bucket collides with the no-settings overload
 
 `../Birko.Data.Stores/StoreLocator.cs:38`
 
 `if (!string.IsNullOrEmpty(id) && ... is ISettingsStore<ISettings> s)` — an ISettings whose GetId() returns string.Empty gets its store constructed and cached permanently with NO settings applied and no error. That identity is also the `string.Empty` bucket the parameterless overload uses (line 17 passes `default!`, so `settings?.GetId() ?? string.Empty`), so GetStore<MyStore>() and GetStore<MyStore,TSettings>(emptyIdSettings) share one instance.
 
-#### SH-L241 — StoreLocator's static cache has no eviction or Destroy, unlike RepositoryLocator
+#### SH-L282 — StoreLocator's static cache has no eviction or Destroy, unlike RepositoryLocator
 
 `../Birko.Data.Stores/StoreLocator.cs:11`
 
 `private static IDictionary<string, IDictionary<Type, object>>? _stores` is written by GetStore and never read for removal — no Destroy/Remove/Clear member exists. Cached stores and any connection or client they hold live for the process lifetime and nothing calls their Destroy(). The sibling RepositoryLocator does expose Destroy<TRepository>(), so the two locators diverge. A full-tree grep for `StoreLocator.` also finds no call site in the framework at all.
 
-#### SH-L242 — CreateInstance's MissingMethodException fallback repeats the call that just failed
+#### SH-L283 — CreateInstance's MissingMethodException fallback repeats the call that just failed
 
 `../Birko.Data.Stores/AbstractStore.cs:160`  ·  _restates a first-pass finding_
 
 `Activator.CreateInstance<T>()` and `Activator.CreateInstance(typeof(T), Array.Empty<object>())` both resolve a public parameterless constructor, so when the first throws MissingMethodException the catch block re-issues the same request and throws again. The catch buys nothing and obscures the failure origin. Same code at AbstractAsyncStore.cs:173-176.
 
-#### SH-L243 — GetUnwrappedStore has no cycle guard and can loop forever
+#### SH-L284 — GetUnwrappedStore has no cycle guard and can loop forever
 
 `../Birko.Data.Stores/StoreExtensions.cs:24`  ·  _restates a first-pass finding_
 
 `while (current is IStoreWrapper wrapper) { var inner = wrapper.GetInnerStore(); if (inner == null) break; current = inner; }` terminates only on a null inner store. A wrapper whose GetInnerStore() returns itself, or two wrappers referencing each other (a mis-wired StoreWrapperBuilder chain), spins indefinitely — no visited-set, no iteration cap — hanging the caller instead of throwing.
 
-#### SH-L244 — GetUnwrappedStore<T,TStore> cannot find a matching intermediate decorator
+#### SH-L285 — GetUnwrappedStore<T,TStore> cannot find a matching intermediate decorator
 
 `../Birko.Data.Stores/StoreExtensions.cs:52`  ·  _restates a first-pass finding_
 
 The typed overload walks unconditionally to the innermost store and only then applies `as TStore`, so asking for a middle layer (e.g. SoftDeleteStoreWrapper<T> beneath a tenant wrapper) returns null. IsStoreOfType<T,TStore> on the same chain can answer true via its direct-type / IStoreWrapper<T> branches, so the two helpers give contradictory answers for the same (store, TStore) pair.
 
-#### SH-L245 — No GetUnwrappedStore overload exists for bulk stores, though IsStoreOfType has all four
+#### SH-L286 — No GetUnwrappedStore overload exists for bulk stores, though IsStoreOfType has all four
 
 `../Birko.Data.Stores/StoreExtensions.cs:43`
 
 GetUnwrappedStore<T,TStore> is declared only for IStore<T>? (43) and IAsyncStore<T>? (96), while IsStoreOfType covers IStore<T>?, IAsyncStore<T>?, IBulkStore<T>? (149) and IAsyncBulkStore<T>? (182). A caller holding an IBulkStore<T> — the interface the whole bulk hierarchy exposes — can test the chain but cannot unwrap it without first casting to IStore<T>. Asymmetric public surface for one capability.
 
-#### SH-L246 — SaveAsync omits ConfigureAwait(false) on both awaits while every other await in the file has it
+#### SH-L287 — SaveAsync omits ConfigureAwait(false) on both awaits while every other await in the file has it
 
 `../Birko.Data.Stores/AbstractAsyncStore.cs:157`
 
 `return await CreateAsync(data, processDelegate, ct);` (157) and `await UpdateAsync(data, processDelegate, ct);` (161) are the only two awaits in AbstractAsyncStore without ConfigureAwait(false) — lines 39, 43, 74, 75, 94, 95, 106, 107, 118, 119, 134, 135 all use it. In library code under a synchronization context SaveAsync resumes on the captured context, the classic sync-over-async deadlock and throughput hazard.
 
-#### SH-L247 — AggregateAsync omits ConfigureAwait(false) on the helper await one line after using it
+#### SH-L288 — AggregateAsync omits ConfigureAwait(false) on the helper await one line after using it
 
 `../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs:229`
 
 Line 228 is `await EnsureInitializedAsync(ct).ConfigureAwait(false);` and line 229 is `return await AggregateHelper.LinqAggregateAsync(_items.Values, query, ct);` with no ConfigureAwait — inconsistent within a single method body and the only such await in the file. Same hazard as AbstractAsyncStore.SaveAsync.
 
-#### SH-L248 — The write delegate parameter is named processDelegate on async single-entity members, storeDelegate elsewhere
+#### SH-L289 — The write delegate parameter is named processDelegate on async single-entity members, storeDelegate elsewhere
 
 `../Birko.Data.Stores/IAsyncStore.cs:94`
 
 IAsyncCreateStore.CreateAsync (94), IAsyncUpdateStore.UpdateAsync (114) and IAsyncStore.SaveAsync (161) name it `processDelegate`; every sync member (IStore.cs:113/132/182) and the async BULK members (AbstractAsyncInMemoryStore.cs:160/176, AbstractAsyncBulkStore.cs:34/46/87/99) name it `storeDelegate`. Named-argument call sites therefore do not port between the sync and async halves, nor between the single-entity and bulk halves of the same async store.
 
-#### SH-L249 — Null-tolerant entity parameters across the contract are not annotated nullable, forcing CS8625 on callers
+#### SH-L290 — Null-tolerant entity parameters across the contract are not annotated nullable, forcing CS8625 on callers
 
 `../Birko.Data.Stores/IStore.cs:113`
 
 `Create(T data, ...)`, `Update(T data, ...)`, `Delete(T data)` (IStore.cs:113/132/150) plus the async twins declare `T data` non-nullable, yet null is accepted and meaningfully handled everywhere: AbstractStore.Save checks `data == null` (135), AbstractInMemoryStore.CreateCore returns Guid.Empty for null (57), UpdateCore/DeleteCore use `data?.Guid` (90/100), bulk cores filter `x != null` (156/171/185). Under the project's no-nullable-warnings rule a caller passing a possibly-null entity gets CS8604/CS8625 against a callee that handles it.
 
-#### SH-L250 — InMemoryStore's _settings is plumbed through two constructors and two setters and never read
+#### SH-L291 — InMemoryStore's _settings is plumbed through two constructors and two setters and never read
 
 `../Birko.Data.InMemory/Stores/InMemoryStore.cs:19`
 
 `protected Settings? _settings` is assigned by the (Settings) constructor (34), SetSettings(Settings) (43) and indirectly SetSettings(ISettings) (60), and is never read in InMemoryStore, AbstractInMemoryStore or the async twins. Dead configuration by design (the class doc says so), but it means the ISettingsStore contract these types advertise — the one StoreLocator uses to configure a fresh store — is satisfied by a write-only field, so nothing can distinguish a configured store from an unconfigured one. Same in AsyncInMemoryStore.cs:19.
 
-#### SH-L251 — SetSettings(ISettings) silently drops any ISettings that is not a Birko.Configuration.Settings
+#### SH-L292 — SetSettings(ISettings) silently drops any ISettings that is not a Birko.Configuration.Settings
 
 `../Birko.Data.InMemory/Stores/InMemoryStore.cs:56`
 
 `if (settings is Settings concrete) { SetSettings(concrete); }` with no else — a custom ISettings implementation is discarded with no exception and no signal. The remark documents this as harmless for InMemory, but ISettingsStore<ISettings> is the ONLY path StoreLocator uses to configure a newly constructed store (StoreLocator.cs:38-41), so any store copying this shape inherits a silent misconfiguration. Same at AsyncInMemoryStore.cs:56.
 
-#### SH-L252 — IStoreWrapper<out T>'s type parameter is unused, so the covariant test matches wrappers over unrelated types
+#### SH-L293 — IStoreWrapper<out T>'s type parameter is unused, so the covariant test matches wrappers over unrelated types
 
 `../Birko.Data.Stores/IStoreWrapper.cs:21`
 
 IStoreWrapper<out T> declares only `TStore? GetInnerStoreAs<TStore>()`, which does not mention T — the parameter constrains nothing and is a bare marker. Because it is declared `out`, a wrapper implementing IStoreWrapper<DerivedInvoice> also satisfies `store is IStoreWrapper<Invoice>` in StoreExtensions.cs:79/132/165/198, so the branch that short-circuits the chain walk fires for a wrapper over a different entity type. Either use T in a signature or drop the generic interface.
 
-#### SH-L253 — StoreException is declared but thrown, caught and referenced nowhere in the framework
+#### SH-L294 — StoreException is declared but thrown, caught and referenced nowhere in the framework
 
 `../Birko.Data.Core/Exceptions/StoreException.cs:9`
 
 A full-tree grep for `StoreException` finds only its own declaration, the projitems entry, README/CLAUDE prose and the spec files — no throw site, no catch, no consumer. Meanwhile the contract answers every invalid input with a sentinel: null data -> Guid.Empty, unknown key -> silent no-op, null store -> false. The type meant to surface store failures is dead while the failures it exists for are unreportable. Also `StoreException(string message) : this(message, null!)` applies `!` to an argument whose parameter is already `Exception?`.
 
-#### SH-L254 — In-memory *CoreAsync bodies ignore the cancellation token entirely
+#### SH-L295 — In-memory *CoreAsync bodies ignore the cancellation token entirely
 
 `../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs:160`
 
 CreateCoreAsync(IEnumerable<T>,...) (160), UpdateCoreAsync(IEnumerable<T>,...) (176), DeleteCoreAsync(IEnumerable<T>,...) (191) and ReadCoreAsync (130) accept `ct` and never read it — cancellation is observed only by the EnsureInitializedAsync gate, i.e. before the work starts. A bulk create over a large sequence (or one backed by a lazy/expensive enumerator) cannot be cancelled once entered, and the unused parameter makes the store look cancellable when it is not.
 
-#### SH-L255 — Single-item ReadCore snapshots the entire dictionary to find one match
+#### SH-L296 — Single-item ReadCore snapshots the entire dictionary to find one match
 
 `../Birko.Data.InMemory/Stores/AbstractInMemoryStore.cs:71`
 
 `_items.Values.FirstOrDefault(...)` — ConcurrentDictionary<K,V>.Values materializes a fresh List of every value before FirstOrDefault sees the first element, so a single-entity read allocates O(n) even when the first candidate matches. Same at AbstractAsyncInMemoryStore.cs:75, and in CountCore (117) / the bulk ReadCore (128) where the copy is at least proportionate. `_items.Where(...)` over the live enumerator, as the Delete(filter) override at line 198 already does, avoids it.
 
-#### SH-L256 — _initialized is a non-volatile bool read outside the lock in both abstract bases
+#### SH-L297 — _initialized is a non-volatile bool read outside the lock in both abstract bases
 
 `../Birko.Data.Stores/AbstractStore.cs:15`
 
 Classic double-checked-locking hazard: the fast-path read (AbstractStore.cs:26, AbstractAsyncStore.cs:38) has no acquire barrier — no volatile, Interlocked, MemoryBarrier or Lazy<T> anywhere. Under the ECMA-335 memory model a reader may observe true before InitCore()'s side effects are visible, or the JIT may cache the field. Correctness rests on the stronger de-facto CLR/x86 model rather than on the code. (Also reported under store-lazy-initialization, which shares these files.)
 
-#### SH-L257 — SemaphoreSlim _initLock is never disposed and the async bases implement no dispose contract
+#### SH-L298 — SemaphoreSlim _initLock is never disposed and the async bases implement no dispose contract
 
 `../Birko.Data.Stores/AbstractAsyncStore.cs:18`
 
 A SemaphoreSlim is allocated per instance, yet neither AbstractAsyncStore<T> nor AbstractAsyncBulkStore<T> implements IDisposable/IAsyncDisposable, and DestroyAsync is abstract with no base behaviour. Per-request store instantiation leaves undisposed semaphores for finalization. Low impact because the wait handle is lazily allocated and uncontended after init, but it is an unowned disposable on a base every async store inherits. (Also reported under store-lazy-initialization.)
 
-#### SH-L258 — CLAUDE.md claims every store implements all four store interfaces; the code has two disjoint hierarchies
+#### SH-L299 — CLAUDE.md claims every store implements all four store interfaces; the code has two disjoint hierarchies
 
 `../Birko.Data.Stores/AbstractAsyncStore.cs:14`
 
@@ -4251,79 +4710,79 @@ CLAUDE.md § Conventions states "All stores implement: IStore, IAsyncStore, IBul
 
 ### area: store-decorator-composition
 
-#### SH-L259 — PrevUpdatedAt is derived from the caller's in-memory UpdatedAt, writing 0001-01-01 for partial entities
+#### SH-L300 — PrevUpdatedAt is derived from the caller's in-memory UpdatedAt, writing 0001-01-01 for partial entities
 
 `../Birko.Data.Patterns/Decorators/AsyncTimestampStoreWrapper.cs:43`
 
 `data.PrevUpdatedAt = data.UpdatedAt;` reads the field on the object handed in, not the stored value. Updating an entity built from a DTO that never populated UpdatedAt writes PrevUpdatedAt = default(DateTime) = 0001-01-01, and updating a stale copy writes a value that was never the stored UpdatedAt. Consumers using PrevUpdatedAt as a change-detection or sync watermark read something corresponding to no prior write. Same at TimestampStoreWrapper.cs:41 and both bulk projections (TimestampBulkStoreWrapper.cs:45, AsyncTimestampBulkStoreWrapper.cs:47).
 
-#### SH-L260 — Versioned wrappers implement only IStoreWrapper, not IStoreWrapper<T>, unlike every other decorator
+#### SH-L301 — Versioned wrappers implement only IStoreWrapper, not IStoreWrapper<T>, unlike every other decorator
 
 `../Birko.Data.Patterns/Concurrency/VersionedStoreWrapper.cs:15`
 
 `VersionedStoreWrapper<T> : IStore<T>, IStoreWrapper` and AsyncVersionedStoreWrapper.cs:17 likewise, while all ten decorators in Birko.Data.Patterns.Decorators declare IStoreWrapper<T> and expose GetInnerStoreAs<TInner>(). Chain-walking helpers that branch on IStoreWrapper<T> (StoreExtensions.IsStoreOfType) classify a versioned link differently from every other link, and typed inner-store access is unavailable on exactly these two wrappers.
 
-#### SH-L261 — StoreWrapperBuilder does not null-check rawStore and can return null through a non-nullable type
+#### SH-L302 — StoreWrapperBuilder does not null-check rawStore and can return null through a non-nullable type
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:37`
 
 `IAsyncBulkStore<T> store = rawStore;` with no guard. For a T implementing no marker, Build(null) returns null from a method declared to return non-nullable IAsyncBulkStore<T> and the NullReferenceException surfaces at the first CRUD call, far from the wiring site. For a T implementing markers it instead surfaces as TargetInvocationException from Activator. Two different failures for one input, neither an ArgumentNullException, while every decorator constructor in this area does guard its inner store.
 
-#### SH-L262 — tenantWrapperFactory's return value is used unvalidated as the chain link
+#### SH-L303 — tenantWrapperFactory's return value is used unvalidated as the chain link
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:77`
 
 `store = tenantWrapperFactory(store, tenantContext);` with no null check. A factory returning null (easy when the wrapper is resolved from a container that has nothing registered) makes store null; if further decorators follow, Activator throws TargetInvocationException wrapping ArgumentNullException("innerStore"), and if none follow, Build hands back null through a non-nullable return. The delegate's own return type is non-nullable so no compiler diagnostic fires at the factory.
 
-#### SH-L263 — Reflection construction wraps decorator ArgumentNullExceptions in TargetInvocationException
+#### SH-L304 — Reflection construction wraps decorator ArgumentNullExceptions in TargetInvocationException
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:110`
 
 `Activator.CreateInstance(closed, ctorArgs)` (also line 117) surfaces any constructor exception as TargetInvocationException. The decorators' validation contract, ArgumentNullException naming innerStore / clock / auditContext, therefore does not hold when the chain is assembled through the builder, the only supported composition path. Callers catching ArgumentNullException around Build never match and the parameter name is lost at the top level.
 
-#### SH-L264 — Bulk Audit/Timestamp filter overloads do not null-check updates or updateAction
+#### SH-L305 — Bulk Audit/Timestamp filter overloads do not null-check updates or updateAction
 
 `../Birko.Data.Patterns/Decorators/AuditBulkStoreWrapper.cs:58`
 
 `Update(filter, PropertyUpdate<T> updates)` calls `updates.Set(...)` immediately, so a null updates throws NullReferenceException from inside the decorator instead of ArgumentNullException at the boundary; `Update(filter, Action<T> updateAction)` (line 48) captures the delegate into a closure that NREs later inside the inner store's callback, with a stack trace pointing at the inner store. Same in AsyncAuditBulkStoreWrapper.cs:50/60, TimestampBulkStoreWrapper.cs:51/62, AsyncTimestampBulkStoreWrapper.cs:53/64. Every constructor here guards its arguments; the methods do not.
 
-#### SH-L265 — Decorators mutate the caller's entity before the inner write, so a failed write leaves it stamped
+#### SH-L306 — Decorators mutate the caller's entity before the inner write, so a failed write leaves it stamped
 
 `../Birko.Data.Patterns/Decorators/SoftDeleteStoreWrapper.cs:60`
 
 `Delete(T)` sets `data.DeletedAt = _clock.UtcNow` and then calls `_innerStore.Update(data)`. If the inner update throws, the caller still holds an object that reports itself deleted, and any later Save persists that. Same pattern for Timestamp (CreatedAt/UpdatedAt/PrevUpdatedAt), Audit (CreatedBy/UpdatedBy) and Sluggable (Slug): all mutate in place with no copy and no rollback, so an entity that failed to persist is indistinguishable from one that did.
 
-#### SH-L266 — SlugGenerator.EnsureUnique has no attempt cap and an unchecked suffix counter
+#### SH-L307 — SlugGenerator.EnsureUnique has no attempt cap and an unchecked suffix counter
 
 `../Birko.Data.Patterns/Decorators/SlugGenerator.cs:76`
 
 `while (isSlugTaken(slug)) { suffix++; slug = $"{baseSlug}-{suffix}"; }` issues one store round trip per iteration with no maximum, so N existing colliding slugs cost N+1 reads per entity (O(N^2) across a bulk create), and a predicate that always answers true loops until suffix overflows int, wrapping negative and producing slugs like "widget--2147483648". EnsureUniqueAsync (line 53) is identical and takes no CancellationToken, so the loop cannot be cancelled between probes.
 
-#### SH-L267 — Audit create overwrites a caller-supplied CreatedBy with null when no user is authenticated
+#### SH-L308 — Audit create overwrites a caller-supplied CreatedBy with null when no user is authenticated
 
 `../Birko.Data.Patterns/Decorators/AuditStoreWrapper.cs:31`
 
 `data.CreatedBy = _auditContext.CurrentUserId; data.UpdatedBy = _auditContext.CurrentUserId;` runs unconditionally, and IAuditContext.CurrentUserId is documented as null when no user is authenticated. A background job, migration or seeding path that deliberately stamps a system principal has that value replaced with null, with no opt-out and no preserve-if-set branch. Same at AsyncAuditStoreWrapper.cs:33-34 and in both bulk Create projections.
 
-#### SH-L268 — Timestamp decoration is unconditional with no opt-out, so imports cannot preserve original timestamps
+#### SH-L309 — Timestamp decoration is unconditional with no opt-out, so imports cannot preserve original timestamps
 
 `../Birko.Data.Composition/StoreWrapperBuilder.cs:52`
 
 `if (typeof(ITimestamped).IsAssignableFrom(typeof(T)))` matches every AbstractLogModel descendant because AbstractLogModel implements ILogEntity, which extends ITimestamped. The decorator's Create then overwrites CreatedAt/UpdatedAt and nulls PrevUpdatedAt (AsyncTimestampBulkStoreWrapper.cs:35-37). A migration or replication write that must carry the source system's CreatedAt cannot, short of holding the raw store, and the builder exposes no flag to skip it, unlike Audit/Tenant/EventSourcing which are at least gated on a context argument.
 
-#### SH-L269 — Non-Latin slug sources normalize to empty, collapsing every such entity onto item/item-2/item-3
+#### SH-L310 — Non-Latin slug sources normalize to empty, collapsing every such entity onto item/item-2/item-3
 
 `../Birko.Data.Patterns/Decorators/SlugGenerator.cs:31`
 
 InvalidChars is `[^a-z0-9\-]` and is applied after diacritic stripping, so Cyrillic, Greek, CJK, Hebrew and Arabic titles reduce to string.Empty and EnsureUnique substitutes the fallback "item". A catalogue with non-Latin names gets item, item-2, item-3 ... with no transliteration hook and a linear number of uniqueness probes per insert. Normalize's doc ("URL-friendly slug") gives no hint that whole scripts are dropped rather than transliterated.
 
-#### SH-L270 — TestDateTimeProvider mutates its clock field with no synchronization or volatile
+#### SH-L311 — TestDateTimeProvider mutates its clock field with no synchronization or volatile
 
 `../Birko.Time.Abstractions/Providers/TestDateTimeProvider.cs:10`
 
 `private DateTimeOffset _current;` is written by SetTime (line 26) and Advance (line 34) and read by UtcNow/OffsetUtcNow/Today, with no lock, no volatile and no Interlocked. DateTimeOffset is a multi-field struct so the write is not atomic; a test that advances the clock from one thread while a decorator under test reads _clock.UtcNow from another can observe a torn value. This is the injected clock for every decorator in the area and its docs advertise freezing/advancing during a run.
 
-#### SH-L271 — Decorator awaits omit ConfigureAwait(false) while the store bases they wrap use it
+#### SH-L312 — Decorator awaits omit ConfigureAwait(false) while the store bases they wrap use it
 
 `../Birko.Data.Patterns/Concurrency/AsyncVersionedStoreWrapper.cs:46`
 
@@ -4331,91 +4790,91 @@ InvalidChars is `[^a-z0-9\-]` and is applied after diacritic stripping, so Cyril
 
 ### area: tenant-isolation
 
-#### SH-L272 — Single-item Update/Delete/Create throw NullReferenceException on a null item
+#### SH-L313 — Single-item Update/Delete/Create throw NullReferenceException on a null item
 
 `../Birko.Data.Tenant/Stores/TenantStoreWrapper.cs:67`  ·  _restates a first-pass finding_
 
 BelongsToCurrentTenant(data) dereferences item.TenantGuid with no null check, so Update(null)/Delete(null) NRE whenever a tenant is in scope — while the exception-construction arguments on the next lines use `data?.TenantGuid`, showing null was anticipated. SetTenantGuidIfNeeded (line 212) dereferences item the same way on the Create path. Under Permissive with no tenant the guard returns true without dereferencing and the null reaches the inner store instead, so the failure mode depends on ambient state.
 
-#### SH-L273 — Data.Tenant TenantMiddleware clears the tenant outside try/finally, leaking it on a downstream throw
+#### SH-L314 — Data.Tenant TenantMiddleware clears the tenant outside try/finally, leaking it on a downstream throw
 
 `../Birko.Data.Tenant/Middleware/TenantMiddleware.cs:78`  ·  _restates a first-pass finding_
 
 ClearTenant() sits on the statement after `await _next(context)`, so any downstream exception skips it and the context still reports HasTenant for the rest of that async flow — visible to upstream error-handling middleware and anything resuming on the same flow. The sibling Birko.Security.AspNetCore.TenantMiddleware wraps the same call in try/finally, so the two entry points diverge on the same failure.
 
-#### SH-L274 — Data.Tenant TenantMiddleware clears the tenant unconditionally, even when it set none
+#### SH-L315 — Data.Tenant TenantMiddleware clears the tenant unconditionally, even when it set none
 
 `../Birko.Data.Tenant/Middleware/TenantMiddleware.cs:78`  ·  _restates a first-pass finding_
 
 ClearTenant() runs whether or not this middleware resolved a tenant. With RequireTenant = false and a request carrying no tenant source, a tenant already established on the same flow (an enclosing WithTenant, or a startup Tenant.Set on the singleton context) is discarded on the way out. Birko.Security.AspNetCore.TenantMiddleware:33 has the identical unconditional clear inside its finally.
 
-#### SH-L275 — Missing tenant is answered with 401 and no WWW-Authenticate, not the 400 the design records
+#### SH-L316 — Missing tenant is answered with 401 and no WWW-Authenticate, not the 400 the design records
 
 `../Birko.Data.Tenant/Middleware/TenantMiddleware.cs:62`
 
 The RequireTenant path sets HttpStatusCode.Unauthorized for a request that is authenticated but tenantless. TenantScopeRequiredException's own rationale states the correct answer to a well-formed request missing tenant context is a 400 naming the cause; 401 without a WWW-Authenticate header also breaks the challenge contract, so clients read an auth failure for a request-shape problem.
 
-#### SH-L276 — An empty X-Tenant-Name header suppresses CustomTenantNameResolver
+#### SH-L317 — An empty X-Tenant-Name header suppresses CustomTenantNameResolver
 
 `../Birko.Data.Tenant/Middleware/TenantMiddleware.cs:139`
 
 ResolveTenantName returns `headerValue.FirstOrDefault()` as soon as TryGetValue succeeds, which it does for a present-but-empty header. The result is an empty-or-null tenant name and CustomTenantNameResolver is never consulted, so a client can suppress server-side name resolution by sending `X-Tenant-Name:` with no value.
 
-#### SH-L277 — SetTenantGuidIfNeeded overwrites the caller's per-item TenantGuid inside an all-tenants scope, contrary to its doc
+#### SH-L318 — SetTenantGuidIfNeeded overwrites the caller's per-item TenantGuid inside an all-tenants scope, contrary to its doc
 
 `../Birko.Data.Tenant/Stores/TenantStoreWrapper.cs:195`
 
 The XML doc says 'inside an all-tenants (admin) scope it trusts the caller's per-item TenantGuid and leaves it untouched', but the early return is nested inside `if (!HasTenant)`. Entering WithAllTenants while a tenant is set still stamps item.TenantGuid = the ambient tenant and item.TenantName over whatever the caller supplied, so a cross-tenant admin create silently lands in the operator's own tenant. Same at AsyncTenantStoreWrapper.cs:198.
 
-#### SH-L278 — TenantSyncResult is never constructed — tenant attribution is absent from every sync result
+#### SH-L319 — TenantSyncResult is never constructed — tenant attribution is absent from every sync result
 
 `../Birko.Data.Sync.Tenant/Models/TenantSyncResult.cs:10`
 
 TenantSyncProvider.SyncAsync returns a plain SyncResult (line 350) and no code in the framework instantiates TenantSyncResult, so its TenantGuid/TenantName are unreachable: a caller cannot tell which tenant a returned SyncResult belongs to. Dead public type shipped as part of the tenant-sync contract.
 
-#### SH-L279 — Tenant name is plumbed through sync options and knowledge items but never written or read
+#### SH-L320 — Tenant name is plumbed through sync options and knowledge items but never written or read
 
 `../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs:42`
 
 CreateKnowledgeItem sets only TenantGuid, so ITenant.TenantName on every persisted knowledge item stays null; TenantSyncOptions.TenantName (TenantSyncOptions.cs:20) is read by nothing, and ApplyTenantContext does not populate it from CurrentTenantName even while it copies TenantGuid. Three plumbed-and-documented properties no code path fills.
 
-#### SH-L280 — ExecutePreviewAsync wraps its body in a catch that only rethrows
+#### SH-L321 — ExecutePreviewAsync wraps its body in a catch that only rethrows
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:332`
 
 `catch (Exception) { throw; }` is a no-op left behind by the CR-M167 fix; it adds a handler frame and invites a future edit to reinstate swallowing at a site whose whole point is that failures must propagate. Dead code on a path documented as deliberately transparent.
 
-#### SH-L281 — ReportProgress discards the real SyncProgress, so callers never see counters or errors
+#### SH-L322 — ReportProgress discards the real SyncProgress, so callers never see counters or errors
 
 `../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs:889`
 
 Every call constructs a fresh SyncProgress with `TotalItems = 100, ProcessedItems = percent`, dropping the `progress` instance that accumulates CreatedItems/UpdatedItems/DeletedItems/SkippedItems/Conflicts/Errors. OnProgress consumers get a fake percentage and permanently zero counters — and the real progress.TotalItems (line 394) sums both dictionaries, double-counting every item present on both sides.
 
-#### SH-L282 — TenantSyncQueue's context field is annotated nullable but can never be null, and Guid.Empty masks 'no tenant'
+#### SH-L323 — TenantSyncQueue's context field is annotated nullable but can never be null, and Guid.Empty masks 'no tenant'
 
 `../Birko.Data.Sync.Tenant/TenantSyncQueue.cs:30`
 
 `_tenantContext` is assigned `tenantContext ?? Tenant.Current`, so every `_tenantContext?.` in the class is dead and the declared nullability is wrong. CurrentTenantGuid then collapses 'no tenant' to Guid.Empty; it is safe only because each call site pre-checks HasTenantContext, so any new caller reading CurrentTenantGuid directly silently keys its queue on the zero guid.
 
-#### SH-L283 — EventContext parameters are treated as nullable but declared non-nullable
+#### SH-L324 — EventContext parameters are treated as nullable but declared non-nullable
 
 `../Birko.EventBus.Tenant/TenantEventEnricher.cs:36`
 
 EnrichAsync guards `context is not null` and TenantEventScopeAccessor.RunWithScopeAsync uses `context?.TenantGuid`, so both accept null at runtime while their signatures declare `EventContext context`. Under the project's no-nullable-warnings rule a caller holding an `EventContext?` cannot pass it without a suppression, and the null-tolerance is invisible in the contract.
 
-#### SH-L284 — TenantContextAdapter and SubdomainTenantResolver accept null constructor dependencies without guarding
+#### SH-L325 — TenantContextAdapter and SubdomainTenantResolver accept null constructor dependencies without guarding
 
 `../Birko.Security.AspNetCore/Tenant/TenantContextAdapter.cs:13`
 
 TenantContextAdapter stores birkoContext with no ArgumentNullException, so a null wrapped context surfaces as an NRE on the first CurrentTenantGuid read rather than at construction; SubdomainTenantResolver.cs:23 does the same with lookupAsync, deferring the failure to the first request that resolves a subdomain. Every other type in this area (both store wrappers, both event-bus halves, TenantSyncProvider) null-checks its constructor arguments.
 
-#### SH-L285 — ModelByTenant's mutable TenantGuid is captured by reference in the returned predicate
+#### SH-L326 — ModelByTenant's mutable TenantGuid is captured by reference in the returned predicate
 
 `../Birko.Data.Tenant/Filters/ModelByTenant.cs:47`
 
 `(x) => x.TenantGuid == TenantGuid` closes over `this`, not over a local copy, so the expression reads the public settable property whenever it is finally evaluated or funcletized. A caller (or a subclass overriding Filter) that reassigns TenantGuid after Filter() returns silently changes which tenant an already-composed, not-yet-executed predicate matches.
 
-#### SH-L286 — Bulk Create stamps tenants lazily, so a Strict refusal surfaces from inside the inner store's enumeration
+#### SH-L327 — Bulk Create stamps tenants lazily, so a Strict refusal surfaces from inside the inner store's enumeration
 
 `../Birko.Data.Tenant/Stores/TenantBulkStoreWrapper.cs:23`
 
@@ -4423,121 +4882,121 @@ TenantContextAdapter stores birkoContext with no ArgumentNullException, so a nul
 
 ### area: views-and-aggregation
 
-#### SH-L287 — AggregateResult.GetBucketTime returns DateTime.MinValue instead of null when bucket_time is absent
+#### SH-L328 — AggregateResult.GetBucketTime returns DateTime.MinValue instead of null when bucket_time is absent
 
 `../Birko.Data.Stores/AggregateResult.cs:46`  ·  _restates a first-pass finding_
 
 `GetValue<TVal>` is unconstrained, so for a value type `TVal?` resolves to plain DateTime and the `return default` path yields DateTime.MinValue, implicitly widened to the DateTime? return type. The documented "if present" semantics are unreachable: a caller cannot distinguish an un-bucketed row from a genuine MinValue bucket.
 
-#### SH-L288 — AggregateHelper never observes its CancellationToken
+#### SH-L329 — AggregateHelper never observes its CancellationToken
 
 `../Birko.Data.Stores/AggregateHelper.cs:36`
 
 LinqAggregateAsync accepts `ct` and returns Task.FromResult, but never calls ThrowIfCancellationRequested — not before `filtered.ToList()` (line 47, which materializes the whole source), nor inside the per-group aggregate loop. Cancelling an aggregation over a large in-memory store has no effect; the parameter is dead.
 
-#### SH-L289 — AggregateMath.TruncateToBucket divides by bucketTicks with no zero guard
+#### SH-L330 — AggregateMath.TruncateToBucket divides by bucketTicks with no zero guard
 
 `../Birko.Data.Stores/AggregateMath.cs:19`
 
 `(dt.Ticks / bucketTicks) * bucketTicks` throws DivideByZeroException when bucketTicks is 0, which is exactly what TimeIntervalParser.Parse returns for an unparseable interval. AggregateHelper guards with `bucketTicks > 0`, but the method is public and is the documented bucketing entry point for other providers, so any caller that forwards a parsed interval directly crashes instead of degrading.
 
-#### SH-L290 — ApplyOrderingAndPaging treats limit 0 as "no rows" while MongoViewStore treats it as "all rows"
+#### SH-L331 — ApplyOrderingAndPaging treats limit 0 as "no rows" while MongoViewStore treats it as "all rows"
 
 `../Birko.Data.Stores/AggregateHelper.cs:159`
 
 `if (limit.HasValue) results.Take(limit.Value)` makes Limit = 0 (or negative) return an empty list, whereas MongoViewStore.BuildQueryStages only emits `$limit` for `limit > 0` (line 111) and so returns every document for the same argument. Ordering also sorts boxed values through Comparer<object>.Default, which throws ArgumentException for any non-IComparable value.
 
-#### SH-L291 — ToSqlInterval passes an unparsed interval string through verbatim for embedding in SQL
+#### SH-L332 — ToSqlInterval passes an unparsed interval string through verbatim for embedding in SQL
 
 `../Birko.Data.Stores/TimeIntervalParser.cs:60`
 
 When Parse yields Zero (unrecognised unit, wrong locale, arbitrary text) the original string is returned unchanged for the caller to interpolate into a SQL interval literal (its documented purpose for TimescaleDB time_bucket / date_trunc). Nothing validates the string, so a caller-supplied TimeBucketInterval reaches the SQL text unescaped and unquoted.
 
-#### SH-L292 — OrderBy.ToDictionary collapses repeated properties and loses documented sort priority
+#### SH-L333 — OrderBy.ToDictionary collapses repeated properties and loses documented sort priority
 
 `../Birko.Data.Stores/OrderBy.cs:76`
 
 Fields is an ordered list, but ToDictionary() (and SqlViewStore.TranslateOrderBy, line 144) projects it into a Dictionary<string,bool>. `By(o => o.Total).ThenByDescending(o => o.Total)` silently becomes a single descending sort, and every consumer that renders `orderFields.Select(...)` (AbstractConnectorBase line 558) depends on Dictionary enumeration order, which is not a contractual ordering — multi-level sort priority is not guaranteed to survive.
 
-#### SH-L293 — ViewMapRegistry's definition dictionary is a plain Dictionary with no synchronization
+#### SH-L334 — ViewMapRegistry's definition dictionary is a plain Dictionary with no synchronization
 
 `../Birko.Data.Views/ViewMapRegistry.cs:14`
 
 `_definitions` is a `Dictionary<Type, ViewDefinition>` mutated by Register/RegisterFromAssembly and read by GetDefinition/HasDefinition/GetAll. The type is designed as a shared registry (the ModelMapRegistry pattern, normally a DI singleton); a Register concurrent with a lookup can corrupt the buckets or throw InvalidOperationException mid-enumeration. The sibling caches in this family (_viewCache, _fieldsCache) were converted to ConcurrentDictionary for exactly this reason (CR-H094).
 
-#### SH-L294 — RegisterFromAssembly aborts the whole scan when one mapping type has no public parameterless constructor
+#### SH-L335 — RegisterFromAssembly aborts the whole scan when one mapping type has no public parameterless constructor
 
 `../Birko.Data.Views/ViewMapRegistry.cs:38`
 
 `Activator.CreateInstance(entry.MappingType)` throws MissingMethodException for an IViewMapping<> implementation with only a parameterized constructor, and the loop has no try/catch, so every mapping after it in the enumeration is left unregistered. The method goes to some length to tolerate unloadable types (GetLoadableTypes, CR-L240) but not uninstantiable ones; subsequent GetDefinition calls then return null and callers fall back to "view not registered".
 
-#### SH-L295 — ClampWindowSize returns Size 0 past the result window, so a deep page silently reads as end-of-data
+#### SH-L336 — ClampWindowSize returns Size 0 past the result window, so a deep page silently reads as end-of-data
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:419`
 
 For `from >= 10000` the clamp yields `size = 0`, and ExecuteSimpleQueryAsync issues that request unchanged: ES returns zero documents and the store returns an empty enumerable with no error. A caller paging beyond max_result_window concludes the view is exhausted rather than learning the window was exceeded; there is no signal to switch to search_after/scroll.
 
-#### SH-L296 — A negative offset is forwarded to ElasticSearch as From
+#### SH-L337 — A negative offset is forwarded to ElasticSearch as From
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:108`
 
 `var from = offset ?? 0;` then `From = from`. ClampWindowSize normalises only its own local copy (line 424), so `QueryAsync(offset: -5)` sends `from: -5` and ES rejects the search; the store then reports it as "ElasticSearch view query failed". Mongo (offset > 0 guard) and Cosmos LINQ silently ignore the same input, so the three backends give three different answers.
 
-#### SH-L297 — Two aggregates with the same function and source field collide in the ES aggregation dictionary
+#### SH-L338 — Two aggregates with the same function and source field collide in the ES aggregation dictionary
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:355`
 
 BuildAggregationName is `{function}_{SourceProperty ?? "all"}`, which ignores ViewProperty. A definition with `Sum(o.Total → v.GrossTotal)` and `Sum(o.Total → v.NetTotal)`, or two Counts (both "count_all"), produces the same key twice and `metricAggregations.Add` (line 177) throws ArgumentException at query time. StoreAggregationHelper.BuildMetricAggregations has the same collision on ResolvedAlias (line 45). The builder never checks ViewProperty/alias uniqueness.
 
-#### SH-L298 — MongoViewStore silently ignores limit <= 0 and offset < 0 instead of honouring or rejecting them
+#### SH-L339 — MongoViewStore silently ignores limit <= 0 and offset < 0 instead of honouring or rejecting them
 
 `../Birko.Data.MongoDB.Views/MongoViewStore.cs:111`
 
 `$limit` is emitted only for `limit > 0` and `$skip` only for `offset > 0`. QueryAsync(limit: 0) returns EVERY matching document — the opposite of AggregateHelper.ApplyOrderingAndPaging, which returns none for the same value — and a negative offset is dropped while ES forwards it to the server. A caller computing limit arithmetically (page size 0) gets an unbounded result set from a paged API.
 
-#### SH-L299 — MongoViewManager.EnsureAsync dereferences definition with no null check and never observes ct
+#### SH-L340 — MongoViewManager.EnsureAsync dereferences definition with no null check and never observes ct
 
 `../Birko.Data.MongoDB.Views/MongoViewManager.cs:30`
 
 `definition.QueryMode` on line 32 throws NullReferenceException for a null definition, whereas ElasticSearchViewManager and RavenViewManager both throw ArgumentNullException(nameof(definition)) first. It is also the only EnsureAsync in the five that never calls ct.ThrowIfCancellationRequested. Same gap in SqlViewManager.EnsureAsync (line 26), which does check ct but not the definition.
 
-#### SH-L300 — Raven GroupBy fallback emits a reduce key the map never projected
+#### SH-L341 — Raven GroupBy fallback emits a reduce key the map never projected
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:248`
 
 FindViewPropertyForGroupBy returns `grp.PropertyName` when no field selector matches (the exact shape ViewDefinitionBuilder.Build permits — grouped-but-not-selected). The reduce then reads `result.Status` / `Status = g.Key` for a field BuildSelectFields never emitted, producing an index Raven rejects at PutIndexesOperation with an opaque compilation error, where SqlViewTranslator rejects the same definition up front with an explanatory NotSupportedException.
 
-#### SH-L301 — Raven map skips Sum/Min/Max clauses with a null SourceProperty while the reduce still references them
+#### SH-L342 — Raven map skips Sum/Min/Max clauses with a null SourceProperty while the reduce still references them
 
 `../Birko.Data.RavenDB.Views/RavenViewTranslator.cs:92`
 
 BuildSelectFields guards `if (agg.SourceProperty != null)` for Sum/Min/Max/Avg and emits nothing otherwise, but BuildReduceExpression unconditionally emits `g.Sum(x => x.{ViewProperty})` for those functions (lines 208-226). A ViewDefinition constructed directly (the type's constructor is internal but reachable in-assembly, and no validation forbids it) yields an index whose reduce references a field the map does not project.
 
-#### SH-L302 — SqlViewStore's sync path throws on a non-TView row where the async path silently skips it
+#### SH-L343 — SqlViewStore's sync path throws on a non-TView row where the async path silently skips it
 
 `../Birko.Data.SQL.Views/SqlViewStore.cs:66`
 
 The AbstractAsyncConnector path filters with `if (item is TView view)`, discarding anything else without a trace; the fallback path (line 71) uses `.Cast<TView>()`, which throws InvalidCastException for the same row. The same view, same data and same filter therefore behave differently depending only on whether the injected connector happens to derive from AbstractAsyncConnector.
 
-#### SH-L303 — SqlViewTranslator silently drops an aggregate when FunctionField.CreateFunctionField returns null
+#### SH-L344 — SqlViewTranslator silently drops an aggregate when FunctionField.CreateFunctionField returns null
 
 `../Birko.Data.SQL.Views/SqlViewTranslator.cs:148`
 
 Both aggregate branches are wrapped in `if (functionField != null) { view.AddField(...) }` with no else. CreateFunctionField returns `functionField!` (declared non-nullable but actually null for any function name outside COUNT/AVG/SUM/MIN/MAX), so the aggregate column vanishes from the view and the view property stays at its default — the opposite of the fail-fast discipline the surrounding CR-L201 code deliberately adopts.
 
-#### SH-L304 — ViewDefinitionBuilder never checks that view property targets are unique across fields and aggregates
+#### SH-L345 — ViewDefinitionBuilder never checks that view property targets are unique across fields and aggregates
 
 `../Birko.Data.Views/ViewDefinitionBuilder.cs:190`
 
 ValidateAggregates only checks existence and numeric type per clause. Two aggregates targeting the same ViewProperty, or two Select calls mapping different source properties onto one view property, build without complaint and then fail differently per backend: SQL silently keeps the first (View.AddField dedup), ES throws ArgumentException from AggregationDictionary.Add, Mongo emits two $project keys for the same name (a BSON duplicate-key error).
 
-#### SH-L305 — ES ungrouped aggregate query always returns exactly one TView, even when nothing matched
+#### SH-L346 — ES ungrouped aggregate query always returns exactly one TView, even when nothing matched
 
 `../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs:274`
 
 ParseUngroupedAggregateResponse constructs `new TView()` unconditionally and only assigns metrics that have a value, so a global aggregate over a filter matching zero documents returns one row of defaults. QueryFirstAsync therefore never returns null for such a view (contradicting its "or null" contract) and a caller cannot distinguish "no data" from "sum is 0".
 
-#### SH-L306 — ParseGroupedBuckets declares the composite key out-parameter as non-nullable string
+#### SH-L347 — ParseGroupedBuckets declares the composite key out-parameter as non-nullable string
 
 `../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs:292`
 
@@ -4545,127 +5004,127 @@ ParseUngroupedAggregateResponse constructs `new TView()` unconditionally and onl
 
 ### area: workflow-state-machine
 
-#### SH-L307 — Guard predicate exceptions escape FireAsync unwrapped, unlike action exceptions
+#### SH-L348 — Guard predicate exceptions escape FireAsync unwrapped, unlike action exceptions
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:51`
 
 The guard loop (lines 49-55) runs before the try block, so an exception from user guard code propagates raw out of FireAsync — no WorkflowActionException wrapping, no workflow name/instance id, no Faulted status — while an identical throw one phase later from an action is wrapped and faults the instance. GetPermittedTriggers line 143 invokes the same predicates unprotected, so a guard that throws on an unexpected payload turns a read-only 'what can I do' query into an unhandled exception.
 
-#### SH-L308 — ES SaveAsync doc claims CreateAsync mints its own _id; it actually keys on Guid
+#### SH-L349 — ES SaveAsync doc claims CreateAsync mints its own _id; it actually keys on Guid
 
 `../Birko.Workflow.ElasticSearch/ElasticSearchWorkflowInstanceStore.cs:36`
 
 The <remarks> states "CreateAsync mints its own _id rather than keying on Guid, so the duplicate is silent" and that concurrent saves produce duplicate documents. AsyncElasticSearchStore.CreateCoreAsync line 111 indexes with `i => i.Id(data.Guid).Index(indexName)`, so the _id IS the instance id: a concurrent double-create overwrites (last-writer-wins lost update), it does not duplicate. The stated durability characteristic is the opposite of the code's, and the spec repeats it verbatim.
 
-#### SH-L309 — ElasticWorkflowInstanceModel.IndexName is dead configuration
+#### SH-L350 — ElasticWorkflowInstanceModel.IndexName is dead configuration
 
 `../Birko.Workflow.ElasticSearch/Models/ElasticWorkflowInstanceModel.cs:35`
 
 `public const string IndexName = "workflow-instances"` is never read anywhere in the repo (grep: one hit, its own declaration). The real index is ElasticSearchStoreHelper.ResolveIndexName(settings, typeof(T)) — Settings.IndexSettings or typeof(T).Name ("ElasticWorkflowInstanceModel"), never "workflow-instances". The identical const was deleted from the sibling BackgroundJobs.ElasticSearch model as CR-L023 for being "unused, misleading"; this one survived and the spec documents it as authoritative.
 
-#### SH-L310 — Six JSON models lack the empty-HistoryJson guard the XML model has
+#### SH-L351 — Six JSON models lack the empty-HistoryJson guard the XML model has
 
 `../Birko.Workflow.SQL/Models/WorkflowInstanceModel.cs:74`
 
 `s.Deserialize<List<StateChangeRecord>>(HistoryJson) ?? new List<...>()` only covers a JSON `null`; an empty or whitespace HistoryJson (a migration-inserted row, or a NOT NULL DEFAULT '' column) makes System.Text.Json throw JsonException, so ToInstance fails opaquely instead of using the documented empty-history fallback. XmlWorkflowInstanceModel.cs:81 added exactly this IsNullOrWhiteSpace guard as CR-M275; it was never back-ported to SQL/JSON/ES/Mongo/Raven/Cosmos.
 
-#### SH-L311 — ToInstance validates Guid and payload but not CurrentState or the Status range
+#### SH-L352 — ToInstance validates Guid and payload but not CurrentState or the Status range
 
 `../Birko.Workflow.SQL/Models/WorkflowInstanceModel.cs:80`
 
 `(WorkflowStatus)Status` is an unchecked cast, so a persisted 99 restores as an undefined enum the engine treats as neither Completed nor Faulted and accepts triggers on. CurrentState (line 79) is passed through unchecked although its default is string.Empty, so a row written without it restores an instance whose every FireAsync returns NotFound forever with no error — silent inertness. Both sit beside explicit fail-fast guards for Guid and DataJson, so the omission is asymmetric. Same in all seven models.
 
-#### SH-L312 — WorkflowInstance.History hands out the live mutable backing list
+#### SH-L353 — WorkflowInstance.History hands out the live mutable backing list
 
 `../Birko.Workflow/Execution/WorkflowInstance.cs:11`
 
 `public IReadOnlyList<StateChangeRecord> History => _history;` returns the List<StateChangeRecord> itself, so any consumer can `((List<StateChangeRecord>)instance.History).Clear()` and destroy the append-only audit trail that the internal AddHistoryRecord setter exists to protect. Returning _history.AsReadOnly() is the only way the stated append-only guarantee actually holds.
 
-#### SH-L313 — Built definitions alias the builders' mutable action/guard lists
+#### SH-L354 — Built definitions alias the builders' mutable action/guard lists
 
 `../Birko.Workflow/Definition/StateBuilder.cs:46`
 
 StateBuilder.Build() passes _onEntryActions/_onExitActions (live List<> fields) straight into StateDefinition, and TransitionBuilder.Build() (line 36) does the same with _guards/_actions. Calling `.OnEntry(x)` or `.Guard(p)` on a builder after WorkflowBuilder.Build() therefore mutates the already-returned, supposedly immutable WorkflowDefinition — and since Build() can be called repeatedly, every definition from one builder shares those lists, so a later addition retroactively changes earlier definitions.
 
-#### SH-L314 — InitialState skips the null/whitespace validation its sibling declarations perform
+#### SH-L355 — InitialState skips the null/whitespace validation its sibling declarations perform
 
 `../Birko.Workflow/Definition/WorkflowBuilder.cs:19`
 
 State(name) and Transition(trigger, from, to) each throw ArgumentException on null/empty/whitespace, but InitialState(state) assigns blindly. `InitialState(null!)` leaves _initialState null so Build() reports "InitialState must be set before building." — a diagnostic that flatly contradicts the call the author made; `InitialState("  ")` reports "InitialState '  ' is not defined as a state." Both send the author looking in the wrong place.
 
-#### SH-L315 — Builders accept null delegates and null guard reasons, deferring failure to fire time
+#### SH-L356 — Builders accept null delegates and null guard reasons, deferring failure to fire time
 
 `../Birko.Workflow/Definition/TransitionBuilder.cs:22`
 
 Guard(predicate, reason) and Action(action) (line 28), and StateBuilder.OnEntry/OnExit (lines 32/38), perform no null checks. A null predicate throws NullReferenceException from the guard loop (WorkflowEngine.cs:51) outside the try — raw and unwrapped; a null action throws inside the try and permanently Faults the instance for a wiring mistake; `Guard(p, null!)` puts a null into TransitionResult.DenialReasons, declared IReadOnlyList<string>, which the project's no-nullable-warnings rule forbids.
 
-#### SH-L316 — FireAsync does not validate trigger, definition, or distinguish a null instance
+#### SH-L357 — FireAsync does not validate trigger, definition, or distinguish a null instance
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:26`
 
 A null instance fails the `is not WorkflowInstance<TData>` pattern and is reported as ArgumentException "Instance must be created via WorkflowInstance<TData>.Create()." rather than ArgumentNullException — misdirecting the caller. A null definition throws NullReferenceException at line 40. A null or empty trigger is not rejected at all: it flows into FirstOrDefault and returns TransitionResult.NotFound, so a bug that loses the trigger reads as a legitimate 'no such transition' result, unlike WorkflowBuilder.Transition which rejects it.
 
-#### SH-L317 — The engine never assigns Active, so a NotStarted instance stays NotStarted forever
+#### SH-L358 — The engine never assigns Active, so a NotStarted instance stays NotStarted forever
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:99`
 
 The only Status assignments in the engine are Completed (line 99) and Faulted (line 116); the check at 31-38 deliberately admits NotStarted. An instance restored with Status==NotStarted (also what a Status int column holds by default, since NotStarted==0) transitions through states, accumulates history and is re-saved still reporting NotStarted — so FindByStatusAsync(Active), the natural 'find in-flight workflows' query, silently omits it while FindByStatusAsync(NotStarted) returns instances that are demonstrably running.
 
-#### SH-L318 — AddWorkflowEngine uses AddSingleton, not TryAdd, and never null-checks configure
+#### SH-L359 — AddWorkflowEngine uses AddSingleton, not TryAdd, and never null-checks configure
 
 `../Birko.Workflow/Extensions/WorkflowServiceCollectionExtensions.cs:17`
 
 Both overloads unconditionally AddSingleton IWorkflowEngine and IWorkflowDiagramGenerator. Calling AddWorkflowEngine() and then AddWorkflowEngine(o => o.PublishStateChanges = true) — a library default plus an app override — leaves two IWorkflowEngine registrations where GetService silently returns the last, so whether state changes are published depends on registration order with no diagnostic. `configure(options)` at line 24 also throws NullReferenceException instead of ArgumentNullException for a null delegate.
 
-#### SH-L319 — PublishStateChanges resolves subscribers from the captured root provider per state change
+#### SH-L360 — PublishStateChanges resolves subscribers from the captured root provider per state change
 
 `../Birko.Workflow/Extensions/WorkflowServiceCollectionExtensions.cs:34`
 
 The singleton factory closes over `sp` (the root provider) and calls GetServices<Action<StateChangeRecord,string,Guid>>() on every transition. A subscriber registered Scoped makes GetServices throw InvalidOperationException from the root provider — and because the callback runs inside WorkflowEngine's try block (WorkflowEngine.cs:105), that DI misconfiguration is converted into a WorkflowActionException that rolls back CurrentState and permanently Faults the instance. Resolution also repeats per invocation on the hot path.
 
-#### SH-L320 — Mermaid escaping maps spaces to underscores, collapsing distinct states into one node
+#### SH-L361 — Mermaid escaping maps spaces to underscores, collapsing distinct states into one node
 
 `../Birko.Workflow/Visualization/MermaidDiagramGenerator.cs:36`  ·  _restates a first-pass finding_
 
 Escape(value) => value.Replace(" ", "_") is applied to state names and triggers, so states "In Review" and "In_Review" render as the same identifier and the diagram merges both states' edges into a single node. No other Mermaid-hostile character is escaped: a state name or trigger containing ':', '-->' or a quote produces invalid diagram source (a ':' in a name makes `A --> B : t` ambiguous).
 
-#### SH-L321 — Mermaid emits an empty-label statement for a whitespace-only description
+#### SH-L362 — Mermaid emits an empty-label statement for a whitespace-only description
 
 `../Birko.Workflow/Visualization/MermaidDiagramGenerator.cs:17`
 
 The guard is `state.Description != null`, and EscapeDescription trims. `State("Draft").Description("")` or Description("  ") therefore emits the line `    Draft : ` with nothing after the colon, which is not a valid stateDiagram-v2 statement — one empty description makes the whole rendered diagram unparseable. The check should be string.IsNullOrWhiteSpace, matching the trimming the method already performs.
 
-#### SH-L322 — DOT generator escapes quotes but not backslashes, and skips Mermaid's newline collapsing
+#### SH-L363 — DOT generator escapes quotes but not backslashes, and skips Mermaid's newline collapsing
 
 `../Birko.Workflow/Visualization/DotDiagramGenerator.cs:45`
 
 Escape(value) replaces only `"` with `\"`, leaving backslashes untouched, so a state name ending in one emits `"back\"` — the trailing backslash escapes the closing quote and the DOT source is unterminated; an embedded `\l`/`\n` is silently reinterpreted as a Graphviz label directive. Its sibling MermaidDiagramGenerator gained EscapeDescription (CR-L403) to collapse CR/LF in descriptions; the DOT label at line 22 passes the raw description through, so one generator sanitizes and the other does not.
 
-#### SH-L323 — History timestamps bypass the framework's IDateTimeProvider seam
+#### SH-L364 — History timestamps bypass the framework's IDateTimeProvider seam
 
 `../Birko.Workflow/Execution/WorkflowEngine.cs:102`
 
 StateChangeRecord.OccurredAt is stamped with a hard-coded DateTime.UtcNow, as are CreatedAt/UpdatedAt in all seven models (e.g. WorkflowInstanceModel.cs:97-98). Birko.Time.Abstractions.IDateTimeProvider exists for this and is injected into the store decorators (TimestampStoreWrapper, AuditStoreWrapper), so the workflow subsystem is the odd one out: history ordering and UpdatedAt-descending Find* cannot be exercised deterministically, and a consumer on a logical clock gets two time sources in one save.
 
-#### SH-L324 — SQL workflow model declares no index on the columns every Find* filters and orders by
+#### SH-L365 — SQL workflow model declares no index on the columns every Find* filters and orders by
 
 `../Birko.Workflow.SQL/Models/WorkflowInstanceModel.cs:18`
 
 WorkflowName, CurrentState, Status and UpdatedAt carry only [NamedField]; no [IndexedField] or class-level [CompositeIndex]. All three Find* methods filter on one of the first three and ORDER BY UpdatedAt DESC, so every query full-scans and sorts __WorkflowInstances — the table accumulating every instance of every workflow. The ElasticSearch sibling maps exactly these discriminators as Keyword/Number/Date for the same queries, so the intent is clear and only the relational backend lacks it.
 
-#### SH-L325 — A null payload surfaces as ArgumentNullException("value") from the serializer
+#### SH-L366 — A null payload surfaces as ArgumentNullException("value") from the serializer
 
 `../Birko.Workflow.SQL/Models/WorkflowInstanceModel.cs:95`
 
 WorkflowInstance<TData>.Create(definition, data) does not reject a null data (WorkflowInstance.cs:23 has no constraint or null check), so an instance with Data == null is constructible and drivable. The first SaveAsync hits `s.Serialize(instance.Data)`, and SystemJsonSerializer.Serialize<T> begins with ArgumentNullException.ThrowIfNull(value) — the caller gets ArgumentNullException with ParamName "value" from inside the serializer, naming neither the workflow, the instance id, nor which of Data/History was null. ToInstance guards the mirror case explicitly.
 
-#### SH-L326 — IWorkflowInstanceStore<TData> omits the TData : class constraint every implementation requires
+#### SH-L367 — IWorkflowInstanceStore<TData> omits the TData : class constraint every implementation requires
 
 `../Birko.Workflow/Core/IWorkflowInstanceStore.cs:9`
 
 The interface is declared `IWorkflowInstanceStore<TData>` with no constraint while all seven backends declare `where TData : class`. Code written generically against the interface (a service with an unconstrained TData resolving an IWorkflowInstanceStore<TData>) compiles against the abstraction but cannot be satisfied by any shipped implementation, and a struct payload is accepted by the contract yet unpersistable — the constraint belongs on the interface.
 
-#### SH-L327 — Build accepts transitions leaving a final state, which can never fire
+#### SH-L368 — Build accepts transitions leaving a final state, which can never fire
 
 `../Birko.Workflow/Definition/WorkflowBuilder.cs:80`
 
