@@ -907,6 +907,91 @@ public class RibbonTests
         expand.ExpandCollapseState.Should().Be(global::Avalonia.Automation.ExpandCollapseState.Collapsed);
     }
 
+    /// <summary>What a screen reader is handed for <paramref name="control"/> — content fallback included.</summary>
+    private static string? AccessibleName(Control control) =>
+        global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(control).GetName();
+
+    /// <summary>Buttons a user can actually reach: on display (not parked off-screen) and enabled.</summary>
+    private static IEnumerable<Button> ReachableButtons(Ribbon ribbon) =>
+        ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.IsEffectivelyEnabled && b.IsVisible && b.Opacity > 0)
+            .Where(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
+
+    [AvaloniaTheory]
+    [InlineData(RibbonGroupSize.Large)]
+    [InlineData(RibbonGroupSize.Medium)]
+    [InlineData(RibbonGroupSize.Small)]
+    public void Every_reachable_ribbon_button_has_an_accessible_name(RibbonGroupSize preferred)
+    {
+        // The reviewer ran Narrator over the commands and heard a generic control type — no command name at
+        // all, so there was no way to tell which command focus was on. Avalonia derives a button's name from
+        // its content only when that content is a STRING; a ribbon item's content is a panel of icon + label,
+        // so every command in every variant was anonymous. An unnamed command is unusable, not merely
+        // under-described.
+        //
+        // Written as a SWEEP rather than as assertions about the buttons I happen to have fixed: the defect
+        // was one missing call at one site, and the next new button would reintroduce it silently.
+        var ribbon = BuildCrowded();
+        ribbon.PreferredGroupSize = preferred;
+        Show(ribbon, out _, 900);
+
+        // Guard: this assertion is only worth anything if the sweep actually SAW the commands. Without it the
+        // test passed with the fix removed, because an over-strict reachability filter matched nothing and
+        // "no unnamed buttons" was trivially true of an empty set.
+        var reachable = ReachableButtons(ribbon).ToList();
+        reachable.Should().HaveCountGreaterThan(6,
+            "the crowded ribbon has ten tabs and six groups of two commands — a sweep that sees fewer than "
+            + "seven buttons is not sweeping anything");
+
+        // "Non-empty" is NOT the criterion, and assuming it was made this test vacuous on first writing: with
+        // no accessible name Avalonia's peer still answers with the content panel's ToString(), so every
+        // button had a "name" like "Avalonia.Controls.StackPanel" and the sweep passed with the fix removed.
+        // The real requirement is that the name is a name the USER would recognise, so check membership of
+        // the model's own strings.
+        var expected = new HashSet<string>(new[]
+        {
+            "Collapse the ribbon", "Expand the ribbon", "Unpin the ribbon", "Pin the ribbon open",
+            "Open the ribbon menu", "Scroll tabs left", "Scroll tabs right",
+        });
+        foreach (var tab in ribbon.Tabs!)
+        {
+            expected.Add(tab.Label!);
+            foreach (var g in tab.Groups!)
+            {
+                expected.Add(g.Label!);
+                foreach (var it in g.Items!) expected.Add(it.Label!);
+            }
+        }
+
+        var wrong = reachable
+            .Select(b => new { Button = b, Name = AccessibleName(b) })
+            .Where(x => x.Name is null || !expected.Contains(x.Name))
+            .Select(x => $"{x.Name ?? "<null>"} (text: {string.Concat(Texts(x.Button))})")
+            .ToList();
+
+        wrong.Should().BeEmpty(
+            "every button a keyboard or screen-reader user can reach must announce a name they recognise, "
+            + "not a type name or a glyph ({0})", preferred);
+    }
+
+    [AvaloniaFact]
+    public void Commands_inside_a_collapsed_groups_flyout_are_named_too()
+    {
+        // The flyout is a separate visual root, so the sweep above cannot see into it — and it is exactly
+        // where the reviewer was listening, since a collapsed group is the only route to its commands.
+        var (_, chunk) = CollapsedGroup(out _);
+        var flyout = (Flyout)chunk.Flyout!;
+        flyout.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+
+        var buttons = ((Visual)flyout.Content!).GetVisualDescendants().OfType<Button>().ToList();
+        buttons.Should().NotBeEmpty("the flyout must hold the group's commands, or this test proves nothing");
+        buttons.Should().OnlyContain(b => !string.IsNullOrWhiteSpace(AccessibleName(b)),
+            "a command reachable only through the flyout must still announce which command it is");
+        buttons.Select(AccessibleName).Should().Contain("Cut",
+            "and the name is the command's own label, not the group's or the glyph's");
+    }
+
     [AvaloniaFact]
     public void A_collapsed_group_announces_what_it_is_not_just_button()
     {
