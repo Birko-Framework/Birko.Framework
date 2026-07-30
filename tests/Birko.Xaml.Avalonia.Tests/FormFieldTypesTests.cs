@@ -255,6 +255,25 @@ public class FormFieldTypesTests
     }
 
     [AvaloniaFact]
+    public void Each_tag_chips_remove_button_says_which_tag_it_removes()
+    {
+        // A glyph is not a name. This button's content is "✕", so that is what a screen reader announced —
+        // and a tag list renders one per tag, giving a row of identical anonymous buttons with no way to tell
+        // which one removes which tag. Found by sweeping the skin after the ribbon's commands turned out to be
+        // anonymous for a related reason (panel content instead of string content).
+        var model = new Model { Labels = new List<string> { "p", "q" } };
+        var form = Show(model, new FormField { Name = nameof(Model.Labels), Type = FieldType.Tags });
+
+        var names = form.GetVisualDescendants().OfType<Button>()
+            .Where(b => (string?)b.Content == "✕")
+            .Select(b => global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(b).GetName())
+            .ToList();
+
+        names.Should().HaveCount(2, "one remove button per tag, or this test is not looking at them");
+        names.Should().BeEquivalentTo(new[] { "Remove p", "Remove q" });
+    }
+
+    [AvaloniaFact]
     public void File_field_renders_path_box_and_browse_button()
     {
         var form = Show(new Model(), new FormField { Name = nameof(Model.Attachment), Type = FieldType.File });
