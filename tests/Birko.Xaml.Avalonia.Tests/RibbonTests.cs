@@ -992,6 +992,132 @@ public class RibbonTests
             "and the name is the command's own label, not the group's or the glyph's");
     }
 
+    /// <summary>Reachable buttons within an arbitrary scope (the panel, a flyout's content).</summary>
+    private static List<Button> NavigableIn(Visual scope) =>
+        scope.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.IsEffectivelyEnabled && b.IsVisible && b.Opacity > 0)
+            .Where(b => b.TranslatePoint(default, scope) is { X: > -1000 })
+            .ToList();
+
+    private static string? FocusedName(Window window) =>
+        window.FocusManager?.GetFocusedElement() is Control c ? AccessibleName(c) : null;
+
+    private static void Arrow(Control target, Key key) =>
+        target.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = key });
+
+    [AvaloniaFact]
+    public void Widening_closes_a_flyout_whose_group_has_been_promoted()
+    {
+        // This criterion was ticked with NO implementation behind it, and the human check could not catch that:
+        // dragging the window edge is a click outside the flyout, so it closed by light dismiss and the
+        // reviewer could not tell the two causes apart. A headless resize involves no pointer at all, which is
+        // exactly why it settles the question.
+        //
+        // Left open, the flyout stays anchored to a chunk button that promotion parks off-screen — so it hovers
+        // over the group it no longer represents.
+        var ribbon = Show(BuildCrowded(), out var window, 320);
+        var chunk = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Flyout is not null)
+            .First(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
+        var flyout = (Flyout)chunk.Flyout!;
+
+        flyout.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+        flyout.IsOpen.Should().BeTrue("the flyout must actually be open, or this test proves nothing");
+
+        window.Width = 1400;
+        window.Measure(new Size(1400, 200));
+        window.Arrange(new Rect(0, 0, 1400, 200));
+        Dispatcher.UIThread.RunJobs();
+
+        ribbon.ResolvedGroupSizes.Should().NotContain(RibbonGroupSize.Popup,
+            "at 1400px nothing should still be collapsed — otherwise no promotion happened to react to");
+        flyout.IsOpen.Should().BeFalse(
+            "a promoted group's flyout must close rather than hover over the now-expanded group");
+    }
+
+    [AvaloniaFact]
+    public void Arrow_keys_move_between_the_commands_in_a_collapsed_groups_flyout()
+    {
+        // The reviewer's step 5: reach a collapsed group's commands by keyboard alone. Escape worked, but
+        // Avalonia had NO arrow navigation anywhere — the criterion is parity with b-ribbon's panel handler,
+        // which cycles items with Left/Right. Avalonia's own directional navigation does not cover this: the
+        // flyout is a separate visual root.
+        var (_, chunk) = CollapsedGroup(out _);
+        var flyout = (Flyout)chunk.Flyout!;
+        flyout.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+
+        var content = (Control)flyout.Content!;
+        var items = content.GetVisualDescendants().OfType<Button>().ToList();
+        items.Should().HaveCountGreaterThan(1, "cycling needs at least two commands to cycle between");
+
+        items[0].Focus().Should().BeTrue();
+        Dispatcher.UIThread.RunJobs();
+
+        Arrow(items[0], Key.Right);
+        Dispatcher.UIThread.RunJobs();
+        items[1].IsFocused.Should().BeTrue("Right moves to the next command");
+
+        // Wrapping matters: a row of commands has no natural end, and the web wraps.
+        Arrow(items[1], Key.Right);
+        Dispatcher.UIThread.RunJobs();
+        items[0].IsFocused.Should().BeTrue("Right past the last command wraps to the first");
+
+        Arrow(items[0], Key.Left);
+        Dispatcher.UIThread.RunJobs();
+        items[^1].IsFocused.Should().BeTrue("and Left from the first wraps to the last");
+    }
+
+    [AvaloniaFact]
+    public void Arrow_keys_move_between_commands_in_the_groups_row()
+    {
+        var ribbon = Show(BuildCrowded(), out var window, 900);
+        var commands = NavigableIn(PanelOf(ribbon));
+        commands.Should().HaveCountGreaterThan(1);
+
+        commands[0].Focus().Should().BeTrue();
+        Dispatcher.UIThread.RunJobs();
+        Arrow(commands[0], Key.Right);
+        Dispatcher.UIThread.RunJobs();
+
+        FocusedName(window).Should().Be(AccessibleName(commands[1]),
+            "the groups row cycles commands the same way the flyout does — one helper, one behaviour");
+    }
+
+    [AvaloniaFact]
+    public void Tab_strip_arrows_select_and_Down_drops_into_the_commands()
+    {
+        // A tab strip activates automatically, so Left/Right SELECT rather than only moving focus — that is
+        // what b-ribbon does, and it is why this does not use the same helper as the commands.
+        var ribbon = Show(BuildCrowded(), out var window, 900);
+        var firstTab = ribbon.GetVisualDescendants().OfType<Button>()
+            .First(b => AccessibleName(b) == "Home");
+        firstTab.Focus().Should().BeTrue();
+        Dispatcher.UIThread.RunJobs();
+
+        Arrow(firstTab, Key.Right);
+        Dispatcher.UIThread.RunJobs();
+        ribbon.SelectedIndex.Should().Be(1, "Right selects the next tab, it does not merely focus it");
+        FocusedName(window).Should().Be("Insert",
+            "and focus follows the selection — Rebuild() would otherwise have dropped it out of the ribbon");
+
+        Arrow((Control)window.FocusManager!.GetFocusedElement()!, Key.End);
+        Dispatcher.UIThread.RunJobs();
+        ribbon.SelectedIndex.Should().Be(ribbon.Tabs!.Count() - 1, "End jumps to the last tab");
+
+        Arrow((Control)window.FocusManager!.GetFocusedElement()!, Key.Home);
+        Dispatcher.UIThread.RunJobs();
+        ribbon.SelectedIndex.Should().Be(0, "Home jumps back to the first");
+
+        Arrow((Control)window.FocusManager!.GetFocusedElement()!, Key.Down);
+        Dispatcher.UIThread.RunJobs();
+        var panel = PanelOf(ribbon);
+        (window.FocusManager?.GetFocusedElement() as Visual)?.GetVisualAncestors().Should().Contain(panel,
+            "Down drops out of the strip into the commands, so the groups row is reachable without tabbing "
+            + "through the collapse chevron and the pin toggle");
+    }
+
     [AvaloniaFact]
     public void A_collapsed_group_announces_what_it_is_not_just_button()
     {
@@ -1129,7 +1255,7 @@ public class RibbonTests
         focused.Should().NotBeNull();
         focused!.GetVisualAncestors().Should().Contain(ribbon,
             "activating a tab must not throw focus out of the ribbon — the groups it just opened would be unreachable");
-        focused.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
+        focused!.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)
             .Should().Contain("Insert", "and focus belongs on the tab that was activated, so Tab continues from there");
     }
 
