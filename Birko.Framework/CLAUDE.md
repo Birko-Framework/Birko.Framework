@@ -197,6 +197,26 @@ Two model-level decisions worth knowing beyond the ribbon:
   into the width being scaled against and the same window width resolved differently depending on drag
   direction. Removing the scroller fixed it with no other change.
 
+**The accessibility round found more than the layout round did (2026-07-30), and every defect was in a
+control whose behaviour was already correct and tested.** The XAML skin was, in effect, unusable without a
+mouse: **no ribbon button had an accessible name** (Avalonia derives one from `Content` only when it is a
+*string*, and a ribbon item's content is a panel — so a screen reader was handed `"Avalonia.Controls.StackPanel"`,
+or the bare glyph at `Small`); there is **no focus visual on `Button` anywhere** in the skin, which faked two
+"Tab is broken" reports before anyone suspected styling; `Rebuild()` **destroyed focus**, so activating a tab
+by keyboard threw the user out of the ribbon; and **arrow navigation did not exist at all**, while `b-ribbon`
+had it in both the tab strip and the panel. `b-ribbon` had every one of these right — hence the rule now in
+`Birko.Xaml.Avalonia/CLAUDE.md`: **when porting a web component, port its ARIA discipline too.** The XAML
+equivalents (`AutomationProperties.Name`, `AccessibilityView.Raw`, an automation peer) all exist, and none of
+them are automatic. The missing focus visual is framework-wide and is tracked as **TASK-103**.
+
+Two lessons that generalise past the ribbon:
+- **A non-empty accessible name is not a criterion.** `Content.ToString()` satisfies it, so the first version
+  of that test passed with the fix removed. Assert the name is a string the *user* would recognise.
+- **Some criteria cannot be signed off by hand, and saying so beats a false tick.** "An open flyout closes
+  when its group is promoted" was ticked with no implementation behind it, and the manual step could never
+  have caught that: dragging a window edge is a click outside the flyout, and snapping or moving it between
+  monitors dismisses popups too. Three causes, one observation. Only a headless resize isolates it.
+
 Review found five defects the automated suites had missed, four of them one species — **state that did not
 survive a re-render** (an imperative CSS class wiped by a synchronous morph; chevron visibility that changed
 *layout*, letting a tab swallow the click; a tab-strip scroll offset discarded by `Rebuild()`; flyout wiring

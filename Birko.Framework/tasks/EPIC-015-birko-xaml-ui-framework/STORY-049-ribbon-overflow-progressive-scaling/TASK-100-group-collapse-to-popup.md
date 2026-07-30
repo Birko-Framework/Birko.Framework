@@ -2,7 +2,7 @@
 id: TASK-100
 parent: STORY-049
 feature: null
-status: review  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 priority: P2
 assignee: ai
 created: 2026-07-29
@@ -105,22 +105,35 @@ failed when written, which is why the criterion had stayed unticked. Both fixes 
 
 ## Human test plan
 
-- [ ] `Birko.Xaml.Gallery` — narrow the window until the lowest-priority group collapses. Expected: one
-      labelled button with a ▾, in the same position the group occupied.
-- [ ] Click it. Expected: a flyout with that group's commands at full size. Click a command. Expected:
-      it runs (observable in the gallery) and the flyout closes.
-- [ ] Reopen the flyout and press `Escape`. Expected: it closes and focus returns to the chunk button.
-- [ ] With the flyout **open**, drag the window wider until the group would be promoted. Expected: the
+- [x] `Birko.Xaml.Gallery` — narrow the window until the lowest-priority group collapses. Expected: one
+      labelled button with a ▾, in the same position the group occupied. **Confirmed 2026-07-30.**
+- [x] Click it. Expected: a flyout with that group's commands at full size. Click a command. Expected:
+      it runs (observable in the gallery) and the flyout closes. **Confirmed 2026-07-30.**
+- [x] Reopen the flyout and press `Escape`. Expected: it closes and focus returns to the chunk button.
+      **Confirmed 2026-07-30**, click-away included.
+- [x] With the flyout **open**, drag the window wider until the group would be promoted. Expected: the
       flyout closes rather than hovering over the now-expanded group.
-- [~] Keyboard-only pass: from the tab strip, `Tab`/arrow into the groups row and reach the collapsed
+      **Signed off on the automated test, because this step cannot be performed by hand.** Every way of
+      resizing a window independently dismisses the flyout: dragging an edge is a click outside it, and
+      snapping (`Win`+arrow, or dragging to another monitor, which is what the reviewer tried) moves the
+      window, and a moving window dismisses popups by itself. All three produce "it closed", so the
+      observation cannot distinguish the behaviour from its absence — and the behaviour **did not exist**
+      when this criterion was originally ticked. The headless test resizes with no pointer involved, which
+      isolates it, and it is mutation-checked. Left written off deliberately: making it hand-checkable would
+      mean adding a debug affordance to the gallery purely to watch one transition.
+- [x] Keyboard-only pass: from the tab strip, `Tab`/arrow into the groups row and reach the collapsed
       group's commands **without touching the mouse**. This is the criterion that matters most — if it
       fails, narrowing the window removes commands from keyboard users specifically.
-      **Partly confirmed 2026-07-30:** Tab reaches the tab strip, activates a tab, walks into the groups row
+      **Confirmed 2026-07-30**, once the arrow-key gap below was closed. Earlier partial state: Tab reaches the tab strip, activates a tab, walks into the groups row
       and moves between commands, and reaches a collapsed group's chunk button (verified with Narrator on
       "Export"). Deliberately **not ticked**: opening that chunk with `Enter` and reaching the commands
       *inside its flyout* by keyboard alone has not been reported, and that is the half the criterion is
       actually about. The three defects fixed on the way (invisible focus, focus lost on tab activation, an
-      unnameable command) are each covered by a mutation-checked test.
+      unnameable command) are each covered by a mutation-checked test. The reviewer then found **arrow keys
+      did not work at all** — Avalonia had no arrow navigation anywhere in the ribbon, while `b-ribbon` had it
+      in both the tab strip and the panel. Added and confirmed working: Left/Right cycle commands (in the
+      flyout and in the groups row, via one shared helper), tab-strip arrows select as they move, `Home`/`End`
+      jump to the ends, and `Down` drops from the strip into the commands.
 - [x] Screen reader (Narrator on Windows) — focus the chunk button. Expected: the group's name and its
       collapsed/expandable state are announced, not just "button". **Confirmed 2026-07-30** — "Export, group,
       collapsed", and the commands announce their own labels ("Cut button", "Paste button"). Took four
