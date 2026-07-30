@@ -358,6 +358,17 @@ fields as an optionally table-qualified column name.
 - **When** `GetField("NoSuchColumn")` or `GetFieldByPropertyName("NoSuchProperty")` is called
 - **Then** `null` is returned
 
+#### Scenario: A post-load column rename desynchronises the keys
+
+- **Given** a loaded table whose field for property `Sku` was keyed — and whose index columns were resolved —
+  under the column name `"Sku"`, and a fluent mapping that afterwards assigns `field.Name = "sku_code"` on the
+  cached `AbstractField` (as `ModelMapRegistry.ApplyToDatabase` does for `HasColumnName`, `AbstractField.Name`
+  being a public setter)
+- **When** the table is used after that assignment
+- **Then** `Fields` is still keyed `"Sku"` and `Table.Indexes` still names the column `"Sku"`, while the
+  field's own `Name` reads `"sku_code"` — neither the dictionary key nor the index columns are recomputed,
+  because both were fixed when `ComputeTable` ran
+
 ### Requirement: Column exclusion attributes
 
 The system SHALL skip a property entirely — producing no field and therefore no column — when it carries
@@ -751,7 +762,9 @@ delegate to the connector's `CreateIndexSql`, and wrap any execution failure in 
 - **When** `CreateAsync` runs on the base manager
 - **Then** `CreateUniqueIndexSql` emits
   `CREATE UNIQUE INDEX IF NOT EXISTS "<index>" ON "<table>" ("<col>" [DESC], ...)` using the connector's
-  `QuoteIdentifier`, and the connector's `CreateIndexSql` is not called
+  `QuoteIdentifier`, and the connector's `CreateIndexSql` is not called — the `IF NOT EXISTS` clause is
+  accepted by SQLite and PostgreSQL (which overrides the method with the same text) but not by MySQL, which
+  inherits this implementation
 
 #### Scenario: Translation drops the Unique flag from the SQL definition
 
@@ -778,7 +791,9 @@ index and scope.
 - **Given** `DropAsync("IX_A", "Invoice")`
 - **When** the SQL is built
 - **Then** a `Tables.IndexDefinition { Name = "IX_A" }` with no columns is passed to `DropIndexSql`
-  alongside the table name
+  alongside the table name, which the base implementation then ignores — it renders
+  `DROP INDEX IF EXISTS "IX_A"` with no `ON <table>` clause (only `MSSqlConnector` overrides `DropIndexSql`
+  to add one), so the statement is accepted by SQLite and PostgreSQL but rejected by MySQL
 
 #### Scenario: Whitespace index name is rejected
 
@@ -831,15 +846,18 @@ The system SHALL supply dialect-specific existence and listing SQL, and these di
 observably: the default/MySQL implementation queries `information_schema.statistics` and **hard-codes
 `is_descending` to 0** with no schema restriction; MSSQL queries `sys.indexes`/`sys.index_columns` reporting
 real descending keys and excluding primary keys, heap rows (`type > 0`) and included columns; PostgreSQL
-queries `pg_class`/`pg_index`/`pg_attribute` reporting real descending keys via `indoption` and excluding
-primary indexes; and SQLite reads `sqlite_master` plus `PRAGMA index_info` excluding `sqlite_autoindex_%`.
+queries `pg_class`/`pg_index`/`pg_attribute` reading descending keys from `indoption` subscripted by the
+column's table `attnum` rather than by its position within the index, and excluding primary indexes; and
+SQLite reads `sqlite_master` plus `PRAGMA index_info` excluding `sqlite_autoindex_%`.
 
 #### Scenario: Descending direction is lost on MySQL and SQLite
 
 - **Given** an index created with a descending column
 - **When** `ListAsync` runs on MySQL (base implementation) or SQLite (PRAGMA implementation)
-- **Then** every returned `IndexField.IsDescending` is `false`, whereas on MSSQL and PostgreSQL the real
-  direction is reported
+- **Then** every returned `IndexField.IsDescending` is `false`; MSSQL reports the real direction from
+  `ic.is_descending_key`, while PostgreSQL evaluates `indoption[a.attnum - 1]` — the column's position in the
+  *table*, not in the index — so the flag is read from the wrong slot on a multi-column index and is absent
+  (yielding `false`) whenever `attnum` exceeds the index's column count
 
 #### Scenario: Primary keys appear only on MySQL
 
@@ -892,7 +910,9 @@ primary indexes; and SQLite reads `sqlite_master` plus `PRAGMA index_info` exclu
 - **Given** `MySqlIndexManager`
 - **When** any operation runs
 - **Then** the inherited `SqlIndexManager` implementation is used unchanged — the subclass declares only a
-  constructor
+  constructor — so `CreateAsync` emits `CREATE [UNIQUE] INDEX IF NOT EXISTS …` and `DropAsync` emits a
+  table-less `DROP INDEX IF EXISTS …`, neither of which MySQL accepts, and both therefore fail against MySQL
+  wrapped in `IndexManagementException`
 
 ### Requirement: Index-management SQL is composed by string interpolation
 
@@ -950,6 +970,14 @@ validated non-empty first.
 - **Then** the second create request reaches the server and its failure surfaces through
   `ValidateResponse` as `InvalidOperationException`, not through the pre-check
 
+#### Scenario: The existence check does not validate its own response
+
+- **Given** an `Indices.Exists` request that fails rather than answering — transport error, auth rejection,
+  unreachable node — whose response therefore carries `Exists == false`
+- **When** `IndexExists` / `IndexExistsAsync` returns `response.Exists` with no `ValidateResponse` call
+- **Then** the failure is reported as "the index does not exist", so the already-exists guard is skipped and
+  a caller cannot distinguish an absent index from an unanswered question
+
 #### Scenario: Blank index name is rejected everywhere
 
 - **Given** any `IndexManager` method taking an index name
@@ -974,6 +1002,14 @@ validate the response otherwise.
 - **Given** no index named `invoices`
 - **When** `DeleteIndexAsync("invoices")` is called
 - **Then** the existence check short-circuits and the method returns with no request and no exception
+
+#### Scenario: A failed existence check also reads as missing
+
+- **Given** an existence request that fails rather than answering, so `exists.Exists` is `false` although the
+  index may well exist
+- **When** `DeleteIndexAsync("invoices")` inspects it
+- **Then** the method short-circuits and returns successfully with no delete request issued — the unvalidated
+  check makes a destructive no-op indistinguishable from a completed deletion
 
 ### Requirement: ElasticSearch responses are validated uniformly, with 404 tolerated for removals
 

@@ -296,16 +296,22 @@ SHALL isolate queues by key so that a null `QueueName` is stored in and served f
 
 ### Requirement: Concurrent dequeue claiming differs per backend
 
-The system SHALL prevent two workers from claiming the same job, using a token-verified conditional
-update on SQL, MongoDB, Elasticsearch and RavenDB; a single atomic Lua script on Redis; an
-in-process `SemaphoreSlim` on the in-memory, JSON and XML backends; and SHALL provide **no**
-concurrency protection at all on Cosmos DB.
+The system SHALL prevent two workers from claiming the same job, using a token-verified,
+status-guarded conditional update on SQL, MongoDB, Elasticsearch and RavenDB; a single atomic Lua
+script on Redis; an in-process `SemaphoreSlim` on the in-memory, JSON and XML backends; and SHALL
+provide **no** concurrency protection at all on Cosmos DB.
 
 #### Scenario: SQL claims via ClaimToken and verifies by re-read
 
 - **Given** two `SqlJobQueue<DB>` workers racing for the same eligible row
 - **When** each issues `UpdateAsync(filter: j => j.Guid == id && j.Status == originalStatus, updates: Set(Status, Processing).Set(ClaimToken, myToken).Set(AttemptCount, n+1).Set(LastAttemptAt, now))` and then re-reads the row
 - **Then** only the worker whose `ClaimToken` matches the stored value returns the descriptor; the loser skips to the next candidate, retrying up to `MaxClaimAttempts = 32` times before returning `null`
+
+#### Scenario: The claim guard is status-only, so a rescheduled job is re-claimed ahead of its ScheduledAt
+
+- **Given** a SQL, MongoDB, Elasticsearch or RavenDB worker B that has read a due `Scheduled` candidate and then stalls, while worker A claims that job, runs it, and `FailAsync` puts it back to `Scheduled` with a future `ScheduledAt`
+- **When** B finally issues its conditional update, whose only guard is `j.Guid == claimId && j.Status == originalStatus`
+- **Then** the filter matches again, B's `ClaimToken` verifies on the re-read, and B returns the descriptor — the job runs before its `ScheduledAt`, and `AttemptCount` is overwritten with B's stale `candidate.AttemptCount + 1`, so the retry budget is rewound; the guard compares status only, never `ScheduledAt`, `AttemptCount` or a version
 
 #### Scenario: A crowded queue exhausts the claim attempt budget
 
@@ -752,7 +758,9 @@ The system SHALL, for each claimed job, execute it under a linked `CancellationT
 after `JobQueueOptions.JobTimeout` (default 30 minutes), call `CompleteAsync` when
 `JobResult.Success` is true and `FailAsync(id, result.Error ?? "Unknown error")` otherwise, and SHALL
 treat a shutdown cancellation as a **failed attempt** recorded via
-`FailAsync(id, "Job cancelled due to processor shutdown", CancellationToken.None)`.
+`FailAsync(id, "Job cancelled due to processor shutdown", CancellationToken.None)` — a path reached
+only when one of those queue calls itself throws on the cancelled token, since `JobExecutor` never
+rethrows cancellation.
 
 #### Scenario: A successful job is completed
 
@@ -774,15 +782,21 @@ treat a shutdown cancellation as a **failed attempt** recorded via
 
 #### Scenario: Shutdown consumes a retry and can kill a last-attempt job
 
-- **Given** a job on its final permitted attempt and a processor whose outer `cancellationToken` is cancelled mid-execution
-- **When** the shutdown path's `FailAsync` runs
+- **Given** a store-backed queue, a job on its final permitted attempt, and a processor whose outer `cancellationToken` is cancelled mid-execution
+- **When** `JobExecutor` swallows the `OperationCanceledException` and returns `JobResult.Failed`, and the reporting `FailAsync(id, result.Error, cancellationToken)` then throws on the cancelled token (every store-backed queue funnels through `EnsureInitializedAsync`, which calls `ct.ThrowIfCancellationRequested()`), so the shutdown catch runs its own `FailAsync`
 - **Then** the job is marked `Dead`; there is no requeue-without-consuming-an-attempt path (`IJobQueue` has no `RequeueAsync`, and `EnqueueAsync` is an insert that would conflict on the existing id)
+
+#### Scenario: A job that succeeded is recorded as a failed attempt when the processor stops mid-completion
+
+- **Given** a store-backed queue and a job whose body has just returned `JobResult.Succeeded`
+- **When** `Stop()` fires so that `CompleteAsync(descriptor.Id, cancellationToken)` throws `OperationCanceledException` before writing anything
+- **Then** the shutdown catch calls `FailAsync(descriptor.Id, "Job cancelled due to processor shutdown", CancellationToken.None)`, so a job that succeeded is rescheduled for a re-run — or marked `Dead` when it was on its last attempt; an `InMemoryJobQueue`, which ignores the token, completes normally and never enters that path
 
 #### Scenario: Stop cancels the loop and in-flight work is awaited
 
 - **Given** a running processor
 - **When** `Stop()` is called
-- **Then** the linked `CancellationTokenSource` is cancelled, the loop exits, and the `finally` block awaits `Task.WhenAll` over the recorded job tasks before `RunAsync` returns
+- **Then** the linked `CancellationTokenSource` is cancelled and the `finally` block awaits `Task.WhenAll` over the recorded job tasks; `RunAsync` returns normally only when the cancellation is observed by `DequeueAsync` or by the polling `Task.Delay`, which each catch `OperationCanceledException` and `break` — when it is observed by `await _concurrencySemaphore.WaitAsync(_cts.Token)`, which sits outside every `catch` (the normal state at `MaxConcurrency`), that exception propagates out of `RunAsync` after the in-flight wait and faults the caller's task
 
 #### Scenario: A queue-reporting failure escapes the job task
 

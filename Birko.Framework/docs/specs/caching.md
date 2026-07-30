@@ -227,9 +227,10 @@ and unconditionally overwrite any existing entry for that key (indexer assignmen
 The system SHALL guard `MemoryCache.GetOrSetAsync` with a per-key `SemaphoreSlim(1, 1)`: it performs an
 unlocked read, then acquires a live (`!Removed`) `KeyLock` — looping to create a fresh one if the
 instance it obtained is being retired — re-checks the cache after acquiring the semaphore, and only then
-invokes the factory and stores the result. The lock is released and its refcount decremented in a
-`finally`; the last releaser (refcount reaching 0) marks it `Removed`, removes the exact key/value pair
-from the map, and disposes the semaphore. The eviction timer SHALL NOT remove locks.
+invokes the factory and stores the result. `Semaphore.WaitAsync(ct)` is awaited **outside** the `try`, so
+the `finally` is entered only once the semaphore has actually been acquired. The lock is released and its
+refcount decremented in that `finally`; the last releaser (refcount reaching 0) marks it `Removed`, removes
+the exact key/value pair from the map, and disposes the semaphore. The eviction timer SHALL NOT remove locks.
 
 #### Scenario: Concurrent callers run the factory once
 
@@ -245,9 +246,9 @@ from the map, and disposes the semaphore. The eviction timer SHALL NOT remove lo
 
 #### Scenario: Lock map does not grow unbounded
 
-- **Given** `GetOrSetAsync` has been called for 10 000 distinct keys, all completed
+- **Given** `GetOrSetAsync` has been called for 10 000 distinct keys, all of which acquired their semaphore and completed
 - **When** the internal `_locks` map is inspected
-- **Then** it is empty, because each lock was retired by its last releaser
+- **Then** it is empty, because each lock was retired by its last releaser — whereas a key whose `WaitAsync` was cancelled keeps its lock in the map with `Refs > 0` for the process lifetime
 
 #### Scenario: A different key is not serialised
 
@@ -296,7 +297,7 @@ and `SetAsync`.
 
 - **Given** a caller blocked in `GetOrSetAsync` on `Semaphore.WaitAsync(ct)`
 - **When** the token is cancelled
-- **Then** the wait throws, the `finally` still runs, and because the semaphore was never acquired the `Release()` in the `finally` is executed anyway (unlike `HybridCache`, which tracks an `acquired` flag)
+- **Then** the wait throws from *outside* the `try`, so the `finally` never runs: neither `Release()` nor `ReleaseKeyLock` executes and the refcount `AcquireKeyLock` already incremented is never decremented, so that `KeyLock` is never marked `Removed`, never removed from `_locks` and its semaphore is never disposed (unlike `HybridCache`, whose `finally` always runs and tracks an `acquired` flag)
 
 ### Requirement: MemoryCache disposal
 
@@ -377,7 +378,9 @@ where `_defaultExpiration` is the constructor argument or 5 minutes.
 The system SHALL, when `SlidingExpiration` is set, persist a `__meta` hash containing `sliding`
 (seconds) and `absoluteDeadline` — a **fixed unix-seconds deadline** computed as
 `UtcNow + AbsoluteExpiration`, or `-1` when there is no absolute window — and SHALL give that hash the
-same TTL as the value. On each `GetAsync` hit the system SHALL recompute the TTL as
+same TTL as the value. When `SlidingExpiration` is not set the system SHALL neither write nor delete the
+hash, so an earlier sliding write's `__meta` survives an overwrite of the same key and goes on governing
+the new value's expiration. On each `GetAsync` hit the system SHALL recompute the TTL as
 `ComputeRefreshedTtl(sliding, deadline, now)` = the full sliding span when `deadline <= 0`,
 `min(sliding, deadline - now)` when the deadline is in the future, and `null` when `deadline - now <= 0`;
 on `null` it SHALL delete both the value and metadata keys instead of re-extending.
@@ -402,7 +405,7 @@ on `null` it SHALL delete both the value and metadata keys instead of re-extendi
 
 #### Scenario: Non-sliding entries skip the refresh round-trip
 
-- **Given** a key written with `Absolute(5 minutes)` and therefore no `__meta` hash
+- **Given** a key written with `Absolute(5 minutes)` and no `__meta` hash left behind by an earlier sliding write
 - **When** `GetAsync` is awaited
 - **Then** the `sliding` hash field has no value, `RefreshSlidingExpirationAsync` returns immediately, and the TTL is left alone
 
@@ -411,6 +414,18 @@ on `null` it SHALL delete both the value and metadata keys instead of re-extendi
 - **Given** a `__meta` hash whose `sliding` field is `0`
 - **When** the refresh runs
 - **Then** it returns without changing any TTL
+
+#### Scenario: A previous sliding write's metadata governs a later absolute-only write
+
+- **Given** `SetAsync("k", v, Sliding(5 minutes))` followed by `SetAsync("k", v2, Absolute(1 hour))` on the same key
+- **When** the key is read
+- **Then** the surviving `__meta` (`sliding == 300`, `absoluteDeadline == -1`) is found, so the refresh re-expires the value to 5 minutes on every read even though the current write asked for a 1-hour absolute window
+
+#### Scenario: A stale past deadline deletes the value just written
+
+- **Given** a `__meta` left by an earlier `AbsoluteAndSliding` write whose `absoluteDeadline` has already passed, and a subsequent `SetAsync("k", v2, Absolute(1 hour))`
+- **When** the key is read for the first time after that write
+- **Then** `ComputeRefreshedTtl` returns `null` and both the value and the metadata key are deleted, discarding the fresh write
 
 ### Requirement: Redis values are JSON-serialised through CacheSerializer
 
@@ -520,7 +535,12 @@ The system SHALL, in `RedisCache.ClearAsync`, delegate to `RemoveByPrefixAsync("
 
 The system SHALL create and own a `RedisConnectionManager` when constructed from `RedisSettings`, and
 SHALL NOT own one when constructed from an externally supplied `RedisConnectionManager`; `Dispose()`
-SHALL be idempotent and dispose the manager only in the owning case.
+SHALL be idempotent for sequential calls — guarded by a plain, non-`volatile` `bool _disposed`, unlike
+`MemoryCache`'s `volatile` one — and dispose the manager only in the owning case. Every data operation
+SHALL address the database index the connection manager captured at *its* construction
+(`GetDatabase()`), while `RemoveByPrefixAsync`'s SCAN and `ClearAsync`'s `FLUSHDB` SHALL address
+`RedisSettings.Database` from the settings handed to the cache — two indexes the shared-manager
+constructor allows to disagree.
 
 #### Scenario: Owned connection is disposed
 
@@ -539,6 +559,18 @@ SHALL be idempotent and dispose the manager only in the owning case.
 - **Given** a null `settings` or a null `connectionManager`
 - **When** either constructor is invoked
 - **Then** an `ArgumentNullException` is thrown for the offending parameter
+
+#### Scenario: The read/write index and the SCAN/FLUSHDB index can disagree
+
+- **Given** `new RedisCache(sharedManager, settings)` where `sharedManager` was built from settings naming database 0 and `settings.Database` is 3
+- **When** entries are written and then `RemoveByPrefixAsync(prefix)` is awaited
+- **Then** the values were written to database 0 while `KeysAsync(..., database: 3)` enumerates database 3, so the call completes successfully having deleted nothing — and `ClearAsync` would `FLUSHDB` database 3, which this cache never wrote to
+
+#### Scenario: Concurrent disposal is not serialised
+
+- **Given** two threads calling `Dispose()` on the same owning `RedisCache` simultaneously
+- **When** both read `_disposed` before either writes it
+- **Then** both pass the guard and `RedisConnectionManager.Dispose()` is entered twice, because the flag is neither `volatile` nor lock-protected
 
 ### Requirement: CachePriority is honoured only by MemoryCache's sweep
 
@@ -757,7 +789,7 @@ The system SHALL reject null `l1` or `l2` at construction with `ArgumentNullExce
 
 - **Given** a `HybridCache`
 - **When** `Dispose()` is called twice
-- **Then** the second call returns at the `_disposed` guard without re-disposing semaphores
+- **Then** the second call returns at the `_disposed` guard without re-disposing semaphores — a plain, non-`volatile` `bool`, so this holds for sequential calls only
 
 ### Requirement: SQL query cache keys are deterministic and table-scoped
 

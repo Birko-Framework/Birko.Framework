@@ -94,7 +94,7 @@ construction-time iteration count below 10,000 with `ArgumentOutOfRangeException
 - **When** `new Pbkdf2PasswordHasher(9_999)` is constructed
 - **Then** `ArgumentOutOfRangeException` is thrown with the message "Iterations must be at least 10,000"
 
-### Requirement: PBKDF2 verification is total over arbitrary stored strings and constant-time
+### Requirement: PBKDF2 verification tolerates most malformed stored strings but is not total
 
 The system SHALL make `Pbkdf2PasswordHasher.Verify` return `false` — never throw — for any non-null stored
 string that is not a valid hash of this format: a segment count other than 4, an algorithm tag other than
@@ -102,6 +102,13 @@ string that is not a valid hash of this format: a segment count other than 4, an
 `FormatException` is caught). The system SHALL compare the recomputed and stored hashes with
 `CryptographicOperations.FixedTimeEquals`, and SHALL throw `ArgumentNullException` when either argument is
 null.
+
+Two shapes escape that guard, so the totality the code comment claims (CR-M233) does not hold. An iteration
+segment that parses as `0` or a negative number passes `int.TryParse` and is handed to
+`Rfc2898DeriveBytes.Pbkdf2`, which throws `ArgumentOutOfRangeException` out of `Verify`. And a stored string
+whose salt and hash segments are both empty — `PBKDF2-SHA512:600000::`, four segments with valid (empty)
+Base64 — decodes to two zero-length arrays, so the recomputation is asked for a zero-length key and
+`FixedTimeEquals` over two empty spans returns `true`: every password verifies against such a stored value.
 
 #### Scenario: Truncated database column
 
@@ -120,6 +127,18 @@ null.
 - **Given** any hasher
 - **When** `Verify(null!, "…")` or `Verify("p", null!)` is called
 - **Then** `ArgumentNullException` is thrown
+
+#### Scenario: Zero iteration count in the stored hash
+
+- **Given** a stored value `"PBKDF2-SHA512:0:{valid base64 salt}:{valid base64 hash}"`
+- **When** `Verify("p", stored)` is called
+- **Then** `ArgumentOutOfRangeException` ("iterations ('0') must be a non-negative and non-zero value") escapes from `Rfc2898DeriveBytes.Pbkdf2`; only `FormatException` is caught
+
+#### Scenario: Empty salt and hash segments accept every password
+
+- **Given** a stored value `"PBKDF2-SHA512:600000::"`, as left by a truncated column or a half-finished migration
+- **When** `Verify(anyPassword, stored)` is called
+- **Then** it returns `true`, because both segments decode to zero-length arrays, the recomputed key is zero-length, and `FixedTimeEquals(empty, empty)` is true
 
 ### Requirement: PBKDF2 verification trusts the parameters embedded in the stored hash
 
@@ -161,6 +180,12 @@ The system SHALL accept, in `Verify`, only a 60-character string with `$` at ind
 candidate against the stored 29-character salt prefix and compare with
 `CryptographicOperations.FixedTimeEquals` over the UTF-8 bytes of the two full hash strings.
 
+That shape guard does not inspect the two cost digits at indices 4–5 — digits and letters are both in the
+BCrypt-Base64 alphabet — so a 60-character in-alphabet hash whose cost does not parse (`$2a$ab$…`) or parses
+outside `MinWorkFactor`…`MaxWorkFactor` (`$2a$99$…`) passes it, reaches `HashPassword`, and raises
+`ArgumentException("Invalid BCrypt cost factor")` out of `Verify` rather than returning `false`. `NeedsRehash`
+on the same input does not throw.
+
 #### Scenario: Hash from another implementation tagged $2b$
 
 - **Given** a valid 60-character `$2b$12$…` hash produced elsewhere
@@ -178,6 +203,12 @@ candidate against the stored 29-character salt prefix and compare with
 - **Given** a 59-character truncated hash
 - **When** `Verify("p", hash)` is called
 - **Then** it returns `false`
+
+#### Scenario: Shaped hash whose cost is out of range
+
+- **Given** a 60-character in-alphabet hash reading `$2a$99$…`
+- **When** `Verify("p", hash)` is called
+- **Then** `ArgumentException("Invalid BCrypt cost factor")` propagates out of `Verify` — the shape guard let it through and `HashPassword` rejected the cost
 
 ### Requirement: BCrypt truncates the password at 72 bytes including its NUL terminator
 
@@ -810,7 +841,7 @@ The system SHALL read `sub` from the validated `JsonWebToken` payload rather tha
 
 #### Scenario: Provider name canonicalised
 
-- **Given** `VerifyAsync("  Google  ", token)` against a configured `"google"` provider
+- **Given** `VerifyAsync("GOOGLE", token)` against a configured `"google"` provider
 - **When** verification succeeds
 - **Then** `Identity.Provider` is `"google"`
 
@@ -839,6 +870,11 @@ already a `Dictionary<string, OidcProviderOptions>` with that exact comparer, so
 resolve identically. A map that holds two spellings of the same name SHALL therefore throw at construction
 rather than silently preferring one at login time. A null key source or null map SHALL throw
 `ArgumentNullException`.
+
+The lookup SHALL use the **raw** supplied name; `Canonical` (trim + lower-case) is computed only after the
+lookup has succeeded, for the key-source cache key and the returned identity. Matching is therefore
+case-insensitive but not whitespace-insensitive: `"  google  "` yields `ProviderNotConfigured` even though
+that provider is configured.
 
 #### Scenario: Case-insensitive lookup from an ordinal dictionary
 

@@ -102,8 +102,9 @@ the junction record.
 
 The system SHALL, in `CreateTagAsync`, first call `FindTagByNameAsync(name.Trim())` and, when a tag is
 found, return that existing tag's DTO **without inserting anything**; only on a miss SHALL it construct
-a `Tag` with `TenantGuid = GetCurrentTenantId()` and `Name = name.Trim()` and persist it via
-`CreateTagInternalAsync`.
+a `Tag` with `TenantGuid = GetCurrentTenantId()`, `Name = name.Trim()` and `Color` / `TagGroup` assigned
+**verbatim** from the arguments — with none of the null-or-whitespace normalisation `UpdateTagAsync`
+applies to those same two fields — and persist it via `CreateTagInternalAsync`.
 
 #### Scenario: Creating a genuinely new tag
 
@@ -132,6 +133,14 @@ a `Tag` with `TenantGuid = GetCurrentTenantId()` and `Name = name.Trim()` and pe
 - **Given** any tenant state
 - **When** a caller invokes `CreateTagAsync(null!)`
 - **Then** `name.Trim()` throws `NullReferenceException` before any hook is called
+
+#### Scenario: Blank colour and group are stored as whitespace, not as null
+
+- **Given** no tag named `"x"` exists for the current tenant
+- **When** a caller invokes `CreateTagAsync("x", "  ", "  ")`
+- **Then** the constructed tag carries `Color = "  "` and `TagGroup = "  "` unchanged — the
+  null-or-whitespace-to-`null` mapping exists only on the update path, so the same two arguments produce
+  a blank-but-not-null value through `CreateTagAsync` and `null` through `UpdateTagAsync`
 
 ### Requirement: Tag lookup by id projects to a DTO or null
 
@@ -460,8 +469,12 @@ The system SHALL stamp `TenantGuid = GetCurrentTenantId()` on every record it in
 every read and delete hook (`GetTagByIdAsync`, `FindTagByNameAsync`, `ListAllTagsAsync`,
 `SearchTagsByNameAsync`, `UpdateTagInternalAsync`, `DeleteTagInternalAsync`, `GetEntityTagLinksAsync`,
 `DeleteEntityTagAsync`, `DeleteAllEntityTagsForTagAsync`, `GetEntityTagLinksBatchAsync`) **without any
-tenant parameter**, performing no comparison of a loaded record's `TenantGuid` against the current
-tenant anywhere in `TagServiceBase`.
+tenant parameter** — three of them (`UpdateTagInternalAsync`, `DeleteTagInternalAsync`,
+`DeleteEntityTagAsync`) do receive the whole record, so its stored `TenantGuid` is available to them,
+while the rest are keyed only by id, name, query or `(entityType, entityId)` — performing no comparison
+of a loaded record's `TenantGuid` against the current tenant anywhere in `TagServiceBase`, and SHALL
+declare `TenantGuid` as a bare `Guid` property on `Tag` / `EntityTag` rather than through
+`Birko.Data.Tenant.Models.ITenant`.
 
 #### Scenario: Inserts are stamped
 
@@ -491,6 +504,38 @@ tenant anywhere in `TagServiceBase`.
 - **When** a caller invokes `AttachTagAsync("Building", B_entity, T)`
 - **Then** an `EntityTag` with `TenantGuid = A` and `TagId = T` is created, since attach validates
   neither the tag's existence nor its ownership
+
+#### Scenario: The models cannot be wrapped by the framework's tenant store wrapper
+
+- **Given** `TenantStoreWrapper<TStore, T>` is constrained `where T : AbstractModel, ITenant`, and
+  `ITenant` declares both `Guid TenantGuid` and `string? TenantName`
+- **When** a platform tries to wrap its `Tag` or `EntityTag` store to obtain that wrapper's automatic
+  tenant read-filtering, `TenantMismatchException` on update/delete and strict-mode refusal
+- **Then** it cannot: neither model implements `ITenant` (each declares a bare `TenantGuid` and no
+  `TenantName`), so the per-hook filtering the tenant contract demands has no framework mechanism to
+  delegate to and must be hand-written in every implementation
+
+### Requirement: Log-model timestamps are never populated by this layer
+
+The system SHALL leave the `CreatedAt` / `UpdatedAt` (non-nullable `DateTime`) and `PrevUpdatedAt`
+(`DateTime?`) fields that `Tag` and `EntityTag` inherit from `AbstractLogModel` untouched — setting none
+of them on the records it constructs in `CreateTagAsync`, `AttachTagAsync` and `SetEntityTagsAsync`, and
+neither advancing `UpdatedAt` nor rolling `PrevUpdatedAt` in `UpdateTagAsync` — so every log field is
+whatever the platform hook or a store decorator around it supplies.
+
+#### Scenario: Inserted records carry default timestamps
+
+- **Given** a platform whose `CreateTagInternalAsync` persists the instance exactly as handed to it
+- **When** a caller invokes `CreateTagAsync("urgent")`
+- **Then** the record carries `TenantGuid = GetCurrentTenantId()` but `CreatedAt` and `UpdatedAt` at
+  `default(DateTime)` and `PrevUpdatedAt` at `null` — the base class stamps the tenant and no timestamp
+
+#### Scenario: Update does not advance UpdatedAt
+
+- **Given** a stored tag whose `CreatedAt` / `UpdatedAt` were populated by something outside this layer
+- **When** a caller invokes `UpdateTagAsync(tagId, name: "renamed")`
+- **Then** the instance handed to `UpdateTagInternalAsync` carries the same `UpdatedAt` and
+  `PrevUpdatedAt` it was loaded with, alongside the new `Name`
 
 ### Requirement: Scoped DI registration of the tag service
 

@@ -25,9 +25,13 @@ shaped-by: []
 This capability lets an application store one entity row per record while serving and accepting
 *translated* values for selected string properties, without any backend-specific support. It works by
 wrapping an existing store in a decorator (`LocalizedStoreWrapper`, `LocalizedBulkStoreWrapper`, and
-their async twins). The wrapper keeps the entity's own columns as the **default-culture** copy of the
-data and keeps every other culture in a side table of `EntityTranslationModel` rows keyed by
-`(EntityGuid, EntityType, FieldName, Culture)`.
+their async twins). The wrapper keeps every non-default culture in a side table of
+`EntityTranslationModel` rows keyed by `(EntityGuid, EntityType, FieldName, Culture)` and reads the
+entity's own columns as the **default-culture** copy of the data whenever a row is missing. Those
+columns are *not* preserved as a default-culture copy on write: every write path hands the entity to the
+inner store exactly as the caller holds it, so on a non-default culture the localized value is persisted
+into the entity's own columns as well as into a translation row, and nothing restores the previous
+default-culture value.
 
 On read, the wrapper overwrites the entity's localizable properties in place with the current culture's
 translation. On write, it persists the incoming values as translation rows. Filters that mention a
@@ -106,7 +110,8 @@ filter rewriting while the current culture is the default one.
 ### Requirement: Applying translations on read
 
 The system SHALL, on a non-default culture, load every translation row for the read entity's GUID and the
-current culture, build a `FieldName → Value` dictionary, and overwrite the entity's localizable properties
+current culture — via `EntityTranslationFilter.ByEntityAndCulture`, which leaves `EntityType`
+unconstrained — build a `FieldName → Value` dictionary, and overwrite the entity's localizable properties
 in place with the matching values.
 
 #### Scenario: Read by GUID returns the translated entity
@@ -144,6 +149,12 @@ in place with the matching values.
 - **Given** the inner store returns `null` for a read
 - **When** `Read(guid)` / `ReadAsync(guid)` / `Read(filter)` returns
 - **Then** `ApplyTranslations` is not called and `null` is propagated
+
+#### Scenario: The read lookup ignores entity type while filter resolution does not
+
+- **Given** translation rows written with `EntityType = entity.GetType().Name`, read through a wrapper whose `T` is a base type of the stored instance
+- **When** `ApplyTranslations` loads them and, separately, `ResolveMatchingGuids` resolves a localized filter condition
+- **Then** the read lookup matches on `(EntityGuid, Culture)` only and applies the rows regardless of their `EntityType`, while the filter resolution constrains `EntityType = typeof(T).Name` and therefore matches no row — the two paths read the same rows through different entity-type criteria
 
 ### Requirement: Bulk reads translate every returned entity
 
@@ -521,6 +532,12 @@ otherwise a new row is created with the same fields plus `EntityType` from the r
 - **When** `UpdatedAt` is assigned
 - **Then** the value is `DateTime.UtcNow` read directly, not obtained from an injected `IDateTimeProvider`
 
+#### Scenario: The localized value is also written to the entity's own column
+
+- **Given** `CurrentCulture = "sk"`, `DefaultCulture = "en"`, entity `G` whose stored `Name` is `"Chair"`, and the caller setting `entity.Name = "Stolička"`
+- **When** `Create(entity)` / `Update(entity)` runs
+- **Then** the entity is handed to the inner store exactly as the caller holds it, so `"Stolička"` is persisted into the entity's own `Name` column, and the `"sk"` translation row is written afterwards with the same value — the default-culture `"Chair"` is neither preserved nor restored
+
 ### Requirement: Bulk create and update persist translations per item
 
 The system SHALL materialize the incoming sequence exactly once before handing it to the inner store, then
@@ -705,7 +722,8 @@ and `ByEntityTypeAndCulture`.
 
 The system SHALL reject a null inner store, translation store or localization context with
 `ArgumentNullException`, SHALL delegate `Init`/`InitAsync`, `Destroy`/`DestroyAsync` and `CreateInstance`
-straight to the inner store, and SHALL expose the inner store via `IStoreWrapper.GetInnerStore()` and
+straight to the inner store and to the inner store only — the translation store is never initialized or
+destroyed by the wrapper — and SHALL expose the inner store via `IStoreWrapper.GetInnerStore()` and
 `GetInnerStoreAs<TInner>()`.
 
 #### Scenario: Null constructor argument
@@ -725,3 +743,9 @@ straight to the inner store, and SHALL expose the inner store via `IStoreWrapper
 - **Given** a chain `LocalizedStoreWrapper → TenantStoreWrapper → ConcreteStore`
 - **When** `GetInnerStoreAs<ConcreteStore>()` is called on the outermost wrapper
 - **Then** it returns `null`, because the implementation is `_innerStore as TInner` with no recursion into further wrappers
+
+#### Scenario: The translation store is not part of the lifecycle
+
+- **Given** a localized wrapper whose entities have translation rows
+- **When** `Init()` / `InitAsync()` and later `Destroy()` / `DestroyAsync()` are called
+- **Then** only the inner store is initialized and destroyed; the translation store receives neither call, so its rows survive the wrapper's `Destroy()`

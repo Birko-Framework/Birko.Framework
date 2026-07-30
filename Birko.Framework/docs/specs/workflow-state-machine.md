@@ -255,7 +255,9 @@ The system SHALL, in `WorkflowInstance<TData>.Create(definition, data)`, mint a 
 
 The system SHALL, in `WorkflowInstance<TData>.Restore(instanceId, currentState, status, data, history)`,
 reconstruct an instance verbatim from the supplied values, treating a null `history` as an empty
-history, and SHALL expose `History` as a read-only view over an internally appended list.
+history, and SHALL expose `History` as an `IReadOnlyList<StateChangeRecord>` typed over the
+internally appended `List<StateChangeRecord>`, which it returns directly rather than as a copy or
+wrapper.
 
 #### Scenario: Restore with history
 

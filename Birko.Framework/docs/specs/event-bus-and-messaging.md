@@ -562,9 +562,12 @@ when any of those steps yields null or an incompatible type.
 
 #### Scenario: Delivery count header present
 
-- **Given** the transport set the custom header `x-delivery-count` to `"3"`
+- **Given** any message delivered over the in-memory, MQTT or Redis transport
 - **When** the message is delivered
-- **Then** `context.DeliveryCount` is 3; a missing or unparseable header yields 1
+- **Then** `context.DeliveryCount` is 1 — the callback reads the custom header `x-delivery-count` (its
+  parsed value when present, 1 when missing or unparseable), but no producer or consumer in the
+  framework ever writes that key, so a handler cannot distinguish a redelivery from a first attempt
+  even on Redis where redelivery genuinely happens
 
 #### Scenario: No handler registered for the event type
 
@@ -1152,7 +1155,18 @@ manual-ack messages in a local dictionary keyed by message id; the MQTT consumer
 The system SHALL poll a stream with `XREADGROUP` (consumer group present) or `XREAD` (otherwise),
 leave a failed handler's entry unacknowledged in the Pending Entries List, and — when a consumer group
 is used and `PendingRetryMilliseconds > 0` — reclaim and reprocess idle pending entries via
-`XAUTOCLAIM` on each empty poll.
+`XAUTOCLAIM` on each empty poll. Without a consumer group the read position is the consumer's own
+`LastReadId`, which starts at `"$"` unless `FromBeginning` is set and is only ever advanced by an entry
+that was actually processed.
+
+#### Scenario: Subscription with no consumer group and default options
+
+- **Given** `RedisStreamSettings.ConsumerGroup` null, no `ConsumerOptions.GroupId`, and
+  `ConsumerOptions.FromBeginning` at its default false
+- **When** the poll loop runs and messages are produced to the stream
+- **Then** every `XREAD` is issued from `"$"` and returns nothing, so `LastReadId` is never assigned and
+  the position stays `"$"` for the subscription's whole life — no message is ever delivered, no error is
+  raised, and `RedisSubscription.IsActive` still reports true
 
 #### Scenario: Handler fails under a consumer group
 
@@ -1173,6 +1187,15 @@ is used and `PendingRetryMilliseconds > 0` — reclaim and reprocess idle pendin
 - **When** the poll loop starts
 - **Then** it first drains the consumer's own pending entries from `0-0` page by page, then switches
   the read position to `">"`
+
+#### Scenario: New consumer group attached to a stream with retained entries
+
+- **Given** `AutoCreateConsumerGroup = true` (the default), a stream holding retained entries, no
+  existing group, and `ConsumerOptions.FromBeginning` at its default false
+- **When** the group is created and the first `">"` read runs
+- **Then** the whole retained stream is delivered — `EnsureConsumerGroupAsync` always creates the group
+  at `"0-0"` and never consults `FromBeginning`, so the code disagrees with that option's own doc
+  comment ("When false, only new messages are received")
 
 #### Scenario: Consumer group already exists
 

@@ -417,7 +417,8 @@ union to `options.MaxItems` when that value is non-null and `>= 0` and the union
 
 - **Given** two items have already failed and been recorded, and the token is then cancelled
 - **When** the batch loop observes the cancellation and breaks
-- **Then** knowledge collected so far is still persisted, `SetLastSyncTime` is still called
+- **Then** in `SyncProvider` the knowledge collected so far is still persisted and `SetLastSyncTime` is still called, because its knowledge writes take no cancellation token
+- **And** in `AsyncSyncProvider` the round's knowledge is discarded instead: `CreateAsync`, `UpdateAsync` and `SetLastSyncTimeAsync` are all passed `options.CancellationToken`, so the first of them throws, the outer catch records a `Sync failed` error and nothing is stamped
 - **And** `result.Success` is false because it is computed as `result.Errors.Count == 0` alone
 
 ### Requirement: Sync knowledge is upserted by splitting inserts from updates
@@ -609,8 +610,10 @@ CosmosDB knowledge stores as plain backend stores that implement **neither** int
 
 The system SHALL scope RavenDB knowledge queries by tenant **only when `tenantId.HasValue`** — a null
 `tenantId` matches every tenant's rows in the scope — and SHALL scope CosmosDB queries with an
-**unconditional equality** `x.TenantId == tenantId`, so a null `tenantId` matches only rows whose
-`TenantId` is itself null. This applies to `GetKnowledge`, `DeleteKnowledge`, `GetLastSyncTime` and
+**unconditional equality** `x.TenantId == tenantId`, so a null `tenantId` is compared as a value and never
+widens to the whole scope: no row carrying a tenant id can match, and whether the rows whose own `TenantId`
+is null match is left to Cosmos SQL's null-equality rules, the store making no `IS_NULL` allowance for
+them. This applies to `GetKnowledge`, `DeleteKnowledge`, `GetLastSyncTime` and
 `SetLastSyncTime` in both the sync and async variants of each store.
 
 #### Scenario: Null tenant reads everything in RavenDB
@@ -619,11 +622,11 @@ The system SHALL scope RavenDB knowledge queries by tenant **only when `tenantId
 - **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncRavenSyncKnowledgeStore`
 - **Then** rows from both tenants are returned
 
-#### Scenario: Null tenant reads only tenant-agnostic rows in CosmosDB
+#### Scenario: Null tenant does not widen the CosmosDB query
 
 - **Given** the same distribution in CosmosDB
 - **When** `GetKnowledgeAsync("Products", null, ct)` is called on `AsyncCosmosSyncKnowledgeStore`
-- **Then** only rows with `TenantId == null` are returned
+- **Then** the predicate stays `x.Scope == scope && x.TenantId == tenantId` with `tenantId` null, so neither tenant `A`'s nor tenant `B`'s rows are returned, and the result is at most the rows whose own `TenantId` is null
 
 #### Scenario: Null tenant delete is scope-wide in RavenDB
 
@@ -750,13 +753,15 @@ are bookkeeping for `GetQueueLength`/`GetAllQueueLengths` only and do not themse
 - **When** a tenant id `T` is supplied
 - **Then** the key is `"{scope}_{T}"`; with a null tenant it is the bare scope
 
-### Requirement: Aggregate definitions are declared fluently and validated at build time
+### Requirement: Aggregate definitions are declared fluently, with the lambda shape as the only validation
 
 The system SHALL let a derived `AggregateDefinition<T>` register relationships with
 `HasMany(navigation)` (`OneToMany`) and `HasOne(navigation)` (`OneToOne`), SHALL extract the navigation
 property name from the lambda — unwrapping a conversion `UnaryExpression` — SHALL throw `ArgumentException`
 when the lambda does not resolve to a property, and SHALL expose the registered descriptors as a read-only
-list alongside `RootType`.
+list alongside `RootType`. Registration is otherwise unvalidated: nothing requires `Via` or `Through` to
+have been called, nothing rejects a null `ForeignKeyProperty`, and nothing rejects the same navigation
+property being registered more than once.
 
 #### Scenario: HasMany with Via records a direct foreign key
 

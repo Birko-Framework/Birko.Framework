@@ -78,7 +78,7 @@ delegate for every subsequent call on the same instance. The caching SHALL be pe
 
 - **Given** a freshly constructed `Specification<T>` with no compiled delegate yet
 - **When** two threads call `IsSatisfiedBy` simultaneously
-- **Then** both may observe `_compiledExpression` as null and compile independently; the last assignment wins and no exception is raised (the race is benign duplicate compilation, not corruption)
+- **Then** both may observe `_compiledExpression` as null and compile independently, and the last assignment wins; the field is non-volatile and the `??=` write is neither atomic nor release-fenced, so the compiled delegate is published without any barrier
 
 #### Scenario: A new instance does not inherit the cache
 
@@ -258,7 +258,9 @@ corresponding guarded `string` method call; `NotContains` to `Expression.Not` of
 
 The system SHALL wrap a translated leaf expression in `Expression.Not` when the rule's `IsNegated` flag
 is set, applying the negation to whatever the operator arm produced — including the degraded
-`Constant(false)` and `Constant(true)` results.
+`Constant(false)` and `Constant(true)` results. The system SHALL NOT apply the negation when the rule's
+`Field` could not be resolved to a property, because that case returns `Expression.Constant(false)`
+before the operator switch and the `IsNegated` check are reached.
 
 #### Scenario: Negated equality
 
@@ -270,7 +272,7 @@ is set, applying the negation to whatever the operator arm produced — includin
 
 - **Given** a leaf rule on a non-existent field with `IsNegated = true`
 - **When** `ToExpression()` is built
-- **Then** the leaf is `Not(Constant(false))`, i.e. it matches every entity even though the field could not be resolved
+- **Then** the leaf is `Constant(false)` with no surrounding `Expression.Not` — the unresolved-field branch returns before the `IsNegated` check, so the negation is discarded and the leaf matches nothing
 
 ### Requirement: Null-check translation builds a typed null constant with no nullability guard
 
@@ -348,7 +350,10 @@ The system SHALL translate `Contains` / `StartsWith` / `EndsWith` to a call of t
 `string(string, StringComparison)` overload with `StringComparison.OrdinalIgnoreCase`, converting the
 rule value with `value?.ToString() ?? string.Empty`, and SHALL wrap the call as
 `AndAlso(member != null, call)`. When the resolved member is not of type `string` the system SHALL emit
-`Expression.Constant(false)` instead.
+`Expression.Constant(false)` instead. The `StringComparison.OrdinalIgnoreCase` argument governs only
+in-memory evaluation of the compiled delegate: when the same expression reaches a SQL store, that store's
+condition parser deliberately discards the `StringComparison` argument and builds the `LIKE` pattern from
+the first argument alone, so case sensitivity there follows the column's database collation.
 
 #### Scenario: Substring match on a string property
 
@@ -373,6 +378,12 @@ rule value with `value?.ToString() ?? string.Empty`, and SHALL wrap the call as
 - **Given** a rule `Name Contains null`
 - **When** `ToExpression()` is built and compiled
 - **Then** the needle is `string.Empty`, so every entity with a non-null `Name` satisfies the leaf
+
+#### Scenario: The same leaf is collation-dependent at a SQL store
+
+- **Given** a rule `Name Contains "acme"` whose expression is passed to a `Birko.Data.SQL` store's `Read(filter)`
+- **When** the store's condition parser translates the `Contains(string, StringComparison)` call
+- **Then** only the first argument becomes the `LIKE` pattern and the `StringComparison.OrdinalIgnoreCase` argument is skipped as a non-operand argument, so whether `Name = "ACME Ltd"` is returned depends on the column's collation rather than on the ordinal-ignore-case semantics the expression requested
 
 ### Requirement: Rule-group translation drops disabled children and treats an empty group as unsatisfiable
 

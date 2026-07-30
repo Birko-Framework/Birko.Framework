@@ -342,6 +342,18 @@ is `item.TenantGuid == CurrentTenantGuid`; with no tenant set it returns
 - **When** `Update(item)` is called for any tenant's item
 - **Then** the write is delegated to the inner store
 
+#### Scenario: All-tenants scope does not widen item writes when a tenant is set
+
+- **Given** a wrapper with tenant `t`, inside `WithAllTenants(...)`, and an item whose `TenantGuid` is `u`
+- **When** `Update(item)` is called
+- **Then** `BelongsToCurrentTenant` still compares `u` against `t` and a `TenantMismatchException` is thrown — the `IsAllTenantsScope` branch is reachable only when no tenant is set, so item-level writes do not widen the way reads do, contradicting the `TenantFilter` comment that the write guards "already special-case all-tenants scope"
+
+#### Scenario: The guard reads the caller-supplied tenant, not the stored row
+
+- **Given** a wrapper with tenant `t` and an item whose `Guid` identifies a row persisted under tenant `u`, with `item.TenantGuid` assigned `t` by the caller
+- **When** `Update(item)` is called
+- **Then** the check passes, because it compares only the in-memory `item.TenantGuid` — a settable `ITenant` property — against the ambient tenant, and the item is handed to the inner store with no tenant term added to the write; the wrapper never reads the persisted row's tenant
+
 ### Requirement: Create stamps the ambient tenant onto the item
 
 The system SHALL call `SetTenantGuidIfNeeded(item)` before every create, which — when a tenant is
@@ -537,7 +549,7 @@ mode is `Permissive`.
 
 - **Given** a `TRepository` with no single-argument constructor accepting the wrapped store
 - **When** the factory runs
-- **Then** `Activator.CreateInstance` fails or the `as TRepository` yields null and an `InvalidOperationException` naming the repository type is thrown
+- **Then** `Activator.CreateInstance` throws `MissingMethodException` and that exception propagates out of the factory — the `?? throw new InvalidOperationException` arm is never reached, because `CreateInstance` either throws or returns an instance of `typeof(TRepository)` that the `as TRepository` cast cannot turn into null
 
 #### Scenario: No ITenantContext registered falls back to the static singleton
 
@@ -1240,7 +1252,7 @@ and key via the base two-argument `GetQueueKey`.
 
 - **Given** tenant `t` and tenant `u` both enqueuing scope `"invoices"`
 - **When** the keys are computed
-- **Then** they are `"invoices_{t}"` and `"invoices_{u}"`, so the two tenants do not serialize against one another
+- **Then** they are `"invoices_{t}"` and `"invoices_{u}"`, so each tenant's pending operations are queued and counted under its own key — but execution still serializes across tenants, because `EnqueueWithKeyAsync` awaits the one inherited `SemaphoreSlim` sized by `maxConcurrentSyncs` (default 1) that every key shares
 
 #### Scenario: No tenant falls back to the bare scope key
 

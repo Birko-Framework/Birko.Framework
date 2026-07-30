@@ -214,6 +214,21 @@ catching `MissingMethodException` and then attempting
 The system SHALL declare `Destroy()` / `DestroyAsync(ct)` abstract in the bases, without opening the
 initialization gate, and SHALL NOT reset the private `_initialized` flag when they run.
 
+The declared and the implemented meaning of the operation disagree, and the spec records both: the XML
+documentation on `IBaseStore.Destroy()` and `IAsyncBaseStore.DestroyAsync(ct)` reads "Destroys the store and
+releases all resources", which is disposal wording, while every implementation deletes stored data — the
+in-memory stores clear `_items`, and backend stores drop the underlying database, container, collection or
+file. No type in this contract implements `IDisposable` or `IAsyncDisposable`, so `Destroy` is also the only
+teardown member a caller can find.
+
+#### Scenario: Caller reads Destroy as resource cleanup
+
+- **Given** the `IBaseStore.Destroy()` documentation "Destroys the store and releases all resources" and no
+  `IDisposable` / `IAsyncDisposable` implementation anywhere in the contract
+- **When** a caller invokes it to release connections or handles at the end of a scope
+- **Then** stored data is destroyed instead — the implemented meaning is the one that runs, and the
+  documentation gives no warning of it
+
 #### Scenario: Destroying an in-memory store
 
 - **Given** an initialized `AbstractInMemoryStore<T>` holding entities

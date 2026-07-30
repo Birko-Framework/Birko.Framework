@@ -221,6 +221,30 @@ implementation already destroys it.
 - **Then** only the base `AbstractAsyncViewModelRepository.DestroyAsync` runs, calling
   `Store.DestroyAsync(ct)` once
 
+### Requirement: Destroy forwards to the store, which for the SQL family drops the table
+
+The system SHALL implement repository `Destroy()`/`DestroyAsync(ct)` as a forward to the injected store's
+`Destroy()` / `DestroyAsync(ct)` in every family (`AbstractRepository`, `AbstractAsyncRepository`,
+`AbstractViewModelRepository`, `AbstractAsyncViewModelRepository`); for a SQL-backed store that call is
+`DataBaseStore.Destroy()` → `Connector?.DropTable(new[] { typeof(T) })`, so the call deletes the entity's
+table and every row in it. `IBaseRepository.Destroy` documents the member only as "Destroys the
+repository and releases all resources"; the resource-release wording and the implemented table drop
+disagree, and no repository-layer documentation records that data is destroyed.
+
+#### Scenario: Destroying a SQL repository drops its table
+
+- **Given** a `DataBaseRepository` over a `DataBaseBulkStore<SqLiteConnector, TModel>` holding rows
+- **When** `Destroy()` is called
+- **Then** `Store.Destroy()` executes `Connector.DropTable(new[] { typeof(TModel) })` and the table and
+  all its rows are gone
+
+#### Scenario: Locator eviction runs the same destructive call
+
+- **Given** a repository cached in `RepositoryLocator`
+- **When** `Destroy<TRepository>(key)` removes it from the cache and then calls `repository.Destroy()`
+- **Then** the eviction also destroys the underlying store — for the SQL family, dropping the table —
+  although the locator API is documented as destroying a cached repository
+
 ### Requirement: RepositoryLocator caches repositories per key and per repository type
 
 The system SHALL maintain a static two-level cache `key → (repository type → instance)` guarded by a
@@ -451,19 +475,23 @@ ViewModel from a Model through `LoadInstance` (create a fresh ViewModel, `result
 - **Then** control reaches `LoadModelInstance(null)` → `MapToModel(null, target)`, unlike `Create` and
   `Update` which return early on `data == null`
 
-### Requirement: ViewModel repositories suppress no-op updates via a SHA-256 model hash
+### Requirement: ViewModel repositories compute a SHA-256 model hash whose no-op verdict never reaches the store
 
 The system SHALL maintain `IDictionary<Guid, byte[]> _modelHash` keyed by the model's `Guid`, SHALL
 populate it from `StoreHash` (only when `ReadMode` is false and `data.Guid.HasValue`) using
 `StringHelper.CalculateSHA256Hash(Serializer.Serialize(data))`, and SHALL, on `Update`, return `null!`
-from the store delegate when `CheckHashChange` finds the freshly computed hash equal to the stored one
-— thereby signalling the store to skip the write — while still refreshing the stored hash.
+from the store delegate when `CheckHashChange` finds the freshly computed hash equal to the stored one,
+while still refreshing the stored hash. That `null!` is intended as a skip signal, but
+`StoreDataDelegate<T>`'s return value is read by no backend — every store calls
+`storeDelegate?.Invoke(data)` and discards the result, then writes `data` regardless — so the write is
+not suppressed.
 
-#### Scenario: An unchanged entity is not written
+#### Scenario: An unchanged entity is written anyway
 
 - **Given** an entity read through the repository (hash recorded) and re-submitted unmodified
 - **When** `Update(data)` runs
-- **Then** `CheckHashChange` returns `false` and the delegate handed to `Store.Update` returns `null!`
+- **Then** `CheckHashChange` returns `false` and the delegate handed to `Store.Update` returns `null!`,
+  but the store discarded that return value and persists the model regardless
 
 #### Scenario: A changed entity is written
 
@@ -540,11 +568,14 @@ filter-based ones — checking the flag *before* any store or null-argument chec
 - **Then** no `ReadMode` property or read-mode guard exists, so the non-ViewModel repositories can
   always write
 
-### Requirement: ProcessDataDelegate is a transform whose result is honoured on both single and bulk paths
+### Requirement: ProcessDataDelegate is a transform whose result is honoured only on the sync bulk path
 
-The system SHALL define `ProcessDataDelegate<TModel>` as `TModel (TModel data)`, SHALL apply it as
-`item = processDelegate?.Invoke(item) ?? item` so a returned replacement instance is adopted, and SHALL
-do so identically on the single-item and bulk paths of the sync ViewModel repositories.
+The system SHALL define `ProcessDataDelegate<TModel>` as `TModel (TModel data)` and SHALL apply it as
+`item = processDelegate?.Invoke(item) ?? item`. On the bulk paths of the sync ViewModel repositories that
+expression sits in the `data.Select(...)` projection handed to the store, so a returned replacement
+instance is adopted; on the single-item paths it runs *inside* the `StoreDataDelegate<TModel>` given to
+`Store.Create`/`Store.Update`, whose return value no backend reads, so a replacement instance is
+discarded and the pre-transform model is persisted.
 
 #### Scenario: A wrapping delegate result is adopted on the bulk path
 
@@ -565,6 +596,14 @@ do so identically on the single-item and bulk paths of the sync ViewModel reposi
 - **When** the store invokes the repository's `StoreDataDelegate`
 - **Then** the process delegate runs first and `StoreHash(x)` is called on its result before the model
   is returned to the store
+
+#### Scenario: A single-item replacement instance never reaches storage
+
+- **Given** a `ProcessDataDelegate<TModel>` returning a different model instance, passed to the
+  single-item `Create(vm, processDelegate)`
+- **When** the store invokes the repository's `StoreDataDelegate`
+- **Then** the replacement is hashed and returned from the delegate, but the store discards that return
+  value and persists the `item` produced by `LoadModelInstance`, so the transform is lost
 
 #### Scenario: The async bulk path takes a store delegate instead
 
@@ -653,11 +692,15 @@ The system SHALL, in `DataBaseRepository<TConnector, TViewModel, TModel>` and
 unwrapping (`GetUnwrappedStore<...>()?.Connector`), yielding `null` when the innermost store is not of
 the expected concrete type.
 
-#### Scenario: A tenant-wrapped database store is accepted
+#### Scenario: A tenant-wrapped database store is accepted by the constructor and then rejected by every bulk method
 
 - **Given** a `DataBaseBulkStore<SqLiteConnector, TModel>` inside a `TenantStoreWrapper`
 - **When** it is passed to the `DataBaseRepository` constructor
-- **Then** `IsStoreOfType` succeeds through the wrapper and `Store` is assigned
+- **Then** `IsStoreOfType` succeeds through the wrapper and `Store` is assigned — but
+  `TenantStoreWrapper<TStore, T>` implements only `IStore<T>`/`IStoreWrapper<T>`, while the inherited
+  `AbstractBulkViewModelRepository` methods test the *outer* reference (`Store is not IBulkStore<TModel>`),
+  so every bulk read/create/update/delete on the accepted repository throws `ArgumentException`; only the
+  `IBulkStore<T>`-implementing `TenantBulkStoreWrapper` passes both checks
 
 #### Scenario: An unrelated store is rejected
 
