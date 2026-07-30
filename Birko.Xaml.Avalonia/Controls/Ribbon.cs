@@ -174,6 +174,42 @@ public class Ribbon : ContentControl
         // The tab strip scrolls when the tabs overflow (Office Web / Fluent do this; the ribbon *body*
         // deliberately does not — see TASK-099). The collapse chevron lives outside the scroller so it
         // stays pinned at the right edge and can never scroll out of reach.
+        // Tab-strip keys, matching b-ribbon: Left/Right move ALONG the strip and select as they go (a tab
+        // strip activates automatically — deliberately NOT the generic focus-only helper used for commands),
+        // Home/End jump to the ends, and Down drops out of the strip into the commands, which is what makes
+        // the groups row reachable without tabbing through the chrome in between.
+        tabButtons.KeyDown += (_, args) =>
+        {
+            int count = tabButtons.Children.Count;
+            if (count == 0) return;
+
+            if (args.Key is Key.Left or Key.Right)
+            {
+                // Selecting rebuilds the strip, which destroys these buttons — the focus restore in Rebuild()
+                // is what puts focus on the newly selected tab, so arrowing does not drop focus.
+                int current = System.Math.Clamp(SelectedIndex, 0, count - 1);
+                SelectedIndex = args.Key == Key.Right
+                    ? (current + 1) % count
+                    : (current - 1 + count) % count;
+                args.Handled = true;
+                return;
+            }
+
+            if (args.Key is Key.Home or Key.End)
+            {
+                SelectedIndex = args.Key == Key.Home ? 0 : count - 1;
+                args.Handled = true;
+                return;
+            }
+
+            if (args.Key != Key.Down) return;
+            if (_groupsPanel is { } panel && NavigableButtons(panel).FirstOrDefault() is { } first)
+            {
+                first.Focus(NavigationMethod.Directional);
+                args.Handled = true;
+            }
+        };
+
         var tabScroller = WrapScrollable(tabButtons, "Scroll tabs left", "Scroll tabs right", _tabRow, out var tabScrollViewer);
         CarryTabScrollAcrossRebuild(tabScrollViewer, tabButtons, selected);
 
@@ -209,6 +245,13 @@ public class Ribbon : ContentControl
         if (!IsCollapsed && IsPinned && selected >= 0)
         {
             var groupsPanel = BuildGroupsRow(tabs[selected], onInvoke: null);
+            WireArrowNavigation(groupsPanel);
+            if (groupsPanel is RibbonGroupsPanel scaling)
+            {
+                // Posted, not called inline: this fires from inside a MEASURE pass, and hiding a popup
+                // synchronously there re-enters layout.
+                scaling.GroupPromoted += () => Dispatcher.UIThread.Post(CloseChunkFlyoutOnPromotion);
+            }
             body.Children.Add(groupsPanel);
             _groupsPanel = groupsPanel;
         }
@@ -716,6 +759,66 @@ public class Ribbon : ContentControl
                 decorativeGlyph, global::Avalonia.Automation.AccessibilityView.Raw);
     }
 
+    /// <summary>
+    /// The buttons inside <paramref name="scope"/> a keyboard user can actually land on — enabled, visible,
+    /// and not parked off-screen by the scaling panel.
+    /// </summary>
+    private static List<Button> NavigableButtons(Visual scope) =>
+        scope.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.IsEffectivelyEnabled && b.IsVisible && b.Opacity > 0)
+            .Where(b => b.TranslatePoint(default, scope) is { X: > -1000 })
+            .ToList();
+
+    /// <summary>
+    /// Left/Right cycle between the buttons in <paramref name="scope"/>, wrapping at both ends — matching
+    /// <c>b-ribbon</c>'s panel handler, which is the behaviour the ribbon's accessibility criterion is
+    /// written against.
+    /// </summary>
+    /// <remarks>
+    /// Needed because Avalonia's own directional navigation does not apply here: the flyout is a separate
+    /// visual root, and the groups row is a custom panel whose alternatives sit off-screen, so "the control
+    /// to the right" is not a question the built-in handler answers usefully. Wrapping is deliberate — the
+    /// web wraps, and a row of commands has no natural end to stop at.
+    /// </remarks>
+    private static void WireArrowNavigation(Control scope)
+    {
+        scope.KeyDown += (_, args) =>
+        {
+            if (args.Key is not (Key.Left or Key.Right)) return;
+
+            var items = NavigableButtons(scope);
+            // The event source is whatever inside the button was hit, so walk up to the button itself.
+            int index = items.FindIndex(b => ReferenceEquals(b, args.Source)
+                || (args.Source is Visual v && v.GetVisualAncestors().Contains(b)));
+            if (index < 0 || items.Count == 0) return;
+
+            int next = args.Key == Key.Right
+                ? (index + 1) % items.Count
+                : (index - 1 + items.Count) % items.Count;
+            items[next].Focus(NavigationMethod.Directional);
+            args.Handled = true;
+        };
+    }
+
+    /// <summary>
+    /// Close an open collapsed-group flyout because its group is no longer collapsed.
+    /// </summary>
+    /// <remarks>
+    /// Focus goes back to the ribbon only if it was inside the flyout — a flyout closing because the window
+    /// was resized must not steal focus from wherever the user actually is.
+    /// </remarks>
+    private void CloseChunkFlyoutOnPromotion()
+    {
+        if (_openChunkFlyout is not { } flyout) return;
+        bool focusWasInFlyout = flyout is Flyout { Content: Visual content }
+            && TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is Visual focused
+            && (ReferenceEquals(focused, content) || focused.GetVisualAncestors().Contains(content));
+
+        flyout.Hide();
+        if (focusWasInFlyout && _groupsPanel is { } panel)
+            NavigableButtons(panel).FirstOrDefault()?.Focus(NavigationMethod.Directional);
+    }
+
     /// <summary>Whether keyboard focus is currently on this ribbon or inside it.</summary>
     private bool ContainsFocus()
     {
@@ -988,6 +1091,7 @@ public class Ribbon : ContentControl
             button.Focus();
             args.Handled = true;
         };
+        WireArrowNavigation(flyoutContent);
 
         // Remembered so Escape can close it. A Flyout does NOT dismiss on Escape by itself — verified, not
         // assumed, after light dismiss failed to deliver both Escape and click-away for the reveal popup.

@@ -109,7 +109,19 @@ internal sealed class RibbonGroupsPanel : Panel
         // value is deliberately conservative: the row it picks then fits with room to spare, whereas
         // deciding against the smaller value could under-degrade and clip. Determinism is unaffected — both
         // gaps are pure functions of the width and the chosen set.
+        var previous = _chosen;
         _chosen = RibbonScaling.Resolve(metrics, available, Preferred, Gap);
+
+        // A group that stops being a Popup has just been PROMOTED: its chunk button is about to be parked
+        // off-screen, and an open flyout anchored to it would be left hovering over the expanded group it no
+        // longer belongs to. The panel is the only place that knows this happened, so it says so; the ribbon
+        // owns the flyout and does the closing.
+        for (int i = 0; i < _chosen.Length && i < previous.Length; i++)
+        {
+            if (previous[i] != RibbonGroupSize.Popup || _chosen[i] == RibbonGroupSize.Popup) continue;
+            GroupPromoted?.Invoke();
+            break;
+        }
         double gap = EffectiveGap(_chosen);
 
         // Last resort, below even an all-Popup row: drop the group name from every chunk button.
@@ -212,4 +224,9 @@ internal sealed class RibbonGroupsPanel : Panel
 
     /// <summary>The variant each group ended up at — for tests and for the ribbon's own diagnostics.</summary>
     internal IReadOnlyList<RibbonGroupSize> Chosen => _chosen;
+
+    /// <summary>
+    /// Raised during measure when at least one group has stopped being a <see cref="RibbonGroupSize.Popup"/>.
+    /// </summary>
+    internal event System.Action? GroupPromoted;
 }
