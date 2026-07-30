@@ -164,6 +164,36 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### `b-button`: the form story was already decided — the button had just been left out (2026-07-30)
+
+Third gap under STORY-052 (framework `TASK-107`), from Reps stopping **before** converting 69 buttons because
+reading the component first found two silent regressions. Shipped: `--b-button-padding-y` / `-x` (no size
+reached a mobile tap target, and the consumer could not fix it from outside without hijacking the button's own
+`gap`), and form participation via `type` (`button` default, `submit`, `reset`).
+
+Three things worth carrying:
+
+- **Check whether the "open question" is already answered before you decide it.** This arrived as a three-way
+  policy choice — `ElementInternals` vs a synthetic submit vs documenting it away. The catalogue had settled
+  that a day earlier: `FormControlComponent` (`formAssociated` + `attachInternals`) already backs **15**
+  controls, and `b-button` was the only member of the family still on `BaseComponent`. What looked like a
+  design decision was a three-override omission. Read the family before writing the policy.
+- **Where a default is contested, the call sites decide it.** From first principles `type` should default to
+  native's `submit` — defaulting to `button` preserves exactly the silent-nothing-happens bug that raised the
+  ticket. One grep overruled it: Presenter has five `b-button`s in a `<form>` whose `submit` listener does
+  something *different* from the buttons' own click handlers, so a native default would fire two actions on
+  one tap. Symbio has 102 files of `b-button` and no `<form>` at all. Opt-in it is — and the reasoning is
+  written down so it is not "fixed" later by someone reasoning from first principles again.
+- **Expose the knob, not the policy** — the same line taken on `--b-card-shadow`. A `pointer: coarse` media
+  query inside the component would have fixed every consumer with no opt-in, which is precisely the problem:
+  it re-renders apps that did not ask (a desktop back-office on a touch laptop reports `coarse`) and makes a
+  component's size depend on the input device rather than its design. The consumer writes the media query.
+
+Also: the origin task's premise (`--b-space-md` ≈ 44px, from Reps' own `.btn`) **did not survive
+measurement** — `b-button` fixes its font at `--b-text-sm` with a tight line-height, so it measures 32px →
+39px → 46px across `sm`/`md`/`lg` padding, and `--b-space-lg` is the rung that clears 44. The numbers live in
+the smoke check names rather than in a pass/fail against a magic constant.
+
 ### `b-card`: two additive options, one refusal, one deferred framework-wide decision (2026-07-30)
 
 Second gap under STORY-052, from Reps adopting `b-card` (framework `TASK-105`). Shipped: a `padding="md"`

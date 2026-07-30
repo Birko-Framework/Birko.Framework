@@ -42,6 +42,13 @@ fork *is* the failure mode this story exists to prevent.
 - A gap may also turn out to be a **framework-wide question** rather than a component fix. It gets its own
   decision task rather than being settled as a side effect of the component change that surfaced it
   (TASK-105 → TASK-106).
+- **Check whether the "open question" is already answered elsewhere in the catalogue before deciding it.**
+  TASK-107 arrived as a three-way policy choice about form participation; the catalogue had settled it a day
+  earlier and applied it to 15 controls, and `b-button` was simply the one left out. Reading the family first
+  turned a design decision into a three-override change.
+- **Where a default is contested, let the consumers decide it.** The right default for `b-button`'s `type`
+  from first principles (native `submit`) was the wrong one for this codebase — one grep found a shipped
+  consumer whose form would have fired two actions on one tap. Survey the call sites before choosing.
 - Coverage lands in `Birko.Web.Playground`'s `backport-smoke.ts` — the framework has no in-tree JS
   unit runner, so the playground build + headless verify is the vehicle. Prefer exporting the pure
   maths so it is assertable without a DOM, then assert the rendered behaviour on top.
@@ -55,6 +62,7 @@ fork *is* the failure mode this story exists to prevent.
 |---|---|---|
 | [[TASK-104]] — small-chart axis polish (tick density, nice scale, latest-value overlay, threshold labels) | `b-chart` | Reps `EPIC-002 / STORY-009 / TASK-092` |
 | [[TASK-105]] — `padding="md"` rung + `--b-card-shadow`; layout/gap rejected | `b-card` | Reps `EPIC-002 / STORY-010 / TASK-089` |
+| [[TASK-107]] — tap-target padding tokens + form participation (`type`) | `b-button` | Reps `EPIC-002 / STORY-010 / TASK-102` |
 
 Spun out of the above, and deliberately **not** decided inside a component task:
 [[TASK-106]] (`tasks/_loose/`) — whether `::part` becomes a catalogue-wide convention or stays the one-off
