@@ -487,6 +487,13 @@ public class Ribbon : ContentControl
         _reveal?.Close();
         var groups = BuildGroupsRow(_revealTabs[_revealSelected], () => _reveal?.Close());
 
+        groups.KeyDown += (_, args) =>
+        {
+            if (args.Key != global::Avalonia.Input.Key.Escape) return;
+            _reveal?.Close();
+            args.Handled = true;
+        };
+
         var surface = new Border
         {
             Child = groups,
@@ -865,8 +872,21 @@ public class Ribbon : ContentControl
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office
         // closes a collapsed group's flyout as soon as a command runs.
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        flyout.Content = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
+        var flyoutContent = BuildGroup(group, RibbonGroupSize.Large, onInvoke: () => flyout.Hide());
+        flyout.Content = flyoutContent;
         button.Flyout = flyout;
+
+        // Escape must be handled ON THE POPUP CONTENT, not only at the ribbon's TopLevel. A popup is its own
+        // visual root, so once focus is inside the flyout the key never reaches the main window — which is
+        // precisely the case a keyboard user is in. The TopLevel handler covers Escape pressed while focus is
+        // still outside; this covers the case that actually matters.
+        flyoutContent.KeyDown += (_, args) =>
+        {
+            if (args.Key != global::Avalonia.Input.Key.Escape) return;
+            flyout.Hide();
+            button.Focus();
+            args.Handled = true;
+        };
 
         // Remembered so Escape can close it. A Flyout does NOT dismiss on Escape by itself — verified, not
         // assumed, after light dismiss failed to deliver both Escape and click-away for the reveal popup.
