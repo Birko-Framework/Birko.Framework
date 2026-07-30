@@ -292,6 +292,11 @@ public class Form : ContentControl
                     if (!field.ReadOnly)
                     {
                         var x = new Button { Content = "✕", Background = null, BorderThickness = new Thickness(0), Padding = new Thickness(2, 0), FontSize = 11 };
+                        // A glyph is not a name: this announced as "✕" with no clue WHICH tag it removes, and
+                        // a tag list renders one per tag. Found sweeping the skin after the ribbon's commands
+                        // turned out to be anonymous (see this project's CLAUDE.md § Accessibility gotchas).
+                        global::Avalonia.Automation.AutomationProperties.SetName(x, $"Remove {value}");
+                        ToolTip.SetTip(x, $"Remove {value}");
                         x.Click += (_, _) => { tags!.Remove(value); Rebuild(); };
                         row.Children.Add(x);
                     }
