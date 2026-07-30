@@ -908,6 +908,27 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void A_collapsed_group_announces_what_it_is_not_just_button()
+    {
+        // The reviewer ran Narrator and heard "button" plus the name — no state. The ExpandCollapse pattern
+        // above was correct and simply not spoken: Narrator voices that state for the control types where it
+        // expects it, and Button is not one of them. So the test that mattered was missing, not the code that
+        // mattered — this asserts what a screen reader is actually GIVEN, in the properties it always reads.
+        var (_, chunk) = CollapsedGroup(out _);
+        var peer = global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(chunk);
+
+        peer.GetLocalizedControlType().Should().Be("collapsed group",
+            "\"button\" tells a screen-reader user nothing about why commands went missing as the window narrowed");
+        global::Avalonia.Automation.AutomationProperties.GetHelpText(chunk)
+            .Should().Contain("Enter", "and the announcement must carry the affordance, not only the state");
+
+        ((global::Avalonia.Automation.Provider.IExpandCollapseProvider)peer).Expand();
+        Dispatcher.UIThread.RunJobs();
+        peer.GetLocalizedControlType().Should().Be("expanded group",
+            "it must not keep saying collapsed while the flyout is open — clients re-read this on focus");
+    }
+
+    [AvaloniaFact]
     public void A_collapsed_group_is_keyboard_reachable_and_parked_variants_are_not()
     {
         // The parked variants sit off-screen but were still FOCUSABLE, so Tab walked through invisible
