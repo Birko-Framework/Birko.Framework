@@ -28,6 +28,11 @@ A follow-up **backport review (2026-07-06)** then asked which of the shipped bac
 replicating to sibling providers or to the parallel Xaml UI family. Its findings became the new,
 actionable stories below (STORY-039/040/041).
 
+A second kind of finding then showed up, which the ledger stories cannot hold: not "the framework is
+missing this", but "the framework has this, a consumer adopted it, and the adoption found what it
+gets wrong". Those live in **STORY-052**, which stays open for the life of the epic — the shipped
+ledgers (STORY-037/038) are done and are not reopened for them.
+
 > **Migration reference:** ⇄ `Consumers/WorkoutTracker/tasks/EPIC-002-birko-backports`
 > (framework stories 008/009 → this epic; STORY-010 stays in Reps).
 
@@ -59,4 +64,6 @@ actionable stories below (STORY-039/040/041).
   (STORY-040).
 - `BMobileAppShell` is discoverable and exercised in the reference surfaces (Playground + Gallery),
   not just shipped as library code (STORY-041).
+- A component gap a consumer hits while adopting the catalogue is fixed **in the component**, with no
+  consumer left on a fork and no consumer-specific branch upstream (STORY-052).
 - Nothing workout-domain-specific leaks upstream.

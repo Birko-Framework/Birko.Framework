@@ -164,6 +164,63 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### `b-card`: two additive options, one refusal, one deferred framework-wide decision (2026-07-30)
+
+Second gap under STORY-052, from Reps adopting `b-card` (framework `TASK-105`). Shipped: a `padding="md"`
+rung (the scale skipped it although `--b-space-md` exists and the card's own header pads with it) and
+`--b-card-shadow` defaulting to `var(--b-shadow-sm)`, so a consumer can flatten one card without
+neutralising `--b-shadow-sm` for everything else in scope. Both additive; Reps has opted into neither and
+measures byte-identical.
+
+The parts worth carrying past the component:
+
+- **A gap can be correctly answered with "no", and the "no" is the deliverable.** A `layout`/`gap`
+  attribute on `b-card` was rejected: a card is chrome, how its contents stack is the contents' business,
+  and the need is not card-specific — the same stack is wanted in three *non-card* Reps surfaces, so a
+  card-scoped answer helps none of them. The bar this repo's backports have met is *things a consumer got
+  wrong or would rediscover the hard way*; a flex column is neither. Recorded with its reasoning in the
+  task so it is not re-proposed as if unexplored.
+- **Don't settle a framework-wide question as a side effect of a component tweak.** The refusal leaves a
+  real complaint standing — "I cannot style into a shadow root" — whose platform answer is `::part`, which
+  today appears in exactly one component (`b-sidebar`). Whether the catalogue commits to it is an API
+  decision (an exposed part is a selector consumers write; renaming it breaks them silently at runtime),
+  so it is filed as **TASK-106** in `tasks/_loose/` next to TASK-059, and no parts were added.
+- **Assert against the live token, not a px literal.** The consumer check compared card padding to a probe
+  carrying `var(--b-space-lg)`. Just as well: it computes to **14px**, not 16px, because the Birko reset
+  sets `html { font-size: var(--b-text-base) }` = 14px, so every `rem` in the token scale resolves against
+  a 14px root. A literal would have failed for the wrong reason — and would have kept passing if the scale
+  were ever rescaled.
+- **A back-compat check is only worth something if the fix-dependent ones can fail.** Removing both changes
+  and re-running took the suite to 126/131: exactly the five fix-dependent checks broke, and the five
+  back-compat ones stayed green. Without that split they would just be restatements of the fix.
+
+### `b-chart` small-chart axis, and a new home for gaps consumers find in the catalogue (2026-07-30)
+
+Reps reported that `b-chart` reads busy at 90–150px — the sizes its Progress surface is entirely made of.
+Fixed in the component (`Birko.Web.Components`, framework `TASK-104`; per-component detail in that repo's
+CLAUDE.md): the y-tick count now follows the plot height (`tickIntervalsForHeight`, capped at 5 so the default
+300px chart is unchanged) or an explicit `yAxis.ticks`; tick values snap to 1/2/2.5/5×10ⁿ (`niceScale`);
+`showLatestValue` is a top-level option instead of something you could only reach by opting into `realTime`.
+
+Three things worth carrying past this component:
+
+- **A "label overlaps X" report is a z-order question before it is a coordinates question.** The write-up
+  named the label's x coordinate, a halo shipped on that reading, and the screenshot of the real surface then
+  showed a bar painted straight *through* the text — the label was emitted with its line, before the bars.
+  Placement was never wrong.
+- **Only the real surface found it.** The playground proved the component correct and the smoke was green;
+  the defect needed a bar tall enough to reach the threshold, in the consumer's own data. Finish verification
+  in the surface that reported the problem, not in the harness.
+- **Decouple what varies for different reasons.** Deriving the *band* from the height-derived tick count made
+  a 90px chart round an 11 357 peak up to 20 000 and draw its bars at 57% of an empty plot. The band is now
+  rounded at a fixed density and only the labels thin out, so the same data lands on the same band at every
+  size — same shape as the ribbon lesson that the scaling decision must not read the applied layout.
+
+Tracking: **STORY-052** under EPIC-016 is the new home for gaps a consumer hits while *adopting* an existing
+component — distinct from STORY-037/038, which are closed ledgers of capabilities moved upstream. The two have
+opposite acceptance tests: a backport is done when the consumer can delete its copy, an adoption gap is done
+when no consumer needs a fork or a special case.
+
 ### `docs/specs/` exists: 25 capability specs harvested from code, and the 865 findings that fell out (2026-07-30)
 
 `docs/specs/` now holds **25 cross-cutting capability specs** — 736 SHALL requirements and 2,426
