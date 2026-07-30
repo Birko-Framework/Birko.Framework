@@ -1037,6 +1037,38 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Promotion_lands_focus_in_the_promoted_group_not_at_the_start_of_the_row()
+    {
+        // Reported by hand: maximising with Export's flyout open closed it correctly, but focus reappeared on
+        // "Copy" — Clipboard's command, at the far end of the row. My first version focused the row's first
+        // button, which teleports the user out of the group they were working in. In a control whose whole
+        // premise is that commands stay where you remember them, that is a real defect, not a nicety.
+        var ribbon = Show(BuildCrowded(), out var window, 320);
+        var chunk = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.Flyout is not null)
+            .Last(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
+        var group = AccessibleName(chunk);
+        group.Should().NotBeNullOrWhiteSpace("the chunk names its group, and the assertion below relies on it");
+
+        var flyout = (Flyout)chunk.Flyout!;
+        flyout.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+        var inFlyout = ((Visual)flyout.Content!).GetVisualDescendants().OfType<Button>().First();
+        inFlyout.Focus().Should().BeTrue("focus must be INSIDE the flyout, or there is nothing to relocate");
+        Dispatcher.UIThread.RunJobs();
+
+        window.Width = 1400;
+        window.Measure(new Size(1400, 200));
+        window.Arrange(new Rect(0, 0, 1400, 200));
+        Dispatcher.UIThread.RunJobs();
+
+        // Every command in this fixture is named "{group} A" / "{group} B", so the group is readable off the
+        // focused command's own name.
+        FocusedName(window).Should().StartWith(group!,
+            "focus belongs to the group that was promoted, not to whichever group happens to be first");
+    }
+
+    [AvaloniaFact]
     public void Arrow_keys_move_between_the_commands_in_a_collapsed_groups_flyout()
     {
         // The reviewer's step 5: reach a collapsed group's commands by keyboard alone. Escape worked, but
