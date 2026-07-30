@@ -155,6 +155,23 @@ that change is reverted._
   that you could not see where you were and that activating a tab lost your place. Same species as the rest
   of this story — the mechanism was tested, the outcome was not.
 
+- **2026-07-30 — Narrator said "button" and the group's name, and nothing about the state.** The
+  `IExpandCollapseProvider` peer was correct all along (the Win32 bridge does expose the pattern — checked
+  rather than assumed); it simply was not *spoken*. Narrator voices expand/collapse state for the control
+  types where it expects one — combo box, tree item, menu item — and a plain `Button` is not one of them
+  however many patterns it advertises. Fixed by putting the state where a screen reader always looks:
+  **`LocalizedControlType`** now returns "collapsed group" / "expanded group" (dynamic, because the fixed
+  wording would keep saying "collapsed" with the flyout open), and **`HelpText`** carries the affordance
+  ("Press Enter to show this group's commands"). The pattern stays — it is the correct UIA contract and
+  other tools read it.
+
+  The instructive part: the existing automation test asserted the peer's `ExpandCollapseState` and was green
+  throughout, because the peer was right. Nothing tested what a screen reader is actually **given**. That is
+  now the *fourth* defect in this story of exactly one shape — mechanism tested, outcome not.
+
+  Still unverified by me: whether Narrator now speaks it. There is no headless substitute, so the human step
+  stands.
+
   Scoping note: the focus ring is on the **ribbon's** buttons only. `Buttons.axaml` having no focus visual
   affects every button in every consumer, which is a broader visual change deserving its own task.
 
