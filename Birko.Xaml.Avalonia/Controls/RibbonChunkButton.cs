@@ -44,21 +44,20 @@ internal sealed class RibbonChunkButton : Button
         }
 
         /// <summary>
-        /// What Narrator actually speaks in place of "button". The reviewer heard exactly that — "button"
-        /// and the name — because the <see cref="IExpandCollapseProvider"/> pattern alone was not enough:
-        /// Narrator voices expand/collapse state for the control types where it expects it (combo box, tree
-        /// item, menu item), and a plain <b>Button</b> is not one of them, whatever patterns it advertises.
-        /// UIA's <c>LocalizedControlType</c> is the supported way to say what a control really is, so the
-        /// state travels in the thing Narrator is guaranteed to read.
+        /// What a screen reader speaks in place of "button" — a ribbon <b>group</b>, which is what this
+        /// control stands in for. The <i>state</i> is deliberately not in here: it belongs to
+        /// <see cref="ExpandCollapseState"/> below, which Narrator does read, and which unlike this property
+        /// raises a change notification when it flips.
         /// </summary>
         /// <remarks>
-        /// Deliberately dynamic rather than the fixed string "collapsed group". A chunk button only exists
-        /// while its group is collapsed, so the static wording would be truthful about the control — but it
-        /// would then keep saying "collapsed" with the flyout open. Clients re-read this on focus, and focus
-        /// returns to the chunk when its flyout closes, so the announcement matches what is on screen.
+        /// This said "collapsed group" / "expanded group" for one build, on the theory that Narrator ignores
+        /// expand/collapse on a plain <c>Button</c>. That was wrong, and instructively so: it was inferred
+        /// from a report about the ribbon's <i>collapse chevron</i>, which announces only "button" and its
+        /// name because it has no pattern at all. The chunk button's pattern was being spoken the whole time,
+        /// so wording the state in here as well made Narrator say it twice ("Export, collapsed group,
+        /// collapsed"). One fact, one owner.
         /// </remarks>
-        protected override string GetLocalizedControlTypeCore() =>
-            _owner.IsFlyoutOpen ? "expanded group" : "collapsed group";
+        protected override string GetLocalizedControlTypeCore() => "group";
 
         public ExpandCollapseState ExpandCollapseState =>
             _owner.IsFlyoutOpen ? ExpandCollapseState.Expanded : ExpandCollapseState.Collapsed;
