@@ -112,11 +112,19 @@ failed when written, which is why the criterion had stayed unticked. Both fixes 
 - [ ] Reopen the flyout and press `Escape`. Expected: it closes and focus returns to the chunk button.
 - [ ] With the flyout **open**, drag the window wider until the group would be promoted. Expected: the
       flyout closes rather than hovering over the now-expanded group.
-- [ ] Keyboard-only pass: from the tab strip, `Tab`/arrow into the groups row and reach the collapsed
+- [~] Keyboard-only pass: from the tab strip, `Tab`/arrow into the groups row and reach the collapsed
       group's commands **without touching the mouse**. This is the criterion that matters most — if it
       fails, narrowing the window removes commands from keyboard users specifically.
-- [ ] Screen reader (Narrator on Windows) — focus the chunk button. Expected: the group's name and its
-      collapsed/expandable state are announced, not just "button".
+      **Partly confirmed 2026-07-30:** Tab reaches the tab strip, activates a tab, walks into the groups row
+      and moves between commands, and reaches a collapsed group's chunk button (verified with Narrator on
+      "Export"). Deliberately **not ticked**: opening that chunk with `Enter` and reaching the commands
+      *inside its flyout* by keyboard alone has not been reported, and that is the half the criterion is
+      actually about. The three defects fixed on the way (invisible focus, focus lost on tab activation, an
+      unnameable command) are each covered by a mutation-checked test.
+- [x] Screen reader (Narrator on Windows) — focus the chunk button. Expected: the group's name and its
+      collapsed/expandable state are announced, not just "button". **Confirmed 2026-07-30** — "Export, group,
+      collapsed", and the commands announce their own labels ("Cut button", "Paste button"). Took four
+      rounds and found the story's worst defect: no ribbon button had an accessible name at all.
 - [ ] `Birko.Web.Playground` — repeat the click, `Escape`, keyboard-only and screen-reader passes in the
       browser, and compare the flyout's rendering against the Avalonia gallery for parity.
 
