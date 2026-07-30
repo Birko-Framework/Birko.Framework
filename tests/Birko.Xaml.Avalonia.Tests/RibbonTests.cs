@@ -5,6 +5,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Birko.Xaml.Avalonia.Controls;
@@ -1010,6 +1011,32 @@ public class RibbonTests
         Dispatcher.UIThread.RunJobs();
 
         flyout.IsOpen.Should().BeFalse("Escape from inside the flyout closes it");
+    }
+
+    [AvaloniaFact]
+    public void A_focused_ribbon_button_is_visibly_focused_without_reflowing_the_row()
+    {
+        // The Avalonia skin has no focus visual on Button at all (only Inputs.axaml styles :focus), so
+        // keyboard focus was invisible on every ribbon command -- which is why a keyboard pass looked like
+        // Tab was stuck on the theme buttons. Reachable but invisible is a WCAG 2.4.7 failure, not a polish
+        // item. Also asserts the ring cannot reflow the row, since this row is measured for scaling.
+        var ribbon = Show(Build(out _));
+        // The parked variants also contain a "Cut" button and are DISABLED, so they cannot take focus —
+        // picking one silently made this test assert nothing. Choose the one on display.
+        var cut = ribbon.GetVisualDescendants().OfType<Button>()
+            .Where(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Cut"))
+            .First(b => b.TranslatePoint(default, ribbon) is { X: > -1000 });
+
+        var restingBrush = cut.BorderBrush;
+        double restingWidth = cut.Bounds.Width;
+
+        cut.Focus().Should().BeTrue("the shown command must be focusable at all");
+        Dispatcher.UIThread.RunJobs();
+
+        cut.BorderBrush.Should().NotBeSameAs(restingBrush, "focus must be visible, not just present");
+        cut.BorderBrush.Should().NotBe(Brushes.Transparent);
+        cut.Bounds.Width.Should().BeApproximately(restingWidth, 0.5,
+            "only the brush changes — a focus ring that resized the button would reflow the scaled row");
     }
 
     [AvaloniaFact]
