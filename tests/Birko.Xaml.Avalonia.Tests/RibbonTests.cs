@@ -917,15 +917,18 @@ public class RibbonTests
         var (_, chunk) = CollapsedGroup(out _);
         var peer = global::Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(chunk);
 
-        peer.GetLocalizedControlType().Should().Be("collapsed group",
+        peer.GetLocalizedControlType().Should().Be("group",
             "\"button\" tells a screen-reader user nothing about why commands went missing as the window narrowed");
+        peer.GetLocalizedControlType().Should().NotContain("collaps",
+            "the state belongs to the ExpandCollapse pattern, which Narrator reads — wording it here too made "
+            + "Narrator say it twice (\"Export, collapsed group, collapsed\")");
         global::Avalonia.Automation.AutomationProperties.GetHelpText(chunk)
             .Should().Contain("Enter", "and the announcement must carry the affordance, not only the state");
 
         ((global::Avalonia.Automation.Provider.IExpandCollapseProvider)peer).Expand();
         Dispatcher.UIThread.RunJobs();
-        peer.GetLocalizedControlType().Should().Be("expanded group",
-            "it must not keep saying collapsed while the flyout is open — clients re-read this on focus");
+        peer.GetLocalizedControlType().Should().Be("group",
+            "what the control IS does not change when its flyout opens — only its state does");
     }
 
     [AvaloniaFact]
