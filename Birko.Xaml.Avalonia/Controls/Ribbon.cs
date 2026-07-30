@@ -932,6 +932,11 @@ public class Ribbon : ContentControl
         // screen reader would announce "button" and nothing more; RibbonChunkButton's peer adds the
         // collapsed/expandable state alongside it.
         global::Avalonia.Automation.AutomationProperties.SetName(button, group.Label);
+        // Narrator reads HelpText after the name and control type, so this is where the *affordance* goes.
+        // Without it the announcement says what the thing is but not that there is anything to do with it —
+        // and a collapsed group is the only route to its commands, since Birko has no KeyTips yet.
+        global::Avalonia.Automation.AutomationProperties.SetHelpText(
+            button, "Press Enter to show this group's commands.");
         AddFocusRing(button);
 
         // Declared before the content so the items can dismiss the flyout they were invoked from — Office

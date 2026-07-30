@@ -43,6 +43,23 @@ internal sealed class RibbonChunkButton : Button
             }
         }
 
+        /// <summary>
+        /// What Narrator actually speaks in place of "button". The reviewer heard exactly that — "button"
+        /// and the name — because the <see cref="IExpandCollapseProvider"/> pattern alone was not enough:
+        /// Narrator voices expand/collapse state for the control types where it expects it (combo box, tree
+        /// item, menu item), and a plain <b>Button</b> is not one of them, whatever patterns it advertises.
+        /// UIA's <c>LocalizedControlType</c> is the supported way to say what a control really is, so the
+        /// state travels in the thing Narrator is guaranteed to read.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately dynamic rather than the fixed string "collapsed group". A chunk button only exists
+        /// while its group is collapsed, so the static wording would be truthful about the control — but it
+        /// would then keep saying "collapsed" with the flyout open. Clients re-read this on focus, and focus
+        /// returns to the chunk when its flyout closes, so the announcement matches what is on screen.
+        /// </remarks>
+        protected override string GetLocalizedControlTypeCore() =>
+            _owner.IsFlyoutOpen ? "expanded group" : "collapsed group";
+
         public ExpandCollapseState ExpandCollapseState =>
             _owner.IsFlyoutOpen ? ExpandCollapseState.Expanded : ExpandCollapseState.Collapsed;
 
