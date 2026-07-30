@@ -142,6 +142,7 @@ public class Ribbon : ContentControl
             };
             tabButton.Bind(ForegroundProperty, tabButton.GetResourceObservable(
                 i == selected ? "BColorPrimaryBrush" : "BTextSecondaryBrush"));
+            Name(tabButton, tabs[i].Label);
             // Clicking the already-active tab toggles collapse (Office-style). Otherwise: pinned selects
             // and expands for good; UNPINNED selects and reveals only temporarily, leaving IsCollapsed
             // alone — "Show Tabs" is a mode you leave by pinning, not by clicking a tab (TASK-101).
@@ -166,6 +167,7 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon",
         };
         chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
+        Name(chevron, IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon");
         chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
         AddFocusRing(chevron);
 
@@ -183,6 +185,7 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = IsPinned ? "Unpin the ribbon" : "Pin the ribbon open",
         };
         pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
+        Name(pin, IsPinned ? "Unpin the ribbon" : "Pin the ribbon open");
         pin.Click += (_, _) => IsPinned = !IsPinned;
         AddFocusRing(pin);
 
@@ -296,6 +299,7 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = "Open the ribbon menu",
         };
         burger.Bind(ForegroundProperty, burger.GetResourceObservable("BTextBrush"));
+        Name(burger, "Open the ribbon menu");
 
         var active = new TextBlock
         {
@@ -690,6 +694,28 @@ public class Ribbon : ContentControl
     /// a focus ring that shifts layout would be its own bug, and this row is measured for scaling.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Give <paramref name="control"/> an accessible name, and hide a decorative glyph from assistive tech.
+    /// </summary>
+    /// <remarks>
+    /// Every focusable thing in the ribbon needs this <b>explicitly</b>. Avalonia derives a button's name
+    /// from its content only when that content is a string; a ribbon item's content is a panel holding an
+    /// icon and a label, so it derived nothing and a screen reader announced the bare control type — the
+    /// reviewer heard commands as "ribbon action group button" with no idea which command they were on.
+    /// An unnamed command is unusable, not merely under-described.
+    /// <para>
+    /// The icon is marked <c>Raw</c> so it drops out of the accessibility tree: these glyphs are emoji, and
+    /// "clipboard Paste" is noise at best. The name carries the meaning; the glyph is decoration.
+    /// </para>
+    /// </remarks>
+    private static void Name(Control control, string? name, Control? decorativeGlyph = null)
+    {
+        if (!string.IsNullOrWhiteSpace(name)) global::Avalonia.Automation.AutomationProperties.SetName(control, name);
+        if (decorativeGlyph is not null)
+            global::Avalonia.Automation.AutomationProperties.SetAccessibilityView(
+                decorativeGlyph, global::Avalonia.Automation.AccessibilityView.Raw);
+    }
+
     /// <summary>Whether keyboard focus is currently on this ribbon or inside it.</summary>
     private bool ContainsFocus()
     {
@@ -743,6 +769,8 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = tip,
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextSecondaryBrush"));
+        // The tip doubles as the accessible name — a bare "◂" announces as the glyph or as nothing at all.
+        Name(button, tip);
         return button;
     }
 
@@ -844,6 +872,9 @@ public class Ribbon : ContentControl
         icon.Bind(TextBlock.FontSizeProperty, button.GetResourceObservable(
             size == RibbonGroupSize.Large ? "BRibbonIconLarge" : "BRibbonIconSmall"));
 
+        // Before the early returns below, so no variant can be left unnamed by a later edit.
+        Name(button, item.Label, icon);
+
         if (size == RibbonGroupSize.Small)
         {
             // Icon only. The label is not drawn, so the tooltip has to carry the name — an icon-only
@@ -931,7 +962,7 @@ public class Ribbon : ContentControl
         // The accessible name is the GROUP's name. A compact chunk draws no label at all, so without this a
         // screen reader would announce "button" and nothing more; RibbonChunkButton's peer adds the
         // collapsed/expandable state alongside it.
-        global::Avalonia.Automation.AutomationProperties.SetName(button, group.Label);
+        Name(button, group.Label, icon);
         // Narrator reads HelpText after the name and control type, so this is where the *affordance* goes.
         // Without it the announcement says what the thing is but not that there is anything to do with it —
         // and a collapsed group is the only route to its commands, since Birko has no KeyTips yet.
