@@ -215,6 +215,24 @@ that change is reverted._
   Scoping note: the focus ring is on the **ribbon's** buttons only. `Buttons.axaml` having no focus visual
   affects every button in every consumer, which is a broader visual change deserving its own task.
 
+- **2026-07-30 — one more defect, found by maximising rather than dragging.** With Export's flyout open, the
+  reviewer maximised the window: the flyout closed correctly, but focus reappeared on **Clipboard's** first
+  command at the opposite end of the row. The close-on-promotion fix focused the first navigable button in the
+  panel, which teleports the user out of the group they were working in — unacceptable in a control whose whole
+  premise is that commands stay where you remember them. Focus now lands in the group that was promoted.
+
+  It took instrumenting to find, and that is the point worth keeping: the resolution compared the chunk
+  `Button` against each group's per-variant control **by reference**, but those controls are `Border` wrappers,
+  so the button is a *descendant*, never the control itself. Nothing matched, and the code fell back to the
+  row's first button **silently**, because that fallback is a legitimate path when the chunk cannot be
+  resolved. Two rounds of reasoning failed to spot it; one diagnostic printing `chunkParent=Border` settled it.
+  A silent fallback on an unmatched lookup hides its own bug — prefer failing loudly, or at least assert the
+  match in a test. Mutation-checked, and the mutant reproduces the reviewer's exact symptom.
+
+  Also confirmed while there: un-maximising does **not** re-open the flyout, and that is deliberate. Closing is
+  one-way — the group re-collapses and its chunk button returns, closed. Office behaves the same way; a flyout
+  is a transient overlay, and re-opening one because the window changed size would be a surprise.
+
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-100` — leave empty until then._
