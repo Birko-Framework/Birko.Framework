@@ -124,6 +124,40 @@ Named `ContentControl` themes (`BCard`/`BBadge`/`BTag`) are applied via `Theme="
   hysteresis you get a feedback loop where the same window width resolves differently depending on drag
   direction. The ribbon's groups row ended up with no scroller at all for exactly this reason.
 
+## Accessibility gotchas (learned the hard way, TASK-100)
+
+Four defects in one review pass, all in controls whose *behaviour* was already correct and tested. Every one
+of them made the ribbon unusable — not merely imperfect — for keyboard or screen-reader users.
+
+- **A button whose content is a panel has NO accessible name.** Avalonia derives one from `Content` only when
+  it is a string; anything else falls through to `Content.ToString()`, so assistive tech is handed
+  `"Avalonia.Controls.StackPanel"` — or, for an icon-only button, the bare glyph. Every ribbon command was
+  anonymous this way. **Set `AutomationProperties.SetName` explicitly on every focusable control**, and route
+  it through one helper (`Ribbon.Describe`) so a new button cannot quietly skip it. A `ToolTip` is not a
+  substitute in general — name it as well as tipping it.
+  - A test asking only that the name be **non-empty is vacuous** for exactly this reason: the `ToString()`
+    fallback satisfies it. Assert the name is a string the *user* would recognise.
+  - Mark decorative glyphs `AutomationProperties.AccessibilityView = Raw`, or an emoji gets read out beside
+    the name it decorates.
+- **There is no focus visual on `Button` anywhere in this skin** (only `Inputs.axaml` styles `:focus`), so
+  keyboard focus is invisible in every consumer app — a WCAG 2.4.7 failure, and it faked two separate "Tab is
+  broken" bug reports. Tracked as **TASK-103**; the ribbon has a scoped ring in the meantime. If you add a
+  focus indicator, **keep its layout footprint constant** (change the brush, not the thickness) — a ring that
+  resizes its control reflows the row, and for the ribbon that re-triggers scaling.
+- **Rebuilding a tree destroys focus.** `Ribbon.Rebuild()` replaces its whole `Content`, so the focused
+  control is disposed and focus falls back to the window root: activating a tab by keyboard threw the user
+  out of the ribbon entirely. Note whether focus was inside before tearing down (`TopLevel.FocusManager`)
+  and restore it afterwards, posted at `DispatcherPriority.Loaded` since the new tree is not yet laid out.
+- **Don't say the state twice.** A `Button` carrying `IExpandCollapseProvider` *is* announced with its state
+  by Narrator, so also wording "collapsed" into `GetLocalizedControlTypeCore()` produced "Export, collapsed
+  group, collapsed". `LocalizedControlType` says what the control **is** ("group"); the pattern owns the
+  **state**, and unlike the property it raises a change notification. Verify against a real screen reader
+  before theorising about what one reads — the theory that led here was inferred from the wrong control.
+
+`b-ribbon` had all of this right already (`aria-label` on every item, `aria-hidden` on icons, a focus ring on
+tabs and items). When porting a web component, **port its ARIA discipline too** — the XAML equivalents are
+`AutomationProperties.Name` / `AccessibilityView.Raw` / an automation peer, and none of them are automatic.
+
 ## Testing
 
 `Birko.Xaml.Avalonia.Tests` (Avalonia.Headless.XUnit, net8.0): loads the real `Tokens.axaml`,
