@@ -142,7 +142,7 @@ public class Ribbon : ContentControl
             };
             tabButton.Bind(ForegroundProperty, tabButton.GetResourceObservable(
                 i == selected ? "BColorPrimaryBrush" : "BTextSecondaryBrush"));
-            Name(tabButton, tabs[i].Label);
+            Describe(tabButton, tabs[i].Label);
             // Clicking the already-active tab toggles collapse (Office-style). Otherwise: pinned selects
             // and expands for good; UNPINNED selects and reveals only temporarily, leaving IsCollapsed
             // alone — "Show Tabs" is a mode you leave by pinning, not by clicking a tab (TASK-101).
@@ -167,7 +167,7 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon",
         };
         chevron.Bind(ForegroundProperty, chevron.GetResourceObservable("BTextSecondaryBrush"));
-        Name(chevron, IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon");
+        Describe(chevron, IsCollapsed ? "Expand the ribbon" : "Collapse the ribbon");
         chevron.Click += (_, _) => IsCollapsed = !IsCollapsed;
         AddFocusRing(chevron);
 
@@ -185,7 +185,7 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = IsPinned ? "Unpin the ribbon" : "Pin the ribbon open",
         };
         pin.Bind(ForegroundProperty, pin.GetResourceObservable("BTextSecondaryBrush"));
-        Name(pin, IsPinned ? "Unpin the ribbon" : "Pin the ribbon open");
+        Describe(pin, IsPinned ? "Unpin the ribbon" : "Pin the ribbon open");
         pin.Click += (_, _) => IsPinned = !IsPinned;
         AddFocusRing(pin);
 
@@ -299,7 +299,7 @@ public class Ribbon : ContentControl
             [ToolTip.TipProperty] = "Open the ribbon menu",
         };
         burger.Bind(ForegroundProperty, burger.GetResourceObservable("BTextBrush"));
-        Name(burger, "Open the ribbon menu");
+        Describe(burger, "Open the ribbon menu");
 
         var active = new TextBlock
         {
@@ -708,7 +708,7 @@ public class Ribbon : ContentControl
     /// "clipboard Paste" is noise at best. The name carries the meaning; the glyph is decoration.
     /// </para>
     /// </remarks>
-    private static void Name(Control control, string? name, Control? decorativeGlyph = null)
+    private static void Describe(Control control, string? name, Control? decorativeGlyph = null)
     {
         if (!string.IsNullOrWhiteSpace(name)) global::Avalonia.Automation.AutomationProperties.SetName(control, name);
         if (decorativeGlyph is not null)
@@ -770,7 +770,7 @@ public class Ribbon : ContentControl
         };
         button.Bind(ForegroundProperty, button.GetResourceObservable("BTextSecondaryBrush"));
         // The tip doubles as the accessible name — a bare "◂" announces as the glyph or as nothing at all.
-        Name(button, tip);
+        Describe(button, tip);
         return button;
     }
 
@@ -873,7 +873,7 @@ public class Ribbon : ContentControl
             size == RibbonGroupSize.Large ? "BRibbonIconLarge" : "BRibbonIconSmall"));
 
         // Before the early returns below, so no variant can be left unnamed by a later edit.
-        Name(button, item.Label, icon);
+        Describe(button, item.Label, icon);
 
         if (size == RibbonGroupSize.Small)
         {
@@ -962,7 +962,7 @@ public class Ribbon : ContentControl
         // The accessible name is the GROUP's name. A compact chunk draws no label at all, so without this a
         // screen reader would announce "button" and nothing more; RibbonChunkButton's peer adds the
         // collapsed/expandable state alongside it.
-        Name(button, group.Label, icon);
+        Describe(button, group.Label, icon);
         // Narrator reads HelpText after the name and control type, so this is where the *affordance* goes.
         // Without it the announcement says what the thing is but not that there is anything to do with it —
         // and a collapsed group is the only route to its commands, since Birko has no KeyTips yet.
