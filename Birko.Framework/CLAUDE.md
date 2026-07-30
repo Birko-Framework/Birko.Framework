@@ -164,6 +164,51 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### `docs/specs/` exists: 25 capability specs harvested from code, and the 865 findings that fell out (2026-07-30)
+
+`docs/specs/` now holds **25 cross-cutting capability specs** — 736 SHALL requirements and 2,426
+Given/When/Then scenarios, generated from 648 source files at code HEAD `f3ac675`. **Spec bodies are
+generated, not written**: `/specs regen` overwrites them, so a wrong statement is fixed by fixing the code or
+the map, never by editing the `.md`. `docs/specs/.map.yml` (capability → source globs) is the only
+human-owned file in that directory. Scope is deliberately **aggregator-only** — cross-cutting contracts
+spanning several `Birko.*` sub-repos, with globs reaching out via `../Birko.X/...`; per-sub-repo
+`docs/specs/` trees remain follow-up work, and 64 single-repo projects are named in the map's explicit
+out-of-scope block so their absence is a decision rather than a silent gap.
+
+**Areas include their backend implementors, not just the interface**, wherever the contract's whole point is
+cross-backend conformance. That is a direct consequence of this family's bug history: the empty-`IN` and
+dropped-ElasticSearch-clause defects were per-provider *divergence*, which a contract-only spec cannot see.
+The uncapped sweep vindicated it — `RefreshAsync` validates its view name on ElasticSearch and silently
+no-ops on the other four backends; MySQL inherits a `CREATE INDEX IF NOT EXISTS` and a table-less
+`DROP INDEX` that it does not accept.
+
+**Specs record actuality, defects included — which is what makes them find things.** Harvesting turned up
+**865 findings (57 high)**, tracked as `tasks/EPIC-014-code-review-remediation/STORY-051` with `SH-*` ids
+(distinct provenance from the `CR-*` audit, so nothing renumbers). Confirmed by hand: `Pbkdf2PasswordHasher.Verify`
+returns **`true` for any password** against a `PBKDF2-SHA512:600000::` column (empty string is valid Base64,
+so the CR-M233 guard never fires and `FixedTimeEquals` compares two zero-length spans); a null or
+silently-dropped filter renders **`DELETE FROM "T"`**; `long`/`double`/`float`/`short`/`byte[]` properties map
+to **no column and never persist** (`decimal` is mapped, so money escapes); the tenant write guard compares a
+**caller-settable** `item.TenantGuid` instead of the stored row; and ORDER BY keys are interpolated verbatim,
+reachable via `OrderBy<T>.ByName(string)`. Note the ordering constraint this creates: **the specs currently
+document these defects as shipped behaviour**, so any fix must be followed by a `/specs regen` of its area
+with the spec diff reviewed — that diff is the fix's evidence.
+
+Three rules worth keeping beyond this exercise:
+- **A spec that silently picks a side is wrong.** `store-crud-contract` specced `Destroy()` with its
+  destructive implementation meaning while the interface doc says "releases all resources" — but the
+  *disagreement* was the defect, and recording only one side hid it. Where code and its own documentation
+  contradict each other, spec both.
+- **Verify before filing.** Of the 15 high findings checked by hand, 12 held exactly and **3 needed their
+  scope corrected** — one named the wrong trigger entirely (the `IsNegated` claim: the unresolved-field
+  branch returns *before* the negation, so only the non-string path degrades to match-all). Filing all 57
+  unverified would have put three misleading tickets into EPIC-014.
+- **Structured-output bounds silently shape results, in both directions.** A `maxItems: 8` on the
+  finding array made 22 of 25 areas return exactly 8 — hiding roughly 90% of what was found, and looking like
+  data rather than a ceiling. Later a 600-character per-item limit made one area fail its schema five times
+  and be dropped entirely. A bound that is too small does not truncate a list, it loses the agent; make
+  agents report exhaustion explicitly and treat a suspiciously round number as a cap, not a count.
+
 ### Ribbon overflow: the ribbon body scales, it does not scroll — delivered in both skins (2026-07-29)
 
 A field report — on a narrow window the ribbon shows fewer commands with no way to reach the rest — turned
