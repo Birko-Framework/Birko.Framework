@@ -3,8 +3,10 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Birko.Xaml.Core.Ribbon;
 
@@ -113,6 +115,9 @@ public class Ribbon : ContentControl
 
     private void Rebuild()
     {
+        // Captured before the tree is discarded — see the focus restore below.
+        bool focusWasInside = ContainsFocus();
+
         var tabs = Tabs?.ToList() ?? new List<RibbonTab>();
         int selected = tabs.Count == 0 ? -1 : System.Math.Clamp(SelectedIndex, 0, tabs.Count - 1);
 
@@ -206,6 +211,17 @@ public class Ribbon : ContentControl
         }
 
         if (IsCollapsed || !IsPinned) _groupsPanel = null; // no in-flow groups row, so report no variants
+
+        // Rebuild() discards the whole tree, so the focused control is destroyed with it and focus falls back
+        // to the window root. Activating a tab BY KEYBOARD therefore threw focus out of the ribbon entirely:
+        // the next Tab restarted from the top of the window, and the groups the tab had just opened were
+        // unreachable. Put focus back on the tab that was activated so Tab continues from there, exactly as it
+        // does after a mouse click. Posted at Loaded priority — the new tree is not laid out yet.
+        if (focusWasInside && selected >= 0 && selected < tabButtons.Children.Count)
+        {
+            var restore = tabButtons.Children[selected];
+            Dispatcher.UIThread.Post(() => restore.Focus(NavigationMethod.Tab), DispatcherPriority.Loaded);
+        }
 
         var chrome = new Border { Child = body, BorderThickness = new Thickness(0, 0, 0, 1) };
         chrome.Bind(Border.BackgroundProperty, chrome.GetResourceObservable("BBgBrush"));
@@ -674,6 +690,13 @@ public class Ribbon : ContentControl
     /// a focus ring that shifts layout would be its own bug, and this row is measured for scaling.
     /// </para>
     /// </remarks>
+    /// <summary>Whether keyboard focus is currently on this ribbon or inside it.</summary>
+    private bool ContainsFocus()
+    {
+        if (TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not Visual focused) return false;
+        return ReferenceEquals(focused, this) || focused.GetVisualAncestors().Contains(this);
+    }
+
     /// <summary>Last-resort focus colour, for when no theme is merged. Matches the light theme's primary.</summary>
     private static readonly IBrush FocusRingFallback = new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xEB));
 
@@ -702,6 +725,10 @@ public class Ribbon : ContentControl
     {
         chevron.Opacity = active ? 1 : 0;
         chevron.IsHitTestVisible = active;
+        // IsEnabled too, or the invisible-but-reserved chevron stays in the TAB ORDER — a keyboard user lands
+        // on a button they cannot see and whose activation does nothing. Opacity and hit-testing hide a control
+        // from the MOUSE, not from Tab; the same defect as the parked size variants.
+        chevron.IsEnabled = active;
     }
 
     private Button ScrollChevron(string glyph, string tip)
