@@ -943,6 +943,76 @@ public class RibbonTests
     }
 
     [AvaloniaFact]
+    public void Tab_walks_through_the_ribbon_and_skips_the_parked_variants()
+    {
+        // Asserts the ORDER a keyboard user actually experiences, not just that controls are focusable.
+        // (The gallery appeared to fail this; the cause was its TabControl defaulting to TabNavigation=Once,
+        // which skips tab content entirely — a host-configuration issue, not the ribbon's. Worth pinning the
+        // ribbon's own behaviour so the two can be told apart next time.)
+        RibbonItem I(string l) => new() { Id = l, Label = l, Icon = "●" };
+        var ribbon = new Ribbon
+        {
+            Tabs = new[]
+            {
+                new RibbonTab { Id = "home", Label = "Home", Groups = new[]
+                    { new RibbonGroup { Label = "Clipboard", Items = new[] { I("Cut"), I("Copy") } } } },
+            },
+        };
+
+        var before = new Button { Content = "Before" };
+        var after = new Button { Content = "After" };
+        var page = new StackPanel();
+        page.Children.Add(before);
+        page.Children.Add(ribbon);
+        page.Children.Add(after);
+
+        var window = new Window { Content = page, Width = 900, Height = 300 };
+        window.Show();
+        window.Measure(new Size(900, 300));
+        window.Arrange(new Rect(0, 0, 900, 300));
+        Dispatcher.UIThread.RunJobs();
+
+        var order = new List<string>();
+        IInputElement? cur = before;
+        for (int i = 0; i < 8; i++)
+        {
+            cur = KeyboardNavigationHandler.GetNext(cur!, NavigationDirection.Next);
+            if (cur is not Button b) break;
+            order.Add(string.Concat(b.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text)));
+            if (ReferenceEquals(cur, after)) break;
+        }
+
+        order.Should().ContainInOrder(new[] { "Home", "●Cut", "●Copy" },
+            "Tab reaches the tab strip, then the group's commands, in reading order");
+        order.Should().EndWith(new[] { "After" }, "and leaves the ribbon rather than trapping focus");
+    }
+
+    [AvaloniaFact]
+    public void Escape_inside_a_collapsed_groups_flyout_closes_it()
+    {
+        // The case the earlier Escape test missed: a popup is its own visual root, so once focus is INSIDE
+        // the flyout the key never reaches the ribbon's TopLevel handler. The previous test raised Escape at
+        // the main window with focus outside, so it passed while the path a keyboard user takes was dead.
+        var (_, chunk) = CollapsedGroup(out _);
+        var flyout = (Flyout)chunk.Flyout!;
+
+        flyout.ShowAt(chunk);
+        Dispatcher.UIThread.RunJobs();
+        flyout.IsOpen.Should().BeTrue("precondition");
+
+        // Raised on the flyout's own content, which is where the key actually arrives.
+        var content = (Control)flyout.Content!;
+        content.RaiseEvent(new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.Escape,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        flyout.IsOpen.Should().BeFalse("Escape from inside the flyout closes it");
+    }
+
+    [AvaloniaFact]
     public void Capture_ribbon_screenshot()
     {
         Application.Current!.RequestedThemeVariant = BirkoThemeVariants.Light;
