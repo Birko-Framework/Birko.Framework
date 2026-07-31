@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Birko.Data.Tenant.Models;
 using Birko.EventBus;
@@ -21,6 +22,58 @@ public class TenantEventScopeAccessorTests
     }
 
     private static EventContext Ctx(Guid? tenant) => EventContext.From(new Thing(), tenant);
+
+    /// <summary>
+    /// SH-H054. An outbox processor / MQ consumer draining events for many tenants plausibly runs the whole
+    /// drain inside <c>WithAllTenants</c>, and this accessor then dispatches each tenant-scoped event
+    /// through <c>WithTenantAsync</c> — producing the nested shape exactly. Before the fix the inner scope
+    /// did not clear <c>IsAllTenantsScope</c>, so a tenant-scoped handler's reads still spanned every
+    /// tenant while its writes were correctly narrowed.
+    /// </summary>
+    [Fact]
+    public async Task Dispatch_inside_an_all_tenants_drain_still_narrows_to_the_events_tenant()
+    {
+        var tenantCtx = new TenantContext();
+        var accessor = new TenantEventScopeAccessor(tenantCtx);
+        var tenant = new Guid("22222222-2222-2222-2222-222222222222");
+
+        Guid? observed = null;
+        var observedAllTenants = true;
+
+        await tenantCtx.WithAllTenantsAsync(() => accessor.RunWithScopeAsync(Ctx(tenant), () =>
+        {
+            observed = tenantCtx.CurrentTenantGuid;
+            observedAllTenants = tenantCtx.IsAllTenantsScope;
+            return Task.CompletedTask;
+        }));
+
+        observed.Should().Be(tenant);
+        observedAllTenants.Should().BeFalse(
+            "the event's own tenant is the innermost explicit scope and must win over the drain's admin scope");
+    }
+
+    /// <summary>
+    /// The other half: the drain's all-tenants scope must survive the dispatch, or every event after the
+    /// first would be handled under a stale narrow scope.
+    /// </summary>
+    [Fact]
+    public async Task An_all_tenants_drain_is_restored_between_dispatches()
+    {
+        var tenantCtx = new TenantContext();
+        var accessor = new TenantEventScopeAccessor(tenantCtx);
+        var observedBetween = new List<bool>();
+
+        await tenantCtx.WithAllTenantsAsync(async () =>
+        {
+            foreach (var t in new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() })
+            {
+                await accessor.RunWithScopeAsync(Ctx(t), () => Task.CompletedTask);
+                observedBetween.Add(tenantCtx.IsAllTenantsScope);
+            }
+        });
+
+        observedBetween.Should().Equal(true, true, true);
+    }
 
     [Fact]
     public async Task Restores_specific_tenant_from_context()
