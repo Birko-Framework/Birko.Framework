@@ -47,7 +47,9 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
         if (parts.Length != 4 || parts[0] != Algorithm)
             return false;
 
-        if (!int.TryParse(parts[1], out var iterations))
+        // SH-H039: a non-positive iteration count made Pbkdf2 throw ArgumentOutOfRangeException *out of*
+        // Verify, so a corrupt column raised an unhandled exception on the login path instead of failing.
+        if (!int.TryParse(parts[1], out var iterations) || iterations <= 0)
             return false;
 
         // CR-M233: Verify must be total over arbitrary stored strings — a corrupted/truncated DB column
@@ -65,12 +67,23 @@ public class Pbkdf2PasswordHasher : IPasswordHasher
             return false;
         }
 
+        // SH-H039: fail closed on a stored value that is not well-formed, BEFORE any comparison. The
+        // derived length must come from the algorithm, never from storedHash.Length — that inversion let
+        // a truncated column decide how many bytes were compared. An empty hash segment is valid Base64,
+        // so the CR-M233 guard above never fired; it derived a zero-length key and FixedTimeEquals of two
+        // empty spans is true, authenticating ANY password. A one-byte segment is the same bug, weaker:
+        // it matched an arbitrary password roughly 1 in 256. An empty salt is unverifiable for the same
+        // reason. Note Hash() never emits either shape — it takes a truncated, defaulted or
+        // half-migrated column to reach, and none of those is a reason to succeed.
+        if (salt.Length == 0 || storedHash.Length != HashSize)
+            return false;
+
         var computedHash = Rfc2898DeriveBytes.Pbkdf2(
             password,
             salt,
             iterations,
             HashAlgorithmName.SHA512,
-            storedHash.Length);
+            HashSize);
 
         return CryptographicOperations.FixedTimeEquals(computedHash, storedHash);
     }
