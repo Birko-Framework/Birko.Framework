@@ -144,7 +144,7 @@ This is the aggregator override the generic `tasks` skill's shape detection defe
 `.claude/skills/` is the home of the Birko-specific skills. They **build on top of the generic
 project-lifecycle-skills set** (never the reverse — the generic skills know only a "stack
 scaffolder" hook, not Birko). Project-local ones (new-birko-subproject, new-store-backend,
-verify-birko-conventions, the roll-changelog shadow) auto-load only inside this repo; the
+verify-birko-conventions, fix-next, the roll-changelog shadow) auto-load only inside this repo; the
 consumer-facing ones (birko-new-project, new-birko-web-page, new-birko-web-component,
 design-agent) are shared user-level via [install-skills.ps1](install-skills.ps1) (junctions —
 edit here, live immediately).

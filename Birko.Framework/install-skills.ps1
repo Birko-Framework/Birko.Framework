@@ -5,8 +5,9 @@
 # Only the consumer-facing skills are shared user-level (they're needed OUTSIDE this
 # repo — scaffolding a new consumer, prototyping in a consumer app). The rest of
 # .claude/skills (new-birko-subproject, new-store-backend, verify-birko-conventions,
-# the roll-changelog shadow) stay project-local: Claude Code auto-loads them only
-# inside this repo, which is exactly their scope.
+# fix-next, the roll-changelog shadow) stay project-local: Claude Code auto-loads them
+# only inside this repo, which is exactly their scope. fix-next in particular MUST NOT
+# be shared — it hardcodes this repo's polyrepo paths and its EPIC-014/017 fix backlog.
 #
 # These skills BUILD ON TOP of the generic project-lifecycle-skills set
 # (github.com -> project-lifecycle-skills; install that one first) — e.g.
