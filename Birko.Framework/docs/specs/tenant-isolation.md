@@ -1,7 +1,7 @@
 ---
 area: tenant-isolation
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 10f5611 (Birko.Data.Tenant; partial regen of the item-level write requirements for SH-H047)
+generated-on: 2026-07-31
 sources:
   - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs
@@ -307,9 +307,13 @@ The system SHALL, in `EnsureTenantForStrict()`, throw `TenantScopeRequiredExcept
 
 ### Requirement: Item-level write authorization
 
-The system SHALL check `BelongsToCurrentTenant(item)` before delegating `Update` and `Delete` of a
-single item, throwing `TenantMismatchException` when it returns false. With a tenant set the check
-is `item.TenantGuid == CurrentTenantGuid`; with no tenant set it returns
+The system SHALL resolve the persisted row each item-level `Update` or `Delete` targets — via
+`ReadStoredItems` / `ReadStoredItemsAsync`, which read by `Guid` **unscoped by tenant** — and SHALL
+authorize the write with `EnsureWriteAuthorized`, throwing `TenantMismatchException` when it is
+refused. When a row exists under the item's `Guid`, `BelongsToCurrentTenant` is applied to **that
+stored row** and the caller-supplied `item.TenantGuid` is not consulted; when no row exists, it falls
+back to `BelongsToCurrentTenant(item)` as a payload-consistency check. With a tenant set the check is
+`subject.TenantGuid == CurrentTenantGuid`; with no tenant set it returns
 `IsAllTenantsScope || _mode != TenantIsolationMode.Strict`.
 
 #### Scenario: Cross-tenant update is refused
@@ -322,7 +326,7 @@ is `item.TenantGuid == CurrentTenantGuid`; with no tenant set it returns
 
 - **Given** a wrapper with tenant `t` and an item whose `TenantGuid` is `u`
 - **When** `DeleteAsync(item)` is awaited
-- **Then** a `TenantMismatchException` with `Operation == "delete"` is thrown and the inner store is never called
+- **Then** a `TenantMismatchException` with `Operation == "delete"` is thrown and no delete is delegated — the inner store receives only the read that resolves the targeted row
 
 #### Scenario: Permissive with no tenant allows any item
 
@@ -348,11 +352,53 @@ is `item.TenantGuid == CurrentTenantGuid`; with no tenant set it returns
 - **When** `Update(item)` is called
 - **Then** `BelongsToCurrentTenant` still compares `u` against `t` and a `TenantMismatchException` is thrown — the `IsAllTenantsScope` branch is reachable only when no tenant is set, so item-level writes do not widen the way reads do, contradicting the `TenantFilter` comment that the write guards "already special-case all-tenants scope"
 
-#### Scenario: The guard reads the caller-supplied tenant, not the stored row
+#### Scenario: The guard reads the stored row, not the caller-supplied tenant
 
 - **Given** a wrapper with tenant `t` and an item whose `Guid` identifies a row persisted under tenant `u`, with `item.TenantGuid` assigned `t` by the caller
 - **When** `Update(item)` is called
-- **Then** the check passes, because it compares only the in-memory `item.TenantGuid` — a settable `ITenant` property — against the ambient tenant, and the item is handed to the inner store with no tenant term added to the write; the wrapper never reads the persisted row's tenant
+- **Then** the wrapper reads the row back by `Guid`, applies `BelongsToCurrentTenant` to the persisted row, and throws `TenantMismatchException` with `ActualTenantGuid == u` — the row's real tenant, not the caller's claim; the write never reaches the inner store, which would otherwise key it on the primary field alone
+
+#### Scenario: A payload tenant that disagrees with both the ambient tenant and the stored row is ignored
+
+- **Given** a wrapper with tenant `t`, a row persisted under `t`, and `item.TenantGuid` assigned a third tenant `v` by the caller
+- **When** `Update(item)` is called
+- **Then** the write is authorized and delegated, because only the stored row's tenant is consulted — `item.TenantGuid` is not an input to the decision in either direction
+
+#### Scenario: The stored-row read is deliberately not tenant-scoped
+
+- **Given** a wrapper with tenant `t` resolving the row targeted by a write
+- **When** `ReadStoredItems` issues the lookup
+- **Then** it composes `ModelByGuid` alone with no tenant predicate, so another tenant's row is returned rather than filtered to null — a tenant-scoped read could not distinguish a foreign row from a missing one, and a missing row authorizes the write
+
+#### Scenario: An update cannot re-home a row the caller owns
+
+- **Given** a wrapper with tenant `t`, a row persisted under `t`, and `item.TenantGuid` assigned `u` by the caller
+- **When** `Update(item)` is called
+- **Then** `PreserveStoredTenant` restores `item.TenantGuid` and `item.TenantName` from the persisted row before delegation, so the row stays in `t` while the rest of the payload is applied
+
+#### Scenario: Re-homing is permitted where cross-tenant writes are deliberate
+
+- **Given** a wrapper with no tenant set, or one inside `WithAllTenants(...)`
+- **When** `Update(item)` is called
+- **Then** `PreserveStoredTenant` returns without touching the item, leaving the caller's per-item `TenantGuid` authoritative — matching `SetTenantGuidIfNeeded`'s behaviour on create in the same scopes
+
+#### Scenario: A write targeting no persisted row falls back to the payload check
+
+- **Given** a wrapper with tenant `t` and an item whose `Guid` matches no persisted row
+- **When** `Update(item)` is called with `item.TenantGuid` set to `u`
+- **Then** a `TenantMismatchException` is thrown — there is no stored row to authorize against, and the payload check remains so an upserting inner store cannot be made to create a row homed in another tenant
+
+#### Scenario: A batch is authorized in full before any item is stamped
+
+- **Given** a bulk wrapper with tenant `t` and a batch whose first item is owned by `t` and whose second targets a row owned by `u`
+- **When** `Update(items)` is called
+- **Then** every item is passed through `EnsureWriteAuthorized` before `PreserveStoredTenant` runs on any of them, so the refusal leaves no earlier item re-stamped and nothing is delegated to the inner store
+
+#### Scenario: The bulk wrappers resolve a batch in one read
+
+- **Given** a bulk wrapper and a batch of `n` items carrying persisted Guids
+- **When** `ReadStoredItems` / `ReadStoredItemsAsync` is called
+- **Then** the bulk override issues a single `ModelsByGuid` read covering the batch rather than the base class's read per item, and the base per-item path is not used
 
 ### Requirement: Create stamps the ambient tenant onto the item
 
@@ -393,13 +439,14 @@ and `item.TenantName = CurrentTenantName`, overwriting whatever the caller suppl
 ### Requirement: Bulk collection writes are authorized all-or-nothing over a single materialization
 
 The system SHALL, in bulk `Update(IEnumerable<T>)` and `Delete(IEnumerable<T>)`, materialize the
-source once as `data as IReadOnlyCollection<T> ?? data.ToList()`, require
-`items.All(BelongsToCurrentTenant)`, and on failure throw `TenantMismatchException` carrying the
-`TenantGuid` of `items.FirstOrDefault(i => !BelongsToCurrentTenant(i))`.
+source once as `data as IReadOnlyCollection<T> ?? data.ToList()`, resolve the batch's persisted rows
+in a single `ModelsByGuid` read, and pass every item through `EnsureWriteAuthorized` — throwing
+`TenantMismatchException` carrying the refused row's tenant on the first failure, before any item is
+stamped or written.
 
 #### Scenario: One foreign item rejects the whole batch
 
-- **Given** a bulk wrapper with tenant `t` and a list of five items, one of which belongs to tenant `u`
+- **Given** a bulk wrapper with tenant `t` and a list of five items, one of which targets a row persisted under tenant `u`
 - **When** `Update(items)` is called
 - **Then** a `TenantMismatchException` with `Operation == "update"` and `ActualTenantGuid == u` is thrown and none of the five is written
 

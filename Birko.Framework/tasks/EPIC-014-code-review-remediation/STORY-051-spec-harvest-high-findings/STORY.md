@@ -13,7 +13,8 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**0 / 57 closed.** 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
+**2 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]]) — **2 of the 11 pre-created tasks
+done.** 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
 15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
 must be confirmed before they are fixed. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md).
