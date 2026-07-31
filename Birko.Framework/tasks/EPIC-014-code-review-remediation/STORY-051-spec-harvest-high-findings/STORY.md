@@ -13,12 +13,18 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**3 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]]) — **3 of 13 tasks done.**
+**4 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]], SH-H003 via
+[[TASK-110]]) — **4 of 14 tasks done.** TASK-110 also closed the medium twin SH-M022, which counts under
+[[STORY-053]], not here.
 TASK-125 (SH-H036) and TASK-126 (SH-H019) were verified by hand and filed on 2026-07-31 while closing
 TASK-114, taking the verified-and-tracked set to 16 findings across 13 tasks. 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
 15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
 must be confirmed before they are fixed. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md).
+
+**[[TASK-128]] (P0) was filed on 2026-07-31 while closing TASK-110** — the view path's ORDER BY still
+interpolates caller text, the same defect one project over, found by hand rather than by the harvester (no
+`SH-` id). It is the 14th task and takes the story from 13 to 14.
 
 ## User story
 

@@ -1,14 +1,18 @@
 ---
 area: bulk-filter-operations
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: f3ac675 + SH-H003/SH-M022 fix (Birko.Data.SQL; partial regen adding the sort-key resolution requirement)
+generated-on: 2026-07-31
 sources:
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
+  - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs
   - ../Birko.Data.SQL/Stores/DataBaseBulkStore.cs
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
   - ../Birko.Data.Stores/IAsyncBulkStore.cs
   - ../Birko.Data.Stores/IBulkStore.cs
+  - ../Birko.Data.Stores/OrderBy.cs
   - ../Birko.Data.Stores/PropertyUpdate.cs
 shaped-by: []
 ---
@@ -70,6 +74,88 @@ optional filter, optional `OrderBy<T>`, optional limit and optional offset, plus
 - **Given** a `DataBaseBulkStore<DB,T>` whose `Connector` is null
 - **When** `Read(filter)` is called
 - **Then** `ReadCore` returns `Enumerable.Empty<T>()` — no exception is thrown
+
+### Requirement: SQL sort keys are resolved against table metadata before reaching the statement
+
+`OrderBy<T>` carries **CLR property names** — `By`/`ThenBy` read `member.Member.Name`, and `ByName`
+accepts an arbitrary caller string — and the SQL `ORDER BY` clause is built by interpolating those keys
+into `CommandText` (`AbstractConnectorBase.CreateSelectCommand`), unparameterised.
+
+The system SHALL therefore resolve every sort key through the selected tables' field metadata before it
+reaches the clause (`DataBase.ResolveOrderFields`, invoked from the `Select(IEnumerable<Tables.Table>, …)`
+and `SelectAsync(IEnumerable<Tables.Table>, …)` funnels that every SQL entity read passes through):
+matching first on property name and then on mapped column name, emitting the field's
+`GetSelectName(withTableName)`, qualifying with the table name when more than one table is selected,
+preserving key order and direction, and SHALL throw `ArgumentException` naming both the key and the
+entity type when a key matches neither. Because the emitted identifier is always a name read out of
+metadata, caller-supplied text cannot reach the statement — **the resolution is the whitelist**.
+
+The resolved identifier SHALL NOT be quoted, matching every other column identifier the SQL layer emits
+(the DDL's column list, the WHERE clause's `condition.Name`, the SELECT list); only table names are
+quoted.
+
+#### Scenario: A remapped property is emitted under its column name
+
+- **Given** an entity with `[NamedField("label_col")] public string? Label` and
+  `Read(null, OrderBy<T>.By(x => x.Label), null, null)`
+- **When** the select command is built
+- **Then** the clause is `ORDER BY label_col ASC` and the rows come back sorted — before resolution the
+  CLR name was emitted and the database rejected the statement with *no such column: Label*, so a
+  remapped or `ModelMap`-mapped column could not be sorted at all
+
+#### Scenario: An unremapped property is emitted unchanged
+
+- **Given** an entity with a plain `public int Rank` and `OrderBy<T>.By(x => x.Rank)`
+- **When** the select command is built
+- **Then** the clause is `ORDER BY Rank ASC` — bare and unquoted, identical to what was emitted before
+  resolution existed, so no working sort changes meaning
+
+#### Scenario: A sort key that is already the mapped column name resolves to itself
+
+- **Given** `OrderBy<T>.ByName("label_col")` for the property mapped to that column
+- **When** the key is resolved
+- **Then** it resolves via the column-name match and the clause is `ORDER BY label_col ASC`
+
+#### Scenario: A joined select qualifies the column with its table
+
+- **Given** a select over two tables and a sort key resolving to a field of the second
+- **When** the keys are resolved
+- **Then** the emitted identifier is `Table.Column`; with a single table it is the bare column
+
+#### Scenario: An injection payload is rejected before the statement is built
+
+- **Given** `OrderBy<T>.ByName("Rank; CREATE TABLE Pwned (x INTEGER); --")` — the shape a consumer
+  reaches by passing a request's sort field straight through
+- **When** the read is enumerated
+- **Then** `ArgumentException` is thrown, no command is executed and no such table is created. Before
+  resolution this text reached `CommandText` verbatim and **the table was created**; a payload of
+  `"Rank LIMIT 1 --"` likewise commented out the framework's own `LIMIT` and returned one row where the
+  caller had asked for a hundred, and `"(SELECT count(*) FROM sqlite_master)"` was evaluated as the sort
+  key. The trailing ` ASC`/` DESC` the builder appends is not a mitigation — a comment removes it
+
+#### Scenario: An unknown sort key names itself rather than surfacing a provider error
+
+- **Given** `OrderBy<T>.ByName("NoSuchThing")`
+- **When** the read is enumerated
+- **Then** `ArgumentException` names both `NoSuchThing` and the entity type, instead of the provider
+  answering with a column name the developer never wrote
+
+#### Scenario: No sort keys emit no clause
+
+- **Given** `Read(filter, null, null, null)`
+- **When** the select command is built
+- **Then** no `ORDER BY` is appended and resolution is a pass-through — a null or empty sort dictionary
+  is returned unchanged
+
+#### Scenario: The view path is not covered by this funnel
+
+- **Given** a `SqlViewStore<TView>` query carrying an `OrderBy<TView>`
+- **When** the view select command is built
+- **Then** the keys are **not** resolved: `SqlViewStore.TranslateOrderBy` copies `PropertyName` into the
+  dictionary and the view clause is emitted from its own site
+  (`AbstractConnectorBase_View.CreatePersistentViewSelectCommand` / the on-the-fly builder), neither of
+  which passes through the `Tables.Table` funnel — so the interpolation and its injection sink remain on
+  the view path. Recorded here as a known gap, tracked as TASK-128
 
 ### Requirement: Single-result reads on a bulk store require ReadFirst
 

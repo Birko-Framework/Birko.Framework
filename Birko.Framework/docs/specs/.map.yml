@@ -82,6 +82,12 @@ areas:
       - ../Birko.Data.Stores/PropertyUpdate.cs
       - ../Birko.Data.SQL/Stores/DataBaseBulkStore.cs
       - ../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs
+      # the bulk Read's sort contract is implemented in the connector's select funnel, not in the
+      # store — added for TASK-110, whose fix landed in files no glob reached (silent under-coverage)
+      - ../Birko.Data.Stores/OrderBy.cs
+      - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
 
   - name: filter-expression-translation
     title: LINQ filter expression translation to backend queries
