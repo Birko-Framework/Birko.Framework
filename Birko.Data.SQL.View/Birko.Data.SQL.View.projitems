@@ -22,6 +22,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Connectors\AbstractConnector_SelectViewCount.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_View.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SQL\DataBase_ViewOrderBy.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\BooleanFunction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\DateTimeFunction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SQL\Fields\FunctionField.cs" />

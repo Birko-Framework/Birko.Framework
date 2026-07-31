@@ -17,9 +17,13 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        // TASK-128: the expression-keyed overloads pass the VIEW PROPERTY name, not a pre-resolved select
+        // name. Resolution happens once, in the Select(Tables.View, …) funnel below, which is the only place
+        // that knows whether the query targets a persistent view — and the two paths expose their columns
+        // under different names. Pre-resolving here could only ever be right for one of them.
         public IEnumerable<object> SelectView<T, P>(Type type, LambdaExpression expr, IDictionary<Expression<Func<T, P>>, bool>? orderFields = null, int? limit = null, int? offset = null)
         {
-            foreach (var item in SelectView(type, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewField(x.Key).GetSelectName(true), x => x.Value), limit, offset))
+            foreach (var item in SelectView(type, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewOrderKey(x.Key), x => x.Value), limit, offset))
             {
                 yield return item;
             }
@@ -66,7 +70,7 @@ namespace Birko.Data.SQL.Connectors
             int? offset = null
         )
         {
-            foreach (var item in Select(view, transformFunction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewField(x.Key).GetSelectName(true), x => x.Value), limit, offset))
+            foreach (var item in Select(view, transformFunction, (expr != null) ? DataBase.ParseConditionExpression(expr) : null, orderFields?.ToDictionary(x => DataBase.GetViewOrderKey(x.Key), x => x.Value), limit, offset))
             {
                 yield return item;
             }
@@ -86,6 +90,13 @@ namespace Birko.Data.SQL.Connectors
             }
 
             var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
+
+            // TASK-128: the single resolution point for view sort keys. It has to sit AFTER usePersistent is
+            // known, because a persistent view exposes its columns under different names than the on-the-fly
+            // join select does — and it has to sit here rather than in the command builders, since every view
+            // read (both paths, both the string- and expression-keyed entry points) funnels through this
+            // method. Resolving makes the ORDER BY clause unreachable from caller-supplied text.
+            orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
 
             if (usePersistent)
             {

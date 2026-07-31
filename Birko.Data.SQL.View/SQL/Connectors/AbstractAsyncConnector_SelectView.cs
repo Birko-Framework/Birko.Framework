@@ -31,6 +31,10 @@ namespace Birko.Data.SQL.Connectors
 
             var usePersistent = ShouldUsePersistentView(view, name => ViewExists(name));
 
+            // TASK-128: resolve here, after usePersistent is known — see the sync twin in
+            // AbstractConnector_SelectView.cs for why this is the single resolution point.
+            orderFields = DataBase.ResolveViewOrderFields(view, orderFields, usePersistent);
+
             if (usePersistent)
             {
                 await foreach (var items in RunReaderCommandAsync(
