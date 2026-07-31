@@ -1,6 +1,7 @@
 # Spec-harvest findings audit — 2026-07-30
 
-Per-finding detail for **STORY-051**. Produced by the `/specs` harvest of the 25 cross-cutting
+Per-finding detail for **STORY-051** (high), **STORY-053** (medium), **STORY-054** (low) and
+**STORY-055** (the unrated areas). Produced by the `/specs` harvest of the 25 cross-cutting
 areas in `docs/specs/.map.yml`, at code HEAD `f3ac675`.
 
 **57 high · 421 medium · 387 low = 865 findings** across 22 areas — every area that was ever capped.

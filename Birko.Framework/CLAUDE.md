@@ -270,8 +270,11 @@ no-ops on the other four backends; MySQL inherits a `CREATE INDEX IF NOT EXISTS`
 `DROP INDEX` that it does not accept.
 
 **Specs record actuality, defects included — which is what makes them find things.** Harvesting turned up
-**865 findings (57 high)**, tracked as `tasks/EPIC-014-code-review-remediation/STORY-051` with `SH-*` ids
-(distinct provenance from the `CR-*` audit, so nothing renumbers). Confirmed by hand: `Pbkdf2PasswordHasher.Verify`
+**865 findings (57 high)** under `tasks/EPIC-014-code-review-remediation`, with `SH-*` ids and one story per
+severity mirroring the `CR-*` sweep — **STORY-051** (high, 11 tasks pre-created for the verified subset),
+**STORY-053** (medium), **STORY-054** (low), **STORY-055** (the three unrated areas, whose findings were
+swept but never written down). Distinct provenance from the `CR-*` audit, so nothing renumbers. Confirmed by
+hand: `Pbkdf2PasswordHasher.Verify`
 returns **`true` for any password** against a `PBKDF2-SHA512:600000::` column (empty string is valid Base64,
 so the CR-M233 guard never fires and `FixedTimeEquals` compares two zero-length spans); a null or
 silently-dropped filter renders **`DELETE FROM "T"`**; `long`/`double`/`float`/`short`/`byte[]` properties map

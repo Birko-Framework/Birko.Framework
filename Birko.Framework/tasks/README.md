@@ -1,18 +1,20 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-07-31. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
-| planned      | 10                 | 25                 | —                   |
-| todo         | —                  | —                  | 38                  |
-| in-progress  | 6                  | 5                  | 1                   |
-| review       | —                  | —                  | 6                   |
+| planned      | 10                 | 27                 | —                   |
+| todo         | —                  | —                  | 51                  |
+| in-progress  | 6                  | 6                  | 1                   |
+| review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 0                   |
-| done         | 1                  | 21                 | 27                  |
+| done         | 1                  | 22                 | 28                  |
 | cancelled    | 0                  | 0                  | 0                   |
+
+Todo by priority: **P0 7 · P1 9 · P2 32 · P3 3**
 
 ## In progress now
 
@@ -20,11 +22,29 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 
 ## In review (awaiting sign-off)
 
-- [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2, ai)
-- [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai)
+- [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai)
 - [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2, ai)
 - [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2, ai)
+- [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2, ai)
+- [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai)
+- [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (P3, ai)
+- [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai)
 - [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai)
+
+## Next up (top P0s, blocked excluded)
+
+- [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai)
+- [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai)
+- [TASK-113](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-113-tenantsyncprovider-scopes-only-saves.md) `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant (P0, ai)
+
+## Consistency flags
+
+- **STORY-001 / STORY-002 / STORY-023 are `planned` but each has a task in `review`.** A story whose only
+  task is code-complete is not `planned`. Should be `in-progress`.
+- **TASK-059 and TASK-106 declare `parent: EPIC-016` but live in `_loose/`.** Either move them under the
+  epic directory or clear the parent — right now they render in both places.
+- **EPIC-017's stories use `STORY-0NN.md` filenames**, not the conventional `STORY.md`. Harmless, but it
+  hides them from a `STORY.md` glob.
 
 ## Tree
 
@@ -100,26 +120,42 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
     - [ ] [TASK-032](EPIC-011-test-coverage-gaps/STORY-022-phase-4-tests/TASK-032-viewmodel-crud-tests.md) Birko.Data.*.ViewModel CRUD tests (P2, ai)
     - [ ] [TASK-033](EPIC-011-test-coverage-gaps/STORY-022-phase-4-tests/TASK-033-configuration-contracts-tests.md) Birko.Configuration + Birko.Contracts DTO tests (P2, ai)
   - STORY-047 [Review filter-parser behaviour on live document databases](EPIC-011-test-coverage-gaps/STORY-047-null-filter-live-parser-review/STORY.md) — planned (0/1)
-    - [ ] [TASK-060](EPIC-011-test-coverage-gaps/STORY-047-null-filter-live-parser-review/TASK-060-run-and-review-live-null-tests.md) Run & review the live null-filter parser tests
+    - [ ] [TASK-060](EPIC-011-test-coverage-gaps/STORY-047-null-filter-live-parser-review/TASK-060-run-and-review-live-null-tests.md) Run & review the live null-filter parser tests (P2, ai)
 - **EPIC-012** [Birko.MessageQueue.MQTT — v5 features](EPIC-012-mqtt-v5-features/EPIC.md) — planned (0/1 tasks done)
   - [ ] [TASK-034](EPIC-012-mqtt-v5-features/TASK-034-mqtt-v5-topic-aliases-user-properties.md) MQTT v5 topic aliases + user properties (P2, ai)
 - **EPIC-013** [Reference consumers — integration smoke harness + Web playground](EPIC-013-reference-consumers/EPIC.md) — in-progress (1/2 tasks done)
   - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer (P2, ai) — **done**
   - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai) ← in-progress
-- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (0/0 tasks done)
+- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (0/11 tasks done)
   - STORY-024 [Critical findings](EPIC-014-code-review-remediation/STORY-024-critical-findings/STORY.md) — done (0/0)
   - STORY-025 [High findings](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — done (0/0)
   - STORY-026 [Medium findings](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — in-progress (0/0)
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (9/15 tasks done)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (0/11)
+    - [ ] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai)
+    - [ ] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai)
+    - [ ] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai)
+    - [ ] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1, ai)
+    - [ ] [TASK-112](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-112-unmapped-primitive-types-never-persist.md) `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist (P0, ai)
+    - [ ] [TASK-113](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-113-tenantsyncprovider-scopes-only-saves.md) `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant (P0, ai)
+    - [ ] [TASK-114](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-114-tenant-write-guard-trusts-caller-supplied-tenantguid.md) The item-level tenant write guard trusts the caller-supplied `TenantGuid` (P0, ai)
+    - [ ] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai)
+    - [ ] [TASK-116](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-116-rulespecification-leaves-degrade-to-match-all.md) `RuleSpecification` leaves degrade to match-all — on the destructive paths (P0, ai)
+    - [ ] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai)
+    - [ ] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai)
+  - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/0)
+  - STORY-054 [Spec-harvest — low findings](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/STORY.md) — planned (0/0)
+  - STORY-055 [Spec-harvest — the three unrated areas](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/STORY.md) — in-progress (0/0)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (10/16 tasks done)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3, ai) — **done**
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2, ai) — **done**
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2, ai) — **done**
   - [x] [TASK-057](EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md) Xaml Form field types: MultiSelect / Tags / File (P2, ai) — **done**
   - [x] [TASK-101](EPIC-015-birko-xaml-ui-framework/TASK-101-avalonia-ribbon-pinned-temporary-reveal.md) Avalonia `Ribbon`: pinned vs temporary-reveal collapse, to match `b-ribbon` and Office (P2, ai) — **done**
   - [x] [TASK-102](EPIC-015-birko-xaml-ui-framework/TASK-102-avalonia-ribbon-narrow-fallback.md) Avalonia `Ribbon`: a narrow fallback, mirroring `b-ribbon`'s hamburger (P2, ai) — **done**
+  - [ ] [TASK-103](EPIC-015-birko-xaml-ui-framework/TASK-103-focus-visual-for-all-avalonia-buttons.md) Every Avalonia control needs a focus visual — `Buttons.axaml` has none (P2, ai)
   - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (0/0)
   - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (0/0)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (0/0)
@@ -134,13 +170,14 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
     - [ ] [TASK-094](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-094-avalonia-12-obsolete-warning-sweep.md) Clear the 28 Avalonia 12 obsolete warnings (`Watermark`, `Bitmap.Save`) (P3, ai)
     - [ ] [TASK-095](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-095-avalonia-screenshot-baseline-gate.md) Screenshot baseline gate for the Avalonia suite (build it *before* the Av12 bump) (P2, ai)
     - [ ] [TASK-096](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-096-consumer-repo-avalonia-12-rollout.md) Roll Avalonia 12 out to consumer repos in lockstep (P2, ai)
-  - STORY-049 [Office-style ribbon overflow — progressive group scaling + group-to-popup collapse](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/STORY.md) — in-progress (2/4)
+  - STORY-049 [Office-style ribbon overflow — progressive group scaling + group-to-popup collapse](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/STORY.md) — done (4/4)
     - [x] [TASK-097](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-097-make-ribbon-overflow-reachable.md) Make the existing ribbon overflow reachable (interim fix, both skins) (P1, ai) — **done**
     - [x] [TASK-098](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-098-ribbon-size-variant-scaling-priority-model.md) Ribbon model + tokens: size variant, scaling priority, group icon (XAML **and** web together) (P2, ai) — **done**
     - [x] [TASK-099](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-099-progressive-group-scaling-degrade-pass.md) The degrade pass — measure and scale groups Large → Medium → Small in priority order (P2, ai) — **done**
-    - [ ] [TASK-100](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-100-group-collapse-to-popup.md) Group-collapse-to-popup — the chunk button and its flyout (P2, ai) 🔍 review
-- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (9/11 tasks done)
+    - [x] [TASK-100](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-100-group-collapse-to-popup.md) Group-collapse-to-popup — the chunk button and its flyout (P2, ai) — **done**
+- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (9/15 tasks done)
   - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
+  - [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
   - STORY-037 [Backend / SQL framework backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-037-backend-sql-backports/STORY.md) — done (0/0)
   - STORY-038 [Frontend Birko.Web backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/STORY.md) — done (0/0)
   - STORY-039 [Cross-provider SQL store-factory + DI backport](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/STORY.md) — in-progress (1/2)
@@ -156,13 +193,21 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
   - STORY-041 [BMobileAppShell showcase / placement](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/STORY.md) — done (2/2)
     - [x] [TASK-049](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-049-bmobileappshell-playground-placement.md) BMobileAppShell — better placement / demo in Birko.Web.Playground (P2, ai) — **done**
     - [x] [TASK-050](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-050-bmobileappshell-xaml-gallery.md) BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery (P3, ai) — **done**
+  - STORY-052 [Component gaps found by consumers adopting the `b-*` catalogue](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/STORY.md) — in-progress (0/3)
+    - [ ] [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (P3, ai) 🔍 review
+    - [ ] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai) 🔍 review
+    - [ ] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) 🔍 review
 - **EPIC-017** [Tenant isolation hardening](EPIC-017-tenant-isolation-hardening/EPIC.md) — in-progress (0/0 tasks done)
+  - STORY-044 [Opt-in strict (fail-closed) tenancy mode](EPIC-017-tenant-isolation-hardening/STORY-044-strict-fail-closed-mode/STORY-044.md) — done (0/0)
+  - STORY-045 [Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped](EPIC-017-tenant-isolation-hardening/STORY-045-decorator-order-per-tenant-uniqueness/STORY-045.md) — done (0/0)
+  - STORY-046 [Restore ambient (tenant) scope for background event dispatch](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/STORY-046.md) — in-progress (0/0)
 
 ## Loose tasks
 
 - [x] [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Framework.Tests,Consumers} + aicode bucket (P1, ai) — **done**
 - [x] [TASK-058](_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2, ai) — **done**
 - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
+- [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
 
 ## Completed
 
@@ -176,4 +221,3 @@ _Generated 2026-07-29. Run `/tasks triage` to refresh. **Do not hand-edit** — 
     - [x] [TASK-027](EPIC-009-communication-protocols/STORY-020-oauth2-server/TASK-027-birko-security-oauth-server.md) Implement Birko.Security.OAuth.Server (P2, ai) — **done**
 
 </details>
-

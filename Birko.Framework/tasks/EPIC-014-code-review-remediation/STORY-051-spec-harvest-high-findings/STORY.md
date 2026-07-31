@@ -1,0 +1,110 @@
+---
+id: STORY-051
+parent: EPIC-014
+status: in-progress
+created: 2026-07-30
+source: SPEC-HARVEST-FINDINGS-2026-07-30.md
+severity: high
+finding-count: 57
+finding-ids: SH-H001 … SH-H057
+---
+
+# Spec-harvest — high findings
+
+## Progress
+
+**0 / 57 closed.** 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
+15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
+must be confirmed before they are fixed. Per-finding detail is in
+[`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md).
+
+## User story
+
+As a maintainer, I want every **high**-severity spec-harvest finding confirmed and then fixed (or explicitly
+waived), so behaviour the specs now record as wrong stops being the behaviour the framework ships.
+
+## Where this came from
+
+Generating `docs/specs/` (commits `3728969`, `acbbe9d`, `d40aba2`) meant reading 648 files across 25
+cross-cutting areas at code HEAD `f3ac675`. The specs record behaviour **as-is**, defects included; this
+story is the queue for changing it. Different provenance from STORY-024…027, which came from the
+2026-06-17 review audit — so these carry an `SH-` prefix and do not renumber `CR-*`.
+
+## Scope
+
+The 57 high findings `SH-H001 … SH-H057`. Severity is by blast radius: **high** = silent data loss,
+cross-tenant leakage, auth bypass, a destructive op on the wrong rows, or a predicate degrading to
+match-all on a write path.
+
+Distribution is uneven, and that is informative: the highs concentrate in **data-access, tenant and
+security** — the same areas this repo's own CHANGELOG history sits in. `serialization`,
+`llm-provider-and-agents` and `validation-and-rules` produced **no highs at all** between them.
+
+## Tasks
+
+Unlike STORY-024…027, the **verified subset is pre-created** — 11 tasks covering 14 of the 15 verified
+findings. That deviation is deliberate: 14 bounded, hand-traced defects are pickable work, whereas
+mirroring 865 unverified claims into the tree is exactly what EPIC-014 decided against. The other 42 highs
+stay extraction-on-demand, one task per `SH-Hxxx`, **verification first**.
+
+| Task | Findings | Prio | What |
+|---|---|---|---|
+| [[TASK-108]] | SH-H039 | P0 | `Pbkdf2.Verify` returns true for any password against an empty-segment hash |
+| [[TASK-109]] | SH-H002, SH-M023 | P0 | Null/untranslatable filter renders `DELETE FROM "T"` |
+| [[TASK-110]] | SH-H003, SH-M022 | P0 | ORDER BY identifiers unresolved + unquoted — injection sink *and* silent empty reads |
+| [[TASK-111]] | SH-H023 | P1 | `rule.Field` reaches the WHERE clause unresolved and unquoted |
+| [[TASK-112]] | SH-H037 | P0 | `long`/`double`/`float`/`short`/`byte[]` map to no column and never persist |
+| [[TASK-113]] | SH-H050, H051, H052 | P0 | `TenantSyncProvider` scopes only saves — reads, previews, deletes span tenants |
+| [[TASK-114]] | SH-H047 | P0 | Write guard trusts the caller-settable `item.TenantGuid` |
+| [[TASK-115]] | SH-H054 | P1 | Nested `WithTenant` does not narrow reads inside an all-tenants scope |
+| [[TASK-116]] | SH-H041, H044, H042, H043 | P0 | `RuleSpecification` leaves degrade to match-all on destructive paths |
+| [[TASK-117]] | SH-H006 | P1 | `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set |
+| [[TASK-118]] | SH-H048 | P1 | Tenant header/claim guard covers only the hard-coded `X-Tenant-Id` |
+
+Two groupings worth explaining, because they are not one-task-per-finding:
+
+- **TASK-113 is three findings, one root cause.** `ApplyTenantFiltering`'s own XML doc says it "only
+  modifies save filters, not fetch predicates" — so the unscoped read (H052), the unscoped delete (H051)
+  and the knowledge/save mismatch (H050) are one omission seen from three angles. Fixing them separately
+  would mean three partial fixes to the same method.
+- **TASK-116 pulls in two unverified findings on purpose.** H041–H044 are all in `RuleSpecification.cs`
+  (lines 62, 94, 97, 100) and all are "a leaf degrades to a constant that then widens to match-all". H044's
+  *verdict* explicitly identifies H043's non-string `BuildStringMethod` path as its real trigger, so they
+  cannot be fixed independently. One fixture covers the file.
+
+The two SQL identifier-injection sinks (H003 → TASK-110, H023 → TASK-111) are **kept separate** despite
+sharing a root cause — `DataBase.ResolveColumnName` exists and neither path calls it. They live in
+different files with different resolution needs (an ORDER BY key vs. a rule leaf's column), so one task
+would have carried two unrelated fixtures.
+
+## SH-H049 is downgraded, not tasked
+
+`UseTenantMiddleware` really does bind `ITenantContext` from the root provider, but the shipped
+`TenantContext` holds tenant state in `AsyncLocal`, so the **default registration is safe per-request**.
+Only a consumer registering a scoped `ITenantContext` that keeps per-request state in *fields* is bitten.
+Recorded here rather than fixed so the downgrade is a decision on the record — re-rate it if a consumer
+ever ships such a registration.
+
+## Coverage gaps
+
+Not to be mistaken for a complete audit:
+
+- **42 of 57 are unverified.** Of the 15 checked, 3 needed their scope corrected and 1 named the wrong
+  trigger entirely — roughly a quarter were imprecise. **Verify before fixing.**
+- **All 22 previously-capped areas were swept uncapped** and every agent self-reported
+  `sweptToExhaustion: true` — the agents' own claim, not independently checked.
+- **3 areas carry no severity rating at all** and so appear in no severity story — tracked as [[STORY-055]].
+- Missing test coverage was out of scope for the sweep and is not reported.
+
+## Acceptance criteria
+
+- [ ] The 42 unverified high findings are each confirmed, narrowed, or refuted against the code
+- [ ] Every CONFIRMED high is fixed with a regression test, or explicitly waived with a reason
+- [x] All 22 capped areas swept uncapped and folded in (2026-07-30)
+- [x] The verified subset is decomposed into pickable tasks (2026-07-30)
+- [ ] Any finding whose fix changes behaviour triggers a `/specs regen` of its area, and the resulting spec
+      diff is reviewed — the specs currently document the defective behaviour as shipped
+
+## Human test plan
+
+N/A — this is a tracking story. Each child task carries its own plan.

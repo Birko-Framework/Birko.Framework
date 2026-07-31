@@ -2,8 +2,9 @@
 id: TASK-060
 parent: STORY-047
 status: todo
+priority: P2
+assignee: ai
 created: 2026-07-18
-owner: ai
 affects: [Birko.Data.MongoDB.Tests, Birko.Data.CosmosDB.Tests, Birko.Data.RavenDB.Tests]
 ---
 
