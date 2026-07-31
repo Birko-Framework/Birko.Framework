@@ -43,6 +43,14 @@ namespace Birko.Data.Stores
         /// <summary>
         /// Creates a sort from a property name string and direction.
         /// Use expression-based overloads when possible for compile-time safety.
+        /// <para>
+        /// The name is an <b>unchecked caller string</b> — this is the overload a consumer reaches for when
+        /// sorting by a request field, so treat it as untrusted at the call site. A backend is expected to
+        /// resolve it against its own field metadata and reject anything that does not map: the SQL backend
+        /// does (<c>DataBase.ResolveOrderFields</c> throws on an unknown key, TASK-110 — before that guard
+        /// existed the string reached the ORDER BY clause verbatim and arbitrary SQL executed). Other
+        /// backends offer no such guarantee, so do not rely on this method to validate input for you.
+        /// </para>
         /// </summary>
         public static OrderBy<T> ByName(string propertyName, bool descending = false)
         {
