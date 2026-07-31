@@ -7,14 +7,14 @@ _Generated 2026-07-31. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 28                 | —                   |
-| todo         | —                  | —                  | 55                  |
+| todo         | —                  | —                  | 58                  |
 | in-progress  | 6                  | 6                  | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 22                 | 30                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 5 · P1 12 · P2 34 · P3 4**
+Todo by priority: **P0 5 · P1 14 · P2 35 · P3 4**
 
 ## In progress now
 
@@ -126,14 +126,14 @@ Todo by priority: **P0 5 · P1 12 · P2 34 · P3 4**
 - **EPIC-013** [Reference consumers — integration smoke harness + Web playground](EPIC-013-reference-consumers/EPIC.md) — in-progress (1/2 tasks done)
   - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer (P2, ai) — **done**
   - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai) ← in-progress
-- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (2/11 tasks done)
+- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (2/13 tasks done)
   - STORY-024 [Critical findings](EPIC-014-code-review-remediation/STORY-024-critical-findings/STORY.md) — done (0/0)
   - STORY-025 [High findings](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — done (0/0)
   - STORY-026 [Medium findings](EPIC-014-code-review-remediation/STORY-026-medium-findings/STORY.md) — in-progress (0/0)
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (2/11)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (2/13)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) — done
     - [ ] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai)
     - [ ] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai)
@@ -145,6 +145,8 @@ Todo by priority: **P0 5 · P1 12 · P2 34 · P3 4**
     - [ ] [TASK-116](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-116-rulespecification-leaves-degrade-to-match-all.md) `RuleSpecification` leaves degrade to match-all — on the destructive paths (P0, ai)
     - [ ] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai)
     - [ ] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai)
+    - [ ] [TASK-125](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-125-readone-bypasses-store-decorators.md) `ReadOne` queries the connector directly, bypassing every store decorator (P1, ai)
+    - [ ] [TASK-126](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-126-tagging-has-no-tenant-assertion.md) `TagServiceBase` states its tenant contract in a comment and enforces nothing (P1, ai)
   - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/0)
   - STORY-054 [Spec-harvest — low findings](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/STORY.md) — planned (0/0)
   - STORY-055 [Spec-harvest — the three unrated areas](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/STORY.md) — in-progress (0/0)
@@ -215,6 +217,7 @@ Todo by priority: **P0 5 · P1 12 · P2 34 · P3 4**
 - [x] [TASK-058](_loose/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) (P2, ai) — **done**
 - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
 - [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
+- [ ] [TASK-127](_loose/TASK-127-all-tenants-scope-and-ambient-tenant-decision.md) Decide what `WithAllTenants` means when a tenant is also in scope (P2, human)
 
 ## Completed
 

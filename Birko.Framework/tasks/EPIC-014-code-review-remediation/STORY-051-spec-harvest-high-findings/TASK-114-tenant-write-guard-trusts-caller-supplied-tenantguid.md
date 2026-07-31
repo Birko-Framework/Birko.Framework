@@ -160,8 +160,13 @@ only its subject changed. `PreserveStoredTenant` closes the re-home defect found
   `NullReferenceException` inside the guard. Both are API misuse of a non-nullable parameter and both end
   in a failure from the inner store; not worth a behavioural guard, but noted.
 - **`SH-H036`** (`ReadOne` extension querying the connector directly, bypassing the tenant wrapper) — the
-  same species on the **read** side, still unverified, still in `repository-contract`. Worth verifying next.
-- **`SH-H019`** (no base-class tenant assertion on any `Birko.Data.Tagging` path) — unverified, separate.
+  same species on the **read** side. **Verified by hand 2026-07-31 and filed as [[TASK-125]]**, with its
+  scope corrected: `GetUnwrappedStore` has 70 call sites, but 69 are the intentional backend-native escape
+  hatch and only `ReadOne` is a general-purpose read helper taking that path.
+- **`SH-H019`** (no base-class tenant assertion on any `Birko.Data.Tagging` path) — **verified by hand
+  2026-07-31 and filed as [[TASK-126]]**. The contract is stated in a comment and enforced nowhere; update
+  and delete both reach their target through the unguarded `GetTagByIdAsync`, so it exposes cross-tenant
+  writes and a cascade delete, not only reads.
 - **NU1903** (`SQLitePCLRaw.lib.e_sqlite3` 2.1.10 advisory) now surfaces in `Birko.Data.Tenant.Tests`
   because it gained the SQLite chain. Pre-existing repo-wide — `Birko.Data.SQL.SqLite.Tests` reports the
   identical advisory untouched. Not introduced here, not addressed here.
@@ -169,4 +174,5 @@ only its subject changed. `PreserveStoredTenant` closes the re-home defect found
 **Note for whoever fixes the neighbouring findings:** the `TenantFilter` XML comment still claims the write
 guards "already special-case all-tenants scope". That was only ever true in the no-tenant branch, and the
 spec records the contradiction as a scenario rather than silently picking a side. Left as found — changing
-it is a behaviour decision about `WithAllTenants` + ambient tenant, not part of this defect.
+it is a behaviour decision about `WithAllTenants` + ambient tenant, now filed as [[TASK-127]] (a decision
+task, not for `/fix-next`).

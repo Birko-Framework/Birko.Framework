@@ -13,8 +13,9 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**2 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]]) — **2 of the 11 pre-created tasks
-done.** 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
+**2 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]]) — **2 of 13 tasks done.**
+TASK-125 (SH-H036) and TASK-126 (SH-H019) were verified by hand and filed on 2026-07-31 while closing
+TASK-114, taking the verified-and-tracked set to 16 findings across 13 tasks. 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
 15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
 must be confirmed before they are fixed. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md).
@@ -61,6 +62,8 @@ stay extraction-on-demand, one task per `SH-Hxxx`, **verification first**.
 | [[TASK-116]] | SH-H041, H044, H042, H043 | P0 | `RuleSpecification` leaves degrade to match-all on destructive paths |
 | [[TASK-117]] | SH-H006 | P1 | `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set |
 | [[TASK-118]] | SH-H048 | P1 | Tenant header/claim guard covers only the hard-coded `X-Tenant-Id` |
+| [[TASK-125]] | SH-H036 | P1 | `ReadOne` queries the connector directly, bypassing every store decorator |
+| [[TASK-126]] | SH-H019 | P1 | `TagServiceBase` states its tenant contract in a comment and enforces nothing |
 
 Two groupings worth explaining, because they are not one-task-per-finding:
 

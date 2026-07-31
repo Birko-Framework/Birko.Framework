@@ -43,9 +43,10 @@ One **story per severity level per sweep**. Tasks are generally **not** pre-crea
 bucket from which tasks are extracted on demand from its findings doc, rather than mirroring 1,700+
 entries into the tree up front.
 
-**The one exception is STORY-051**, where the 15 hand-verified highs are pre-created as 11 tasks. A
-bounded set of traced defects is pickable work; the reasoning against pre-creation applies to unverified
-claims, not to confirmed ones.
+**The one exception is STORY-051**, where the hand-verified highs are pre-created as tasks — 11 initially,
+now 13 as further findings are verified and promoted. A bounded set of traced defects is pickable work; the
+reasoning against pre-creation applies to unverified claims, not to confirmed ones. **Verification is the
+gate for promotion**, so a finding earns a task by being traced, not by being filed.
 
 ### Sweep 1 — `CR-*`
 
@@ -58,7 +59,7 @@ claims, not to confirmed ones.
 
 ### Sweep 2 — `SH-*`
 
-- STORY-051 — High findings (57, in progress) — `SH-H001 … SH-H057`; 15 verified, **11 tasks pre-created** (TASK-108 … TASK-118); **2 closed** (TASK-108 SH-H039, TASK-114 SH-H047)
+- STORY-051 — High findings (57, in progress) — `SH-H001 … SH-H057`; **13 tasks** (TASK-108 … TASK-118, TASK-125, TASK-126) covering 16 verified findings; **2 closed** (TASK-108 SH-H039, TASK-114 SH-H047)
 - STORY-053 — Medium findings (421) — `SH-M001 … SH-M421`
 - STORY-054 — Low findings (387) — `SH-L001 … SH-L387`
 - STORY-055 — The three unrated areas (16) — `core-model-contracts`, `store-lazy-initialization`, `unit-of-work-and-transactions`: swept, but their findings were **never written down**. Recovery, not remediation.
