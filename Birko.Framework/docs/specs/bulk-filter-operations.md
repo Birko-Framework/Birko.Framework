@@ -1,6 +1,6 @@
 ---
 area: bulk-filter-operations
-generated-at: f3ac675 + SH-H003/SH-M022 fix (Birko.Data.SQL; partial regen adding the sort-key resolution requirement)
+generated-at: f3ac675 + SH-H003/SH-M022 + TASK-128 fixes (Birko.Data.SQL / .View; partial regen of the sort-key resolution requirement)
 generated-on: 2026-07-31
 sources:
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
@@ -147,15 +147,15 @@ quoted.
 - **Then** no `ORDER BY` is appended and resolution is a pass-through — a null or empty sort dictionary
   is returned unchanged
 
-#### Scenario: The view path is not covered by this funnel
+#### Scenario: The view path resolves through its own funnel, not this one
 
 - **Given** a `SqlViewStore<TView>` query carrying an `OrderBy<TView>`
 - **When** the view select command is built
-- **Then** the keys are **not** resolved: `SqlViewStore.TranslateOrderBy` copies `PropertyName` into the
-  dictionary and the view clause is emitted from its own site
-  (`AbstractConnectorBase_View.CreatePersistentViewSelectCommand` / the on-the-fly builder), neither of
-  which passes through the `Tables.Table` funnel — so the interpolation and its injection sink remain on
-  the view path. Recorded here as a known gap, tracked as TASK-128
+- **Then** the keys do **not** pass through this `Tables.Table` funnel — the view clause is emitted from its
+  own sites (`AbstractConnectorBase_View.CreatePersistentViewSelectCommand` and the on-the-fly builder) — and
+  are instead resolved by `DataBase.ResolveViewOrderFields` in `Select(Tables.View, …)` / `SelectAsync(…)`,
+  which additionally picks the resolved form per path because a persistent view exposes different column
+  names than the on-the-fly join select. Specified under `views-and-aggregation`; closed by TASK-128
 
 ### Requirement: Single-result reads on a bulk store require ReadFirst
 

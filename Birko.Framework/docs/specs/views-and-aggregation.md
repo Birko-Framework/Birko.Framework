@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: f3ac675 + TASK-128 fix (Birko.Data.SQL.View; partial regen of the SQL view read requirements)
+generated-on: 2026-07-31
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -16,6 +16,9 @@ sources:
   - ../Birko.Data.RavenDB.Views/RavenViewStore.cs
   - ../Birko.Data.RavenDB.Views/RavenViewTranslator.cs
   - ../Birko.Data.SQL.Views/SqlViewManager.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectView.cs
+  - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
+  - ../Birko.Data.SQL.View/SQL/DataBase_ViewOrderBy.cs
   - ../Birko.Data.SQL.Views/SqlViewStore.cs
   - ../Birko.Data.SQL.Views/SqlViewTranslator.cs
   - ../Birko.Data.Stores/AggregateHelper.cs
@@ -426,8 +429,10 @@ The system SHALL execute SQL view queries through the connector, preferring genu
 I/O — `SelectAsync` / `SelectCountAsync` on an `AbstractAsyncConnector`, threading the
 `CancellationToken` — and falling back to synchronous `Select` / `SelectCount` otherwise;
 SHALL parse the filter with `DataBase.ParseConditionExpression`; SHALL translate
-`OrderBy<TView>` to a `Dictionary<string,bool>` (property name → descending), returning
-`null` when there are no sort fields; SHALL check the token with `ThrowIfCancellationRequested`
+`OrderBy<TView>` to a `Dictionary<string,bool>` (view property name → descending), returning
+`null` when there are no sort fields — the connector resolves those keys against the view's
+fields, so the store passes them through unvalidated on purpose (see *View sort keys are
+resolved against the view's field metadata, per path*); SHALL check the token with `ThrowIfCancellationRequested`
 before each operation; and SHALL materialize each row by reading reader columns
 **positionally** against `View.GetTableFields()`.
 
@@ -461,11 +466,57 @@ before each operation; and SHALL materialize each row by reading reader columns
 - **When** `DataBase.ParseConditionExpression` resolves `Status` against the lambda's parameter type `OrderSummary`
 - **Then** resolution goes through `LoadTable(typeof(OrderSummary))` and then the `ResolveFieldSelectName` view hook, both of which require SQL mapping attributes on `TView`; the definition's `FieldSelector` list is never consulted, so for a plain portable view POCO the condition is left with no name and the query fails with `InvalidOperationException("Condition name cannot be null or empty")`
 
-#### Scenario: Order-by keys are interpolated verbatim while aggregate columns are aliased by function name
+#### Scenario: Order-by keys are resolved against the view's fields, per path
 
 - **Given** an aggregate view whose `Sum` of `Order.Total` targets `TView.Total`, queried with `OrderBy<TView>.By(v => v.Total)`
-- **When** the on-the-fly select command is built
-- **Then** `ORDER BY Total ASC` is appended from the order dictionary key unchanged, while the SELECT list emits `SUM(Order.Total) as SUM` — the alias is the `table.Fields` dictionary key, which `SqlViewTranslator` sets to the SQL function name — and plain fields emit `Table.Column`, so neither an aggregate nor a renamed view property matches an emitted column; the persistent-view path instead names aggregate columns by view property (`GetPersistentViewSelectFields`)
+- **When** the select command is built
+- **Then** the key is resolved by `DataBase.ResolveViewOrderFields` before it reaches the clause, and the resolved form follows the path: on the on-the-fly path `ORDER BY SUM(Order.Total) ASC` (what that SELECT list projects, aliased `as SUM` — the `table.Fields` dictionary key, which `SqlViewTranslator` sets to the SQL function name), and on the persistent path `ORDER BY Total ASC` (the `AS "Total"` alias the view DDL created). Before resolution existed the raw key was interpolated, so neither an aggregate nor a renamed view property matched an emitted column
+
+### Requirement: View sort keys are resolved against the view's field metadata, per path
+
+`OrderBy<TView>` carries **view property names** — `SqlViewStore.TranslateOrderBy` copies
+`OrderByField.PropertyName` across, and `ByName` accepts an arbitrary caller string — while both view
+`ORDER BY` emit sites interpolate their keys into `CommandText` unparameterised
+(`CreatePersistentViewSelectCommand`, and the entity builder reached via
+`CreateSelectCommand(DbCommand, Tables.View, …)`).
+
+The system SHALL therefore resolve every view sort key through the view's field metadata before it reaches
+either clause, in `Select(Tables.View, …)` / `SelectAsync(Tables.View, …)` — the one method every view read
+passes through, and the only one that knows which path will run. It SHALL match on view property name first
+and then on source column name, and SHALL throw `ArgumentException` naming the key and the view when neither
+matches. Because the emitted identifier is always a name read out of that metadata, caller-supplied text
+cannot reach the clause.
+
+The resolved form SHALL follow the path, because the two expose their columns under different names:
+**on-the-fly** → `field.GetSelectName(true)`, the `Table.Column` form `View.GetSelectFields()` always
+projects; **persistent** → `field.IsAggregate ? field.Property.Name : field.Name`, matching
+`GetPersistentViewSelectFields()` and the `AS "<ViewProperty>"` alias the view DDL emits for aggregates.
+The resolved identifier SHALL NOT be quoted, matching the on-the-fly SELECT list (note the persistent SELECT
+list *does* quote its columns, so on that path alone the two disagree).
+
+#### Scenario: Sorting by a renamed view property works
+
+- **Given** a view projecting `Person.Name` as the view property `PersonName`, queried with `OrderBy<TView>.By(v => v.PersonName)`
+- **When** the read is enumerated
+- **Then** the on-the-fly clause is `ORDER BY Persons.Name ASC` and the persistent clause is `ORDER BY Name ASC`, and the rows come back sorted. Before resolution both raised `no such column: PersonName` — so sorting a view by one of its own properties did not work at all, and only `ByName("<source column>")` did
+
+#### Scenario: An injection payload is rejected on both paths
+
+- **Given** `OrderBy<TView>.ByName("Name; CREATE TABLE Pwned (x INTEGER); --")`
+- **When** the read is enumerated, on either the on-the-fly or the persistent path
+- **Then** `ArgumentException` is thrown, no command runs and no such table is created. Before resolution the text reached `CommandText` verbatim on **both** paths and **the table was created**; the trailing ` ASC` the builders append is neutralised by the comment
+
+#### Scenario: The expression-keyed connector overloads pass the view property name
+
+- **Given** `SelectView<TView,P>(…)` or `Select<TView,P>(Tables.View, …)` with an expression-keyed order dictionary
+- **When** the keys are prepared
+- **Then** `DataBase.GetViewOrderKey` yields the member's own name — the view property — and resolution happens once in the funnel. Pre-resolving at these overloads (as they did, via `GetViewField(...).GetSelectName(true)`) could only ever suit one of the two paths, and it emitted the qualified source column, which a persistent view does not have
+
+#### Scenario: A source column the view does not project is not a legal sort key
+
+- **Given** a view that joins `Order` but selects only `Order.Guid` and `Person.Name`, queried with `OrderBy<TView>.ByName("Amount")`
+- **When** the read is enumerated
+- **Then** `ArgumentException` is thrown — resolution is scoped to what the view exposes, not to every column its source tables have
 
 ### Requirement: MongoDB pipeline translation
 

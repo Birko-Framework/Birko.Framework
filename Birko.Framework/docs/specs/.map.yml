@@ -121,6 +121,12 @@ areas:
       - ../Birko.Data.Stores/TimeIntervalParser.cs
       # platform translators — the conformance surface for one ViewDefinition
       - ../Birko.Data.SQL.Views/**/*.cs
+      # Birko.Data.SQL.View is otherwise out of scope (see the block above), but the view read path's sort
+      # contract is implemented in these three files and this spec documents it — added for TASK-128 rather
+      # than leaving the behaviour unmapped. Not an opening of that whole project.
+      - ../Birko.Data.SQL.View/SQL/DataBase_ViewOrderBy.cs
+      - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
+      - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectView.cs
       - ../Birko.Data.MongoDB.Views/**/*.cs
       - ../Birko.Data.ElasticSearch.Views/**/*.cs
       - ../Birko.Data.RavenDB.Views/**/*.cs

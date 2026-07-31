@@ -13,18 +13,21 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**4 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]], SH-H003 via
-[[TASK-110]]) — **4 of 14 tasks done.** TASK-110 also closed the medium twin SH-M022, which counts under
-[[STORY-053]], not here.
+**4 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+SH-H003 via [[TASK-110]]) — **5 of 15 tasks done.** TASK-110 also closed the medium twin SH-M022, which counts
+under [[STORY-053]], not here; and [[TASK-128]] closed a defect that has no `SH-` id at all, so the task count
+now runs ahead of the finding count.
 TASK-125 (SH-H036) and TASK-126 (SH-H019) were verified by hand and filed on 2026-07-31 while closing
 TASK-114, taking the verified-and-tracked set to 16 findings across 13 tasks. 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
 15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
 must be confirmed before they are fixed. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md).
 
-**[[TASK-128]] (P0) was filed on 2026-07-31 while closing TASK-110** — the view path's ORDER BY still
-interpolates caller text, the same defect one project over, found by hand rather than by the harvester (no
-`SH-` id). It is the 14th task and takes the story from 13 to 14.
+**Two tasks were filed from the remediation itself, both by hand and neither with an `SH-` id**, taking the
+story from 13 tasks to 15: [[TASK-128]] (P0, **closed same day**) — the view path's ORDER BY interpolated
+caller text, the same defect one project over from TASK-110 — and [[TASK-129]] (P1, open) — an aggregate
+view's generated DDL carries a double alias, so no persistent aggregate view can be created at all, found
+while writing TASK-128's tests.
 
 ## User story
 
