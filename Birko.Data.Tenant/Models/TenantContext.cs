@@ -11,6 +11,19 @@ public class TenantContext : ITenantContext
 {
     private readonly AsyncLocal<Guid?> _currentTenantGuid = new();
     private readonly AsyncLocal<string?> _currentTenantName = new();
+    /// <summary>
+    /// Whether an explicit all-tenants (admin) scope is active.
+    /// </summary>
+    /// <remarks>
+    /// <b>This flag is part of the scope <c>WithTenant</c> saves and restores (SH-H054)</b>, not just
+    /// <c>WithAllTenants</c>'s own state. <c>TenantFilter</c> resolves the read predicate as
+    /// <c>IsAllTenantsScope ? null : CurrentTenantGuid</c> — testing the flag <i>first</i> — so leaving it
+    /// set made a nested <c>WithTenant</c> a no-op for reads, and the per-tenant admin loop
+    /// <c>WithAllTenants(() =&gt; foreach (t) WithTenant(t, ...))</c> read every tenant's rows on every
+    /// iteration. Each <c>WithTenant</c> overload therefore clears it for its duration and restores the
+    /// captured value in the same <c>finally</c> as the guid and name: the innermost explicit scope wins,
+    /// and the next iteration is not left narrowed.
+    /// </remarks>
     private readonly AsyncLocal<bool> _allTenantsScope = new();
 
     /// <inheritdoc />
@@ -44,16 +57,19 @@ public class TenantContext : ITenantContext
     {
         var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
+        var previousAllTenantsScope = _allTenantsScope.Value; // SH-H054 — see the field declaration
 
         try
         {
             SetTenant(tenantGuid, tenantName);
+            _allTenantsScope.Value = false;
             return action();
         }
         finally
         {
             _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
+            _allTenantsScope.Value = previousAllTenantsScope;
         }
     }
 
@@ -62,16 +78,19 @@ public class TenantContext : ITenantContext
     {
         var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
+        var previousAllTenantsScope = _allTenantsScope.Value; // SH-H054 — see the field declaration
 
         try
         {
             SetTenant(tenantGuid, tenantName);
+            _allTenantsScope.Value = false;
             return await action();
         }
         finally
         {
             _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
+            _allTenantsScope.Value = previousAllTenantsScope;
         }
     }
 
@@ -80,16 +99,19 @@ public class TenantContext : ITenantContext
     {
         var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
+        var previousAllTenantsScope = _allTenantsScope.Value; // SH-H054 — see the field declaration
 
         try
         {
             SetTenant(tenantGuid, tenantName);
+            _allTenantsScope.Value = false;
             action();
         }
         finally
         {
             _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
+            _allTenantsScope.Value = previousAllTenantsScope;
         }
     }
 
@@ -98,16 +120,19 @@ public class TenantContext : ITenantContext
     {
         var previousTenantGuid = _currentTenantGuid.Value;
         var previousTenantName = _currentTenantName.Value;
+        var previousAllTenantsScope = _allTenantsScope.Value; // SH-H054 — see the field declaration
 
         try
         {
             SetTenant(tenantGuid, tenantName);
+            _allTenantsScope.Value = false;
             await action();
         }
         finally
         {
             _currentTenantGuid.Value = previousTenantGuid;
             _currentTenantName.Value = previousTenantName;
+            _allTenantsScope.Value = previousAllTenantsScope;
         }
     }
 

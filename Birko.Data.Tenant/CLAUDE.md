@@ -88,6 +88,18 @@ Middleware/
   just the ambient tenant). It also suppresses the Strict no-tenant throw. Note it only changes the
   filter seam — `CurrentTenantGuid` is unchanged, so a nested `WithTenant(...)` used purely for event
   attribution still stamps that tenant.
+- **The innermost explicit scope wins (SH-H054).** `WithTenant` suspends any active all-tenants scope for
+  its duration and restores it in the same `finally` as the guid and name. It has to: `TenantFilter` tests
+  `IsAllTenantsScope` *before* `CurrentTenantGuid`, so leaving the flag set made a nested `WithTenant` a
+  no-op for reads — and the per-tenant admin loop `WithAllTenants(() => foreach (t) WithTenant(t, …))`,
+  which is the reason both scopes exist, read **every** tenant's rows on **every** iteration. Restoring on
+  exit is what keeps the next iteration from being left narrowed. Adding a new scope method means deciding
+  what it does to this flag; it is not `WithAllTenants`'s private state.
+- **Still open: what `WithAllTenants` means when it is the *innermost* scope.** With an ambient tenant (from
+  `SetTenant`, i.e. middleware) or an enclosing `WithTenant`, reads widen but item writes do not —
+  `TenantFilter` tests `IsAllTenantsScope` first, `BelongsToCurrentTenant` tests `HasTenant` first. That
+  disagreement is a **decision, tracked as TASK-127**, deliberately not settled by the SH-H054 fix; the
+  suite pins it as a baseline. Don't "tidy" the two orderings into agreement without reading that task.
 - **Filter composition:** ModelByTenant combines base filters with tenant predicate via Expression.AndAlso
 - **Typed refusals:** every tenancy refusal has its own exception type, each subclassing the one hosts already
   catch, so a host can map it to the right status instead of a generic 500/403 — `TenantScopeRequiredException`

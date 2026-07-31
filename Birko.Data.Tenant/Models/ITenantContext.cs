@@ -59,22 +59,23 @@ public interface ITenantContext
     void ClearTenant();
 
     /// <summary>
-    /// Execute an action within a specific tenant scope
+    /// Execute an action within a specific tenant scope.
     /// </summary>
+    /// <remarks>
+    /// <b>The innermost explicit scope wins (SH-H054).</b> An implementation must suspend any active
+    /// all-tenants scope for the duration and restore it on exit, so
+    /// <c>WithAllTenants(() =&gt; WithTenant(t, ... ))</c> — the per-tenant admin loop this pair exists for —
+    /// actually narrows to <i>t</i> on each iteration instead of reading every tenant's rows every time.
+    /// Restoring on exit is what keeps the next iteration from being left narrowed.
+    /// </remarks>
     TResult? WithTenant<TResult>(Guid tenantGuid, string? tenantName, Func<TResult> action);
 
-    /// <summary>
-    /// Execute an async action within a specific tenant scope
-    /// </summary>
+    /// <inheritdoc cref="WithTenant{TResult}(Guid, string?, Func{TResult})"/>
     Task<TResult?> WithTenantAsync<TResult>(Guid tenantGuid, string? tenantName, Func<Task<TResult>> action);
 
-    /// <summary>
-    /// Execute an action within a specific tenant scope (no return value)
-    /// </summary>
+    /// <inheritdoc cref="WithTenant{TResult}(Guid, string?, Func{TResult})"/>
     void WithTenant(Guid tenantGuid, string? tenantName, Action action);
 
-    /// <summary>
-    /// Execute an async action within a specific tenant scope (no return value)
-    /// </summary>
+    /// <inheritdoc cref="WithTenant{TResult}(Guid, string?, Func{TResult})"/>
     Task WithTenantAsync(Guid tenantGuid, string? tenantName, Func<Task> action);
 }
