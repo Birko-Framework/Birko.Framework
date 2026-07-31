@@ -59,7 +59,7 @@ gate for promotion**, so a finding earns a task by being traced, not by being fi
 
 ### Sweep 2 — `SH-*`
 
-- STORY-051 — High findings (57, in progress) — `SH-H001 … SH-H057`; **13 tasks** (TASK-108 … TASK-118, TASK-125, TASK-126) covering 16 verified findings; **2 closed** (TASK-108 SH-H039, TASK-114 SH-H047)
+- STORY-051 — High findings (57, in progress) — `SH-H001 … SH-H057`; **13 tasks** (TASK-108 … TASK-118, TASK-125, TASK-126) covering 16 verified findings; **3 closed** (TASK-108 SH-H039, TASK-114 SH-H047, TASK-115 SH-H054)
 - STORY-053 — Medium findings (421) — `SH-M001 … SH-M421`
 - STORY-054 — Low findings (387) — `SH-L001 … SH-L387`
 - STORY-055 — The three unrated areas (16) — `core-model-contracts`, `store-lazy-initialization`, `unit-of-work-and-transactions`: swept, but their findings were **never written down**. Recovery, not remediation.

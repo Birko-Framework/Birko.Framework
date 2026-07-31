@@ -1,6 +1,6 @@
 ---
 area: tenant-isolation
-generated-at: 10f5611 (Birko.Data.Tenant; partial regen of the item-level write requirements for SH-H047)
+generated-at: 10f5611 + SH-H054 fix (Birko.Data.Tenant; partial regen of the item-level write and scoped-execution requirements)
 generated-on: 2026-07-31
 sources:
   - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
@@ -103,8 +103,9 @@ context and are per-instance rather than per-process.
 ### Requirement: Scoped tenant execution restores the previous tenant
 
 The system SHALL, in every `WithTenant` / `WithTenantAsync` overload, capture the previous tenant
-guid and name, set the requested tenant, run the delegate, and restore the captured values in a
-`finally` block — restoring even when the delegate throws.
+guid, name **and all-tenants flag**, set the requested tenant, **suspend any active all-tenants scope**,
+run the delegate, and restore all three captured values in a `finally` block — restoring even when the
+delegate throws.
 
 #### Scenario: Nested scopes unwind to the outer tenant
 
@@ -123,6 +124,30 @@ guid and name, set the requested tenant, run the delegate, and restore the captu
 - **Given** a `TenantContext` with no tenant set
 - **When** `WithTenant(t, "n", action)` returns
 - **Then** `HasTenant` is false again, because the captured previous guid was null
+
+#### Scenario: A nested tenant scope narrows reads inside an all-tenants scope
+
+- **Given** code inside `WithAllTenants(...)` over a store holding one row per tenant
+- **When** `WithTenant(t, null, () => store.Read())` runs
+- **Then** only tenant `t`'s rows are returned — `WithTenant` clears `IsAllTenantsScope` for its duration, so `TenantFilter`'s `IsAllTenantsScope ? null : CurrentTenantGuid` resolves to `t`; the innermost explicit scope wins
+
+#### Scenario: The per-tenant admin loop reads each tenant once
+
+- **Given** `WithAllTenants(() => foreach (t in tenants) WithTenant(t, null, () => store.Read()))`
+- **When** the loop runs over *n* tenants
+- **Then** each iteration returns only that tenant's rows, and the all-tenants scope is restored between iterations so no iteration is left narrowed
+
+#### Scenario: The suspended all-tenants scope is restored even when the delegate throws
+
+- **Given** code inside `WithAllTenants(...)`
+- **When** a nested `WithTenant` delegate throws and the exception propagates
+- **Then** `IsAllTenantsScope` is true again, because the flag is restored in the same `finally` block as the tenant guid and name
+
+#### Scenario: Reads and item writes agree on nested-scope precedence
+
+- **Given** `WithAllTenants(() => WithTenant(t, ...))`
+- **When** a row returned by a read inside that scope is then updated inside it
+- **Then** the write is authorized — both paths resolve the innermost scope to `t`, where previously reads spanned all tenants while item writes narrowed to `t`
 
 ### Requirement: Explicit all-tenants (admin) scope
 
@@ -147,6 +172,12 @@ restores the previous value in a `finally` block.
 - **Given** `SetTenant(t)` has been called
 - **When** `WithAllTenants(...)` is entered
 - **Then** `HasTenant` remains true and `CurrentTenantGuid` remains `t`; only `IsAllTenantsScope` changes
+
+#### Scenario: An all-tenants scope entered innermost still widens reads but not item writes
+
+- **Given** an ambient tenant `t` — set via `SetTenant`, or by an enclosing `WithTenant` — and an inner `WithAllTenants(...)`
+- **When** a read and an item-level write are performed inside that inner scope
+- **Then** the read spans all tenants while the write is still refused for another tenant's row: `TenantFilter` tests `IsAllTenantsScope` first, `BelongsToCurrentTenant` tests `HasTenant` first. Only the *nested `WithTenant`* case was reconciled; this remaining disagreement is a recorded open decision, not a settled contract
 
 ### Requirement: Custom ITenantContext implementations fail closed for admin scope
 

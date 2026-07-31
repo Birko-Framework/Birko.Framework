@@ -13,7 +13,7 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**2 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]]) — **2 of 13 tasks done.**
+**3 / 57 closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]]) — **3 of 13 tasks done.**
 TASK-125 (SH-H036) and TASK-126 (SH-H019) were verified by hand and filed on 2026-07-31 while closing
 TASK-114, taking the verified-and-tracked set to 16 findings across 13 tasks. 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
 15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
