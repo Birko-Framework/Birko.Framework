@@ -2,13 +2,13 @@
 id: TASK-108
 parent: STORY-051
 feature: null
-status: todo
+status: done
 priority: P0
 assignee: ai
 created: 2026-07-30
 depends-on: []
 blocks: []
-pr: null
+pr: 2a19150   # Birko.Security; tests aeb9307 in Birko.Security.Tests
 github-issue: null
 jira-key: null
 findings: [SH-H039]
@@ -51,16 +51,52 @@ length equal to the algorithm's expected output size. Anything else → `false`,
 
 ## Acceptance criteria
 
-- [ ] `Verify("anything", "PBKDF2-SHA512:600000::")` returns `false`
-- [ ] A hash segment shorter than the algorithm's output length returns `false` (the ~1/256 case), not a
+- [x] `Verify("anything", "PBKDF2-SHA512:600000::")` returns `false`
+- [x] A hash segment shorter than the algorithm's output length returns `false` (the ~1/256 case), not a
       probabilistic match
-- [ ] An empty **salt** segment returns `false`
-- [ ] Iterations of `0`, a negative number, or a non-integer returns `false` and **throws nothing**
-- [ ] A malformed segment count, an unknown algorithm, and non-Base64 content all return `false`
-- [ ] A genuine `Hash()` → `Verify()` round trip still succeeds, and a wrong password still returns `false`
-- [ ] Derived length is taken from the algorithm, not from `storedHash.Length` — asserted directly
-- [ ] Regression tests in `Birko.Security.Tests` covering each row above
-- [ ] `/specs regen` for `security-and-authorization`, spec diff reviewed
+- [x] An empty **salt** segment returns `false`
+- [x] Iterations of `0`, a negative number, or a non-integer returns `false` and **throws nothing**
+- [x] A malformed segment count, an unknown algorithm, and non-Base64 content all return `false`
+- [x] A genuine `Hash()` → `Verify()` round trip still succeeds, and a wrong password still returns `false`
+- [x] Derived length is taken from the algorithm, not from `storedHash.Length` — asserted directly
+- [x] Regression tests in `Birko.Security.Tests` covering each row above
+- [x] `/specs regen` for `security-and-authorization`, spec diff reviewed
+
+## Outcome
+
+One guard added to `Verify`, before any comparison: `iterations <= 0` joins the `TryParse` check, and
+`salt.Length == 0 || storedHash.Length != HashSize` rejects the value outright. The derivation then asks
+for `HashSize` rather than `storedHash.Length` — that one argument was the root cause of both the empty
+and the truncated case.
+
+**The suite splits, and the split was measured.** `Birko.Security.Tests` is 47/47 green with the fix.
+Reverting only `Pbkdf2PasswordHasher.cs` and re-running gives **12 failures, exactly the fix-dependent
+rows** — the 3 `AllEmptySegments` passwords, the 4 `TruncatedHashSegment` lengths, the crafted one-byte
+column, and iterations `0` / `-1` / `-600000` (which threw rather than returned). Everything else,
+including the whole pre-existing `PasswordHasherAndEncryptionTests` class, passed both ways.
+
+Worth recording, because it corrects two assumptions in the analysis above:
+
+- **`Verify_TruncatedHashSegment` is the direct assertion of criterion 7**, and it works because PBKDF2
+  output is prefix-stable: the truncated segment *is* byte-for-byte what the correct password derives to
+  at that length, so under the old code every one of those four rows returned `true` for the **correct**
+  password. Nothing weaker demonstrates the length inversion — a wrong-password test would have passed
+  either way.
+- **Two of the new tests are guards, not proofs.** `Verify_EmptySaltSegment` and
+  `Verify_OverlongHashSegment` pass with the fix reverted: an empty salt derives a *different* 32-byte
+  key, and a 64-byte segment derives 64 bytes that don't match. They pin the contract; they were never
+  evidence of the bug. Keeping them is right, calling them fix-dependent would not have been.
+
+**Salt is checked for non-emptiness, not for `SaltSize`.** A short-but-present salt is weak salting, not a
+bypass — the comparison still runs over all 32 bytes — so requiring exactly 16 would reject stored values
+without closing anything, and this task's contract is fail-closed, not re-key. Same reasoning for leaving
+the iteration floor at `> 0` rather than the constructor's 10,000: a low-iteration column is a rehash
+concern, and rejecting it here would lock out every user written before an iteration bump.
+
+**Flagged, not fixed:** an iteration segment of `2147483647` is well-formed and would burn CPU for minutes
+on the login path. It needs DB corruption to reach and an upper bound is a policy call (it caps legitimate
+future hardening), so it is not decided here. Worth a follow-up task if the login path is ever exposed to
+untrusted stored values.
 
 ## Out of scope
 

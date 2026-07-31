@@ -1,7 +1,7 @@
 ---
 area: security-and-authorization
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 0fc2d23a0139b275a82516cf65fe6f006585d560
+generated-on: 2026-07-31
 sources:
   - ../Birko.Security.AspNetCore/Authentication/JwtAuthenticationOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs
@@ -94,21 +94,19 @@ construction-time iteration count below 10,000 with `ArgumentOutOfRangeException
 - **When** `new Pbkdf2PasswordHasher(9_999)` is constructed
 - **Then** `ArgumentOutOfRangeException` is thrown with the message "Iterations must be at least 10,000"
 
-### Requirement: PBKDF2 verification tolerates most malformed stored strings but is not total
+### Requirement: PBKDF2 verification is total and fails closed on any malformed stored string
 
 The system SHALL make `Pbkdf2PasswordHasher.Verify` return `false` — never throw — for any non-null stored
-string that is not a valid hash of this format: a segment count other than 4, an algorithm tag other than
-`PBKDF2-SHA512`, a non-integer iteration segment, or a salt/hash segment that is not valid Base64 (the
-`FormatException` is caught). The system SHALL compare the recomputed and stored hashes with
-`CryptographicOperations.FixedTimeEquals`, and SHALL throw `ArgumentNullException` when either argument is
-null.
+string that is not a well-formed hash of this format, and SHALL make that judgement **before** any
+comparison is attempted. A stored string is well-formed only when it has exactly 4 colon-separated
+segments, an algorithm tag of `PBKDF2-SHA512`, an iteration segment that parses as an `int` greater than
+zero, salt and hash segments that are both valid Base64 (the `FormatException` is caught), a salt that
+decodes to at least one byte, and a hash that decodes to exactly `HashSize` (32) bytes. The system SHALL
+compare the recomputed and stored hashes with `CryptographicOperations.FixedTimeEquals`, and SHALL throw
+`ArgumentNullException` when either argument is null.
 
-Two shapes escape that guard, so the totality the code comment claims (CR-M233) does not hold. An iteration
-segment that parses as `0` or a negative number passes `int.TryParse` and is handed to
-`Rfc2898DeriveBytes.Pbkdf2`, which throws `ArgumentOutOfRangeException` out of `Verify`. And a stored string
-whose salt and hash segments are both empty — `PBKDF2-SHA512:600000::`, four segments with valid (empty)
-Base64 — decodes to two zero-length arrays, so the recomputation is asked for a zero-length key and
-`FixedTimeEquals` over two empty spans returns `true`: every password verifies against such a stored value.
+`Hash` never emits a malformed shape, so reaching these guards takes a truncated column, a column defaulted
+to `''`, or a half-finished migration — none of which is treated as a reason to succeed.
 
 #### Scenario: Truncated database column
 
@@ -128,30 +126,54 @@ Base64 — decodes to two zero-length arrays, so the recomputation is asked for 
 - **When** `Verify(null!, "…")` or `Verify("p", null!)` is called
 - **Then** `ArgumentNullException` is thrown
 
-#### Scenario: Zero iteration count in the stored hash
+#### Scenario: Non-positive iteration count in the stored hash
 
-- **Given** a stored value `"PBKDF2-SHA512:0:{valid base64 salt}:{valid base64 hash}"`
+- **Given** a stored value `"PBKDF2-SHA512:0:{valid base64 salt}:{valid base64 hash}"`, or the same with `-1`
 - **When** `Verify("p", stored)` is called
-- **Then** `ArgumentOutOfRangeException` ("iterations ('0') must be a non-negative and non-zero value") escapes from `Rfc2898DeriveBytes.Pbkdf2`; only `FormatException` is caught
+- **Then** it returns `false` and nothing is thrown; the `iterations <= 0` guard rejects the value before `Rfc2898DeriveBytes.Pbkdf2` can raise `ArgumentOutOfRangeException` out of the login path
 
-#### Scenario: Empty salt and hash segments accept every password
+#### Scenario: Empty salt and hash segments are rejected
 
 - **Given** a stored value `"PBKDF2-SHA512:600000::"`, as left by a truncated column or a half-finished migration
 - **When** `Verify(anyPassword, stored)` is called
-- **Then** it returns `true`, because both segments decode to zero-length arrays, the recomputed key is zero-length, and `FixedTimeEquals(empty, empty)` is true
+- **Then** it returns `false` for every password — the empty salt and the 0-byte hash each fail the well-formedness guard, so no zero-length key is derived and `FixedTimeEquals` is never reached
 
-### Requirement: PBKDF2 verification trusts the parameters embedded in the stored hash
+#### Scenario: Empty salt with an otherwise genuine hash
 
-The system SHALL recompute the candidate hash using the iteration count parsed from the stored string and a
-length equal to `storedHash.Length`, not the hasher's own configured iteration count or `HashSize`. There is
-no verification-time minimum: a stored hash whose iteration segment is far below the constructor's 10,000
-floor still verifies successfully, and `Pbkdf2PasswordHasher` exposes no rehash-needed query.
+- **Given** a genuine stored value whose salt segment has been blanked
+- **When** `Verify(correctPassword, stored)` is called
+- **Then** it returns `false`, because an unsalted column is not verifiable
+
+### Requirement: PBKDF2 verification derives its key length from the algorithm, not from the stored value
+
+The system SHALL recompute the candidate hash at a length of `HashSize` (32) bytes — the algorithm's own
+output size — and SHALL reject any stored hash segment whose decoded length differs, in either direction.
+The iteration count, by contrast, is taken from the stored string rather than from the hasher's own
+configuration, so hashes written under an older iteration count remain verifiable. There is no
+verification-time iteration minimum: a stored hash whose iteration segment is far below the constructor's
+10,000 floor still verifies successfully, and `Pbkdf2PasswordHasher` exposes no rehash-needed query.
+
+Because PBKDF2 output is prefix-stable, deriving to `storedHash.Length` would let a truncated column decide
+how many bytes were compared — a 1-byte segment would match an arbitrary password roughly 1 in 256, and a
+0-byte segment would match every password. Pinning the length to the algorithm removes that entire class.
 
 #### Scenario: Legacy weak hash still verifies
 
 - **Given** a stored value `"PBKDF2-SHA512:10000:{salt}:{hash}"` written by an older deployment, and a hasher constructed with 600,000 iterations
 - **When** `Verify(correctPassword, stored)` is called
 - **Then** it returns `true`, because the 10,000 from the stored string is used for the recomputation
+
+#### Scenario: Truncated hash segment rejected even for the correct password
+
+- **Given** a genuine stored value whose hash segment has been truncated to 1, 4, 16 or 31 bytes
+- **When** `Verify(correctPassword, stored)` is called
+- **Then** it returns `false`, although the truncated segment is byte-for-byte the prefix the correct password derives to
+
+#### Scenario: Over-long hash segment rejected
+
+- **Given** a stored value whose hash segment decodes to 64 bytes
+- **When** `Verify(correctPassword, stored)` is called
+- **Then** it returns `false`; the length is pinned to 32 in both directions, not merely required to be non-empty
 
 ### Requirement: BCrypt hashing emits the standard modular crypt format with a bounded work factor
 
