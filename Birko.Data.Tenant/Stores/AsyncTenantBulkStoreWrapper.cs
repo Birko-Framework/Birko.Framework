@@ -30,11 +30,10 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
         // CR-M173: materialize once — validating then passing the same lazy source enumerated it twice,
         // so a non-deterministic sequence could persist a set different from the one authorized.
         var items = data as IReadOnlyCollection<T> ?? data.ToList();
-        if (!items.All(BelongsToCurrentTenant))
+        var stored = await ReadStoredItemsAsync(items, cancellationToken);
+        foreach (var item in items)
         {
-            throw new TenantMismatchException(
-                "delete", typeof(T).Name, _tenantContext.CurrentTenantGuid,
-                items.FirstOrDefault(i => !BelongsToCurrentTenant(i))?.TenantGuid);
+            EnsureWriteAuthorized("delete", item, stored);
         }
 
         await _innerStore.DeleteAsync(items, cancellationToken);
@@ -56,14 +55,46 @@ public class AsyncTenantBulkStoreWrapper<TStore, T> : AsyncTenantStoreWrapper<TS
     public async Task UpdateAsync(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null, CancellationToken cancellationToken = default)
     {
         var items = data as IReadOnlyCollection<T> ?? data.ToList(); // CR-M173: materialize once
-        if (!items.All(BelongsToCurrentTenant))
+        var stored = await ReadStoredItemsAsync(items, cancellationToken);
+        // Authorize the whole batch before mutating any of it, so a refusal in the middle of the set
+        // cannot leave earlier items re-stamped.
+        foreach (var item in items)
         {
-            throw new TenantMismatchException(
-                "update", typeof(T).Name, _tenantContext.CurrentTenantGuid,
-                items.FirstOrDefault(i => !BelongsToCurrentTenant(i))?.TenantGuid);
+            EnsureWriteAuthorized("update", item, stored);
+        }
+        foreach (var item in items)
+        {
+            PreserveStoredTenant(item, stored);
         }
 
         await _innerStore.UpdateAsync(items, storeDelegate, cancellationToken);
+    }
+
+    /// <summary>
+    /// One read for the whole batch instead of the base class's read-per-item. Same contract: keyed by
+    /// Guid, missing rows absent, and deliberately unscoped by tenant (see the base implementation).
+    /// </summary>
+    protected override async Task<IReadOnlyDictionary<Guid, T>> ReadStoredItemsAsync(
+        IReadOnlyCollection<T> items, CancellationToken cancellationToken = default)
+    {
+        var guids = TargetGuids(items).ToList();
+        var stored = new Dictionary<Guid, T>();
+        if (guids.Count == 0)
+        {
+            return stored;
+        }
+
+        // _innerStore is IAsyncBulkStore<T> here, so ReadAsync(filter) binds to the collection overload.
+        var rows = await _innerStore.ReadAsync(
+            new Data.Filters.ModelsByGuid<T>(guids).Filter(), null, null, null, cancellationToken);
+        foreach (var row in rows)
+        {
+            if (row?.Guid != null)
+            {
+                stored[row.Guid.Value] = row;
+            }
+        }
+        return stored;
     }
 
     public async Task UpdateAsync(Expression<Func<T, bool>> filter, Action<T> updateAction, CancellationToken cancellationToken = default)

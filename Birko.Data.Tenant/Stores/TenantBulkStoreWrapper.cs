@@ -27,11 +27,10 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
     {
         // CR-M173: materialize once so the authorized set equals the persisted set for a lazy source.
         var items = data as IReadOnlyCollection<T> ?? data.ToList();
-        if (!items.All(BelongsToCurrentTenant))
+        var stored = ReadStoredItems(items);
+        foreach (var item in items)
         {
-            throw new TenantMismatchException(
-                "delete", typeof(T).Name, _tenantContext.CurrentTenantGuid,
-                items.FirstOrDefault(i => !BelongsToCurrentTenant(i))?.TenantGuid);
+            EnsureWriteAuthorized("delete", item, stored);
         }
 
         _innerStore.Delete(items);
@@ -53,14 +52,43 @@ public class TenantBulkStoreWrapper<TStore, T> : TenantStoreWrapper<TStore, T>, 
     public void Update(IEnumerable<T> data, StoreDataDelegate<T>? storeDelegate = null)
     {
         var items = data as IReadOnlyCollection<T> ?? data.ToList(); // CR-M173: materialize once
-        if (!items.All(BelongsToCurrentTenant))
+        var stored = ReadStoredItems(items);
+        // Authorize the whole batch before mutating any of it, so a refusal in the middle of the set
+        // cannot leave earlier items re-stamped.
+        foreach (var item in items)
         {
-            throw new TenantMismatchException(
-                "update", typeof(T).Name, _tenantContext.CurrentTenantGuid,
-                items.FirstOrDefault(i => !BelongsToCurrentTenant(i))?.TenantGuid);
+            EnsureWriteAuthorized("update", item, stored);
+        }
+        foreach (var item in items)
+        {
+            PreserveStoredTenant(item, stored);
         }
 
         _innerStore.Update(items, storeDelegate);
+    }
+
+    /// <summary>
+    /// One read for the whole batch instead of the base class's read-per-item. Same contract: keyed by
+    /// Guid, missing rows absent, and deliberately unscoped by tenant (see the base implementation).
+    /// </summary>
+    protected override IReadOnlyDictionary<Guid, T> ReadStoredItems(IReadOnlyCollection<T> items)
+    {
+        var guids = TargetGuids(items).ToList();
+        var stored = new Dictionary<Guid, T>();
+        if (guids.Count == 0)
+        {
+            return stored;
+        }
+
+        // _innerStore is IBulkStore<T> here, so Read(filter) binds to the collection overload.
+        foreach (var row in _innerStore.Read(new Data.Filters.ModelsByGuid<T>(guids).Filter()))
+        {
+            if (row?.Guid != null)
+            {
+                stored[row.Guid.Value] = row;
+            }
+        }
+        return stored;
     }
 
     public void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)

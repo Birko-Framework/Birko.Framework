@@ -98,6 +98,23 @@ Middleware/
   deliberately FAIL OPEN ("non-tenant/admin mode": reads unfiltered, writes allowed across tenants;
   CR-L229, test-pinned). Fail-closed callers must set a tenant or override the virtual
   `BelongsToCurrentTenant`
+- **A tenant assertion the caller controls is not a tenant check (SH-H047).** Item-level `Update`/`Delete`
+  read the targeted row back — by `Guid`, deliberately **unscoped by tenant** — and authorize against
+  *that*, never against `item.TenantGuid`. `ITenant.TenantGuid` is a public settable property, normally
+  model-bound from a request body, and the inner stores key writes on the primary field alone, so
+  comparing it to the ambient tenant let `{ Guid = <another tenant's row>, TenantGuid = mine }` overwrite
+  or delete that row. The read must stay unscoped: a tenant-scoped one returns null for a foreign row,
+  which is indistinguishable from "no such row" — and "no such row" authorizes the write. This is the
+  store-layer sibling of the `X-Tenant-Id`/JWT-claim guard in `Birko.Security.AspNetCore`.
+  - `BelongsToCurrentTenant` stays the override seam but is now **handed the persisted row**; an override
+    that consults anything caller-controlled re-opens the hole.
+  - `Update` also restores the stored `TenantGuid`/`TenantName` onto the item (`PreserveStoredTenant`), so
+    an owner cannot **re-home** a row by editing the field. Skipped with no tenant set and inside
+    `WithAllTenants(...)`, matching `SetTenantGuidIfNeeded`'s behaviour on create in those scopes.
+  - Cost: one read per item-level write. The bulk wrappers override `ReadStoredItems` to resolve a whole
+    batch in a single `ModelsByGuid` read, and authorize the entire batch before stamping any of it.
+  - The **filter-based** bulk paths (`Update(filter, …)`, `Delete(filter)`) were never affected — they
+    already compose `TenantFilter`
 
 ## Related Projects
 - [Birko.Data.Sync.Tenant](../Birko.Data.Sync.Tenant/CLAUDE.md) — Tenant-aware synchronization
