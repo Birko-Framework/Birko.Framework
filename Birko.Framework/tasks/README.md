@@ -6,15 +6,15 @@ _Generated 2026-07-31. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
-| planned      | 10                 | 27                 | —                   |
-| todo         | —                  | —                  | 51                  |
+| planned      | 10                 | 28                 | —                   |
+| todo         | —                  | —                  | 57                  |
 | in-progress  | 6                  | 6                  | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 22                 | 28                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 7 · P1 9 · P2 32 · P3 3**
+Todo by priority: **P0 7 · P1 12 · P2 34 · P3 4**
 
 ## In progress now
 
@@ -148,7 +148,7 @@ Todo by priority: **P0 7 · P1 9 · P2 32 · P3 3**
   - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/0)
   - STORY-054 [Spec-harvest — low findings](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/STORY.md) — planned (0/0)
   - STORY-055 [Spec-harvest — the three unrated areas](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/STORY.md) — in-progress (0/0)
-- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (10/16 tasks done)
+- **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (10/22 tasks done)
   - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3, ai) — **done**
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2, ai) — **done**
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2, ai) — **done**
@@ -175,6 +175,13 @@ Todo by priority: **P0 7 · P1 9 · P2 32 · P3 3**
     - [x] [TASK-098](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-098-ribbon-size-variant-scaling-priority-model.md) Ribbon model + tokens: size variant, scaling priority, group icon (XAML **and** web together) (P2, ai) — **done**
     - [x] [TASK-099](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-099-progressive-group-scaling-degrade-pass.md) The degrade pass — measure and scale groups Large → Medium → Small in priority order (P2, ai) — **done**
     - [x] [TASK-100](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-100-group-collapse-to-popup.md) Group-collapse-to-popup — the chunk button and its flyout (P2, ai) — **done**
+  - STORY-056 [Mixed per-item size variants within one ribbon group](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/STORY.md) — planned (0/6)
+    - [ ] [TASK-119](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-119-decide-mixed-size-model.md) Decide the mixed-size model: per-item degrade order, or fixed group templates (P1, human)
+    - [ ] [TASK-120](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-120-mixed-size-model-both-skins.md) The mixed-size model, in both skins, with its tokens (P1, ai) ⟵ depends on TASK-119
+    - [ ] [TASK-121](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-121-reformulate-scaling-ladder-for-mixed-groups.md) Reformulate the degrade ladder for mixed-size groups (P1, ai) ⟵ depends on TASK-119, TASK-120
+    - [ ] [TASK-122](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-122-render-mixed-columns-both-skins.md) Render mixed columns — the CSS grid and the Avalonia panel (P2, ai) ⟵ depends on TASK-119, TASK-120
+    - [ ] [TASK-123](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-123-panel-height-under-mixed-sizes.md) Panel height under mixed sizes, and extending the clipping guard (P2, ai) ⟵ depends on TASK-121, TASK-122
+    - [ ] [TASK-124](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-124-stale-ribbongroupsize-parity-comment.md) The `RibbonGroupSize` doc comment describes a parity gap that no longer exists (P3, ai)
 - **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (9/15 tasks done)
   - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
   - [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)

@@ -175,7 +175,14 @@ Decomposed into 8 stories (dependency-ordered):
 10. **STORY-049** — Office-style ribbon overflow: progressive group scaling + group-to-popup collapse,
     in both `Birko.Xaml.Avalonia`'s `Ribbon` and `Birko.Web.Components`' `b-ribbon`. Starts with an
     interim "make overflow reachable" fix, then the shared model change (size variant + scaling
-    priority, added to both models at once) before the degrade pass itself.
+    priority, added to both models at once) before the degrade pass itself. **Done** (4/4).
+11. **STORY-056** — Mixed per-item size variants within one ribbon group: one large button beside a
+    column of three small ones, as Office's Clipboard group does. **Not a redo of STORY-049** — that
+    story deliberately modelled Office's `SizeDefinition` as a *uniform* per-group variant; real
+    `SizeDefinition` allows mixed layouts, and this is the extension it simplified away. The blocker
+    is the scaling model, not the CSS: `RibbonGroupMetrics.Widths` keys one width per group per
+    variant, which stops naming a configuration once items size independently. Opens with an explicit
+    design decision (TASK-119) before any code.
 
 ## WPF addendum — adding WPF after Avalonia
 
