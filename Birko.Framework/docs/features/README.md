@@ -10,12 +10,16 @@ been built. One feature per epic, ids aligned (`FEATURE-0NN` ↔ `EPIC-0NN`) so 
 Each feature's `decisions.md` § History log states exactly what its backfilled rows do and do not claim.
 
 > ⚠ **Awaiting sign-off (8):** FEATURE-001 (4), FEATURE-016 (4) — these are verification debt; finish them before new scope.
+>
+> 💭 **Awaiting a decision (1):** FEATURE-001 D8 — whether `b-form` starts rejecting more kinds of invalid
+> input (`typeMismatch` first). Run `/feature decide FEATURE-001`; [[TASK-134]] gathers the evidence and must
+> not adopt a flag before the row is settled.
 
 ## Features
 
 | Feature | Title | Phase | Decisions (a/c/d/r/p) | Tasks | Prototype | Source |
 |---------|-------|-------|-----------------------|-------|-----------|--------|
-| [FEATURE-001](FEATURE-001-web-components-ui-polish/) | Birko.Web.Components — UI polish | building | 7/0/0/0/0 | 4/9 | n/a (backfilled) | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
+| [FEATURE-001](FEATURE-001-web-components-ui-polish/) | Birko.Web.Components — UI polish | building | 7/0/0/0/**1** | 4/12 | n/a (backfilled) | [EPIC-001](../../tasks/EPIC-001-web-components-ui-polish/EPIC.md) |
 | [FEATURE-002](FEATURE-002-birko-data-redis/) | Birko.Data.Redis | idea | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-002](../../tasks/EPIC-002-birko-data-redis/EPIC.md) |
 | [FEATURE-003](FEATURE-003-birko-caching-ncache/) | Birko.Caching.NCache | idea | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-003](../../tasks/EPIC-003-birko-caching-ncache/EPIC.md) |
 | [FEATURE-004](FEATURE-004-storage-cloud-providers/) | Birko.Storage — Cloud providers | idea | 3/0/0/0/0 | 0/3 | n/a (backfilled) | [EPIC-004](../../tasks/EPIC-004-storage-cloud-providers/EPIC.md) |

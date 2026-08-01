@@ -17,11 +17,11 @@ generated: 2026-08-01
 | ✏️ changed | 0 |
 | ⏸️ deferred | 0 |
 | ❌ removed | 0 |
-| 💭 proposed (undecided) | 0 |
+| 💭 proposed (undecided) | 1 |
 
 ## Build progress
 
-4 / 9 tasks done.
+4 / 12 tasks done.
 
 - [ ] TASK-001 Add `bare` attribute to all form controls — **review**
 - [ ] TASK-002 Benchmark + migrate b-editable-table to bare components — **review**
@@ -32,6 +32,9 @@ generated: 2026-08-01
 - [x] TASK-041 Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components
 - [x] TASK-053 b-range: vertical orientation (equalizer-style slider)
 - [ ] TASK-091 `description` — a persistent help-text row on the form controls — **review**
+- [ ] TASK-132 "Required" on a tick box or toggle currently does nothing — an unticked box counts as answered
+- [ ] TASK-133 A multiple-choice (radio) question's answer is never saved, and marking it required makes the form impossible to submit
+- [ ] TASK-134 Decide whether the form should start rejecting more kinds of invalid input than it does today — **awaiting decision**
 
 ## What can be tested now
 
@@ -44,3 +47,9 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 ## Next step
 
 Sign off the 4 item(s) in review before starting new scope (verification debt).
+
+Two newly-found faults are queued behind that (TASK-132, TASK-133). Neither affects anything shipped —
+nothing in any of the 16 apps built on this library uses the two settings involved — which is why they went
+unnoticed, and why fixing them now cannot break an existing screen. The third item (TASK-134) is a
+**question, not work**: it would make forms reject more kinds of bad input, which is visible to users, so it
+waits for a decision (D8) rather than being built.

@@ -7,14 +7,14 @@ _Generated 2026-08-01. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 59                  |
+| todo         | —                  | —                  | 62                  |
 | in-progress  | 6                  | 10                  | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 22                 | 33                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 4 · P1 15 · P2 36 · P3 4**
+Todo by priority: **P0 4 · P1 15 · P2 39 · P3 4**
 
 ## In progress now
 
@@ -48,8 +48,11 @@ Todo by priority: **P0 4 · P1 15 · P2 36 · P3 4**
     - [ ] [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai) 🔍 review · FEATURE-001
   - STORY-003 [size attribute coverage](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/STORY.md) — planned (0/1)
     - [ ] [TASK-003](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/TASK-003-size-on-pagination-dropdown-breadcrumb.md) size attribute on b-pagination, b-dropdown-menu, b-breadcrumb (P2, ai) · FEATURE-001
-  - STORY-023 [Form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — in-progress (0/1)
+  - STORY-023 [Form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — in-progress (0/4)
     - [ ] [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai) 🔍 review · FEATURE-001
+    - [ ] [TASK-132](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-132-bform-required-inert-on-unchecked-toggle.md) `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled (P2, ai) · FEATURE-001
+    - [ ] [TASK-133](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-133-bform-radio-value-never-collected.md) `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate (P2, ai) · FEATURE-001
+    - [ ] [TASK-134](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-134-bform-remaining-validity-flags-decision.md) Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch` (P2, ai) · FEATURE-001
   - STORY-028 [Display & disclosure components](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/STORY.md) — done (3/3) (done)
     - [x] [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch) (P3, ai) · FEATURE-001
     - [x] [TASK-040](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-040-b-accordion-component.md) Add a `b-accordion` (collapsible / disclosure group) component (P2, ai) · FEATURE-001
