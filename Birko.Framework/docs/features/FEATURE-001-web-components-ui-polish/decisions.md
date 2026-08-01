@@ -14,7 +14,7 @@ created: 2026-05-28
 | D1 | bare attribute for inline form usage ([[STORY-001]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-05-28 | ai | [[TASK-001]] |
 | D2 | b-editable-table migration to bare components ([[STORY-002]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-05-28 | ai | [[TASK-002]] |
 | D3 | size attribute coverage ([[STORY-003]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-05-28 | ai | [[TASK-003]] |
-| D4 | Form-associated custom elements (ElementInternals) ([[STORY-023]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-06-15 | ai | [[TASK-035]], [[TASK-132]], [[TASK-133]] |
+| D4 | Form-associated custom elements (ElementInternals) ([[STORY-023]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-06-15 | ai | [[TASK-035]], [[TASK-132]], [[TASK-133]], [[TASK-136]] |
 | D5 | Display & disclosure components ([[STORY-028]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-06-19 | ai | [[TASK-039]], [[TASK-040]], [[TASK-041]] |
 | D6 | Visible help text on form controls ([[STORY-050]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-29 | ai | [[TASK-091]] |
 | D7 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-05-28 | ai | [[TASK-053]] |
@@ -39,6 +39,12 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   reconstructed. Where a real dated decision with reasoning exists it lives in `CHANGELOG.md` or
   `CLAUDE.md` § Recent Updates, which remain the authority for *why*. Rows carry no invented `deferred`
   or `removed` history, so the absence of such rows means "not recorded", not "never considered".
+- 2026-08-01 — **D4** — [[TASK-136]] added by backfill: the `validate()` change itself
+  (`Birko.Web.Components` `9402219`) had no task in this tree, because that line of work was driven from the
+  consumer repos. Inside D4's approved scope — it is the seam between a form-associated control's validity
+  and `b-form`'s schema layer — so no new decision row. Filed at `review`: the framework side is verified
+  (226/226, every check falsified) but Symbio, which reported it, has not been re-checked end-to-end, and
+  the nastiest half of that report is an **edit** that claims success while leaving the old value.
 - 2026-08-01 — **D4** — [[TASK-132]] and [[TASK-133]] spawned while making `b-form.validate()` surface a
   control's own validity (`Birko.Web.Components` `9402219`). Both are pre-existing defects where `b-form`'s
   schema layer and a form-associated control disagree about the same field, so both fall inside D4's

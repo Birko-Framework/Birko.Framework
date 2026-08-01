@@ -21,7 +21,7 @@ generated: 2026-08-01
 
 ## Build progress
 
-4 / 12 tasks done.
+4 / 13 tasks done.
 
 - [ ] TASK-001 Add `bare` attribute to all form controls — **review**
 - [ ] TASK-002 Benchmark + migrate b-editable-table to bare components — **review**
@@ -32,13 +32,18 @@ generated: 2026-08-01
 - [x] TASK-041 Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components
 - [x] TASK-053 b-range: vertical orientation (equalizer-style slider)
 - [ ] TASK-091 `description` — a persistent help-text row on the form controls — **review**
+- [ ] TASK-136 Forms now catch text that isn't a number, instead of accepting it and saving nothing — **review**
 - [ ] TASK-132 "Required" on a tick box or toggle currently does nothing — an unticked box counts as answered
 - [ ] TASK-133 A multiple-choice (radio) question's answer is never saved, and marking it required makes the form impossible to submit
 - [ ] TASK-134 Decide whether the form should start rejecting more kinds of invalid input than it does today — **awaiting decision**
 
 ## What can be tested now
 
-4 item(s) are code-complete and awaiting sign-off: TASK-001, TASK-002, TASK-035, TASK-091. These can be exercised now.
+5 item(s) are code-complete and awaiting sign-off: TASK-001, TASK-002, TASK-035, TASK-091, TASK-136. These can be exercised now.
+
+TASK-136 is the one with a specific thing to try, in Symbio: open a tax rate, type letters into the
+percentage box and save. It must refuse, and the stored percentage must be unchanged. That second half is
+the fault it was written for — before the fix, an edit reported success and quietly kept the old figure.
 
 ## Prototype
 
@@ -46,7 +51,7 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Sign off the 4 item(s) in review before starting new scope (verification debt).
+Sign off the 5 item(s) in review before starting new scope (verification debt).
 
 Two newly-found faults are queued behind that (TASK-132, TASK-133). Neither affects anything shipped —
 nothing in any of the 16 apps built on this library uses the two settings involved — which is why they went

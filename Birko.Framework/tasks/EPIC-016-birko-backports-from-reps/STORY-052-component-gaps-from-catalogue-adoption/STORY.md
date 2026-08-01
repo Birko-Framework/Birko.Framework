@@ -63,6 +63,17 @@ fork *is* the failure mode this story exists to prevent.
 | [[TASK-104]] — small-chart axis polish (tick density, nice scale, latest-value overlay, threshold labels) | `b-chart` | Reps `EPIC-002 / STORY-009 / TASK-092` |
 | [[TASK-105]] — `padding="md"` rung + `--b-card-shadow`; layout/gap rejected | `b-card` | Reps `EPIC-002 / STORY-010 / TASK-089` |
 | [[TASK-107]] — tap-target padding tokens + form participation (`type`) | `b-button` | Reps `EPIC-002 / STORY-010 / TASK-102` |
+| [[TASK-135]] — `type="decimal"` for comma-locale entry (+ `percent` routed through it) — **backfilled** | `b-input` / `b-form` | Reps `EPIC-001 / TASK-104` |
+
+**[[TASK-135]] is the story's own failure mode, live.** Reps fixed the comma bug in its **own** code
+(`ec69529`) before the framework mode existed and has not migrated to it, so the originating consumer is
+carrying a fork — exactly what the acceptance test above forbids. The framework half shipped and is verified;
+the task stays at `review` until the Reps-side migration exists in that repo's tree. Worth reading as the
+concrete case for the rule: shipping the component fix is not the same as closing the gap.
+
+Its follow-up [[TASK-136]] (`b-form.validate()` surfacing the validity that mode reports) sits under
+[[STORY-023]] rather than here, because it became a question about the form-validation seam rather than about
+one component — and three further defects came out of it ([[TASK-132]], [[TASK-133]], [[TASK-134]]).
 
 Spun out of the above, and deliberately **not** decided inside a component task:
 [[TASK-106]] (`tasks/_loose/`) — whether `::part` becomes a catalogue-wide convention or stays the one-off

@@ -16,7 +16,7 @@ created: 2026-07-06
 | D3 | Cross-provider SQL store-factory + DI backport ([[STORY-039]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-06 | ai | [[TASK-042]], [[TASK-051]] |
 | D4 | Web → Xaml UI / offline / device backports ([[STORY-040]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-07-06 | ai | [[TASK-043]], [[TASK-044]], [[TASK-045]], [[TASK-046]], [[TASK-047]], [[TASK-048]] |
 | D5 | BMobileAppShell showcase / placement ([[STORY-041]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-07-06 | ai | [[TASK-049]], [[TASK-050]] |
-| D6 | Component gaps found by consumers adopting the `b-*` catalogue ([[STORY-052]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | [[TASK-104]], [[TASK-105]], [[TASK-107]] |
+| D6 | Component gaps found by consumers adopting the `b-*` catalogue ([[STORY-052]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | [[TASK-104]], [[TASK-105]], [[TASK-107]], [[TASK-135]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -37,3 +37,10 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   reconstructed. Where a real dated decision with reasoning exists it lives in `CHANGELOG.md` or
   `CLAUDE.md` § Recent Updates, which remain the authority for *why*. Rows carry no invented `deferred`
   or `removed` history, so the absence of such rows means "not recorded", not "never considered".
+- 2026-08-01 — **D6** — [[TASK-135]] added by backfill: `b-input type="decimal"` (comma-locale entry, with
+  `percent` routed through it) shipped on 2026-07-31/08-01 with no task in this tree, because that line of
+  work was driven from the consumer repos. Inside D6's approved scope — a Reps-origin gap in an existing
+  component, the same shape as TASK-104/105/107 — so no new decision row. Filed at `review`, not `done`: the
+  originating consumer still carries its **own** fix (Reps `ec69529`) rather than the component's, which is
+  precisely the fork STORY-052 exists to prevent, and the mode's premise is a WebKit behaviour no headless
+  harness can demonstrate.

@@ -9,7 +9,7 @@ _Generated 2026-08-01. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | planned      | 10                 | 24                 | —                   |
 | todo         | —                  | —                  | 62                  |
 | in-progress  | 6                  | 10                  | 1                   |
-| review       | —                  | —                  | 8                   |
+| review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 22                 | 33                  |
 | cancelled    | 0                  | 0                  | 0                   |
@@ -22,6 +22,8 @@ Todo by priority: **P0 4 · P1 15 · P2 39 · P3 4**
 
 ## In review (awaiting sign-off)
 
+- [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai)
+- [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1, ai)
 - [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2, ai)
 - [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai)
 - [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2, ai)
@@ -48,8 +50,9 @@ Todo by priority: **P0 4 · P1 15 · P2 39 · P3 4**
     - [ ] [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai) 🔍 review · FEATURE-001
   - STORY-003 [size attribute coverage](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/STORY.md) — planned (0/1)
     - [ ] [TASK-003](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/TASK-003-size-on-pagination-dropdown-breadcrumb.md) size attribute on b-pagination, b-dropdown-menu, b-breadcrumb (P2, ai) · FEATURE-001
-  - STORY-023 [Form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — in-progress (0/4)
+  - STORY-023 [Form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — in-progress (0/5)
     - [ ] [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai) 🔍 review · FEATURE-001
+    - [ ] [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1, ai) 🔍 review · FEATURE-001
     - [ ] [TASK-132](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-132-bform-required-inert-on-unchecked-toggle.md) `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled (P2, ai) · FEATURE-001
     - [ ] [TASK-133](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-133-bform-radio-value-never-collected.md) `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate (P2, ai) · FEATURE-001
     - [ ] [TASK-134](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-134-bform-remaining-validity-flags-decision.md) Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch` (P2, ai) · FEATURE-001
@@ -198,10 +201,11 @@ Todo by priority: **P0 4 · P1 15 · P2 39 · P3 4**
   - STORY-041 [BMobileAppShell showcase / placement](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/STORY.md) — done (2/2) (done)
     - [x] [TASK-049](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-049-bmobileappshell-playground-placement.md) BMobileAppShell — better placement / demo in Birko.Web.Playground (P2, ai) · FEATURE-016
     - [x] [TASK-050](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-050-bmobileappshell-xaml-gallery.md) BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery (P3, ai) · FEATURE-016
-  - STORY-052 [Component gaps found by consumers adopting the `b-*` catalogue](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/STORY.md) — in-progress (0/3)
+  - STORY-052 [Component gaps found by consumers adopting the `b-*` catalogue](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/STORY.md) — in-progress (0/4)
     - [ ] [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) (P3, ai) 🔍 review · FEATURE-016
     - [ ] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai) 🔍 review · FEATURE-016
     - [ ] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) 🔍 review · FEATURE-016
+    - [ ] [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai) 🔍 review · FEATURE-016
 - **EPIC-017** [Tenant isolation hardening](EPIC-017-tenant-isolation-hardening/EPIC.md) — in-progress (0/0 tasks done)
   - STORY-044 [Opt-in strict (fail-closed) tenancy mode](EPIC-017-tenant-isolation-hardening/STORY-044-strict-fail-closed-mode/STORY.md) — done (0/0) (done)
   - STORY-045 [Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped](EPIC-017-tenant-isolation-hardening/STORY-045-decorator-order-per-tenant-uniqueness/STORY.md) — done (0/0) (done)

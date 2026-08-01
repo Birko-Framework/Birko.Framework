@@ -21,7 +21,7 @@ generated: 2026-08-01
 
 ## Build progress
 
-9 / 13 tasks done.
+9 / 14 tasks done.
 
 - [ ] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL — **review**
 - [x] TASK-043 Xaml mobile app-shell (BMobileAppShell equivalent)
@@ -36,10 +36,16 @@ generated: 2026-08-01
 - [ ] TASK-104 `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) — **review**
 - [ ] TASK-105 `b-card`: the missing `md` padding rung, and elevation as a token — **review**
 - [ ] TASK-107 `b-button`: a reachable tap target, and form participation — **review**
+- [ ] TASK-135 Number fields accept a comma decimal, so a phone with a Slovak keypad can type 81,8 — **review**
 
 ## What can be tested now
 
-4 item(s) are code-complete and awaiting sign-off: TASK-042, TASK-104, TASK-105, TASK-107. These can be exercised now.
+5 item(s) are code-complete and awaiting sign-off: TASK-042, TASK-104, TASK-105, TASK-107, TASK-135. These can be exercised now.
+
+TASK-135 needs a **real phone with a comma keypad** — no automated test can show this one, because the
+original fault was the phone keyboard refusing to type the comma at all. It also has a loose end worth
+knowing about: Reps, the app that reported it, fixed the problem in its own code first and has not yet
+switched over to the shared version, so two implementations of the same fix exist side by side.
 
 ## Prototype
 
@@ -47,4 +53,4 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Sign off the 4 item(s) in review before starting new scope (verification debt).
+Sign off the 5 item(s) in review before starting new scope (verification debt).

@@ -42,9 +42,13 @@ one-off. The rules that hold today, and the tasks that came out of asking them:
 | Task | What |
 |---|---|
 | [[TASK-035]] | Make the form controls form-associated via `ElementInternals` (the capability) |
+| [[TASK-136]] | `validate()` surfaces a control's own verdict, on a whitelist — the change that created the seam (backfilled) |
 | [[TASK-132]] | `required` on a checkbox / switch is inert — `b-form` counts an unchecked toggle as filled |
 | [[TASK-133]] | A `radio` field's value is never collected; a `required` radio group can never validate |
 | [[TASK-134]] | Decide whether `validate()` adopts the remaining validity flags, `typeMismatch` first |
+
+[[TASK-136]] is where the other three came from, and it depends on [[TASK-135]] (`b-input type="decimal"`,
+under [[STORY-052]]) — that mode produced the first verdict `validate()` had no way to see.
 
 ## Notes
 
