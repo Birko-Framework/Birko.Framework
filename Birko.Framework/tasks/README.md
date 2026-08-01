@@ -1,20 +1,20 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-07-31. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-01. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 28                 | —                   |
-| todo         | —                  | —                  | 57                  |
+| todo         | —                  | —                  | 58                  |
 | in-progress  | 6                  | 6                  | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 22                 | 33                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 4 · P1 14 · P2 35 · P3 4**
+Todo by priority: **P0 4 · P1 15 · P2 35 · P3 4**
 
 ## In progress now
 
@@ -221,6 +221,7 @@ Todo by priority: **P0 4 · P1 14 · P2 35 · P3 4**
 - [ ] [TASK-059](_loose/TASK-059-nested-projitems-import-convention-decision.md) Decide the long-term convention for nested `.projitems` imports (MSB4011) (P3, ai)
 - [ ] [TASK-106](_loose/TASK-106-css-part-as-a-catalogue-convention-decision.md) Decide whether `::part` is a catalogue convention or stays a one-off (P3, human)
 - [ ] [TASK-127](_loose/TASK-127-all-tenants-scope-and-ambient-tenant-decision.md) Decide what `WithAllTenants` means when a tenant is also in scope (P2, human)
+- [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
 
 ## Completed
 
