@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: f3ac675 + TASK-128 fix (Birko.Data.SQL.View; partial regen of the SQL view read requirements)
-generated-on: 2026-07-31
+generated-at: a62ec942b6f7bd18c3ce91995b4496ae95aa910a
+generated-on: 2026-08-01
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -71,6 +71,22 @@ The backends do **not** behave uniformly. Persistent-view support, join support,
 group-by-only handling, and the meaning of `CountAsync` on an aggregate view all differ per
 backend; those divergences are recorded explicitly below because they are the operational
 reality of this capability.
+
+## Regen provenance
+
+Full regen at `a62ec94`. Supersedes a partial regen that carried its scope as prose in the `generated-at`
+stamp itself, making it unparseable as a sha so the staleness check reported this area stale on format alone
+(TASK-128 → `Birko.Data.SQL.View@576707c`).
+
+Four of this area's 40 sources changed between the originating harvest and this regen —
+`Birko.Data.SQL.View`'s `SQL/DataBase_ViewOrderBy.cs` and its two view-select connectors, plus a
+documentation-only change to `Birko.Data.Stores/OrderBy.cs` — and all four were re-read here. The other 36,
+spread across `Birko.Data.Views`, `Birko.Data.SQL.Views`, the Mongo / ElasticSearch / RavenDB / Cosmos view
+projects and `Birko.Data.ElasticSearch`, have no commits since that harvest, so the requirements drawn from
+them cannot have drifted.
+
+Sibling-repo shas are recorded here rather than in the stamp because this repo cannot resolve them — every
+source in this area lives in a sibling repo, so `generated-at` can only ever name this aggregator's HEAD.
 
 ## Requirements
 
@@ -483,16 +499,28 @@ before each operation; and SHALL materialize each row by reading reader columns
 The system SHALL therefore resolve every view sort key through the view's field metadata before it reaches
 either clause, in `Select(Tables.View, …)` / `SelectAsync(Tables.View, …)` — the one method every view read
 passes through, and the only one that knows which path will run. It SHALL match on view property name first
-and then on source column name, and SHALL throw `ArgumentException` naming the key and the view when neither
-matches. Because the emitted identifier is always a name read out of that metadata, caller-supplied text
-cannot reach the clause.
+— compared `Ordinal`, so case-sensitively — and then on source column name compared `OrdinalIgnoreCase`, and
+SHALL throw `ArgumentException` naming the key and the view when neither matches. Because the emitted
+identifier is always a name read out of that metadata, caller-supplied text cannot reach the clause. Unlike
+the entity funnel's `ResolveOrderFields`, there is no third resolver hook: these two lookups are the whole
+whitelist.
+
+The system SHALL additionally throw `ArgumentException` naming every unresolved key when sort keys are
+supplied but the view exposes no fields, rather than emitting them unresolved. A null or whitespace-only key
+SHALL match nothing and raise the same unresolved-key error. Where two keys resolve to the same identifier —
+a view property and its own source column are both accepted — the system SHALL collapse them into one clause
+entry (last direction wins) rather than throwing.
 
 The resolved form SHALL follow the path, because the two expose their columns under different names:
 **on-the-fly** → `field.GetSelectName(true)`, the `Table.Column` form `View.GetSelectFields()` always
-projects; **persistent** → `field.IsAggregate ? field.Property.Name : field.Name`, matching
-`GetPersistentViewSelectFields()` and the `AS "<ViewProperty>"` alias the view DDL emits for aggregates.
-The resolved identifier SHALL NOT be quoted, matching the on-the-fly SELECT list (note the persistent SELECT
-list *does* quote its columns, so on that path alone the two disagree).
+projects; **persistent** → `field.IsAggregate && field.Property != null ? field.Property.Name : field.Name`,
+matching `GetPersistentViewSelectFields()` and the `AS "<ViewProperty>"` alias the view DDL emits for
+aggregates. The `Property != null` arm is load-bearing rather than defensive: `AbstractField.Property` is
+declared non-nullable but is assigned by the view builders, and a key matched on `Name` alone can reach this
+point, so an aggregate field with no `Property` SHALL fall back to its source name instead of raising
+`NullReferenceException` from a sort. The resolved identifier SHALL NOT be quoted, matching the on-the-fly
+SELECT list (note the persistent SELECT list *does* quote its columns, so on that path alone the two
+disagree).
 
 #### Scenario: Sorting by a renamed view property works
 
@@ -517,6 +545,56 @@ list *does* quote its columns, so on that path alone the two disagree).
 - **Given** a view that joins `Order` but selects only `Order.Guid` and `Person.Name`, queried with `OrderBy<TView>.ByName("Amount")`
 - **When** the read is enumerated
 - **Then** `ArgumentException` is thrown — resolution is scoped to what the view exposes, not to every column its source tables have
+
+#### Scenario: The two lookups disagree on case, deliberately
+
+- **Given** a view whose property is `PersonName` over source column `Name`, queried with
+  `OrderBy<TView>.ByName("personname")`
+- **When** the key is resolved
+- **Then** the property lookup compares `Ordinal` and misses, then the source-column lookup compares
+  `OrdinalIgnoreCase` and also misses (`personname` ≠ `Name`), so `ArgumentException` is thrown — whereas
+  `ByName("NAME")` resolves via the case-insensitive column lookup. A view property must be named exactly;
+  a source column need not be
+
+#### Scenario: A view exposing no fields rejects its sort keys
+
+- **Given** a non-empty sort dictionary and a view whose `GetTableFields()` yields nothing (or is null)
+- **When** `ResolveViewOrderFields` runs
+- **Then** `ArgumentException` is thrown naming every supplied key and reporting that the view exposes no
+  fields — the keys are never emitted unresolved, which is what stops this path becoming a hole around the
+  whitelist
+
+#### Scenario: A blank sort key is an unresolved key
+
+- **Given** `OrderBy<TView>.ByName("")` or `ByName("   ")`
+- **When** the key is resolved
+- **Then** `MatchViewOrderField` returns null on the `IsNullOrWhiteSpace` check before examining any field,
+  so the caller raises the same unresolved-key `ArgumentException`
+
+#### Scenario: A view property and its source column collapse to one clause entry
+
+- **Given** a sort naming both the view property `PersonName` and its source column `Name`, which resolve to
+  the same identifier on the queried path
+- **When** the keys are resolved
+- **Then** the resolved dictionary is written with the indexer rather than `Add`, so one entry survives
+  carrying the later direction; no duplicate-key `ArgumentException` is raised
+
+#### Scenario: An aggregate field with no view property sorts by its source name
+
+- **Given** a persistent-view query whose sort key matched an aggregate field on `Name` alone, that field's
+  `Property` being unset
+- **When** the resolved form is computed
+- **Then** `field.Name` is emitted rather than dereferencing the null `Property` — the persistent branch tests
+  `Property != null` before preferring the alias, so a sort cannot throw `NullReferenceException`
+
+#### Scenario: A non-property sort expression is rejected at the key-extraction step
+
+- **Given** an expression-keyed order dictionary whose selector is not a property access (for example
+  `v => v.Compute()`), or a null expression
+- **When** `DataBase.GetViewOrderKey` runs
+- **Then** a null expression raises `ArgumentNullException` and a non-property selector raises
+  `ArgumentException` naming the expression — the failure is at key extraction, before any resolution or
+  command building
 
 ### Requirement: MongoDB pipeline translation
 

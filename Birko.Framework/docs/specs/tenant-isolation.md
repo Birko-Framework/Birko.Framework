@@ -1,7 +1,7 @@
 ---
 area: tenant-isolation
-generated-at: 10f5611 + SH-H054 fix (Birko.Data.Tenant; partial regen of the item-level write and scoped-execution requirements)
-generated-on: 2026-07-31
+generated-at: a62ec942b6f7bd18c3ce91995b4496ae95aa910a
+generated-on: 2026-08-01
 sources:
   - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs
@@ -50,6 +50,23 @@ token, an event-bus bridge that captures the publishing tenant and restores it b
 dispatch, and a tenant-scoped data-sync provider. Anything that persists or reads a model
 implementing `ITenant` depends on this capability; so does any host that wants a missing tenant to
 be a `400` and a wrong tenant to be a `403` instead of both being a `500`.
+
+## Regen provenance
+
+Full regen at `a62ec94`, producing **no behavioural change** — every requirement below survived
+verification against the code unaltered. Supersedes a partial regen whose `generated-at` carried its scope
+as prose *and* named `10f5611`, a **`Birko.Data.Tenant` sha** rather than one of this repo's: `git diff
+10f5611..HEAD` fails with *unknown revision* here, so the staleness check could not run on this area at all.
+
+Six files changed in the sibling repos between the previous harvest and this regen, all in
+`Birko.Data.Tenant` — `Models/TenantContext.cs`, `Models/ITenantContext.cs`, and the four store wrappers —
+carrying SH-H047 (`@10f5611`, item-level writes authorized against the stored row) and SH-H054
+(`@595d99b`, `WithTenant` suspends the all-tenants scope). All six were re-read for this regen.
+`Birko.EventBus.Tenant`, `Birko.Data.Sync.Tenant` and `Birko.Security.AspNetCore` have no commits since the
+originating harvest, so the requirements drawn from them cannot have drifted.
+
+Sibling-repo shas are recorded here rather than in the stamp because this repo cannot resolve them — every
+source in this area lives in a sibling repo, so `generated-at` can only ever name this aggregator's HEAD.
 
 ## Requirements
 

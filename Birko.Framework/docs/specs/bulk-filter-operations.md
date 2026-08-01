@@ -1,7 +1,7 @@
 ---
 area: bulk-filter-operations
-generated-at: f3ac675 + SH-H003/SH-M022 + TASK-128 fixes (Birko.Data.SQL / .View; partial regen of the sort-key resolution requirement)
-generated-on: 2026-07-31
+generated-at: a62ec942b6f7bd18c3ce91995b4496ae95aa910a
+generated-on: 2026-08-01
 sources:
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
@@ -36,6 +36,14 @@ paths are **not observationally equivalent**, and the differences (how many rows
 per-entity hooks run, which inputs throw) are the substance of this document. Everything that layers
 on stores — repositories, the decorator/wrapper chains, tenant scoping, localisation — inherits
 whichever semantics the concrete store implements.
+
+## Regen provenance
+
+Full regen at `a62ec94`. Supersedes two partial regens that carried their scope in the `generated-at`
+stamp itself (making it unparseable as a sha, so the staleness check reported the area stale on format
+alone): SH-H003/SH-M022 → `Birko.Data.SQL@2a87f84`, TASK-128 → `Birko.Data.SQL.View@576707c`. Sibling-repo
+shas are recorded here rather than in the stamp because this repo cannot resolve them — the area's sources
+all live in sibling repos, so `generated-at` can only ever name this aggregator's HEAD.
 
 ## Requirements
 
@@ -75,6 +83,15 @@ optional filter, optional `OrderBy<T>`, optional limit and optional offset, plus
 - **When** `Read(filter)` is called
 - **Then** `ReadCore` returns `Enumerable.Empty<T>()` — no exception is thrown
 
+#### Scenario: Repeating one property in the sort loses the earlier direction
+
+- **Given** `OrderBy<T>.By(x => x.Rank).ThenByDescending(x => x.Rank)` — two `OrderByField` entries on the
+  same property, which `Fields` reports faithfully
+- **When** the store converts it for the connector with `orderBy?.ToDictionary()`
+- **Then** `ToDictionary` assigns by key (`dict[field.PropertyName] = field.Descending`), so the two entries
+  collapse to one `Rank → descending` before any backend sees them — a multi-key sort that names one
+  property twice cannot be expressed through the connector boundary, and no error reports the loss
+
 ### Requirement: SQL sort keys are resolved against table metadata before reaching the statement
 
 `OrderBy<T>` carries **CLR property names** — `By`/`ThenBy` read `member.Member.Name`, and `ByName`
@@ -83,12 +100,23 @@ into `CommandText` (`AbstractConnectorBase.CreateSelectCommand`), unparameterise
 
 The system SHALL therefore resolve every sort key through the selected tables' field metadata before it
 reaches the clause (`DataBase.ResolveOrderFields`, invoked from the `Select(IEnumerable<Tables.Table>, …)`
-and `SelectAsync(IEnumerable<Tables.Table>, …)` funnels that every SQL entity read passes through):
-matching first on property name and then on mapped column name, emitting the field's
-`GetSelectName(withTableName)`, qualifying with the table name when more than one table is selected,
-preserving key order and direction, and SHALL throw `ArgumentException` naming both the key and the
-entity type when a key matches neither. Because the emitted identifier is always a name read out of
-metadata, caller-supplied text cannot reach the statement — **the resolution is the whitelist**.
+and `SelectAsync(IEnumerable<Tables.Table>, …)` funnels that every SQL entity read passes through),
+trying three lookups in order — property name (`Table.GetFieldByPropertyName`), then mapped column name
+compared `OrdinalIgnoreCase`, then the optional `DataBase.ResolveFieldSelectName` hook that the view layer
+registers — emitting the field's `GetSelectName(withTableName)`, qualifying with the table name when more
+than one table is selected, preserving key order and direction, and SHALL throw `ArgumentException` naming
+both the key and the entity type when a key matches none of the three. Because the emitted identifier is
+always a name read out of metadata, caller-supplied text cannot reach the statement — **the resolution is
+the whitelist**.
+
+The system SHALL additionally throw `ArgumentException` naming every unresolved key when sort keys are
+supplied but no non-null table metadata is, since there is then nothing to resolve against and emitting
+the keys unresolved would reopen the injection. A null or whitespace-only key SHALL resolve to nothing and
+therefore raise the same unresolved-key error.
+
+Where two keys resolve to the same identifier — a property name and that property's own column name are
+both accepted, so this is reachable without caller error — the system SHALL collapse them into one clause
+entry (last direction wins) rather than throwing or emitting the column twice.
 
 The resolved identifier SHALL NOT be quoted, matching every other column identifier the SQL layer emits
 (the DDL's column list, the WHERE clause's `condition.Name`, the SELECT list); only table names are
@@ -115,6 +143,48 @@ quoted.
 - **Given** `OrderBy<T>.ByName("label_col")` for the property mapped to that column
 - **When** the key is resolved
 - **Then** it resolves via the column-name match and the clause is `ORDER BY label_col ASC`
+
+#### Scenario: The column-name match ignores case
+
+- **Given** `OrderBy<T>.ByName("LABEL_COL")` for a property mapped to `label_col`
+- **When** the key is resolved
+- **Then** the column-name lookup compares `OrdinalIgnoreCase`, so it matches and the emitted identifier is
+  the metadata's own spelling `label_col` — not the caller's. The property-name lookup runs first and is
+  whatever `Table.GetFieldByPropertyName` implements, so the two steps need not agree on case sensitivity
+
+#### Scenario: A view column resolves inside the entity funnel via the registered hook
+
+- **Given** a sort key naming a column that no `Tables.Table` field knows, and the view layer has assigned
+  `DataBase.ResolveFieldSelectName`
+- **When** the key is resolved
+- **Then** after the property-name and column-name lookups both miss, the hook is invoked as
+  `ResolveFieldSelectName(table.Type, key, withTableName)` for each selected table with a non-null `Type`,
+  and a non-empty answer is emitted as the identifier — so the entity funnel is not exclusively an
+  entity-column whitelist, and a view column can be sorted through it
+
+#### Scenario: Sort keys with no table metadata are rejected, not passed through
+
+- **Given** a non-empty sort dictionary and a `tables` argument that is null or contains only nulls
+- **When** `ResolveOrderFields` runs
+- **Then** `ArgumentException` is thrown naming every supplied key and reporting that no table metadata was
+  available — the keys are never emitted unresolved, which is what stops this path becoming a hole around
+  the whitelist
+
+#### Scenario: A blank sort key is an unresolved key
+
+- **Given** `OrderBy<T>.ByName("")` or `ByName("   ")`
+- **When** the key is resolved
+- **Then** the per-key resolver returns null on the `IsNullOrWhiteSpace` check before consulting any
+  metadata, so the caller raises the same unresolved-key `ArgumentException`
+
+#### Scenario: Two keys resolving to one column collapse instead of throwing
+
+- **Given** `OrderBy<T>.ByName("Label").ThenByDescending(x => x.Label)` — the CLR name and the property both
+  resolving to `label_col`
+- **When** the keys are resolved
+- **Then** the resolved dictionary is written with the indexer rather than `Add`, so one entry survives
+  carrying the later direction; no `ArgumentException` for a duplicate key is raised and the clause names
+  the column once
 
 #### Scenario: A joined select qualifies the column with its table
 
@@ -155,7 +225,10 @@ quoted.
   own sites (`AbstractConnectorBase_View.CreatePersistentViewSelectCommand` and the on-the-fly builder) — and
   are instead resolved by `DataBase.ResolveViewOrderFields` in `Select(Tables.View, …)` / `SelectAsync(…)`,
   which additionally picks the resolved form per path because a persistent view exposes different column
-  names than the on-the-fly join select. Specified under `views-and-aggregation`; closed by TASK-128
+  names than the on-the-fly join select. Specified under `views-and-aggregation`; closed by TASK-128.
+  The separation is one-directional, not total: the entity funnel's own third lookup calls the
+  `ResolveFieldSelectName` hook the view layer registers, so a view column reaching *this* funnel still
+  resolves (see the hook scenario above)
 
 ### Requirement: Single-result reads on a bulk store require ReadFirst
 
