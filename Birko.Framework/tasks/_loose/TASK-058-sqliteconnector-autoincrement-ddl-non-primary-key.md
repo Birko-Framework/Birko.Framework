@@ -2,7 +2,7 @@
 id: TASK-058
 parent: null
 feature: null
-status: done  # todo | in-progress | review | blocked | done | cancelled
+status: done
 priority: P2
 assignee: ai
 created: 2026-07-14

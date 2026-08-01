@@ -1,8 +1,11 @@
 ---
 id: TASK-106
-parent: EPIC-016
+# parent deliberately null: this is a decision ticket living in _loose/. Declaring a parent while
+# sitting here makes it render in two places on the dashboard. Related to EPIC-016 in substance;
+# see the body. Same convention as TASK-059 and TASK-127.
+parent: null
 feature: null
-status: todo  # todo | in-progress | review | blocked | done | cancelled
+status: todo
 priority: P3
 assignee: human
 created: 2026-07-30
@@ -18,6 +21,10 @@ jira-key: null
 **This is a decision, not an implementation.** Filed in `_loose` alongside [[TASK-059]] because it is a
 framework-wide API-surface convention spanning the whole `b-*` catalogue — not work on any one component,
 and larger than the story that surfaced it ([[STORY-052]], which fixes gaps *inside* components).
+
+Substantively it belongs to **EPIC-016** (framework backports from Reps), but `parent` is left null on
+purpose, so the dashboard does not render it in two places. Same convention as [[TASK-059]] and
+[[TASK-127]]. Move it under the epic directory if that is ever reversed.
 
 ## Context
 

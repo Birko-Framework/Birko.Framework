@@ -1,8 +1,8 @@
 ---
 id: TASK-037
 parent: EPIC-013
-feature: null
-status: done  # todo | in-progress | review | blocked | done | cancelled
+feature: FEATURE-013
+status: done
 priority: P2
 assignee: ai
 created: 2026-06-18

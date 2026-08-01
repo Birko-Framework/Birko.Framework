@@ -1,5 +1,6 @@
 ---
 id: TASK-004
+feature: FEATURE-002
 parent: EPIC-002
 status: todo
 priority: P2

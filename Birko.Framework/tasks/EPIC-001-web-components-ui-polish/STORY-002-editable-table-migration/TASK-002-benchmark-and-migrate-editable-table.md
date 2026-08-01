@@ -1,5 +1,6 @@
 ---
 id: TASK-002
+feature: FEATURE-001
 parent: STORY-002
 status: review
 priority: P2

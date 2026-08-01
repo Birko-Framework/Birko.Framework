@@ -1,8 +1,8 @@
 ---
 id: TASK-097
 parent: STORY-049
-feature: null
-status: done  # todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+feature: FEATURE-015
+status: done
 priority: P1
 assignee: ai
 created: 2026-07-29

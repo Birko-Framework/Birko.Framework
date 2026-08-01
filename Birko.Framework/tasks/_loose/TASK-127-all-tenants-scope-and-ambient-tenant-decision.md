@@ -1,7 +1,7 @@
 ---
 id: TASK-127
-# parent deliberately null: TASK-059/TASK-106 declare a parent while living in _loose/ and the dashboard
-# flags them for rendering in two places. Related to EPIC-017 in substance; see the body.
+# parent deliberately null: a ticket in _loose/ that declares a parent renders in two places on the
+# dashboard. Related to EPIC-017 in substance; see the body. Same convention as TASK-059 and TASK-106.
 parent: null
 feature: null
 status: todo
@@ -24,8 +24,9 @@ surfaced it ([[TASK-114]]), and it cannot be answered by reading the code, becau
 answers it two different ways.
 
 Substantively it belongs to **EPIC-017** (tenant-isolation hardening), but `parent` is left null on purpose:
-[[TASK-059]] and [[TASK-106]] declare a parent while living here, and the dashboard flags them for rendering
-in two places. Move this under the epic directory if that flag is ever resolved the other way.
+a ticket in `_loose/` that declares a parent renders in two places on the dashboard. [[TASK-059]] and
+[[TASK-106]] were cleared to match this convention on 2026-08-01, so all three now agree. Move them under
+their epic directories together if that is ever reversed.
 
 ## Context
 

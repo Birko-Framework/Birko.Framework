@@ -1,8 +1,11 @@
 ---
 id: TASK-059
-parent: EPIC-016
+# parent deliberately null: this is a decision ticket living in _loose/. Declaring a parent while
+# sitting here makes it render in two places on the dashboard. Related to EPIC-016 in substance;
+# see the body. Same convention as TASK-106 and TASK-127.
+parent: null
 feature: null
-status: todo  # todo | in-progress | review | blocked | done | cancelled
+status: todo
 priority: P3
 assignee: ai
 created: 2026-07-14
@@ -14,6 +17,11 @@ jira-key: null
 ---
 
 # Decide the long-term convention for nested `.projitems` imports (MSB4011)
+
+Substantively this belongs to **EPIC-016** (framework backports from Reps), but `parent` is left null on
+purpose: the ticket lives in `_loose/` because it is a framework-wide convention decision rather than work
+on any one project, and declaring a parent from here makes it render in two places on the dashboard. Same
+convention as [[TASK-106]] and [[TASK-127]]. Move it under the epic directory if that is ever reversed.
 
 ## Context
 

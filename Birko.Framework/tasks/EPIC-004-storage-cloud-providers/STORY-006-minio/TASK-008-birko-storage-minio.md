@@ -1,5 +1,6 @@
 ---
 id: TASK-008
+feature: FEATURE-004
 parent: STORY-006
 status: todo
 priority: P2
