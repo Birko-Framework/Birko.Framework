@@ -5,6 +5,7 @@ created: 2026-06-18
 owner: ai
 affects: [Birko.Framework]
 source: [CODE-REVIEW-AUDIT-2026-06-17.md, SPEC-HARVEST-FINDINGS-2026-07-30.md]
+kind: review-intake
 ---
 
 # Code review — audit remediation

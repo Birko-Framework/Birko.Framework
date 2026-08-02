@@ -5,6 +5,7 @@ created: 2026-07-17
 owner: ai
 affects: [Birko.Data.Tenant, Birko.Data.Composition, Birko.EventBus, Birko.EventBus.Outbox, Birko.EventBus.MessageQueue]
 source: security-review (Symbio consumer) 2026-07-17
+kind: review-intake
 ---
 
 # Tenant isolation hardening

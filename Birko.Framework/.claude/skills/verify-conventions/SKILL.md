@@ -1,9 +1,16 @@
 ---
-name: verify-birko-conventions
-description: Lint the staged or current diff against the conventions documented in `Birko.Framework/CLAUDE.md`. Use when the user says "verify conventions", "check birko rules", "lint pred commitom", "skontroluj zmeny", "are my changes following birko conventions", or before any commit on Birko.Framework. Catches nullable-warning regressions (CS8600–CS8625), concrete stores overriding public CRUD instead of `*Core`, missing tests for new public methods, hard-coded paths instead of `$(BirkoSrc)`, `RemoteSettings` constructed inline instead of via `base.SetSettings()`, missing `Recent Updates` entries for non-trivial changes, missing `CLAUDE.md` / `README.md` / `License.md` / `.gitignore` in new project directories, missing registrations in `.slnx` / `.code-workspace` / `Birko.Framework.csproj`, and new projects missing from the documentation index (`README.md` project table / `CLAUDE-projects.md` / `docs/`).
+name: verify-conventions
+description: Lint the staged or current diff against the conventions documented in `Birko.Framework/CLAUDE.md`. Use when the user says "verify conventions", "check birko rules", "lint pred commitom", "skontroluj zmeny", "are my changes following birko conventions", or before any commit on Birko.Framework. **Project-local variant that deliberately shares the generic `verify-conventions` name so it shadows it here; it runs the generic pass first (step 0), then these concrete checks.** Catches nullable-warning regressions (CS8600–CS8625), concrete stores overriding public CRUD instead of `*Core`, missing tests for new public methods, hard-coded paths instead of `$(BirkoSrc)`, `RemoteSettings` constructed inline instead of via `base.SetSettings()`, missing `Recent Updates` entries, missing required files or `.slnx` / `.code-workspace` / `.csproj` registrations for new projects, and new projects missing from the documentation index.
 ---
 
 # Birko Framework — Convention Verifier
+
+> **Shadows the generic `verify-conventions` — and therefore must EXTEND it, not replace it.**
+> Project-local skills win by *name* inside their repo, so this file is what `/tasks close` step 5b
+> and `/fix-next` step 8 actually load here; the generic skill does not also run. It was previously
+> called `verify-birko-conventions`, which shadowed nothing — those gates silently ran the generic
+> lint and none of the concrete checks below. Now the reverse risk applies, so **run step 0 first**:
+> the generic pass is not optional, and checks 1–10 are additive to it, not a substitute.
 
 A pre-commit / post-change lint that enforces the rules listed in:
 
@@ -31,6 +38,32 @@ Run these checks in order. For each violation found, report:
 - **Line number**
 - **The rule violated**
 - **Suggested fix** (one-line)
+
+### 0. The generic pass — run this FIRST, every time
+
+Checks 1–10 are a **frozen list**, written against the conventions as they stood when this file was
+authored. They cannot notice a rule added to `CLAUDE.md` afterwards. The generic
+`verify-conventions` skill exists precisely to catch that, and this file shadows it — so its work
+has to happen here. Three parts, none skippable:
+
+- **a. Sweep the live rulebook.** Read `CLAUDE.md` § Conventions and § Code Style *as they are right
+  now*, extract every rule into a working checklist, and check the diff against all of them — not
+  only the ones enumerated below. **Quote the CLAUDE.md line each finding comes from**, so it's
+  traceable rather than invented. A rule applies to a file when the file's kind/path matches the
+  rule's domain.
+- **b. Register-on-introduce (the currency rule).** A diff that establishes a *new* cross-cutting
+  pattern — a new framework or major dependency, a new architectural layer or module shape, a new
+  naming or testing convention — must **also update `CLAUDE.md` § Conventions** in the same change.
+  If it doesn't, flag it: *"New pattern introduced (`<what>`) but not recorded in § Conventions — add
+  it so the next task follows it."* This is what keeps checks 1–10 from being the whole truth
+  forever. **Not the same as check #9**, which asks for a `Recent Updates` entry: #9 records *what
+  happened*, this records *what the rule now is*. A change can need both, and usually does.
+- **c. Architecture drift.** If the change alters structure (a new engine/protocol, a changed
+  dependency direction, a new project shape) and `## Architecture` still describes the old shape,
+  flag it — a stale architecture section is a real defect, not harmless lag.
+
+If step 0a finds a rule in `CLAUDE.md` that recurs often enough to deserve a mechanical check, say
+so: that's the signal to add check #11 here rather than re-deriving it every run.
 
 ### 1. Nullable warnings (CS8600–CS8625)
 
@@ -153,9 +186,9 @@ if\s*\(\s*\w+\s*!=\s*null\s*\)\s*\{(?:[^}]*\{[^}]*\}[^}]*)*\}\s*$
 
 Group findings by severity:
 
-- **🛑 Blockers** — nullable warnings, missing `*Core` overrides, missing required files in new projects, missing build-file registrations, new projects missing from the documentation index.
-- **⚠ Warnings** — missing tests for new public methods, hard-coded paths, missing health check.
-- **💡 Suggestions** — missing `Recent Updates` entry, guard-clause violations.
+- **🛑 Blockers** — nullable warnings, missing `*Core` overrides, missing required files in new projects, missing build-file registrations, new projects missing from the documentation index, and any hard rule from the step-0a sweep.
+- **⚠ Warnings** — missing tests for new public methods, hard-coded paths, missing health check, likely step-0a violations needing judgement.
+- **💡 Suggestions** — missing `Recent Updates` entry, register-on-introduce gaps (step 0b), architecture drift (step 0c), guard-clause violations.
 
 Sample output:
 

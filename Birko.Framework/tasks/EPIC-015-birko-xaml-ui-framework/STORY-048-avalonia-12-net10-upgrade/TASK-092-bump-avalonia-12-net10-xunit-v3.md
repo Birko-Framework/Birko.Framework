@@ -101,7 +101,7 @@ generated theme dictionaries**, `ThemeDictionaries`, `BThemeId`, `AvaloniaThemeM
 - [ ] `Birko.Xaml.Avalonia.Tests` 144/144 green; `Birko.Xaml.Core.Tests` (41) and `Birko.DesignTokens.Tests` (42) still green.
 - [ ] `Birko.Xaml.Core` still has zero Avalonia references (EPIC-015 WPF-addendum constraint #1).
 - [ ] TASK-095's baseline gate passes, or every intentional pixel diff is reviewed and re-baselined with a note saying why.
-- [ ] `Recent Updates` entry in `CLAUDE.md` + each affected project's `CLAUDE.md`; `verify-birko-conventions` clean.
+- [ ] `Recent Updates` entry in `CLAUDE.md` + each affected project's `CLAUDE.md`; `/verify-conventions` clean (the repo-local shadow, renamed from `verify-birko-conventions`).
 
 ## Out of scope
 

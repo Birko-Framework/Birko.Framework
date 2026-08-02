@@ -139,12 +139,36 @@ This is the aggregator override the generic `tasks` skill's shape detection defe
   aggregator, per-project in each sub-repo (a cross-cutting story regens specs per affected
   project, driven by `affects:`).
 
+### Integration model — commit to `main`, one commit per repo
+
+`tasks/.config.yml` sets `integration: single-branch`. **This family does not branch per task**, so
+`/tasks pick` offers no `task/TASK-NNN` branch and `/tasks close` skips its merge step. `done` still
+means *landed on the default branch* — only the mechanism differs from the generic PR-per-task default.
+
+Because this is a polyrepo, **one fix normally spans three independent repos and needs three commits**:
+
+| Repo | Contents | Message shape |
+|---|---|---|
+| `Framework/Birko.{Project}` | the production change | `fix(<FINDING-ID>): <what now holds>` |
+| `Framework.Tests/Birko.{Project}.Tests` | the regression suite | `test(<FINDING-ID>): <what it pins>` |
+| `Framework/Birko.Framework` (here) | task file + spec + dashboard | `tasks(TASK-NNN): <outcome>` |
+
+**Order matters:** commit the production fix first, so its SHA can go into the task's `pr:` field
+before the aggregator commit — otherwise the tracking file lands referencing nothing.
+
+- **Stage explicitly. Never `git add -A`.**
+- **No `Co-Authored-By:` trailer.** Standing preference; overrides the harness default. Don't copy it
+  from older commits that carry it.
+- Body over subject: say what was wrong and why the fix is shaped the way it is. A future reader gets
+  the commit, not the session that produced it.
+
 ## Skills shipped by this repo
 
 `.claude/skills/` is the home of the Birko-specific skills. They **build on top of the generic
 project-lifecycle-skills set** (never the reverse — the generic skills know only a "stack
 scaffolder" hook, not Birko). Project-local ones (new-birko-subproject, new-store-backend,
-verify-birko-conventions, fix-next, the roll-changelog shadow) auto-load only inside this repo; the
+verify-conventions (the project-local shadow of the generic one), the roll-changelog shadow) auto-load
+only inside this repo; the
 consumer-facing ones (birko-new-project, new-birko-web-page, new-birko-web-component,
 design-agent) are shared user-level via [install-skills.ps1](install-skills.ps1) (junctions —
 edit here, live immediately).
@@ -155,6 +179,10 @@ edit here, live immediately).
 
 ## Testing
 - All test projects use **xUnit + FluentAssertions**
+- **Tests live in a parallel tree, not in the project repo:** `Birko.{Project}`'s tests are at
+  `C:\Source\Birko\Framework.Tests\Birko.{Project}.Tests` (its own git repo — see the integration
+  model above; a fix and its regression suite are two commits in two repos). Run with
+  `dotnet test --nologo` from the test project.
 - Every new public functionality must have corresponding tests in `Birko.{ProjectName}.Tests`
 - Test both success and failure cases; include edge cases and boundary conditions
 - Each test project has its own `CLAUDE.md` describing scope and conventions
@@ -464,7 +492,7 @@ doc (README project table, `CLAUDE-projects.md`, `docs/event-bus.md`) — an aud
 project of 175+ missing from the doc index. Added it there, and closed the gap structurally so it can't
 recur: new **`CLAUDE-maintenance.md` § "Documentation Index Registration"** makes doc-index membership a
 required registration step distinct from build-file registration (`.slnx`/`.code-workspace`/`.csproj`
-make it compile; the doc index makes it discoverable), and **`verify-birko-conventions` check #7b** lints
+make it compile; the doc index makes it discoverable), and **`verify-conventions` check #7b** lints
 new `.shproj` projects against all three index locations — including a full-repo drift sweep that catches
 pre-existing gaps, not just the current diff.
 

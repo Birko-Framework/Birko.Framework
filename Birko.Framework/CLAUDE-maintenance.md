@@ -76,7 +76,7 @@ A new project is not "registered" until it appears in the framework's **document
 
 Exclusions: `.Tests`, `.ViewModel`, `.Views` companions inherit their parent's documentation and need no separate index row (but confirm the parent is indexed). Test projects are never listed in the project index.
 
-This is the gap that build-file registration alone misses — a project can compile and ship yet be invisible in every human-facing doc. `verify-birko-conventions` check #11 lints for it.
+This is the gap that build-file registration alone misses — a project can compile and ship yet be invisible in every human-facing doc. `verify-conventions` check #11 lints for it.
 
 ## Test Requirements
 Every new public functionality must have corresponding unit tests:

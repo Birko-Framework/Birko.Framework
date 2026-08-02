@@ -4,10 +4,16 @@
 #
 # Only the consumer-facing skills are shared user-level (they're needed OUTSIDE this
 # repo — scaffolding a new consumer, prototyping in a consumer app). The rest of
-# .claude/skills (new-birko-subproject, new-store-backend, verify-birko-conventions,
-# fix-next, the roll-changelog shadow) stay project-local: Claude Code auto-loads them
-# only inside this repo, which is exactly their scope. fix-next in particular MUST NOT
-# be shared — it hardcodes this repo's polyrepo paths and its EPIC-014/017 fix backlog.
+# .claude/skills (new-birko-subproject, new-store-backend, verify-conventions,
+# the roll-changelog shadow) stay project-local: Claude Code auto-loads them only inside
+# this repo, which is exactly their scope. verify-conventions and roll-changelog
+# deliberately share the generic skills' names so they SHADOW them here — that is the
+# whole mechanism, and renaming either one silently disarms the gates that call them.
+#
+# !! NEVER add a name-sharing shadow (verify-conventions, roll-changelog) to $shared.
+# Shadowing is scoped by living in THIS repo's .claude/skills. Junctioning one into
+# ~/.claude/skills would replace the generic skill for EVERY project on this machine
+# with the Birko-specific variant. Same hazard the lifecycle repo's skills-pi/ carries.
 #
 # These skills BUILD ON TOP of the generic project-lifecycle-skills set
 # (github.com -> project-lifecycle-skills; install that one first) — e.g.

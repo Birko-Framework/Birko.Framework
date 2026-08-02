@@ -3,6 +3,10 @@
 
 mode: local                    # local | hybrid
 
+# This family commits straight to main — no task branches. See CLAUDE.md
+# § Task tracking › Integration model for the polyrepo three-commit rule.
+integration: single-branch     # pr-per-task | single-branch
+
 # When mode: hybrid, fill in the external section:
 # external:
 #   provider: github             # github | jira
