@@ -51,32 +51,52 @@ Birko.Security.AspNetCore/
 
 ### Tenant header/claim correlation (`TenantHeaderClaimGuardMiddleware`)
 
-`HeaderTenantResolver` only *parses* `X-Tenant-Id` — it never compares it to the `tenant_id` claim, and it
+A tenant resolver only *parses* its source — it never compares the result to the `tenant_id` claim, and it
 cannot: `TenantMiddleware` runs **before** `UseAuthentication()`, so `context.User` is still unpopulated
-there. Left uncorrelated, the header and the claim feed *different* consumers (repository tenant scoping
-follows the header, permission resolution follows the token), so a caller can authenticate in their own
-tenant, send `X-Tenant-Id: {victim}`, keep their home-tenant permissions and point every tenant-scoped read
+there. Left uncorrelated, the resolved tenant and the claim feed *different* consumers (repository tenant
+scoping follows the resolution, permission resolution follows the token), so a caller can authenticate in
+their own tenant, address `{victim}`, keep their home-tenant permissions and point every tenant-scoped read
 **and write** at another tenant.
 
 The correlation is therefore a separate post-authentication step:
 
 ```csharp
-app.UseMiddleware<TenantMiddleware>();   // resolves the header
+app.UseMiddleware<TenantMiddleware>();   // resolves the tenant
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseBirkoTenantHeaderGuard();         // ← header must agree with the claim
+app.UseBirkoTenantHeaderGuard();         // ← resolved tenant must agree with the claim
 // …tenant-scoped middleware and endpoints
 ```
+
+**Guard the resolved tenant, not a transport (SH-H048).** The guard originally compared one hard-coded
+`X-Tenant-Id` header, so every other door was open: `TenantQueryStringKey`, `TenantRouteKey`, both
+custom-resolver hooks, `SubdomainTenantResolver`, and a **renamed** `TenantMiddlewareOptions.TenantHeaderName`
+— that last one made the guard stop working with no error on a deployment that looked correctly configured.
+Both resolving middlewares (this project's `Tenant/TenantMiddleware.cs` and `Birko.Data.Tenant`'s) now publish
+their result via `ResolvedTenant.Publish`, and the guard reads that, so a source added later is covered
+without editing the guard.
+
+Two constraints on that carrier, both load-bearing:
+
+- **It is `HttpContext.Items`, not `ITenantContext`.** `UseTenantMiddleware` binds its `ITenantContext` from
+  the root provider (SH-H049) while the guard resolves one per request, so under `AddTenantContextScoped()`
+  they are different objects and an interface-reading guard would see no tenant and **fail open**.
+- **The key is a fixed constant.** `TenantMiddlewareOptions.TenantContextKey` is configurable, and a guard
+  keyed on a configurable name is defeated by the same class of config change as the hard-coded header was.
+
+The literal `X-Tenant-Id` check is kept **on top of** the resolved-tenant check: an app that never wired a
+tenant middleware resolves nothing, yet its own code may read the header directly — dropping it would have
+made the fix a coverage regression for those apps.
 
 - **Secure by default** — `BirkoSecurityOptions.RequireTenantHeaderMatchesClaim = true`. An opt-*in* guard
   was considered and rejected: a check nobody knows to enable protects nobody. Set it false only for an app
   that genuinely wants header-only tenancy (which re-opens the above); with the flag off the middleware is a
   pass-through, so `UseBirkoTenantHeaderGuard()` is safe to call unconditionally.
 - **Mismatch** → `403` with `{"Error": "…", "Code": "Tenant.HeaderClaimMismatch"}`.
-- **Deliberate pass-throughs**: no header (the claim is then the only source — SSE cannot set headers);
-  unauthenticated (login/register/first-run setup carry no claim); wildcard `*` holders (cross-tenant reach
-  is intentional); unparseable header (resolves to no tenant in `HeaderTenantResolver` anyway, so it cannot
-  scope anything).
+- **Deliberate pass-throughs**: no tenant addressed (the claim is then the only source — SSE cannot set
+  headers); unauthenticated (login/register/first-run setup carry no claim); wildcard `*` holders
+  (cross-tenant reach is intentional); unparseable source (resolves to no tenant anyway, so it cannot scope
+  anything).
 - `Guid.Empty` (the system/no-tenant scope) is compared like any other value — a non-wildcard caller whose
   token was issued for it cannot name a real tenant via the header.
 

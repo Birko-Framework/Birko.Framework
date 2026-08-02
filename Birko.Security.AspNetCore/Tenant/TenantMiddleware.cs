@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using Birko.Data.Tenant.Middleware;
 using Microsoft.AspNetCore.Http;
 
 namespace Birko.Security.AspNetCore;
@@ -22,6 +23,11 @@ public sealed class TenantMiddleware
         if (tenant is not null)
         {
             tenantContext.SetTenant(tenant.TenantGuid, tenant.TenantName);
+
+            // SH-H048: publish the resolution so TenantHeaderClaimGuardMiddleware can correlate it with the
+            // token after authentication. Naming the resolver is what lets the guard cover a subdomain or
+            // custom ITenantResolver it has no knowledge of — the gap that made the guard header-only.
+            ResolvedTenant.Publish(context, tenant.TenantGuid, $"the tenant resolved by {resolver.GetType().Name}");
         }
 
         try

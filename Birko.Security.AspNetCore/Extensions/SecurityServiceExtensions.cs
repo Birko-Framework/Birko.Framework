@@ -47,19 +47,24 @@ public class BirkoSecurityOptions
     public bool WildcardPermissionEnabled { get; set; } = true;
 
     /// <summary>
-    /// When true (the default), <c>UseBirkoTenantHeaderGuard()</c> rejects a request whose
-    /// <c>X-Tenant-Id</c> header names a tenant other than the one its JWT was issued for.
+    /// When true (the default), <c>UseBirkoTenantHeaderGuard()</c> rejects a request that resolves to a
+    /// tenant other than the one its JWT was issued for.
     ///
     /// <para>
-    /// This is secure-by-default deliberately. <see cref="HeaderTenantResolver"/> accepts any parseable
-    /// header without comparing it to the <c>tenant_id</c> claim, and in a typical app the two feed
-    /// *different* consumers — repository tenant scoping follows the header while permission resolution
-    /// follows the token. A caller could therefore authenticate in their own tenant, send
-    /// <c>X-Tenant-Id: {victim}</c>, keep their home-tenant permissions and point tenant-scoped reads
-    /// <b>and writes</b> at another tenant.
+    /// The name is historical: the guard covers <b>every</b> tenant source, not just <c>X-Tenant-Id</c> —
+    /// query-string key, route value, subdomain, custom resolvers and a renamed <c>TenantHeaderName</c>
+    /// alike (SH-H048). It reads the resolution each tenant middleware publishes rather than any one
+    /// transport.
     /// </para>
     /// <para>
-    /// Set false only for an app that genuinely wants header-only tenancy with no token correlation — and
+    /// This is secure-by-default deliberately. A resolver accepts any parseable value without comparing it
+    /// to the <c>tenant_id</c> claim, and in a typical app the two feed *different* consumers — repository
+    /// tenant scoping follows the resolved tenant while permission resolution follows the token. A caller
+    /// could therefore authenticate in their own tenant, address <c>{victim}</c>, keep their home-tenant
+    /// permissions and point tenant-scoped reads <b>and writes</b> at another tenant.
+    /// </para>
+    /// <para>
+    /// Set false only for an app that genuinely wants uncorrelated tenancy with no token check — and
     /// note that doing so re-opens the above. An opt-<i>in</i> guard was rejected as the design: a check
     /// nobody knows to enable protects nobody, which is exactly how this survived unnoticed.
     /// </para>
