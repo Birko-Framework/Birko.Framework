@@ -28,6 +28,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncTenantStoreWrapper.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Middleware\ResolvedTenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\TenantMiddleware.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Middleware\ServiceCollectionExtensions.cs" />
   </ItemGroup>

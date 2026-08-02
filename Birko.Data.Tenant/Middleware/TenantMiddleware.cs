@@ -45,16 +45,23 @@ public class TenantMiddleware
     public async Task InvokeAsync(HttpContext context)
     {
         // Try to resolve tenant from configured sources
-        var tenantGuid = ResolveTenantGuid(context);
+        var resolved = ResolveTenantGuid(context);
 
-        if (tenantGuid.HasValue)
+        if (resolved.HasValue)
         {
+            var (tenantGuid, source) = resolved.Value;
+
             // Set the tenant for this request
-            var tenantName = ResolveTenantName(context, tenantGuid.Value);
-            _tenantContext.SetTenant(tenantGuid.Value, tenantName);
+            var tenantName = ResolveTenantName(context, tenantGuid);
+            _tenantContext.SetTenant(tenantGuid, tenantName);
 
             // Add tenant to HTTP context for easy access
-            context.Items[_options.TenantContextKey] = tenantGuid.Value;
+            context.Items[_options.TenantContextKey] = tenantGuid;
+
+            // SH-H048: publish under the fixed key too, so the post-authentication tenant/claim guard can
+            // correlate whatever door was used. TenantContextKey above is configurable and _tenantContext
+            // may be a different instance from the one downstream middleware resolves — see ResolvedTenant.
+            ResolvedTenant.Publish(context, tenantGuid, source);
         }
         else if (_options.RequireTenant)
         {
@@ -79,9 +86,13 @@ public class TenantMiddleware
     }
 
     /// <summary>
-    /// Resolve tenant ID from the HTTP request
+    /// Resolve tenant ID from the HTTP request, along with a description of the source that produced it.
     /// </summary>
-    private Guid? ResolveTenantGuid(HttpContext context)
+    /// <remarks>
+    /// The source description is carried so the tenant/claim guard can name the door in its 403 body
+    /// (SH-H048). Keep these descriptions free of quotes and backslashes — see <see cref="ResolvedTenant"/>.
+    /// </remarks>
+    private (Guid TenantGuid, string Source)? ResolveTenantGuid(HttpContext context)
     {
         // 1. Check header
         if (!string.IsNullOrEmpty(_options.TenantHeaderName))
@@ -90,7 +101,7 @@ public class TenantMiddleware
             {
                 if (Guid.TryParse(headerValue.FirstOrDefault(), out var tenantGuid))
                 {
-                    return tenantGuid;
+                    return (tenantGuid, $"the {Describe(_options.TenantHeaderName)} header");
                 }
             }
         }
@@ -102,7 +113,7 @@ public class TenantMiddleware
             {
                 if (Guid.TryParse(queryValue.FirstOrDefault(), out var tenantGuid))
                 {
-                    return tenantGuid;
+                    return (tenantGuid, $"the {Describe(_options.TenantQueryStringKey)} query string parameter");
                 }
             }
         }
@@ -114,7 +125,7 @@ public class TenantMiddleware
             {
                 if (Guid.TryParse(routeValue, out var tenantGuid))
                 {
-                    return tenantGuid;
+                    return (tenantGuid, $"the {Describe(_options.TenantRouteKey)} route value");
                 }
             }
         }
@@ -122,11 +133,22 @@ public class TenantMiddleware
         // 4. Custom resolver
         if (_options.CustomTenantResolver != null)
         {
-            return _options.CustomTenantResolver(context);
+            var custom = _options.CustomTenantResolver(context);
+            if (custom.HasValue)
+            {
+                return (custom.Value, "the custom tenant resolver");
+            }
         }
 
         return null;
     }
+
+    /// <summary>
+    /// Render a configured key for use in the guard's JSON 403 body: quotes and backslashes are stripped
+    /// rather than escaped, because the key is consumer-configured and the body is hand-written JSON.
+    /// </summary>
+    private static string Describe(string key)
+        => new string(key.Where(c => c != '"' && c != '\\' && !char.IsControl(c)).ToArray());
 
     /// <summary>
     /// Resolve tenant name from the HTTP request
