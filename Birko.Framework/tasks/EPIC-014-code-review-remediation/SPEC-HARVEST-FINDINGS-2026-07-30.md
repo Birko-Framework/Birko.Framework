@@ -363,7 +363,15 @@ BelongsToCurrentTenant compares `item.TenantGuid` (a public settable property, o
 
 `../Birko.Security.AspNetCore/Tenant/TenantHeaderClaimGuardMiddleware.cs:57`
 
-**Verdict: CONFIRMED-NARROWER** — The guard reads only its hard-coded TenantGuidHeader, and genuinely unguarded alternative sources exist: TenantMiddlewareOptions.TenantQueryStringKey and SubdomainTenantResolver. But "route" is unsubstantiated — no RouteValues tenant source exists. The claim also misses that TenantMiddlewareOptions.TenantHeaderName is itself configurable, so a custom header name escapes the guard's hard-coded constant.
+**Verdict: CONFIRMED-WIDER** (re-verified 2026-08-02 under TASK-118; supersedes the CONFIRMED-NARROWER verdict below). The guard reads only its hard-coded TenantGuidHeader, and every alternative source named in the finding is genuinely unguarded.
+
+**Retraction: the earlier verdict's "route is unsubstantiated — no RouteValues tenant source exists" is wrong.** It does exist: `../Birko.Data.Tenant/Middleware/TenantMiddleware.cs:111-120` reads `TenantMiddlewareOptions.TenantRouteKey` via `context.GetRouteValue(...)`. The original finding was right and the correction was the error — acting on the correction would have deliberately left a live source out of the fix.
+
+Two things the finding missed, both widening it:
+- `TenantMiddlewareOptions.TenantHeaderName` is itself configurable, so a **renamed** header escapes the guard's hard-coded constant — the guard stops working with no error and no warning on a deployment that looks correctly configured.
+- There are **two independent resolution stacks**, not one. The finding attributes every alternative source to `Birko.Data.Tenant`; `Birko.Security.AspNetCore` has its own `ITenantResolver` chain (`Tenant/TenantMiddleware.cs`) where the subdomain and custom-resolver gaps actually live.
+
+Also note SH-H049 (below) is a **prerequisite of any fix here**: because `UseTenantMiddleware` binds `ITenantContext` from the root provider, a guard that read the resolved tenant through that interface would fail *open* under `AddTenantContextScoped()`. Fixed by publishing the resolution per-request on `HttpContext.Items` instead — see `Birko.Data.Tenant/Middleware/ResolvedTenant.cs`.
 
 It reads only Headers["X-Tenant-Id"], on the stated grounds that anything else 'resolves to no tenant in HeaderTenantResolver'. But Birko.Data.Tenant's TenantMiddleware also accepts a query-string key (line 99), a route key (line 111) and a CustomTenantResolver, and SubdomainTenantResolver resolves from Request.Host. With TenantQueryStringKey configured, `?tenant={victim}` (optionally beside a garbage header, waved through at line 81) scopes every tenant-scoped read and write to the victim while permissions stay home-tenant. Under Subdomain resolution nothing is correlated.
 

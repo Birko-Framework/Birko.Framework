@@ -13,15 +13,21 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**4 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
-SH-H003 via [[TASK-110]]) — **5 of 15 tasks done.** TASK-110 also closed the medium twin SH-M022, which counts
-under [[STORY-053]], not here; and [[TASK-128]] closed a defect that has no `SH-` id at all, so the task count
-now runs ahead of the finding count.
+**5 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]]) — **5 of 15 tasks done, 1 in review.** TASK-110 also
+closed the medium twin SH-M022, which counts under [[STORY-053]], not here; and [[TASK-128]] closed a defect
+that has no `SH-` id at all, so the task count now runs ahead of the finding count.
 TASK-125 (SH-H036) and TASK-126 (SH-H019) were verified by hand and filed on 2026-07-31 while closing
-TASK-114, taking the verified-and-tracked set to 16 findings across 13 tasks. 15 are hand-verified — 12 CONFIRMED, 3 CONFIRMED-NARROWER, 0 refuted — and 14 of those
+TASK-114, taking the verified-and-tracked set to 16 findings across 13 tasks. 15 are hand-verified — 13 CONFIRMED (one of them re-verified WIDER), 2 CONFIRMED-NARROWER, 0 refuted — and 14 of those
 15 now have tasks ([[TASK-108]] … [[TASK-118]]). The remaining **42 are unverified harvester claims** and
 must be confirmed before they are fixed. Per-finding detail is in
 [`SPEC-HARVEST-FINDINGS-2026-07-30.md`](../SPEC-HARVEST-FINDINGS-2026-07-30.md).
+
+**A verified finding can be verified wrong.** SH-H048 was filed CONFIRMED-**NARROWER** on the grounds that its
+"route" tenant source did not exist. It does (`TenantMiddleware.cs:111-120`), and the verdict plus [[TASK-118]]
+both instructed the fix to record it as nonexistent — which would have left a live, unguarded source out of a
+security fix. Re-verified WIDER at fix time and retracted in the findings doc. Worth carrying into the
+remaining 42: the verification pass is not automatically more trustworthy than the claim it is correcting.
 
 **Two tasks were filed from the remediation itself, both by hand and neither with an `SH-` id**, taking the
 story from 13 tasks to 15: [[TASK-128]] (P0, **closed same day**) — the view path's ORDER BY interpolated

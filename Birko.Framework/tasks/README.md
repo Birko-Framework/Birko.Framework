@@ -132,7 +132,7 @@ Todo by priority: **P0 4 · P1 15 · P2 39 · P3 4**
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (5/15)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (5/15, 1 in review)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [ ] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
@@ -143,7 +143,7 @@ Todo by priority: **P0 4 · P1 15 · P2 39 · P3 4**
     - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai) · FEATURE-014
     - [ ] [TASK-116](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-116-rulespecification-leaves-degrade-to-match-all.md) `RuleSpecification` leaves degrade to match-all — on the destructive paths (P0, ai) · FEATURE-014
     - [ ] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) · FEATURE-014
-    - [ ] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai) · FEATURE-014
+    - [~] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai) · FEATURE-014 — review
     - [ ] [TASK-125](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-125-readone-bypasses-store-decorators.md) `ReadOne` queries the connector directly, bypassing every store decorator (P1, ai) · FEATURE-014
     - [ ] [TASK-126](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-126-tagging-has-no-tenant-assertion.md) `TagServiceBase` states its tenant contract in a comment and enforces nothing (P1, ai) · FEATURE-014
     - [x] [TASK-128](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-128-view-order-by-identifier-unresolved.md) The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover (P0, ai) · FEATURE-014

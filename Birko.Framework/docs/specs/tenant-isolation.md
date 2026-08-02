@@ -1,7 +1,7 @@
 ---
 area: tenant-isolation
-generated-at: a62ec942b6f7bd18c3ce91995b4496ae95aa910a
-generated-on: 2026-08-01
+generated-at: ce656787e660707163ccf3cd6158cf305d35f2b5
+generated-on: 2026-08-02
 sources:
   - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs
@@ -10,6 +10,7 @@ sources:
   - ../Birko.Data.Sync.Tenant/Providers/TenantSyncProvider.cs
   - ../Birko.Data.Sync.Tenant/TenantSyncQueue.cs
   - ../Birko.Data.Tenant/Filters/ModelByTenant.cs
+  - ../Birko.Data.Tenant/Middleware/ResolvedTenant.cs
   - ../Birko.Data.Tenant/Middleware/ServiceCollectionExtensions.cs
   - ../Birko.Data.Tenant/Middleware/TenantMiddleware.cs
   - ../Birko.Data.Tenant/Models/ITenant.cs
@@ -680,8 +681,10 @@ properties rather than in the message.
 
 The system SHALL, in `Birko.Data.Tenant.Middleware.TenantMiddleware.ResolveTenantGuid`, try in order:
 the configured header (default `X-Tenant-Id`), the configured query-string key, the configured route
-key, then `CustomTenantResolver` — returning the first value that `Guid.TryParse` accepts, and null
-when nothing resolves. Each source is skipped when its configured key is null or empty.
+key, then `CustomTenantResolver` — returning the first value that `Guid.TryParse` accepts **paired
+with a description of the source that produced it**, and null when nothing resolves. Each source is
+skipped when its configured key is null or empty. Configured key names are stripped of quotes,
+backslashes and control characters in the description, because it reaches a hand-written JSON body.
 
 #### Scenario: Header wins over query string
 
@@ -709,8 +712,9 @@ when nothing resolves. Each source is skipped when its configured key is null or
 
 ### Requirement: Birko.Data.Tenant middleware sets HttpContext.Items and can require a tenant
 
-The system SHALL, when a tenant resolves, call `SetTenant(guid, ResolveTenantName(...))` and store
-the guid in `context.Items[options.TenantContextKey]` (default key `"TenantId"`); when no tenant
+The system SHALL, when a tenant resolves, call `SetTenant(guid, ResolveTenantName(...))`, store
+the guid in `context.Items[options.TenantContextKey]` (default key `"TenantId"`) and additionally
+publish it via `ResolvedTenant.Publish(context, guid, source)` under the fixed key; when no tenant
 resolves and `RequireTenant` is true, SHALL short-circuit with HTTP `401`, content type
 `application/json`, and a serialized `{ error = "Tenant Required", message = … }` body; and when
 `RequireTenant` is false SHALL continue the pipeline with no tenant.
@@ -885,8 +889,8 @@ extracted subdomain is empty.
 
 The system SHALL, in `Birko.Security.AspNetCore.TenantMiddleware`, receive `ITenantResolver` and
 `ITenantContext` as `InvokeAsync` parameters (resolved per request), set the tenant when the resolver
-returns non-null, invoke the rest of the pipeline in a `try`, and call `ClearTenant()` in the
-`finally`.
+returns non-null and publish it via `ResolvedTenant.Publish` naming the resolver's type, invoke the
+rest of the pipeline in a `try`, and call `ClearTenant()` in the `finally`.
 
 #### Scenario: The tenant is cleared even when the pipeline throws
 
@@ -931,41 +935,88 @@ implement it in `TenantContextAdapter` by delegating each member to a wrapped
 - **When** it looks for a cross-tenant scope
 - **Then** no `IsAllTenantsScope`, `WithAllTenants` or `WithTenant` member exists on that interface, so the deliberate-cross-tenant path is unreachable without reaching for the Birko interface
 
-### Requirement: X-Tenant-Id must agree with the caller's tenant claim
+### Requirement: Every tenant a request addresses must agree with the caller's tenant claim
 
-The system SHALL, in `TenantHeaderClaimGuardMiddleware`, compare the `X-Tenant-Id` header to
-`currentUser.TenantGuid ?? Guid.Empty` and, on disagreement, short-circuit with HTTP `403`, content
-type `application/json` and the exact body
-`{"Error":"The X-Tenant-Id header does not match the tenant this session was issued for.","Code":"Tenant.HeaderClaimMismatch"}`.
+The system SHALL, in `TenantHeaderClaimGuardMiddleware`, collect every tenant the request addresses —
+the `ResolvedTenant` published on `HttpContext.Items`, the ambient `ITenantContext` tenant, and a
+parseable literal `X-Tenant-Id` header — de-duplicate them by guid, compare each to
+`currentUser.TenantGuid ?? Guid.Empty` and, on the first disagreement, short-circuit with HTTP `403`,
+content type `application/json` and a body naming the source that was used together with
+`"Code":"Tenant.HeaderClaimMismatch"`.
+
+#### Scenario: A tenant resolved from any source is refused
+
+- **Given** an authenticated non-wildcard caller whose claim tenant is `t`, and a request resolving to `{u}` through a query-string key, a route value, a renamed tenant header, a `CustomTenantResolver`, a `SubdomainTenantResolver` or any custom `ITenantResolver`
+- **When** the middleware runs
+- **Then** the response is `403` with code `Tenant.HeaderClaimMismatch` and `_next` is never invoked
 
 #### Scenario: Header naming another tenant is refused
 
 - **Given** an authenticated non-wildcard caller whose claim tenant is `t` and header `X-Tenant-Id: {u}`
 - **When** the middleware runs
-- **Then** the response is `403` with code `Tenant.HeaderClaimMismatch` and `_next` is never invoked
+- **Then** the response is `403` with code `Tenant.HeaderClaimMismatch` and `_next` is never invoked — checked from the literal header even when no tenant middleware ran, so an app that never wired resolution is still guarded
 
 #### Scenario: A system-scope token cannot name a real tenant
 
-- **Given** an authenticated non-wildcard caller with no `tenant_id` claim (so the claim resolves to `Guid.Empty`) and header `X-Tenant-Id: {u}`
+- **Given** an authenticated non-wildcard caller with no `tenant_id` claim (so the claim resolves to `Guid.Empty`) addressing `{u}` through any source
 - **When** the middleware runs
 - **Then** the request is refused with `403`
 
-#### Scenario: Matching header passes
+#### Scenario: Matching tenant passes
 
-- **Given** claim tenant `t` and header `X-Tenant-Id: {t}`
+- **Given** claim tenant `t` and a request addressing `{t}`
 - **When** the middleware runs
 - **Then** the pipeline continues unchanged
 
-### Requirement: Deliberate pass-throughs of the header/claim guard
+#### Scenario: A guard that cannot see the resolution does not degrade to a pass-through
+
+- **Given** an `ITenantContext` that never observed the resolution (the root-provider binding of SH-H049 under a scoped registration) and a published `ResolvedTenant` of `{u}`
+- **When** the middleware runs
+- **Then** the request is still refused, because the published resolution is per-request and independent of any container lifetime
+
+#### Scenario: A configured key name cannot break out of the response body
+
+- **Given** a `TenantQueryStringKey` containing a double quote, and a mismatching tenant
+- **When** the 403 body is written
+- **Then** quotes, backslashes and control characters are stripped from the source description, leaving the JSON well-formed
+
+### Requirement: The resolved tenant is published per-request under a fixed key
+
+The system SHALL, in `ResolvedTenant`, expose the constant key `"Birko.Tenant.Resolved"`, a
+`Publish(HttpContext, Guid, string)` that stores a `ResolvedTenant(TenantGuid, Source)` on
+`HttpContext.Items`, and a `From(HttpContext)` returning it or null; and both
+`Birko.Data.Tenant.Middleware.TenantMiddleware` and `Birko.Security.AspNetCore.TenantMiddleware` SHALL
+call `Publish` whenever they resolve a tenant.
+
+#### Scenario: Each source names itself
+
+- **Given** a tenant resolved from a query-string key, a route value, a header, a custom delegate or an `ITenantResolver`
+- **When** the resolution is published
+- **Then** the `Source` describes that specific door, so the refusal body can name it
+
+#### Scenario: Nothing is published when nothing resolved
+
+- **Given** a request no source resolves a tenant from
+- **When** `From` is called downstream
+- **Then** null is returned and the guard treats the request as addressing no tenant
+
+#### Scenario: The key is not the configurable context key
+
+- **Given** a consumer that changed `TenantMiddlewareOptions.TenantContextKey`
+- **When** the guard reads the resolution
+- **Then** it still finds it, because `HttpContextItemKey` is a fixed constant — a guard keyed on a configurable name would be defeated by the same class of configuration change as the hard-coded `X-Tenant-Id` constant it replaced
+
+### Requirement: Deliberate pass-throughs of the tenant/claim guard
 
 The system SHALL invoke `_next` without comparison when
-`BirkoSecurityOptions.RequireTenantHeaderMatchesClaim` is false, when the header is absent or
-whitespace, when `currentUser.IsAuthenticated` is false, when wildcard permissions are enabled and
-the caller's permissions contain `"*"`, or when the header value fails `Guid.TryParse`.
+`BirkoSecurityOptions.RequireTenantHeaderMatchesClaim` is false, when the request addresses no tenant
+at all, when `currentUser.IsAuthenticated` is false, or when wildcard permissions are enabled and
+the caller's permissions contain `"*"`. A source whose value fails `Guid.TryParse` resolves to no
+tenant and therefore lands in the addresses-no-tenant case rather than being a separate check.
 
-#### Scenario: No header means the claim is the only source
+#### Scenario: No tenant addressed means the claim is the only source
 
-- **Given** an authenticated caller sending no `X-Tenant-Id`
+- **Given** an authenticated caller whose request resolves no tenant and sends no `X-Tenant-Id`
 - **When** the middleware runs
 - **Then** the request proceeds — required so header-less transports such as server-sent events keep working
 
@@ -981,17 +1032,17 @@ the caller's permissions contain `"*"`, or when the header value fails `Guid.Try
 - **When** the middleware runs
 - **Then** the request proceeds
 
-#### Scenario: An unparseable header is treated as absent
+#### Scenario: An unparseable source is treated as absent
 
-- **Given** an authenticated caller with claim tenant `t` and header `X-Tenant-Id: nonsense`
+- **Given** an authenticated caller with claim tenant `t` and a header, query-string or route value that fails `Guid.TryParse`
 - **When** the middleware runs
-- **Then** the request proceeds without a 403, on the grounds that `HeaderTenantResolver` would resolve nothing from it
+- **Then** the request proceeds without a 403, on the grounds that no resolver produces a tenant from it, so it cannot scope anything
 
 #### Scenario: Opting out makes the middleware a pass-through
 
 - **Given** `RequireTenantHeaderMatchesClaim = false`
 - **When** any request arrives, matching or not
-- **Then** `_next` is invoked immediately and no header is read
+- **Then** `_next` is invoked immediately and no source is read
 
 ### Requirement: Header-guard wiring
 

@@ -123,6 +123,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 - Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), **NOT** the public CRUD methods. The base class handles lazy-init in the public wrapper
 - Use protected setters for properties that derived classes need to modify
 - `RemoteSettings` should be passed via `base.SetSettings()`, not constructed inline
+- **Any middleware that resolves a tenant must publish it via `ResolvedTenant.Publish(context, guid, source)`**
+  (`Birko.Data.Tenant/Middleware/ResolvedTenant.cs`). `TenantHeaderClaimGuardMiddleware` correlates that
+  published value with the JWT `tenant_id` claim after authentication, so a source that does not publish is a
+  source the guard cannot see — and it fails *open*, silently (SH-H048). Publish on `HttpContext.Items` under
+  the fixed key, never through `ITenantContext`: `UseTenantMiddleware` binds that from the root provider
+  (SH-H049), so a scoped registration hands the guard a different instance
 
 ## Task tracking — this repo is the polyrepo family's aggregator
 
@@ -191,6 +197,37 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The tenant guard was on a transport, not on the tenant — and its own correction was wrong (2026-08-02)
+
+TASK-118 / SH-H048. The guard shipped on 2026-07-28 compared one hard-coded `X-Tenant-Id` header against the
+JWT `tenant_id` claim. Every other door was open: `TenantQueryStringKey`, `TenantRouteKey`, both
+custom-resolver hooks, `SubdomainTenantResolver`, and — the quiet one — a **renamed**
+`TenantMiddlewareOptions.TenantHeaderName`, which made the guard stop working with no error on a deployment
+that looked correctly configured. A caller authenticated in tenant A reached tenant B's reads *and writes*
+with their own permissions intact, and nothing failed or logged. Both resolving middlewares now publish their
+result as a `ResolvedTenant` and the guard checks that, so a source added later is covered without editing it.
+
+Four things worth carrying past this middleware:
+
+- **A correction to a finding can be the thing that's wrong.** Both the filed finding and this task instructed
+  the fix to record that "no `RouteValues` tenant source exists". It exists — `TenantMiddleware.cs:111-120`.
+  Following the correction would have deliberately left a live, unguarded source out of a security fix. The
+  usual step-3 failure is a finding that overstates; this one *understated*, via its own verification pass.
+  Re-verify the corrections too, not just the claims.
+- **Where the resolution travels decides whether the guard fails open.** Reading the resolved tenant off
+  `ITenantContext` covers every source and is simpler — and would fail open, because `UseTenantMiddleware`
+  binds its context from the root provider (SH-H049) while the guard resolves one per request, so under
+  `AddTenantContextScoped()` they are different objects and the guard sees no tenant. It goes on
+  `HttpContext.Items` under a **fixed** key: `TenantContextKey` is configurable, and a guard keyed on a
+  configurable name is defeated by the same class of config change as the hard-coded header constant was.
+- **Widening a guard can narrow it.** Replacing the literal `X-Tenant-Id` check with the resolved-tenant check
+  would be cleaner and would have been a *coverage regression* for any app that never wired a tenant
+  middleware but reads the header in its own code — the premise the original guard was written on. Kept both.
+- **The revert reclassified one of the tests.** `SystemScopeToken_CannotAddressARealTenant` was filed as a
+  contract pin and failed on the step-6 revert: it reaches the victim through the query string, so it was
+  never pinning old behaviour. Split: **9 of 16 failed**, 2 more don't compile pre-fix, 7 genuine pins. The
+  guard had also shipped with **zero tests** — this is its first suite.
 
 ### Shadow depth per theme, and the generator drift that had been running for two days (2026-08-02)
 
