@@ -192,6 +192,57 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Shadow depth per theme, and the generator drift that had been running for two days (2026-08-02)
+
+Started as a question — *should shadows be distinguishable on dark / neon / inverse?* — asked while trying
+the new global theme switcher in `Birko.Web.Playground`. Measuring rather than eyeballing answered it and
+turned up two defects and a process hole.
+
+**The scale, not the depth, is the contract.** `sm`→`lg` on the dark themes were already fine: they raise
+alpha from light's 0.05–0.1 to 0.3–0.6 and measure on par with light. But **`dark`/`neon`/`inverse` had
+never overridden `--b-shadow-xl`**, so it fell through to the light `:root` value (0.1/0.04) and measured
+**7 / 4 / 9** against those themes' own `--b-shadow` at **13 / 10 / 15** — the ladder inverted at its
+deepest rung, and `xl` is the level *every* overlay uses (`b-modal`, `b-drawer`, `b-confirm-dialog`,
+`b-command-palette`, `b-tour`). Now 33 / 25 / 37. `finstat` had the same inversion one rung lower
+(`md` > `lg`, from a 1:1 mapping to the legacy `@box-shadow-preset`); where a brand mapping contradicts the
+ladder, **the ladder wins** — `md` and `xl` still map 1:1.
+
+Three things worth carrying past shadows:
+
+- **A metric that is too narrow invents defects.** Judged on peak pixel, finstat's `xl` looked broken too.
+  It isn't: it is deliberately wide and diffuse (`0 20px 70px -25px`), reads as the theme's deepest level,
+  and only measures a low peak. Switching to *ink* (delta integrated down the column) cleared `xl` and kept
+  `lg` condemned. Assert the ordering; the absolute number is decoration.
+- **A question can be correctly closed with "no change".** `dark`/`inverse` set `--b-bg-secondary` ==
+  `--b-bg-elevated`, so a `b-card` has zero surface step — which sounds like a defect until measured: the
+  card edge reads at **26 / 23** against light's **22**, because the 1px border does the work. Nothing
+  changed, and a permanent check now guards the property that made "no" the right answer.
+- **Some defects have no DOM to assert against.** `--b-shadow-*` has no element, no ARIA, no geometry, so
+  `verify.mjs` and every in-page smoke suite are blind to it *by construction*. It has to come off rendered
+  pixels — screenshot, hand the PNG back into the page, sample a canvas. Now a permanent group in the
+  playground's `device-fix-check.mjs` (63 checks, up from 47), verified to fail by reverting both fixes.
+
+**The process hole is the more valuable find.** `verify` was **already red before any of this work**:
+`c97d9bd` and `e07f9d3` had written real fixes straight into the *generated* CSS — the four dark
+`--b-color-*-light` tint fixes and `--b-split-detail-sticky-top` — so `generate` would have deleted them,
+and did, until they were restored and recovered with `extract`. That recovery exposed a live bug nobody
+could see: the **Avalonia dark dictionary was still serving the light pastel tints** (`#DCFCE7`/`#FEF3C7`/
+`#FEE2E2`/`#CFFAFE`) under near-white text — the very defect the web side fixed on 2026-08-01 — because
+AXAML is generated from `tokens.json` and agreed *perfectly* with a stale source.
+
+- **`verify` answers "does the output match the source", never "is the source still true".** A green run is
+  evidence of consistency, not correctness. It flagged the two CSS files and passed the AXAML that was
+  actively wrong.
+- **Only the CSS has ever drifted, and only the CSS lacked a banner.** Every AXAML dictionary opens with
+  `AUTO-GENERATED … DO NOT EDIT`; `tokens.css` opened straight into `:root {` and `dark.css` opened with a
+  prose "how to use this theme" comment that reads exactly like a hand-authored file. All five sheets now
+  carry the banner (in `Sheet.prologue`, so the verbatim round-trip keeps it with no emitter change), with
+  `CssParityTests.Every_sheet_declares_itself_generated` per sheet.
+- **The banner is a human signal; the gate is CI, and there was none.** `tokens.json`, the CSS, the AXAML
+  and the parity suite live in **four separate repos**, so no single checkout can run the gate — which is
+  exactly why an editor's diff, review and test run never mention `tokens.json`. A `token-parity` workflow
+  now exists in **all four**: a gate that only fires on the source cannot catch an edit made to the output.
+
 ### `b-button`: the form story was already decided — the button had just been left out (2026-07-30)
 
 Third gap under STORY-052 (framework `TASK-107`), from Reps stopping **before** converting 69 buttons because
