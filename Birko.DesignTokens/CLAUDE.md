@@ -32,6 +32,29 @@ AXAML) instead of `tokens.json`, the next `generate` silently *deletes* their ed
 `extract` (it folds the live CSS back into `tokens.json` and self-checks the round-trip), then
 `generate`. Prevention is running `verify`.
 
+**It happened a second time (2026-08-02), and only the CSS target has ever drifted.** `c97d9bd`
+wrote `--b-split-detail-sticky-top` straight into `css/tokens.css`; `e07f9d3` wrote the four dark
+`--b-color-*-light` tint fixes straight into `css/themes/dark.css`. Same recovery. Two things this
+pinned down, both now closed:
+
+- **Only the CSS drifts because only the CSS lacked a banner.** Every AXAML dictionary opens with
+  `AUTO-GENERATED … DO NOT EDIT`; the CSS opened straight into `:root {`, and `dark.css` opened with
+  a prose "how to use this theme" comment that reads exactly like a hand-authored file. The banner is
+  now emitted into all five sheets (in each `Sheet.prologue`, so the verbatim round-trip carries it
+  for free — no emitter change) and `CssParityTests.Every_sheet_declares_itself_generated` fails any
+  sheet that ships without it. This matters more than it looks: the output lives in
+  **`Birko.Web.Components`, a different git repo**, so the editor's diff, review and test run contain
+  nothing that mentions `tokens.json`.
+- **`verify` cannot see a stale source.** It answers "does the output match `tokens.json`", never "is
+  `tokens.json` still true". At the 2026-08-02 baseline it flagged the two CSS files and passed the
+  AXAML — because the AXAML agreed perfectly with the stale source, and was therefore shipping the
+  light pastel tints (`#DCFCE7`/`#FEF3C7`/`#FEE2E2`/`#CFFAFE`) that `e07f9d3` had fixed on the web
+  side months earlier. A green `verify` is not evidence the tokens are right, only that they are
+  consistent. The AXAML defect surfaced only *after* `extract` folded the recovered values back in.
+
+Still open: nothing runs `CssParityTests` when `Birko.Web.Components` changes — none of the three
+repos has CI. The banner is a human signal, not a gate.
+
 ## Convention deviations (deliberate — do not "fix")
 
 1. **A real `.csproj`, not `.shproj`/`.projitems`.** It is the first buildable assembly in the
