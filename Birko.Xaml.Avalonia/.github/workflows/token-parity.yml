@@ -1,0 +1,69 @@
+# Token parity gate.
+#
+# tokens.json (Birko.DesignTokens) generates this repo's Themes/*.axaml AND Birko.Web.Components' css/,
+# and the suite that compares them lives in a FOURTH repo (Birko.DesignTokens.Tests). No single repo's
+# checkout can run that gate — which is precisely how the CSS drifted twice: a real fix was written into
+# the generated file, reviewed inside a repo whose diff never mentions tokens.json, and silently deleted
+# by the next `generate`. The generated files now carry an AUTO-GENERATED banner, but that is a human
+# signal; this is the machine one.
+#
+# The job reassembles the layout the tool expects (BIRKO_SRC points at the Framework bucket, its parent
+# is the Birko root) and runs the suite. It exists in all four repos on purpose — a gate that only fires
+# on the source cannot catch an edit made to the output, which is the failure that actually happened.
+#
+# Cross-repo checkout: the default GITHUB_TOKEN only reaches public repos. If any of these are private,
+# add a BIRKO_CI_TOKEN secret (a PAT with read access to the four) and it will be used instead.
+
+name: token-parity
+
+on:
+  push:
+    paths:
+      - 'Themes/**'
+      - '.github/workflows/token-parity.yml'
+  pull_request:
+    paths:
+      - 'Themes/**'
+      - '.github/workflows/token-parity.yml'
+  workflow_dispatch:
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repo (the change under test)
+        uses: actions/checkout@v4
+        with:
+          path: birko/Framework/Birko.Xaml.Avalonia
+
+      - name: Check out the token source
+        uses: actions/checkout@v4
+        with:
+          repository: birko/Birko.DesignTokens
+          path: birko/Framework/Birko.DesignTokens
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - name: Check out the CSS target
+        uses: actions/checkout@v4
+        with:
+          repository: birko/Birko.Web.Components
+          path: birko/Web/Birko.Web.Components
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - name: Check out the parity suite
+        uses: actions/checkout@v4
+        with:
+          repository: birko/Birko.DesignTokens.Tests
+          path: birko/Framework.Tests/Birko.DesignTokens.Tests
+          token: ${{ secrets.BIRKO_CI_TOKEN || github.token }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Covers both generated trees: CssParityTests (byte-identical CSS + the AUTO-GENERATED banner)
+      # and AxamlParityTests (the six dictionaries, plus that Themes/ holds exactly the generated set).
+      - name: Generated CSS and AXAML must match tokens.json
+        env:
+          BIRKO_SRC: ${{ github.workspace }}/birko/Framework
+        run: dotnet test birko/Framework.Tests/Birko.DesignTokens.Tests --nologo
