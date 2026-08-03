@@ -13,8 +13,11 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**5 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
-SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]]) — **5 of 15 tasks done, 1 in review.** TASK-110 also
+**8 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]]) — **6 of 15
+tasks done, 1 in review.** TASK-113 closed three findings at once: they shared one root cause
+(`ApplyTenantFiltering` scoping only the save predicates), so scoping the *fetch* closed the read, preview,
+delete and knowledge paths together rather than one guard per path. TASK-110 also
 closed the medium twin SH-M022, which counts under [[STORY-053]], not here; and [[TASK-128]] closed a defect
 that has no `SH-` id at all, so the task count now runs ahead of the finding count.
 TASK-125 (SH-H036) and TASK-126 (SH-H019) were verified by hand and filed on 2026-07-31 while closing

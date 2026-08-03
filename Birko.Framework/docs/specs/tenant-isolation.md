@@ -1,7 +1,7 @@
 ---
 area: tenant-isolation
-generated-at: ce656787e660707163ccf3cd6158cf305d35f2b5
-generated-on: 2026-08-02
+generated-at: 42297caabceb8d5a0114e9bc235bba6f0a24ffcf
+generated-on: 2026-08-03
 sources:
   - ../Birko.Data.Sync.Tenant/Models/ITenantSyncKnowledgeItem.cs
   - ../Birko.Data.Sync.Tenant/Models/TenantSyncKnowledgeItem.cs
@@ -35,7 +35,8 @@ sources:
   - ../Birko.Security.AspNetCore/Tenant/TenantContextAdapter.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantHeaderClaimGuardMiddleware.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantMiddleware.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+shaped-by-derived: false
 ---
 
 # Multi-tenant isolation across stores, HTTP and events
@@ -54,10 +55,17 @@ be a `400` and a wrong tenant to be a `403` instead of both being a `500`.
 
 ## Regen provenance
 
-Full regen at `a62ec94`, producing **no behavioural change** — every requirement below survived
-verification against the code unaltered. Supersedes a partial regen whose `generated-at` carried its scope
-as prose *and* named `10f5611`, a **`Birko.Data.Tenant` sha** rather than one of this repo's: `git diff
-10f5611..HEAD` fails with *unknown revision* here, so the staleness check could not run on this area at all.
+Scoped regen at `42297ca` for TASK-113 (SH-H050 / SH-H051 / SH-H052), rewriting the three
+`TenantSyncProvider` requirements the fix contradicted — tenant resolution, fetch-vs-save scoping, and
+knowledge stamping. Every other requirement is verbatim from the previous regen. The harvest read the
+`Birko.Data.Sync.Tenant` working tree **before** that repo's fix was committed, so `generated-at` names
+this repo's HEAD at the time rather than the commit carrying the behaviour.
+
+Supersedes a full regen at `a62ec94`, which produced **no behavioural change** — every requirement
+survived verification against the code unaltered. That in turn superseded a partial regen whose
+`generated-at` carried its scope as prose *and* named `10f5611`, a **`Birko.Data.Tenant` sha** rather than
+one of this repo's: `git diff 10f5611..HEAD` fails with *unknown revision* here, so the staleness check
+could not run on this area at all.
 
 Six files changed in the sibling repos between the previous harvest and this regen, all in
 `Birko.Data.Tenant` — `Models/TenantContext.cs`, `Models/ITenantContext.cs`, and the four store wrappers —
@@ -1136,30 +1144,65 @@ overload SHALL use `Birko.Data.Tenant.Models.Tenant.Current`.
 - **When** the bridge is used
 - **Then** it observes `Tenant.Current`, which only matches store/repository behaviour if the app's `ITenantContext` registration is that same instance
 
-### Requirement: Tenant-scoped sync options resolution
+### Requirement: Tenant-scoped sync resolves exactly one tenant per run
 
-The system SHALL, in `TenantSyncProvider.ApplyTenantContext`, fill `TenantSyncOptions.TenantGuid`
-from the ambient context only when the caller left it null and `HasTenant` is true, and SHALL
-otherwise wrap a plain `SyncOptions` into a new `TenantSyncOptions` copying every option field and
-setting `TenantGuid` to the ambient tenant (or null when none is set).
+The system SHALL, in `TenantSyncProvider.ResolveTenantScope`, resolve the run's tenant **once** per
+`PreviewAsync`/`SyncAsync` call as `TenantSyncOptions.TenantGuid` when set and otherwise the ambient
+`CurrentTenantGuid` when `HasTenant` is true, and SHALL supply that one value to the fetch predicates,
+the save predicates, the knowledge/last-sync keys and the knowledge items alike. The system SHALL
+throw `TenantMismatchException` when an explicit option tenant and an ambient tenant are both present
+and differ, and SHALL throw `TenantScopeRequiredException` when neither source supplies a tenant and
+the entity type declares a `TenantGuid` property; both refusals SHALL be suppressed while
+`ITenantContext.IsAllTenantsScope` is active. The system SHALL NOT mutate the caller's `SyncOptions`
+instance or promote a plain `SyncOptions` into a `TenantSyncOptions`.
 
-#### Scenario: An explicit tenant on the options wins
+#### Scenario: An explicit tenant with no ambient tenant scopes the whole run
 
-- **Given** `TenantSyncOptions { TenantGuid = u }` and ambient tenant `t`
+- **Given** `TenantSyncOptions { TenantGuid = u }`, no ambient tenant, and remote items belonging to `u` and to `t`
 - **When** `SyncAsync(options)` runs
-- **Then** the knowledge store is queried with `u`
+- **Then** the knowledge store is queried with `u` **and** only `u`'s items are written — the writes are scoped to the same tenant the knowledge is keyed to
 
-#### Scenario: A plain SyncOptions is promoted
-
-- **Given** a plain `SyncOptions` and ambient tenant `t`
-- **When** `PreviewAsync(options)` runs
-- **Then** a new `TenantSyncOptions` with `TenantGuid == t` is used and the caller's instance is not modified
-
-#### Scenario: A caller-supplied TenantSyncOptions is mutated in place
+#### Scenario: The ambient tenant is used when the options name none
 
 - **Given** a `TenantSyncOptions` with a null `TenantGuid` and ambient tenant `t`
 - **When** `SyncAsync(options)` runs
-- **Then** the same instance is returned with `TenantGuid` set to `t`, so the caller's object retains `t` after the call
+- **Then** the run resolves to `t`, and the caller's options instance is returned unmodified — its `TenantGuid` is still null after the call
+
+#### Scenario: An explicit tenant agreeing with the ambient one is allowed
+
+- **Given** `TenantSyncOptions { TenantGuid = t }` and ambient tenant `t`
+- **When** `SyncAsync(options)` runs
+- **Then** the run proceeds scoped to `t`
+
+#### Scenario: An explicit tenant contradicting the ambient one is refused
+
+- **Given** `TenantSyncOptions { TenantGuid = u }` and ambient tenant `t`, with no all-tenants scope
+- **When** `SyncAsync(options)` or `PreviewAsync(options)` runs
+- **Then** `TenantMismatchException` is thrown before any store is read — the contradiction is not resolved by precedence
+
+#### Scenario: No tenant from either source is refused, not widened
+
+- **Given** a tenant-scoped entity type, no ambient tenant and no `TenantGuid` on the options
+- **When** `SyncAsync(options)` runs
+- **Then** `TenantScopeRequiredException` is thrown and nothing is written, rather than every tenant being synced
+
+#### Scenario: A non-tenant entity type needs no tenant
+
+- **Given** an entity type with no `TenantGuid` property and no tenant in scope
+- **When** `SyncAsync(options)` runs
+- **Then** the run proceeds unscoped — there is no tenant to scope it by
+
+#### Scenario: An explicit all-tenants scope is the sanctioned cross-tenant run
+
+- **Given** a tenant-scoped entity type, no tenant in scope, inside `WithAllTenantsAsync`
+- **When** `SyncAsync(options)` runs
+- **Then** no exception is thrown and every tenant's items are synced
+
+#### Scenario: An all-tenants scope with an explicit tenant still narrows
+
+- **Given** `WithAllTenantsAsync` around `SyncAsync(new TenantSyncOptions { TenantGuid = u })`
+- **When** the run executes
+- **Then** only `u`'s items are synced — the per-tenant admin loop scopes each iteration
 
 #### Scenario: Knowledge is keyed by scope and tenant
 
@@ -1167,36 +1210,57 @@ setting `TenantGuid` to the ambient tenant (or null when none is set).
 - **When** the provider loads knowledge and last-sync time
 - **Then** `GetKnowledgeAsync("invoices", t, ct)` and `GetLastSyncTimeAsync("invoices", t, ct)` are called, and on completion `SetLastSyncTimeAsync("invoices", t, now, ct)`
 
-### Requirement: Tenant sync filters writes only, via the save predicates
+### Requirement: Tenant sync scopes the fetch predicates, not only the save predicates
 
-The system SHALL, in `ApplyTenantFiltering`, wrap `CanSaveToLocal` and `CanSaveToRemote` with a
-reflection-based `BelongsToTenant` check (conjoined with any existing predicate) only when
-`HasTenant` is true and the entity type declares a `TenantGuid` property — and SHALL leave
-`LocalFetchPredicate` and `RemoteFetchPredicate` untouched.
+The system SHALL, in `ApplyTenantFiltering`, conjoin a `TenantGuid`-equality predicate onto both
+`LocalFetchPredicate` and `RemoteFetchPredicate` (via `ExpressionParameterReplacer.AndAlso`) and wrap
+`CanSaveToLocal` and `CanSaveToRemote` with a reflection-based `BelongsToTenant` check, whenever the
+run resolved a tenant and the entity type declares a `TenantGuid` property. `BuildTenantPredicate`
+SHALL emit an unlifted equality for a `Guid` or `Guid?` property and return null for any other
+property type. The system SHALL additionally drop any materialized row failing `BelongsToTenant` in
+`GetAllItemsAsync`, so the tenant guarantee does not depend on the backend honouring the predicate.
+
+#### Scenario: Another tenant's rows never enter the comparison
+
+- **Given** resolved tenant `t` and remote items belonging to `t` and to `u`
+- **When** `PreviewAsync` runs
+- **Then** only `t`'s entities appear in `preview.Items` — `u`'s rows are neither enumerated, version-hashed nor counted as ToCreate/ToUpdate/ToDelete
+
+#### Scenario: A non-nullable TenantGuid is scoped like a nullable one
+
+- **Given** a canonical `ITenant` entity whose `TenantGuid` is a non-nullable `Guid`
+- **When** the fetch predicate is built and applied
+- **Then** only the resolved tenant's rows are fetched
+
+#### Scenario: A backend that ignores the predicate is still scoped
+
+- **Given** a store whose filter translation discards the predicate it is handed
+- **When** `GetAllItemsAsync` materializes the rows
+- **Then** rows failing `BelongsToTenant` are dropped in-process, so no foreign row reaches the compare or delete paths
 
 #### Scenario: Cross-tenant items are not saved
 
-- **Given** ambient tenant `t` and a remote item whose `TenantGuid` is `u`, resolved to `SyncAction.Create` in the Download direction
+- **Given** resolved tenant `t` and an item whose `TenantGuid` is `u` reaching the create branch in the Download direction
 - **When** the create branch consults `CanSaveToLocal`
 - **Then** it returns false and `progress.SkippedItems` is incremented instead of the item being written locally
 
 #### Scenario: A caller's predicate is preserved as a conjunction
 
-- **Given** a caller-supplied `CanSaveToRemote` and ambient tenant `t`
+- **Given** a caller-supplied `CanSaveToRemote` and resolved tenant `t`
 - **When** the wrapped predicate runs
 - **Then** the item must both belong to `t` and satisfy the caller's predicate
 
-#### Scenario: Both stores are read across all tenants
+#### Scenario: A caller's fetch predicate is preserved as a conjunction
 
-- **Given** ambient tenant `t` and no `LocalFetchPredicate`/`RemoteFetchPredicate`
-- **When** `GetAllItemsAsync` runs
-- **Then** `store.ReadAsync(ct)` is called with no tenant predicate, so every tenant's items enter `localDict`/`remoteDict` and are compared, previewed and counted
+- **Given** a caller-supplied `RemoteFetchPredicate` and resolved tenant `t`
+- **When** the fetch runs
+- **Then** rows must satisfy both terms — the tenant term is composed with the caller's predicate, not substituted for it
 
 #### Scenario: An entity type with no TenantGuid property is never filtered
 
 - **Given** a model without a `TenantGuid` property
 - **When** `ApplyTenantFiltering` runs
-- **Then** the save predicates are left as supplied, and `BelongsToTenant` (if reached) returns true
+- **Then** the fetch and save predicates are left as supplied, and `BelongsToTenant` (if reached) returns true
 
 #### Scenario: A TenantGuid that is not a Guid excludes the item
 
@@ -1204,34 +1268,34 @@ reflection-based `BelongsToTenant` check (conjoined with any existing predicate)
 - **When** `BelongsToTenant(item, t)` runs
 - **Then** it returns false, excluding the item — the allow-all path is reserved for types with no such property at all
 
-#### Scenario: Deletes bypass the save predicates entirely
+#### Scenario: Deletes consult the save predicate
 
-- **Given** ambient tenant `t` and an item belonging to tenant `u` resolved to `SyncAction.Delete`
+- **Given** resolved tenant `t` and an item resolved to `SyncAction.Delete`
 - **When** the delete branch runs
-- **Then** `_localStore.DeleteAsync` / `_remoteStore.DeleteAsync` is called with no `CanSaveToLocal`/`CanSaveToRemote` consultation, so another tenant's row is deleted
+- **Then** `CanSaveToLocal`/`CanSaveToRemote` is consulted first, exactly as the create and update branches do, and a blocked delete increments `progress.SkippedItems` instead of removing the row
 
-#### Scenario: No ambient tenant disables tenant filtering completely
+#### Scenario: No resolved tenant leaves filtering off
 
-- **Given** `HasTenant == false`
+- **Given** a run that resolved no tenant (an explicit all-tenants scope, or a non-tenant entity type)
 - **When** `ApplyTenantFiltering` runs
-- **Then** no wrapping happens and every item on both sides is eligible for save, regardless of its `TenantGuid`
+- **Then** no wrapping happens and every item on both sides is eligible, regardless of its `TenantGuid`
 
-### Requirement: Sync knowledge items are stamped with the effective tenant
+### Requirement: Sync knowledge items are stamped with the run's resolved tenant
 
-The system SHALL, in `CreateKnowledgeItem`, compute the tenant as
-`GetTenantGuid(options) ?? (HasTenant ? CurrentTenantGuid : Guid.Empty)`, store it as
-`TenantGuid ?? Guid.Empty` on a `TenantSyncKnowledgeItem`, and record `IsLocalDeleted` /
-`IsRemoteDeleted` only as `hasKnowledge && item == null`.
+The system SHALL, in `CreateKnowledgeItem`, stamp the `TenantGuid` supplied by the caller — the one
+value `ResolveTenantScope` returned for the run — as `TenantGuid ?? Guid.Empty` on a
+`TenantSyncKnowledgeItem`, and record `IsLocalDeleted` / `IsRemoteDeleted` only as
+`hasKnowledge && item == null`.
 
-#### Scenario: Options tenant takes precedence over the ambient one
+#### Scenario: Knowledge is keyed to the tenant the writes were scoped to
 
-- **Given** `TenantSyncOptions { TenantGuid = u }` and ambient tenant `t`
-- **When** a knowledge item is created
-- **Then** its `TenantGuid` is `u`
+- **Given** a run resolved to tenant `u` over stores holding items of `u` and `t`
+- **When** the knowledge updates are written
+- **Then** every knowledge item carries `TenantGuid == u`, and no foreign entity's guid appears among them
 
 #### Scenario: No tenant anywhere stamps the zero guid
 
-- **Given** a plain `SyncOptions` promoted with no ambient tenant
+- **Given** a run that resolved no tenant (a non-tenant entity type, or an all-tenants scope)
 - **When** a knowledge item is created
 - **Then** its `TenantGuid` is `Guid.Empty`
 

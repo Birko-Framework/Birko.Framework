@@ -21,14 +21,14 @@ generated: 2026-08-01
 
 ## Build progress
 
-5 / 16 tasks done.
+6 / 16 tasks done.
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [ ] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
 - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted
 - [ ] TASK-111 `rule.Field` reaches the WHERE clause unresolved and unquoted
 - [ ] TASK-112 `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist
-- [ ] TASK-113 `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant
+- [x] TASK-113 `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant
 - [x] TASK-114 The item-level tenant write guard trusts the caller-supplied `TenantGuid`
 - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope
 - [ ] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths

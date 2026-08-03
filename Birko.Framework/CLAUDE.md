@@ -123,6 +123,20 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 - Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), **NOT** the public CRUD methods. The base class handles lazy-init in the public wrapper
 - Use protected setters for properties that derived classes need to modify
 - `RemoteSettings` should be passed via `base.SetSettings()`, not constructed inline
+- **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
+  than picking a winner.** Two live answers in one run is the defect, not a precedence question:
+  `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
+  context, so the documented background-job call installed *no* write filter at all (SH-H050). One resolver
+  feeds every consumer in the run — fetch predicate, write filter, knowledge key. An explicit tenant that
+  **contradicts** the ambient one throws `TenantMismatchException`; **no** tenant from any source, on a
+  tenant-scoped entity, throws `TenantScopeRequiredException`. `ITenantContext.IsAllTenantsScope` is the
+  only sanctioned cross-tenant path, and an explicit tenant inside it still narrows the run
+- **Scope the read, not just the write.** A tenant term on a write filter alone leaves every other path —
+  compare, preview, version-hash, bookkeeping, and above all **delete** — operating on every tenant's rows
+  (SH-H051/H052). Put the term where the data is *fetched* so those paths are correct by construction, and
+  keep the write check as defence in depth. Re-check the tenant on the materialized rows too: a fetch
+  predicate is only as strong as the backend's translation of it, and this family has shipped filters a
+  backend silently widened to match-all
 - **Any middleware that resolves a tenant must publish it via `ResolvedTenant.Publish(context, guid, source)`**
   (`Birko.Data.Tenant/Middleware/ResolvedTenant.cs`). `TenantHeaderClaimGuardMiddleware` correlates that
   published value with the JWT `tenant_id` claim after authentication, so a source that does not publish is a
@@ -197,6 +211,52 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A tenant-scoped sync that only filtered its writes — and deleted other tenants' rows (2026-08-03)
+
+TASK-113 / SH-H050+H051+H052, three findings with one root cause. `TenantSyncProvider.ApplyTenantFiltering`
+wrapped `CanSaveToLocal`/`CanSaveToRemote` and **said so in its own XML doc** — *"only modifies save filters,
+not fetch predicates"*. Everything else followed from that sentence being true: every tenant's rows entered
+`localDict`/`remoteDict`, so a preview under tenant *t* enumerated and version-hashed another tenant's
+entities, their guids went into the knowledge store, and the `SyncAction.Delete` arm — the one arm that
+consulted no predicate at all, unlike Create/Update/conflict-resolution — **deleted them**. The tenant term
+now goes on the fetch predicates and one `ResolveTenantScope` answers "which tenant" for the whole run. The
+two standing rules this produced are in § Conventions above; four things worth carrying past this provider:
+
+- **A silent no-op beats a wrong answer only if someone notices.** The worst of the three was the *documented*
+  call shape: `SyncAsync(new TenantSyncOptions { TenantGuid = u })` from a background job with no ambient
+  tenant keyed knowledge to *u* while `if (_tenantContext.HasTenant …)` installed **no write filter at all**,
+  copying every tenant's items into both stores. The configuration the docs recommend was the one that failed
+  hardest, and it reported success.
+- **Widening the guard's reach meant narrowing what the API accepts.** Ambient *t* plus an explicit *u* now
+  **throws** instead of resolving by precedence, and a tenant-scoped entity with no tenant anywhere throws
+  instead of syncing everything. From first principles the explicit option is the more specific instruction
+  and should win — rejected, because that is code running in *t*'s scope reaching *u*, the same shape as
+  SH-H048, and a silent winner makes it unobservable. The deliberate cross-tenant caller says so out loud.
+- **A refusal must not fire on the case it was never about.** The missing-tenant throw applies **only** to
+  entity types that declare `TenantGuid`. This provider legitimately serves models without one — two
+  pre-existing regressions use exactly such a model — so an unconditional throw would have broken working
+  behaviour rather than closing a hole. Fail-closed still has to know what it is closing.
+- **The tests that passed before the fix are the informative ones.** 14 of 37 failed on the revert;
+  `Sync_DoesNotCopyAnotherTenantsRowsIntoTheLocalStore` passed, because the write filter was the single path
+  the old code *did* scope. Recorded as a contract pin, not as evidence — a pin logged as proof is how the
+  next reader concludes a fix was verified when it wasn't.
+- **The review found a defect in the fix, and then the revert found a defect in that fix's test.**
+  `code-review` caught that scoping the fetch predicates wrote them back onto the **caller's**
+  `SyncFilterOptions`, so the per-tenant admin loop — reusing one instance, the shape the README had just
+  blessed — would carry `t1 && t2` on iteration two and silently sync nothing (fail-closed, so it would have
+  read as "tenants stopped syncing", never as a leak; third time this file has been bitten by writing to a
+  caller-owned object, after CR-M168). Its regression test then **passed the pre-fix revert**: asserting only
+  the loop's *end state* ("both tenants present") cannot distinguish two correctly-scoped iterations from one
+  unscoped iteration that copied everything. Asserting after *each* iteration fixed it. **Re-run step 6 when
+  a later step adds a check** — a test written to pin a fix is not automatically evidence of it.
+
+Also: `/specs regen` for `tenant-isolation` deleted three scenarios that **asserted the defects** as shipped
+behaviour (`Both stores are read across all tenants`, `Deletes bypass the save predicates entirely`, `A
+caller-supplied TenantSyncOptions is mutated in place`) — the ordering constraint the spec harvest warned
+about, arriving exactly as predicted. And the `shaped-by` evidence pass **cannot run from this repo at all**:
+every `tenant-isolation` source glob points into a sibling repo, so no task's `pr:` sha resolves under
+`git show` here. That is true of every area in this aggregator's spec tree, not just this one.
 
 ### The tenant guard was on a transport, not on the tenant — and its own correction was wrong (2026-08-02)
 
