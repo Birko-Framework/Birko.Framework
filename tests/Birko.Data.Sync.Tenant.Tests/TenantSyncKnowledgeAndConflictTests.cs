@@ -64,7 +64,9 @@ public class TenantSyncKnowledgeAndConflictTests
             new AsyncInMemoryStore<Item>(), new AsyncInMemoryStore<Item>(), new FakeKnowledgeStore());
 
         var local = new Item { Guid = Guid.NewGuid(), Name = "only-local" };
-        var k = provider.CreateKnowledgeItem(local.Guid!.Value, local, null, hasKnowledge: false, new SyncOptions { Scope = "S" });
+        // tenantGuid is now passed in by the caller (SH-H050) instead of re-derived here; Item is not
+        // tenant-scoped, so null is what ResolveTenantScope returns for it.
+        var k = provider.CreateKnowledgeItem(local.Guid!.Value, local, null, hasKnowledge: false, new SyncOptions { Scope = "S" }, null);
 
         k.IsRemoteDeleted.Should().BeFalse("absent-on-remote for a never-synced item is a one-sided create, not a deletion");
         k.IsLocalDeleted.Should().BeFalse();
@@ -78,7 +80,7 @@ public class TenantSyncKnowledgeAndConflictTests
 
         var guid = Guid.NewGuid();
         var local = new Item { Guid = guid, Name = "still-local" };
-        var k = provider.CreateKnowledgeItem(guid, local, null, hasKnowledge: true, new SyncOptions { Scope = "S" });
+        var k = provider.CreateKnowledgeItem(guid, local, null, hasKnowledge: true, new SyncOptions { Scope = "S" }, null);
 
         k.IsRemoteDeleted.Should().BeTrue("a previously-synced item now gone from remote is a genuine deletion");
         k.IsLocalDeleted.Should().BeFalse();
