@@ -14,8 +14,34 @@ Tenant-aware synchronization support for multi-tenant applications using the Bir
 ### Sync Provider
 - `TenantSyncProvider<TStore, T>` - Implements `ISyncProvider` with tenant scoping
   - `PreviewAsync()`, `SyncAsync()` methods
-  - `ApplyTenantContext()`, `ApplyTenantFiltering()` for tenant isolation
+  - `ResolveTenantScope()`, `ApplyTenantFiltering()`, `BuildTenantPredicate()` for tenant isolation
   - `BelongsToTenant()`, `DetermineSyncAction()`, `ResolveConflict()` logic
+
+#### Tenant scoping — the fetch is what is scoped (SH-H050/H051/H052)
+
+The tenant term goes on the **fetch** predicates, not just the save predicates. It used to be the other way
+round, and everything else followed from that: every tenant's rows entered `localDict`/`remoteDict`, so
+`PreviewAsync` under tenant *t* enumerated and version-hashed another tenant's entities, their guids reached
+the knowledge store, and the `SyncAction.Delete` arm — which consulted no predicate at all, unlike
+Create/Update — **deleted another tenant's rows**. Scoping the fetch makes the read, compare, preview,
+delete and knowledge paths correct by construction instead of each needing its own guard.
+
+Three rules for anyone touching this provider:
+
+- **One tenant per run, resolved once.** `ResolveTenantScope` is the only place that answers "which tenant";
+  the fetch predicates, save predicates, knowledge keys and knowledge items all take its return value. Two
+  live answers *was* the bug (`options.TenantGuid` for knowledge, the ambient tenant for saves), so
+  `SyncAsync(new TenantSyncOptions { TenantGuid = u })` with no ambient tenant installed **no save predicate
+  at all**.
+- **Contradiction is refused, absence is refused.** Ambient *t* plus an explicit *u* throws
+  `TenantMismatchException` rather than picking a winner; a tenant-scoped entity with no tenant from either
+  source throws `TenantScopeRequiredException` rather than syncing everything. `IsAllTenantsScope` is the one
+  sanctioned cross-tenant path, and under it an explicit `options.TenantGuid` still narrows the run — that is
+  the per-tenant admin loop.
+- **The post-fetch `BelongsToTenant` pass in `GetAllItemsAsync` is not redundant.** A fetch predicate is only
+  as strong as the backend's translation of it, and this family has shipped filters a backend silently
+  widened to match-all (a NEST request with a null `Query`; an empty `IN` rendered always-true). Deleting
+  that pass moves the tenant guarantee back into the backend's hands.
 
 ### Queue
 - `TenantSyncQueue` - Extends `SyncQueue` with tenant-aware scoping

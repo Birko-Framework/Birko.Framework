@@ -4,9 +4,11 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading.Tasks;
+using Birko.Data.Expressions;
 using Birko.Data.Sync.Models;
 using Birko.Data.Sync.Stores;
 using Birko.Data.Tenant.Models;
+using Birko.Data.Tenant.Stores;
 using Birko.Data.Stores;
 using Birko.Configuration;
 using Birko.Data.Sync.Tenant.Models;
@@ -59,14 +61,14 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     {
         var options = baseOptions ?? new SyncOptions();
 
-        // Ensure tenant context is applied
-        options = ApplyTenantContext(options);
+        // Resolve the run's tenant ONCE (SH-H050) and scope everything to that one answer.
+        var tenantGuid = ResolveTenantScope(options);
 
-        // Add tenant filtering to filter options
-        filterOptions = ApplyTenantFiltering(filterOptions);
+        // Add tenant filtering to filter options — fetch predicates included (SH-H052)
+        filterOptions = ApplyTenantFiltering(filterOptions, tenantGuid);
 
         // Execute preview
-        return await ExecutePreviewAsync(options, filterOptions);
+        return await ExecutePreviewAsync(options, tenantGuid, filterOptions);
     }
 
     /// <summary>
@@ -78,90 +80,172 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     {
         var options = baseOptions ?? new SyncOptions();
 
-        // Ensure tenant context is applied
-        options = ApplyTenantContext(options);
+        // Resolve the run's tenant ONCE (SH-H050) and scope everything to that one answer.
+        var tenantGuid = ResolveTenantScope(options);
 
-        // Add tenant filtering to filter options
-        filterOptions = ApplyTenantFiltering(filterOptions);
+        // Add tenant filtering to filter options — fetch predicates included (SH-H052)
+        filterOptions = ApplyTenantFiltering(filterOptions, tenantGuid);
 
         // Execute sync
-        return await ExecuteSyncAsync(options, filterOptions);
+        return await ExecuteSyncAsync(options, tenantGuid, filterOptions);
     }
 
     /// <summary>
-    /// Apply tenant context to sync options
+    /// Resolve the single tenant this run is scoped to. Called <b>once</b> per
+    /// <see cref="PreviewAsync"/> / <see cref="SyncAsync"/>; every downstream decision — fetch
+    /// predicates, save predicates, knowledge keys, last-sync keys — takes its tenant from the
+    /// returned value and from nowhere else.
     /// </summary>
-    private SyncOptions ApplyTenantContext(SyncOptions options)
+    /// <remarks>
+    /// <para><b>SH-H050 — two live answers were the bug.</b> The knowledge/last-sync calls read
+    /// <c>options.TenantGuid</c> while the save filters read <c>_tenantContext.CurrentTenantGuid</c>, so
+    /// <c>SyncAsync(new TenantSyncOptions { TenantGuid = u })</c> with no ambient tenant — the documented
+    /// background-job shape — keyed knowledge to <i>u</i> while installing <b>no save predicate at all</b>,
+    /// writing every tenant's items into both stores. Whichever source wins, the mismatch is the defect.</para>
+    /// <para><b>Precedence.</b> Explicit <c>options.TenantGuid</c> is the answer when it is the only one
+    /// present, and the ambient tenant is the answer when it is the only one present. When <b>both</b> are
+    /// present and <b>disagree</b> the run is <b>refused</b> rather than silently resolved: code running
+    /// inside tenant <i>t</i>'s scope asking to sync tenant <i>u</i> is a cross-tenant escalation, and the
+    /// family has already paid for guessing here once (the <c>X-Tenant-Id</c>-vs-<c>tenant_id</c> guard,
+    /// SH-H048). The deliberate cross-tenant caller says so by wrapping the call in
+    /// <see cref="ITenantContext.WithAllTenantsAsync(Func{Task})"/>, under which the explicit option wins —
+    /// that is the per-tenant admin loop.</para>
+    /// <para><b>No tenant from either source throws</b> for a tenant-scoped entity type, instead of syncing
+    /// every tenant. An entity type with no <c>TenantGuid</c> property is not tenant-scoped and is
+    /// unaffected (there is no tenant to scope it by), matching <see cref="BelongsToTenant"/>'s allow-all
+    /// path; and an explicit all-tenants scope is the sanctioned way to ask for every tenant on purpose.</para>
+    /// </remarks>
+    private Guid? ResolveTenantScope(SyncOptions options)
     {
-        // If options is already TenantSyncOptions, use it
-        if (options is TenantSyncOptions tenantOptions)
+        var fromOptions = (options as TenantSyncOptions)?.TenantGuid;
+        var fromContext = _tenantContext.HasTenant ? _tenantContext.CurrentTenantGuid : null;
+        var allTenants = _tenantContext.IsAllTenantsScope;
+
+        if (fromOptions.HasValue && fromContext.HasValue && fromOptions.Value != fromContext.Value && !allTenants)
         {
-            // Only set if not explicitly provided
-            if (!tenantOptions.TenantGuid.HasValue && _tenantContext.HasTenant)
-            {
-                tenantOptions.TenantGuid = _tenantContext.CurrentTenantGuid;
-            }
-            return tenantOptions;
+            throw new TenantMismatchException("sync", typeof(T).Name, fromContext, fromOptions);
         }
 
-        // Otherwise, wrap in TenantSyncOptions
-        var wrapped = new TenantSyncOptions
+        var resolved = fromOptions ?? fromContext;
+
+        if (!resolved.HasValue && _tenantGuidProperty != null && !allTenants)
         {
-            Direction = options.Direction,
-            ConflictPolicy = options.ConflictPolicy,
-            CustomConflictResolver = options.CustomConflictResolver,
-            BatchSize = options.BatchSize,
-            MaxItems = options.MaxItems,
-            Scope = options.Scope,
-            CancellationToken = options.CancellationToken,
-            OnProgress = options.OnProgress,
-            OnConflict = options.OnConflict,
-            OnError = options.OnError,
-            OnBatchStarting = options.OnBatchStarting,
-            OnBatchCompleted = options.OnBatchCompleted,
-            SkipPreview = options.SkipPreview,
-            TenantGuid = _tenantContext.HasTenant ? _tenantContext.CurrentTenantGuid : null
+            throw new TenantScopeRequiredException(
+                "sync",
+                typeof(T).Name,
+                $"Cannot sync {typeof(T).Name}: no tenant is in scope. Set TenantSyncOptions.TenantGuid, "
+                    + "establish an ambient tenant, or run inside an explicit all-tenants scope to sync every tenant on purpose.");
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
+    /// Apply tenant filtering to filter options — to the <b>fetch</b> predicates as well as the save
+    /// predicates.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>SH-H051 / SH-H052 — the tenant term belongs on the fetch.</b> This method used to wrap only
+    /// <c>CanSaveToLocal</c>/<c>CanSaveToRemote</c>, and said so in this doc comment. Everything else
+    /// followed: every tenant's rows entered <c>localDict</c>/<c>remoteDict</c>, so preview enumerated and
+    /// version-hashed other tenants' entities, the knowledge store recorded their guids, and the
+    /// <c>SyncAction.Delete</c> arm — which consulted no predicate at all — deleted them. Scoping the fetch
+    /// makes the read, compare, preview, delete and knowledge paths correct <i>by construction</i> rather
+    /// than needing a guard each, which is what stops a sixth path being found later.</para>
+    /// <para>The save predicates stay wrapped as defence in depth: a fetch predicate is only as good as the
+    /// backend's translation of it, and this family has shipped a filter that a backend silently degraded to
+    /// match-all more than once.</para>
+    /// <para><b>Returns a copy; never mutates the caller's instance.</b> The scoping terms are per-run, and
+    /// the per-tenant admin loop reuses one <see cref="SyncFilterOptions{T}"/> across every iteration:
+    /// <c>foreach (t) SyncAsync(new TenantSyncOptions { TenantGuid = t }, filterOptions)</c>. Writing the
+    /// terms back onto that shared object would conjoin each tenant onto the last — <c>t1 &amp;&amp; t2</c>
+    /// matches nothing — so the loop would silently sync one tenant and then nothing at all. Same species as
+    /// CR-M168 (mutating the caller's <c>SyncOptions.Direction</c>), which is why the resolved tenant is
+    /// never written back onto the options either.</para>
+    /// </remarks>
+    private SyncFilterOptions<T> ApplyTenantFiltering(SyncFilterOptions<T>? filterOptions, Guid? tenantGuid)
+    {
+        var scoped = new SyncFilterOptions<T>
+        {
+            LocalFetchPredicate = filterOptions?.LocalFetchPredicate,
+            RemoteFetchPredicate = filterOptions?.RemoteFetchPredicate,
+            CanSaveToLocal = filterOptions?.CanSaveToLocal,
+            CanSaveToRemote = filterOptions?.CanSaveToRemote,
+            OnSaveFilterBlock = filterOptions?.OnSaveFilterBlock ?? new SyncFilterOptions().OnSaveFilterBlock
         };
-        return wrapped;
+
+        // No tenant in scope (an explicit all-tenants run), or an entity type that is not tenant-scoped.
+        if (!tenantGuid.HasValue || _tenantGuidProperty == null)
+        {
+            return scoped;
+        }
+
+        var scopedTenantGuid = tenantGuid.Value;
+
+        // Narrow what is FETCHED, so no foreign entity ever reaches the compare/delete/knowledge paths.
+        var tenantPredicate = BuildTenantPredicate(scopedTenantGuid);
+        if (tenantPredicate != null)
+        {
+            scoped.LocalFetchPredicate =
+                ExpressionParameterReplacer.AndAlso(scoped.LocalFetchPredicate, tenantPredicate);
+            scoped.RemoteFetchPredicate =
+                ExpressionParameterReplacer.AndAlso(scoped.RemoteFetchPredicate, tenantPredicate);
+        }
+
+        // Wrap existing save predicates with tenant check
+        var canSaveLocal = scoped.CanSaveToLocal;
+        var canSaveRemote = scoped.CanSaveToRemote;
+
+        scoped.CanSaveToLocal = canSaveLocal == null
+            ? (T item) => BelongsToTenant(item, scopedTenantGuid)
+            : (T item) => BelongsToTenant(item, scopedTenantGuid) && canSaveLocal(item);
+
+        scoped.CanSaveToRemote = canSaveRemote == null
+            ? (T item) => BelongsToTenant(item, scopedTenantGuid)
+            : (T item) => BelongsToTenant(item, scopedTenantGuid) && canSaveRemote(item);
+
+        return scoped;
     }
 
     /// <summary>
-    /// Get TenantGuid from options (returns null if not TenantSyncOptions)
+    /// Build <c>x =&gt; x.TenantGuid == tenantGuid</c> over the reflected <c>TenantGuid</c> property, in the
+    /// same shape <c>ModelByTenant</c> emits so every backend's filter translator already handles it.
     /// </summary>
-    private Guid? GetTenantGuid(SyncOptions options)
+    /// <remarks>
+    /// Returns <c>null</c> when the property is not a <see cref="Guid"/> or <see cref="Nullable{Guid}"/> —
+    /// nothing can be expressed about it, and <see cref="BelongsToTenant"/> already excludes every such row
+    /// from the save paths, so the post-fetch guard in <see cref="GetAllItemsAsync"/> keeps the run
+    /// fail-closed rather than widening it.
+    /// </remarks>
+    private Expression<Func<T, bool>>? BuildTenantPredicate(Guid tenantGuid)
     {
-        return (options as TenantSyncOptions)?.TenantGuid;
-    }
-
-    /// <summary>
-    /// Apply tenant filtering to filter options (only modifies save filters, not fetch predicates)
-    /// </summary>
-    private SyncFilterOptions<T> ApplyTenantFiltering(SyncFilterOptions<T>? filterOptions)
-    {
-        if (filterOptions == null)
+        if (_tenantGuidProperty == null)
         {
-            filterOptions = new SyncFilterOptions<T>();
+            return null;
         }
 
-        // Add tenant filtering if tenant context exists and entity has TenantGuid
-        if (_tenantContext.HasTenant && _tenantGuidProperty != null)
+        var parameter = Expression.Parameter(typeof(T), "x");
+        Expression access = Expression.Property(parameter, _tenantGuidProperty);
+        var propertyType = _tenantGuidProperty.PropertyType;
+
+        Expression body;
+        if (propertyType == typeof(Guid))
         {
-            var currentTenantGuid = _tenantContext.CurrentTenantGuid!.Value;
-
-            // Wrap existing save predicates with tenant check
-            var canSaveLocal = filterOptions.CanSaveToLocal;
-            var canSaveRemote = filterOptions.CanSaveToRemote;
-
-            filterOptions.CanSaveToLocal = canSaveLocal == null
-                ? (T item) => BelongsToTenant(item, currentTenantGuid)
-                : (T item) => BelongsToTenant(item, currentTenantGuid) && canSaveLocal(item);
-
-            filterOptions.CanSaveToRemote = canSaveRemote == null
-                ? (T item) => BelongsToTenant(item, currentTenantGuid)
-                : (T item) => BelongsToTenant(item, currentTenantGuid) && canSaveRemote(item);
+            body = Expression.Equal(access, Expression.Constant(tenantGuid, typeof(Guid)));
+        }
+        else if (Nullable.GetUnderlyingType(propertyType) == typeof(Guid))
+        {
+            // liftToNull: false keeps the node's type bool (C#'s own `==` on two Guid? does the same), so an
+            // unset TenantGuid is excluded rather than yielding a null result — matching BelongsToTenant.
+            body = Expression.Equal(
+                access, Expression.Constant((Guid?)tenantGuid, typeof(Guid?)), liftToNull: false, method: null);
+        }
+        else
+        {
+            return null;
         }
 
-        return filterOptions;
+        return Expression.Lambda<Func<T, bool>>(body, parameter);
     }
 
     /// <summary>
@@ -269,6 +353,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// </summary>
     private async Task<SyncPreview> ExecutePreviewAsync(
         SyncOptions options,
+        Guid? tenantGuid,
         SyncFilterOptions<T> filterOptions)
     {
         var preview = new SyncPreview { Scope = options.Scope };
@@ -276,8 +361,6 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         try
         {
             ReportProgress(options, SyncPhase.DetectingChanges, 0);
-
-            var tenantGuid = GetTenantGuid(options);
 
             // Get existing sync knowledge
             var knowledge = await _knowledgeStore.GetKnowledgeAsync(
@@ -295,8 +378,8 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             var isInitialSync = !lastSyncTime.HasValue;
 
             // Get items from both stores with filtering
-            var localItems = await GetAllItemsAsync(_localStore, filterOptions.LocalFetchPredicate, options);
-            var remoteItems = await GetAllItemsAsync(_remoteStore, filterOptions.RemoteFetchPredicate, options);
+            var localItems = await GetAllItemsAsync(_localStore, filterOptions.LocalFetchPredicate, tenantGuid, options);
+            var remoteItems = await GetAllItemsAsync(_remoteStore, filterOptions.RemoteFetchPredicate, tenantGuid, options);
 
             var localDict = localItems.ToDictionary(GetGuid);
             var remoteDict = remoteItems.ToDictionary(GetGuid);
@@ -344,6 +427,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// </summary>
     private async Task<SyncResult> ExecuteSyncAsync(
         SyncOptions options,
+        Guid? tenantGuid,
         SyncFilterOptions<T> filterOptions)
     {
         var startTime = DateTime.UtcNow;
@@ -359,8 +443,6 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         try
         {
             ReportProgress(options, SyncPhase.DetectingChanges, 0);
-
-            var tenantGuid = GetTenantGuid(options);
 
             // Get existing sync knowledge
             var knowledge = await _knowledgeStore.GetKnowledgeAsync(
@@ -386,8 +468,8 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
             result.Direction = effectiveDirection;
 
             // Get items from both stores
-            var localItems = await GetAllItemsAsync(_localStore, filterOptions.LocalFetchPredicate, options);
-            var remoteItems = await GetAllItemsAsync(_remoteStore, filterOptions.RemoteFetchPredicate, options);
+            var localItems = await GetAllItemsAsync(_localStore, filterOptions.LocalFetchPredicate, tenantGuid, options);
+            var remoteItems = await GetAllItemsAsync(_remoteStore, filterOptions.RemoteFetchPredicate, tenantGuid, options);
 
             var localDict = localItems.ToDictionary(GetGuid);
             var remoteDict = remoteItems.ToDictionary(GetGuid);
@@ -472,16 +554,35 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
                                 }
                                 break;
 
+                            // SH-H051: consult the save predicate before deleting, exactly as the Create and
+                            // Update arms above do. This arm used to consult nothing at all, so with the
+                            // fetches unscoped an item belonging to tenant u that resolved to Delete under a
+                            // run scoped to t was deleted outright. The fetches are scoped now, which is the
+                            // real fix; this stays as defence in depth on the one irreversible path.
                             case SyncAction.Delete:
                                 if (action.DeleteOn == "local" && localItem != null)
                                 {
-                                    await _localStore.DeleteAsync(localItem, options.CancellationToken);
-                                    progress.DeletedItems++;
+                                    if (filterOptions.CanSaveToLocal?.Invoke(localItem) != false)
+                                    {
+                                        await _localStore.DeleteAsync(localItem, options.CancellationToken);
+                                        progress.DeletedItems++;
+                                    }
+                                    else
+                                    {
+                                        progress.SkippedItems++;
+                                    }
                                 }
                                 else if (action.DeleteOn == "remote" && remoteItem != null)
                                 {
-                                    await _remoteStore.DeleteAsync(remoteItem, options.CancellationToken);
-                                    progress.DeletedItems++;
+                                    if (filterOptions.CanSaveToRemote?.Invoke(remoteItem) != false)
+                                    {
+                                        await _remoteStore.DeleteAsync(remoteItem, options.CancellationToken);
+                                        progress.DeletedItems++;
+                                    }
+                                    else
+                                    {
+                                        progress.SkippedItems++;
+                                    }
                                 }
                                 break;
 
@@ -501,7 +602,7 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
                         progress.ProcessedItems++;
 
                         // Update knowledge
-                        knowledgeUpdates.Add(CreateKnowledgeItem(guid, localItem, remoteItem, hasKnowledge, options));
+                        knowledgeUpdates.Add(CreateKnowledgeItem(guid, localItem, remoteItem, hasKnowledge, options, tenantGuid));
                     }
                     catch (Exception ex)
                     {
@@ -570,11 +671,21 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     }
 
     /// <summary>
-    /// Get all items from a store with optional filtering
+    /// Get all items from a store with optional filtering, then drop anything that does not belong to the
+    /// run's tenant.
     /// </summary>
+    /// <remarks>
+    /// The post-fetch pass is <b>not</b> redundant with the tenant term
+    /// <see cref="ApplyTenantFiltering"/> puts on the predicate. A fetch predicate is only as strong as the
+    /// backend's translation of it, and this family has shipped filters that a backend silently widened to
+    /// match-all (a NEST request with a null <c>Query</c>, an empty <c>IN</c> rendered as always-true). Here
+    /// that class of bug would put another tenant's rows into <c>localDict</c>/<c>remoteDict</c> and back onto
+    /// the delete path, so the guarantee is enforced in-process where nothing can degrade it.
+    /// </remarks>
     private async Task<List<T>> GetAllItemsAsync(
         TStore store,
         Expression<Func<T, bool>>? predicate,
+        Guid? tenantGuid,
         SyncOptions options)
     {
         IEnumerable<T> items;
@@ -586,6 +697,13 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
         {
             items = await store.ReadAsync(options.CancellationToken);
         }
+
+        if (tenantGuid.HasValue && _tenantGuidProperty != null)
+        {
+            var scopedTenantGuid = tenantGuid.Value;
+            return items.Where(item => BelongsToTenant(item, scopedTenantGuid)).ToList();
+        }
+
         return items.ToList();
     }
 
@@ -803,15 +921,21 @@ public class TenantSyncProvider<TStore, T> : ISyncProvider
     /// <summary>
     /// Create sync knowledge item
     /// </summary>
+    /// <remarks>
+    /// SH-H050: the tenant is <b>passed in</b> — the one value <see cref="ResolveTenantScope"/> returned for
+    /// this run — rather than re-derived here from <c>options.TenantGuid</c> with an ambient-tenant fallback.
+    /// Re-deriving it was how knowledge came to be keyed to a different tenant than the writes were filtered
+    /// to; a knowledge row keyed to the wrong tenant makes the *next* run's change detection wrong, so the
+    /// damage outlives the run that recorded it.
+    /// </remarks>
     internal ISyncKnowledgeItem CreateKnowledgeItem(
         Guid guid,
         T? localItem,
         T? remoteItem,
         bool hasKnowledge,
-        SyncOptions options)
+        SyncOptions options,
+        Guid? tenantGuid)
     {
-        var tenantGuid = GetTenantGuid(options) ?? (_tenantContext.HasTenant ? _tenantContext.CurrentTenantGuid : Guid.Empty);
-
         return new TenantSyncKnowledgeItem
         {
             EntityGuid = guid,
