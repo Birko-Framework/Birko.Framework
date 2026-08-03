@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -206,6 +206,8 @@ namespace Birko.Data.InMemory.Stores
         /// </summary>
         public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
         {
+            // SH-M023 — see AbstractInMemoryStore.Delete.
+            RequireFilter(filter, "delete");
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
             var predicate = filter.Compile();
             foreach (var pair in _items.Where(pair => predicate(pair.Value)).ToList())
