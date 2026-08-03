@@ -1,4 +1,4 @@
-using Birko.Data.Filters;
+﻿using Birko.Data.Filters;
 using Birko.Data.MongoDB.Aggregation;
 using Birko.Data.MongoDB.ChangeStreams;
 using Birko.Data.Stores;
@@ -370,6 +370,8 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
         {
+            // SH-M023 — see MongoDBStore.Delete; this override bypasses the base guard, so it repeats it.
+            RequireFilter(filter, "delete");
             if (Collection == null) return;
 
             if (TransactionContext != null)
@@ -381,6 +383,8 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
         {
+            // SH-M023 — see MongoDBStore.Delete.
+            RequireFilter(filter, "update");
             if (Collection == null || updates.Assignments.Count == 0) return;
 
             var updateDefs = new List<UpdateDefinition<T>>();

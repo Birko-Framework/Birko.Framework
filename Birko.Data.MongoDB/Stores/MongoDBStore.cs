@@ -1,4 +1,4 @@
-using Birko.Data.Filters;
+﻿using Birko.Data.Filters;
 using Birko.Data.MongoDB.Aggregation;
 using Birko.Data.MongoDB.ChangeStreams;
 using MongoDB.Bson;
@@ -267,6 +267,9 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Delete(Expression<Func<T, bool>> filter)
         {
+            // SH-M023: this override bypasses AbstractBulkStore's guard, so it repeats it. A null filter
+            // reaches the driver as an empty predicate — DeleteMany over the whole collection.
+            RequireFilter(filter, "delete");
             if (Collection == null) return;
 
             if (TransactionContext != null)
@@ -278,6 +281,8 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Update(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates)
         {
+            // SH-M023 — see Delete.
+            RequireFilter(filter, "update");
             if (Collection == null || updates.Assignments.Count == 0) return;
 
             var updateDefs = new List<UpdateDefinition<T>>();
