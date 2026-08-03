@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -105,6 +105,7 @@ namespace Birko.Data.Stores
             PropertyUpdate<T> updates,
             CancellationToken ct = default)
         {
+            RequireFilter(filter, "update");
             return UpdateAsync(filter, entity => updates.ApplyTo(entity), ct);
         }
 
@@ -114,6 +115,7 @@ namespace Birko.Data.Stores
             Action<T> updateAction,
             CancellationToken ct = default)
         {
+            RequireFilter(filter, "update");
             var items = (await ReadAsync(filter, null, null, null, ct).ConfigureAwait(false)).ToList();
             foreach (var item in items)
             {
@@ -143,9 +145,59 @@ namespace Birko.Data.Stores
             Expression<Func<T, bool>> filter,
             CancellationToken ct = default)
         {
+            RequireFilter(filter, "delete");
             var items = (await ReadAsync(filter, null, null, null, ct).ConfigureAwait(false)).ToList();
             await DeleteAsync(items, ct).ConfigureAwait(false);
         }
+
+        /// <inheritdoc cref="AbstractBulkStore{T}.UpdateAll(PropertyUpdate{T})"/>
+        public virtual Task UpdateAllAsync(PropertyUpdate<T> updates, CancellationToken ct = default)
+        {
+            return UpdateAllAsync(entity => updates.ApplyTo(entity), ct);
+        }
+
+        /// <inheritdoc cref="AbstractBulkStore{T}.UpdateAll(PropertyUpdate{T})"/>
+        public virtual async Task UpdateAllAsync(Action<T> updateAction, CancellationToken ct = default)
+        {
+            var items = (await ReadAsync(ct).ConfigureAwait(false)).ToList();
+            foreach (var item in items)
+            {
+                updateAction(item);
+                await UpdateAsync(item, ct: ct).ConfigureAwait(false);
+            }
+        }
+
+        /// <inheritdoc cref="AbstractBulkStore{T}.DeleteAll()"/>
+        public virtual async Task DeleteAllAsync(CancellationToken ct = default)
+        {
+            var items = (await ReadAsync(ct).ConfigureAwait(false)).ToList();
+            await DeleteAsync(items, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Guards the filter-based destructive overloads.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>SH-M023.</b> These overloads declare <c>filter</c> non-nullable and then never checked it.
+        /// They are read-then-loop — <c>Delete(null!)</c> called <c>Read(null, ...)</c>, where a null filter
+        /// legitimately means <i>read everything</i>, and deleted the entire result. Because every statement
+        /// they issue is per-row and therefore carries its own key, no backend query guard can see this: the
+        /// damage is "affected every row", never "a statement with no predicate". So it has to be refused
+        /// here, at the boundary where the intent is still visible.</para>
+        /// <para>Deliberately an <see cref="ArgumentNullException"/>: the caller passed null for a parameter
+        /// declared non-nullable. Wanting every row is expressed by the <c>*All</c> methods instead.</para>
+        /// </remarks>
+        protected static void RequireFilter(Expression<Func<T, bool>> filter, string operation)
+        {
+            if (filter == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(filter),
+                    $"A filter is required to {operation} {typeof(T).Name}: a missing filter would affect every "
+                        + $"row. To target every row deliberately use {(operation == "delete" ? "DeleteAllAsync()" : "UpdateAllAsync(updates)")}.");
+            }
+        }
+
 
         #endregion
     }

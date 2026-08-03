@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -67,13 +67,36 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
         {
+            RequireFilter(filter, "update");
             Update(filter, entity => updates.ApplyTo(entity));
         }
 
         /// <inheritdoc />
         public virtual void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
         {
+            RequireFilter(filter, "update");
             var items = Read(filter, null, null, null).ToList();
+            foreach (var item in items)
+            {
+                updateAction(item);
+                Update(item);
+            }
+        }
+
+        /// <summary>
+        /// Updates EVERY row — the explicit all-rows door (SH-M023). Equivalent to
+        /// <c>Update(x =&gt; true, updates)</c>, and the recommended spelling: a reader of the call site does
+        /// not have to notice that the predicate is a constant.
+        /// </summary>
+        public virtual void UpdateAll(PropertyUpdate<T> updates)
+        {
+            UpdateAll(entity => updates.ApplyTo(entity));
+        }
+
+        /// <inheritdoc cref="UpdateAll(PropertyUpdate{T})"/>
+        public virtual void UpdateAll(Action<T> updateAction)
+        {
+            var items = Read().ToList();
             foreach (var item in items)
             {
                 updateAction(item);
@@ -96,9 +119,44 @@ namespace Birko.Data.Stores
         /// <inheritdoc />
         public virtual void Delete(Expression<Func<T, bool>> filter)
         {
+            RequireFilter(filter, "delete");
             var items = Read(filter, null, null, null).ToList();
             Delete(items);
         }
+
+        /// <summary>
+        /// Deletes EVERY row — the explicit all-rows door (SH-M023). Equivalent to
+        /// <c>Delete(x =&gt; true)</c>. Use <c>Destroy()</c> to discard the store instead of emptying it.
+        /// </summary>
+        public virtual void DeleteAll()
+        {
+            Delete(Read().ToList());
+        }
+
+        /// <summary>
+        /// Guards the filter-based destructive overloads.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>SH-M023.</b> These overloads declare <c>filter</c> non-nullable and then never checked it.
+        /// They are read-then-loop — <c>Delete(null!)</c> called <c>Read(null, ...)</c>, where a null filter
+        /// legitimately means <i>read everything</i>, and deleted the entire result. Because every statement
+        /// they issue is per-row and therefore carries its own key, no backend query guard can see this: the
+        /// damage is "affected every row", never "a statement with no predicate". So it has to be refused
+        /// here, at the boundary where the intent is still visible.</para>
+        /// <para>Deliberately an <see cref="ArgumentNullException"/>: the caller passed null for a parameter
+        /// declared non-nullable. Wanting every row is expressed by the <c>*All</c> methods instead.</para>
+        /// </remarks>
+        protected static void RequireFilter(Expression<Func<T, bool>> filter, string operation)
+        {
+            if (filter == null)
+            {
+                throw new ArgumentNullException(
+                    nameof(filter),
+                    $"A filter is required to {operation} {typeof(T).Name}: a missing filter would affect every "
+                        + $"row. To target every row deliberately use {(operation == "delete" ? "DeleteAll()" : "UpdateAll(updates)")}.");
+            }
+        }
+
 
         #endregion
     }
