@@ -7,14 +7,14 @@ _Generated 2026-08-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 62                  |
+| todo         | —                  | —                  | 63                  |
 | in-progress  | 6                  | 10                  | 2                   |
 | review       | —                  | —                  | 11                  |
 | blocked      | —                  | —                  | 0                   |
 | done         | 1                  | 22                 | 34                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 2 · P1 14 · P2 42 · P3 4**
+Todo by priority: **P0 2 · P1 15 · P2 42 · P3 4**
 
 ## In progress now
 
@@ -222,6 +222,7 @@ Todo by priority: **P0 2 · P1 14 · P2 42 · P3 4**
 - [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
 - [ ] [TASK-138](_loose/TASK-138-readasync-zero-arg-overload-ambiguity.md) `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2, ai)
 - [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (`b-button` refuses it, `b-segmented` applies it with no opt-out) (P2, human)
+- [ ] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table (P1, ai)
 
 <details>
 <summary><b>Completed epics (1)</b></summary>
