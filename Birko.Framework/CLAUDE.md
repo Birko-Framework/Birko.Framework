@@ -212,6 +212,39 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Birko.Web: a cascade invariant that needed asserting twice, and two half-fixes (2026-08-04)
+
+A review of what landed in the `Birko\Web` bucket over 2026-08-02…04. Three shipped fixes, one in flight; the
+per-component detail is in `Birko.Web.Components`/`.Shell`'s own CLAUDE.mds. What generalises past the web
+tree:
+
+- **A style invariant that must hold in both trees needs a rule in both sheets.** `[hidden] { display: none
+  !important }` now sits in `reset.css` *and* in `BasePage.styles` — `BasePage.styles` is adopted into a
+  shadow root and `reset.css` styles the document, so neither reaches the other. The UA's `[hidden]` rule
+  ties on specificity (0,1,0) with any class selector, so an author `display` declaration silently un-hid an
+  element the code believed was gone: it shipped a four-week date range recorded as **one day**, with a
+  success message, under a fully green suite. `!important` because a specificity bump only outranks the
+  selectors that exist today. **Assert computed style, not the attribute** — an attribute assertion was green
+  throughout the original defect.
+- **Two layers sizing themselves in different viewport units is a defect even when both units are correct.**
+  `BCoreAppShell` sized itself in `dvh`; `reset.css` kept `body { min-height: 100vh }`. `vh` is the *large*
+  viewport, so on Android Chrome in a tab the body was taller than the shell by exactly the URL-bar height
+  (56px), giving dead scroll that dragged the bottom nav behind the system bar. Neither declaration is wrong
+  in isolation; the disagreement is the bug. And it **cannot be reproduced headlessly** — with no retractable
+  chrome `vh == dvh` — so the guard asserts the declaration and labels itself as not a reproduction.
+- **A regression test the fix's own revert cannot break is not evidence.** Two of the three fixes shipped as
+  half-fixes for exactly this reason. `b-segmented`'s touch floor cited a 44 × 44 target and floored only
+  *height*, and the test asserted height; the consumer's suite ran a locale whose labels all cleared 44px
+  from padding alone, so no label short enough to fail existed. Reviewing the in-flight
+  `Surface.alsoMatches` change found the same shape: its "first match wins" check passed with the fix
+  reverted, because the fallback chain's last resort is `surfaces[0]` — the same answer it asserted. Both are
+  fixed and red-verified (3 of 6 nav checks now fail on revert, up from 2).
+- **A shared component's regression test belongs in the framework, not only in the consumer that reported
+  it.** The half-floor's only coverage lived in the consumer for two months, which is how a single-locale
+  suite was able to bless it. The framework check now includes the inverse case (a *fine* pointer stays
+  dense), since a fix that floored every pointer type would have passed the original assertion and silently
+  resized every consumer.
+
 ### A tenant-scoped sync that only filtered its writes — and deleted other tenants' rows (2026-08-03)
 
 TASK-113 / SH-H050+H051+H052, three findings with one root cause. `TenantSyncProvider.ApplyTenantFiltering`
