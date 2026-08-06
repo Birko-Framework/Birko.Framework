@@ -14,7 +14,7 @@ finding-ids: SH-H001 … SH-H057
 ## Progress
 
 **8 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
-SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]]) — **6 of 15
+SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]]) — **6 of 16
 tasks done, 1 in review.** TASK-113 closed three findings at once: they shared one root cause
 (`ApplyTenantFiltering` scoping only the save predicates), so scoping the *fetch* closed the read, preview,
 delete and knowledge paths together rather than one guard per path. TASK-110 also
@@ -32,8 +32,11 @@ both instructed the fix to record it as nonexistent — which would have left a 
 security fix. Re-verified WIDER at fix time and retracted in the findings doc. Worth carrying into the
 remaining 42: the verification pass is not automatically more trustworthy than the claim it is correcting.
 
-**Two tasks were filed from the remediation itself, both by hand and neither with an `SH-` id**, taking the
-story from 13 tasks to 15: [[TASK-128]] (P0, **closed same day**) — the view path's ORDER BY interpolated
+**Three tasks were filed from the remediation itself, by hand and none with an `SH-` id**, taking the
+story from 13 tasks to 16 — the third is [[TASK-137]] (P2, blocked on TASK-109), spawned while *planning*
+TASK-109: the empty-`NOT IN` → `1 = 1` rendering shipped 2026-07-27 is a false SQL-injection signal in query
+logs, found because TASK-109 proposed `1 = 1` as its all-rows idiom and had it rejected on that ground. The
+other two: [[TASK-128]] (P0, **closed same day**) — the view path's ORDER BY interpolated
 caller text, the same defect one project over from TASK-110 — and [[TASK-129]] (P1, open) — an aggregate
 view's generated DDL carries a double alias, so no persistent aggregate view can be created at all, found
 while writing TASK-128's tests.

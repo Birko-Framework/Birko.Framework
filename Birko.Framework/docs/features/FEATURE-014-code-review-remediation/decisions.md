@@ -17,7 +17,7 @@ created: 2026-06-18
 | D4 | Low findings ([[STORY-027]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-06-18 | ai | — (tracked in prose) |
 | D5 | Integration-test tier — the Docker-gated remediation findings ([[STORY-042]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-07-14 | ai | — (tracked in prose) |
 | D6 | Workflow backends — unify the serialization seam (ISerializer everywhere) ([[STORY-043]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-07-17 | ai | — (tracked in prose) |
-| D7 | Spec-harvest — high findings ([[STORY-051]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | [[TASK-108]], [[TASK-109]], [[TASK-110]], [[TASK-111]], [[TASK-112]], [[TASK-113]], [[TASK-114]], [[TASK-115]], [[TASK-116]], [[TASK-117]], [[TASK-118]], [[TASK-125]], [[TASK-126]], [[TASK-128]], [[TASK-129]] |
+| D7 | Spec-harvest — high findings ([[STORY-051]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | [[TASK-108]], [[TASK-109]], [[TASK-110]], [[TASK-111]], [[TASK-112]], [[TASK-113]], [[TASK-114]], [[TASK-115]], [[TASK-116]], [[TASK-117]], [[TASK-118]], [[TASK-125]], [[TASK-126]], [[TASK-128]], [[TASK-129]], [[TASK-137]] |
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-07-30 | ai | — (tracked in prose) |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-07-30 | ai | — (tracked in prose) |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | — (tracked in prose) |
@@ -42,3 +42,13 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   reconstructed. Where a real dated decision with reasoning exists it lives in `CHANGELOG.md` or
   `CLAUDE.md` § Recent Updates, which remain the authority for *why*. Rows carry no invented `deferred`
   or `removed` history, so the absence of such rows means "not recorded", not "never considered".
+- 2026-08-03 — **D7** — [[TASK-137]] spawned from [[TASK-109]] while planning it: the empty-`NOT IN` → `1 = 1`
+  rendering shipped 2026-07-27 is a false SQL-injection signal in query logs, by the same argument that led
+  TASK-109 to *reject* `1 = 1` as its all-rows idiom. No state change — D7 is already `approved` and this is
+  one more task realizing it, filed under STORY-051 alongside the other two non-`SH-` tasks the remediation
+  itself produced ([[TASK-128]], [[TASK-129]]). Blocked on TASK-109, because dropping an always-true term can
+  leave a `DELETE` with no `WHERE` and must reach TASK-109's deliberate-all-rows path rather than its refusal.
+- 2026-08-03 — Also spawned from TASK-109, but **deliberately outside this feature**: [[TASK-138]]
+  (`ReadAsync()` with no arguments does not compile — CS0121). Filed to `tasks/_loose/` with `feature: null`,
+  because it is an API-ergonomics papercut rather than code-review remediation. Recorded here so the spawn is
+  traceable from the feature the origin belongs to, without widening this feature's scope to cover it.

@@ -21,7 +21,7 @@ generated: 2026-08-01
 
 ## Build progress
 
-6 / 16 tasks done.
+6 / 17 tasks done.
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [ ] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
@@ -39,6 +39,7 @@ generated: 2026-08-01
 - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover
 - [ ] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created
 - [ ] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire
+- [ ] TASK-137 An empty `NOT IN` renders `1 = 1` — indistinguishable from an injection payload in a query log
 
 ## What can be tested now
 
