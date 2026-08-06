@@ -2,14 +2,21 @@
 id: TASK-109
 parent: STORY-051
 feature: FEATURE-014
-status: in-progress
+status: done
 priority: P0
 assignee: ai
+picked-by: fix-next
 created: 2026-07-30
 depends-on: []
 blocks: [TASK-137]
 related: [TASK-138]
-pr: null
+# One fix, four production repos + three test repos (polyrepo — see CLAUDE.md § Integration model).
+# None of these resolve under `git show` from this aggregator; that is also why the spec's
+# shaped-by evidence pass cannot run here.
+pr: >-
+  Birko.Data.SQL@d8c2f40, Birko.Data.Stores@3cd8b2a, Birko.Data.InMemory@4f680b7,
+  Birko.Data.MongoDB@88f96ee, Birko.Data.SQL.Tests@349c7b3,
+  Birko.Data.SQL.SqLite.Tests@35fc122, Birko.Data.InMemory.Tests@86df89c
 github-issue: null
 jira-key: null
 findings: [SH-H002, SH-M023]
@@ -64,32 +71,32 @@ untranslatable operand must not silently collapse: `1 = 0` for an empty `IN`, `1
 > is preserved and in places strengthened; see `## Implementation plan › Resolved decisions`. Correcting a
 > target before the work is legitimate; rewriting one afterwards to fit the result is not.
 
-- [ ] **No destructive SQL statement is ever issued without a `WHERE` clause** — enforced at the four
+- [x] **No destructive SQL statement is ever issued without a `WHERE` clause** — enforced at the four
       connector funnels on the *rendered* clause, not on the condition collection (a non-empty collection can
       still render nothing). *(was: "`ParseConditionExpression` distinguishes no-filter from
       could-not-translate" — unsound, see the note above)*
-- [ ] SQL `Delete(filter)` / `Update(filter, PropertyUpdate)` / `Update(filter, Action)` **throw** on a null
+- [x] SQL `Delete(filter)` / `Update(filter, PropertyUpdate)` / `Update(filter, Action)` **throw** on a null
       filter, sync and async, on all four providers
-- [ ] An untranslatable-but-non-null predicate (e.g. `x => pred(x)` via `InvocationExpression`) is **refused
+- [x] An untranslatable-but-non-null predicate (e.g. `x => pred(x)` via `InvocationExpression`) is **refused
       on the destructive paths** instead of deleting everything. The refusal does **not** need to name
       untranslatability as its cause — null, untranslatable and reduces-to-everything all get the same
       answer, differing only in message. *(was: "throws" with an implied per-cause distinction)*
-- [ ] A predicate that legitimately matches nothing deletes/updates **zero** rows and still emits a `WHERE`
-- [ ] `AbstractBulkStore` / `AbstractAsyncBulkStore` guard the null filter on `Delete` and both `Update`
+- [x] A predicate that legitimately matches nothing deletes/updates **zero** rows and still emits a `WHERE`
+- [x] `AbstractBulkStore` / `AbstractAsyncBulkStore` guard the null filter on `Delete` and both `Update`
       overloads (SH-M023), so the portable path fails the same way
-- [ ] **A deliberate all-rows delete/update remains possible on every layer** — `DeleteAll()` /
+- [x] **A deliberate all-rows delete/update remains possible on every layer** — `DeleteAll()` /
       `UpdateAll(updates)` (+ async) on the SQL stores and both portable bases, with `Delete(x => true)` kept
       working as a synonym. The emitted SQL is the clean `DELETE FROM "T"` — **no `1 = 1` is introduced
       anywhere**, since that pattern is indistinguishable from `' OR 1=1--` in a query log. *(new — the guard
       would otherwise remove a capability, which is how guards get reverted)*
-- [ ] Reads are unchanged — a null filter on `Read(filter, …)` still means read-everything, which is a
+- [x] Reads are unchanged — a null filter on `Read(filter, …)` still means read-everything, which is a
       documented API; no read path gains a `WHERE` it did not have
-- [ ] The all-rows naming asymmetry is recorded in `CLAUDE.md § Conventions` (read-all is the parameterless
+- [x] The all-rows naming asymmetry is recorded in `CLAUDE.md § Conventions` (read-all is the parameterless
       overload; destructive all-rows is the louder `*All` name) so it is not re-litigated from symmetry
-- [ ] Regression tests in `Birko.Data.SQL.Tests` (statement text) **and**
+- [x] Regression tests in `Birko.Data.SQL.Tests` (statement text) **and**
       `Birko.Data.SQL.SqLite.Tests` (end-to-end: rows survive), plus `Birko.Data.Stores` coverage for the
       portable guard
-- [ ] `/specs regen` for `bulk-filter-operations` and `store-crud-contract`, spec diffs reviewed
+- [x] `/specs regen` for `bulk-filter-operations` and `store-crud-contract`, spec diffs reviewed
 
 ## Out of scope
 
@@ -104,6 +111,15 @@ untranslatable operand must not silently collapse: `1 = 0` for an empty `IN`, `1
   path rather than its refusal.
 - Deferred to [[TASK-138]] — `ReadAsync()` with no arguments does not compile (CS0121 between the read-all
   and filtered overloads). A read-path change, so excluded by criterion 6.
+- Spawned to [[TASK-141]] at close (2026-08-06) — **MongoDB's four repeated guards have no test.** Found by
+  the close-gate review, not by a failure: criterion 9 named `Birko.Data.SQL.Tests`,
+  `Birko.Data.SQL.SqLite.Tests` and the portable base, so this is adjacent scope rather than an unmet
+  criterion. ElasticSearch's 4 (CR-H047) and InMemory's 2 (`86df89c`) are covered; MongoDB's 4 rest on
+  inspection alone, and the InMemory half of this very sweep was *discovered* by a failing test.
+- **Converting the 10 public `Delete`/`Update` overrides to `protected *Core`** — the actually-correct fix,
+  since the convention exists so the base can enforce invariants. Changes behaviour in three backends and
+  needs its own decision; the contained repeat was chosen deliberately (see `## Outcome`). Not filed as a
+  task yet: it is a convention decision, not a defect.
 
 ## Implementation plan
 
@@ -265,6 +281,82 @@ across the 8 backends, *that* is the spawn candidate.
 - Criterion 4 (`_ => false` still emits a `WHERE`) → **verify first**; likely already true, so a test not a change
 - Task split → **stays one task**
 
+## Outcome
+
+**What the fix is.** A SQL `DELETE` or `UPDATE` that would carry no `WHERE` clause is now refused with
+`WholeTableWriteException` instead of silently rewriting the whole table. The three inputs that used to
+collapse into that statement — a null filter, a predicate the parser has no branch for, and a predicate
+that reduces to "everything" without being an explicit constant — all reach the refusal. Deliberate
+whole-table writes stay possible through `DeleteAll()` / `UpdateAll(updates)` (+ async) on the SQL stores
+and both portable bases, with `Delete(x => true)` kept working as a synonym; the SQL they emit is clean
+(`DELETE FROM "T"`, no `1 = 1`). Reads are untouched — a null filter on a read still means read-everything.
+
+**Where it lives.** Two guards for two failure modes, because one could not cover both: the four connector
+funnels (every public overload of each verb feeds exactly one method, and no provider overrides them, so
+one edit covers all four SQL providers), plus a filter-required check at the store boundaries for the
+read-then-loop overloads, which issue one `WHERE Guid = …` per row and so are invisible to a
+statement-level guard even though "mutated every row" is the identical damage.
+
+**Step 6 — prove the guard can fail: 12 of 40 failed** with the guard call sites removed but the API
+surface kept, so the split isolates the guard rather than the scaffolding.
+
+- Fix-dependent (12): `Birko.Data.SQL.SqLite.Tests` **6** end-to-end, `Birko.Data.InMemory.Tests` **6**.
+- **`Birko.Data.SQL.Tests` failed 0 — and that is the informative half.** Those 14 unit tests exercise
+  `AddRequiredWhere` directly, so they pin the *helper's* behaviour and **not** that the funnels call it.
+  They are **contract pins, not evidence**; the wiring evidence is the SqLite end-to-end suite alone.
+  Recorded in that test file's own header so a future reader cannot mistake one for the other.
+- Re-verified at close: 362 + 113 + 53 = **528 green** across the three suites.
+
+**Judgement calls, and the stricter option rejected in each.**
+
+- **`WHERE 1 = 1` as the all-rows marker — rejected.** It is the signature of `' OR 1=1--`; emitting it in
+  normal query logs trains operators to ignore the pattern that should alarm them. Permission to write
+  every row comes from *how the call was made*, not from a marker in the SQL. (This is also what spawned
+  [[TASK-137]] against the pre-existing empty-`NOT IN` → `1 = 1`.)
+- **`IsExplicitAllRows` as a one-node test, not a whitelist of always-true shapes — deliberate, and the
+  narrower behaviour is the stricter one.** `x => true || x.A == 1` reduces to "everything" in the parser
+  and is *refused*. Enumerating the parser's reduce-to-everything sites was tried and rejected: a
+  whitelist rots the moment a fifth site is added, and its failure mode is a refused destructive operation
+  on working code.
+- **Refuse before the transaction wrapper, not inside it.** `DoCommandWithTransaction` funnels callback
+  exceptions through `InitException`, which re-wraps them in a bare `Exception` — so the tidier
+  refuse-at-render-time-only design would surface a request-shaped problem as something no
+  `catch (WholeTableWriteException)` could select. `AddRequiredWhere` stays as the backstop for the exotic
+  case (a non-empty collection that renders nothing), so both are present on purpose.
+- **`ArgumentNullException` for the null filter, not `WholeTableWriteException`.** The caller passed null
+  for a non-nullable parameter; that is an argument error, and the message names the `*All` door. The
+  guard runs *before* the `Connector == null` early return, so a store with no connector still refuses
+  rather than silently doing nothing.
+- **Repeating the guard in overriding backends rather than converting them to `*Core` — contained fix
+  chosen over the correct one.** 10 stores override the *public* `Delete`/`Update` and so bypass the base
+  guard entirely. ElasticSearch's 4 were already covered by `ParseRequiredFilterQuery` (CR-H047); InMemory's
+  2 and MongoDB's 4 now repeat the check. These overrides stand against the family convention (override
+  `protected *Core`, not the public CRUD methods, *precisely* so the base can enforce invariants) — but
+  converting them is a behavioural change to six stores and is not this task's business.
+
+**Flagged, not fixed.**
+
+- **The spec map under-covered the fix's primary site.** The four destructive funnels,
+  `WholeTableWriteException` and both MongoDB stores were reachable by **no** glob in **any** area, so a
+  regen could not have seen this behaviour change at all. Added to `bulk-filter-operations`' globs with the
+  reason recorded in `.map.yml`. This is the second instance of the same silent under-coverage (the first
+  was TASK-110, noted in the same file) — the pattern is worth a systematic sweep, which is *not* filed
+  yet because it needs a decision about how the map is audited rather than another glob.
+- **The `shaped-by` evidence pass cannot run from this aggregator at all** — every source glob points into
+  a sibling repo, so no `pr:` sha resolves under `git show` here (verified: `d8c2f40` is "unknown
+  revision"). Both regenerated specs are stamped `shaped-by-derived: false` *with the reason*, so the
+  false is not read as "nobody tried". True of every area in this repo's spec tree.
+- **The two "no connector means the write is silently dropped" behaviours are unchanged** and still
+  specced. A null `Connector` swallowing a destructive call is its own smell, but it predates this task and
+  narrowing it would change behaviour no finding asked about.
+
+**A process failure worth carrying.** Mid-verification, `git checkout -- .` across the four production
+repos to undo the step-6 experiment reverted *every* tracked change, not just the guard-stripping — about
+an hour of work. Recovery was mechanical **only because the test files live in different repos and
+survived**: the 40 tests were the executable specification, and the rebuild was verified complete by them
+going green at identical counts. Commit before a revert experiment; prefer targeted `git restore <paths>`
+or a stash over `checkout -- .`. The polyrepo split, usually an overhead, is what made this recoverable.
+
 ## Progress log
 
 - 2026-08-03 — **plan drafted, then grilled.** The grill overturned the draft's central mechanism; see
@@ -301,6 +393,25 @@ across the 8 backends, *that* is the spawn candidate.
   live in different repos** and survived: the 40 tests are the executable specification, and the rebuild was
   verified complete by them going green again at identical counts. Two lessons, both structural: commit
   before a revert experiment, and prefer targeted `git restore <paths>` or a stash over `checkout -- .`.
+- 2026-08-06 — **resumed after a session reset.** Reconciled the log against git: all 7 commits are HEAD in
+  their repos and every tree is clean, so the rebuild did land. Re-ran the three suites: **528 green**
+  (362 + 113 + 53). Steps 3–6 confirmed complete; 7 and 8 were outstanding.
+- 2026-08-06 — **criterion 8 was NOT met and is now closed.** The `*All` naming asymmetry existed only in
+  `Birko.Data.Stores@3cd8b2a`'s commit body, never in `CLAUDE.md § Conventions` where the criterion put it.
+  Added there with the full rule (why `Delete()` must never be parameterless, the two guards, the
+  `x => true` synonym, and no `1 = 1`). Every other criterion verified against the code before ticking.
+- 2026-08-06 — **step 7 — respecced `bulk-filter-operations` + `store-crud-contract`.** Requirements
+  changed: *"A filter that translates to no conditions produces an unfiltered statement"* → **"A
+  destructive statement that would carry no WHERE is refused, not issued"** (a requirement whose own
+  **title** asserted the defect); added *"Every-row destructive writes are reachable only through an
+  explicit door"* and *"A backend overriding the public destructive methods repeats the guard"*; retitled
+  and extended the in-memory delete requirement; tightened the two "no connector" scenarios, which the
+  guard's ordering made imprecise rather than wrong. Diff reviewed: every change traces to an acceptance
+  row, **no unexplained behavioural change, so no findings spawned**. Map gap found and fixed first — the
+  guard's primary site was reachable by no glob (see `## Outcome › Flagged`).
+- 2026-08-06 — **step 8 — `## Outcome` written** (fix, step-6 split with names, five judgement calls with
+  the rejected stricter option, three flags, and the `checkout -- .` process failure), then handed to
+  `/tasks close`.
 
 ## Human test plan
 

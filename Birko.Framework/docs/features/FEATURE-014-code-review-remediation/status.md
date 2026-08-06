@@ -21,10 +21,10 @@ generated: 2026-08-01
 
 ## Build progress
 
-6 / 17 tasks done.
+7 / 18 tasks done.
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
-- [ ] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
+- [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
 - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted
 - [ ] TASK-111 `rule.Field` reaches the WHERE clause unresolved and unquoted
 - [ ] TASK-112 `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist
@@ -40,10 +40,11 @@ generated: 2026-08-01
 - [ ] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created
 - [ ] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire
 - [ ] TASK-137 An empty `NOT IN` renders `1 = 1` — indistinguishable from an injection payload in a query log
+- [ ] TASK-141 MongoDB's four null-filter guards have no regression test
 
 ## What can be tested now
 
-5 of 16 tracked items are complete and exercisable.
+7 of 18 tracked items are complete and exercisable.
 
 ## Prototype
 

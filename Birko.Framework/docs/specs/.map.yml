@@ -88,6 +88,21 @@ areas:
       - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
+      # the destructive-write funnels — one per verb per sync/async, and the ONLY place the
+      # no-WHERE guard physically lives. Added for TASK-109: the same silent under-coverage as the
+      # TASK-110 note above, found the same way (the fix's primary site was reachable by no glob,
+      # so a regen could not have seen the behaviour change at all).
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Delete.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
+      - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
+      - ../Birko.Data.SQL/Exceptions/WholeTableWriteException.cs
+      # backend implementors that override the PUBLIC Delete/Update and so must repeat the guard —
+      # cross-backend conformance is the whole point of this contract (§ Areas include their backend
+      # implementors). InMemory's pair is already reached via store-crud-contract's Stores/*.cs glob;
+      # MongoDB's was reached by nothing, which is how its 4 overrides went unguarded until TASK-109.
+      - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
+      - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
 
   - name: filter-expression-translation
     title: LINQ filter expression translation to backend queries

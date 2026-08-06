@@ -1,7 +1,7 @@
 ---
 area: store-crud-contract
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 5b4c2b4ef9fa19a2e1d6ed48378861579a3bf5a4
+generated-on: 2026-08-06
 sources:
   - ../Birko.Data.Core/Exceptions/StoreException.cs
   - ../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs
@@ -15,7 +15,11 @@ sources:
   - ../Birko.Data.Stores/IStoreWrapper.cs
   - ../Birko.Data.Stores/StoreExtensions.cs
   - ../Birko.Data.Stores/StoreLocator.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+# false, and NOT because nobody tried — see the identical note in bulk-filter-operations.md: every
+# source glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` in this
+# aggregator. FEATURE-014 comes from the regenerating task's `feature:` field, not from evidence.
+shaped-by-derived: false
 ---
 
 # Store CRUD contract and template-method hierarchy
@@ -476,11 +480,18 @@ The system SHALL treat a `null` collection as a no-op in bulk `CreateCore`, `Upd
 - **When** bulk `Create(null)`, `Update(null)` or `Delete(null)` runs
 - **Then** the method returns immediately (`Task.CompletedTask` in the async store) leaving `_items` untouched
 
-### Requirement: In-memory filter-based delete snapshots the matches before removing them
+### Requirement: In-memory filter-based delete requires a filter, then snapshots the matches before removing them
 
 The system SHALL override the public `Delete(Expression<Func<T, bool>> filter)` /
-`DeleteAsync(filter, ct)` in the in-memory stores to open the initialization gate, compile the predicate,
-materialize the matching key/value pairs with `.ToList()`, and then `TryRemove` each key.
+`DeleteAsync(filter, ct)` in the in-memory stores to **first refuse a null filter**, then open the
+initialization gate, compile the predicate, materialize the matching key/value pairs with `.ToList()`, and
+`TryRemove` each key.
+
+The null check SHALL be repeated **in the override itself** rather than inherited. Overriding the *public*
+method bypasses the base class's guard entirely, so the base cannot enforce the invariant for it — which
+is precisely why the family convention has concrete stores override `protected *Core` and not the public
+CRUD methods (SH-M023). These overrides predate the guard and stand against that convention; repeating
+the check is the contained fix, and converting them to `*Core` is separate work.
 
 #### Scenario: Deleting all entities matching a predicate
 
@@ -494,6 +505,20 @@ materialize the matching key/value pairs with `.ToList()`, and then `TryRemove` 
 - **Given** no stored entity satisfies the filter
 - **When** `Delete(filter)` is called
 - **Then** the snapshot list is empty, no removal occurs, and no exception is raised
+
+#### Scenario: A null filter is refused rather than clearing the whole collection
+
+- **Given** an in-memory store holding entities
+- **When** `Delete(null!)` / `DeleteAsync(null!, ct)` is called
+- **Then** the override throws `ArgumentNullException` naming the `filter` parameter, and **no** entity is
+  removed — a compiled null predicate would otherwise have matched everything
+
+#### Scenario: Every row is still reachable deliberately
+
+- **Given** a caller that genuinely wants the collection emptied
+- **When** they call `DeleteAll()` (or pass an explicit `x => true`)
+- **Then** the operation proceeds — the guard removes the *accidental* whole-collection delete, not the
+  deliberate one
 
 ### Requirement: In-memory stores support aggregation over the live entity set
 

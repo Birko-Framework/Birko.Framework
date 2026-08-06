@@ -1,10 +1,17 @@
 ---
 area: bulk-filter-operations
-generated-at: a62ec942b6f7bd18c3ce91995b4496ae95aa910a
-generated-on: 2026-08-01
+generated-at: 5b4c2b4ef9fa19a2e1d6ed48378861579a3bf5a4
+generated-on: 2026-08-06
 sources:
+  - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
+  - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
+  - ../Birko.Data.SQL/Exceptions/WholeTableWriteException.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Select.cs
+  - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/Stores/AsyncDataBaseBulkStore.cs
   - ../Birko.Data.SQL/Stores/DataBaseBulkStore.cs
@@ -14,7 +21,13 @@ sources:
   - ../Birko.Data.Stores/IBulkStore.cs
   - ../Birko.Data.Stores/OrderBy.cs
   - ../Birko.Data.Stores/PropertyUpdate.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator at all.
+# Every source glob above points into a sibling repo, so no task's `pr:` sha resolves under `git show`
+# here (verified: TASK-109's d8c2f40 is "unknown revision" in this checkout). FEATURE-014 above comes
+# from the regenerating task's own `feature:` field — the --story/--feature input to the union — not
+# from evidence. True of every area in this repo's spec tree, not just this one.
+shaped-by-derived: false
 ---
 
 # Bulk filter-based Update/Delete and Read semantics
@@ -44,6 +57,15 @@ stamp itself (making it unparseable as a sha, so the staleness check reported th
 alone): SH-H003/SH-M022 → `Birko.Data.SQL@2a87f84`, TASK-128 → `Birko.Data.SQL.View@576707c`. Sibling-repo
 shas are recorded here rather than in the stamp because this repo cannot resolve them — the area's sources
 all live in sibling repos, so `generated-at` can only ever name this aggregator's HEAD.
+
+Scoped regen at `5b4c2b4` for **TASK-109 / SH-H002 + SH-M023** — the no-WHERE destructive-write guard.
+Sibling-repo shas: `Birko.Data.SQL@d8c2f40`, `Birko.Data.Stores@3cd8b2a`, `Birko.Data.InMemory@4f680b7`,
+`Birko.Data.MongoDB@88f96ee`. This regen **rewrote a requirement whose own title asserted the defect**
+(*"A filter that translates to no conditions produces an unfiltered statement"*) — the shipped behaviour
+the previous harvest correctly recorded, and the thing the fix inverts. It also added the four
+destructive funnels, `WholeTableWriteException` and the two MongoDB stores to this area's globs in
+`.map.yml`: the guard's primary site was reachable by **no** glob in any area, so a regen could not have
+seen the change at all. Same silent under-coverage as the TASK-110 note in the map, found the same way.
 
 ## Requirements
 
@@ -430,8 +452,11 @@ invoking no per-entity update path.
 #### Scenario: No connector means the update is silently dropped
 
 - **Given** a SQL bulk store whose `Connector` is null
-- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates, ct)` is called
+- **When** `Update(filter, updates)` / `UpdateAsync(filter, updates, ct)` is called with a **non-null**
+  filter
 - **Then** the method returns without error, without translating the filter and without writing anything
+- **And** with a null filter it instead throws, because `RequireFilter` precedes the `Connector == null`
+  early return — a missing store does not excuse a missing filter
 
 ### Requirement: Filter-based delete — portable read-then-delete versus native DELETE
 
@@ -473,49 +498,166 @@ connector delete against the translated filter without reading anything.
 #### Scenario: No connector means the delete is silently dropped
 
 - **Given** a SQL bulk store whose `Connector` is null
-- **When** `Delete(filter)` / `DeleteAsync(filter, ct)` is called
+- **When** `Delete(filter)` / `DeleteAsync(filter, ct)` is called with a **non-null** filter
 - **Then** the method returns without error and no rows are deleted
+- **And** with a null filter it instead throws, because `RequireFilter` precedes the `Connector == null`
+  early return
 
-### Requirement: A filter that translates to no conditions produces an unfiltered statement
+### Requirement: A destructive statement that would carry no WHERE is refused, not issued
 
-The system SHALL, on the SQL native filter paths, emit no WHERE clause when
-`DataBase.ParseConditionExpression` yields an empty condition set — so such an update or delete SHALL
-affect every row of the table. Three distinct inputs yield that empty set: the constant-true predicate
-(an explicit early return), a null filter (the whole method body is skipped), and any predicate shape
-the parser has no branch for (the method's final statement is an unconditional
-`return Array.Empty<Condition>()`). The three are therefore indistinguishable at this boundary.
+The system SHALL refuse to issue a destructive SQL statement (`DELETE` / `UPDATE`) that would carry no
+`WHERE` clause, unless every-row was requested **explicitly**. The refusal SHALL be
+`WholeTableWriteException` (a `System.InvalidOperationException`) naming the operation, the table and the
+explicit door to use. All the inputs that previously collapsed into a conditionless statement — a null
+filter, a predicate shape the parser has no branch for, and a predicate that reduces to "everything"
+without being an explicit constant — SHALL therefore reach the same refusal rather than the same
+whole-table write.
 
-#### Scenario: A constant-true predicate deletes the whole table
+The guard SHALL sit at the **four destructive funnels** (`AbstractConnector_Delete`,
+`AbstractConnector_Update` and their async twins), each of which is the single method every public
+overload of its verb feeds; no provider overrides them, so one implementation covers all four SQL
+providers. It SHALL be enforced twice, at two different points and on two different things:
 
-- **Given** a `DataBaseBulkStore<DB,T>` and the predicate `x => true`
-- **When** `Delete(x => true)` is called
-- **Then** `ParseConditionExpression` returns `Array.Empty<Condition>()`, `AddWhere` appends nothing,
-  and the emitted statement is `DELETE FROM <table>` with no WHERE — every row is removed
+- `WouldTargetEveryRow(conditions)` **before** entering `DoCommandWithTransaction`. That wrapper funnels
+  every exception from its command-building callback through `InitException`, which re-wraps it in a bare
+  `Exception` — so a refusal thrown from inside would reach the caller as a type no
+  `catch (WholeTableWriteException)` could select. Refusing first also avoids opening a connection and
+  beginning a transaction for a statement that will never run.
+- `AddRequiredWhere(...)` on the **rendered** clause, as the backstop. `ConditionDefinition` returns
+  `string.Empty` for a null *or* empty enumerable and builds each term through `BuildSingleCondition`,
+  which can yield an empty string for a malformed condition — so a non-empty collection can still render
+  no `WHERE`. Guarding the rendered text is what closes that case; guarding the collection alone would
+  not.
 
-#### Scenario: A constant-false predicate becomes an impossible condition
+`AddRequiredWhere` SHALL be separate from `AddWhere` rather than a flag on it, because reads share
+`AddWhere` and a null filter on a read legitimately means read-everything.
 
-- **Given** a `DataBaseBulkStore<DB,T>` and the predicate `x => false`
-- **When** `Delete(x => false)` is called
-- **Then** `ParseConditionExpression` returns a single condition rendering `1 = 0`, so the statement
-  matches no rows
-
-#### Scenario: A predicate the parser cannot translate also affects every row
+#### Scenario: A predicate the parser cannot translate is refused instead of affecting every row
 
 - **Given** a `DataBaseBulkStore<DB,T>` and a predicate whose body is a shape `ParseConditionExpression`
   has no branch for — for example the `InvocationExpression` of `x => pred(x)` over a captured
   `Func<T,bool>`, which `ExpressionNormalizer` cannot funcletize because it references the parameter
 - **When** `Delete(filter)` or `Update(filter, PropertyUpdate<T>)` is called
-- **Then** the parse falls through to the final `return Array.Empty<Condition>()`, `AddWhere` appends
-  nothing, and the statement is issued as `DELETE FROM <table>` / `UPDATE <table> SET …` with no WHERE —
-  every row is deleted or updated, with no exception and no signal that the predicate was dropped
+- **Then** the parse falls through to `Array.Empty<Condition>()`, `WouldTargetEveryRow` returns true, and
+  `WholeTableWriteException` is thrown before any connection is opened — no statement is issued and no
+  row is touched
 
-#### Scenario: A null filter reaches the same fall-through
+#### Scenario: A null filter is refused at the store boundary, before the connector
 
-- **Given** a SQL bulk store called as `Delete(null!)` / `Update(null!, updates)` — the `filter`
-  parameter is declared non-nullable and is not checked
-- **When** the filter is translated
-- **Then** `filter as LambdaExpression` is null, `ParseConditionExpression` skips its entire body and
-  returns `Array.Empty<Condition>()`, and the emitted statement carries no WHERE — every row is affected
+- **Given** a SQL bulk store called as `Delete(null!)` / `Update(null!, updates)`
+- **When** the call is made
+- **Then** `RequireFilter` throws `ArgumentNullException` naming the `filter` parameter, with a message
+  directing the caller to `DeleteAll()` / `UpdateAll(updates)` or an explicit `x => true`
+- **And** the throw precedes the `Connector == null` early return, so a store with no connector still
+  refuses rather than silently doing nothing
+
+#### Scenario: The refusal names a type a caller can catch selectively
+
+- **Given** any of the refused shapes above
+- **When** the exception propagates
+- **Then** it is `WholeTableWriteException : InvalidOperationException`, not a bare `Exception`, so
+  `catch (WholeTableWriteException)` and `catch (InvalidOperationException)` both select it — a
+  request-shaped problem does not surface as an unhandled fault
+
+#### Scenario: A constant-false predicate still becomes an impossible condition
+
+- **Given** a `DataBaseBulkStore<DB,T>` and the predicate `x => false`
+- **When** `Delete(x => false)` is called
+- **Then** `ParseConditionExpression` returns a single condition rendering `1 = 0`, so the statement is
+  issued, carries a WHERE, and matches no rows — a predicate that legitimately matches nothing is not a
+  whole-table write and is not refused
+
+#### Scenario: A non-constant predicate that reduces to everything is refused, not allowed
+
+- **Given** the predicate `x => true || x.A == 1`, which the parser reduces to an empty condition set but
+  which is not a single constant node after normalization
+- **When** `Delete(filter)` is called
+- **Then** `IsExplicitAllRows` returns false, the funnel guard fires, and `WholeTableWriteException` is
+  thrown — the explicit-opt-in test is deliberately narrower than the set of shapes that mean
+  "everything", so the boundary errs toward refusing rather than toward writing
+
+### Requirement: Every-row destructive writes are reachable only through an explicit door
+
+The system SHALL keep a deliberate whole-table delete/update possible, through exactly two spellings:
+the named `DeleteAll()` / `UpdateAll(updates)` methods (plus `DeleteAllAsync(ct)` /
+`UpdateAllAsync(updates, ct)`), and a caller-supplied `x => true` predicate retained as their synonym.
+Both SHALL exist on the SQL bulk stores and on the portable bases `AbstractBulkStore<T>` /
+`AbstractAsyncBulkStore<T>`.
+
+The emitted SQL SHALL be the clean conditionless statement (`DELETE FROM "T"`) and SHALL NOT carry a
+`1 = 1` marker: that pattern is indistinguishable from `' OR 1=1--` in a query log and would train
+operators to ignore a real attack signature. A bare `DELETE` in a log therefore means somebody asked for
+it explicitly.
+
+The synonym test SHALL be a **one-node** check (`IsExplicitAllRows`) applied after
+`ExpressionNormalizer` funcletization, not a catalogue of always-true shapes — `x => true`,
+`x => 1 == 1` and `x => capturedFlag` all normalize to the same `ConstantExpression`. Enumerating the
+parser's reduce-to-everything sites SHALL NOT be used, because such a whitelist rots when a site is
+added and its failure mode is a refused destructive operation on working code.
+
+#### Scenario: The named door emits the conditionless statement
+
+- **Given** a `DataBaseBulkStore<DB,T>`
+- **When** `DeleteAll()` is called
+- **Then** the connector's `DeleteAll(type)` runs `Delete(table, conditions: null, allowAllRows: true)`,
+  the guard is bypassed by the explicit flag, and the emitted statement is `DELETE FROM <table>` with no
+  WHERE and no `1 = 1`
+
+#### Scenario: An explicit constant-true filter routes to the same door
+
+- **Given** a `DataBaseBulkStore<DB,T>` and the predicate `x => true`
+- **When** `Delete(x => true)` is called
+- **Then** `IsExplicitAllRows` returns true and the call is routed to `Connector.DeleteAll(typeof(T))` —
+  the pre-existing idiom keeps working and reaches the same clean statement
+
+#### Scenario: A captured-flag or arithmetic-true predicate is the same one node
+
+- **Given** the predicates `x => 1 == 1` and `x => capturedFlag` where `capturedFlag` is true
+- **When** either is passed to `Delete(filter)`
+- **Then** `ExpressionNormalizer` funcletizes each to a single `ConstantExpression(true)`,
+  `IsExplicitAllRows` returns true, and both reach the all-rows door — the test is on the normalized
+  node, not on the source spelling
+
+#### Scenario: Destroy remains distinct from emptying
+
+- **Given** a caller wanting the table itself gone rather than emptied
+- **When** they consult `DeleteAll`'s contract
+- **Then** it directs them to `Destroy()` — `DeleteAll` empties, `Destroy` drops, and the two SHALL NOT
+  be conflated
+
+### Requirement: A backend overriding the public destructive methods repeats the guard
+
+The system SHALL enforce the require-a-filter guard in every store that overrides the **public**
+`Delete(filter)` / `Update(filter, …)` methods rather than the `protected *Core` methods, because such
+an override bypasses the base class's guard entirely.
+
+This SHALL be read together with the family convention that concrete stores override `protected *Core`
+and **not** the public CRUD methods, precisely so the base can enforce invariants. The overrides that
+require the repeat predate the guard and stand against that convention; repeating the guard is the
+contained fix, and converting them to `*Core` is separate work.
+
+#### Scenario: The InMemory store repeats the guard in its overriding Delete
+
+- **Given** `AbstractInMemoryStore<T>` / `AbstractAsyncInMemoryStore<T>`, which override the public
+  `Delete(filter)`
+- **When** `Delete(null!)` is called
+- **Then** the override throws `ArgumentNullException` itself rather than deleting the whole collection —
+  reaching the base's guard is not possible from an override of the public method
+
+#### Scenario: The MongoDB store repeats the guard on all four overrides
+
+- **Given** `MongoDBStore<T>` / `AsyncMongoDBStore<T>`, which override the public `Delete(filter)` and
+  `Update(filter, …)`
+- **When** a null filter is passed to any of them
+- **Then** each refuses, so the guard holds on the native `$set` / `DeleteMany` paths as well as on the
+  portable ones
+
+#### Scenario: The ElasticSearch stores are already covered by their own filter boundary
+
+- **Given** the ElasticSearch stores' four public overrides
+- **When** an untranslatable or null filter reaches a destructive path
+- **Then** `ParseRequiredFilterQuery` already refuses it (CR-H047), so no additional repeat is required
+  there — the invariant is enforced, by a different mechanism at the same boundary
 
 ### Requirement: Bulk collection operations initialise lazily and default to per-item loops
 

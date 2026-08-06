@@ -123,6 +123,19 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
 - Concrete stores override `protected *Core` methods (e.g., `CreateCoreAsync`, `ReadCore`), **NOT** the public CRUD methods. The base class handles lazy-init in the public wrapper
 - Use protected setters for properties that derived classes need to modify
 - `RemoteSettings` should be passed via `base.SetSettings()`, not constructed inline
+- **A destructive all-rows operation is named `*All`; only reading everything gets the short name.** The
+  asymmetry is deliberate and is not to be "fixed" by someone reasoning from symmetry: read-all is the
+  existing parameterless overload (`Read()`, `ReadAsync(ct)`) because reading everything is harmless,
+  while all-rows writes are `DeleteAll()` / `UpdateAll(updates)` (+ async) on the SQL stores and both
+  portable bases. **`Delete()` must never be spelled parameterless** — it would sit one keystroke from
+  `Delete(items)`, and a short name is a footgun in proportion to how destructive the operation is. A
+  filter-based destructive overload **requires** a filter: null throws `ArgumentNullException` naming the
+  `*All` door, and a filter that renders no `WHERE` throws `WholeTableWriteException` at the connector
+  (SH-H002/SH-M023). `Delete(x => true)` is kept working as the `*All` synonym — a single normalized
+  `ConstantExpression(true)` node, not a whitelist of always-true shapes. **No `1 = 1` is emitted** to
+  mark a deliberate all-rows write: the SQL stays clean (`DELETE FROM "T"`), because `1 = 1` in a query
+  log is indistinguishable from `' OR 1=1--` and trains operators to ignore the pattern that should
+  alarm them
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient

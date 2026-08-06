@@ -13,9 +13,13 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**8 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
-SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]]) — **6 of 16
-tasks done, 1 in review.** TASK-113 closed three findings at once: they shared one root cause
+**10 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
+SH-H002+SH-M023 via [[TASK-109]]) — **7 of 17 tasks done, 1 in review.** TASK-109 closed two findings that
+were one decision: the SQL native paths and the portable bases both let a null or untranslatable filter
+become a whole-table write, so one policy — refuse unless every-row was asked for explicitly — needed two
+edits, at the four connector funnels and at the store boundaries. It also spawned [[TASK-141]] at its close
+gate (MongoDB's four repeated guards are untested), taking the story to 17 tasks. TASK-113 closed three findings at once: they shared one root cause
 (`ApplyTenantFiltering` scoping only the save predicates), so scoping the *fetch* closed the read, preview,
 delete and knowledge paths together rather than one guard per path. TASK-110 also
 closed the medium twin SH-M022, which counts under [[STORY-053]], not here; and [[TASK-128]] closed a defect
@@ -32,14 +36,20 @@ both instructed the fix to record it as nonexistent — which would have left a 
 security fix. Re-verified WIDER at fix time and retracted in the findings doc. Worth carrying into the
 remaining 42: the verification pass is not automatically more trustworthy than the claim it is correcting.
 
-**Three tasks were filed from the remediation itself, by hand and none with an `SH-` id**, taking the
-story from 13 tasks to 16 — the third is [[TASK-137]] (P2, blocked on TASK-109), spawned while *planning*
-TASK-109: the empty-`NOT IN` → `1 = 1` rendering shipped 2026-07-27 is a false SQL-injection signal in query
-logs, found because TASK-109 proposed `1 = 1` as its all-rows idiom and had it rejected on that ground. The
-other two: [[TASK-128]] (P0, **closed same day**) — the view path's ORDER BY interpolated
+**Four tasks were filed from the remediation itself, by hand and none with an `SH-` id**, taking the
+story from 13 tasks to 17. TASK-109 alone produced two of them, at two different stages, which is the
+pattern worth noticing: [[TASK-137]] (P2, blocked on TASK-109) came out of *planning* it — the
+empty-`NOT IN` → `1 = 1` rendering shipped 2026-07-27 is a false SQL-injection signal in query logs, found
+because TASK-109 proposed `1 = 1` as its own all-rows idiom and had it rejected on that ground — and
+[[TASK-141]] (P2) came out of its **close gate**, where the review found MongoDB's four repeated null-filter
+guards have no test at all, while the InMemory half of the same sweep had been *discovered* by a failing
+test. The other two: [[TASK-128]] (P0, **closed same day**) — the view path's ORDER BY interpolated
 caller text, the same defect one project over from TASK-110 — and [[TASK-129]] (P1, open) — an aggregate
 view's generated DDL carries a double alias, so no persistent aggregate view can be created at all, found
 while writing TASK-128's tests.
+
+Two of the four surfaced at a *gate* rather than during the coding, so the gates are earning their place:
+planning caught one, the close review caught another, and neither was a symptom anybody had observed.
 
 ## User story
 
