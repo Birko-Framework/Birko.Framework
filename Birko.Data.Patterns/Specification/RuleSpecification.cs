@@ -56,10 +56,49 @@ public class RuleSpecification<T> : Specification<T> where T : class
         return new RuleGroup(LogicOperator.And, ruleSet.Rules) { IsEnabled = ruleSet.IsEnabled };
     }
 
+    /// <summary>
+    /// A built leaf, plus whether it <b>degraded</b> — i.e. the constant it carries expresses "this leaf
+    /// cannot be evaluated", not "this predicate is false" (SH-H041…SH-H044).
+    /// </summary>
+    /// <remarks>
+    /// The four filed findings were one root cause wearing four faces: a degradation constant is
+    /// indistinguishable from a real predicate once it is returned, so <see cref="Expression.Not(Expression)"/>
+    /// happily inverts a match-none into a <b>match-all</b>. Tracking the flag is what makes the invariant
+    /// enforceable in one place (see <c>BuildLeafExpression</c>'s negation step) rather than needing every
+    /// present and future degradation site to remember it — two sites beyond the filed findings
+    /// (<c>BuildComparison</c>, <c>BuildBetween</c>) had already forgotten.
+    /// </remarks>
+    private readonly struct Leaf
+    {
+        public readonly Expression Expr;
+        public readonly bool Degraded;
+
+        private Leaf(Expression expr, bool degraded)
+        {
+            Expr = expr;
+            Degraded = degraded;
+        }
+
+        /// A real predicate; negation is meaningful.
+        public static Leaf Predicate(Expression expr) => new(expr, false);
+
+        /// This leaf cannot be evaluated. Matches nothing, and STAYS matching nothing under negation.
+        public static Leaf Unevaluable() => new(Expression.Constant(false), true);
+    }
+
     private static Expression BuildExpression(IRule rule, ParameterExpression param)
     {
+        // A disabled rule matches NOTHING, agreeing with RuleEvaluator.Evaluate, which returns
+        // NoMatch for the same condition (SH-H042). This previously returned Constant(true): a
+        // disabled ROOT rule became literally `x => true`, so Delete(spec.ToExpression()) emptied the
+        // table — and, since TASK-109, did so through the explicit all-rows door, because `x => true`
+        // is exactly the node IsExplicitAllRows whitelists as a deliberate whole-table request.
+        //
+        // Reachable only for a disabled ROOT: BuildGroupExpression filters disabled children before
+        // recursing, and an all-disabled group already returned Constant(false). That is also why
+        // flipping this constant cannot change any in-group behaviour.
         if (!rule.IsEnabled)
-            return Expression.Constant(true);
+            return Expression.Constant(false);
 
         return rule switch
         {
@@ -74,15 +113,18 @@ public class RuleSpecification<T> : Specification<T> where T : class
         var property = typeof(T).GetProperty(rule.Field,
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
 
+        // An unresolved field is unevaluable rather than false: previously this returned before the
+        // negation and so was already safe, but only by accident of ordering. Routing it through the
+        // same flag keeps it safe if the ordering ever changes.
         if (property is null)
-            return Expression.Constant(false);
+            return Leaf.Unevaluable().Expr;
 
         var member = Expression.Property(param, property);
 
-        Expression expr = rule.Operator switch
+        Leaf leaf = rule.Operator switch
         {
-            ComparisonOperator.IsNull => BuildNullCheck(member, isNull: true),
-            ComparisonOperator.IsNotNull => BuildNullCheck(member, isNull: false),
+            ComparisonOperator.IsNull => Leaf.Predicate(BuildNullCheck(member, isNull: true)),
+            ComparisonOperator.IsNotNull => Leaf.Predicate(BuildNullCheck(member, isNull: false)),
             ComparisonOperator.Equal => BuildComparison(member, rule.Value, Expression.Equal),
             ComparisonOperator.NotEqual => BuildComparison(member, rule.Value, Expression.NotEqual),
             ComparisonOperator.GreaterThan => BuildComparison(member, rule.Value, Expression.GreaterThan),
@@ -91,17 +133,37 @@ public class RuleSpecification<T> : Specification<T> where T : class
             ComparisonOperator.LessThanOrEqual => BuildComparison(member, rule.Value, Expression.LessThanOrEqual),
             ComparisonOperator.Between => BuildBetween(member, rule.Value, rule.UpperValue),
             ComparisonOperator.Contains => BuildStringMethod(member, rule.Value, "Contains"),
-            ComparisonOperator.NotContains => Expression.Not(BuildStringMethod(member, rule.Value, "Contains")),
+            ComparisonOperator.NotContains => Negate(BuildStringMethod(member, rule.Value, "Contains")),
             ComparisonOperator.StartsWith => BuildStringMethod(member, rule.Value, "StartsWith"),
             ComparisonOperator.EndsWith => BuildStringMethod(member, rule.Value, "EndsWith"),
-            _ => Expression.Constant(true)
+            ComparisonOperator.Like => BuildLike(member, rule.Value),
+            ComparisonOperator.In => BuildIn(member, rule.Value),
+            ComparisonOperator.NotIn => Negate(BuildIn(member, rule.Value)),
+
+            // NOT a degradation — a ComparisonOperator this translator has no arm for is a gap in the
+            // code, not a property of the data, and the old `Constant(true)` here is SH-H041: Like, In
+            // and NotIn were all declared operators falling into it, so `Status In [1,2]` matched every
+            // row. Throwing keeps a future added operator from silently repeating that; every arm that
+            // legitimately cannot evaluate returns Leaf.Unevaluable() instead.
+            _ => throw new NotSupportedException(
+                $"RuleSpecification<{typeof(T).Name}> cannot translate ComparisonOperator.{rule.Operator} "
+                + $"on field '{rule.Field}'. Add an arm to BuildLeafExpression — do not let it fall through "
+                + "to a constant, which would widen the filter instead of narrowing it.")
         };
 
-        if (rule.IsNegated)
-            expr = Expression.Not(expr);
+        // THE invariant: a degraded leaf is never negated. `Not(match-none)` is match-ALL, which is how
+        // SH-H043/SH-H044 turned an inapplicable predicate into "every row". A leaf that could not be
+        // evaluated matches nothing whichever way it is read.
+        if (rule.IsNegated && !leaf.Degraded)
+            return Expression.Not(leaf.Expr);
 
-        return expr;
+        return leaf.Expr;
     }
+
+    /// Negates a leaf, preserving the degradation flag — so NotContains / NotIn over an unevaluable
+    /// leaf stay match-none instead of inverting to match-all.
+    private static Leaf Negate(Leaf leaf) =>
+        leaf.Degraded ? leaf : Leaf.Predicate(Expression.Not(leaf.Expr));
 
     private static Expression BuildNullCheck(MemberExpression member, bool isNull)
     {
@@ -111,7 +173,7 @@ public class RuleSpecification<T> : Specification<T> where T : class
             : Expression.NotEqual(member, nullExpr);
     }
 
-    private static Expression BuildComparison(
+    private static Leaf BuildComparison(
         MemberExpression member,
         object? value,
         Func<Expression, Expression, BinaryExpression> comparison)
@@ -119,27 +181,102 @@ public class RuleSpecification<T> : Specification<T> where T : class
         // A value that cannot be converted to the member type (null against a non-nullable
         // value type, or a non-convertible/mistyped value) makes the leaf unsatisfiable rather
         // than throwing when the compiled delegate runs in-memory or the provider translates it.
+        // Unevaluable, NOT false: a negated comparison with a mistyped value used to invert this
+        // constant into match-all. Not one of the four filed findings — found while fixing them.
         if (!TryConvertConstant(value, member.Type, out var constant))
-            return Expression.Constant(false);
-        return comparison(member, constant);
+            return Leaf.Unevaluable();
+        return Leaf.Predicate(comparison(member, constant));
     }
 
-    private static Expression BuildBetween(MemberExpression member, object? lower, object? upper)
+    private static Leaf BuildBetween(MemberExpression member, object? lower, object? upper)
     {
+        // Same species as BuildComparison above — a negated Between with unconvertible bounds
+        // inverted to match-all before the flag existed.
         if (!TryConvertConstant(lower, member.Type, out var lowerConst) ||
             !TryConvertConstant(upper, member.Type, out var upperConst))
-            return Expression.Constant(false);
-        return Expression.AndAlso(
+            return Leaf.Unevaluable();
+        return Leaf.Predicate(Expression.AndAlso(
             Expression.GreaterThanOrEqual(member, lowerConst),
             Expression.LessThanOrEqual(member, upperConst)
-        );
+        ));
     }
 
-    private static Expression BuildStringMethod(MemberExpression member, object? value, string methodName)
+    /// <summary>
+    /// SQL-style LIKE with `%` wildcards, ported from Birko.Rules' RuleExpressionConverter so the two
+    /// translators agree. Anchored `%`s become StartsWith / EndsWith / Contains; a pattern with interior
+    /// wildcards is unevaluable here rather than approximated (SH-H041).
+    /// </summary>
+    private static Leaf BuildLike(MemberExpression member, object? value)
     {
-        // String methods only apply to string members; a non-string field is never a match.
         if (member.Type != typeof(string))
-            return Expression.Constant(false);
+            return Leaf.Unevaluable();
+
+        var pattern = value?.ToString();
+        if (string.IsNullOrEmpty(pattern))
+            return Leaf.Unevaluable();
+
+        var starts = pattern!.StartsWith('%');
+        var ends = pattern.EndsWith('%');
+        var core = pattern.Trim('%');
+
+        // An interior wildcard ("a%b") has no single string-method equivalent. Unevaluable — match-none,
+        // never negatable — rather than silently matching on the fragments.
+        if (core.Contains('%'))
+            return Leaf.Unevaluable();
+
+        var method = (starts, ends) switch
+        {
+            (true, true) => "Contains",
+            (false, true) => "StartsWith",
+            (true, false) => "EndsWith",
+            _ => "Equals"
+        };
+
+        return method == "Equals"
+            ? BuildComparison(member, core, Expression.Equal)
+            : BuildStringMethod(member, core, method);
+    }
+
+    /// <summary>
+    /// Membership test, ported from Birko.Rules' RuleExpressionConverter (SH-H041 — this operator was
+    /// declared but had no arm, so `Status In [1,2]` matched every row).
+    /// </summary>
+    /// <remarks>
+    /// An <b>empty</b> set is match-none and is a real predicate, not a degradation: "in the empty set" is
+    /// false for every row, and its negation is legitimately true for every row. That mirrors the SQL
+    /// empty-IN / empty-NOT-IN decision (2026-07-27) — set-faithful constants, not an always-false shortcut
+    /// that would invert wrongly.
+    /// </remarks>
+    private static Leaf BuildIn(MemberExpression member, object? value)
+    {
+        if (value is not System.Collections.IEnumerable raw || value is string)
+            return Leaf.Unevaluable();
+
+        Expression? combined = null;
+        var any = false;
+        foreach (var item in raw)
+        {
+            if (!TryConvertConstant(item, member.Type, out var constant))
+                return Leaf.Unevaluable();
+            any = true;
+            var eq = Expression.Equal(member, constant);
+            combined = combined is null ? eq : Expression.OrElse(combined, eq);
+        }
+
+        // Empty set: a genuine predicate that matches nothing, so NotIn over it correctly matches
+        // everything. Marked Predicate rather than Unevaluable precisely so Negate CAN invert it.
+        return any && combined is not null
+            ? Leaf.Predicate(combined)
+            : Leaf.Predicate(Expression.Constant(false));
+    }
+
+    private static Leaf BuildStringMethod(MemberExpression member, object? value, string methodName)
+    {
+        // String methods only apply to string members. Unevaluable, not false: wrapped in Expression.Not
+        // by the NotContains arm this became `!false` — every row — which is SH-H043, and the same
+        // constant reached rule.IsNegated, which is SH-H044's real trigger.
+        if (member.Type != typeof(string))
+            return Leaf.Unevaluable();
 
         var method = typeof(string).GetMethod(methodName, [typeof(string), typeof(StringComparison)])!;
         var valueExpr = Expression.Constant(value?.ToString() ?? string.Empty, typeof(string));
@@ -147,9 +284,11 @@ public class RuleSpecification<T> : Specification<T> where T : class
         var call = Expression.Call(member, method, valueExpr, comparisonExpr);
 
         // Guard against a null string property: null.Contains(...) would NRE when the compiled
-        // delegate runs in-memory. A null field is treated as "does not match".
+        // delegate runs in-memory. A null field is treated as "does not match". This IS a real
+        // predicate — a null field genuinely does not match — so negation over it is meaningful and
+        // it is deliberately not marked degraded.
         var notNull = Expression.NotEqual(member, Expression.Constant(null, typeof(string)));
-        return Expression.AndAlso(notNull, call);
+        return Leaf.Predicate(Expression.AndAlso(notNull, call));
     }
 
     /// <summary>
