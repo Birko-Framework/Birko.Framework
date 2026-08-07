@@ -1,7 +1,7 @@
 ---
 area: validation-and-rules
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 804f0b7619d3e502e6a0a9d33119a3e62097c562
+generated-on: 2026-08-07
 sources:
   - ../Birko.Rules/Context/DictionaryRuleContext.cs
   - ../Birko.Rules/Context/IRuleContext.cs
@@ -36,7 +36,11 @@ sources:
   - ../Birko.Validation/Rules/RangeRule.cs
   - ../Birko.Validation/Rules/RegexRule.cs
   - ../Birko.Validation/Rules/RequiredRule.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
+# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
+# from the regenerating task's own `feature:` field, not from evidence.
+shaped-by-derived: false
 ---
 
 # Fluent validation, rule engine and validating store wrappers
@@ -190,6 +194,15 @@ absent, and SHALL carry the resolved field value on the result as `ActualValue`.
 - **When** the context has no `Temp` field at all
 - **Then** the evaluator returns `NoMatch` *before* applying `IsNegated`, so `IsMatch` is `false` rather than `true`
 
+#### Scenario: Negation is skipped when the operator could not be evaluated at all
+
+- **Given** `new Rule("Code", ComparisonOperator.Contains, "234") { IsNegated = true }` on an `int` field
+- **When** the rule is evaluated
+- **Then** `IsMatch` is `false`. `ComparisonHelper.CanEvaluate` reports that a string operator has no answer
+  for a non-string member, and negation is applied only to an answer the comparison could actually give —
+  a `false` meaning *"does not apply"* must not invert into a match, which is the same widening that
+  affected the expression translator
+
 ### Requirement: Group rule evaluation
 
 The system SHALL evaluate a `RuleGroup` by short-circuiting over its **enabled** children — `And`
@@ -327,17 +340,37 @@ inclusive conjunction `actual >= Value && actual <= UpperValue`.
 
 ### Requirement: Comparison semantics — string operators and LIKE
 
-The system SHALL implement `Contains`, `NotContains`, `StartsWith` and `EndsWith` by calling the
-corresponding `string` method on `actual.ToString()` with `StringComparison.OrdinalIgnoreCase`
-(returning `false` — and therefore `true` for `NotContains` — whenever either side is `null`), and
-SHALL implement `Like` as SQL-style `%` wildcard matching: `%text%` → contains, `%text` → ends-with,
-`text%` → starts-with, and no wildcard → case-insensitive equality.
+The system SHALL apply `Contains`, `NotContains`, `StartsWith`, `EndsWith` and `Like` **only to a `string`
+actual value** (a `null` actual counts as string-compatible, since this engine sees values rather than
+declared types). Against a non-string actual all five SHALL evaluate to `false` in **both** polarities —
+`NotContains` is deliberately not `!Contains` here, because negating "this operator does not apply"
+produces match-all.
 
-#### Scenario: Case-insensitive contains on a non-string field
+For a string actual the system SHALL call the corresponding `string` method on `actual.ToString()` with
+`StringComparison.OrdinalIgnoreCase` (returning `false` — and therefore `true` for `NotContains` —
+whenever either side is `null`), and SHALL implement `Like` as SQL-style `%` wildcard matching: `%text%` →
+contains, `%text` → ends-with, `text%` → starts-with, and no wildcard → case-insensitive equality.
+
+This engine previously stringified any actual value, so `Code Contains "234"` matched an `int 12345`. That
+answer could not be reconciled with the expression path, which runs against a database where no portable
+translation of `column.ToString().Contains(…)` exists — so both engines were moved onto match-none. No
+existing test depended on the stringified behaviour.
+
+#### Scenario: A string operator against a non-string field matches nothing
 
 - **Given** a context where `Code` resolves to `int 12345`
-- **When** `Contains "234"` is evaluated
-- **Then** `actual.ToString()` is used and the rule matches — string operators are not restricted to string fields in the in-memory path
+- **When** `Contains "234"` is evaluated, and separately `NotContains "234"`, and separately
+  `Contains "234"` with `IsNegated = true`
+- **Then** all three are `NoMatch` — and the same rule translated through `RuleSpecification.ToExpression()`
+  agrees, which is the property the two engines are now tested on together
+
+#### Scenario: A null actual is still treated as string-compatible
+
+- **Given** a context where `Name` resolves to `null`
+- **When** `NotContains "abc"` is evaluated
+- **Then** the result is `Match` — a null field does not contain the needle. Only the typed expression path
+  can tell a null `string` from a null `int?`, so this engine deliberately admits null rather than
+  rejecting it and diverging on the case the two currently agree on
 
 #### Scenario: LIKE wildcard forms
 

@@ -13,9 +13,14 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**10 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+**14 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
-SH-H002+SH-M023 via [[TASK-109]]) — **7 of 17 tasks done, 1 in review.** TASK-109 closed two findings that
+SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]]) — **8 of 17 tasks
+done, 1 in review.** TASK-116 closed four findings that were one root cause — a degraded leaf constant is
+indistinguishable from a real predicate, so negation inverts match-none into match-ALL — and the fix is a
+tracked flag rather than four patched sites, because two further sites of the same species (unfiled) had
+already made the same mistake. Its both-engines agreement test then found a fifth, in `RuleEvaluator`,
+against which no finding had ever been filed. TASK-109 closed two findings that
 were one decision: the SQL native paths and the portable bases both let a null or untranslatable filter
 become a whole-table write, so one policy — refuse unless every-row was asked for explicitly — needed two
 edits, at the four connector funnels and at the store boundaries. It also spawned [[TASK-141]] at its close

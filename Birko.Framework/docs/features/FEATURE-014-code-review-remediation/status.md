@@ -21,7 +21,7 @@ generated: 2026-08-01
 
 ## Build progress
 
-7 / 18 tasks done.
+8 / 18 tasks done.
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
@@ -31,7 +31,7 @@ generated: 2026-08-01
 - [x] TASK-113 `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant
 - [x] TASK-114 The item-level tenant write guard trusts the caller-supplied `TenantGuid`
 - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope
-- [ ] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths
+- [x] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths
 - [ ] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set
 - [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id`
 - [ ] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator
@@ -44,7 +44,7 @@ generated: 2026-08-01
 
 ## What can be tested now
 
-7 of 18 tracked items are complete and exercisable.
+8 of 18 tracked items are complete and exercisable.
 
 ## Prototype
 

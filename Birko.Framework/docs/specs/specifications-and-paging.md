@@ -1,7 +1,7 @@
 ---
 area: specifications-and-paging
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 804f0b7619d3e502e6a0a9d33119a3e62097c562
+generated-on: 2026-08-07
 sources:
   - ../Birko.Data.Patterns/Paging/AsyncPagedRepositoryWrapper.cs
   - ../Birko.Data.Patterns/Paging/IPagedRepository.cs
@@ -13,7 +13,11 @@ sources:
   - ../Birko.Data.Patterns/Specification/OrSpecification.cs
   - ../Birko.Data.Patterns/Specification/RuleSpecification.cs
   - ../Birko.Data.Patterns/Specification/Specification.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
+# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
+# from the regenerating task's own `feature:` field, not from evidence.
+shaped-by-derived: false
 ---
 
 # Specification composition and paged results
@@ -227,8 +231,14 @@ The system SHALL translate a leaf rule's `ComparisonOperator` to an expression a
 `IsNotNull` to a typed null equality/inequality; `Equal`, `NotEqual`, `GreaterThan`,
 `GreaterThanOrEqual`, `LessThan`, `LessThanOrEqual` to the corresponding `Expression` binary comparison;
 `Between` to `AndAlso(member >= lower, member <= upper)`; `Contains`, `StartsWith`, `EndsWith` to the
-corresponding guarded `string` method call; `NotContains` to `Expression.Not` of the guarded
-`Contains` call; and **any other operator value to `Expression.Constant(true)`**.
+corresponding guarded `string` method call; `NotContains` to the negation of the guarded `Contains` call;
+`Like` to an anchored `StartsWith` / `EndsWith` / `Contains` / equality according to its `%` placement;
+`In` to a chain of `OrElse` equalities; and `NotIn` to the negation of that chain.
+
+An operator value with **no arm** SHALL throw `NotSupportedException` naming the operator and the field.
+It SHALL NOT fall back to a constant: a fallback constant is indistinguishable from a real predicate, and
+the previous `Expression.Constant(true)` fallback silently widened `In`, `NotIn` and `Like` — all three
+declared operators — into match-everything on a filter that also drives bulk `Update` and `Delete`.
 
 #### Scenario: Range rule
 
@@ -236,31 +246,58 @@ corresponding guarded `string` method call; `NotContains` to `Expression.Not` of
 - **When** `ToExpression()` is built
 - **Then** the body is `x.Qty >= 10 && x.Qty <= 20`
 
-#### Scenario: Collection-membership rule degrades to match-all
+#### Scenario: Collection membership filters instead of matching everything
 
 - **Given** a leaf rule with `Operator = In` and `Value = new[] { 1, 2, 3 }` on an `int` property
 - **When** `ToExpression()` is built
-- **Then** the leaf falls into the `_ =>` arm and becomes `Expression.Constant(true)`, so the resulting store filter matches **every** row — while `IsSatisfiedBy` for the same rule filters correctly via `ComparisonHelper.IsIn`
+- **Then** the leaf is `x.Qty == 1 || x.Qty == 2 || x.Qty == 3`, and `IsSatisfiedBy` agrees with it for
+  every entity
 
-#### Scenario: SQL-style wildcard rule degrades to match-all
+#### Scenario: Membership over an empty set is match-none, and its negation is match-all
 
-- **Given** a leaf rule with `Operator = Like` and `Value = "%abc%"`
+- **Given** a leaf rule with `Operator = In` and an empty `Value` collection
 - **When** `ToExpression()` is built
-- **Then** the leaf becomes `Expression.Constant(true)`, because the translation switch has no `Like` arm
+- **Then** the leaf is `Constant(false)` — and, unlike a degraded leaf, it is a **real predicate**, so
+  `NotIn` over the same empty set correctly matches every row. "In the empty set" is false for every row
+  and its negation is true for every row; this is the only all-rows outcome the translator produces on
+  purpose
 
-#### Scenario: NotIn under negation inverts to match-none
+#### Scenario: SQL-style wildcard translates by its anchors
 
-- **Given** a leaf rule with `Operator = NotIn` and `IsNegated = true`
+- **Given** a leaf rule with `Operator = Like` on a `string` property
+- **When** the pattern is `"abc"`, `"abc%"`, `"%abc"` or `"%abc%"`
+- **Then** the leaf is an equality, `StartsWith`, `EndsWith` or `Contains` respectively
+
+#### Scenario: A wildcard with an interior `%` is unevaluable rather than approximated
+
+- **Given** a leaf rule with `Operator = Like` and `Value = "a%b"`
 - **When** `ToExpression()` is built
-- **Then** the unsupported-operator arm yields `Constant(true)`, which the negation step turns into `Not(true)` — the leaf matches nothing
+- **Then** the leaf is an unevaluable match-none, because no single string method expresses an interior
+  wildcard — and it stays match-none under negation rather than matching every row
 
-### Requirement: Leaf negation is applied after operator translation
+#### Scenario: An operator with no arm throws
 
-The system SHALL wrap a translated leaf expression in `Expression.Not` when the rule's `IsNegated` flag
-is set, applying the negation to whatever the operator arm produced — including the degraded
-`Constant(false)` and `Constant(true)` results. The system SHALL NOT apply the negation when the rule's
-`Field` could not be resolved to a property, because that case returns `Expression.Constant(false)`
-before the operator switch and the `IsNegated` check are reached.
+- **Given** a leaf rule whose `Operator` is a value the translator has no arm for
+- **When** `ToExpression()` is built
+- **Then** `NotSupportedException` is thrown naming the operator and the field, so a newly added
+  `ComparisonOperator` cannot silently widen a filter the way `In` / `NotIn` / `Like` did
+
+### Requirement: Negation is applied only to a leaf the translator could actually evaluate
+
+The system SHALL distinguish a leaf that expresses a **real predicate** from one that **could not be
+evaluated**, and SHALL apply `Expression.Not` only to the former. A leaf that could not be evaluated
+matches nothing, and SHALL continue to match nothing under negation.
+
+This is the single invariant behind four separate findings. `Expression.Not` over a match-none constant is
+match-**all**, so every site that degraded to `Constant(false)` — a non-string member handed a string
+operator, a value that will not convert to the member's type, unconvertible `Between` bounds — became a
+whole-table match as soon as the rule was negated, or, for `NotContains`, without any negation flag at all.
+The distinction SHALL be carried on the leaf itself rather than re-derived per site, so that a degradation
+site added later inherits the invariant instead of having to remember it.
+
+An unresolved `Field` SHALL likewise be an unevaluable match-none. (It was already safe, but only because
+its early return happened to precede the negation step; it is now safe by the same rule as every other
+degradation.)
 
 #### Scenario: Negated equality
 
@@ -268,11 +305,26 @@ before the operator switch and the `IsNegated` check are reached.
 - **When** `ToExpression()` is built
 - **Then** the body is `!(x.Status == "Open")`
 
-#### Scenario: Negated unresolvable field
+#### Scenario: Negated unresolvable field matches nothing
 
 - **Given** a leaf rule on a non-existent field with `IsNegated = true`
 - **When** `ToExpression()` is built
-- **Then** the leaf is `Constant(false)` with no surrounding `Expression.Not` — the unresolved-field branch returns before the `IsNegated` check, so the negation is discarded and the leaf matches nothing
+- **Then** the leaf matches nothing — the negation is not applied to an unevaluable leaf
+
+#### Scenario: A string operator on a non-string member never widens
+
+- **Given** a leaf rule `Quantity Contains "1"` on an `int` property, with or without `IsNegated`, and the
+  equivalent `Quantity NotContains "1"`
+- **When** `ToExpression()` is built
+- **Then** every one of those leaves matches nothing — previously `NotContains` produced `Not(false)` and
+  matched every row with no negation flag set at all
+
+#### Scenario: A negated comparison with a non-convertible value never widens
+
+- **Given** a leaf rule `Quantity Equal "not-a-number"` with `IsNegated = true`, and a `Between` rule with
+  unconvertible bounds and `IsNegated = true`
+- **When** `ToExpression()` is built
+- **Then** both match nothing rather than every row
 
 ### Requirement: Null-check translation builds a typed null constant with no nullability guard
 
@@ -305,8 +357,9 @@ The system SHALL convert a leaf rule's `Value` (and `UpperValue` for `Between`) 
 type; passes the value through unchanged when `targetType.IsInstanceOfType(value)` (covering enums and
 exact type matches); otherwise calls `Convert.ChangeType` against the target's non-nullable underlying
 type; and returns false when the conversion raises `InvalidCastException`, `FormatException`,
-`OverflowException` or `ArgumentException`. When conversion fails the system SHALL emit
-`Expression.Constant(false)` for that leaf rather than throwing.
+`OverflowException` or `ArgumentException`. When conversion fails the system SHALL emit an **unevaluable**
+match-none leaf for that leaf rather than throwing — unevaluable rather than merely false, so that a
+negated comparison with a non-convertible value cannot invert into match-all.
 
 #### Scenario: Numeric string is converted
 
@@ -349,8 +402,11 @@ type; and returns false when the conversion raises `InvalidCastException`, `Form
 The system SHALL translate `Contains` / `StartsWith` / `EndsWith` to a call of the
 `string(string, StringComparison)` overload with `StringComparison.OrdinalIgnoreCase`, converting the
 rule value with `value?.ToString() ?? string.Empty`, and SHALL wrap the call as
-`AndAlso(member != null, call)`. When the resolved member is not of type `string` the system SHALL emit
-`Expression.Constant(false)` instead. The `StringComparison.OrdinalIgnoreCase` argument governs only
+`AndAlso(member != null, call)`. When the resolved member is not of type `string` the system SHALL emit an
+**unevaluable** match-none leaf instead — unevaluable rather than merely false, so neither `NotContains`
+nor an `IsNegated` flag can invert it into match-all. The null guard, by contrast, produces a **real**
+predicate: a null field genuinely does not match, so negating it is meaningful and `NotContains` over a
+null string is correctly true. The `StringComparison.OrdinalIgnoreCase` argument governs only
 in-memory evaluation of the compiled delegate: when the same expression reaches a SQL store, that store's
 condition parser deliberately discards the `StringComparison` argument and builds the `LIKE` pattern from
 the first argument alone, so case sensitivity there follows the column's database collation.
@@ -370,8 +426,11 @@ the first argument alone, so case sensitivity there follows the column's databas
 #### Scenario: String operator on a non-string member
 
 - **Given** a rule `Qty Contains "1"` on an `int` property
-- **When** `ToExpression()` is built
-- **Then** the leaf becomes `Expression.Constant(false)`, i.e. a numeric field is never a substring match
+- **When** `ToExpression()` is built, and separately `IsSatisfiedBy` is called for the same rule
+- **Then** both report no match, in both polarities. The in-memory engine previously answered **true** here
+  by stringifying the member (`21.ToString().Contains("1")`); the two engines were reconciled onto
+  match-none because the expression path cannot follow — no portable translation of
+  `column.ToString().Contains(…)` exists across the SQL providers and ElasticSearch
 
 #### Scenario: Null rule value becomes an empty needle
 
@@ -422,17 +481,31 @@ otherwise. The group's own `IsNegated` flag SHALL NOT be applied.
 - **When** `ToExpression()` is built
 - **Then** the nested group is translated recursively through `BuildExpression` and folded into the outer `OrElse` chain
 
-### Requirement: A disabled root rule translates to match-all while in-memory evaluation reports no match
+### Requirement: A disabled root rule matches nothing, agreeing with in-memory evaluation
 
-The system SHALL return `Expression.Constant(true)` from `BuildExpression` when the rule being translated
-has `IsEnabled == false`, and SHALL return `Expression.Constant(false)` when the rule is neither a
-`Rules.Rule` nor a `RuleGroup`.
+The system SHALL return `Expression.Constant(false)` from `BuildExpression` when the rule being translated
+has `IsEnabled == false`, matching `RuleEvaluator.Evaluate`, which short-circuits a disabled rule to
+`NoMatch`. It SHALL also return `Expression.Constant(false)` when the rule is neither a `Rules.Rule` nor a
+`RuleGroup`.
+
+This applies only to a **root** rule: `BuildGroupExpression` filters disabled children before recursing, so
+a disabled rule inside a group is dropped from the composition and never reaches this branch.
 
 #### Scenario: Disabled root rule
 
 - **Given** `new RuleSpecification<Order>(rule)` where `rule.IsEnabled == false`
 - **When** `ToExpression()` is built and, separately, `IsSatisfiedBy(order)` is called
-- **Then** `ToExpression()` yields `x => true` (the store filter matches every row) while `IsSatisfiedBy` returns false, because `RuleEvaluator.Evaluate` short-circuits a disabled rule to `NoMatch`
+- **Then** both report no match for every entity — previously `ToExpression()` yielded `x => true`, so a
+  disabled rule handed to `Delete(filter)` emptied the table while `IsSatisfiedBy` returned false for every
+  entity
+
+#### Scenario: A disabled root rule is not an instruction to delete everything
+
+- **Given** a populated store and a specification whose root rule is disabled
+- **When** `Delete(spec.ToExpression())` is called
+- **Then** no rows are removed. This matters beyond the filter: `x => true` is precisely the shape the
+  destructive-write guard recognises as a *deliberate* whole-table request, so the disabled rule was routed
+  through the explicit all-rows door rather than being refused by it
 
 #### Scenario: Unknown IRule implementation
 

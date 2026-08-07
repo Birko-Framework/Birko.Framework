@@ -59,3 +59,10 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   four repeated null-filter guards have no test, while the InMemory half of the same sweep was *discovered*
   by a failing one. Adjacent scope rather than an unmet criterion (criterion 9 named the SQL and portable
   suites), so it is filed rather than folded in. No state change — one more task realizing D7.
+- 2026-08-07 — **D7** — [[TASK-116]] closed (SH-H041 + SH-H042 + SH-H043 + SH-H044): a rule leaf that cannot
+  be evaluated no longer widens the filter to every row. Four findings, one root cause, plus two unfiled
+  sites of the same species pulled in. The fix also moved `Birko.Rules`' in-memory evaluator onto match-none
+  for a string operator against a non-string member — a **user decision**, taken because the expression path
+  cannot portably stringify a column and the two engines had to converge somewhere. No state change; D7
+  stays `approved`.
+
