@@ -58,7 +58,13 @@ public class RuleEvaluator : IRuleEvaluator
             return RuleResult.NoMatch(rule);
 
         var match = ComparisonHelper.Compare(actual, rule.Operator, rule.Value, rule.UpperValue);
-        match = rule.IsNegated ? !match : match;
+
+        // Negate only an answer the comparison could actually give. A `false` meaning "this operator does
+        // not apply to this member" must NOT invert to a match — that is how a string operator on an int
+        // became "every row" on the expression side (SH-H043/SH-H044, TASK-116), and this engine had the
+        // identical hole: `IsNegated ? !match : match` treated both kinds of false alike.
+        if (rule.IsNegated && ComparisonHelper.CanEvaluate(actual, rule.Operator))
+            match = !match;
 
         return match ? RuleResult.Match(rule, actual) : RuleResult.NoMatch(rule, actual);
     }

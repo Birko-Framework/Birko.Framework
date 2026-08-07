@@ -26,16 +26,59 @@ internal static class ComparisonHelper
             ComparisonOperator.LessThan => CompareValues(actual, expected) < 0,
             ComparisonOperator.LessThanOrEqual => CompareValues(actual, expected) <= 0,
             ComparisonOperator.Between => CompareValues(actual, expected) >= 0 && CompareValues(actual, upperExpected) <= 0,
-            ComparisonOperator.Contains => ContainsString(actual, expected),
-            ComparisonOperator.NotContains => !ContainsString(actual, expected),
-            ComparisonOperator.StartsWith => StartsWithString(actual, expected),
-            ComparisonOperator.EndsWith => EndsWithString(actual, expected),
-            ComparisonOperator.Like => LikeString(actual, expected),
+            // A string operator against a NON-string member is not a predicate this engine can answer,
+            // so it matches nothing — in BOTH polarities. `NotContains` deliberately does NOT read as
+            // `!Contains` here: negating "cannot be evaluated" is what turns match-none into match-ALL,
+            // which is exactly how SH-H043/SH-H044 emptied tables on the expression side (TASK-116).
+            //
+            // This is the convergence point chosen for the two engines. The expression path cannot move
+            // to meet this one: it runs against a database, and no portable translation of
+            // `column.ToString().Contains(…)` exists across the SQL providers and ElasticSearch. The
+            // behaviour given up is `21 Contains "1"` → true, which was an artefact of ToString() rather
+            // than a business predicate anybody specified.
+            ComparisonOperator.Contains => IsStringMember(actual) && ContainsString(actual, expected),
+            ComparisonOperator.NotContains => IsStringMember(actual) && !ContainsString(actual, expected),
+            ComparisonOperator.StartsWith => IsStringMember(actual) && StartsWithString(actual, expected),
+            ComparisonOperator.EndsWith => IsStringMember(actual) && EndsWithString(actual, expected),
+            ComparisonOperator.Like => IsStringMember(actual) && LikeString(actual, expected),
             ComparisonOperator.In => IsIn(actual, expected),
             ComparisonOperator.NotIn => !IsIn(actual, expected),
             _ => false
         };
     }
+
+    /// <summary>
+    /// Whether a string operator can be answered against this value at all.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Null counts as string-compatible, deliberately.</b> This engine sees values, not declared
+    /// types, so a null gives it nothing to reject on — and the expression path (which IS typed) answers
+    /// `true` for `NotContains` over a null string member, with a test pinning that. Treating null as
+    /// non-string here would agree with nothing and would newly diverge on the very case the two engines
+    /// currently match on.</para>
+    /// <para>Residual, narrow and known: a null-valued <i>non-string</i> member (e.g. `int? Qty = null`)
+    /// still answers `true` for `NotContains` here while the expression path answers match-none, because
+    /// only the typed side can tell those two nulls apart. Closing it needs the declared property type
+    /// plumbed into the rule context, which is a bigger change than this correctness fix.</para>
+    /// </remarks>
+    private static bool IsStringMember(object? actual) => actual is null or string;
+
+    /// <summary>
+    /// Whether <see cref="Compare"/> could actually answer this operator against this value, as opposed to
+    /// returning <c>false</c> because it had nothing to say. Callers applying <c>IsNegated</c> MUST consult
+    /// this: negating "cannot be evaluated" produces match-<b>all</b>, which is the whole species of defect
+    /// behind SH-H041…SH-H044. Mirrors <c>RuleSpecification.Leaf.Degraded</c> on the expression side, so the
+    /// two engines enforce the invariant the same way rather than agreeing by coincidence.
+    /// </summary>
+    public static bool CanEvaluate(object? actual, ComparisonOperator op) => op switch
+    {
+        ComparisonOperator.Contains
+            or ComparisonOperator.NotContains
+            or ComparisonOperator.StartsWith
+            or ComparisonOperator.EndsWith
+            or ComparisonOperator.Like => IsStringMember(actual),
+        _ => true
+    };
 
     private static bool AreEqual(object? a, object? b)
     {
