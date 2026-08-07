@@ -1,7 +1,7 @@
 ---
 area: repository-contract
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 804f0b7619d3e502e6a0a9d33119a3e62097c562
+generated-on: 2026-08-07
 sources:
   - ../Birko.Data.Core/ViewModels/AbstractLogViewModel.cs
   - ../Birko.Data.Core/ViewModels/LogViewModel.cs
@@ -30,7 +30,11 @@ sources:
   - ../Birko.Data.ViewModel/Repositories/IAsyncViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/IBulkViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/IViewModelRepository.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
+# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
+# from the regenerating task's own `feature:` field, not from evidence.
+shaped-by-derived: false
 ---
 
 # Repository and ViewModel-repository abstractions
@@ -772,39 +776,72 @@ hook; only the sync family declares these members on an interface
   `IDataBaseRepository`-style async interface exists, so `Connector`, `DataBaseStore`, `AddOnInit` and
   `RemoveOnInit` are reachable only through the concrete class
 
-### Requirement: The SQL ReadOne extension bypasses the repository and queries the connector directly
+### Requirement: An ordered single read goes through the decorated store, never through the connector
 
-The system SHALL provide `IDataBaseRepositoryExtensions.ReadOne<TRepository, TConnector, TViewModel, TModel>`
-which, when `repository.Connector` is non-null, calls
-`Connector.Select<TModel, object>(typeof(TModel), filter?.Filter(), orderByExpr, 1, 0)`, returns
-`repository.LoadInstance(firstItem)` for the first row, and returns `default` when the connector is
-`null` or the query yields no rows.
+The system SHALL expose the ordered single read as
+`AbstractViewModelRepository.ReadOne(IFilter<TModel>?, OrderBy<TModel>?)`, reading through `Store` — the
+**decorated** chain — and SHALL NOT provide any repository-level read that reaches
+`repository.Connector`.
 
-#### Scenario: First row is mapped to a viewmodel
+`Connector` resolves as `Store?.GetUnwrappedStore<…>()?.Connector`, and `GetUnwrappedStore` walks
+`IStoreWrapper.GetInnerStore()` to the **innermost** store, so a read issued through it applies no
+decorator at all. `TenantStoreWrapper.Read` is what injects the `ModelByTenant` predicate; without it the
+read returns the first matching row from **any** tenant, and the soft-delete, localization and audit
+wrappers are skipped by the same call (SH-H036).
 
-- **Given** a repository with a live connector and a filter matching two rows
-- **When** `ReadOne(filter, orderByExpr)` is called
-- **Then** the connector is queried with limit 1 / offset 0 and the first row is returned as a
-  ViewModel via `LoadInstance` (which also records its hash)
+The ordered read SHALL therefore be an **instance** method rather than an extension: `Store` is
+`protected`, so an extension in another assembly cannot reach the decorated chain and `Connector` is the
+only handle available to it — the capability is not implementable safely from outside the class.
 
-#### Scenario: No connector yields default
+Where the configured store does not implement `IBulkReadStore<T>` (as `TenantStoreWrapper`, which
+implements only `IStore<T>`/`IStoreWrapper<T>`, does not), the ordering SHALL be dropped and the read
+SHALL degrade to the unordered `Read(filter)`. Correct-but-unordered is the required trade; the
+alternative that preserved ordering is precisely the connector bypass.
 
-- **Given** `repository.Connector == null`
-- **When** `ReadOne(filter)` is called
+#### Scenario: An ordered read under a tenant does not return another tenant's row
+
+- **Given** a repository over a `TenantStoreWrapper` scoped to tenant *t*, and a row belonging to tenant
+  *u* that matches the filter
+- **When** `ReadOne(filter, orderBy)` is called
+- **Then** no row is returned — and the caller's own matching row is still returned, so the scoping is a
+  narrowing rather than a blanket refusal
+
+#### Scenario: Adding an ordering does not change a read's isolation
+
+- **Given** the same repository and filter
+- **When** `ReadOne(filter)` and `ReadOne(filter, orderBy)` are compared
+- **Then** both are tenant-scoped. Previously these were two different methods — a safe instance method
+  and an unsafe same-named extension differing only in arity, with C# preferring the instance method — so
+  adding an ordering to a working call silently dropped tenant scoping
+
+#### Scenario: Ordering is honoured when the store supports bulk reads
+
+- **Given** a repository over an undecorated `IBulkReadStore<T>`
+- **When** `ReadOne(null, OrderBy<T>.By(...))` and its descending counterpart are called
+- **Then** the first and last rows in that ordering are returned respectively
+
+#### Scenario: Ordering degrades rather than bypassing when the decorator is not a bulk store
+
+- **Given** a repository over a `TenantStoreWrapper`, which implements `IStore<T>` but not
+  `IBulkReadStore<T>`
+- **When** `ReadOne(filter, orderBy)` is called
+- **Then** a correctly tenant-scoped row is returned with the ordering not applied — the decorator is
+  never unwrapped to honour it
+
+#### Scenario: No store yields default
+
+- **Given** a repository whose `Store` is `null`
+- **When** `ReadOne` is called in either form
 - **Then** `default` is returned without querying anything
 
-#### Scenario: No rows yield default
+#### Scenario: Unwrapping a decorated store is the escape hatch, and it strips tenant scoping
 
-- **Given** a filter matching nothing
-- **When** `ReadOne(filter)` is called
-- **Then** the `foreach` body never executes and `default` is returned
-
-#### Scenario: Ordering is expressible here but not on the repository read
-
-- **Given** `orderByExpr` as `IDictionary<Expression<Func<TModel, object>>, bool>`
-- **When** `ReadOne` runs
-- **Then** the ordering is passed to the connector, whereas
-  `AbstractBulkViewModelRepository.Read` always passes `null` for `orderBy`
+- **Given** a `TenantStoreWrapper` over a store holding another tenant's row
+- **When** the same query is issued through the wrapper and through `GetUnwrappedStore()`
+- **Then** the wrapper returns nothing and the unwrapped store returns the foreign row. This is
+  **intended** behaviour of the escape hatch — the `XStore` / `Connector` properties exist so callers can
+  reach backend-native features a portable store cannot express — but it is why those properties must
+  never serve a portable read
 
 ### Requirement: ViewModel base classes raise PropertyChanged only on an actual change
 

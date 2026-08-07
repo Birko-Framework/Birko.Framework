@@ -65,4 +65,9 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   for a string operator against a non-string member — a **user decision**, taken because the expression path
   cannot portably stringify a column and the two engines had to converge somewhere. No state change; D7
   stays `approved`.
+- 2026-08-07 — **D7** — [[TASK-125]] closed (SH-H036): the ordered `ReadOne` no longer reads around the
+  store decorator chain, so it can no longer return another tenant's row. The bypassing extension was
+  removed rather than repaired — `Store` is `protected`, so an extension cannot reach the decorated chain
+  and the capability is only implementable safely as an instance method. No state change; D7 stays
+  `approved`.
 
