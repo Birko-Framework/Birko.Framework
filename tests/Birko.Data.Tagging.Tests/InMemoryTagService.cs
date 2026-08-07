@@ -30,11 +30,35 @@ public sealed class InMemoryTagService : TagServiceBase
     public Action<string>? AfterFindTagByName { get; set; }
 
     /// <summary>Inserts a tag directly, bypassing the service (simulates a concurrent writer).</summary>
+    /// <summary>
+    /// Seeds a tag that belongs to THIS service's tenant — the normal case, matching what
+    /// <c>CreateTagAsync</c> does (it stamps <c>TenantGuid = GetCurrentTenantId()</c> on every insert).
+    /// </summary>
+    /// <remarks>
+    /// SH-H019: the tenant defaulting was added with the base-class guard. Before it, seeds left
+    /// <c>TenantGuid</c> at <c>Guid.Empty</c> while the ambient tenant was a real Guid — a state no real
+    /// implementation can produce, which the guard now (correctly) rejects. Use <see cref="SeedForeignTag"/>
+    /// to seed the leak deliberately.
+    /// </remarks>
     public void SeedTag(Tag tag)
+    {
+        tag.Guid ??= Guid.NewGuid();
+        if (tag.TenantGuid == Guid.Empty) tag.TenantGuid = _tenant;
+        _tags.Add(tag);
+    }
+
+    /// <summary>
+    /// Seeds a tag exactly as given, tenant included — the only way to simulate a data-access hook that
+    /// forgot its tenant filter and handed the base class another tenant's row.
+    /// </summary>
+    public void SeedForeignTag(Tag tag)
     {
         tag.Guid ??= Guid.NewGuid();
         _tags.Add(tag);
     }
+
+    /// <summary>This service's ambient tenant, so tests can assert against it.</summary>
+    public Guid Tenant => _tenant;
 
     protected override Task<Tag> CreateTagInternalAsync(Tag tag, CancellationToken ct)
     {
@@ -89,8 +113,16 @@ public sealed class InMemoryTagService : TagServiceBase
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Counts cascade invocations. SH-H019: `DeleteTagAsync` calls this BEFORE deleting the tag, so
+    /// "did the cascade run?" is the assertion that distinguishes a guard placed early enough from one
+    /// that fires after another tenant's links are already gone.
+    /// </summary>
+    public int DeleteAllEntityTagsCalls { get; private set; }
+
     protected override Task DeleteAllEntityTagsForTagAsync(Guid tagId, CancellationToken ct)
     {
+        DeleteAllEntityTagsCalls++;
         _links.RemoveAll(l => l.TagId == tagId);
         return Task.CompletedTask;
     }
