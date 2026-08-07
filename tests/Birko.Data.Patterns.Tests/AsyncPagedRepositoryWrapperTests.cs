@@ -80,6 +80,10 @@ public class AsyncPagedRepositoryWrapperTests
         public Task<IEnumerable<Item>> ReadAsync(CancellationToken ct = default) => throw new NotSupportedException();
         public Task<Item?> ReadAsync(Guid guid, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<Item?> ReadAsync(Expression<Func<Item, bool>>? filter = null, CancellationToken ct = default) => throw new NotSupportedException();
+        // Added 2026-08-07: IAsyncBulkRepository<T> gained ReadFirstAsync in Birko.Data.Repositories and this
+        // hand-rolled double was never updated, so this project did not compile on main. The interface, its
+        // abstract base and this double live in three separate repos, which is why no single build caught it.
+        public Task<Item?> ReadFirstAsync(Expression<Func<Item, bool>>? filter = null, CancellationToken ct = default) => throw new NotSupportedException();
         public Task<Guid> CreateAsync(Item data, CancellationToken ct = default) => throw new NotSupportedException();
         public Task CreateAsync(IEnumerable<Item> data, CancellationToken ct = default) => throw new NotSupportedException();
         public Task UpdateAsync(Item data, CancellationToken ct = default) => throw new NotSupportedException();
