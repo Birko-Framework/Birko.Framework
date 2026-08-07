@@ -21,7 +21,7 @@ generated: 2026-08-01
 
 ## Build progress
 
-9 / 18 tasks done.
+10 / 18 tasks done.
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
@@ -35,7 +35,7 @@ generated: 2026-08-01
 - [ ] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set
 - [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id`
 - [x] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator
-- [ ] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing
+- [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing
 - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover
 - [ ] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created
 - [ ] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire
@@ -44,7 +44,7 @@ generated: 2026-08-01
 
 ## What can be tested now
 
-9 of 18 tracked items are complete and exercisable.
+10 of 18 tracked items are complete and exercisable.
 
 ## Prototype
 

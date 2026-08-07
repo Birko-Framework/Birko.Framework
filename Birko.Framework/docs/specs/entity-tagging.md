@@ -1,7 +1,7 @@
 ---
 area: entity-tagging
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 04d65750a08aa37e7f6ef0d323ad305b07584cec
+generated-on: 2026-08-07
 sources:
   - ../Birko.Data.Tagging/Extensions/TaggingExtensions.cs
   - ../Birko.Data.Tagging/Models/EntityTag.cs
@@ -9,7 +9,10 @@ sources:
   - ../Birko.Data.Tagging/Models/Tag.cs
   - ../Birko.Data.Tagging/Services/ITagService.cs
   - ../Birko.Data.Tagging/Services/TagService.cs
-shaped-by: []
+shaped-by: [FEATURE-014]
+# false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
+# glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here.
+shaped-by-derived: false
 ---
 
 # Polymorphic, tenant-scoped entity tagging
@@ -28,8 +31,10 @@ reconciliation, cascade-on-delete, DTO projection, and tenant stamping on insert
 every read, write and delete to abstract hooks that a consuming platform implements over its own
 repositories. Consumers depend on the `ITagService` interface and its `TagDto` projection; the
 `ITaggable` marker interface exists for entities to declare their own discriminator string. Tenant
-isolation is split: this layer stamps the tenant on inserts, but *reads and deletes carry no tenant
-parameter at all*, so isolation on those paths rests entirely on the platform implementation.
+isolation is layered: this layer stamps the tenant on inserts, and although *reads and deletes carry no
+tenant parameter at all*, the base class no longer rests on the platform implementation to filter them —
+it re-checks the tenant of every record the hooks return, throwing on a by-identity load and filtering a
+collection.
 
 ## Requirements
 
@@ -462,18 +467,31 @@ timestamp, and SHALL therefore throw when a tag whose inherited `Guid` is still 
 - **Then** `t.Guid!.Value` throws `InvalidOperationException` ("Nullable object must have a value") —
   there is no null guard and no clearer diagnostic
 
-### Requirement: Tenant scoping is stamped on inserts only, never enforced on reads or deletes
+### Requirement: Tenant scoping is stamped on inserts and re-checked on every record the hooks return
 
 The system SHALL stamp `TenantGuid = GetCurrentTenantId()` on every record it inserts — the `Tag` in
-`CreateTagAsync` and the `EntityTag` in `AttachTagAsync` and `SetEntityTagsAsync` — and SHALL declare
-every read and delete hook (`GetTagByIdAsync`, `FindTagByNameAsync`, `ListAllTagsAsync`,
-`SearchTagsByNameAsync`, `UpdateTagInternalAsync`, `DeleteTagInternalAsync`, `GetEntityTagLinksAsync`,
-`DeleteEntityTagAsync`, `DeleteAllEntityTagsForTagAsync`, `GetEntityTagLinksBatchAsync`) **without any
-tenant parameter** — three of them (`UpdateTagInternalAsync`, `DeleteTagInternalAsync`,
-`DeleteEntityTagAsync`) do receive the whole record, so its stored `TenantGuid` is available to them,
-while the rest are keyed only by id, name, query or `(entityType, entityId)` — performing no comparison
-of a loaded record's `TenantGuid` against the current tenant anywhere in `TagServiceBase`, and SHALL
-declare `TenantGuid` as a bare `Guid` property on `Tag` / `EntityTag` rather than through
+`CreateTagAsync` and the `EntityTag` in `AttachTagAsync` and `SetEntityTagsAsync`.
+
+Every read and delete hook (`GetTagByIdAsync`, `FindTagByNameAsync`, `ListAllTagsAsync`,
+`SearchTagsByNameAsync`, `GetEntityTagLinksAsync`, `GetEntityTagLinksBatchAsync`, …) SHALL continue to be
+declared **without a tenant parameter**, and implementations SHALL still scope their own queries. But the
+base class SHALL NOT depend on their doing so: it SHALL re-check what they return, on two rules chosen by
+failure mode.
+
+- **A tag loaded by identity SHALL be asserted, and a foreign record SHALL raise
+  `CrossTenantTagAccessException`** (an `InvalidOperationException`) carrying the tag id, the record's
+  tenant and the current tenant. This covers `GetTagAsync`, `UpdateTagAsync`, `DeleteTagAsync` and
+  `GetEntityTagsAsync`, which all reach their target through one call, plus the by-name lookup behind
+  `CreateTagAsync` and `AttachTagByNameAsync`. It SHALL NOT be downgraded to "not found": the caller named
+  one record, and a null would hide an isolation breach as an ordinary miss.
+- **A collection result SHALL have foreign records filtered out**, not raise. One leaked row must not
+  blank an entire tag picker. The trade is accepted deliberately: a broken hook is quieter on the
+  collection paths than on the by-identity ones, which is why the latter throw.
+
+`Guid.Empty` SHALL be treated as an ordinary tenant value, never as a wildcard — a record stamped
+`Guid.Empty` is visible only while `GetCurrentTenantId()` also returns `Guid.Empty`.
+
+`Tag` / `EntityTag` SHALL continue to declare `TenantGuid` as a bare `Guid` rather than through
 `Birko.Data.Tenant.Models.ITenant`.
 
 #### Scenario: Inserts are stamped
@@ -482,38 +500,70 @@ declare `TenantGuid` as a bare `Guid` property on `Tag` / `EntityTag` rather tha
 - **When** a caller invokes `CreateTagAsync("urgent")` and then `AttachTagAsync("Building", B, tagId)`
 - **Then** both the `Tag` and the `EntityTag` handed to the platform hooks carry `TenantGuid = A`
 
-#### Scenario: Cross-tenant read is not blocked by the base class
+#### Scenario: A cross-tenant read is refused, not returned
 
-- **Given** `GetCurrentTenantId()` returns tenant `A`, and a platform implementation whose
-  `GetTagByIdAsync` looks up by primary key alone without a tenant filter
+- **Given** current tenant `A`, and an implementation whose `GetTagByIdAsync` looks up by primary key
+  alone without a tenant filter
 - **When** a caller invokes `GetTagAsync(tagIdOwnedByTenantB)`
-- **Then** tenant `B`'s tag is returned to tenant `A` — `TagServiceBase` performs no
-  `tag.TenantGuid == GetCurrentTenantId()` check to catch the implementation's omission
+- **Then** `CrossTenantTagAccessException` is raised and no tag is returned
 
-#### Scenario: Cross-tenant update and delete are not blocked either
+#### Scenario: A cross-tenant update does not write
 
 - **Given** the same unfiltered implementation and current tenant `A`
-- **When** a caller invokes `UpdateTagAsync(tagIdOwnedByTenantB, name: "hijacked")` or
-  `DeleteTagAsync(tagIdOwnedByTenantB)`
-- **Then** the operation proceeds against tenant `B`'s tag, because both methods reach it through the
-  same unguarded `GetTagByIdAsync` and neither compares its `TenantGuid`
+- **When** a caller invokes `UpdateTagAsync(tagIdOwnedByTenantB, name: "hijacked")`
+- **Then** the call raises and tenant `B`'s tag is unmodified
 
-#### Scenario: A link may reference another tenant's tag while carrying this tenant's stamp
+#### Scenario: A cross-tenant delete never reaches the link cascade
+
+- **Given** the same unfiltered implementation and current tenant `A`
+- **When** a caller invokes `DeleteTagAsync(tagIdOwnedByTenantB)`
+- **Then** the call raises **before** `DeleteAllEntityTagsForTagAsync` is invoked, so the other tenant's
+  entity links are untouched — the guard is placed ahead of the cascade precisely because the cascade was
+  the most destructive of the three paths through this choke point
+
+#### Scenario: A by-name miss cannot return another tenant's tag as newly created
+
+- **Given** the same unfiltered implementation and a tag named `"urgent"` owned by tenant `B`
+- **When** tenant `A` invokes `CreateTagAsync("urgent")`, whose de-duplication returns an existing hit
+  instead of inserting
+- **Then** the call raises rather than handing tenant `A` a tag it does not own and did not create; the
+  same applies to `AttachTagByNameAsync`, which would otherwise link a foreign tag to a local entity
+
+#### Scenario: Listing and searching drop foreign records silently by design
+
+- **Given** the same unfiltered implementation, one tag owned by `A` and one by `B`
+- **When** tenant `A` invokes `ListTagsAsync()` or `SearchTagsAsync(...)`
+- **Then** only `A`'s tags are returned and no exception is raised
+
+#### Scenario: An empty tenant is a value, not a wildcard
+
+- **Given** a record stamped `TenantGuid = Guid.Empty` and a current tenant that is a real Guid
+- **When** the record is listed
+- **Then** it is filtered out — `Guid.Empty` matches only an ambient tenant that is also `Guid.Empty`
+
+#### Scenario: A correctly-scoped implementation is unaffected
+
+- **Given** an implementation that does filter every hook to the ambient tenant
+- **When** the full create / read / list / search / update / attach / batch / delete surface is exercised
+- **Then** behaviour is unchanged — the guard removes the leak without narrowing anything legitimate
+
+#### Scenario: A link may still reference another tenant's tag while carrying this tenant's stamp
 
 - **Given** current tenant `A` and a tag id `T` owned by tenant `B`
 - **When** a caller invokes `AttachTagAsync("Building", B_entity, T)`
-- **Then** an `EntityTag` with `TenantGuid = A` and `TagId = T` is created, since attach validates
-  neither the tag's existence nor its ownership
+- **Then** an `EntityTag` with `TenantGuid = A` and `TagId = T` is created — attach still validates
+  neither the tag's existence nor its ownership. Reading that entity's tags afterwards raises, because the
+  link survives the tenant filter and then resolves a foreign tag by identity
 
 #### Scenario: The models cannot be wrapped by the framework's tenant store wrapper
 
 - **Given** `TenantStoreWrapper<TStore, T>` is constrained `where T : AbstractModel, ITenant`, and
   `ITenant` declares both `Guid TenantGuid` and `string? TenantName`
 - **When** a platform tries to wrap its `Tag` or `EntityTag` store to obtain that wrapper's automatic
-  tenant read-filtering, `TenantMismatchException` on update/delete and strict-mode refusal
+  tenant read-filtering
 - **Then** it cannot: neither model implements `ITenant` (each declares a bare `TenantGuid` and no
-  `TenantName`), so the per-hook filtering the tenant contract demands has no framework mechanism to
-  delegate to and must be hand-written in every implementation
+  `TenantName`), so per-hook filtering still has no framework mechanism to delegate to — which is why the
+  base class re-checks the returned records rather than relying on the wrapper
 
 ### Requirement: Log-model timestamps are never populated by this layer
 

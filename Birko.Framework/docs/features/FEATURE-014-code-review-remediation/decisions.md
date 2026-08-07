@@ -70,4 +70,8 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   removed rather than repaired — `Store` is `protected`, so an extension cannot reach the decorated chain
   and the capability is only implementable safely as an instance method. No state change; D7 stays
   `approved`.
+- 2026-08-07 — **D7** — [[TASK-126]] closed (SH-H019): `TagServiceBase` now re-checks the tenant of every
+  record its data-access hooks return — throwing on a by-identity load, filtering a collection — instead
+  of depending on each implementor to filter. Hardening rather than a reproduced leak: the framework ships
+  no implementation of the base. No state change; D7 stays `approved`.
 
