@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\Tag.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\EntityTag.cs" />
     <!-- Services -->
+    <Compile Include="$(MSBuildThisFileDirectory)Services\CrossTenantTagAccessException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\ITagService.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Services\TagService.cs" />
     <!-- Extensions -->
