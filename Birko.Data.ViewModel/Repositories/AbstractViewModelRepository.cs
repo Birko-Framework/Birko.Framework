@@ -169,6 +169,49 @@ namespace Birko.Data.Repositories
             return Read(filter);
         }
 
+        /// <summary>
+        /// Reads the first entity matching the filter under an explicit ordering, **through the decorator
+        /// chain** (SH-H036).
+        /// </summary>
+        /// <remarks>
+        /// <para>This exists because the ordered read previously lived in an <b>extension</b> method
+        /// (<c>Birko.Data.SQL.Extensions.IDataBaseRepositoryExtensions.ReadOne</c>) that reached
+        /// <c>repository.Connector</c> — and <c>Connector</c> resolves through <c>GetUnwrappedStore</c>,
+        /// which walks to the innermost store. Every decorator was therefore skipped, including
+        /// <c>TenantStoreWrapper</c>, so the read returned the first matching row from <b>any</b> tenant.
+        /// Soft-delete, localization and audit wrappers were dropped by the same call.</para>
+        /// <para>An extension in another assembly cannot do better: <see cref="Store"/> is
+        /// <c>protected</c>, so the decorated chain is unreachable from outside and <c>Connector</c> was
+        /// the only handle available. The capability has to be an instance method to be implementable
+        /// safely at all — which is why this replaces the extension rather than patching it.</para>
+        /// <para>The two overloads differ only in arity, and C# prefers an applicable instance method over
+        /// an extension — so before this existed, <c>ReadOne(filter)</c> was tenant-safe while
+        /// <c>ReadOne(filter, orderBy)</c> silently was not. Adding an ordering to a working call changed
+        /// its isolation. Keep both overloads on this class so that can never diverge again.</para>
+        /// <para>Ordering needs the bulk read surface; when the configured store is not an
+        /// <see cref="IBulkReadStore{T}"/> the ordering cannot be honoured and this degrades to the
+        /// unordered <see cref="Read(IFilter{TModel})"/> — still decorator-correct, which is the property
+        /// that matters here.</para>
+        /// </remarks>
+        public virtual TViewModel? ReadOne(IFilter<TModel>? filter, OrderBy<TModel>? orderBy)
+        {
+            if (Store == null)
+            {
+                return default;
+            }
+
+            if (orderBy == null || Store is not IBulkReadStore<TModel> bulk)
+            {
+                return Read(filter);
+            }
+
+            foreach (var model in bulk.Read(filter?.Filter(), orderBy, 1, 0))
+            {
+                return LoadInstance(model);
+            }
+            return default;
+        }
+
         /// <inheritdoc />
         public virtual TViewModel? Read(IFilter<TModel>? filter = null)
         {
