@@ -156,6 +156,17 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   source the guard cannot see — and it fails *open*, silently (SH-H048). Publish on `HttpContext.Items` under
   the fixed key, never through `ITenantContext`: `UseTenantMiddleware` binds that from the root provider
   (SH-H049), so a scoped registration hands the guard a different instance
+- **A mapper that cannot express something refuses; it never drops it quietly.** `CreateAbstractField`
+  ended its CLR-type dispatch in `return null`, and `LoadField` turned that into an empty field set — so
+  `long` / `short` / `double` / `float` / `byte[]` properties got **no column, no write, no read, no
+  exception and no log entry** (SH-H037). The missing arms were half the defect; the silence was the half
+  that guaranteed the *next* unmapped type would repeat it. An unmappable property now throws
+  `FieldAttributeException` at table load, naming the declaring type, the property and its CLR type.
+  **Fail-fast is only legitimate where an opt-out exists and is checked first** — here `[IgnoreField]` and
+  `[NotMapped]`, both evaluated before the dispatch — otherwise a guard is a wall. And **measure the blast
+  radius before turning silence into a throw**: this one was cleared against 19 SQL-touching suites,
+  including every `Birko.Models.*.SQL` domain suite, because the change breaks any consumer model carrying
+  a property the mapper never covered
 
 ## Task tracking — this repo is the polyrepo family's aggregator
 
@@ -224,6 +235,43 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Five CLR types that mapped to no column at all — and the mapping that was waiting for them (2026-08-08)
+
+TASK-112 / SH-H037. A `[Table]` model with a `long`, `short`, `double`, `float` or `byte[]` property got a
+`CREATE TABLE` **without that column**: the value was dropped on every save and read back as the type's
+default, with no exception and no log entry. `decimal` *is* mapped, so money was safe — which is precisely
+why it survived; what vanished were identifiers, measurements and blobs. Five new `AbstractField`
+subclasses and their dispatch arms fix it, and an unmappable type now throws instead of disappearing (the
+standing rule is in § Conventions above).
+
+**⚠ Consumers: this can break a running deployment.** A consumer whose model already carries a `long` has a
+live table with no such column. Adding the mapping means their DDL and their live schema now disagree, and
+a read will *fail* rather than silently return zero. Migrating those tables is deliberately out of scope —
+it is a consumer decision. The same applies to any model with a property the mapper still cannot express
+(`char?`, `TimeSpan`, `DateTimeOffset`, collections): those now throw at table load where they previously
+loaded fine minus a column. `[IgnoreField]` / `[NotMapped]` is the opt-out.
+
+Four things worth carrying past this mapper:
+
+- **The finding was right and its cost model was wrong — check both.** The task called the per-provider type
+  mapping "the bulk of the work". All four `ConvertType` implementations **already** had `Int16` / `Int64` /
+  `Single` / `Double` / `Binary` arms emitting exactly the requested types, `AddParameter` binds untyped, and
+  `ModelMap<T>` does no type dispatch at all. The mapping had been built for a `DbType` the dispatch could
+  never produce. Scope went from four providers to one method plus five small classes; following the written
+  approach would have meant a large pointless change.
+- **A test that builds the object under test by hand cannot witness a dispatch fix.** Step 6's first run had
+  **all 15** per-provider DDL tests passing with the fix reverted — they constructed `new LongField(...)`,
+  and the field classes survive a revert that only touches `CreateAbstractField`. They were pinning the
+  providers' `ConvertType` contract while looking like evidence. Driving `DataBase.LoadTable(typeof(Model))`
+  instead took the provider suites from 0 → 15 failing, and the total from 28 → **43 of 52**.
+- **Fixing an inert defect is cheaper than filing it.** SQLite mapped `DbType.Single` → `INTEGER`, grouped
+  with the integral types — the identical mistake PostgreSQL and MSSql had both already fixed under CR-H087.
+  It was unreachable because nothing could produce a `Single` field; the moment `float` mapped, the reference
+  and test provider would have been the one declaring a float column as an integer.
+- **A silent skip and a wrong answer are the same bug.** `char?` was never in this task's scope and is still
+  unmapped — but the fail-fast changes it from *silently dropped* to *reported*, which surfaced a latent
+  instance of the very defect being fixed. Pinned by a test and specced rather than quietly mapped.
 
 ### Birko.Web: a cascade invariant that needed asserting twice, and two half-fixes (2026-08-04)
 

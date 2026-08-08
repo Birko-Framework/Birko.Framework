@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: d9637e67bd2a3a7b5c10dc8e53d91562630f0a4e
+generated-on: 2026-08-08
 sources:
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexInfo.cs
@@ -27,10 +27,15 @@ sources:
   - ../Birko.Data.SQL/SQL/Fields/AbstractField.cs
   - ../Birko.Data.SQL/SQL/Fields/BooleanField.cs
   - ../Birko.Data.SQL/SQL/Fields/CharField.cs
+  - ../Birko.Data.SQL/SQL/Fields/BinaryField.cs
   - ../Birko.Data.SQL/SQL/Fields/DateTimeField.cs
   - ../Birko.Data.SQL/SQL/Fields/DecimalField.cs
+  - ../Birko.Data.SQL/SQL/Fields/DoubleField.cs
+  - ../Birko.Data.SQL/SQL/Fields/FloatField.cs
   - ../Birko.Data.SQL/SQL/Fields/GuidField.cs
   - ../Birko.Data.SQL/SQL/Fields/IntegerField.cs
+  - ../Birko.Data.SQL/SQL/Fields/LongField.cs
+  - ../Birko.Data.SQL/SQL/Fields/ShortField.cs
   - ../Birko.Data.SQL/SQL/Fields/StringField.cs
   - ../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs
   - ../Birko.Data.SQL/SQL/Tables/IndexDefinition.cs
@@ -106,14 +111,17 @@ default (zero) value.
 - **When** `Type` is read
 - **Then** it equals `FieldType.String`
 
-#### Scenario: Portable vocabulary is wider than the SQL mapper
+#### Scenario: Portable vocabulary is matched by the SQL mapper except for Json
 
 - **Given** `FieldType.Long`, `FieldType.Double`, `FieldType.Binary` and `FieldType.Json` exist in the
   portable enum
 - **When** the corresponding CLR types (`long`, `double`, `byte[]`, an object graph) appear as properties on
   a `[Table]`-annotated model handed to `AbstractField.CreateAbstractField`
-- **Then** no field is produced for them (see "CLR-type to SQL field mapping") — the portable vocabulary and
-  the attribute-driven SQL mapper do not cover the same set of types
+- **Then** `long`, `double` and `byte[]` produce `LongField`, `DoubleField` and `BinaryField` carrying
+  `DbType.Int64`, `DbType.Double` and `DbType.Binary` — the same `DbType`s `SchemaField.MapFieldType`
+  assigns to `FieldType.Long` / `.Double` / `.Binary`, so the portable vocabulary and the attribute-driven
+  mapper now agree — while an object graph (`FieldType.Json`) has no CLR-type arm and raises
+  `FieldAttributeException` at table load
 
 ### Requirement: Schema builder surface
 
@@ -388,6 +396,36 @@ The system SHALL skip a property entirely — producing no field and therefore n
 - **Then** the property is still skipped, because the `[NotMapped]` check reads the property's attributes
   directly
 
+### Requirement: An unmappable property fails table load rather than vanishing
+
+The system SHALL, when a property's CLR type matches no arm of the type dispatch and the property carries
+neither `[IgnoreField]` nor `[NotMapped]`, throw `Exceptions.FieldAttributeException` from
+`CreateAbstractField` — naming the declaring type, the property, its CLR type, and both opt-out attributes
+— instead of returning `null` and producing a table without that column.
+
+#### Scenario: A collection property is reported, not dropped
+
+- **Given** a `[Table]`-annotated model with `public IEnumerable<string> Items { get; set; }`
+- **When** `DataBase.LoadTable(type)` is called
+- **Then** a `FieldAttributeException` propagates out of table load, and its message contains the property
+  name, `IEnumerable`, `IgnoreField` and `NotMapped`
+
+#### Scenario: An indexer is skipped rather than reported
+
+- **Given** a `[Table]`-annotated model declaring `public string this[string key] { get; set; }`, which
+  `GetProperties` enumerates like any other public instance property
+- **When** `LoadTable` runs
+- **Then** the indexer produces no field and no exception, while the model's ordinary properties map
+  normally — an indexer has no single value to store and cannot be read through `GetValue(obj, null)`, so
+  no mapping could ever cover it and the unmapped-type failure does not apply
+
+#### Scenario: The exclusion attributes are checked before the dispatch, so opting out never throws
+
+- **Given** the same unmappable property carrying `[IgnoreField]`, and a second carrying `[NotMapped]`
+- **When** `LoadTable` runs
+- **Then** neither property appears in `Table.Fields`, no exception is raised, and the model's mapped
+  properties load normally — the failure fires on silence, not on an explicit instruction
+
 ### Requirement: Column name resolution precedence
 
 The system SHALL name a column after the property by default, override it with `[NamedField(name)]` when the
@@ -465,9 +503,13 @@ The system SHALL map property CLR types to field classes as: `bool`/`bool?` → 
 `NullableBooleanField`; `DateTime`/`DateTime?` → `DateTimeField` / `NullableDateTimeField`;
 `decimal`/`decimal?` → `DecimalField` / `NullableDecimalField` (carrying precision and scale);
 `Guid`/`Guid?` → `GuidField` / `NullableGuidField`; `int`/`int?` → `IntegerField` /
-`NullableIntegerField`; `char` → `CharField` of length 1; `string` → `CharField` when an effective length
-greater than zero is known else `StringField`; any enum or `Nullable<enum>` → `IntegerField` /
-`NullableIntegerField`; and SHALL return `null` — silently skipping the property — for every other type.
+`NullableIntegerField`; `long`/`long?` → `LongField` / `NullableLongField`; `short`/`short?` →
+`ShortField` / `NullableShortField`; `double`/`double?` → `DoubleField` / `NullableDoubleField`;
+`float`/`float?` → `FloatField` / `NullableFloatField`; `byte[]` → `BinaryField`; `char` → `CharField` of
+length 1; `string` → `CharField` when an effective length greater than zero is known else `StringField`;
+any enum or `Nullable<enum>` → `IntegerField` / `NullableIntegerField`; and SHALL throw
+`Exceptions.FieldAttributeException` naming the declaring type, the property and its CLR type — rather
+than returning `null` and silently skipping the property — for every other type.
 
 #### Scenario: Enums are stored as integers
 
@@ -481,27 +523,51 @@ greater than zero is known else `StringField`; any enum or `Nullable<enum>` → 
 - **When** the field is created
 - **Then** a `NullableIntegerField` is produced, resolved via `Nullable.GetUnderlyingType(...).IsEnum`
 
-#### Scenario: long, double and byte[] properties are dropped without warning
+#### Scenario: long, double and byte[] properties map to their own columns
 
 - **Given** a `[Table]`-annotated model with `public long Ticks { get; set; }`,
   `public double Ratio { get; set; }` and `public byte[] Blob { get; set; }`
 - **When** `LoadFields` runs
-- **Then** none of the three appears in `Table.Fields`; no exception is raised and no diagnostic is emitted,
-  so the columns simply do not exist and the values are never persisted
+- **Then** all three appear in `Table.Fields` as a `LongField`, a `DoubleField` and a `BinaryField`, so the
+  columns exist and the values round-trip through `Write` and `Read`
 
-#### Scenario: Nullable char is dropped
+#### Scenario: A wide integer is not narrowed through the integer arm
+
+- **Given** `public long Ticks { get; set; }`
+- **When** the field is created
+- **Then** it is a `LongField` carrying `DbType.Int64` and is not an `IntegerField` — an `Int32` column
+  would silently truncate every value past 2^31
+
+#### Scenario: Binary floating point is not routed through the decimal arm
+
+- **Given** `public double Ratio { get; set; }`
+- **When** the field is created
+- **Then** it is a `DoubleField` carrying `DbType.Double` and is not a `DecimalField` — `decimal` is exact
+  base-10 and `double` is binary floating point, so the two map to different provider column types
+
+#### Scenario: byte[] is nullable by default and honours a required marker
+
+- **Given** `public byte[] Blob { get; set; }` with no required marker
+- **When** the field is created
+- **Then** a `BinaryField` with `IsNotNull == false` is produced, following `StringField`'s reference-type
+  convention rather than the value-type `Nullable*` pairing, and `[RequiredField]` / `[Required]` sets
+  `IsNotNull` to true
+
+#### Scenario: Nullable char raises the unmapped-type failure
 
 - **Given** `public char? Flag { get; set; }`
 - **When** the field is created
 - **Then** the `property.PropertyType == typeof(char)` test fails (the type is `Nullable<char>`), the
-  underlying type is not an enum, and `null` is returned — the property is skipped
+  underlying type is not an enum, and `FieldAttributeException` is thrown — where the property was
+  previously skipped in silence, its absence from the table is now reported
 
 ### Requirement: Reader materialisation per field type
 
 The system SHALL materialise a column into its property through a type-specific `Read` override —
-`GetBoolean`, `GetDateTime`, `GetDecimal`, `GetGuid`, `GetInt32`, `GetString` — where the nullable variants
-first test `reader.IsDBNull(index)` and assign `null`, while the non-nullable variants perform no null test
-at all; and `AbstractField.Read` SHALL by default assign `reader.GetValue(index)` unconverted.
+`GetBoolean`, `GetDateTime`, `GetDecimal`, `GetGuid`, `GetInt32`, `GetInt64`, `GetInt16`, `GetDouble`,
+`GetFloat`, `GetFieldValue<byte[]>`, `GetString` — where the nullable variants first test
+`reader.IsDBNull(index)` and assign `null`, while the non-nullable variants perform no null test at all;
+and `AbstractField.Read` SHALL by default assign `reader.GetValue(index)` unconverted.
 
 #### Scenario: Nullable field reads a database NULL
 
@@ -652,8 +718,9 @@ contributions by index name into one `Tables.IndexDefinition` per name, and SHAL
 
 #### Scenario: An index on an unmapped property silently names a non-existent column
 
-- **Given** `[IgnoreField] [IndexedField("IX_Bad")] public string Scratch { get; set; }` — or an
-  `[IndexedField]` on a property of an unsupported CLR type such as `long`
+- **Given** `[IgnoreField] [IndexedField("IX_Bad")] public string Scratch { get; set; }` — the deliberate
+  opt-out is now the only way to reach this, because an unsupported CLR type fails table load outright
+  instead of producing a fieldless property
 - **When** `LoadIndexes` runs
 - **Then** no matching field is found and the column name falls back to the property name `"Scratch"`,
   producing an index definition over a column that the table does not have; no exception is raised

@@ -11,10 +11,10 @@ _Generated 2026-08-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 6                  | 10                  | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 41                  |
+| done         | 1                  | 22                 | 42                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
+Todo by priority: **P0 0 · P1 13 · P2 49 · P3 6**
 
 ## In progress now
 
@@ -33,7 +33,11 @@ Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
 
 ## Next up (top P0s, blocked excluded)
 
-- [TASK-112](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-112-unmapped-primitive-types-never-persist.md) `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist (P0, ai)
+_No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
+
+- [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) — unbounded destructive write, and it is the *default* path
+- [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1, ai) — injection sink, reachability gated on a consumer exposing rule authoring
+- [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias (P1, ai) — self-reporting, so it ranks below the two silent ones
 
 ## Tree
 
@@ -127,12 +131,12 @@ Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (10/17, 1 in review)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (11/17, 1 in review)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
     - [ ] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1, ai) · FEATURE-014
-    - [ ] [TASK-112](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-112-unmapped-primitive-types-never-persist.md) `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist (P0, ai) · FEATURE-014
+    - [x] [TASK-112](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-112-unmapped-primitive-types-never-persist.md) `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist (P0, ai) · FEATURE-014
     - [x] [TASK-113](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-113-tenantsyncprovider-scopes-only-saves.md) `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant (P0, ai) · FEATURE-014
     - [x] [TASK-114](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-114-tenant-write-guard-trusts-caller-supplied-tenantguid.md) The item-level tenant write guard trusts the caller-supplied `TenantGuid` (P0, ai) · FEATURE-014
     - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai) · FEATURE-014
@@ -227,6 +231,7 @@ Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
 - [ ] [TASK-146](_loose/TASK-146-async-ordered-readone-parity.md) Nothing pins that the async repository has no connector-bypassing read (P3, ai)
 - [ ] [TASK-147](_loose/TASK-147-attachtag-does-not-validate-tag-ownership.md) `AttachTagAsync` validates neither a tag's existence nor its ownership (P2, human)
 - [ ] [TASK-149](_loose/TASK-149-story-level-tracking-is-invisible-to-every-scheduler.md) A story that tracks work without task files is invisible to every scheduler (P2, human)
+- [ ] [TASK-150](_loose/TASK-150-char-nullable-and-the-remaining-unmapped-types.md) `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly (P2, ai)
 
 <details>
 <summary><b>Completed epics (1)</b></summary>
