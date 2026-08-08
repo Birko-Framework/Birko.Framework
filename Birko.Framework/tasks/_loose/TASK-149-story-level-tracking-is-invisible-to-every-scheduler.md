@@ -49,6 +49,27 @@ because nothing ran `/roadmap`. That is the same shape as [[TASK-142]] (the spec
 check exists and does not run), and the two should probably be answered together rather than each growing
 its own reminder.
 
+**A third occurrence, on the same day, split the thesis in two — and it is already fixed.** Clearing the
+review backlog turned up three tasks (TASK-104 / TASK-105 / TASK-107) parked at `review` for weeks with
+**no `## Human test plan` section at all**. `/tasks close` step 5 *was* run every time and *did* have a
+rule for this family — it warned when the plan held the template's placeholder text — but it had no arm
+for a section that is **absent**, so the absence silently defaulted to `review`. Fixed outright in the
+skills repo (`project-lifecycle-skills@4be1bad`): an absent section now stops the close until it is
+resolved, and the rule is stated beside the review-vs-done semantics in `SKILL.md` as well as in the verb.
+
+That is **not** the same failure as DV12 or the spec map, and the difference is the useful part:
+
+| | Failure | Remedy |
+|---|---|---|
+| DV12 (this task), spec-map check ([[TASK-142]]) | the check is correct and **nothing invokes it** | wire it to something that runs |
+| `close` step 5 (fixed) | the check **runs every time** and had a blind spot | widen the rule |
+
+So "wire the unrun checks to something that runs them" is only half an answer. The other half is asking,
+of each check that *does* run, whether it actually covers the case it appears to. A gate that fires
+faithfully on the wrong condition is more dangerous than one nobody runs, because its green is believed.
+The third instance is recorded here as **evidence and a lesson, not as scope** — nothing about it is
+outstanding, and it must not be re-opened as a criterion below.
+
 ## Acceptance criteria
 
 - [ ] **Decide** what a container tracking work in its own body must show. Options include: requiring at
@@ -63,6 +84,11 @@ its own reminder.
       have matched, exactly as [[TASK-142]] asks of the spec map's check
 - [ ] Run the resulting check once across the whole tree and record what it finds. EPIC-017 was found by
       accident; nothing says it is the only one
+- [ ] Whatever mechanism is chosen, state **which of the two failure modes it addresses** (see the table
+      above) and confirm it is not assumed to cover the other. A check wired to run is still worthless on
+      a condition it does not match — `close` step 5 ran faithfully every time and missed three tasks for
+      weeks. Deciding "we will run the checks" without asking what each one actually matches would leave
+      this task's own lesson unapplied
 - [ ] The rule permits legitimate parent-level tracking rather than outlawing it — a check that forces
       decomposition of finished work would produce exactly the transcript tasks the skill forbids
 - [ ] Whatever is decided is recorded where the next person tracking at story level will meet it
