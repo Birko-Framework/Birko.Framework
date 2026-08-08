@@ -52,6 +52,39 @@ which is the first half of this task.
 - [ ] If the answer is a gate, it is stated where a gate can actually run — this family is a polyrepo and
       this aggregator cannot resolve sibling-repo shas, which is what defeated the `shaped-by` pass
 
+## Sweep progress (2026-08-08)
+
+**Criterion 1 answered — it is a BLIND SPOT, not an unrun check.** `/specs regen` step 6 globs "project
+sources"; this aggregator has **0 `.cs` files of its own** (every source is in a sibling repo reached via
+`../`), so the check globbed nothing, reported nothing, and passed silently on every run since it was
+written. Fixed in `project-lifecycle-skills@e560f99`: it now derives its search roots from the map's own
+`sources:` entries, and reports the count even at zero.
+
+**Measured gap: 148 unmapped `.cs` inside the 97 projects the map already references** (~18%). Areas list
+specific files rather than whole trees, so a sibling file added later matches nothing. TASK-109 and
+TASK-110 were symptoms of this, not two unlucky files.
+
+**Widened four areas** — the omission was systematic: each already listed its SQL and ElasticSearch
+implementors and omitted the document backends, in areas whose whole point is cross-backend conformance:
+`schema-index-and-ddl` (+Mongo/Raven/Cosmos `IndexManagement`), `unit-of-work-and-transactions`
+(+Mongo/Raven/Cosmos/Influx `UnitOfWork`), `repository-contract` (+the five backends' `Repositories`),
+`views-and-aggregation` (+Mongo/Raven/Cosmos `Aggregation`). **28 files newly covered.**
+
+**A widening was proposed and REVERTED, which is the more useful result.** The sweep also proposed adding
+`Birko.Data.SQL.View/**/*.cs` and the document backends' `Stores/*.cs` — both are named in this map's own
+header as **deliberately out of scope** *"and are NOT silent under-coverage"*. A coverage number is not an
+argument against a recorded decision; both were reverted with the reasoning left inline. **35 of the
+remaining unmapped files are that deliberate exclusion**, so the raw 148 conflated two different things
+and any future sweep must subtract them before quoting a number.
+
+**Remaining genuine gap: 85 files**, concentrated and uniform in shape — `Stores/`, `Repositories/` and
+`Extensions/` in `Birko.Data.SQL` and its four providers (10 each), plus ElasticSearch's
+`Highlighting/`, and `Birko.Data.SQL`'s `Models/` + `Exceptions/` + remaining `SQL/Connectors/`. These are
+**not** obviously in-scope: several are per-provider store bodies, which is exactly the category the
+header excludes. Finishing the sweep therefore needs the same decision the reverted pair needed —
+whether the out-of-scope rule for "store bodies" should hold now that per-backend divergence has produced
+three defects (TASK-109, TASK-116, TASK-125) — rather than more globbing.
+
 ## Out of scope
 
 - Per-sub-repo `docs/specs/` trees — [[TASK-131]].

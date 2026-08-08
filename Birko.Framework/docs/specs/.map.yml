@@ -63,6 +63,11 @@ areas:
       - ../Birko.Data.Core/Exceptions/StoreException.cs
       # reference conformance: the simplest complete store in the family
       - ../Birko.Data.InMemory/Stores/*.cs
+      # NOT the document backends' store bodies: the header's out-of-scope list names them explicitly
+      # ("per-backend store bodies … CRUD implementations") as a deliberate exclusion, not a gap. The
+      # 2026-08-08 sweep proposed adding them and that was reverted — a coverage number is not an
+      # argument against a recorded decision. Individual files still enter an area when a specific
+      # cross-backend contract needs them (see bulk-filter-operations' two MongoDB entries).
 
   - name: store-lazy-initialization
     title: Lazy store initialization (EnsureInitialized double-checked locking)
@@ -139,9 +144,17 @@ areas:
       # Birko.Data.SQL.View is otherwise out of scope (see the block above), but the view read path's sort
       # contract is implemented in these three files and this spec documents it — added for TASK-128 rather
       # than leaving the behaviour unmapped. Not an opening of that whole project.
+      # Three named files out of thirty. The rest of Birko.Data.SQL.View is in the header's out-of-scope
+      # list, so the 90% is deliberate rather than silent — the 2026-08-08 sweep proposed widening this to
+      # the whole tree and reverted it for that reason. Worth revisiting as a DECISION (TASK-129's
+      # aggregate-view DDL defect sits in the excluded part), not as a coverage fix.
       - ../Birko.Data.SQL.View/SQL/DataBase_ViewOrderBy.cs
       - ../Birko.Data.SQL.View/SQL/Connectors/AbstractConnector_SelectView.cs
       - ../Birko.Data.SQL.View/SQL/Connectors/AbstractAsyncConnector_SelectView.cs
+      # per-backend aggregation helpers — the other half of this area's contract
+      - ../Birko.Data.MongoDB/Aggregation/*.cs
+      - ../Birko.Data.RavenDB/Aggregation/*.cs
+      - ../Birko.Data.CosmosDB/Aggregation/*.cs
       - ../Birko.Data.MongoDB.Views/**/*.cs
       - ../Birko.Data.ElasticSearch.Views/**/*.cs
       - ../Birko.Data.RavenDB.Views/**/*.cs
@@ -179,6 +192,13 @@ areas:
       - ../Birko.Data.Core/ViewModels/*.cs
       - ../Birko.Data.ViewModel/**/*.cs
       - ../Birko.Data.SQL.ViewModel/**/*.cs
+      # per-backend repository implementations (2026-08-08 sweep) — the contract is what they must all
+      # satisfy, so specing only the abstractions leaves every implementor unread.
+      - ../Birko.Data.MongoDB/Repositories/*.cs
+      - ../Birko.Data.RavenDB/Repositories/*.cs
+      - ../Birko.Data.CosmosDB/Repositories/*.cs
+      - ../Birko.Data.InfluxDB/Repositories/*.cs
+      - ../Birko.Data.SQL/Repositories/*.cs
 
   - name: settings-configuration-chain
     title: Settings inheritance chain and connection-string contract
@@ -214,6 +234,12 @@ areas:
       - ../Birko.Data.SQL.MySQL/IndexManagement/*.cs
       - ../Birko.Data.SQL.SqLite/IndexManagement/*.cs
       - ../Birko.Data.ElasticSearch/IndexManagement/*.cs
+      # document backends — omitted until the 2026-08-08 coverage sweep, though this area's whole point
+      # is cross-backend conformance of IIndexManager (see CLAUDE.md § "Areas include their backend
+      # implementors"). The SQL providers and ElasticSearch were listed; these four were not.
+      - ../Birko.Data.MongoDB/IndexManagement/*.cs
+      - ../Birko.Data.RavenDB/IndexManagement/*.cs
+      - ../Birko.Data.CosmosDB/IndexManagement/*.cs
 
   - name: unit-of-work-and-transactions
     title: Unit of work and transactional store boundaries
@@ -223,6 +249,12 @@ areas:
       - ../Birko.Data.SQL/UnitOfWork/*.cs
       - ../Birko.Data.SQL/Stores/SqlTransactionContext.cs
       - ../Birko.Data.ElasticSearch/UnitOfWork/*.cs
+      # document backends — same omission as schema-index-and-ddl above (2026-08-08 sweep). A UoW
+      # contract that specs only two of six implementors cannot see the divergence it exists to catch.
+      - ../Birko.Data.MongoDB/UnitOfWork/*.cs
+      - ../Birko.Data.RavenDB/UnitOfWork/*.cs
+      - ../Birko.Data.CosmosDB/UnitOfWork/*.cs
+      - ../Birko.Data.InfluxDB/UnitOfWork/*.cs
 
   - name: migrations
     title: Schema/data migration runner and backend contexts
