@@ -7,14 +7,14 @@ _Generated 2026-08-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 67                  |
+| todo         | —                  | —                  | 68                  |
 | in-progress  | 6                  | 10                  | 1                   |
 | review       | —                  | —                  | 11                  |
 | blocked      | —                  | —                  | 1                   |
 | done         | 1                  | 22                 | 38                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 1 · P1 13 · P2 47 · P3 6**
+Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
 
 ## In progress now
 
@@ -229,6 +229,7 @@ Todo by priority: **P0 1 · P1 13 · P2 47 · P3 6**
 - [ ] [TASK-145](_loose/TASK-145-document-the-decorator-stripping-escape-hatch.md) Nothing at the `GetUnwrappedStore` call sites says they strip every decorator (P2, ai)
 - [ ] [TASK-146](_loose/TASK-146-async-ordered-readone-parity.md) Nothing pins that the async repository has no connector-bypassing read (P3, ai)
 - [ ] [TASK-147](_loose/TASK-147-attachtag-does-not-validate-tag-ownership.md) `AttachTagAsync` validates neither a tag's existence nor its ownership (P2, human)
+- [ ] [TASK-149](_loose/TASK-149-story-level-tracking-is-invisible-to-every-scheduler.md) A story that tracks work without task files is invisible to every scheduler (P2, human)
 
 <details>
 <summary><b>Completed epics (1)</b></summary>

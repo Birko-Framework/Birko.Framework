@@ -55,6 +55,9 @@ which is the first half of this task.
 ## Out of scope
 
 - Per-sub-repo `docs/specs/` trees — [[TASK-131]].
+- [[TASK-149]] is the same shape in the task tree — roadmap's DV12 rule exists and did not run, exactly as
+  the unmapped-sources check here exists and did not. Different mechanism, so a separate task, but the two
+  are probably one decision about which checks are actually wired to something that runs them.
 - The `shaped-by` evidence pass being unrunnable here: a known, stamped limitation of every area in this
   repo, and a different problem from coverage.
 
