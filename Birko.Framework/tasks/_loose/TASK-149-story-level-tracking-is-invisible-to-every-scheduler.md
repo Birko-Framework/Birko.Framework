@@ -79,19 +79,45 @@ outstanding, and it must not be re-opened as a criterion below.
 - [ ] The rollup line for such a container is unambiguous — a reader must be able to tell "no work
       recorded" from "work recorded, not as tasks" **without opening the file**. That distinction is the
       whole defect
-- [ ] `/tasks audit` (or `triage`) flags the case, joining its existing parent-vs-children contradiction
+- [ ] ⚠ HALF MET (2026-08-08) — DV12 is now invoked (see below); the `audit`/`triage` half is not. `/tasks audit` (or `triage`) flags the case, joining its existing parent-vs-children contradiction
       checks; and DV12's non-firing is addressed — establish whether it is unrun, unsurfaced, or would not
       have matched, exactly as [[TASK-142]] asks of the spec map's check
-- [ ] Run the resulting check once across the whole tree and record what it finds. EPIC-017 was found by
+- [x] Run the resulting check once across the whole tree and record what it finds. EPIC-017 was found by
       accident; nothing says it is the only one
-- [ ] Whatever mechanism is chosen, state **which of the two failure modes it addresses** (see the table
+- [x] Whatever mechanism is chosen, state **which of the two failure modes it addresses** (see the table
       above) and confirm it is not assumed to cover the other. A check wired to run is still worthless on
       a condition it does not match — `close` step 5 ran faithfully every time and missed three tasks for
       weeks. Deciding "we will run the checks" without asking what each one actually matches would leave
       this task's own lesson unapplied
 - [ ] The rule permits legitimate parent-level tracking rather than outlawing it — a check that forces
       decomposition of finished work would produce exactly the transcript tasks the skill forbids
-- [ ] Whatever is decided is recorded where the next person tracking at story level will meet it
+- [x] Whatever is decided is recorded where the next person tracking at story level will meet it — for the DV12 half, in `fix-next/SKILL.md` step 1
+
+## Progress (2026-08-08) — the DV12 half is done; the rendering question is NOT
+
+**Decision taken (criterion 3, second half): `fix-next` invokes DV12 when building its pool.** It already
+walks every `review-intake` epic, so evaluating DV12 over the same epics is nearly free, and it puts the
+check in the verb that runs most often *and* that would act on the answer. Shipped in
+`project-lifecycle-skills@e560f99`.
+
+**Criterion 4 — ran DV12 across the whole tree, and the result changed the design.** 4 hits:
+STORY-046 (genuine — now [[TASK-148]]), and STORY-053 / STORY-054 / STORY-055, each holding a findings
+list. **Three of the four were false positives**: those stories say in their bodies *"Not pre-created.
+Extract on demand, one task per `SH-Mxxx`"* — a recorded decision, not an unscheduled backlog, and DV12's
+condition cannot tell the two apart. Shipping the wiring unamended would have produced three spurious
+reports on **every** run; a check that nags about a decision somebody already made gets muted, and a muted
+check is worth exactly what an unrun one is. Amended in `@222b453` to check for the declaration first.
+
+That is criterion 5 arriving in practice rather than in theory, and it lands on this task's own thesis:
+**the third failure mode is a check that runs, matches, and is right to be ignored.** Prose-matching is
+itself a guess, so a machine-readable "decomposed on demand" marker is the better answer — and choosing
+one is part of the rendering decision still outstanding below, not separate from it.
+
+**Still open — and it is the part this task is named for.** Criteria 1, 2 and 6 are the *rendering*
+question: what a container tracking work in its own body must display, so that "no work recorded" and
+"work recorded, not as tasks" are distinguishable without opening the file. Nothing about that was
+decided. EPIC-017 still demonstrates it: it reads `0/1 tasks done` today only because [[TASK-148]] was
+filed, and any other story tracking in-body would still render `0/0`.
 
 ## Out of scope
 
