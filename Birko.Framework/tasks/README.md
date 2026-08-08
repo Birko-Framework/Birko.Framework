@@ -9,9 +9,9 @@ _Generated 2026-08-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | planned      | 10                 | 24                 | —                   |
 | todo         | —                  | —                  | 68                  |
 | in-progress  | 6                  | 10                  | 1                   |
-| review       | —                  | —                  | 11                  |
+| review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 38                  |
+| done         | 1                  | 22                 | 41                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
 Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
@@ -29,10 +29,7 @@ Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
 - [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai)
 - [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2, ai)
 - [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2, ai)
-- [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai)
 - [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai)
-- [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) (P3, ai)
-- [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai)
 
 ## Next up (top P0s, blocked excluded)
 
@@ -185,7 +182,7 @@ Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
     - [ ] [TASK-122](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-122-render-mixed-columns-both-skins.md) Render mixed columns — the CSS grid and the Avalonia panel (P2, ai) · FEATURE-015
     - [ ] [TASK-123](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-123-panel-height-under-mixed-sizes.md) Panel height under mixed sizes, and extending the clipping guard (P2, ai) · FEATURE-015
     - [ ] [TASK-124](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-124-stale-ribbongroupsize-parity-comment.md) The `RibbonGroupSize` doc comment describes a parity gap that no longer exists (P3, ai) · FEATURE-015
-- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (9/13 tasks done)
+- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (12/13 tasks done)
   - STORY-037 [Backend / SQL framework backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-037-backend-sql-backports/STORY.md) — done (0/0) (done)
   - STORY-038 [Frontend Birko.Web backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/STORY.md) — done (0/0) (done)
   - STORY-039 [Cross-provider SQL store-factory + DI backport](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/STORY.md) — in-progress (1/2)
@@ -201,10 +198,10 @@ Todo by priority: **P0 1 · P1 13 · P2 48 · P3 6**
   - STORY-041 [BMobileAppShell showcase / placement](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/STORY.md) — done (2/2) (done)
     - [x] [TASK-049](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-049-bmobileappshell-playground-placement.md) BMobileAppShell — better placement / demo in Birko.Web.Playground (P2, ai) · FEATURE-016
     - [x] [TASK-050](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-050-bmobileappshell-xaml-gallery.md) BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery (P3, ai) · FEATURE-016
-  - STORY-052 [Component gaps found by consumers adopting the `b-*` catalogue](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/STORY.md) — in-progress (0/4)
-    - [ ] [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) (P3, ai) 🔍 review · FEATURE-016
-    - [ ] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai) 🔍 review · FEATURE-016
-    - [ ] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) 🔍 review · FEATURE-016
+  - STORY-052 [Component gaps found by consumers adopting the `b-*` catalogue](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/STORY.md) — in-progress (3/4, 1 in review)
+    - [x] [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) (P3, ai) · FEATURE-016
+    - [x] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai) · FEATURE-016
+    - [x] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) · FEATURE-016
     - [ ] [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai) 🔍 review · FEATURE-016
 - **EPIC-017** [Tenant isolation hardening](EPIC-017-tenant-isolation-hardening/EPIC.md) — in-progress (0/1 tasks done)
   - STORY-044 [Opt-in strict (fail-closed) tenancy mode](EPIC-017-tenant-isolation-hardening/STORY-044-strict-fail-closed-mode/STORY.md) — done (0/0) (done)

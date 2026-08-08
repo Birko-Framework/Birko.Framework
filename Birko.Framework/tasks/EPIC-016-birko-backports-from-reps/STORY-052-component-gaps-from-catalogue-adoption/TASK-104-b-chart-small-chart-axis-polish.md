@@ -2,7 +2,7 @@
 id: TASK-104
 parent: STORY-052
 feature: FEATURE-016
-status: review
+status: done
 priority: P3
 assignee: ai
 created: 2026-07-30
@@ -130,6 +130,21 @@ Held constant on purpose: the tick-count cap of 5 keeps the default 300px chart 
 always had; the latest-value overlay still defaults **on**, so no existing chart silently loses its
 label; overlay bars (TASK-093) and per-point colour (TASK-088) are unchanged and both are guarded by
 new smoke checks.
+
+## Human test plan
+
+N/A — fully covered by automated tests.
+
+**Recorded 2026-08-08 while clearing review debt.** This section was **missing entirely** — not `N/A`, not
+a placeholder — which is why the task was parked at `review` and sat there. A task whose plan is genuinely
+`N/A` skips `review` and closes straight to `done`; an absent section is indistinguishable from an unrun
+one to every reader and to the close gate, so it defaults to debt.
+
+Why N/A is the right answer here: the tick/scale maths is exported and asserted numerically, and the rendered ticks, latest-value overlay and threshold labels are measured in the playground. The one judgement call — does a 90px chart read as busy — was closed on Reps' real Progress surface at the time, and is recorded under `## Verification`.
+
+Re-verified before closing rather than trusting the original run — the playground suites are green today
+at 624 checks across seven harnesses plus 66 device-fix checks, and every acceptance criterion above was
+already ticked with its evidence cited.
 
 ## Cross-links
 

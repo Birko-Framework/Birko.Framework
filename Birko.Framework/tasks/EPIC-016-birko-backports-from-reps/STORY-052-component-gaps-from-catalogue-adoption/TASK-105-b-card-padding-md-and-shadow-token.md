@@ -2,7 +2,7 @@
 id: TASK-105
 parent: STORY-052
 feature: FEATURE-016
-status: review
+status: done
 priority: P3
 assignee: ai
 created: 2026-07-30
@@ -101,6 +101,21 @@ Two things the measurement got right by not hard-coding:
 - **Five** `b-card`s render, not the six the origin task counts. The sixth (`#metrics-offline-card`) is
   conditional on `windowState === 'unavailable'` — the offline stand-in for the body and steps cards — so it
   is correctly absent on a host that is reachable. Six in source, five on screen.
+
+## Human test plan
+
+N/A — fully covered by automated tests.
+
+**Recorded 2026-08-08 while clearing review debt.** This section was **missing entirely** — not `N/A`, not
+a placeholder — which is why the task was parked at `review` and sat there. A task whose plan is genuinely
+`N/A` skips `review` and closes straight to `done`; an absent section is indistinguishable from an unrun
+one to every reader and to the close gate, so it defaults to debt.
+
+Why N/A is the right answer here: both changes are additive and measured against the live token rather than a px literal, and the five fix-dependent checks were proven to fail by removing the rules. No consumer has opted in, so there is no rendered surface a human could inspect that differs from before.
+
+Re-verified before closing rather than trusting the original run — the playground suites are green today
+at 624 checks across seven harnesses plus 66 device-fix checks, and every acceptance criterion above was
+already ticked with its evidence cited.
 
 ## Cross-links
 

@@ -21,7 +21,7 @@ generated: 2026-08-01
 
 ## Build progress
 
-9 / 14 tasks done.
+12 / 14 tasks done.
 
 - [ ] TASK-042 Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL — **review**
 - [x] TASK-043 Xaml mobile app-shell (BMobileAppShell equivalent)
@@ -33,14 +33,16 @@ generated: 2026-08-01
 - [x] TASK-049 BMobileAppShell — better placement / demo in Birko.Web.Playground
 - [x] TASK-050 BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery
 - [x] TASK-051 FIX: MSSqlStore.SetSettings drops connection fields (lossy)
-- [ ] TASK-104 `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) — **review**
-- [ ] TASK-105 `b-card`: the missing `md` padding rung, and elevation as a token — **review**
-- [ ] TASK-107 `b-button`: a reachable tap target, and form participation — **review**
+- [x] TASK-104 `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels)
+- [x] TASK-105 `b-card`: the missing `md` padding rung, and elevation as a token
+- [x] TASK-107 `b-button`: a reachable tap target, and form participation
 - [ ] TASK-135 Number fields accept a comma decimal, so a phone with a Slovak keypad can type 81,8 — **review**
 
 ## What can be tested now
 
-5 item(s) are code-complete and awaiting sign-off: TASK-042, TASK-104, TASK-105, TASK-107, TASK-135. These can be exercised now.
+2 item(s) are code-complete and awaiting sign-off: TASK-042 (needs a live MSSql/MySQL/PostgreSQL server) and TASK-135 (needs a real comma-keypad phone). These can be exercised now.
+
+TASK-104 / TASK-105 / TASK-107 were closed to `done` on 2026-08-08: each had every acceptance criterion ticked with automated evidence, and **no `## Human test plan` section at all** — an absent section, not an `N/A` one, which is what parked them at `review`. Re-verified before closing (playground 624 checks + 66 device-fix, all green).
 
 TASK-135 needs a **real phone with a comma keypad** — no automated test can show this one, because the
 original fault was the phone keyboard refusing to type the comma at all. It also has a loose end worth

@@ -2,7 +2,7 @@
 id: TASK-107
 parent: STORY-052
 feature: FEATURE-016
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-07-30
@@ -152,6 +152,21 @@ gap, tracked as Birko.Framework TASK-035)". It is now. Its explicit guard and it
 work and are still needed (a form-associated custom element does **not** provide implicit submission — that
 needs a native text control), so nothing is broken; only the stated reasons are out of date. Presenter's
 call, not this task's.
+
+## Human test plan
+
+N/A — fully covered by automated tests.
+
+**Recorded 2026-08-08 while clearing review debt.** This section was **missing entirely** — not `N/A`, not
+a placeholder — which is why the task was parked at `review` and sat there. A task whose plan is genuinely
+`N/A` skips `review` and closes straight to `done`; an absent section is indistinguishable from an unrun
+one to every reader and to the close gate, so it defaults to debt.
+
+Why N/A is the right answer here: the target sizes are measured in the playground under a coarse pointer and the form participation is asserted through real submit/reset events. The sizes are pinned by named checks rather than against a magic constant, so a human eyeballing them adds nothing the measurement does not.
+
+Re-verified before closing rather than trusting the original run — the playground suites are green today
+at 624 checks across seven harnesses plus 66 device-fix checks, and every acceptance criterion above was
+already ticked with its evidence cited.
 
 ## Cross-links
 
