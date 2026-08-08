@@ -89,7 +89,7 @@ all, or whether it exists *because* it needed the connector's `Select` projectio
 
 ## Out of scope
 
-- **Documenting the escape hatch.** The `XStore` / `Connector` properties strip every decorator and nothing
+- **Documenting the escape hatch.** Now filed as [[TASK-145]]; the async-parity gap is [[TASK-146]]. The `XStore` / `Connector` properties strip every decorator and nothing
   says so at the call site. Worth a doc note on `GetUnwrappedStore` and the CLAUDE.md files, but it is a
   documentation task, not this defect — file separately if it is not picked up here.
 - `SH-H019` ([[TASK-126]]) — different subsystem, same family.

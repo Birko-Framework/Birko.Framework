@@ -101,7 +101,7 @@ unnoticed.
 - `SH-H021`/`SH-H022`/`SH-H026`/`SH-H027` — the same match-all species in the SQL and ElasticSearch
   expression translators. Unverified; separate tasks, but worth verifying as a set since the fix rationale
   here transfers directly.
-- Unifying `RuleSpecification` and `RuleExpressionConverter` into one converter. Worth doing, but it is a
+- Unifying `RuleSpecification` and `RuleExpressionConverter` into one converter. Now filed as [[TASK-144]]. Worth doing, but it is a
   refactor with its own risk and should not ride along on a correctness fix — file it if the port makes the
   duplication obvious.
 

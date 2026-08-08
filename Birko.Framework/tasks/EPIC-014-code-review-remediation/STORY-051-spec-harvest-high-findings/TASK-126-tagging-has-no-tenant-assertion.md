@@ -84,6 +84,8 @@ be careful.
 
 ## Out of scope
 
+- `AttachTagAsync` validating a tag's existence and ownership — now filed as [[TASK-147]].
+
 - Auditing consumer implementations of `TagServiceBase` for missing filters. The point of this task is that
   the base stops depending on them being correct.
 - `SH-H036` ([[TASK-125]]) and the tenant-wrapper work in [[TASK-114]].

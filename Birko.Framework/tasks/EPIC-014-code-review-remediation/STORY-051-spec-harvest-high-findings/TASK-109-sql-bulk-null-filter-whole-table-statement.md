@@ -118,8 +118,8 @@ untranslatable operand must not silently collapse: `1 = 0` for an empty `IN`, `1
   inspection alone, and the InMemory half of this very sweep was *discovered* by a failing test.
 - **Converting the 10 public `Delete`/`Update` overrides to `protected *Core`** — the actually-correct fix,
   since the convention exists so the base can enforce invariants. Changes behaviour in three backends and
-  needs its own decision; the contained repeat was chosen deliberately (see `## Outcome`). Not filed as a
-  task yet: it is a convention decision, not a defect.
+  needs its own decision; the contained repeat was chosen deliberately (see `## Outcome`). **Now filed as
+  [[TASK-143]]** (2026-08-08).
 
 ## Implementation plan
 
@@ -340,8 +340,8 @@ surface kept, so the split isolates the guard rather than the scaffolding.
   `WholeTableWriteException` and both MongoDB stores were reachable by **no** glob in **any** area, so a
   regen could not have seen this behaviour change at all. Added to `bulk-filter-operations`' globs with the
   reason recorded in `.map.yml`. This is the second instance of the same silent under-coverage (the first
-  was TASK-110, noted in the same file) — the pattern is worth a systematic sweep, which is *not* filed
-  yet because it needs a decision about how the map is audited rather than another glob.
+  was TASK-110, noted in the same file) — the pattern is worth a systematic sweep, which needs a decision
+  about how the map is audited rather than another glob. **Now filed as [[TASK-142]]** (2026-08-08).
 - **The `shaped-by` evidence pass cannot run from this aggregator at all** — every source glob points into
   a sibling repo, so no `pr:` sha resolves under `git show` here (verified: `d8c2f40` is "unknown
   revision"). Both regenerated specs are stamped `shaped-by-derived: false` *with the reason*, so the
