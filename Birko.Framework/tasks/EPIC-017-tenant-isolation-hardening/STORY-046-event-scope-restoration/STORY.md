@@ -59,7 +59,7 @@ public interface IEventScopeAccessor
 
 ## Status (2026-07-17) — outbox path prototyped (DONE); pipeline behavior TODO
 
-Landed (framework, uncommitted):
+Landed (framework — **committed since**; shas added 2026-08-08):
 - `Birko.EventBus/Core/IEventScopeAccessor.cs` — `IEventScopeAccessor` + `NullEventScopeAccessor`
   (registered in `.projitems`).
 - `OutboxProcessor` — optional `IEventScopeAccessor scopeAccessor` ctor param (defaults to the no-op);
@@ -91,9 +91,15 @@ through the same `Tenant.Current`:
   nested-WithTenant-wins, no-clobber; DI wires both halves). Only project depending on both
   `Birko.EventBus` and `Birko.Data.Tenant`, keeping the two cores independent.
 
-Not done yet (framework follow-up):
+Not done yet (framework follow-up) — **now filed as [[TASK-148]]** (2026-08-08), `blocked` on the
+external trigger rather than left as a story bullet, because a bullet is invisible to `pick`, the
+snapshot and `fix-next`:
 - **`ScopeRestorationBehavior : IEventPipelineBehavior`** for the distributed-consumer path (only needed
   once a distributed/MQTT transport dispatches these handlers; Symbio uses in-memory outbox today).
+
+**Commit references** (the "uncommitted" note above was true when written on 2026-07-17 and is not any
+more): `Birko.EventBus@e2eab6c` (the `IEventScopeAccessor` seam), `Birko.EventBus.Outbox@ec4ceb9` (scope
+restored from `entry.TenantGuid`), `Birko.EventBus.Tenant@8ac24f4` + `@6967992` (both bridge halves).
 
 Consumer adoption is **out of scope for this framework story** — calling `AddEventTenantScope()` and
 flipping `TenantIsolationMode.Strict` is per-consumer work tracked in each consumer's own `tasks/`

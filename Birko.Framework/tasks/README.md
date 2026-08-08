@@ -10,7 +10,7 @@ _Generated 2026-08-06. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | todo         | —                  | —                  | 67                  |
 | in-progress  | 6                  | 10                  | 1                   |
 | review       | —                  | —                  | 11                  |
-| blocked      | —                  | —                  | 0                   |
+| blocked      | —                  | —                  | 1                   |
 | done         | 1                  | 22                 | 38                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
@@ -206,10 +206,11 @@ Todo by priority: **P0 1 · P1 13 · P2 47 · P3 6**
     - [ ] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai) 🔍 review · FEATURE-016
     - [ ] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) 🔍 review · FEATURE-016
     - [ ] [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai) 🔍 review · FEATURE-016
-- **EPIC-017** [Tenant isolation hardening](EPIC-017-tenant-isolation-hardening/EPIC.md) — in-progress (0/0 tasks done)
+- **EPIC-017** [Tenant isolation hardening](EPIC-017-tenant-isolation-hardening/EPIC.md) — in-progress (0/1 tasks done)
   - STORY-044 [Opt-in strict (fail-closed) tenancy mode](EPIC-017-tenant-isolation-hardening/STORY-044-strict-fail-closed-mode/STORY.md) — done (0/0) (done)
   - STORY-045 [Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped](EPIC-017-tenant-isolation-hardening/STORY-045-decorator-order-per-tenant-uniqueness/STORY.md) — done (0/0) (done)
-  - STORY-046 [Restore ambient (tenant) scope for background event dispatch](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/STORY.md) — in-progress (0/0)
+  - STORY-046 [Restore ambient (tenant) scope for background event dispatch](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/STORY.md) — in-progress (0/1)
+    - [ ] [TASK-148](EPIC-017-tenant-isolation-hardening/STORY-046-event-scope-restoration/TASK-148-scope-restoration-pipeline-behavior.md) `ScopeRestorationBehavior` for the distributed-consumer dispatch path (P3, ai) ⚠ blocked
 
 ## Loose tasks
 
