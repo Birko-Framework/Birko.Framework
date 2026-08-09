@@ -12,7 +12,7 @@ using Xunit;
 namespace Birko.Data.SQL.Tests.DataBase
 {
     /// <summary>
-    /// SH-H038 — <c>TimeOnly</c> was the one BCL value type <c>CreateAbstractField</c> had no arm for.
+    /// SH-H037 (TASK-197) — <c>TimeOnly</c> was one more BCL value type <c>CreateAbstractField</c> had no arm for.
     /// While an unmapped type was silently skipped (SH-H037) that only lost the column; once the
     /// fallthrough started throwing, a single <c>TimeOnly</c> property took down <b>every</b> route on the
     /// owning entity, because the throw is raised at TABLE LOAD rather than on the query that touches the
