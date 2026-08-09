@@ -23,8 +23,16 @@ Filed from [[TASK-112]]'s Outcome, where the fail-fast turned each of these from
 table-load failure. That change is the improvement; this task is the resolution.
 
 TASK-112 mapped `long` / `short` / `double` / `float` / `byte[]` and made an unmappable property throw
-`FieldAttributeException` rather than producing no column. Three CLR types are now known to be on the
-wrong side of that line:
+`FieldAttributeException` rather than producing no column.
+
+> **This list was incomplete, and the omission reached a consumer before the list did.** `TimeOnly`
+> was on neither this task nor TASK-112's CLAUDE.md note, and it is the type that actually fired —
+> Symbio hit it on a schedule model and lost every route on the entity, since the throw happens at
+> table load. Mapped and closed separately as [[TASK-197]]. The lesson for whoever picks this up: an
+> inventory of what the *mapper* omits is worth less than an inventory of what *consumer models
+> actually declare*. Grep the consumer trees before assuming the three below are the remainder.
+
+Three CLR types are known to be on the wrong side of that line:
 
 - **`char?`** — the sharpest case, and the one that proves the fail-fast was worth having. `char` maps to
   `CharField(length: 1)`, but the dispatch tests `PropertyType == typeof(char)`, which `Nullable<char>`

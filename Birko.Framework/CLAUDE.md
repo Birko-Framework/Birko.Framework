@@ -236,6 +236,47 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Six fixes that were written but never committed — and the false premise that kept them there (2026-08-09)
+
+A sweep of the sibling repos found six real fixes sitting in working trees or landed without their
+aggregator commit. All are now committed with framework-side regression coverage: `TimeOnly` mapping
+(**TASK-197**, `b0dec59`), the `.Date` predicate rewrite (**TASK-196**, `f3cdf99`, landed 2026-08-08 with
+no tracking at all), and four in the `Birko\Web` bucket — `b-chart`'s span-aware time axis (`a2521ce`),
+`FormControlComponent`'s `willValidate` guard (`5a94c59`), `BaseCrudPage._openEdit`'s pre-fill window
+(`352e198`) and the `setChecked` page object (`69e0583`), with Playground coverage in `c285e48`.
+
+The individual defects are in their task files. What generalises:
+
+- **A false premise about tooling can quietly replace version control.** The four Web fixes were
+  uncommitted because a consumer's `docs/birko-framework-fix-prompts.md` recorded, twice, that *"the
+  framework repo has no git"* and reproduced the diffs as prose on that basis. All four packages are
+  ordinary git repos (Components 165 commits, Shell 59, Core 53, Testing 2). For two days a consumer's
+  docs folder was the source of truth for framework code, and Symbio's committed `wwwroot/app.js`
+  shipped a bundle whose sources existed in no repository. Nothing was broken and nothing failed —
+  the only symptom was a note explaining why it had to be that way. **Run `git log` before concluding
+  a repo is unversioned;** the cost of being wrong is invisible until a restore.
+- **A polyrepo fix that stops at two commits looks finished.** `.Date` had its production fix and its
+  regression suite, both excellent, and no aggregator commit — so no task, no `pr:` sha, no spec regen,
+  and nothing in this repo knew it existed. It was found by diffing sibling `git log` against this
+  repo's HEAD, which is now the only reliable way to notice: the third commit is the one with no
+  compiler or test to demand it.
+- **"We enumerated what this will break" was not true.** `TimeOnly` was on neither TASK-112's
+  CLAUDE.md note nor TASK-150's list of remaining unmapped types, and it is the one that reached a
+  consumer. An inventory of what the *mapper omits* is worth less than an inventory of what *consumer
+  models declare* — grep the consumer trees, don't reason from the dispatch.
+- **A wrong finding id survives every check a compiler can make.** The `TimeOnly` code cited SH-H038,
+  which is an unrelated ElasticSearch reindex finding; it came in with the working-tree comments and
+  was carried into two commit messages before anyone compared it to the register. It points every
+  "which findings are closed" sweep at the wrong defect.
+- **Two regression suites passed against the wrong thing, in opposite directions.** The `b-chart`
+  checks set `type: 'line'` via `setOptions` — but `type` is an *attribute*, so the default **bar**
+  renderer ran and its thinned category labels (`"0"`,`"3"`,`"6"`…) satisfied a "no label is a clock"
+  assertion; three checks passed against a chart that was never a line chart. Assert the shape you
+  want **positively**, never the absence of the broken one. And the `willValidate` checks used only
+  `b-input`, which reports no validity flag while disabled, so they passed with the fix reverted — the
+  throw needs `b-select`/`b-textarea`. **One representative is not a suite**, and picking the wrong one
+  gives a green run over a live crash.
+
 ### Five CLR types that mapped to no column at all — and the mapping that was waiting for them (2026-08-08)
 
 TASK-112 / SH-H037. A `[Table]` model with a `long`, `short`, `double`, `float` or `byte[]` property got a
