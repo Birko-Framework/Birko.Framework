@@ -45,6 +45,74 @@ The timeout fix widened the window.
   built on that premise would have presented a delete that **succeeded** to the user as a failure to
   inspect, retry or discard.
 
+## ⚠ Measured correction, 2026-08-11 — the mechanism is right, the ROUTE is not reachable in Symbio
+
+The guide asked for each finding to be confirmed in code before acting. Doing that confirmed all three —
+and then **falsified the consequence**. Reproduced against the running Testing stack, not reasoned about.
+
+**All three findings hold.** No `randomUUID`/`uuidv4`/`getRandomValues` anywhere in `Symbio.UI`;
+`AccountEndpoints.cs:38` returns a server-assigned id. `_keepMine()` re-issues the identical request and,
+on failure, hits `toast.error(retryFailed)` **without** calling `actionQueue.remove` — only `_keepServer()`
+clears the entry. TASK-151 is still `todo` and lines 47–48 are verbatim as quoted.
+
+**But the duplicate does not reproduce, because no write ever reaches the outbox.**
+`_sendWrite` diverts only `if (meta && !res.ok && res.status === 0)`. A depth-aware scan of every write
+call site in `Symbio.UI/src` — counting arguments by nesting, not by regex, since the bodies contain
+commas, template literals and nested objects:
+
+| | |
+|---|---|
+| `api.post` / `api.delete` / `api.put` call sites | 94 / 61 / 29 = **184** |
+| …passing an `ActionMeta` argument | **0** |
+| `actionQueue.enqueue` call sites | **1** (`shared/api.ts:39`, reachable only from `onQueueAction`) |
+
+`api` is a bare `new ApiClient({...})` — no wrapper can inject `meta` behind the call sites, so the third
+argument is the only source and it is never supplied.
+
+**Reproduction** (stall the create's response against a server that commits it, exactly as step 1 asks):
+
+```
+POST intercepted, forwarded to server → server COMMITTED (visitors 8 → 9)
+[ApiClient] Timed out: POST api/facilities/visitors → client saw {ok:false, status:0}
+outbox 'actions' store                → 0 entries
+rows created                          → 1, NOT 2
+```
+
+So Symbio's whole offline-write path — `ActionQueue`, `SyncManager`, `conflict-modal.ts` — is wired and
+**never fed**. That also explains why the modal's dead end has never been reported in Symbio: it is
+unreachable.
+
+### What IS reachable, and it is live today
+
+The create is committed and the user is told it failed. `visits-page.ts:320` is
+`if (r.ok) { toast.success(...); close(); reload(); } else showFormError(form, 'fullName', r.data)` — and
+`r.data` is `null` on a timeout. Measured after the 20s timeout, with a before/after control:
+
+| | |
+|---|---|
+| modal still open | **true** (control: open before; the success path calls `close()`) |
+| save button | **re-armed** — no `disabled`, no `loading` |
+| field value | **still holds the user's input** |
+| success toast | **none** |
+| rows on server | **1, already created** |
+
+The form sits open with their text and an armed Save. One more click is the second row. Same end state as
+the guide describes, reached entirely through the user rather than the outbox. Filed as **Symbio TASK-390**.
+
+### Consequences for the Approach below
+
+- **Both options address a route that does not exist yet.** `idPinned` was already unsafe here — Symbio
+  maps to 409 from `AlreadyExists`/`AlreadyAssigned`/`AlreadyLinked`/`AlreadyMember`/`AlreadyInitialized`
+  and any `Duplicate*` prefix (`ResultExtensions.cs:132-141`), all business rules, and
+  `sync-manager.ts:177` classifies on **HTTP status only**, never the body code. It is now also moot.
+- **If Option 1 is taken, prefer the upsert branch over the 409 branch.** With an idempotent create the
+  replay returns 2xx and drains on `_classifyReplay`'s `if (ok) return 'applied'` — `idPinned` is never
+  needed and the business-rule ambiguity never arises. The 409 branch would first require relocating every
+  `Duplicate*`/`Already*` off 409 across every module: a breaking contract change before it is safe anywhere.
+- ⚠ **Ordering is inverted from the guide's.** Today's safety is accidental. The moment anyone passes
+  `ActionMeta` on writes to make offline queueing work, this duplicate becomes automatic rather than
+  user-driven. **Id-idempotency must land before writes are allowed to queue**, not after.
+
 ## Approach
 
 Not settled — the shape is a consumer decision. Two candidates, and the choice matters:
