@@ -11,7 +11,7 @@ completed: null
 depends-on: []
 blocks: []
 findings: []
-pr: 83651e0 (Birko.Data.SQL), cbaca07 (Birko.Data.SQL.SqLite.Tests)
+pr: 83651e0 + 8445747 (Birko.Data.SQL), cbaca07 (Birko.Data.SQL.SqLite.Tests)
 github-issue: null
 jira-key: null
 ---
@@ -106,6 +106,20 @@ than counted as a red-verified failure.
 Pre-dedupe state at that point: `Birko.Data.SQL.SqLite.Tests` 131/131 and `Birko.Data.SQL.Tests` 417/417
 green with the fix applied.
 
+### A raw NUL byte shipped in the first commit (8445747)
+
+`83651e0` landed `IndexFailureKey` with a **literal NUL byte** inside a string literal where a separator
+was intended. git classifies a file containing a NUL as **binary**, so `AbstractConnector.cs` committed as
+`Bin 11529 -> 17428 bytes` with no textual diff — a C# file that could never again be reviewed, blamed or
+merged as text. Fixed in `8445747` by spelling it `\u0000`; same key and same runtime bytes, and a NUL is
+in fact the right separator for a composite key because it cannot occur in a table or index name.
+
+Two things worth keeping from it: **the compiler would probably have accepted it**, so the only signal was
+the word `Bin` in `git show --stat` — read the stat after committing, not just the diff before. And the
+file's history is still text end to end (`git diff HEAD~2 HEAD` renders 112 insertions); only that one
+intermediate commit's diff is binary, which is why it was fixed forward rather than amended — `83651e0`
+was already referenced by this task and by the aggregator commit message.
+
 ### Blocked: no .NET 10 SDK on this machine
 
 The four **dedupe/recovery/async tests added for the second defect have not been run.** Mid-session an
@@ -113,5 +127,6 @@ The four **dedupe/recovery/async tests added for the second defect have not been
 only 6.0.16 / 6.0.36 / 8.0.30, `shared/Microsoft.NETCore.App` likewise, and `sdk/10.0.{102,103,200,301}`
 are empty shells of 0–1 items. Everything here targets `net10.0`, so no build or test can run.
 
-**Next step:** reinstall the .NET 10 SDK, then run both suites and flip the last criterion. Until then
+**Next step:** restart the machine (a reboot is already pending, so .NET 10 most likely comes back
+with it; reinstall only if it does not), then run both suites and flip the last criterion. Until then
 the dedupe half is reviewed but unverified, and this task stays `review`, not `done`.
