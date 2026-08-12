@@ -253,4 +253,33 @@ public class RuleFieldResolutionTests
 
         act.Should().Throw<ArgumentNullException>();
     }
+
+    // ── Null arguments raise ArgumentNullException, not NullReferenceException ──
+
+    [Fact]
+    public void A_null_rule_is_rejected_on_the_type_aware_overload()
+    {
+        // The entityType parameter was guarded from the start and its sibling was not, so these three
+        // dereferenced inside Convert/ConvertSet and surfaced a bare NullReferenceException from within the
+        // converter — an inconsistent contract on a public API.
+        var act = () => RuleConditionConverter.ToConditions<RuleRow>((IRule)null!).ToList();
+
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void A_null_ruleset_is_rejected_on_the_type_aware_overload()
+    {
+        var act = () => RuleConditionConverter.ToConditions<RuleRow>((RuleSet)null!).ToList();
+
+        act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void A_null_rule_is_rejected_on_the_type_less_overload()
+    {
+        var act = () => RuleConditionConverter.ToConditions((IRule)null!).ToList();
+
+        act.Should().Throw<ArgumentNullException>();
+    }
 }
