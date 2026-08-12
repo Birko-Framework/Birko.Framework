@@ -9,6 +9,7 @@
     <Import_RootNamespace>Birko.Caching.Redis</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\WholeDatabaseDeleteException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RedisCache.cs" />
   </ItemGroup>
 </Project>

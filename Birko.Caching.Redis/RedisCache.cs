@@ -152,15 +152,139 @@ public sealed class RedisCache : ICache
     public async Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        // Report the argument the caller actually passed: null and "" both normalise to the same empty scope,
+        // and an operator grepping logs for their own call must be able to find it.
+        var operation = $"{nameof(RemoveByPrefixAsync)}({(prefix is null ? "null" : "\"\"")})";
+        var pattern = ResolveOwnedKeyPattern(_settings.KeyPrefix, prefix ?? string.Empty)
+            ?? throw new WholeDatabaseDeleteException(operation, _settings.Database);
+
+        await RemoveByPatternAsync(pattern, ct);
+    }
+
+    public async Task ClearAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        // SH-H006: this used to fall through to FLUSHDB whenever no KeyPrefix was configured — which is the
+        // DEFAULT, since RedisSettings.KeyPrefix is an unassigned string?. It targeted every key in the
+        // logical database, including the queued messages and pending jobs of the sibling components that
+        // share this connection by design. FLUSHDB is admin-gated, so on a settings-built connection it threw
+        // instead of flushing; the door that destroyed data silently on EVERY configuration was
+        // RemoveByPrefixAsync(""), which scans "*" and DELs — neither command gated. An unprefixed cache has
+        // no key space of its own to clear (see WholeDatabaseDeleteException for why inventing one was
+        // rejected), so both doors now refuse.
+        var pattern = ResolveOwnedKeyPattern(_settings.KeyPrefix, string.Empty)
+            ?? throw new WholeDatabaseDeleteException(nameof(ClearAsync), _settings.Database);
+
+        await RemoveByPatternAsync(pattern, ct);
+    }
+
+    /// <summary>
+    /// Destroys **every key in the configured logical database** (Redis <c>FLUSHDB</c>) — not just this
+    /// cache's entries. Keys written by <c>Birko.MessageQueue.Redis</c>, <c>Birko.BackgroundJobs.Redis</c>
+    /// and any Redis store sharing the connection go with them.
+    ///
+    /// <para>
+    /// Declared on <see cref="RedisCache"/> and deliberately **not** on <c>ICache</c> (SH-H006): a
+    /// cache-shaped contract must not be able to empty a database, so reaching this requires holding the
+    /// concrete type and naming the operation. That is the explicit door
+    /// <see cref="WholeDatabaseDeleteException"/> points callers at, and it is why a <c>FLUSHDB</c> in a
+    /// Redis log now means somebody asked for one.
+    /// </para>
+    /// <para>
+    /// <b>Requires admin mode.</b> StackExchange.Redis gates <c>FLUSHDB</c> behind <c>allowAdmin=true</c>
+    /// (measured: <c>Message.IsAdmin</c> is <c>true</c> for <c>FLUSHDB</c> and <c>KEYS</c>, <c>false</c> for
+    /// <c>SCAN</c>/<c>DEL</c>), and <see cref="RedisSettings.GetConnectionString"/> never emits it — so on a
+    /// settings-built connection this throws <c>RedisCommandException</c> rather than flushing. Supply
+    /// <c>allowAdmin=true</c> through <see cref="RedisSettings.RawConnectionString"/> to use it. This
+    /// precondition is stated in <see cref="WholeDatabaseDeleteException"/>'s message too, so the guard does
+    /// not send an operator to a door that answers with an unrelated exception.
+    /// </para>
+    /// </summary>
+    public async Task FlushDatabaseAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var server = _connectionManager.GetServer();
+        await server.FlushDatabaseAsync(_settings.Database);
+    }
+
+    /// <summary>
+    /// Resolves the <c>SCAN</c> pattern covering the keys this cache owns under <paramref name="prefix"/>, or
+    /// <c>null</c> when the pattern would degrade to <c>*</c> — i.e. when the caller's scope cannot be
+    /// distinguished from "the entire database".
+    ///
+    /// <para>
+    /// The single condition, checked once for both delete doors (SH-H006): the effective prefix is empty. That
+    /// happens only when no <c>KeyPrefix</c> is configured **and** the caller supplied no prefix either — a
+    /// configured <c>KeyPrefix</c> always contributes at least <c>"{prefix}:"</c>, and a caller-supplied
+    /// prefix bounds the pattern on its own even with no <c>KeyPrefix</c>, so ownership is not in question
+    /// there.
+    /// </para>
+    /// <para>
+    /// <b>The literal prefix is glob-escaped, and that is load-bearing, not tidiness.</b> Redis <c>MATCH</c>
+    /// treats <c>* ? [ ]</c> as metacharacters while <see cref="GetFullKey"/> writes them as literals, so an
+    /// unescaped prefix made the delete side match keys the read side never wrote. Concretely it walked
+    /// straight past the guard above: <c>RemoveByPrefixAsync("*")</c> on an unprefixed cache resolved to the
+    /// non-null pattern <c>"**"</c>, which matches **every key in the database** — the exact whole-database
+    /// delete this method exists to refuse, one character wide. A <c>KeyPrefix</c> of <c>"*"</c> did the same
+    /// to <c>ClearAsync</c> via <c>"*:*"</c>, reaching every sibling's namespaced key. Escaping makes the two
+    /// sides agree, which is what "prefix" meant all along.
+    /// </para>
+    /// <para>
+    /// <c>internal</c> rather than <c>private</c> so the regression suite can pin the decision table directly
+    /// — the same reason <see cref="ComputeRefreshedTtl"/> is internal (CR-L039).
+    /// </para>
+    /// </summary>
+    internal static string? ResolveOwnedKeyPattern(string? keyPrefix, string prefix)
+    {
+        // Composed through the same helper the read/write path uses. Two copies of the key layout is exactly
+        // how the delete side ends up addressing keys the read side never wrote — the bug class this method
+        // exists to close, arriving from the other direction.
+        var fullPrefix = ComposeKey(keyPrefix, prefix);
+        // Emptiness is judged on the raw prefix: escaping can only lengthen it, so checking after would
+        // report a bounded scope for an unbounded one.
+        return fullPrefix.Length == 0 ? null : $"{EscapeGlob(fullPrefix)}*";
+    }
+
+    /// <summary>
+    /// Escapes the Redis glob metacharacters <c>\ * ? [ ]</c> so a literal key prefix cannot act as a pattern.
+    /// The backslash goes first — escaping it after the others would double-escape the escapes.
+    /// </summary>
+    internal static string EscapeGlob(string literal)
+    {
+        if (literal.Length == 0) return literal;
+
+        var sb = new System.Text.StringBuilder(literal.Length);
+        foreach (var c in literal)
+        {
+            if (c is '\\' or '*' or '?' or '[' or ']')
+                sb.Append('\\');
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Enumerates keys matching <paramref name="pattern"/> and deletes them in batches. Enumeration goes
+    /// through <c>KeysAsync</c>, and the array overload of <c>KeyDeleteAsync</c> cuts the N individual
+    /// round-trips inside the enumeration (CR-L040).
+    /// <para>
+    /// <b>The library picks the command, and only one of its choices works here.</b> <c>KeysAsync</c> uses
+    /// <c>SCAN</c> or <c>KEYS</c> "based on the server capabilities" (its own doc), and <c>KEYS</c> is
+    /// admin-gated (measured: <c>Message.IsAdmin</c> is <c>true</c>) while <c>SCAN</c> is not — so against a
+    /// pre-2.8 server this path throws rather than falling back to a server-blocking scan. Stated rather than
+    /// claimed, so a refactor does not "preserve" a guarantee the library never made.
+    /// </para>
+    /// Callers must resolve the pattern through <see cref="ResolveOwnedKeyPattern"/> first — this method
+    /// deletes whatever it is given.
+    /// </summary>
+    private async Task RemoveByPatternAsync(string pattern, CancellationToken ct)
+    {
         var db = _connectionManager.GetDatabase();
         var server = _connectionManager.GetServer();
-        var fullPrefix = GetFullKey(prefix);
 
-        // Buffer matched keys and delete in batches via the array overload to cut the N individual
-        // KeyDeleteAsync round-trips inside the SCAN enumeration (CR-L040).
         const int batchSize = 512;
         var batch = new List<RedisKey>(batchSize);
-        await foreach (var key in server.KeysAsync(pattern: $"{fullPrefix}*", database: _settings.Database))
+        await foreach (var key in server.KeysAsync(pattern: pattern, database: _settings.Database))
         {
             ct.ThrowIfCancellationRequested();
             batch.Add(key);
@@ -174,22 +298,16 @@ public sealed class RedisCache : ICache
             await db.KeyDeleteAsync(batch.ToArray());
     }
 
-    public async Task ClearAsync(CancellationToken ct = default)
-    {
-        ct.ThrowIfCancellationRequested();
-        if (_settings.KeyPrefix is not null)
-        {
-            await RemoveByPrefixAsync("", ct);
-        }
-        else
-        {
-            var server = _connectionManager.GetServer();
-            await server.FlushDatabaseAsync(_settings.Database);
-        }
-    }
+    private string GetFullKey(string key) => ComposeKey(_settings.KeyPrefix, key);
 
-    private string GetFullKey(string key) =>
-        _settings.KeyPrefix is not null ? $"{_settings.KeyPrefix}:{key}" : key;
+    /// <summary>
+    /// The one place the Redis key layout is written down: <c>"{keyPrefix}:{key}"</c> when a prefix is
+    /// configured, the bare key otherwise. Both the read/write path (<see cref="GetFullKey"/>) and the
+    /// delete path (<see cref="ResolveOwnedKeyPattern"/>) go through it, so the two cannot drift apart.
+    /// Note <c>""</c> is a prefix and <c>null</c> is its absence — <c>RedisSettings</c> distinguishes them.
+    /// </summary>
+    private static string ComposeKey(string? keyPrefix, string key) =>
+        keyPrefix is not null ? $"{keyPrefix}:{key}" : key;
 
     private static RedisKey GetMetaKey(string fullKey) => $"{fullKey}:__meta";
 

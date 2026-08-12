@@ -37,7 +37,15 @@ var result = await cache.GetAsync<User>("user:42");
 - Sliding expiration uses Redis Hash metadata key (`{key}:__meta`) to track sliding/absolute TTL
 - GetOrSetAsync uses Redis SET NX as distributed lock to prevent stampede
 - RemoveByPrefixAsync uses SCAN via KeysAsync (non-blocking)
-- ClearAsync with KeyPrefix does prefix removal; without it does FlushDatabase
+- **A cache-scoped delete that would match the whole database refuses (SH-H006).** `ClearAsync` does prefix
+  removal when a `KeyPrefix` is configured; with none it throws `WholeDatabaseDeleteException` rather than
+  `FLUSHDB`-ing the logical database out from under `Birko.MessageQueue.Redis`,
+  `Birko.BackgroundJobs.Redis` and every Redis store sharing the connection. `RemoveByPrefixAsync("")` on an
+  unprefixed cache is the same delete through a second door and refuses identically. An unprefixed cache
+  writes bare keys, so it has no key space of its own — "this cache's entries" is not a set that exists, which
+  is why this refuses instead of deleting selectively or no-op'ing.
+- **`FLUSHDB` lives on `RedisCache.FlushDatabaseAsync`, not on `ICache`** — a cache-shaped contract must not be
+  able to empty a database. Reaching it needs the concrete type and the operation's real name.
 - All values serialized via CacheSerializer (JSON)
 
 ## Maintenance
