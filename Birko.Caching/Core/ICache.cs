@@ -25,7 +25,12 @@ public interface ICache : IDisposable
     Task RemoveByPrefixAsync(string prefix, CancellationToken ct = default);
 
     /// <summary>
-    /// Removes all entries from the cache.
+    /// Removes all entries from the cache — <b>the cache, not the store behind it</b>.
+    /// <para>
+    /// An implementation that cannot tell its own entries apart from a shared backing store's must refuse
+    /// rather than widen the operation to everything it can reach (SH-H006). <c>RedisCache</c> throws
+    /// <c>WholeDatabaseDeleteException</c> when no <c>KeyPrefix</c> gives it a namespace of its own.
+    /// </para>
     /// </summary>
     Task ClearAsync(CancellationToken ct = default);
 }
