@@ -9,7 +9,9 @@ picked-by: fix-next
 created: 2026-07-30
 depends-on: []
 blocks: []
-pr: ed74331          # + tests: 2a50d49 (Birko.Data.SQL.Tests), a042697 (Birko.Data.SQL.SqLite.Tests)
+pr: ed74331          # + review follow-up a210cd6 (Birko.Data.SQL), ec60359 (Birko.Data.SQL.View)
+                     # tests: 2a50d49 + 8803c20 (Birko.Data.SQL.Tests), a042697 (…SqLite.Tests),
+                     #        d1cb7b7 (Birko.Data.SQL.Views.Tests)
 github-issue: null
 jira-key: null
 findings: [SH-H023]
@@ -206,6 +208,12 @@ and a consumer should not have to learn two rules for which field names are acce
   is the more important half: [[TASK-110]] closed the identical defect on the sibling sink twelve days
   earlier and recorded its reasoning only in a commit message and a doc comment, which is why this one had
   to be rediscovered rather than reused.
+- **The table qualifier contradicts the FROM clause on PostgreSQL** — [[TASK-205]], filed from this task's
+  review. The emitted `Table.Column` leaves the table part unquoted while `CreateSelectCommand` quotes it,
+  so PG folds them apart. Pre-existing and framework-wide (the SELECT list and the expression WHERE path
+  qualify identically), so this task matches the surrounding convention rather than diverging in one sink —
+  but the "don't quote, for PostgreSQL" rationale had been recorded in three places without noting that it
+  covers the *column* and not the *qualifier*. All three are now corrected.
 - **The `shaped-by` evidence pass cannot run from this aggregator** — every source glob in this area points
   into a sibling repo, so no `pr:` sha resolves under `git show` here. Recorded in the spec's frontmatter.
   This is the family-wide limitation CLAUDE.md already notes, not something specific to this area.
@@ -227,20 +235,44 @@ and a consumer should not have to learn two rules for which field names are acce
 - step 4 — layer: local (`Birko.Data.SQL`). The defect is in this repo's own converter, not in a dependency;
   `Birko.Rules` is the reference implementation here and is not at fault.
 - step 5 — fix in `SQL/Conditions/RuleConditionConverter.cs`, new `SQL/DataBase_RuleField.cs`,
-  `SQL/DataBase_OrderBy.cs` (shared lookup), `Birko.Data.SQL.projitems`; tests in
-  `Birko.Data.SQL.Tests/RuleFieldResolutionTests.cs` (31) and
-  `Birko.Data.SQL.SqLite.Tests/RuleFieldResolutionEndToEndTests.cs` (11). 685/685 green across the 8
-  SQL-touching suites (SQL 448, SqLite 146, Providers 8, Views 38, SqLite.View 9, ViewModel 18, Caching 7,
-  View.Migrations 11).
-- step 6 — reintroduced the defect surgically (`ConvertLeaf` takes `rule.Field` again, every signature
-  intact): **34 of 42 failed** — unit 24/31, end-to-end 10/11. Restored, 594/594 green again.
-  Contract pins (8, passed both ways, named below), not evidence. A *full* revert was rejected as the
-  check: 29 of the 42 reference the new type-aware overloads and would not compile, so it would have
-  reported 8 of 13 and hidden the rest behind a build error — the TASK-204 trap.
-  Contract pins by name: `A_bare_identifier_still_passes_the_type_less_overload` (×5),
+  `SQL/DataBase_OrderBy.cs` (shared lookup), `Birko.Data.SQL.projitems`; later
+  `Birko.Data.SQL.View/SQL/DataBase_View.cs`. Tests in `RuleFieldResolutionTests.cs`,
+  `RuleFieldResolutionEndToEndTests.cs`, `ViewResolverRegistrationTests.cs`.
+- step 6 — **re-measured after review; the first numbers recorded here were wrong.** See the correction
+  note below.
+  **Final measurement (55 new tests: unit 42, end-to-end 11, view 2).** Three surgical reintroductions,
+  each keeping every signature intact so nothing is hidden behind a build error:
+  - **A — `ConvertLeaf` takes `rule.Field` again: 42 of 55 fail** (unit 32/42, e2e 10/11, view 0/2).
+  - **B — `[ModuleInitializer]` removed from the view resolver: 2 of 2 fail.** Both, including the
+    behavioural one — run filtered, nothing else had loaded a view, so it is evidence and not only a
+    mechanism pin.
+  - **C — the four `ArgumentNullException` guards removed: 3 of 3 fail.**
+  Restored after each; all suites green.
+  A *full* revert was rejected as the check: most of the new tests reference the new type-aware overloads
+  and would not compile against the pre-fix tree, so it would have reported a fraction and hidden the rest
+  behind a build error — the TASK-204 trap.
+  Contract pins by name (passed under reintroduction A, so **not** evidence for the main fix):
+  `A_bare_identifier_still_passes_the_type_less_overload` (×5),
   `A_disabled_rule_carrying_a_payload_is_skipped_not_emitted`,
   `A_null_entity_type_is_rejected_rather_than_silently_skipping_resolution`,
-  `An_unremapped_property_still_filters_correctly`.
+  the three null-guard tests (they pin the review fix, measured separately at C),
+  `An_unremapped_property_still_filters_correctly`, and both view tests (they pin the review fix,
+  measured separately at B).
+
+### Correction — the first step-6 numbers were stale, and were reported as final
+
+Recorded initially: unit `(31)`, `685/685 green … SQL 448`, `Restored, 594/594 green again`, and a headline
+split of **"34 of 42 failed"** — which also went into `CLAUDE.md`. Two of those cannot both be true (685 and
+594 do not describe the same eight suites), and none of them survived the change made *after* they were
+taken: the step-7 security pass added four payload cases for the `\A…\z` anchor fix, and the counts were
+never re-derived. The suite was 50 by then, and 55 after the review fixes; `Birko.Data.SQL.Tests` was 456,
+not 448.
+
+Caught by `/code-review`, not by anything in this task's own process — the numbers were carried forward by
+hand across three edits and never re-run. **A red-verify split is a measurement with an expiry date: it
+expires the moment the suite changes.** Re-derive it as the last thing before the close report, not the
+first thing after step 6. This repo has now been bitten twice in one task by counts that looked like
+evidence (see also TASK-204's five-tests-two-of-which-were-evidence).
 - step 7 — merge gate: local `verify-conventions` (checks 0a/0b/1–10) — clean apart from two obligations it
   raised and this change met: a `Recent Updates` entry (check 9, 5+ files) and a § Conventions rule
   (step 0b, register-on-introduce). Nullable sweep clean on all four changed files. `security-review` could
@@ -249,4 +281,14 @@ and a consumer should not have to learn two rules for which field names are acce
   and pinned by two payload cases. **Blast radius measured against the consumer trees, not reasoned from
   the dispatch** (the TimeOnly lesson): `grep -rn "ToConditions"` across all 16 consumers returns nothing —
   three build rule trees but none reaches either converter. Zero consumer impact.
-- step 8 — closed done; production `ed74331`, tests `2a50d49` + `a042697`, aggregator below.
+- step 8 — closed done; production `ed74331`, tests `2a50d49` + `a042697`, aggregator `7f14a0c`.
+- step 8b — **`/code-review high` returned after the close and found six things; three were real defects in
+  the fix and are now fixed.** (1) rules over a `[View]` type threw on the first call in a process —
+  `ec60359` + `d1cb7b7`; (2) null `rule`/`ruleSet` gave a bare `NullReferenceException` — `a210cd6` +
+  `8803c20`; (3) `ResolveFieldNameIn` was private, so the "shared reuse point" the new convention advertises
+  was uncallable — `a210cd6`. Two were record defects: the stale red-verify numbers (corrected above) and
+  the PostgreSQL rationale (corrected in all three places, [[TASK-205]] filed). One was a stale parent count
+  in `EPIC.md`/`STORY.md`, fixed. Suites re-run: 698/698 green across nine projects.
+  **The lesson: the gate ran too late to gate anything.** `code-review` was launched before the commits but
+  reported after them, and I closed on an inline pass rather than waiting — so three defects landed on
+  `main` and needed a follow-up commit in four repos. Either wait for the gate or do not call it a gate.

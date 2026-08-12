@@ -801,10 +801,29 @@ SHALL require the `Field` to be a bare, optionally table-qualified SQL identifie
 (`DataBase.ValidateRuleFieldIdentifier`) and SHALL emit it unchanged.
 
 A `Field` that is blank, unresolvable, or not a bare identifier SHALL raise `ArgumentException` naming the
-field (and, on the type-aware path, the entity type). The resolved identifier SHALL NOT be quoted, for the
-same reason recorded for the ORDER BY sink: this codebase emits column identifiers bare everywhere and
-quotes only table names, so quoting would break a working filter on PostgreSQL, where an unquoted DDL
-identifier folds to lower case.
+field (and, on the type-aware path, the entity type). A null `rule`/`ruleSet`/`entityType` SHALL raise
+`ArgumentNullException` rather than dereferencing inside the converter.
+
+The resolved **column** identifier SHALL NOT be quoted, for the same reason recorded for the ORDER BY sink:
+this codebase emits column identifiers bare everywhere and quotes only table names, so quoting would break
+a working filter on PostgreSQL, where an unquoted DDL identifier folds to lower case. The **table
+qualifier** is a separate matter and that rationale does not extend to it — the emitted `Table.Column`
+leaves the table part unquoted while the `FROM` clause quotes it, which breaks a non-lower-case table on
+PostgreSQL. This is pre-existing and framework-wide (`GetSelectFields(true)` qualifies identically), so the
+rule path matches the surrounding convention rather than diverging in one sink.
+
+Because a `[View]` type has no `[Table]`, its fields resolve only through the `ResolveFieldSelectName`
+delegate; that delegate SHALL therefore be registered at module load, not merely as a side effect of the
+first `LoadView`, so that resolution at the caller does not depend on what has already run in the process.
+
+#### Scenario: A view field resolves on the first call in a process
+
+- **Given** a fresh process in which nothing has loaded a view
+- **When** a rule over a `[View]` type is converted
+- **Then** the field resolves, because a `[ModuleInitializer]` registered the view resolver at module load.
+  Previously the delegate was registered only inside `LoadView`, so the first such call raised
+  `ArgumentException` for a valid field and the identical call succeeded later — an order-dependent,
+  first-call-only failure. The ORDER BY sink never had this: the connector invokes it after `LoadView`
 
 #### Scenario: A remapped property filters on its mapped column
 

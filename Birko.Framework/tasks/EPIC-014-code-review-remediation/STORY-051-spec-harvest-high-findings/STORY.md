@@ -13,9 +13,10 @@ finding-ids: SH-H001 … SH-H057
 
 ## Progress
 
-**16 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
+**17 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
-SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]]) — **10 of 17 tasks
+SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
+SH-H023 via [[TASK-111]]) — **12 of 17 tasks
 done, 1 in review.** TASK-126 completes the tenant trio with TASK-114 (write guard) and TASK-125 (read
 bypass): a base class that documented its scoping contract in a comment and enforced none of it now
 re-checks every record its hooks return. Unlike the other two it is hardening rather than a reproduced

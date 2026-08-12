@@ -144,10 +144,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   `DataBase.ResolveFieldNameIn` — property name, then mapped column name — so **the resolution IS the
   whitelist**: what survives is a name read out of metadata, and caller text has no path to the statement.
   One shared lookup because a consumer should not have to learn two rules for which field names are
-  accepted. **Do not quote the resolved identifier**: this codebase emits column identifiers bare
-  everywhere (DDL, SELECT list, every condition strategy) and quotes only table names, so quoting one sink
-  breaks it on PostgreSQL, where the unquoted DDL identifier folds to lower case. Quoting was never what
-  closed either injection. Where an entity type genuinely isn't available, the fallback is a **bare
+  accepted — and it is `internal`, not `private`, precisely so the third sink can *call* it. **Do not quote
+  the resolved column identifier**: this codebase emits column identifiers bare everywhere (DDL, SELECT
+  list, every condition strategy) and quotes only table names, so quoting one sink breaks it on PostgreSQL,
+  where the unquoted DDL identifier folds to lower case. Quoting was never what closed either injection.
+  (**That argument covers the column, not the table qualifier.** An emitted `Table.Column` leaves the table
+  part unquoted while the `FROM` clause quotes it, which on PostgreSQL breaks any table whose name is not
+  already lower case. That is pre-existing and framework-wide — `GetSelectFields(true)` does the same — so
+  it is not a reason to diverge in one sink, but do not cite the PostgreSQL rationale as if the qualifier
+  were covered by it.) Where an entity type genuinely isn't available, the fallback is a **bare
   identifier check** (`ValidateRuleFieldIdentifier`) — weaker, since it cannot fix a `[NamedField]`
   remapping, but it still refuses every payload; anchor such a pattern with `\A…\z`, because .NET's `$`
   also matches before a trailing newline. Sanitising the *parameter name* is not this check:
@@ -297,10 +302,18 @@ Four things worth carrying:
   end-to-end OR-group check returned 0 rows where 2 were expected — SH-M128, already filed, different root
   cause (`ConvertGroup` wraps with `AndSubCondition`). Asserting the OR result would have had to encode the
   broken behaviour to stay green, which blesses it. The test uses an AND group and says why.
-- **Full revert would have reported two-fifths of the check.** 29 of the 42 new tests reference the new
-  type-aware overloads and would not compile against the pre-fix tree, so a plain revert would have shown 8
-  of 13 and hidden the rest behind a build error — the TASK-204 trap arriving again. Reintroducing the
-  defect *surgically* (one line in `ConvertLeaf`, every signature intact) gave a real split: **34 of 42**.
+- **Full revert would have reported a fraction of the check.** Most of the new tests reference the new
+  type-aware overloads and would not compile against the pre-fix tree, so a plain revert would have hidden
+  them behind a build error — the TASK-204 trap arriving again. Reintroducing the defect *surgically* (one
+  line in `ConvertLeaf`, every signature intact) gave a real split: **42 of 55**.
+- **The split was then reported stale, and `/code-review` caught it.** The first recorded numbers ("34 of
+  42", plus two mutually inconsistent totals) were taken *before* the security pass added four payload
+  cases, and were carried by hand across three edits without being re-run. **A red-verify split expires the
+  moment the suite changes** — re-derive it as the last step before reporting, never carry it forward. Two
+  further defects in the fix came out of the same review: rules over a `[View]` type threw on the first
+  call in a process (the resolver was registered only inside `LoadView`, while rule fields resolve at the
+  caller — now a `[ModuleInitializer]`), and the "don't quote, for PostgreSQL" rationale was recorded in
+  three places without noting that it covers the *column* and not the *table qualifier*.
 
 ### One index it could not build took down six entities' read surfaces — and the fix leaked per request (2026-08-12)
 
