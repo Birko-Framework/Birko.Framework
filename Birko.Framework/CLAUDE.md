@@ -136,6 +136,40 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   mark a deliberate all-rows write: the SQL stays clean (`DELETE FROM "T"`), because `1 = 1` in a query
   log is indistinguishable from `' OR 1=1--` and trains operators to ignore the pattern that should
   alarm them
+- **That rule is not about SQL — it is about any write whose scope can silently become "everything", in
+  any backend.** The bullet above was written for `WHERE`-less statements, and the second instance arrived in
+  Redis (SH-H006/TASK-117): with no `KeyPrefix` configured — the *default*, since `RedisSettings.KeyPrefix` is
+  an unassigned `string?` — `RemoveByPrefixAsync("")` scanned `"*"` and `DEL`'d every key, and
+  `ClearAsync` fell through to `FLUSHDB`. Both targeted the queued messages and pending jobs of every sibling
+  sharing the database. **The two doors had different volumes, and the quiet one was not the one the finding
+  named**: `SCAN`/`DEL` are not admin-gated so the prefix door destroyed data silently on every configuration,
+  while `FLUSHDB` *is* gated, so it flushed only for a consumer whose `RawConnectionString` carries
+  `allowAdmin=true` and threw for everyone else. Four parts generalise, and a third sink should be a reuse
+  rather than a rediscovery:
+  - **Resolve the scope once, and refuse when it reduces to everything.** One helper answers "what does this
+    operation cover" for every door into the same write — `ResolveOwnedKeyPattern` for the cache the way
+    `ResolveFieldNameIn` does for identifiers. `ClearAsync` was only the *documented* door;
+    `RemoveByPrefixAsync("")` reached the identical whole-database delete by scanning `"*"`, and one shared
+    resolver closed both. **Guard on the resolved scope, never on the configuration that produced it** — the
+    blunt check ("no `KeyPrefix`") would have refused the bounded, legitimate `RemoveByPrefixAsync("user:")`.
+  - **The refusal is `WholeTableWriteException`'s sibling**, deriving from `InvalidOperationException` for the
+    same reason (existing `catch` blocks keep working; a host that wants to report it distinctly can catch
+    the type first), and its message **names the deliberate door**. A guard that only says "no" gets reached
+    around.
+  - **The explicit door is named for what it destroys, not for the caller's intent.** `*All` is the SQL
+    spelling because the scope there *is* the caller's own table; where the blast radius is somebody else's
+    data, the honest name says so — hence `FlushDatabaseAsync`, not `ClearAll`, and it is declared on the
+    concrete `RedisCache` and **not on `ICache`**, so a cache-shaped contract cannot empty a database. Same
+    reasoning as keeping `Delete()` unspellable: a short or reassuring name is a footgun in proportion to how
+    destructive the operation is. Assert the off-interface property with a test — "I didn't add it to the
+    interface" is construction, not evidence, and the next person to widen the interface breaks it silently.
+  - **Verify the escape hatch opens — a guard whose opt-out throws is a wall wearing a door's label.** The
+    refusal message pointed at `FlushDatabaseAsync`, which StackExchange.Redis gates behind `allowAdmin=true`
+    that `RedisSettings.GetConnectionString()` never emits: an operator following the message would have hit a
+    second, unrelated exception. Fixed by naming `KeyPrefix` **first** (it works on every configuration) and
+    stating the admin precondition on the flush door. The § SH-H037 rule says fail-fast is legitimate *only*
+    where an opt-out exists and is checked first — so **the opt-out is part of the fix and needs its own
+    test**, not a mention in a message nobody executed.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -274,6 +308,77 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### "Clear the cache" deleted the database — by default, and the default had no default (2026-08-12)
+
+TASK-117 / SH-H006. With no `KeyPrefix` configured — the **default**, since `RedisSettings.KeyPrefix` is an
+unassigned `string?` — two doors in `RedisCache` targeted every key in the logical database, including the
+queued messages and pending jobs of the siblings that share the connection by design
+(`Birko.MessageQueue.Redis`, `Birko.BackgroundJobs.Redis`, the Redis sync stores). `ICache.ClearAsync` promises
+to clear *the cache*; the implementation was wider than its own contract. Both doors now refuse with
+`WholeDatabaseDeleteException` before opening a connection, and `FLUSHDB` lives on
+`RedisCache.FlushDatabaseAsync` — off the `ICache` surface. The generalised rule is in § Conventions above.
+Split: **9 of 27** new tests fail on a surgical reintroduction. Six things worth carrying:
+
+- **The finding named the loud door and the quiet one was next to it.** `ClearAsync`'s `FLUSHDB` is what the
+  finding described — but `FLUSHDB` is admin-gated by StackExchange.Redis (measured by reflecting the shipped
+  2.8.41: `Message.IsAdmin` is `true` for `FLUSHDB` and `KEYS`, `false` for `SCAN`/`DEL`), and
+  `GetConnectionString()` never emits `allowAdmin=true`, which nothing in `Framework`, `Framework.Tests` or
+  `Consumers` sets. So on a settings-built cache that branch **threw** rather than flushing. The door that
+  destroyed data silently on every configuration was `RemoveByPrefixAsync("")` — `SCAN "*"` + `DEL`, neither
+  gated — found while re-verifying and filed as *secondary*. It was primary. Two lessons: **a defect's
+  reachability depends on the client library's own gates, not only on the code path**, and the ranking
+  rationale ("the default path destroys and reports success") was right about the defect and wrong about which
+  command did it. Both were recorded, then corrected.
+
+- **The finding's preferred remedy was unimplementable, and the reason is worth more than the fix.** It asked
+  for an unprefixed clear to delete "this cache's entries and leave other keys intact". That set does not
+  exist: an unprefixed cache writes bare keys, so they are byte-for-byte indistinguishable from every
+  sibling's, and two unprefixed caches on one database *are* the same key space. Every way to invent one was
+  worse — an owned-key index needs a key name (the layout change the finding's option 2 was rejected for),
+  costs a round-trip per write, and grows without bound because Redis expiry does not remove members; while
+  scanning a made-up prefix finds nothing and turns the clear into a **silent no-op reporting success**. The
+  option the task ranked *last* was the only one that is neither destructive nor a lie. **When a finding
+  prescribes a remedy, check the remedy is possible before costing it** — third time in a fortnight (TASK-111
+  rejected "resolve and quote", TASK-112 found the mapping already built).
+- **The documented door was not the only door.** `RemoveByPrefixAsync("")` reached the identical
+  whole-database delete by scanning `"*"` instead of `FLUSHDB` — same root cause, one function away, not in
+  the finding. Fixed together through one resolver. Findings travel in packs, and the pack members are
+  usually in the same file.
+- **Widening the guard meant narrowing what it fires on.** Guarding "no `KeyPrefix` configured" would have
+  refused `RemoveByPrefixAsync("user:")` on an unprefixed cache — bounded and legitimate. The guard is on the
+  *resolved scope* (`"*"`), not on the configuration that produced it. A refusal must not fire on the case it
+  was never about.
+- **`verify-conventions` found the register-on-introduce gap, and its own step 0 is why.** This is the second
+  instance of one guard (after `WholeTableWriteException`) and § Conventions recorded it only in SQL terms —
+  precisely the TASK-111 lesson arriving again, twelve days later, in a different backend. The frozen
+  checks 1–10 could not have caught it; the live rulebook sweep did. Check 5 then caught that a ticked
+  criterion ("`FLUSHDB` not reachable from `ICache`") rested on construction rather than a test.
+- **The close gate then found a one-character bypass of the new guard, and the split had to be re-derived
+  three times.** `security-review` could not run (no `origin/HEAD`, and the production change is in a sibling
+  repo no skill in this repo can diff), so the pass ran **inline** — which is the only reason the question
+  *"can this guard be walked past?"* got asked. It could: the literal prefix went into a Redis `MATCH` pattern
+  unescaped, so `RemoveByPrefixAsync("*")` resolved to `"**"` — non-null, past the emptiness check, and
+  matching **every key in the database**. A `KeyPrefix` of `"*"` did it to `ClearAsync` via `"*:*"`. The same
+  escaping fixed a latent read/write disagreement, since `GetFullKey` always wrote metacharacters as literals.
+  Two things generalise: **when a review skill fails to resolve, run the pass by hand — the gate is not
+  optional**, and **a scope guard's own test is whether a caller can widen the scope back**, not whether it
+  fires on the reported input. The split went 5 of 13 → 5 of 16 → **8 of 25**; the first number would have
+  understated the check by three tests and the fix by a whole defect. Final: **9 of 27**, after the review's
+  findings added two more.
+- **The regression suite for a destructive-clear defect was itself destructive.** The tests asserting a call is
+  *not* refused must run past the guard, so they reached `GetDatabase()`/`GetServer()` — and pointed at
+  `localhost:6379` they issued real `SCAN test:*` + `DEL` and `SCAN user:*` + `DEL` against database 0. On any
+  developer box with a local Redis they were deleting live `user:*` keys, and
+  `NotThrowAsync<WholeDatabaseDeleteException>` swallowed every trace. They now point at TEST-NET-1
+  (`192.0.2.1`, RFC 5737, never routable). The tell was in plain sight and nobody read it: suite runtime went
+  **36s → 800ms** once the connections stopped. **A "not refused" assertion is an instruction to execute the
+  dangerous path** — give it somewhere harmless to execute, and treat a slow offline suite as evidence it is
+  not offline.
+- **A `NotThrowAsync<TSpecific>` assertion passes on every other exception.** `FlushDatabaseAsync_IsNotItself
+  Refused` claimed to prove "the escape hatch opens" while asserting only that one exception type was absent —
+  so it passed identically whether the flush worked, hit the admin gate, or never connected. Narrowed to what
+  it can actually see, with the real property (the admin precondition) pinned separately and by measurement.
 
 ### A rule field was executable SQL, and the second sink proved the first one's rule (2026-08-12)
 

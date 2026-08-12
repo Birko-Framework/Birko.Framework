@@ -40,14 +40,27 @@ that diff is the fix's evidence.
 
 ## Structure
 
-One **story per severity level per sweep**. Tasks are generally **not** pre-created — each story is the
-bucket from which tasks are extracted on demand from its findings doc, rather than mirroring 1,700+
-entries into the tree up front.
+One **story per severity level per sweep**. Sweep 2 is fully decomposed into tasks; sweep 1's remaining
+story still extracts on demand.
 
-**The one exception is STORY-051**, where the hand-verified highs are pre-created as tasks — 11 initially,
-now 13 as further findings are verified and promoted. A bounded set of traced defects is pickable work; the
-reasoning against pre-creation applies to unverified claims, not to confirmed ones. **Verification is the
-gate for promotion**, so a finding earns a task by being traced, not by being filed.
+**Sweep 2 was decomposed on 2026-08-09** (`/tasks intake --epic EPIC-014`), at **one task per area per
+severity** — 22 + 22 + 1 = 45 tasks across STORY-053/054/055. The on-demand policy had held for ten days and
+produced **zero** extractions, which is not a coincidence: *a checklist line is filed, not scheduled.* Only
+`status: todo` tasks are ranked by `/tasks pick`, by the `Next up` snapshot, or by [[fix-next]], so 808
+findings sat in a state no picker could see. The [[roadmap]] DV12 audit is what surfaced it.
+
+**Per-area is the right grain, and per-finding never was.** Findings in one area share a spec, a source-glob
+set and frequently a root cause, so they are fixed in one edit — which is the intake rule for what belongs in
+one task. Mirroring 808 entries one-to-one would have been as unworkable as filing none. Per-finding
+extraction still happens *inside* an area task, via `/tasks spawn`, when triage confirms something too large
+to fix there.
+
+**STORY-051 keeps its own rule**, which is different and still correct: its tasks are the *hand-verified*
+highs, promoted one per traced defect. **Verification is the gate for promotion** — a high finding earns a
+task by being traced, not by being filed. The area-batching above applies to the unverified medium/low
+claims, where triage *is* the work.
+
+**Sweep 1's STORY-026** (275 medium `CR-*`) is untouched by this and still extracts on demand.
 
 ### Sweep 1 — `CR-*`
 
@@ -60,10 +73,11 @@ gate for promotion**, so a finding earns a task by being traced, not by being fi
 
 ### Sweep 2 — `SH-*`
 
-- STORY-051 — High findings (57, in progress) — `SH-H001 … SH-H057`; **15 tasks** (TASK-108 … TASK-118, TASK-125, TASK-126, TASK-128, TASK-129) covering 16 verified findings plus two found during remediation; **5 done** (TASK-108 SH-H039, TASK-114 SH-H047, TASK-115 SH-H054, TASK-110 SH-H003 + the medium twin SH-M022, TASK-128 the view twin — no `SH-` id, so the task count runs ahead of the 4 findings closed)
-- STORY-053 — Medium findings (421) — `SH-M001 … SH-M421`
-- STORY-054 — Low findings (387) — `SH-L001 … SH-L387`
-- STORY-055 — The three unrated areas (16) — `core-model-contracts`, `store-lazy-initialization`, `unit-of-work-and-transactions`: swept, but their findings were **never written down**. Recovery, not remediation.
+- STORY-051 — High findings (57, in progress) — `SH-H001 … SH-H057`; **17 tasks** (TASK-108 … TASK-118, TASK-125, TASK-126, TASK-128, TASK-129, TASK-137, TASK-141), promoted one per verified finding plus several found during remediation; **13 done · 1 in review · 3 todo**
+(TASK-118 in review; TASK-129, TASK-137, TASK-141 todo). The task count runs ahead of the findings closed — some tasks close a defect that never got an `SH-` id (TASK-128's view twin), and some close two at once (TASK-110 took `SH-H003` and its medium twin `SH-M022`).
+- STORY-053 — Medium findings (421) — `SH-M001 … SH-M421`; **22 per-area tasks**, TASK-151 … TASK-172
+- STORY-054 — Low findings (387) — `SH-L001 … SH-L387`; **22 per-area tasks**, TASK-173 … TASK-194
+- STORY-055 — The three unrated areas (16) — `core-model-contracts`, `store-lazy-initialization`, `unit-of-work-and-transactions`: swept, but their findings were **never written down**. Recovery, not remediation. **1 task**, TASK-195. Note these three areas are precisely the ones with *no* per-area triage task above, because they contributed no medium/low findings to the doc — so TASK-195 has to create their route, not just their ids.
 
 ## Success criteria
 

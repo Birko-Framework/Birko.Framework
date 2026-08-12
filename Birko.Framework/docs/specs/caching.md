@@ -1,10 +1,11 @@
 ---
 area: caching
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 2f8675abb8c68e81c9cefb5455db97a5425ee369
+generated-on: 2026-08-12
 sources:
   - ../Birko.Caching.Hybrid/HybridCache.cs
   - ../Birko.Caching.Hybrid/HybridCacheOptions.cs
+  - ../Birko.Caching.Redis/Exceptions/WholeDatabaseDeleteException.cs
   - ../Birko.Caching.Redis/RedisCache.cs
   - ../Birko.Caching/Core/CacheEntryOptions.cs
   - ../Birko.Caching/Core/CacheResult.cs
@@ -15,7 +16,14 @@ sources:
   - ../Birko.Data.SQL.Caching/Caching/SqlCacheKeyBuilder.cs
   - ../Birko.Data.SQL.Caching/Caching/SqlCacheOptions.cs
   - ../Birko.Data.SQL.Caching/Stores/CachedAsyncDataBaseBulkStore.cs
-shaped-by: []
+# FEATURE-014 comes from the triggering task (TASK-117), NOT from the evidence pass.
+# The evidence pass structurally cannot run from this aggregator: every `sources:` glob points into a
+# sibling repo with its own history, so no task's `pr:` sha resolves under `git show` here (verified —
+# TASK-113's `86c8247` is an unknown revision in this repo). Hence derived: false, and
+# shaped-by-unresolved is omitted because nothing ran to count. Per-sub-repo spec trees (TASK-131) are
+# the fix.
+shaped-by: [FEATURE-014]
+shaped-by-derived: false
 ---
 
 # Cache abstraction, tiering and query-cache decoration
@@ -494,7 +502,41 @@ caller SHALL NOT delete the lock key.
 The system SHALL implement `RemoveByPrefixAsync` by enumerating `server.KeysAsync(pattern:
 "{fullPrefix}*", database: settings.Database)`, buffering matched keys and issuing a single
 `KeyDeleteAsync(RedisKey[])` per 512 keys plus a final partial batch, checking
-`ct.ThrowIfCancellationRequested()` once per enumerated key.
+`ct.ThrowIfCancellationRequested()` once per enumerated key. The pattern SHALL be resolved through
+`ResolveOwnedKeyPattern`, so a call whose effective prefix is empty — no `KeyPrefix` **and** no
+caller-supplied prefix, the same whole-database delete `ClearAsync` refuses — throws
+`WholeDatabaseDeleteException` instead of scanning `"*"`. The literal prefix SHALL be glob-escaped
+(`\ * ? [ ]`) before the trailing `*` is appended, so a prefix cannot act as a pattern.
+
+#### Scenario: A glob metacharacter in the prefix is matched literally
+
+- **Given** `RedisSettings` with `KeyPrefix == null` and `RemoveByPrefixAsync("*")`
+- **When** the pattern is resolved
+- **Then** it is `"\\**"` — keys literally beginning with `*` — and **not** `"**"`, which would match every key in the database and pass the emptiness guard unnoticed
+
+#### Scenario: A glob metacharacter in the KeyPrefix does not widen ClearAsync
+
+- **Given** `RedisSettings { KeyPrefix = "*" }`
+- **When** `ClearAsync()` is awaited
+- **Then** the pattern is `"\\*:*"`, matching only keys written as `"*:{key}"` — not `"*:*"`, which would reach every colon-containing key including every sibling component's
+
+#### Scenario: Escaping keeps the read and delete sides in agreement
+
+- **Given** a `KeyPrefix` containing `*`, `?`, `[` or `]`
+- **When** a key is written via `GetFullKey` and later removed by prefix
+- **Then** both address the same key, because `GetFullKey` writes metacharacters as literals and the scan now matches them as literals
+
+#### Scenario: An unprefixed cache refuses an empty prefix
+
+- **Given** `RedisSettings` with `KeyPrefix == null` and `RemoveByPrefixAsync("")`
+- **When** it is awaited
+- **Then** `WholeDatabaseDeleteException` is thrown, because the pattern would have been `"*"` — this is the second door onto the same delete, not a separate case
+
+#### Scenario: A caller-supplied prefix bounds the pattern without a KeyPrefix
+
+- **Given** `RedisSettings` with `KeyPrefix == null` and `RemoveByPrefixAsync("user:")`
+- **When** it is awaited
+- **Then** the scan proceeds over `"user:*"` — ownership is not in question, so the guard does not fire
 
 #### Scenario: Batched deletion
 
@@ -514,10 +556,14 @@ The system SHALL implement `RemoveByPrefixAsync` by enumerating `server.KeysAsyn
 - **When** the next key is yielded
 - **Then** `OperationCanceledException` is thrown and any keys already buffered in the current partial batch are **not** deleted
 
-### Requirement: Redis ClearAsync depends on whether a key prefix is configured
+### Requirement: Redis ClearAsync refuses when it cannot scope itself
 
-The system SHALL, in `RedisCache.ClearAsync`, delegate to `RemoveByPrefixAsync("")` when
-`RedisSettings.KeyPrefix is not null`, and otherwise call `server.FlushDatabaseAsync(settings.Database)`.
+The system SHALL, in `RedisCache.ClearAsync`, resolve the owned key pattern through
+`ResolveOwnedKeyPattern(settings.KeyPrefix, "")` and delete by it; and SHALL throw
+`WholeDatabaseDeleteException` when that resolution yields `null` — i.e. when no `KeyPrefix` gives the cache
+a namespace of its own, so the pattern would be `"*"`. The refusal SHALL precede any use of the connection,
+and SHALL name both deliberate routes in order of applicability: configure `RedisSettings.KeyPrefix` (works on
+every configuration), or call `RedisCache.FlushDatabaseAsync` (additionally requires `allowAdmin=true`).
 
 #### Scenario: Prefixed cache clears only its own namespace
 
@@ -525,11 +571,56 @@ The system SHALL, in `RedisCache.ClearAsync`, delegate to `RemoveByPrefixAsync("
 - **When** `ClearAsync()` is awaited
 - **Then** only keys matching `"app:*"` are deleted and unrelated keys in the same database survive
 
-#### Scenario: Unprefixed cache flushes the whole database
+#### Scenario: Unprefixed cache refuses rather than targeting the database
 
 - **Given** `RedisSettings` with `KeyPrefix == null` (the default) sharing database 0 with other framework components
 - **When** `ClearAsync()` is awaited
-- **Then** `FLUSHDB` is issued and **every** key in database 0 is destroyed, including keys this cache never wrote
+- **Then** `WholeDatabaseDeleteException` is thrown, no command is sent, and every key in database 0 — including those written by `Birko.MessageQueue.Redis` and `Birko.BackgroundJobs.Redis` — survives
+
+#### Scenario: The refusal happens before the connection is opened
+
+- **Given** an unprefixed `RedisCache` pointed at an unreachable server
+- **When** `ClearAsync()` is awaited
+- **Then** `WholeDatabaseDeleteException` is thrown rather than a `RedisConnectionException`, because the scope check precedes `GetServer()`
+
+#### Scenario: A cancelled token still wins over the scope check
+
+- **Given** an unprefixed `RedisCache` and a pre-cancelled token
+- **When** `ClearAsync(token)` is awaited
+- **Then** `OperationCanceledException` is thrown, not `WholeDatabaseDeleteException` — the cancellation check is first
+
+#### Scenario: An empty KeyPrefix is a namespace, not the absence of one
+
+- **Given** `RedisSettings { KeyPrefix = "" }`
+- **When** `ClearAsync()` is awaited
+- **Then** the pattern is `":*"` and the clear proceeds, because the caller did set a prefix and keys are written as `":{key}"`
+
+### Requirement: FLUSHDB is reachable only through an explicitly named door off the ICache surface
+
+The system SHALL expose `RedisCache.FlushDatabaseAsync(CancellationToken)`, which calls
+`server.FlushDatabaseAsync(settings.Database)` and destroys every key in the logical database; and SHALL NOT
+declare it on `ICache`, so reaching it requires holding the concrete `RedisCache` type. Because
+StackExchange.Redis gates `FLUSHDB` behind `allowAdmin=true` and `RedisSettings.GetConnectionString()` never
+emits it, this door SHALL be documented — and named in `WholeDatabaseDeleteException`'s message — as
+additionally requiring a connection built with admin mode.
+
+#### Scenario: Deliberate whole-database flush on an admin-enabled connection
+
+- **Given** a caller holding a concrete `RedisCache` whose `RedisSettings.RawConnectionString` carries `allowAdmin=true`
+- **When** `FlushDatabaseAsync()` is awaited
+- **Then** `FLUSHDB` is issued against `settings.Database`, destroying keys the cache never wrote — which is what the method's name says
+
+#### Scenario: The flush door is admin-gated on a settings-built connection
+
+- **Given** a `RedisCache` built from `RedisSettings` without a `RawConnectionString`
+- **When** `FlushDatabaseAsync()` is awaited
+- **Then** StackExchange.Redis raises `RedisCommandException` ("not available unless admin mode is enabled"), because `GetConnectionString()` emits no `allowAdmin=true` — so the refusal message names `KeyPrefix` first, as the opt-out that works on every configuration
+
+#### Scenario: A cache-typed consumer cannot empty the database
+
+- **Given** consumer code typed against `ICache`
+- **When** it attempts to flush the database
+- **Then** no member of the interface can do so; `ClearAsync` is namespace-scoped or refuses, so a `FLUSHDB` in a Redis log means somebody named the operation
 
 ### Requirement: Redis connection ownership
 
@@ -538,9 +629,9 @@ SHALL NOT own one when constructed from an externally supplied `RedisConnectionM
 SHALL be idempotent for sequential calls — guarded by a plain, non-`volatile` `bool _disposed`, unlike
 `MemoryCache`'s `volatile` one — and dispose the manager only in the owning case. Every data operation
 SHALL address the database index the connection manager captured at *its* construction
-(`GetDatabase()`), while `RemoveByPrefixAsync`'s SCAN and `ClearAsync`'s `FLUSHDB` SHALL address
-`RedisSettings.Database` from the settings handed to the cache — two indexes the shared-manager
-constructor allows to disagree.
+(`GetDatabase()`), while `RemoveByPrefixAsync`'s and `ClearAsync`'s SCAN and `FlushDatabaseAsync`'s
+`FLUSHDB` SHALL address `RedisSettings.Database` from the settings handed to the cache — two indexes the
+shared-manager constructor allows to disagree.
 
 #### Scenario: Owned connection is disposed
 
@@ -564,7 +655,7 @@ constructor allows to disagree.
 
 - **Given** `new RedisCache(sharedManager, settings)` where `sharedManager` was built from settings naming database 0 and `settings.Database` is 3
 - **When** entries are written and then `RemoveByPrefixAsync(prefix)` is awaited
-- **Then** the values were written to database 0 while `KeysAsync(..., database: 3)` enumerates database 3, so the call completes successfully having deleted nothing — and `ClearAsync` would `FLUSHDB` database 3, which this cache never wrote to
+- **Then** the values were written to database 0 while `KeysAsync(..., database: 3)` enumerates database 3, so the call completes successfully having deleted nothing — and `FlushDatabaseAsync` would `FLUSHDB` database 3, which this cache never wrote to
 
 #### Scenario: Concurrent disposal is not serialised
 
@@ -711,6 +802,12 @@ and `RemoveAsync` / `RemoveByPrefixAsync` / `ClearAsync` to awaiting the L1 task
 - **Given** default options and a token cancelled while the L2 `GetAsync` is in flight
 - **When** the `OperationCanceledException` reaches the filter
 - **Then** it is caught and `Miss()` is returned instead of the cancellation being observed by the caller
+
+#### Scenario: A refusing L2 clear degrades to an L1-only clear
+
+- **Given** default options and an L2 `RedisCache` with no `KeyPrefix`, whose `ClearAsync` throws `WholeDatabaseDeleteException`
+- **When** `HybridCache.ClearAsync` is awaited
+- **Then** the filter catches it and only L1 is cleared — the L2 entries remain and the caller sees no exception, because the fallback filter is unqualified and does not distinguish a misconfiguration from an outage
 
 #### Scenario: Removal keeps L1 consistent when L2 is down
 

@@ -9,14 +9,23 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 113                  |
+| todo         | —                  | —                  | 113                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 42                  |
+| done         | 1                  | 22                 | 44                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 27 · P2 80 · P3 6**
+Todo by priority: **P0 0 · P1 26 · P2 81 · P3 6**
+
+> Counts hand-adjusted 2026-08-12 for TASK-117 (`todo → done`) and the TASK-206 it spawned (new `todo`) —
+> the two cancel out in the todo total and shift one row from P1 to P2. Adjusted rather than regenerated
+> because the `Next up` section below carries hand-written ranking rationale a regen would discard; a full
+> `/tasks triage` is still owed.
+>
+> The done column was **two** behind, not one: EPIC-014 measures 13 done · 1 review · 49 todo, so TASK-111
+> (closed earlier today) had not been rolled up either. Counted rather than incremented, which is why the gap
+> showed — a dashboard adjusted by arithmetic on its own stale numbers stays stale.
 
 ## In progress now
 
@@ -37,16 +46,23 @@ Todo by priority: **P0 0 · P1 27 · P2 80 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) — unbounded destructive write, and it is the *default* path. **Note before picking:** its acceptance requires a foreign-key-survives assertion against a real or faked Redis under the STORY-042 Docker-gated tier, which does not exist yet. Either build that tier first or expect the task to stall on it
 - [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias (P1, ai) — self-reporting, so it ranks below the silent ones
+- [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2, ai) — coverage debt on a shipped destructive-write guard, assertable offline
 - [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders an injection lookalike (P2, ai)
 
 TASK-111 closed 2026-08-12 — it was taken **ahead of** TASK-117, departing from this list's previous order.
 Two reasons, recorded because the departure should be visible: an injection sink outranks a destructive
 write on severity, and the measurement made that gap wider than the filing suggested (a `CREATE TABLE`
 payload actually executed, so it is arbitrary statement execution rather than only a widened predicate);
-and TASK-117 cannot finish inside one session while its Docker tier is missing, which the `/fix-next`
-self-containment key exists to avoid.
+and TASK-117 was thought to need a Docker tier it could not build.
+
+**TASK-117 then closed 2026-08-12 with no Docker at all, and the note above was the reason it was deferred
+twice.** The blocking premise — "its acceptance requires a foreign-key-survives assertion against a real or
+faked Redis" — came from the filed acceptance criteria, which assumed a fix that *deletes selectively*. The
+delivered fix **refuses before opening a connection**, so there is no command to observe and the whole check
+runs offline in 800ms. Worth carrying: a task can be parked on a dependency that belongs to the *proposed
+remedy* rather than to the defect, and this dashboard repeated the claim as fact for two weeks. Re-read a
+"blocked on infrastructure" note against the defect, not against the plan.
 
 The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are deliberately absent from this list: each one *triages* an area before it fixes anything, so its blast radius is unknown until it runs. `/fix-next` ranks them after the traced defects above.
 
@@ -134,7 +150,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
 - **EPIC-013** [Reference consumers — integration smoke harness + Web playground](EPIC-013-reference-consumers/EPIC.md) — in-progress (1/2 tasks done)
   - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer (P2, ai) · FEATURE-013
   - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai) ← in-progress · FEATURE-013
-- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (11/63 tasks done)
+- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (13/63 tasks done)
   - [ ] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2, ai) · FEATURE-014
   - STORY-024 [Critical findings](EPIC-014-code-review-remediation/STORY-024-critical-findings/STORY.md) — done (0/0) (done)
   - STORY-025 [High findings](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — done (0/0) (done)
@@ -142,7 +158,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (11/17, 1 in review)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (13/17, 1 in review)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
@@ -153,7 +169,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
     - [x] [TASK-128](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-128-view-order-by-identifier-unresolved.md) The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover (P0, ai) · FEATURE-014
     - [x] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved — a payload created a table (P1, ai) · FEATURE-014
     - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai) · FEATURE-014
-    - [ ] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) · FEATURE-014
+    - [x] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) · FEATURE-014
     - [ ] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai) 🔍 review · FEATURE-014
     - [x] [TASK-125](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-125-readone-bypasses-store-decorators.md) `ReadOne` queries the connector directly, bypassing every store decorator (P1, ai) · FEATURE-014
     - [x] [TASK-126](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-126-tagging-has-no-tenant-assertion.md) `TagServiceBase` states its tenant contract in a comment and enforces nothing (P1, ai) · FEATURE-014
