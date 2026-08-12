@@ -1,20 +1,22 @@
 # Tasks — Birko.Framework
 
-_Generated 2026-08-06. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+> ⚠ **Drift (4):** TASK-148 DV3 (`feature: null` under EPIC-017, which slug-matches FEATURE-017) · specs DV7 ×2 (`schema-index-and-ddl` stamped at a sha this repo does not contain; all 25 areas unmeasurable — every source glob is in a sibling repo) · specs DV11 (`shaped-by` provenance never derived, so DV8 is suppressed everywhere) — run `/roadmap --check`.
+
+_Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 68                  |
-| in-progress  | 6                  | 10                  | 1                   |
+| todo         | —                  | —                  | 113                  |
+| in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 8                   |
 | blocked      | —                  | —                  | 1                   |
 | done         | 1                  | 22                 | 42                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 13 · P2 49 · P3 6**
+Todo by priority: **P0 0 · P1 27 · P2 80 · P3 6**
 
 ## In progress now
 
@@ -22,9 +24,9 @@ Todo by priority: **P0 0 · P1 13 · P2 49 · P3 6**
 
 ## In review (awaiting sign-off)
 
-- [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai)
 - [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1, ai)
 - [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai)
+- [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai)
 - [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2, ai)
 - [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai)
 - [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2, ai)
@@ -35,31 +37,40 @@ Todo by priority: **P0 0 · P1 13 · P2 49 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) — unbounded destructive write, and it is the *default* path
-- [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1, ai) — injection sink, reachability gated on a consumer exposing rule authoring
-- [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias (P1, ai) — self-reporting, so it ranks below the two silent ones
+- [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) — unbounded destructive write, and it is the *default* path. **Note before picking:** its acceptance requires a foreign-key-survives assertion against a real or faked Redis under the STORY-042 Docker-gated tier, which does not exist yet. Either build that tier first or expect the task to stall on it
+- [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias (P1, ai) — self-reporting, so it ranks below the silent ones
+- [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders an injection lookalike (P2, ai)
+
+TASK-111 closed 2026-08-12 — it was taken **ahead of** TASK-117, departing from this list's previous order.
+Two reasons, recorded because the departure should be visible: an injection sink outranks a destructive
+write on severity, and the measurement made that gap wider than the filing suggested (a `CREATE TABLE`
+payload actually executed, so it is arbitrary statement execution rather than only a widened predicate);
+and TASK-117 cannot finish inside one session while its Docker tier is missing, which the `/fix-next`
+self-containment key exists to avoid.
+
+The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are deliberately absent from this list: each one *triages* an area before it fixes anything, so its blast radius is unknown until it runs. `/fix-next` ranks them after the traced defects above.
 
 ## Tree
 
-- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (4/9 tasks done)
+- **EPIC-001** [Birko.Web.Components — UI polish](EPIC-001-web-components-ui-polish/EPIC.md) — in-progress (4/13 tasks done)
   - [x] [TASK-053](EPIC-001-web-components-ui-polish/TASK-053-b-range-vertical-orientation.md) b-range: vertical orientation (equalizer-style slider) (P3, ai) · FEATURE-001
-  - STORY-001 [bare attribute for inline form usage](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/STORY.md) — in-progress (0/1)
+  - STORY-001 [bare attribute for inline form usage](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/STORY.md) — in-progress (0/1, 1 in review)
     - [ ] [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) Add `bare` attribute to all form controls (P2, ai) 🔍 review · FEATURE-001
-  - STORY-002 [b-editable-table migration to bare components](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/STORY.md) — in-progress (0/1)
+  - STORY-002 [b-editable-table migration to bare components](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/STORY.md) — in-progress (0/1, 1 in review)
     - [ ] [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) Benchmark + migrate b-editable-table to bare components (P2, ai) 🔍 review · FEATURE-001
   - STORY-003 [size attribute coverage](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/STORY.md) — planned (0/1)
     - [ ] [TASK-003](EPIC-001-web-components-ui-polish/STORY-003-size-attribute-coverage/TASK-003-size-on-pagination-dropdown-breadcrumb.md) size attribute on b-pagination, b-dropdown-menu, b-breadcrumb (P2, ai) · FEATURE-001
-  - STORY-023 [Form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — in-progress (0/5)
-    - [ ] [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai) 🔍 review · FEATURE-001
+  - STORY-023 [Form-associated custom elements (ElementInternals)](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/STORY.md) — in-progress (0/5, 2 in review)
     - [ ] [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1, ai) 🔍 review · FEATURE-001
     - [ ] [TASK-132](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-132-bform-required-inert-on-unchecked-toggle.md) `b-form`: `required` on a checkbox / switch is inert — an unchecked toggle counts as filled (P2, ai) · FEATURE-001
     - [ ] [TASK-133](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-133-bform-radio-value-never-collected.md) `b-form`: a `radio` field's value is never collected, and a `required` radio group can never validate (P2, ai) · FEATURE-001
     - [ ] [TASK-134](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-134-bform-remaining-validity-flags-decision.md) Decide whether `b-form.validate()` adopts the remaining validity flags, starting with `typeMismatch` (P2, ai) · FEATURE-001
+    - [ ] [TASK-035](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-035-element-internals-form-association.md) Make form controls form-associated via ElementInternals (P3, ai) 🔍 review · FEATURE-001
   - STORY-028 [Display & disclosure components](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/STORY.md) — done (3/3) (done)
-    - [x] [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch) (P3, ai) · FEATURE-001
     - [x] [TASK-040](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-040-b-accordion-component.md) Add a `b-accordion` (collapsible / disclosure group) component (P2, ai) · FEATURE-001
     - [x] [TASK-041](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-041-shared-coerce-css-length.md) Extract a shared `coerceCssLength` helper and fix the unitless-length bug across components (P2, ai) · FEATURE-001
-  - STORY-050 [Visible help text on form controls](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/STORY.md) — in-progress (0/1)
+    - [x] [TASK-039](EPIC-001-web-components-ui-polish/STORY-028-display-disclosure-components/TASK-039-b-chart-coerce-unitless-height.md) b-chart: coerce/validate a unitless `height` (avoid endless SVG stretch) (P3, ai) · FEATURE-001
+  - STORY-050 [Visible help text on form controls](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/STORY.md) — in-progress (0/1, 1 in review)
     - [ ] [TASK-091](EPIC-001-web-components-ui-polish/STORY-050-help-text-row/TASK-091-description-help-text-row.md) `description` — a persistent help-text row on the form controls (P2, ai) 🔍 review · FEATURE-001
 - **EPIC-002** [Birko.Data.Redis](EPIC-002-birko-data-redis/EPIC.md) — planned (0/1 tasks done)
   - [ ] [TASK-004](EPIC-002-birko-data-redis/TASK-004-implement-birko-data-redis.md) Implement Birko.Data.Redis (P2, ai) · FEATURE-002
@@ -123,7 +134,7 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
 - **EPIC-013** [Reference consumers — integration smoke harness + Web playground](EPIC-013-reference-consumers/EPIC.md) — in-progress (1/2 tasks done)
   - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer (P2, ai) · FEATURE-013
   - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai) ← in-progress · FEATURE-013
-- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (10/18 tasks done)
+- **EPIC-014** [Code review — audit remediation](EPIC-014-code-review-remediation/EPIC.md) — in-progress (11/63 tasks done)
   - [ ] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire (P2, ai) · FEATURE-014
   - STORY-024 [Critical findings](EPIC-014-code-review-remediation/STORY-024-critical-findings/STORY.md) — done (0/0) (done)
   - STORY-025 [High findings](EPIC-014-code-review-remediation/STORY-025-high-findings/STORY.md) — done (0/0) (done)
@@ -135,31 +146,76 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
-    - [ ] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1, ai) · FEATURE-014
     - [x] [TASK-112](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-112-unmapped-primitive-types-never-persist.md) `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist (P0, ai) · FEATURE-014
     - [x] [TASK-113](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-113-tenantsyncprovider-scopes-only-saves.md) `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant (P0, ai) · FEATURE-014
     - [x] [TASK-114](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-114-tenant-write-guard-trusts-caller-supplied-tenantguid.md) The item-level tenant write guard trusts the caller-supplied `TenantGuid` (P0, ai) · FEATURE-014
-    - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai) · FEATURE-014
     - [x] [TASK-116](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-116-rulespecification-leaves-degrade-to-match-all.md) `RuleSpecification` leaves degrade to match-all — on the destructive paths (P0, ai) · FEATURE-014
+    - [x] [TASK-128](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-128-view-order-by-identifier-unresolved.md) The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover (P0, ai) · FEATURE-014
+    - [x] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved — a payload created a table (P1, ai) · FEATURE-014
+    - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai) · FEATURE-014
     - [ ] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) · FEATURE-014
     - [ ] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai) 🔍 review · FEATURE-014
     - [x] [TASK-125](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-125-readone-bypasses-store-decorators.md) `ReadOne` queries the connector directly, bypassing every store decorator (P1, ai) · FEATURE-014
     - [x] [TASK-126](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-126-tagging-has-no-tenant-assertion.md) `TagServiceBase` states its tenant contract in a comment and enforces nothing (P1, ai) · FEATURE-014
-    - [x] [TASK-128](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-128-view-order-by-identifier-unresolved.md) The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover (P0, ai) · FEATURE-014
     - [ ] [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created (P1, ai) · FEATURE-014
     - [ ] [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log (P2, ai) · FEATURE-014
     - [ ] [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2, ai) · FEATURE-014
-  - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/0)
-  - STORY-054 [Spec-harvest — low findings](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/STORY.md) — planned (0/0)
-  - STORY-055 [Spec-harvest — the three unrated areas](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/STORY.md) — in-progress (0/0)
+  - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/22)
+    - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1, ai) · FEATURE-014
+    - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1, ai) · FEATURE-014
+    - [ ] [TASK-153](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-153-triage-medium-filter-expression-translation.md) Triage the 29 medium spec-harvest findings in `filter-expression-translation` (P1, ai) · FEATURE-014
+    - [ ] [TASK-154](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-154-triage-medium-schema-index-and-ddl.md) Triage the 25 medium spec-harvest findings in `schema-index-and-ddl` (P1, ai) · FEATURE-014
+    - [ ] [TASK-156](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-156-triage-medium-validation-and-rules.md) Triage the 22 medium spec-harvest findings in `validation-and-rules` (P1, ai) · FEATURE-014
+    - [ ] [TASK-157](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-157-triage-medium-data-sync.md) Triage the 21 medium spec-harvest findings in `data-sync` (P1, ai) · FEATURE-014
+    - [ ] [TASK-159](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-159-triage-medium-store-decorator-composition.md) Triage the 20 medium spec-harvest findings in `store-decorator-composition` (P1, ai) · FEATURE-014
+    - [ ] [TASK-161](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-161-triage-medium-tenant-isolation.md) Triage the 18 medium spec-harvest findings in `tenant-isolation` (P1, ai) · FEATURE-014
+    - [ ] [TASK-162](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-162-triage-medium-repository-contract.md) Triage the 16 medium spec-harvest findings in `repository-contract` (P1, ai) · FEATURE-014
+    - [ ] [TASK-163](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-163-triage-medium-store-crud-contract.md) Triage the 15 medium spec-harvest findings in `store-crud-contract` (P1, ai) · FEATURE-014
+    - [ ] [TASK-165](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-165-triage-medium-security-and-authorization.md) Triage the 15 medium spec-harvest findings in `security-and-authorization` (P1, ai) · FEATURE-014
+    - [ ] [TASK-170](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-170-triage-medium-bulk-filter-operations.md) Triage the 13 medium spec-harvest findings in `bulk-filter-operations` (P1, ai) · FEATURE-014
+    - [ ] [TASK-171](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-171-triage-medium-specifications-and-paging.md) Triage the 12 medium spec-harvest findings in `specifications-and-paging` (P1, ai) · FEATURE-014
+    - [ ] [TASK-155](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-155-triage-medium-event-bus-and-messaging.md) Triage the 24 medium spec-harvest findings in `event-bus-and-messaging` (P2, ai) · FEATURE-014
+    - [ ] [TASK-158](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-158-triage-medium-background-jobs.md) Triage the 21 medium spec-harvest findings in `background-jobs` (P2, ai) · FEATURE-014
+    - [ ] [TASK-160](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-160-triage-medium-llm-provider-and-agents.md) Triage the 20 medium spec-harvest findings in `llm-provider-and-agents` (P2, ai) · FEATURE-014
+    - [ ] [TASK-164](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-164-triage-medium-settings-configuration-chain.md) Triage the 15 medium spec-harvest findings in `settings-configuration-chain` (P2, ai) · FEATURE-014
+    - [ ] [TASK-166](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-166-triage-medium-entity-tagging.md) Triage the 15 medium spec-harvest findings in `entity-tagging` (P2, ai) · FEATURE-014
+    - [ ] [TASK-167](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-167-triage-medium-serialization.md) Triage the 14 medium spec-harvest findings in `serialization` (P2, ai) · FEATURE-014
+    - [ ] [TASK-168](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-168-triage-medium-entity-localization.md) Triage the 14 medium spec-harvest findings in `entity-localization` (P2, ai) · FEATURE-014
+    - [ ] [TASK-169](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-169-triage-medium-caching.md) Triage the 14 medium spec-harvest findings in `caching` (P2, ai) · FEATURE-014
+    - [ ] [TASK-172](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-172-triage-medium-workflow-state-machine.md) Triage the 9 medium spec-harvest findings in `workflow-state-machine` (P2, ai) · FEATURE-014
+  - STORY-054 [Spec-harvest — low findings](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/STORY.md) — planned (0/22)
+    - [ ] [TASK-173](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-173-triage-low-llm-provider-and-agents.md) Triage the 31 low spec-harvest findings in `llm-provider-and-agents` (P2, ai) · FEATURE-014
+    - [ ] [TASK-174](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-174-triage-low-event-bus-and-messaging.md) Triage the 29 low spec-harvest findings in `event-bus-and-messaging` (P2, ai) · FEATURE-014
+    - [ ] [TASK-175](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-175-triage-low-background-jobs.md) Triage the 24 low spec-harvest findings in `background-jobs` (P2, ai) · FEATURE-014
+    - [ ] [TASK-176](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-176-triage-low-security-and-authorization.md) Triage the 23 low spec-harvest findings in `security-and-authorization` (P2, ai) · FEATURE-014
+    - [ ] [TASK-177](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-177-triage-low-data-sync.md) Triage the 23 low spec-harvest findings in `data-sync` (P2, ai) · FEATURE-014
+    - [ ] [TASK-178](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-178-triage-low-migrations.md) Triage the 22 low spec-harvest findings in `migrations` (P2, ai) · FEATURE-014
+    - [ ] [TASK-179](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-179-triage-low-workflow-state-machine.md) Triage the 21 low spec-harvest findings in `workflow-state-machine` (P2, ai) · FEATURE-014
+    - [ ] [TASK-180](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-180-triage-low-views-and-aggregation.md) Triage the 20 low spec-harvest findings in `views-and-aggregation` (P2, ai) · FEATURE-014
+    - [ ] [TASK-181](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-181-triage-low-validation-and-rules.md) Triage the 19 low spec-harvest findings in `validation-and-rules` (P2, ai) · FEATURE-014
+    - [ ] [TASK-182](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-182-triage-low-store-crud-contract.md) Triage the 19 low spec-harvest findings in `store-crud-contract` (P2, ai) · FEATURE-014
+    - [ ] [TASK-183](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-183-triage-low-settings-configuration-chain.md) Triage the 18 low spec-harvest findings in `settings-configuration-chain` (P2, ai) · FEATURE-014
+    - [ ] [TASK-184](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-184-triage-low-caching.md) Triage the 17 low spec-harvest findings in `caching` (P2, ai) · FEATURE-014
+    - [ ] [TASK-185](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-185-triage-low-tenant-isolation.md) Triage the 15 low spec-harvest findings in `tenant-isolation` (P2, ai) · FEATURE-014
+    - [ ] [TASK-186](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-186-triage-low-entity-tagging.md) Triage the 14 low spec-harvest findings in `entity-tagging` (P2, ai) · FEATURE-014
+    - [ ] [TASK-187](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-187-triage-low-store-decorator-composition.md) Triage the 13 low spec-harvest findings in `store-decorator-composition` (P2, ai) · FEATURE-014
+    - [ ] [TASK-188](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-188-triage-low-specifications-and-paging.md) Triage the 13 low spec-harvest findings in `specifications-and-paging` (P2, ai) · FEATURE-014
+    - [ ] [TASK-189](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-189-triage-low-filter-expression-translation.md) Triage the 13 low spec-harvest findings in `filter-expression-translation` (P2, ai) · FEATURE-014
+    - [ ] [TASK-190](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-190-triage-low-bulk-filter-operations.md) Triage the 13 low spec-harvest findings in `bulk-filter-operations` (P2, ai) · FEATURE-014
+    - [ ] [TASK-191](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-191-triage-low-serialization.md) Triage the 10 low spec-harvest findings in `serialization` (P2, ai) · FEATURE-014
+    - [ ] [TASK-192](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-192-triage-low-schema-index-and-ddl.md) Triage the 10 low spec-harvest findings in `schema-index-and-ddl` (P2, ai) · FEATURE-014
+    - [ ] [TASK-193](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-193-triage-low-repository-contract.md) Triage the 10 low spec-harvest findings in `repository-contract` (P2, ai) · FEATURE-014
+    - [ ] [TASK-194](EPIC-014-code-review-remediation/STORY-054-spec-harvest-low-findings/TASK-194-triage-low-entity-localization.md) Triage the 10 low spec-harvest findings in `entity-localization` (P2, ai) · FEATURE-014
+  - STORY-055 [Spec-harvest — the three unrated areas](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/STORY.md) — in-progress (0/1)
+    - [ ] [TASK-195](EPIC-014-code-review-remediation/STORY-055-spec-harvest-unrated-areas/TASK-195-rate-id-and-fold-the-16-recovered-findings.md) Rate, ID and fold the 16 recovered findings into the severity backlog (P1, ai) · FEATURE-014
 - **EPIC-015** [Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web](EPIC-015-birko-xaml-ui-framework/EPIC.md) — in-progress (10/22 tasks done)
-  - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3, ai) · FEATURE-015
   - [x] [TASK-055](EPIC-015-birko-xaml-ui-framework/TASK-055-xaml-form-field-type-parity.md) Xaml Form field-type parity with b-form (wire existing controls + FormField props) (P2, ai) · FEATURE-015
   - [x] [TASK-056](EPIC-015-birko-xaml-ui-framework/TASK-056-xaml-date-time-picker-controls.md) Xaml date & time picker controls + field types (P2, ai) · FEATURE-015
   - [x] [TASK-057](EPIC-015-birko-xaml-ui-framework/TASK-057-xaml-form-multiselect-tags-file.md) Xaml Form field types: MultiSelect / Tags / File (P2, ai) · FEATURE-015
   - [x] [TASK-101](EPIC-015-birko-xaml-ui-framework/TASK-101-avalonia-ribbon-pinned-temporary-reveal.md) Avalonia `Ribbon`: pinned vs temporary-reveal collapse, to match `b-ribbon` and Office (P2, ai) · FEATURE-015
   - [x] [TASK-102](EPIC-015-birko-xaml-ui-framework/TASK-102-avalonia-ribbon-narrow-fallback.md) Avalonia `Ribbon`: a narrow fallback, mirroring `b-ribbon`'s hamburger (P2, ai) · FEATURE-015
   - [ ] [TASK-103](EPIC-015-birko-xaml-ui-framework/TASK-103-focus-visual-for-all-avalonia-buttons.md) Every Avalonia control needs a focus visual — `Buttons.axaml` has none (P2, ai) · FEATURE-015
+  - [x] [TASK-054](EPIC-015-birko-xaml-ui-framework/TASK-054-xaml-slider-control-and-range-fieldtype.md) Xaml restyled Slider (Tier-1 gap) + `Range` Form field type (P3, ai) · FEATURE-015
   - STORY-029 [Tier 0 — single-source design tokens + multi-target generator](EPIC-015-birko-xaml-ui-framework/STORY-029-design-tokens-generator/STORY.md) — done (0/0) (done)
   - STORY-030 [Tier 0 — Avalonia theme system + runtime ThemeVariant swap](EPIC-015-birko-xaml-ui-framework/STORY-030-avalonia-theme-system/STORY.md) — done (0/0) (done)
   - STORY-031 [Tier 0 validation — Avalonia gallery app + first restyled controls](EPIC-015-birko-xaml-ui-framework/STORY-031-tier0-gallery-validation/STORY.md) — done (0/0) (done)
@@ -171,9 +227,9 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
   - STORY-048 [Avalonia 12 / .NET 10 upgrade for the Birko.Xaml stack](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/STORY.md) — planned (0/5)
     - [ ] [TASK-092](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-092-bump-avalonia-12-net10-xunit-v3.md) Bump Birko.Xaml to Avalonia 12.1.0 / `net10.0` + xunit v3 (Kanban DataTransfer, focus event) (P2, ai) · FEATURE-015
     - [ ] [TASK-093](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-093-livecharts-avalonia-12-story.md) Decide the LiveCharts story for Avalonia 12 (the only blocker on the bump) (P2, human) · FEATURE-015
-    - [ ] [TASK-094](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-094-avalonia-12-obsolete-warning-sweep.md) Clear the 28 Avalonia 12 obsolete warnings (`Watermark`, `Bitmap.Save`) (P3, ai) · FEATURE-015
     - [ ] [TASK-095](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-095-avalonia-screenshot-baseline-gate.md) Screenshot baseline gate for the Avalonia suite (build it *before* the Av12 bump) (P2, ai) · FEATURE-015
     - [ ] [TASK-096](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-096-consumer-repo-avalonia-12-rollout.md) Roll Avalonia 12 out to consumer repos in lockstep (P2, ai) · FEATURE-015
+    - [ ] [TASK-094](EPIC-015-birko-xaml-ui-framework/STORY-048-avalonia-12-net10-upgrade/TASK-094-avalonia-12-obsolete-warning-sweep.md) Clear the 28 Avalonia 12 obsolete warnings (`Watermark`, `Bitmap.Save`) (P3, ai) · FEATURE-015
   - STORY-049 [Office-style ribbon overflow — progressive group scaling + group-to-popup collapse](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/STORY.md) — done (4/4) (done)
     - [x] [TASK-097](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-097-make-ribbon-overflow-reachable.md) Make the existing ribbon overflow reachable (interim fix, both skins) (P1, ai) · FEATURE-015
     - [x] [TASK-098](EPIC-015-birko-xaml-ui-framework/STORY-049-ribbon-overflow-progressive-scaling/TASK-098-ribbon-size-variant-scaling-priority-model.md) Ribbon model + tokens: size variant, scaling priority, group icon (XAML **and** web together) (P2, ai) · FEATURE-015
@@ -186,10 +242,10 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
     - [ ] [TASK-122](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-122-render-mixed-columns-both-skins.md) Render mixed columns — the CSS grid and the Avalonia panel (P2, ai) · FEATURE-015
     - [ ] [TASK-123](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-123-panel-height-under-mixed-sizes.md) Panel height under mixed sizes, and extending the clipping guard (P2, ai) · FEATURE-015
     - [ ] [TASK-124](EPIC-015-birko-xaml-ui-framework/STORY-056-mixed-per-item-ribbon-sizes/TASK-124-stale-ribbongroupsize-parity-comment.md) The `RibbonGroupSize` doc comment describes a parity gap that no longer exists (P3, ai) · FEATURE-015
-- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (12/13 tasks done)
+- **EPIC-016** [Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)](EPIC-016-birko-backports-from-reps/EPIC.md) — in-progress (12/14 tasks done)
   - STORY-037 [Backend / SQL framework backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-037-backend-sql-backports/STORY.md) — done (0/0) (done)
   - STORY-038 [Frontend Birko.Web backports (shipped)](EPIC-016-birko-backports-from-reps/STORY-038-frontend-web-backports/STORY.md) — done (0/0) (done)
-  - STORY-039 [Cross-provider SQL store-factory + DI backport](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/STORY.md) — in-progress (1/2)
+  - STORY-039 [Cross-provider SQL store-factory + DI backport](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/STORY.md) — in-progress (1/2, 1 in review)
     - [ ] [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2, ai) 🔍 review · FEATURE-016
     - [x] [TASK-051](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-051-fix-mssqlstore-setsettings-lossy.md) FIX: MSSqlStore.SetSettings drops connection fields (lossy) (P2, ai) · FEATURE-016
   - STORY-040 [Web → Xaml UI / offline / device backports](EPIC-016-birko-backports-from-reps/STORY-040-web-to-xaml-backports/STORY.md) — done (6/6) (done)
@@ -203,10 +259,10 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
     - [x] [TASK-049](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-049-bmobileappshell-playground-placement.md) BMobileAppShell — better placement / demo in Birko.Web.Playground (P2, ai) · FEATURE-016
     - [x] [TASK-050](EPIC-016-birko-backports-from-reps/STORY-041-bmobileappshell-showcase/TASK-050-bmobileappshell-xaml-gallery.md) BMobileAppShell (Xaml) — showcase in Birko.Xaml.Gallery (P3, ai) · FEATURE-016
   - STORY-052 [Component gaps found by consumers adopting the `b-*` catalogue](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/STORY.md) — in-progress (3/4, 1 in review)
+    - [ ] [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai) 🔍 review · FEATURE-016
+    - [x] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) · FEATURE-016
     - [x] [TASK-104](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-104-b-chart-small-chart-axis-polish.md) `b-chart`: axis polish for small charts (tick density, nice scale, latest-value overlay, threshold labels) (P3, ai) · FEATURE-016
     - [x] [TASK-105](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-105-b-card-padding-md-and-shadow-token.md) `b-card`: the missing `md` padding rung, and elevation as a token (P3, ai) · FEATURE-016
-    - [x] [TASK-107](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-107-b-button-tap-target-and-form-participation.md) `b-button`: a reachable tap target, and form participation (P2, ai) · FEATURE-016
-    - [ ] [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai) 🔍 review · FEATURE-016
 - **EPIC-017** [Tenant isolation hardening](EPIC-017-tenant-isolation-hardening/EPIC.md) — in-progress (0/1 tasks done)
   - STORY-044 [Opt-in strict (fail-closed) tenancy mode](EPIC-017-tenant-isolation-hardening/STORY-044-strict-fail-closed-mode/STORY.md) — done (0/0) (done)
   - STORY-045 [Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped](EPIC-017-tenant-isolation-hardening/STORY-045-decorator-order-per-tenant-uniqueness/STORY.md) — done (0/0) (done)
@@ -222,7 +278,7 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
 - [ ] [TASK-127](_loose/TASK-127-all-tenants-scope-and-ambient-tenant-decision.md) Decide what `WithAllTenants` means when a tenant is also in scope (P2, human)
 - [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check (P1, ai)
 - [ ] [TASK-138](_loose/TASK-138-readasync-zero-arg-overload-ambiguity.md) `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads (P2, ai)
-- [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (`b-button` refuses it, `b-segmented` applies it with no opt-out) (P2, human)
+- [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob (P2, human)
 - [ ] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table (P1, ai)
 - [ ] [TASK-142](_loose/TASK-142-spec-map-coverage-audit.md) The spec map silently under-covers, and nothing detects it (P2, human)
 - [ ] [TASK-143](_loose/TASK-143-public-crud-overrides-defeat-base-guards.md) Stores that override public CRUD instead of `*Core` defeat every base-class guard (P2, human)

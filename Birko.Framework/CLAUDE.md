@@ -136,6 +136,23 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   mark a deliberate all-rows write: the SQL stays clean (`DELETE FROM "T"`), because `1 = 1` in a query
   log is indistinguishable from `' OR 1=1--` and trains operators to ignore the pattern that should
   alarm them
+- **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
+  text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
+  column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
+  have now shipped this defect: ORDER BY keys (SH-H003/M022, TASK-110) and rule fields (SH-H023, TASK-111),
+  where `Field = "Rank; CREATE TABLE Pwned (x INTEGER); --"` **created the table**. Both now go through
+  `DataBase.ResolveFieldNameIn` — property name, then mapped column name — so **the resolution IS the
+  whitelist**: what survives is a name read out of metadata, and caller text has no path to the statement.
+  One shared lookup because a consumer should not have to learn two rules for which field names are
+  accepted. **Do not quote the resolved identifier**: this codebase emits column identifiers bare
+  everywhere (DDL, SELECT list, every condition strategy) and quotes only table names, so quoting one sink
+  breaks it on PostgreSQL, where the unquoted DDL identifier folds to lower case. Quoting was never what
+  closed either injection. Where an entity type genuinely isn't available, the fallback is a **bare
+  identifier check** (`ValidateRuleFieldIdentifier`) — weaker, since it cannot fix a `[NamedField]`
+  remapping, but it still refuses every payload; anchor such a pattern with `\A…\z`, because .NET's `$`
+  also matches before a trailing newline. Sanitising the *parameter name* is not this check:
+  `SqlBuilderContext.GenerateParameterName` already did that, and it is what made SH-H023 look safe on a
+  skim
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
@@ -252,6 +269,38 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A rule field was executable SQL, and the second sink proved the first one's rule (2026-08-12)
+
+TASK-111 / SH-H023. `RuleConditionConverter` made a rule's `Field` into the condition's **name**, and every
+strategy interpolates that straight into `CommandText`. Measured against SQLite on a 3-row table, with rules
+whose value matched nothing: `Rank OR 1=1 --` returned **3 rows of 3**, and
+`Rank; CREATE TABLE Pwned (x INTEGER); --` **created the table** — from configuration data that
+`docs/rules.md` advertises as a way to build "dynamic filtering from user-defined rules". Fields now resolve
+against table metadata via new type-aware overloads (`ToConditions<T>`), which also fixes the ordinary half:
+a `[NamedField("label_col")]` property emitted `WHERE Label = @p` and the database answered *no such column*,
+so a remapped property could not be filtered at all. The standing rule is in § Conventions above.
+
+Four things worth carrying:
+
+- **The second instance is what turns a fix into a rule.** TASK-110 closed the identical defect on ORDER BY
+  twelve days earlier and recorded its reasoning beautifully — in a commit message and a doc comment, which
+  is exactly where the *next* sink's author will not look. Two sinks, one root cause, and no § Conventions
+  entry between them. The shared `ResolveFieldNameIn` and the rule above exist so the third sink is a
+  compile-time reuse rather than a rediscovery. **When a fix is the second of its kind, the deliverable
+  includes the rule, not just the fix.**
+- **The prescribed remedy was wrong, and the closed twin was the evidence.** The finding said "resolve
+  **and quote**". Quoting would have broken working filters on PostgreSQL, where an unquoted DDL identifier
+  folds to lower case — TASK-110 had already measured this and rejected it. Following the finding would
+  have shipped a regression while closing a hole. Read what the twin decided before re-deciding it.
+- **A test tripped over a second, unrelated defect, and the honest move was to not assert it.** The
+  end-to-end OR-group check returned 0 rows where 2 were expected — SH-M128, already filed, different root
+  cause (`ConvertGroup` wraps with `AndSubCondition`). Asserting the OR result would have had to encode the
+  broken behaviour to stay green, which blesses it. The test uses an AND group and says why.
+- **Full revert would have reported two-fifths of the check.** 29 of the 42 new tests reference the new
+  type-aware overloads and would not compile against the pre-fix tree, so a plain revert would have shown 8
+  of 13 and hidden the rest behind a build error — the TASK-204 trap arriving again. Reintroducing the
+  defect *surgically* (one line in `ConvertLeaf`, every signature intact) gave a real split: **34 of 42**.
 
 ### One index it could not build took down six entities' read surfaces — and the fix leaked per request (2026-08-12)
 

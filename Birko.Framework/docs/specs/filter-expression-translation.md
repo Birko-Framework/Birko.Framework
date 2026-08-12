@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 84457477972f5f00ff263f6b7f13fcb6449676c9
+generated-on: 2026-08-12
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
@@ -27,7 +27,12 @@ sources:
   - ../Birko.Data.SQL/SQL/Connectors/Strategies/LikeConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/Connectors/Strategies/NullConditionStrategy.cs
   - ../Birko.Data.SQL/SQL/DataBase.cs
-shaped-by: []
+  - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
+  - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
+shaped-by:
+  # TASK-111 / SH-H023 — rule fields resolve against table metadata. The evidence pass cannot run from this
+  # aggregator: every source above is in a sibling repo, so the sha resolves under no `git show` here.
+  - TASK-111
 ---
 
 # LINQ filter expression translation to backend queries
@@ -769,7 +774,8 @@ other method call SHALL be evaluated and bound as a constant.
 ### Requirement: Rules-to-SQL condition conversion
 
 `RuleConditionConverter` SHALL skip any rule, rule group or rule set whose `IsEnabled` is false; SHALL
-convert a leaf `Rule` into a `Condition` named after the rule's `Field`; SHALL map `NotEqual`,
+convert a leaf `Rule` into a `Condition` whose name is the **resolved column** for the rule's `Field`
+(never the `Field` string itself — see the rule-field resolution requirement below); SHALL map `NotEqual`,
 `NotContains`, `NotIn` and `IsNotNull` to their positive `ConditionType` with `IsNot` inverted relative
 to the rule's own `IsNegated`; SHALL wrap a group's children in a sub-condition; and SHALL return an
 empty sequence for a group with no rules or no enabled rules.
@@ -778,7 +784,66 @@ empty sequence for a group with no rules or no enabled rules.
 
 - **Given** a `Rule` with `IsEnabled = false`
 - **When** `ToConditions(rule)` is called
-- **Then** an empty sequence is returned
+- **Then** an empty sequence is returned, and its `Field` is never checked — a disabled rule carrying a
+  SQL payload is dropped before conversion rather than refused
+
+### Requirement: Rule fields resolve against table metadata before reaching the WHERE clause
+
+Every condition strategy interpolates `Condition.Name` directly into `CommandText`
+(`EqualConditionStrategy` renders `$"{condition.Name}{op}{value}"`), so a rule's `Field` is an identifier
+sink, not a value. `RuleConditionConverter` SHALL therefore refuse any `Field` it cannot account for,
+before any statement is built.
+
+Given an entity type — `ToConditions<T>(…)` or `ToConditions(Type, …)` — it SHALL resolve the `Field`
+through `DataBase.ResolveRuleField`, matching a CLR property name first and then a mapped column name, and
+SHALL emit the resolved, **table-qualified** select name. Without an entity type, the type-less overloads
+SHALL require the `Field` to be a bare, optionally table-qualified SQL identifier
+(`DataBase.ValidateRuleFieldIdentifier`) and SHALL emit it unchanged.
+
+A `Field` that is blank, unresolvable, or not a bare identifier SHALL raise `ArgumentException` naming the
+field (and, on the type-aware path, the entity type). The resolved identifier SHALL NOT be quoted, for the
+same reason recorded for the ORDER BY sink: this codebase emits column identifiers bare everywhere and
+quotes only table names, so quoting would break a working filter on PostgreSQL, where an unquoted DDL
+identifier folds to lower case.
+
+#### Scenario: A remapped property filters on its mapped column
+
+- **Given** an entity with `[NamedField("label_col")] string Label` and a rule with `Field = "Label"`
+- **When** `ToConditions<T>(rule)` is called
+- **Then** the condition's name is `TableName.label_col`, and the emitted clause is
+  `TableName.label_col = @param` — previously the CLR name was emitted and the database answered
+  *no such column: Label*, so a remapped property could not be filtered at all
+
+#### Scenario: The mapped column name is also accepted
+
+- **Given** a rule whose `Field` is the mapped column name (`"label_col"`) rather than the property name
+- **When** `ToConditions<T>(rule)` is called
+- **Then** it resolves to the same table-qualified name — a caller passing the column name directly worked
+  before the guard existed and is drawn from the same metadata, so it is equally safe
+
+#### Scenario: A field carrying SQL is refused before a statement is built
+
+- **Given** a rule whose `Field` is `Rank OR 1=1 --`, `Rank; CREATE TABLE Pwned (x INTEGER); --`,
+  `(SELECT count(*) FROM sqlite_master)` or `1=1 OR 1=1 --`
+- **When** conditions are requested through either the type-aware or the type-less overload
+- **Then** `ArgumentException` naming the field is raised and no statement is executed. Measured against
+  SQLite before this held: the first returned every row for a filter matching none, the second **created
+  the table**, the third evaluated the subquery as the left operand. The trailing ` = @param` the strategy
+  appends is not a mitigation — `--` comments it out
+
+#### Scenario: A field naming no column of the entity is refused
+
+- **Given** a rule with `Field = "NoSuchProperty"` and a type-aware conversion
+- **When** conditions are requested
+- **Then** `ArgumentException` names both the field and the entity type, rather than letting the database
+  answer with a column name it never heard of
+
+#### Scenario: The guard reaches every rule in a tree
+
+- **Given** a payload field on a rule nested inside an AND group, an OR group, or a `RuleSet`
+- **When** conditions are requested
+- **Then** the conversion raises rather than emitting it. `RuleSet` conversion is materialised rather than
+  lazy so the refusal surfaces at the call, not later from inside the connector's statement builder
 
 #### Scenario: NotIn becomes IN with IsNot
 

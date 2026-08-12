@@ -252,9 +252,22 @@ There are two conversion paths from rules:
 | Converter | Output | Use Case |
 |-----------|--------|----------|
 | `RuleExpressionConverter.ToExpression<T>()` | `Expression<Func<T, bool>>` | Any store (SQL, ES, MongoDB, JSON) |
-| `RuleConditionConverter.ToConditions()` | SQL `Condition` tree | SQL-specific (direct WHERE clause) |
+| `RuleConditionConverter.ToConditions<T>()` | SQL `Condition` tree | SQL-specific (direct WHERE clause) |
 
 The expression converter is the universal path — use it unless you need SQL-specific optimizations.
+
+> **Pass the entity type** — `ToConditions<T>(rule)` or `ToConditions(typeof(T), rule)`. A rule's `Field`
+> becomes the condition **name**, and every condition strategy interpolates that straight into
+> `CommandText`, so it is an identifier sink rather than a value. With the type, the field is resolved
+> against table metadata: a `[NamedField]`-remapped property filters on the right column, and no caller
+> text can reach the statement, because the resolution is the whitelist. The type-less overloads have no
+> metadata to resolve against and can only insist the field is a bare column identifier — enough to refuse
+> a payload, not enough to fix a remapping. An unresolvable or non-identifier field raises
+> `ArgumentException` naming it (SH-H023).
+>
+> This matters most where rule trees are *authored by users* — "dynamic filtering" below is exactly that
+> case. Before SH-H023 was closed, a `Field` of `Rank; CREATE TABLE Pwned (x INTEGER); --` created the
+> table.
 
 ## Use Cases
 

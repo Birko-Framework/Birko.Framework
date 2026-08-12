@@ -114,7 +114,9 @@ areas:
     sources:
       - ../Birko.Data.Core/Expressions/*.cs
       - ../Birko.Data.Core/Filters/*.cs
-      - ../Birko.Data.SQL/SQL/DataBase.cs
+      # DataBase*.cs, not DataBase.cs: the identifier resolution for both interpolated sinks lives in the
+      # partials (DataBase_OrderBy.cs, DataBase_RuleField.cs), which the exact-file glob never covered.
+      - ../Birko.Data.SQL/SQL/DataBase*.cs
       - ../Birko.Data.SQL/SQL/Conditions/*.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs
       - ../Birko.Data.SQL/SQL/Connectors/IConditionStrategy.cs
