@@ -167,6 +167,23 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   radius before turning silence into a throw**: this one was cleared against 19 SQL-touching suites,
   including every `Birko.Models.*.SQL` domain suite, because the change breaks any consumer model carrying
   a property the mapper never covered
+- **Lazy schema-ensure degrades and reports; an explicit schema call throws.** Stores run schema-ensure on
+  first data access and set `_initialized` only *after* it returns, so anything that throws in there leaves
+  the store permanently uninitialised and re-throws on **every** later operation — reads included. An
+  unbuildable index therefore took down the entity's whole surface, and the rows needed to repair it were
+  unreachable through the very store that refused to start (TASK-204). Schema-ensure attempts **one index
+  per statement** and records failures on `AbstractConnector.IndexCreationFailures` /
+  `OnIndexCreationFailed`; the public `CreateIndexes` / `CreateIndexesAsync` are **unchanged and still
+  throw**, because an explicit call (migrations' `SqlSchemaBuilder`) is a caller asking for that index *now*.
+  Degrade only what is a constraint or an optimisation — never correctness — and **report rather than
+  swallow**. Keep the re-attempt on later runs: that is what lets the index appear once the data is repaired.
+- **State a host reads must be current state, keyed — not an append-only log.** Connectors are cached
+  process-wide per (type, settings id) in `DataBase.GetConnector` while `_initialized` lives on the *store*,
+  so a scoped store per HTTP request re-runs schema-ensure per request against one shared connector. A
+  `List` of failures grew by one entry per request, forever, and re-raised its event each time (measured:
+  5 stores → 5 entries, 5 re-executed failing DDL statements). Key such collections by their identity,
+  fire events on the **transition** into the condition, and **clear the record when it no longer holds** —
+  a report that cannot un-report is a report an operator learns to ignore.
 
 ## Task tracking — this repo is the polyrepo family's aggregator
 
@@ -235,6 +252,31 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### One index it could not build took down six entities' read surfaces — and the fix leaked per request (2026-08-12)
+
+TASK-204. A duplicate `(TenantGuid, OrderNumber)` pair made a later-declared UNIQUE index unbuildable, and
+because schema-ensure runs lazily and sets `_initialized` only on success, the store never initialised and
+**re-threw on every later operation** — reads included, on six entities in consumer Symbio, permanently. An
+unbuildable index is now recorded (`IndexCreationFailures` / `OnIndexCreationFailed`) instead of thrown; the
+two standing rules that came out of it are in § Conventions above. Four things worth carrying:
+
+- **The read surface is what makes repair possible.** The old behaviour was self-sealing: you could not read
+  the duplicate rows to delete them, because reading them ran the schema-ensure that refused. Degrading the
+  index kept the door open, and the fix's own recovery test walks through it — read, delete the duplicate,
+  re-init, index builds itself with no restart.
+- **The fix had the same class of bug as the defect.** An append-only failure `List` on a **process-cached**
+  connector, fed by a **per-store** init flag, grew one entry per HTTP request and re-raised its event each
+  time. Measured 5 stores → 5 entries and 5 re-executed failing DDL statements. Lifetime mismatches between
+  a cached collaborator and its per-instance gate are worth checking whenever you add state to a connector.
+- **Only two of the original five tests were evidence.** The other three referenced the new API and so could
+  not compile against the reverted fix — pins, not proof. Counting them as red-verified would have reported
+  five-fifths confidence for two-fifths of a check.
+- **Found by diffing the working tree, not by a failure.** This arrived as three modified files with no
+  commit, no test and no task — the third such find in a week after TASK-197/198. Nothing in this repo knew
+  it existed, and nothing would have.
+
+Note: `Recent Updates` is well past the ~5–8 entry threshold and is overdue a `/roll-changelog` pass.
 
 ### Six fixes that were written but never committed — and the false premise that kept them there (2026-08-09)
 
