@@ -18,6 +18,25 @@ namespace Birko.Data.SQL
         // LoadView across concurrent requests could corrupt its buckets (CR-H094).
         private static readonly ConcurrentDictionary<Type, Tables.View> _viewCache = new();
 
+        /// <summary>
+        /// Registers the view field resolver at module load, not merely on the first <see cref="LoadView"/>.
+        /// <para>
+        /// TASK-111. `DataBase.ResolveRuleField` resolves a rule's field **at the caller**, before any store
+        /// operation has run — unlike `ResolveOrderFields`, which the connector invokes after `LoadView` has
+        /// already registered this delegate. A view type carries no `[Table]`, so `LoadTable` returns null
+        /// and the delegate is the only thing that can resolve its fields. Without this, the *first*
+        /// `ToConditions&lt;MyView&gt;(…)` in a process threw `ArgumentException` for a perfectly valid view
+        /// field, and the identical call succeeded later once anything had touched a view — an
+        /// order-dependent, first-call-only failure, which is the worst kind to diagnose.
+        /// </para>
+        /// <para>
+        /// Shared projects compile into each consuming assembly, so this runs once per module;
+        /// <see cref="EnsureViewResolverRegistered"/> is idempotent and no-ops on every call after the first.
+        /// </para>
+        /// </summary>
+        [System.Runtime.CompilerServices.ModuleInitializer]
+        internal static void InitializeViewResolver() => EnsureViewResolverRegistered();
+
         private static void EnsureViewResolverRegistered()
         {
             if (ResolveFieldSelectName == null)
