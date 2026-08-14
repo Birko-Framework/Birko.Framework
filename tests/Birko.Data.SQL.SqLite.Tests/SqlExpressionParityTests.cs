@@ -75,6 +75,9 @@ public class SqlExpressionParityTests : IDisposable
 
     private static readonly int[] Ids = { 1, 5 };
 
+    /// <summary>Empty by design — TASK-137's empty-`IN` / empty-`NOT IN` cases below.</summary>
+    private static readonly int[] NoIds = Array.Empty<int>();
+
     // Each case: a label and the predicate. The oracle is expr.Compile() over the same seed.
     public static IEnumerable<object[]> Cases()
     {
@@ -106,6 +109,28 @@ public class SqlExpressionParityTests : IDisposable
             ("deepNest",      x => x.Active || (x.Amount > 4 && (x.Score != null || x.Name!.EndsWith("a")))),
             ("mixedNot",      x => x.Score != null && !(x.Name == "beta") && (x.Amount <= 2 || x.Amount >= 7)),
             ("orOfAnds",      x => (x.Active && x.Score != null) || (x.Amount == 9) || (x.Name!.StartsWith("b") && !x.Active)),
+
+            // TASK-137 — an empty NOT IN matches every row and is now REDUCED AWAY rather than rendered as
+            // `1 = 1`. The reduction rewrites the SQL for every shape below (dropping the term from an AND
+            // run, collapsing an OR chain, flipping a negated group to always-false), so the oracle is the
+            // check that actually matters: C# `!empty.Contains(x)` is true of every row, and the SQL must
+            // agree after being rewritten. `emptyIn` is the asymmetric twin — always-FALSE terms cannot be
+            // dropped (`A AND FALSE` is `FALSE`, not `A`) and keep their `1 = 0`.
+            ("emptyNotIn",       x => !NoIds.Contains(x.Amount)),
+            ("emptyIn",          x => NoIds.Contains(x.Amount)),
+            ("emptyNotInAnd",    x => x.Amount > 4 && !NoIds.Contains(x.Amount)),
+            ("emptyNotInOr",     x => x.Amount > 4 || !NoIds.Contains(x.Amount)),
+            ("emptyNotInNotOr",  x => !(x.Amount > 4 || !NoIds.Contains(x.Amount))),
+            ("emptyNotInNotAnd", x => !(x.Amount > 4 && !NoIds.Contains(x.Amount))),
+            ("emptyNotInNested", x => x.Amount == 9 || (x.Name!.StartsWith("a") && !NoIds.Contains(x.Amount))),
+            // Two always-true terms, so the whole AND group reduces rather than just losing one term.
+            // Deliberately over a PLAIN column twice: any COMPUTED operand inside Contains
+            // (`x.Amount + 1`, `x.Score ?? 0`) is translated wrongly TODAY, independently of this task —
+            // the operand is discarded and replaced by a subcondition, so `SomeIds.Contains(x.Amount + 1)`
+            // over a NON-empty set answers 1 where the oracle says 0. Asserting it here would have had to
+            // encode that defect to stay green, which blesses it; it is filed as TASK-213 instead.
+            ("emptyNotInTwice",  x => !NoIds.Contains(x.Amount) && !NoIds.Contains(x.Amount)),
+            ("emptyBothKinds",   x => NoIds.Contains(x.Amount) || !NoIds.Contains(x.Amount)),
         };
         foreach (var c in cases)
             yield return new object[] { c.label, c.expr };
