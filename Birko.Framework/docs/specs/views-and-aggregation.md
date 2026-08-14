@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: a62ec942b6f7bd18c3ce91995b4496ae95aa910a
-generated-on: 2026-08-01
+generated-at: 715caf9d0e013cdacf990f2fd80c4c0d9ea5199a
+generated-on: 2026-08-14
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -44,6 +44,10 @@ sources:
   - ../Birko.Data.Views/ViewQueryMode.cs
   - ../Birko.Data.Views/ViewResult.cs
 shaped-by: []
+# false, not an empty answer: every source glob in this area points into a sibling repo, so no
+# task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run
+# here at all. Treat shaped-by as unknown rather than as "no feature shaped this area".
+shaped-by-derived: false
 ---
 
 # Fluent view definitions and aggregation queries
@@ -415,6 +419,12 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 - **When** the translation runs
 - **Then** the first entry of `table.Fields.Values` is used as the base column for the `COUNT` function field, and an `InvalidOperationException` is thrown if the table exposes no fields
 
+#### Scenario: Two aggregates of the same function both survive translation
+
+- **Given** a definition with `Sum(Order.Total) → TView.TotalSpent` and `Sum(Order.Tax) → TView.TotalTax` — the same SQL function over one table
+- **When** `SqlViewTranslator.Translate` runs
+- **Then** both aggregates are added to `View.Tables[…].Fields` under their **view property** keys (`TotalSpent`, `TotalTax`), so `GetPersistentViewSelectFields()` exposes both. Keying by the SQL function name would collide on `"SUM"`, and `View.AddField` skips a key it already holds — the second aggregate would be dropped with no column, no exception and no log entry, and its property would read back as `default(T)`
+
 #### Scenario: An unnamed view derives its name from the joined table names
 
 - **Given** a definition with `Name == null` spanning tables `Order` and `Customer`
@@ -486,7 +496,7 @@ before each operation; and SHALL materialize each row by reading reader columns
 
 - **Given** an aggregate view whose `Sum` of `Order.Total` targets `TView.Total`, queried with `OrderBy<TView>.By(v => v.Total)`
 - **When** the select command is built
-- **Then** the key is resolved by `DataBase.ResolveViewOrderFields` before it reaches the clause, and the resolved form follows the path: on the on-the-fly path `ORDER BY SUM(Order.Total) ASC` (what that SELECT list projects, aliased `as SUM` — the `table.Fields` dictionary key, which `SqlViewTranslator` sets to the SQL function name), and on the persistent path `ORDER BY Total ASC` (the `AS "Total"` alias the view DDL created). Before resolution existed the raw key was interpolated, so neither an aggregate nor a renamed view property matched an emitted column
+- **Then** the key is resolved by `DataBase.ResolveViewOrderFields` before it reaches the clause, and the resolved form follows the path: on the on-the-fly path `ORDER BY SUM(Order.Total) ASC` (what that SELECT list projects, aliased `as Total` — the aggregate's view property, read off `AbstractField.Property`), and on the persistent path `ORDER BY Total ASC` — emitted bare, while the column the view DDL created is `AS "Total"`, which is the pre-existing three-way quoting disagreement this area's sort requirement notes and TASK-209 owns. Before resolution existed the raw key was interpolated, so neither an aggregate nor a renamed view property matched an emitted column
 
 ### Requirement: View sort keys are resolved against the view's field metadata, per path
 
@@ -515,7 +525,9 @@ The resolved form SHALL follow the path, because the two expose their columns un
 **on-the-fly** → `field.GetSelectName(true)`, the `Table.Column` form `View.GetSelectFields()` always
 projects; **persistent** → `field.IsAggregate && field.Property != null ? field.Property.Name : field.Name`,
 matching `GetPersistentViewSelectFields()` and the `AS "<ViewProperty>"` alias the view DDL emits for
-aggregates. The `Property != null` arm is load-bearing rather than defensive: `AbstractField.Property` is
+aggregates. That DDL alias is the one column identifier the system quotes, because it *creates* the column and
+the persistent SELECT list quotes it when reading it back; a bare alias would fold to lower case on PostgreSQL
+and be unfindable. The `Property != null` arm is load-bearing rather than defensive: `AbstractField.Property` is
 declared non-nullable but is assigned by the view builders, and a key matched on `Name` alone can reach this
 point, so an aggregate field with no `Property` SHALL fall back to its source name instead of raising
 `NullReferenceException` from a sort. The resolved identifier SHALL NOT be quoted, matching the on-the-fly

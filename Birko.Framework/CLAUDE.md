@@ -192,6 +192,41 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   also matches before a trailing newline. Sanitising the *parameter name* is not this check:
   `SqlBuilderContext.GenerateParameterName` already did that, and it is what made SH-H023 look safe on a
   skim
+- **A name that one layer CREATES and another layer READS BACK has exactly one producer.** Same "resolve it
+  once" discipline as the two rules below, applied to identifiers rather than to scope or tenancy — and the
+  failure mode is different: not a wrong answer, but two layers each patching their own half until the
+  emitted SQL carries both. An aggregate view column's alias *becomes* the column name in the view's DDL, so
+  three places must agree on it: the SELECT-list alias (`Table.GetSelectFields`), the persistent read
+  (`View.GetPersistentViewSelectFields`) and the sort key (`DataBase.ViewOrderFieldName`). CR-L195 decided
+  the name is the **view property**, taught two of the three to read `field.Property.Name`, and left the
+  alias reading the `Fields` dictionary key — which both view builders set to the SQL *function* name. The
+  two disagreeing producers then emitted `COUNT(VOrders.PersonId) as COUNT AS "OrderCount"` — **two aliases
+  on one column**, a syntax error on every provider, so no persistent aggregate view could be created at all
+  (TASK-129). Three parts generalise:
+  - **Fix it at the producer, not at each emit site.** Suppressing the second alias would have shipped valid
+    SQL with the identity still split, so the *next* aggregate sink rediscovers it. All three now read
+    `Property.Name`, so they agree **by construction** — a fourth consumer is correct without being told.
+  - **A duplicate key that is silently skipped is the same defect wearing a quieter coat.** The mis-keying
+    had a second consequence nobody filed: `View.AddField` skips a `Fields` key it already holds, so two
+    aggregates of the same function — both keyed `"SUM"` — produced **one** column, and the lost property
+    read back as `default(T)` with no exception and no log entry. Worse than the loud one, and found only by
+    running the generator. Where an identity is used as a dictionary key, **check what happens on collision
+    before trusting the key** (§ SH-H037's rule, arriving through a `ContainsKey` guard instead of a
+    `return null`).
+  - **A created identifier is quoted the way its reader quotes it — the bare-identifier rule below does NOT
+    apply.** This is the one place this codebase quotes a column identifier, and the distinction is
+    *creating* versus *referencing*: the DDL alias becomes a real column, and its only reader
+    (`CreatePersistentViewSelectCommand`) emits `QuoteIdentifier(GetPersistentViewSelectFields()[i])` through
+    the **same connector**, so quoted round-trips on every provider (`"` ANSI, `` ` `` MySQL, `[]` MSSql)
+    while a bare `as OrderCount` creates `ordercount` on PostgreSQL against a read asking for `"OrderCount"`
+    — created, then unqueryable. **TASK-129's first attempt got this backwards** by applying the bare rule
+    below on autopilot; the inline review at the close gate caught it before commit. The general rule:
+    **match the sink's reader, then check whether the codebase-wide convention actually covers that sink** —
+    "identifiers are emitted bare" was written for identifiers being *referenced*.
+    (Three producers of a persistent view's column names currently take three positions: the DDL projection
+    is bare + table-qualified for non-aggregates, the persistent SELECT quotes, the persistent ORDER BY
+    interpolates bare. That means **non-aggregate** persistent view columns are still broken on PostgreSQL —
+    TASK-209, found by this fix's own test and deliberately out of its scope.)
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
@@ -308,6 +343,48 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### An aggregate column had two names, so it got two aliases — and the quiet half lost a column (2026-08-14)
+
+TASK-129. Every SQL view containing an aggregate generated
+`COUNT(VOrders.PersonId) as COUNT AS "OrderCount"` — **two aliases on one column**, which SQLite rejects with
+`near "AS": syntax error` and which is a syntax error on every other provider, so a persistent (or `Auto`)
+aggregate view could **never be created**. The capability was unreachable, not degraded. Reproducing it turned
+up a second defect with the same root cause and no filing: two aggregates of the *same* function collided on
+their `Fields` dictionary key and the second was **dropped silently** — no column, no exception, no log entry,
+the property reading back as `default(T)`. The standing rule is in § Conventions above. **Split: 15 of 17**
+new-or-changed tests fail on a full revert. Five things worth carrying:
+
+- **CR-L195 was right and only got two thirds of the way.** It decided an aggregate's identity is its view
+  property and taught `GetPersistentViewSelectFields` and `ViewOrderFieldName` to read `field.Property.Name` —
+  then aliased at its own emit site instead of at the producer, leaving `Table.GetSelectFields` still reading
+  the dictionary key. Two producers of one name is what put two aliases on the column. The fix moves the read
+  to the producer so a fourth consumer is correct without being told.
+- **This task's own § Approach recommended the smaller fix, and the smaller fix was wrong.** It suggested
+  parameterising an un-aliased projection so the shared `Table.GetSelectFields` stayed untouched — which
+  closes the syntax error, leaves the identity split, and leaves the silent-drop defect entirely alive. Its
+  *caution* was still correct about what to check: the on-the-fly path was verified to read **positionally**
+  (`SqlViewStore.CreateTransformFunction` ignores the field-name map) and ORDER BY to match on
+  `Property.Name`/`Name`, never the key — which is what made the larger fix safe. **Check what the written
+  approach tells you to check, then re-decide the approach** — fourth time in a month a prescribed remedy
+  needed re-costing (TASK-111, TASK-112, TASK-117).
+- **The shipped test asserted the absence of the broken thing, and the broken thing passed it.**
+  CR-L195's pin was `sql.Should().Contain("AS \"OrderCount\"")` — satisfied byte-for-byte by
+  `as COUNT AS "OrderCount"`. It never executed the DDL. Its MSSql twin asserted `AS [OrderCount]` and did
+  the same. Every DDL assertion now **executes** against SQLite and reads the created columns back out of the
+  database, compared to what `GetPersistentViewSelectFields()` asks for rather than to a literal. Same lesson
+  as the `b-chart` suite (2026-08-09): **assert the shape you want positively.**
+- **Two tests changed classification by changing what they execute.** TASK-128's two
+  `Persistent_aggregate_sort_*` were contract *pins* while their DDL was hand-written — they asserted a shape
+  the generator could not produce, so no revert could touch them. Switching them to the generator (an
+  acceptance criterion here) made both fix-dependent evidence. TASK-118 saw this in the opposite direction;
+  the rule is that **classification follows what a test executes, not what it was written for.**
+- **The fix landed partly in files no spec area covers, and `.map.yml` had predicted exactly that** — naming
+  this task, and asking for a DECISION rather than a coverage fix. `ViewSelectSqlBuilder.cs` and
+  `DataBase_View.cs` are in no area's globs, so the spec diff could not be evidence for the part of the
+  change that lives there; a fix confined to those files would have produced a spotless diff. Left excluded
+  and filed as TASK-208 (`assignee: human`) rather than silently widened — a note that gets quietly acted on
+  stops being a decision. The residual silent-skip in `View.AddField` is TASK-207.
 
 ### "Clear the cache" deleted the database — by default, and the default had no default (2026-08-12)
 

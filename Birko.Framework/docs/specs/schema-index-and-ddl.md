@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: d9637e67bd2a3a7b5c10dc8e53d91562630f0a4e
-generated-on: 2026-08-08
+generated-at: 715caf9d0e013cdacf990f2fd80c4c0d9ea5199a
+generated-on: 2026-08-14
 sources:
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexInfo.cs
@@ -41,6 +41,10 @@ sources:
   - ../Birko.Data.SQL/SQL/Tables/IndexDefinition.cs
   - ../Birko.Data.SQL/SQL/Tables/Table.cs
 shaped-by: []
+# false, not an empty answer: every source glob in this area points into a sibling repo, so no
+# task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run
+# here at all. Treat shaped-by as unknown rather than as "no feature shaped this area".
+shaped-by-derived: false
 ---
 
 # Schema descriptors, index management and attribute-driven DDL
@@ -328,8 +332,19 @@ no table or to a table with no fields.
 
 The system SHALL expose on `Tables.Table` a positional select-field map (`GetSelectFields`), primary-field
 enumeration, column-name lookup (`GetField`) and property-name lookup (`GetFieldByPropertyName`) backed by a
-lazily built reverse index, and SHALL render aggregate fields as `FUNC(args) as <key>` while rendering plain
-fields as an optionally table-qualified column name.
+lazily built reverse index, and SHALL render aggregate fields as `FUNC(args) as <ViewProperty>` while
+rendering plain fields as an optionally table-qualified column name.
+
+The aggregate alias SHALL be taken from `AbstractField.Property.Name` — the aggregate's view property —
+falling back to the `Fields` dictionary key only when `Property` is unset. It is the same name
+`View.GetPersistentViewSelectFields()` queries back and `DataBase.ViewOrderFieldName()` sorts by; all three
+SHALL read it from that one place, so they agree by construction rather than by each view builder keying the
+field identically.
+
+The system SHALL additionally accept an `aggregateAlias` flag (default true) that suppresses the
+`as <alias>` suffix entirely. The view-DDL builder passes false and appends its own **quoted** alias, because
+the column it creates is read back quoted; with both emitting, an aggregate carried two aliases and the
+statement was a syntax error on every provider.
 
 #### Scenario: Select list is keyed by ordinal position
 
@@ -338,12 +353,22 @@ fields as an optionally table-qualified column name.
 - **Then** the returned dictionary has keys `0`, `1`, `2` in `Fields.Keys` order, so a reader can be read
   positionally
 
-#### Scenario: Aggregate fields are aliased, plain fields are not
+#### Scenario: Aggregate fields are aliased by their view property, plain fields are not
 
-- **Given** a field with `IsAggregate == true` stored under key `"Total"`
+- **Given** an aggregate field (`IsAggregate == true`) whose `Property` is the view property `TotalSpent`,
+  stored under the `Fields` key `"SUM"`
 - **When** `GetSelectFields(withName: true)` is called
-- **Then** its value ends with `" as Total"`, whereas a non-aggregate field's value is
-  `"<TableName>.<ColumnName>"` with no alias
+- **Then** its value ends with `" as TotalSpent"` — the property, not the key — whereas a non-aggregate
+  field's value is `"<TableName>.<ColumnName>"` with no alias
+
+#### Scenario: An aggregate field with no view property falls back to its dictionary key
+
+- **Given** an aggregate field whose `Property` is unset
+- **When** `GetSelectFields(withName: true)` is called
+- **Then** the alias is the `Fields` dictionary key, so the read-path projection is still valid SQL rather
+  than raising `NullReferenceException`. This covers `GetSelectFields` only — the view-DDL builder
+  dereferences `Property.Name` unconditionally when appending its own alias, so a `Property`-less aggregate
+  still raises there (pre-existing; the view builders always assign `Property`)
 
 #### Scenario: Aggregate-only omission
 
