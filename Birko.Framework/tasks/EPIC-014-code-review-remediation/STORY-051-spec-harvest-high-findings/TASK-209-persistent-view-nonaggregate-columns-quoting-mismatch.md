@@ -79,6 +79,19 @@ view: a view created by an older build has columns named by source column, and a
 for the view-property name, so **already-deployed persistent views must be recreated**. That migration call
 is this task's to make, alongside the quoting decision it already owns.
 
+**Blocked on infrastructure, twice measured (2026-08-14).** Two `/fix-next` runs ranked this task **top of
+the pool** on severity and reachability and could not take it: acceptance criterion 1 requires a
+reproduction against real PostgreSQL, and this machine has **no Docker daemon** (`failed to connect to the
+docker API at npipe:////./pipe/dockerDesktopLinuxEngine`), no `psql` on `PATH`, and nothing listening on
+5432. Status deliberately left `todo` rather than `blocked` — the blocker clears the moment Docker Desktop
+is started, and marking it blocked would hide the highest-value item in the pool. **Start Docker before
+picking this**, or the run stalls at step 3.
+
+Note the duplicate-column half added above **is** reproducible without PostgreSQL (measured on SQLite), so
+if PG stays unavailable this task could legitimately be split: the duplicate closed on SQLite evidence, the
+quoting mismatch left waiting. That split has not been made — one fix closes both, and doing half would
+change the persistent DDL twice.
+
 ## Approach
 
 The decision is *which* convention wins, and it cannot be taken per sink — that is what produced three answers.
