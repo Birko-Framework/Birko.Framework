@@ -1,7 +1,7 @@
 ---
 area: bulk-filter-operations
-generated-at: 5b4c2b4ef9fa19a2e1d6ed48378861579a3bf5a4
-generated-on: 2026-08-06
+generated-at: 34fa9b2797a9cfa273ccb2c4fcb9189a9648f55e
+generated-on: 2026-08-14
 sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
@@ -66,6 +66,21 @@ the previous harvest correctly recorded, and the thing the fix inverts. It also 
 destructive funnels, `WholeTableWriteException` and the two MongoDB stores to this area's globs in
 `.map.yml`: the guard's primary site was reachable by **no** glob in any area, so a regen could not have
 seen the change at all. Same silent under-coverage as the TASK-110 note in the map, found the same way.
+
+Scoped regen at `34fa9b2` for **TASK-137** — an empty `NOT IN` rendered `1 = 1`, which is a non-empty
+`WHERE` and therefore **satisfied the guard TASK-109 had just installed**. Measured against SQLite:
+`Delete(x => !empty.Contains(x.Col))` left 0 of 3 rows and threw nothing; the `Update` twin rewrote 3 of 3.
+`WouldTargetEveryRow` now shares the renderer's reduction, so a non-empty condition collection whose terms
+all reduce away is refused like the empty one.
+
+**Coverage gap, reported rather than silently patched:** this area's requirement text describes
+`WouldTargetEveryRow` and `AddRequiredWhere` in detail, and both live in
+`../Birko.Data.SQL/SQL/Connectors/AbstractConnectorBase.cs`, which **no glob in this area reaches** — the
+guard's own implementation file. TASK-137's change to it is visible here only through the funnels and the
+store overloads that call into it, so a future fix confined to that file would produce a clean diff for this
+area. The third instance of exactly this shape (after the TASK-110 and TASK-109 notes above), which is the
+argument for deciding TASK-208 rather than routing around it again. `.map.yml` is human-owned and was not
+edited.
 
 ## Requirements
 
@@ -529,6 +544,17 @@ providers. It SHALL be enforced twice, at two different points and on two differ
   no `WHERE`. Guarding the rendered text is what closes that case; guarding the collection alone would
   not.
 
+An **empty** condition collection is not the only way to mean everything: a NON-EMPTY collection whose
+terms all reduce away means it too. `WouldTargetEveryRow` SHALL therefore ask
+`AbstractConnectorBase.IsAlwaysTrueCondition` / `IsAlwaysTrueChain` — the **same** reduction the renderer
+uses, so the guard and the emitted SQL cannot disagree about what "everything" covers. A term that
+constrains nothing SHALL NOT be rendered as a constant: a tautology such as `1 = 1` is a non-empty
+`WHERE` and would satisfy the rendered-clause test above, which is precisely how an ordinary filter
+(`Delete(x => !empty.Contains(x.Col))`) reached a whole-table `DELETE` with the guard's blessing.
+
+A tree that reduces to always-**false** SHALL NOT be refused: it targets no rows, so it renders its
+`1 = 0` and the statement is issued. The refusal fires on "everything", never on "nothing".
+
 `AddRequiredWhere` SHALL be separate from `AddWhere` rather than a flag on it, because reads share
 `AddWhere` and a null filter on a read legitimately means read-everything.
 
@@ -575,6 +601,39 @@ providers. It SHALL be enforced twice, at two different points and on two differ
 - **Then** `IsExplicitAllRows` returns false, the funnel guard fires, and `WholeTableWriteException` is
   thrown — the explicit-opt-in test is deliberately narrower than the set of shapes that mean
   "everything", so the boundary errs toward refusing rather than toward writing
+
+#### Scenario: An empty negated `Contains` is refused, not treated as a deliberate all-rows write
+
+- **Given** a `DataBaseBulkStore<DB,T>` and the predicate `x => !ids.Contains(x.Amount)` where `ids` is an
+  empty collection — a filter that constrains nothing, though it is not an explicit constant
+- **When** `Delete(filter)` / `DeleteAsync(filter, ct)` or `Update(filter, updates)` is called
+- **Then** `WouldTargetEveryRow` finds the single `In` term reduces to always-true, and
+  `WholeTableWriteException` is thrown before a transaction opens — the same answer
+  `x => true || x.A == 1` gets, because both merely *reduce* to everything rather than saying so
+- **And** no row is deleted or rewritten: measured end-to-end against SQLite on a 3-row table, all 3 rows
+  survive the delete and none is rewritten by the update
+
+#### Scenario: An OR chain that collapses to everything is refused for the same reason
+
+- **Given** the predicate `x => x.Amount > 20 || !ids.Contains(x.Amount)` with `ids` empty
+- **When** `Delete(filter)` is called
+- **Then** the OR group reduces to always-true (`A OR TRUE` is `TRUE`) and the call is refused — a
+  collapsed chain targets every row just as surely as a sole always-true term does
+
+#### Scenario: A bounded filter beside an always-true term still deletes its own rows
+
+- **Given** the predicate `x => x.Amount > 20 && !ids.Contains(x.Amount)` with `ids` empty
+- **When** `Delete(filter)` is called
+- **Then** the always-true term is dropped, the statement carries `WHERE` on the real term, and only its
+  rows are deleted — the reduction must not make a bounded delete look unbounded
+
+#### Scenario: A filter that reduces to always-false deletes nothing rather than being refused
+
+- **Given** the predicate `x => !(x.Amount > 20 || !ids.Contains(x.Amount))` with `ids` empty, which is
+  always false
+- **When** `Delete(filter)` is called
+- **Then** the statement is issued carrying `WHERE 1 = 0` and no row is deleted — it is neither refused
+  nor widened into a whole-table write
 
 ### Requirement: Every-row destructive writes are reachable only through an explicit door
 

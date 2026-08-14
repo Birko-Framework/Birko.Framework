@@ -16,8 +16,18 @@ finding-ids: SH-H001 … SH-H057
 **17 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
-SH-H023 via [[TASK-111]]) — **12 of 17 tasks
-done, 1 in review.** TASK-126 completes the tenant trio with TASK-114 (write guard) and TASK-125 (read
+SH-H023 via [[TASK-111]]) — **18 of 21 tasks
+done, 1 in review, 2 todo.** [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
+planned, and closed it much wider than filed: the empty `NOT IN`'s `1 = 1` was not merely an injection
+lookalike in a log, it was a **non-empty `WHERE` that constrains nothing**, so it satisfied the whole-table
+write guard TASK-109 had installed 18 days earlier and `Delete(x => !empty.Contains(x.Col))` emptied the
+table silently (0 of 3 rows, no exception). A guard defeated by the code it guards is the shape to remember:
+the tautology was chosen *for* being harmless. Its close gate spawned [[TASK-212]] (MongoDB's `RequireFilter`
+refuses only a *null* filter, so the same shape is unguarded there — mechanism deliberately filed
+**unverified**, since the driver owns the translation) and [[TASK-213]] (a *computed* operand inside
+`Contains` is silently replaced by a fabricated predicate, answering 1 row where the truth is 0 —
+pre-existing, unrelated, and found only because the fix added its shapes to the compiled-delegate oracle),
+taking the story to 21 tasks. TASK-126 completes the tenant trio with TASK-114 (write guard) and TASK-125 (read
 bypass): a base class that documented its scoping contract in a comment and enforced none of it now
 re-checks every record its hooks return. Unlike the other two it is hardening rather than a reproduced
 leak — the framework ships no implementation of `TagServiceBase` — which is why it lost the ranking twice

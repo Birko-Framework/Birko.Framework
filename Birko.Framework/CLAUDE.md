@@ -170,6 +170,37 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     stating the admin precondition on the flush door. The § SH-H037 rule says fail-fast is legitimate *only*
     where an opt-out exists and is checked first — so **the opt-out is part of the fix and needs its own
     test**, not a mention in a message nobody executed.
+- **A scope guard tests what the statement MEANS, never whether text was produced — and an always-true
+  term is reduced away, never rendered.** Third instance of the family above (SH-H002 SQL, SH-H006 Redis),
+  and the one that shows a guard can be defeated by the code it is guarding. `AddRequiredWhere` refuses a
+  destructive statement when *nothing was rendered*; `InConditionStrategy` rendered an empty `NOT IN` as
+  `1 = 1`, which is a **non-empty `WHERE` that constrains nothing** — so `Delete(x => !empty.Contains(x.Col))`
+  emptied the table with the guard's blessing (measured: 0 of 3 rows left, no exception; the `Update` twin
+  rewrote 3 of 3). The tautology was chosen *for* its harmlessness and that is exactly what made it a
+  bypass. Four parts generalise (TASK-137):
+  - **"Something was emitted" is not a scope check.** Guard on the resolved *meaning* —
+    `AbstractConnectorBase.IsAlwaysTrueCondition` / `IsAlwaysTrueChain`, called by **both**
+    `WouldTargetEveryRow` and the renderer, so the guard and the emitted SQL cannot disagree about what
+    "everything" covers. Same "one producer" discipline as the entry below, applied to scope instead of to
+    identifiers: two implementations is how a guard ends up agreeing with itself and disagreeing with the SQL.
+  - **An always-true term has no rendering, by design.** `A AND TRUE` is `A`, so drop it; `A OR TRUE` is
+    `TRUE`, so **collapse the chain** rather than dropping the term (dropping it silently narrows the result —
+    a wrong answer, worse than the constant being removed); and `NOT (A OR TRUE)` is **always-false**, so a
+    negated group *flips* and renders the existing `1 = 0`. The asymmetry with the always-false side is not an
+    oversight: `A AND FALSE` is `FALSE`, not `A`, so `1 = 0` must be emitted — and it carries no injection
+    connotation, while `1 = 1` is the `' OR 1=1--` signature. A strategy asked to render the unrenderable
+    **throws** (§ SH-H037): a constant is the defect and an empty string is silently joined between its
+    neighbours' separators into `A AND  AND B`.
+  - **Refuse where the caller can still catch it.** `AddRequiredWhere` runs inside
+    `DoCommandWithTransaction`, whose `InitException` re-wraps every callback exception in a bare `Exception`
+    that no `catch (WholeTableWriteException)` can select — so the reduction must be visible to the
+    **pre-check**, or a silent whole-table delete merely becomes an unhandled 500. This is why SH-H002 has a
+    pre-check *and* a rendered-clause backstop; a new "means everything" shape has to be taught to the former.
+  - **Reduced-to-everything is REFUSED; only a one-node explicit constant is the door.** `x => true` is the
+    `DeleteAll()` synonym; `x => true || x.A == 1` and an empty `NOT IN` merely *reduce* to everything and get
+    the refusal. The task file argued the opposite from a false premise ("otherwise it starts throwing, which
+    would be a regression") — it does not throw today, it wipes the table. **Measure the shipped behaviour
+    before costing a remedy against it.**
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -386,6 +417,49 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The tautology chosen for being harmless was the thing that walked past the guard (2026-08-14)
+
+TASK-137. An empty `NOT IN` rendered `WHERE 1 = 1`, filed — correctly — as a log-hygiene defect: `1 = 1` is the
+`' OR 1=1--` signature and trains operators to scroll past it. What nobody had checked was what the constant
+does one layer up. `AddRequiredWhere`'s whole contract (SH-H002 / TASK-109, landed 18 days earlier) is
+*"nothing rendered → refuse"*, and `1 = 1` is a **non-empty `WHERE` that constrains nothing** — so
+`store.DeleteAsync(x => !emptyIds.Contains(x.Amount))` reached a whole-table `DELETE` **with the guard's
+blessing**: measured on real SQLite, 0 of 3 rows left and no exception, while the `Update` twin rewrote 3 of 3.
+Always-true terms are now reduced away instead of rendered, and `WouldTargetEveryRow` shares that reduction.
+The standing rule is in § Conventions above. Split: **29 of 54** (re-derived; the first number, 29 of 45,
+expired when the fix's own spec step added 9 oracle cases). Five things worth carrying:
+
+- **⚠ Consumers: a call that used to succeed now throws.** `Delete`/`Update` with a filter that reduces to
+  everything — an empty negated `Contains`, or an `OR` chain containing one — now raises
+  `WholeTableWriteException` instead of writing every row. Anything relying on that (deliberately or not) must
+  move to `DeleteAll()` / `UpdateAll(updates)` or an explicit `x => true`. Reads are byte-for-byte unaffected.
+  `InConditionStrategy.BuildSql` also now throws for the empty negated case rather than returning `1 = 1`,
+  which is breaking only for code calling the strategy directly rather than through `ConditionDefinition`.
+- **The finding was right, its severity was wrong, and the task's prescribed remedy would have preserved the
+  bug.** Acceptance criterion 2 required the sole-condition destructive case to reach TASK-109's
+  *deliberate-all-rows* path — i.e. to keep deleting everything — reasoning that refusing "would be a
+  regression, not a fix". It was inverted before any code was written. **Sixth time in a month a written
+  remedy needed re-costing** (TASK-111, 112, 117, 129, 207). The tell each time is the same: the approach
+  reasons about what the code *should* do without measuring what it *does*.
+- **Reads were never wrong, which is why nothing found this for 18 days.** All eight read shapes returned
+  correct rows before and after — `1 = 1` is genuinely always-true. The 9 cases added to the
+  compiled-delegate oracle (`SqlExpressionParityTests`, the strongest instrument available: SQL vs
+  `expr.Compile()` over a real database) therefore **pass either way** and are recorded as contract pins.
+  When a defect's whole surface is a guard being fooled, no amount of result-correctness testing can see it.
+- **The fix's own first draft had the defect it was fixing.** Dropping an always-true term that *opened* an
+  `OR` run would have rendered `A OR TRUE AND B` as `A AND B` — the intersection instead of the union, a
+  silent narrowing. Caught by reasoning through the reduction rather than by a test, since the flat-list path
+  is unreachable from the parser (which always yields one nested root). The dropped term now hands its `OR` to
+  the next survivor.
+- **Adding the shapes to the oracle suite found a second, unrelated defect — filed, not asserted.** A
+  **computed** operand inside `Contains` (`x.Amount + 1`, `x.Score ?? 0`) is silently discarded and replaced
+  by a fabricated subcondition, so `SomeIds.Contains(x.Amount + 1)` over a *non-empty* set answers 1 row where
+  the truth is 0 — a wrong answer in the positive direction, pre-existing and independent (TASK-213). The
+  parity case was rewritten over a plain column: encoding the broken behaviour to keep the suite green would
+  have blessed it (the TASK-111 precedent). MongoDB's half-guard is TASK-212 — `RequireFilter` refuses only a
+  *null* filter, so the shape this task spent its whole scope on is unguarded there, filed with its mechanism
+  marked **unverified** because the MongoDB driver owns the translation and nothing in this repo settles it.
 
 ### Re-keying half a dictionary moved the collision instead of closing it (2026-08-14)
 

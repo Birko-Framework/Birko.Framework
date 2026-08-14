@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: 84457477972f5f00ff263f6b7f13fcb6449676c9
-generated-on: 2026-08-12
+generated-at: 34fa9b2797a9cfa273ccb2c4fcb9189a9648f55e
+generated-on: 2026-08-14
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
@@ -33,6 +33,10 @@ shaped-by:
   # TASK-111 / SH-H023 — rule fields resolve against table metadata. The evidence pass cannot run from this
   # aggregator: every source above is in a sibling repo, so the sha resolves under no `git show` here.
   - TASK-111
+  # TASK-137 — the empty NOT IN's `1 = 1` was both an injection lookalike and a tautology that satisfied
+  # the whole-table write guard; always-true terms are now reduced away instead of rendered.
+  - TASK-137
+shaped-by-derived: false   # see the note above: no source glob resolves in this repo, so no evidence pass
 ---
 
 # LINQ filter expression translation to backend queries
@@ -398,9 +402,19 @@ typed `StringComparison`, `CultureInfo`, non-generic `IEqualityComparer`/`ICompa
 ### Requirement: SQL IN translation and empty sets
 
 A non-`String` `Contains` SHALL produce `ConditionType.In`. `InConditionStrategy` SHALL render an
-EMPTY value set as the constant `1 = 0` when not negated and `1 = 1` when negated — never `Col IN ()`.
-A collection operand whose materialised, null-filtered contents are empty SHALL leave the condition an
-`In` with an empty value array rather than degrading to `IsNull`.
+EMPTY value set as the constant `1 = 0` when not negated — never `Col IN ()`. An empty NEGATED set
+matches every row and SHALL NOT be rendered at all: it carries no SQL at this layer and is reduced
+away by the enclosing chain (`AbstractConnectorBase.IsAlwaysTrueCondition`), so no always-true
+constant is emitted anywhere in the framework's SQL. A collection operand whose materialised,
+null-filtered contents are empty SHALL leave the condition an `In` with an empty value array rather
+than degrading to `IsNull`.
+
+The two halves are deliberately asymmetric. An always-FALSE term cannot be dropped — `A AND FALSE` is
+`FALSE`, not `A` — and `1 = 0` carries no injection connotation, so it is rendered. An always-TRUE term
+can always be dropped (`A AND TRUE` is `A`), and the constant that would express it, `1 = 1`, is both
+the signature of `' OR 1=1--` and a non-empty `WHERE` that constrains nothing — which satisfied the
+whole-table write guard in § *bulk-filter-operations* and let an ordinary filter reach a whole-table
+DELETE.
 
 #### Scenario: Empty IN is always false on every provider
 
@@ -408,11 +422,57 @@ A collection operand whose materialised, null-filtered contents are empty SHALL 
 - **When** `InConditionStrategy.BuildSql` runs
 - **Then** it returns `"1 = 0"` with no parameters — valid on SQLite, PostgreSQL, MySQL and MSSQL alike, where `Col IN ()` is a syntax error on the latter two
 
-#### Scenario: Empty NOT IN is always true
+#### Scenario: Empty NOT IN has no rendering and is reduced away
 
 - **Given** the same empty `In` condition with `IsNot = true`
-- **When** it is rendered
-- **Then** it returns `"1 = 1"`, because "not a member of the empty set" is true of every row — the predicate is not inverted
+- **When** the condition tree is rendered through `ConditionDefinition`
+- **Then** the term contributes nothing to the emitted SQL, because "not a member of the empty set" is true of every row; the predicate is not inverted, and no always-true constant appears
+
+#### Scenario: The strategy refuses the always-true case rather than inventing SQL for it
+
+- **Given** the same empty negated `In` condition handed directly to `InConditionStrategy.BuildSql`
+- **When** it is asked to render a term whose truth does not depend on any row
+- **Then** it throws `InvalidOperationException` naming `IsAlwaysTrueCondition` and the reduction that
+  owns the case — it returns neither a constant (a tautology is the defect) nor an empty string (which a
+  chain would silently join between two separators). Nothing in the framework reaches this: the assembler
+  skips such terms before `BuildSingleCondition` is called
+
+#### Scenario: A sole empty NOT IN renders no WHERE clause
+
+- **Given** a filter `x => !ids.Contains(x.Field)` where `ids` is empty, as the whole predicate
+- **When** `ConditionDefinition` renders the resulting single-leaf tree
+- **Then** the result is the empty string, exactly as for `x => true` — which on a read means read-everything, and on a destructive statement is what the whole-table write guard refuses
+
+#### Scenario: An always-true term is dropped from an AND chain
+
+- **Given** `x => x.Amount > 10 && !ids.Contains(x.Amount)` with `ids` empty
+- **When** the AND group is assembled
+- **Then** only the real term is emitted, with no leftover separator — the SQL says what the remaining conditions say, and the row set is unchanged from the constant-rendering behaviour
+
+#### Scenario: An OR chain containing an always-true term collapses instead of dropping it
+
+- **Given** `x => x.Amount > 20 || !ids.Contains(x.Amount)` with `ids` empty
+- **When** the OR group is assembled
+- **Then** the whole group reduces to always-true and renders nothing, because `A OR TRUE` is `TRUE` — dropping only the term would leave `A` and silently narrow the result set from every row to A's rows
+
+#### Scenario: Precedence is respected because the parser nests rather than flattens
+
+- **Given** `x => x.Amount > 20 || x.Name == "r1" && !ids.Contains(x.Amount)` with `ids` empty
+- **When** the tree is assembled — an OR group whose second child is an AND group
+- **Then** only the inner AND run drops its always-true term; the outer OR does not collapse, because
+  `A OR (B AND TRUE)` is `A OR B` and still constrains rows
+
+#### Scenario: A negated group that reduces to always-true renders always-FALSE
+
+- **Given** `x => !(x.Amount > 20 || !ids.Contains(x.Amount))` with `ids` empty, which parses to a group with `IsNot = true, IsOr = true`
+- **When** the group is rendered
+- **Then** it emits the always-false constant `1 = 0`, because `NOT (A OR TRUE)` is `FALSE` — reducing the group away instead of flipping it would invert the filter from matching no rows to matching every row
+
+#### Scenario: A negated AND group keeps its negation after the term is dropped
+
+- **Given** `x => !(x.Amount > 20 && !ids.Contains(x.Amount))` with `ids` empty
+- **When** the always-true term is dropped, leaving one child
+- **Then** the group still renders as `NOT (…)` over the remaining condition, since `NOT (A AND TRUE)` is `NOT A`
 
 #### Scenario: All-null collection collapses to matches-nothing
 
