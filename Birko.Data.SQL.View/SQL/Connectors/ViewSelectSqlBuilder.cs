@@ -52,7 +52,7 @@ namespace Birko.Data.SQL.Connectors
             // own. Both emitting produced `COUNT(VOrders.PersonId) as COUNT AS "OrderCount"` — two aliases
             // on one column, which SQLite rejects with `near "AS": syntax error` and which is a syntax error
             // on every other provider, so no persistent (or Auto) aggregate view could be created at all.
-            var fields = view.GetSelectFields(aggregateAlias: false);
+            var fields = view.GetSelectFields(aggregateAlias: false, quoteTable: quoteIdentifier);
             if (fields == null || !fields.Any())
             {
                 throw new InvalidOperationException("View must have at least one field.");
@@ -63,23 +63,25 @@ namespace Birko.Data.SQL.Connectors
             var sql = "SELECT " + string.Join(", ", fields.Select(f =>
             {
                 var fieldAtIndex = f.Key < tableFields.Length ? tableFields[f.Key] : null;
-                if (fieldAtIndex != null && fieldAtIndex.IsAggregate)
+                if (fieldAtIndex?.Property != null)
                 {
-                    // Alias aggregate columns by the unique view-property name, not the aggregate function
-                    // name (FunctionField.Name = "COUNT"/"SUM"/…): two aggregates of the same function would
-                    // otherwise collide on a duplicate column name in the view DDL, and the alias must equal
-                    // the column GetPersistentViewSelectFields queries back (CR-L195).
+                    // TASK-209: alias EVERY column by its view property, and BARE.
                     //
-                    // QUOTED, and that is load-bearing rather than stylistic — it is the one place this
-                    // codebase quotes a column identifier, because this identifier is being *created*, not
-                    // referenced, and its only reader quotes it too: CreatePersistentViewSelectCommand emits
-                    // `QuoteIdentifier(GetPersistentViewSelectFields()[i])` through this same connector. On
-                    // PostgreSQL a bare `as OrderCount` would create `ordercount` while that read asks for
-                    // `"OrderCount"`, and the view would be created and then be unqueryable. (The persistent
-                    // ORDER BY interpolates its key bare, so it disagrees with the persistent SELECT list on
-                    // that provider — pre-existing, noted in docs/specs/views-and-aggregation.md, and not a
-                    // reason to make the DDL disagree with the reader that actually consumes this name.)
-                    return f.Value + " AS " + quoteIdentifier(fieldAtIndex.Property.Name);
+                    // Every column, because a non-aggregate previously carried no alias at all and so was
+                    // created under its source column name — which is wrong twice over: the persistent read
+                    // asks for the view property, and two view properties over one source column produced
+                    // one duplicated output name (TASK-207).
+                    //
+                    // Bare, because the whole point is that the alias must round-trip against a reader that
+                    // is now also bare. TASK-129 quoted this alias to agree with a reader that quoted; that
+                    // pairing was self-consistent but broke against the rest of the framework, whose
+                    // base-table DDL emits column definitions bare so that every base column folds on
+                    // PostgreSQL. Measured against PostgreSQL 16.4: the DDL below creates `name` /
+                    // `ordercount`, and a bare `SELECT Name, OrderCount` resolves while the previously
+                    // shipped `SELECT "Name", "OrderCount"` fails with `column "Name" does not exist`.
+                    // The persistent ORDER BY already interpolated its key bare, so it becomes the model the
+                    // other two producers were brought into line with, not the outlier.
+                    return f.Value + " AS " + fieldAtIndex.Property.Name;
                 }
                 return f.Value;
             }));
@@ -154,7 +156,7 @@ namespace Birko.Data.SQL.Connectors
             // GROUP BY for aggregate views
             if (view.HasAggregateFields())
             {
-                var groupFields = view.GetSelectFields(true);
+                var groupFields = view.GetSelectFields(true, quoteTable: quoteIdentifier);
                 if (groupFields != null && groupFields.Any())
                 {
                     sql += " GROUP BY " + string.Join(", ", groupFields.Values);
@@ -215,13 +217,23 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// Quotes a dotted field reference (e.g., "TableName.FieldName" → quoted each segment).
         /// </summary>
+        /// <summary>
+        /// Emits a join-condition field reference: the <b>table</b> half quoted, the <b>column</b> half bare.
+        /// <para>
+        /// TASK-209. This quoted both halves, so a join emitted <c>"AvOrders"."PersonId"</c> while the base
+        /// table — whose DDL writes column definitions bare — actually holds <c>personid</c> on PostgreSQL.
+        /// Measured: <c>ERROR: column AvOrders.PersonId does not exist</c>, which stopped the view being
+        /// created one step after the qualifier defect and two steps before the one that was filed.
+        /// </para>
+        /// </summary>
         private static string QuoteFieldReference(string fieldRef, Func<string, string> quoteIdentifier)
         {
-            if (fieldRef.Contains('.'))
+            var separator = fieldRef.IndexOf('.');
+            if (separator > 0)
             {
-                return string.Join(".", fieldRef.Split('.').Select(p => quoteIdentifier(p)));
+                return quoteIdentifier(fieldRef.Substring(0, separator)) + "." + fieldRef.Substring(separator + 1);
             }
-            return quoteIdentifier(fieldRef);
+            return fieldRef;
         }
     }
 }

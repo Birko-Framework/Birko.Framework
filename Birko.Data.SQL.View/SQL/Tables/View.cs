@@ -181,13 +181,13 @@ namespace Birko.Data.SQL.Tables
         /// passes false and appends its own quoted alias instead (TASK-129) — see
         /// <see cref="Birko.Data.SQL.Tables.Table.GetSelectFields"/>.
         /// </param>
-        public IDictionary<int, string> GetSelectFields(bool notAggregate = false, bool aggregateAlias = true)
+        public IDictionary<int, string> GetSelectFields(bool notAggregate = false, bool aggregateAlias = true, Func<string, string>? quoteTable = null)
         {
             var result = new Dictionary<int, string>();
             int i = 0;
             foreach (var table in Tables)
             {
-                var fields = table?.GetSelectFields(true, notAggregate, aggregateAlias);
+                var fields = table?.GetSelectFields(true, notAggregate, aggregateAlias, quoteTable);
                 if (fields != null && fields.Any())
                 {
                     foreach (var field in fields)
@@ -234,7 +234,14 @@ namespace Birko.Data.SQL.Tables
 
                 foreach (var field in table.Fields.Values)
                 {
-                    result.Add(i, field.IsAggregate ? field.Property.Name : field.Name);
+                    // TASK-209: the VIEW PROPERTY for every column, not just aggregates. Non-aggregates used
+                    // to read back under their SOURCE column name, which broke two ways at once — the DDL
+                    // creates the column under the view property (so the name was simply wrong), and two view
+                    // properties over one source column produced the SAME name twice, so the persistent read
+                    // (which selects by name) bound both to the first column. TASK-207 measured that as
+                    // `SELECT … , VkOrders.Total, SUM(VkOrders.Amount) AS "Total"` returning 70 for an
+                    // aggregate whose answer was 5.
+                    result.Add(i, field.Property != null ? field.Property.Name : field.Name);
                     i++;
                 }
             }

@@ -81,7 +81,11 @@ namespace Birko.Data.SQL.Connectors
                 throw new InvalidOperationException("View must have at least one field.");
             }
 
-            command.CommandText = "SELECT " + string.Join(", ", fields.Values.Select(f => QuoteIdentifier(f)))
+            // TASK-209: columns BARE, view name QUOTED — "quote tables, never quote columns" (§ Conventions).
+            // These columns are created by the view DDL's bare `AS <ViewProperty>` alias, so on PostgreSQL
+            // they are folded; asking for QuoteIdentifier(f) made them case-sensitive and the read failed
+            // with `column "Name" does not exist` on every PascalCase view property. Measured on 16.4.
+            command.CommandText = "SELECT " + string.Join(", ", fields.Values)
                 + " FROM " + QuoteIdentifier(viewName!);
 
             AddWhere(conditions, command);

@@ -141,11 +141,13 @@ namespace Birko.Data.SQL
                 return field.GetSelectName(true);
             }
 
-            // Mirrors View.GetPersistentViewSelectFields(): the view DDL aliases aggregates
-            // AS <ViewProperty> and leaves every other column under its source name. Property is declared
-            // non-nullable but assigned by the view builders, and a key can reach here matched on Name
-            // alone, so fall back rather than risk a NullReferenceException on a sort.
-            return field.IsAggregate && field.Property != null ? field.Property.Name : field.Name;
+            // Mirrors View.GetPersistentViewSelectFields(): TASK-209 made the view DDL alias EVERY column
+            // AS <ViewProperty>, not just aggregates, so the sort key is the view property throughout.
+            // Emitted bare by CreatePersistentViewSelectCommand, which is correct under "quote tables, never
+            // quote columns" and is why this sink needed no change when the other two were brought into line.
+            // Property is declared non-nullable but assigned by the view builders, and a key can reach here
+            // matched on Name alone, so fall back rather than risk a NullReferenceException on a sort.
+            return field.Property != null ? field.Property.Name : field.Name;
         }
     }
 }
