@@ -3,9 +3,10 @@ id: TASK-209
 parent: STORY-051
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: in-progress
 priority: P1
 assignee: ai
+picked-by: fix-next
 created: 2026-08-14
 depends-on: []
 blocks: []
@@ -92,6 +93,69 @@ if PG stays unavailable this task could legitimately be split: the duplicate clo
 quoting mismatch left waiting. That split has not been made — one fix closes both, and doing half would
 change the persistent DDL twice.
 
+## Measured on real PostgreSQL (2026-08-14)
+
+**How it was run** (criterion 1 asks this to be recorded). No Docker: EDB's portable binaries zip
+(`get.enterprisedb.com/postgresql/postgresql-16.4-1-windows-x64-binaries.zip`, 339 MB) extracted into the
+session scratchpad, then
+
+```
+initdb  -D data -U birko -A md5 --pwfile=pw.txt -E UTF8
+pg_ctl  -D data -l pg.log -o "-p 55432 -c listen_addresses=127.0.0.1" start
+```
+
+No admin rights, no installer, no Windows service, port 55432, deleted afterwards. `Npgsql 9.0.3` was
+already referenced by `Birko.Data.SQL.PostgreSQL.View.Tests`.
+
+**The base tables are the key fact, and it inverts the analysis.** `CreateTable` quotes the *table* and
+emits *column* definitions bare, so on PostgreSQL every base column folds to lower case — measured:
+
+```
+AvPersons.guid, AvPersons.name, AvOrders.guid, AvOrders.personid, AvOrders.amount
+```
+
+So on PostgreSQL a column reference must be **bare** to resolve, and a table reference must be **quoted**.
+Every sink that deviates is broken. There are four, and **the filed one is third in line** — two others
+fail before it, so fixing only the persistent read changes nothing observable:
+
+| # | Sink | Emits | Result on PG |
+|---|---|---|---|
+| 1 | View DDL SELECT list (`Table.GetSelectFields(true)`) | `AvPersons.Name` — table **unquoted** | `ERROR: missing FROM-clause entry for table "avpersons"` |
+| 2 | View DDL JOIN `ON` | `"AvOrders"."PersonId"` — column **quoted** | `ERROR: column AvOrders.PersonId does not exist` |
+| 3 | Persistent read (`CreatePersistentViewSelectCommand`) | `SELECT "Name"` — column **quoted** | `ERROR: column "Name" does not exist` ← **the filed defect** |
+| 4 | Aggregate DDL alias (TASK-129) | `AS "OrderCount"` — creates case-sensitive | agrees with #3 only; must move with it |
+
+Verbatim generator DDL fails at #1. With #1 hand-fixed it fails at #2. Only with #1 and #2 fixed does the
+view get created, and only then does #3 — the defect this task was filed for — become reachable.
+
+**The correct end state is proven, not theorised.** Applying § Conventions' own rule — *quote table
+identifiers, never quote column identifiers* — end to end:
+
+```sql
+CREATE VIEW "AvTotals" AS SELECT "AvPersons".Name, COUNT("AvOrders".PersonId) AS OrderCount
+  FROM "AvOrders" INNER JOIN "AvPersons" ON ("AvOrders".PersonId = "AvPersons".Guid)
+  GROUP BY "AvPersons".Name;
+-- CREATE VIEW; columns: name, ordercount
+SELECT Name, OrderCount FROM "AvTotals";   -- works
+SELECT "Name", "OrderCount" FROM "AvTotals";  -- ERROR: column "Name" does not exist  (what ships today)
+```
+
+So § Approach **option 1 is right** (unquote the read, unquote TASK-129's alias) and **incomplete**: it
+names three producers and there are four, two of which this task currently lists as out of scope. The
+persistent `ORDER BY` already interpolates bare and is correct under this rule — it becomes the model, not
+the outlier.
+
+**Consequence for scope.** Sinks #1 and #2 are the "framework-wide `Table.Column` qualifier inconsistency"
+that § Out of scope defers. The measurement shows they are not merely *related* — they are **in front of**
+the filed defect, so this task cannot deliver a working persistent view on PostgreSQL without them.
+Widening is therefore not scope creep; it is the minimum that makes the task's own acceptance testable.
+**That decision is deferred to the user** rather than taken here.
+
+**Risk the widening carries.** Going bare is only safe while no identifier *needs* quoting. An entity or
+property named after a reserved word (`Order`, `User`, `Group`, `Table`) currently survives sink #2 and #3
+*because* they quote, and would break if they go bare. No audit of consumer models for reserved words has
+been done — that belongs in whatever task takes the widening.
+
 ## Approach
 
 The decision is *which* convention wins, and it cannot be taken per sink — that is what produced three answers.
@@ -153,3 +217,17 @@ miss it again.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-209` — leave empty until then._
+
+## Progress log
+
+- step 2 — picked; top of the pool on severity and reachability across three consecutive runs. The
+  Docker blocker recorded above is **resolved without Docker**: the user chose the portable-binaries
+  route, so a real PostgreSQL 16.4 runs from the scratchpad (`initdb` + `pg_ctl` on a high port, no
+  admin, no service, deleted afterwards) and criterion 1 is satisfiable as written. `Npgsql 9.0.3` is
+  already referenced by `Birko.Data.SQL.PostgreSQL.View.Tests`, so no package change is needed.
+  Two halves in scope, and only one of them needs the server: the **duplicate output column** (already
+  reproduced on SQLite under TASK-207) and the **case-folding mismatch** (needs PG, or a folding model).
+- step 3 — **verified against real PostgreSQL 16.4, and the finding is REAL but MIS-SCOPED. The fix as
+  filed would be a no-op on PostgreSQL** — precisely the trap criterion 1 was written to catch. See
+  § Measured on real PostgreSQL below. Not yet rescoped: the widening crosses this task's own
+  § Out of scope, so it is a decision, not a correction. **No production code changed yet.**
