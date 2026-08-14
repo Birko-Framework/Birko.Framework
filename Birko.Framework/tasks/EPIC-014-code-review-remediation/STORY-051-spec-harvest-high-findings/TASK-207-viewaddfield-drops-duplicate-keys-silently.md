@@ -142,7 +142,7 @@ key both go through the field, the aggregate alias uses it only as a fallback wh
 **Step-6 split: 7 of 9.** Named in the progress log above. The two contract pins
 (`Re_adding_the_very_same_field_on_a_taken_key_stays_silent`,
 `A_view_with_two_view_attributes_still_loads_and_keeps_each_field_once`) assert the *old* silent-skip
-survives, which is what makes them blast-radius checks and not evidence. 813/813 green across 13 SQL suites.
+survives, which is what makes them blast-radius checks and not evidence. 815/815 green across 13 SQL suites.
 
 **Judgement calls.**
 
@@ -163,6 +163,50 @@ survives, which is what makes them blast-radius checks and not evidence. 813/813
   ignoring whether the field is the same, is simpler and would be a behaviour change in every
   attribute-driven view — unmeasured, and § Conventions' SH-H037 rule says fail-fast is legitimate only once
   the blast radius is measured and an opt-out is checked first. The idempotent-re-add path *is* that opt-out.
+
+**⚠ Post-close correction — the close-gate review found a real gap in this fix.** The backgrounded
+`code-review` returned after the commits landed and was right. Measured on SQLite with this task's own
+`VkCollidingView` under `Persistent`:
+
+```
+DDL: SELECT VkPersons.Name, VkOrders.Total, SUM(VkOrders.Amount) AS "Total" FROM …
+GetPersistentViewSelectFields() → 0=Name  1=Total  2=Total
+```
+
+Keying the field dictionary by view property is only three quarters of the "one producer" rule.
+`GetPersistentViewSelectFields()` still returns `field.Name` — the **source column** — for non-aggregates,
+and `ViewSelectSqlBuilder` still projects them unaliased. So on the persistent path **the collision was
+relocated from the dictionary to the view DDL, not closed**: two output columns named `Total`, and because
+the persistent read selects *by name*, the aggregate binds to the non-aggregate's column and reads `70`
+where `5` is correct. On MSSql and PostgreSQL `CREATE VIEW` rejects a duplicated output name, so such a view
+cannot be created at all.
+
+**Honest severity.** No previously-*correct* view is broken — only views that already had a collision, and
+those were already silently dropping a column. Shape 1 persistent actually improves on SQLite (both columns
+now read `alice`). But shape 2 persistent goes from `Total = 0` to `Total = 70` — a plausible wrong answer
+replacing an obvious one, which is *worse* on this project's own severity ladder — and on MSSql such a view
+now fails to create where it previously created-but-wrong. That is a genuine regression, narrow (needs the
+name coincidence **and** `Persistent`/`Auto`) but real.
+
+**Why it shipped: the excluded test was excluded on a false premise.** The comment justifying no Persistent
+variant claimed such a test would *pass* on SQLite and so would bless broken behaviour. It fails. The one
+variant that would have caught this was skipped on a misdiagnosis — the precise failure mode CLAUDE.md
+records twice already (a guard whose own test cannot fail). The comment is corrected in the suite and the
+reasoning recorded here; **re-check the claim in a "why I did not test X" comment as carefully as an
+assertion**, because nothing executes it.
+
+Corrected in this pass: the test comment, the spec (the read-back scenario is now qualified to `OnTheFly`
+and a new scenario documents the persistent duplicate as shipped behaviour), and the test-count arithmetic
+(**815**, not 813 — the per-suite figures were right, the sum was not).
+
+**Not corrected: the duplicate itself — it needs a decision.** The fix is ~4 lines (alias non-aggregates by
+view property in `ViewSelectSqlBuilder`; return `Property.Name` uniformly from
+`GetPersistentViewSelectFields`) and would also close [[TASK-209]]'s quoting mismatch. It is deliberately
+**not** taken here because it changes the DDL of **every** persistent view: a view created by an older
+build has columns named by source column, and after the change the read asks for the view-property name, so
+**already-deployed persistent views must be recreated**. That is a migration decision, it belongs to
+TASK-209 (which also requires the PostgreSQL verification this box cannot run), and taking it silently
+inside a P2 would be exactly the scope escalation the skill forbids.
 
 **Flagged, not fixed.**
 
@@ -204,7 +248,7 @@ _Populated by `/tasks plan TASK-207` — leave empty until then._
   `Birko.Data.SQL.Views/SqlViewTranslator.cs` and `Birko.Data.SQL.View/SQL/DataBase_View.cs`)
 - step 5 — fix in `View.cs` (`ViewFieldKey` + backstop throw), comments in `SqlViewTranslator.cs` +
   `DataBase_View.cs`; tests in `Birko.Data.SQL.Views.Tests/ViewFieldKeyCollisionTests.cs`;
-  **813/813 green** across 13 SQL suites (Views 59, SQL 459, SqLite 146, SqLite.View 9, View.Migrations 14,
+  **815/815 green** across 13 SQL suites (Views 59, SQL 459, SqLite 146, SqLite.View 9, View.Migrations 14,
   MSSql.View 19, MSSql 26, MySQL.View 7, PostgreSQL.View 7, Data.Views 36, SQL.ViewModel 18, Caching 7,
   Providers 8)
 - step 6 — reverted fix surgically (key back to `field.Name`, throw short-circuited): **7 of 9 failed**.

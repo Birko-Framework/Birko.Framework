@@ -57,6 +57,28 @@ parenthetical describes the same root cause from the sort side. So there are thr
 column identifiers and they take **three different** positions on quoting — one quoted (SELECT), one bare
 (ORDER BY), one bare-and-table-qualified (DDL).
 
+**Update (2026-08-14, from [[TASK-207]]'s close-gate review) — this is now two defects, not one, and the
+second one raises the priority.** The same unaliased non-aggregate projection also produces a **duplicate
+output column name** whenever two view fields resolve to the same source column name. TASK-207 made both
+collision shapes reach the DDL (previously one field was silently dropped before it got there), so measured
+on SQLite with its `VkCollidingView` under `Persistent`:
+
+```
+DDL: SELECT VkPersons.Name, VkOrders.Total, SUM(VkOrders.Amount) AS "Total" FROM …
+GetPersistentViewSelectFields() → 0=Name  1=Total  2=Total
+```
+
+The persistent read selects **by name**, so the aggregate binds to the non-aggregate's column and reads `70`
+where `5` is correct; on MSSql and PostgreSQL `CREATE VIEW` rejects the duplicate outright. Both defects have
+one cause — non-aggregates are projected unaliased and read back by source column — and **one fix closes
+both**: alias non-aggregates by their view property, quoted, exactly as TASK-129 did for aggregates, and
+return `Property.Name` uniformly from `GetPersistentViewSelectFields`. About four lines.
+
+It was left to this task rather than taken inside TASK-207 because it changes the DDL of **every** persistent
+view: a view created by an older build has columns named by source column, and after the change the read asks
+for the view-property name, so **already-deployed persistent views must be recreated**. That migration call
+is this task's to make, alongside the quoting decision it already owns.
+
 ## Approach
 
 The decision is *which* convention wins, and it cannot be taken per sink — that is what produced three answers.
@@ -84,6 +106,15 @@ exactly the same way.
       SELECT list and the persistent ORDER BY. The chosen convention is recorded in `CLAUDE.md` § Conventions
       alongside the existing bare-identifier rule, since that rule is currently true of two sinks out of three
 - [ ] A persistent view with non-aggregate PascalCase columns round-trips on PostgreSQL
+- [ ] **The duplicate-output-column defect above is closed with the same change**: TASK-207's
+      `VkCollidingView` under `Persistent` reads `OrderTotal = 70, Total = 5` (it currently reads
+      `Total = 70`), and its shape-1 twin creates on MSSql/PostgreSQL rather than being rejected for a
+      duplicated output name. TASK-207 left a corrected comment in
+      `ViewFieldKeyCollisionTests.The_colliding_aggregate_and_non_aggregate_read_back_their_own_values`
+      pointing here — turn it into an executing Persistent assertion as part of this task
+- [ ] The migration consequence is recorded and decided, not discovered: aliasing non-aggregates renames the
+      columns of **every** existing persistent view, so already-deployed views must be recreated. Say so in
+      `CLAUDE.md` § Recent Updates as a consumer-facing ⚠, the way the TASK-112 mapper change did
 - [ ] TASK-129's aggregate behaviour still round-trips — its
       `The_ddl_alias_is_quoted_exactly_as_the_persistent_read_quotes_it` is updated together with the reader if
       option 1 is taken, never left asserting a convention the code no longer follows

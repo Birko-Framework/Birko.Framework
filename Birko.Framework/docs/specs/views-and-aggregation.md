@@ -435,7 +435,13 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 
 - **Given** a definition selecting `Order.Total → TView.OrderTotal` alongside `Sum(Order.Amount) → TView.Total` — the aggregate's view property coincides with the non-aggregate's source column name
 - **When** `SqlViewTranslator.Translate` runs
-- **Then** both fields are present and read back their own values. A per-table dictionary keyed by view property for aggregates and by source column for non-aggregates puts two namespaces in one key space, and whichever field is added second is lost
+- **Then** both fields are present in the view metadata and, **on the `OnTheFly` query mode**, read back their own values. A per-table dictionary keyed by view property for aggregates and by source column for non-aggregates puts two namespaces in one key space, and whichever field is added second is lost
+
+#### Scenario: Either collision shape still emits a duplicate column name in a persistent view's DDL
+
+- **Given** either colliding definition above with `QueryMode == Persistent` or `Auto`
+- **When** the view DDL is generated
+- **Then** the duplicate is **relocated rather than closed**: `GetPersistentViewSelectFields()` returns `field.Name` (the *source column*) for non-aggregates and `ViewSelectSqlBuilder` projects them unaliased, so the colliding fixture emits `SELECT VkPersons.Name, VkOrders.Total, SUM(VkOrders.Amount) AS "Total"` — two output columns named `Total` — and `GetPersistentViewSelectFields()` returns `Total` twice. The persistent read selects **by name**, so both bind to the first column and the aggregate reads the non-aggregate's value. On MSSql and PostgreSQL `CREATE VIEW` rejects a duplicated output name, so such a view cannot be created at all. Closing this requires aliasing non-aggregates by their view property, which changes the DDL of every persistent view — tracked as TASK-209
 
 #### Scenario: An unnamed view derives its name from the joined table names
 
