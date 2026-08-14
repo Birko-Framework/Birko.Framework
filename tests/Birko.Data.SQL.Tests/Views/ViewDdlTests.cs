@@ -141,8 +141,8 @@ namespace Birko.Data.SQL.Tests.Views
 
             var sql = connector.TestBuildViewSelectSql(view);
 
-            sql.Should().Contain("AS \"OrderCount\"");
-            sql.Should().Contain("AS \"TotalSpent\"");
+            sql.Should().Contain("AS OrderCount");
+            sql.Should().Contain("AS TotalSpent");
             sql.Should().NotContain(" as COUNT");
             sql.Should().NotContain(" as SUM");
 
@@ -156,8 +156,12 @@ namespace Birko.Data.SQL.Tests.Views
             var cols = view!.GetPersistentViewSelectFields().Values;
             cols.Should().Contain("OrderCount");
             cols.Should().Contain("TotalSpent");
-            // The plain (non-aggregate) columns still use the source column names.
-            cols.Should().Contain("Name");
+            // TASK-209: non-aggregates now use the VIEW PROPERTY too, not the source column. They used to
+            // read back as "Name" while the DDL created the column under whatever the projection produced —
+            // wrong on PostgreSQL, and a duplicated output name whenever two view properties mapped the same
+            // source column (TASK-207). The whole set is now one namespace.
+            cols.Should().Contain("CustomerName");
+            cols.Should().NotContain("Name");
         }
 
         [Fact]
