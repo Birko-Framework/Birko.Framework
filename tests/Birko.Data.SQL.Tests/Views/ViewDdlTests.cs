@@ -124,6 +124,15 @@ namespace Birko.Data.SQL.Tests.Views
         // CR-L195: aggregate columns are aliased by the unique view-property name (not the aggregate
         // function name, which would collide across two same-function aggregates), and those aliases must
         // be exactly the columns GetPersistentViewSelectFields queries back.
+        //
+        // TASK-129 strengthened the assertions without changing the rule. Contain("AS \"OrderCount\"") alone
+        // passes on `COUNT(Orders.Guid) as COUNT AS "OrderCount"` — two aliases on one column and a syntax
+        // error on every provider — which is how the defect shipped green. Aliases are now COUNTED, so a
+        // second one fails, and the inner `as COUNT` is asserted absent by name.
+        //
+        // The alias stays QUOTED: this identifier is being created, and its reader
+        // (CreatePersistentViewSelectCommand) quotes it too, so on PostgreSQL a bare alias would create
+        // `ordercount` while the read asks for `"OrderCount"`.
         [Fact]
         public void BuildViewSelectSql_AggregateAliases_UsePropertyNames_AndMatchPersistentSelect()
         {
@@ -134,8 +143,15 @@ namespace Birko.Data.SQL.Tests.Views
 
             sql.Should().Contain("AS \"OrderCount\"");
             sql.Should().Contain("AS \"TotalSpent\"");
-            sql.Should().NotContain("AS \"COUNT\"");
-            sql.Should().NotContain("AS \"SUM\"");
+            sql.Should().NotContain(" as COUNT");
+            sql.Should().NotContain(" as SUM");
+
+            var projection = sql.Substring("SELECT ".Length, sql.IndexOf(" FROM ", StringComparison.Ordinal) - "SELECT ".Length);
+            foreach (var item in projection.Split(',').Select(x => x.Trim()))
+            {
+                item.Split(' ').Count(t => t.Equals("as", StringComparison.OrdinalIgnoreCase))
+                    .Should().BeLessThanOrEqualTo(1, $"'{item}' must carry at most one alias");
+            }
 
             var cols = view!.GetPersistentViewSelectFields().Values;
             cols.Should().Contain("OrderCount");
