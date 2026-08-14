@@ -90,9 +90,9 @@ public class AggregateViewSqlGeneratorTests
         {
             sql.Should().Contain(column);
         }
-        sql.Should().Contain("AS \"OrderCount\"");
-        sql.Should().Contain("AS \"TotalSpent\"");
-        sql.Should().Contain("AS \"TotalTax\"");
+        sql.Should().Contain("AS OrderCount");
+        sql.Should().Contain("AS TotalSpent");
+        sql.Should().Contain("AS TotalTax");
     }
 
     [Fact]
