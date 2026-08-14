@@ -61,13 +61,18 @@ public class MSSqlSchemaBindingSelectSqlTests
         // Aggregate aliases use the unique view-property name (CR-L195), same as the base builder.
         //
         // TASK-129: Contain("AS [OrderCount]") alone passed on the double alias
-        // `COUNT(SbOrders.Guid) as COUNT AS [OrderCount]`, a syntax error. The inner `as COUNT` is now
-        // asserted absent by name; the bracket-quoted outer alias is the correct one and comes from this
-        // builder's own quoteIdentifier, so it round-trips against the persistent read on MSSql.
-        sql.Should().Contain("COUNT(SbOrders.Guid)");
-        sql.Should().Contain("AS [OrderCount]");
-        sql.Should().Contain("SUM(SbOrders.Total)");
-        sql.Should().Contain("AS [TotalSpent]");
+        // `COUNT(SbOrders.Guid) as COUNT AS [OrderCount]`, a syntax error. The inner `as COUNT` is still
+        // asserted absent by name.
+        //
+        // TASK-209 changed the spelling of both halves, and MSSql is useful evidence that the rule
+        // generalises past PostgreSQL's `"`: the table qualifier is now quoted in this provider's own
+        // style (`[SbOrders]`) while the column stays bare, and the alias is bare rather than
+        // `[OrderCount]`. That is the same "quote tables, never quote columns" rule the PostgreSQL
+        // round-trip proved, rendered through a different quoteIdentifier.
+        sql.Should().Contain("COUNT([SbOrders].Guid)");
+        sql.Should().Contain("AS OrderCount");
+        sql.Should().Contain("SUM([SbOrders].Total)");
+        sql.Should().Contain("AS TotalSpent");
         sql.Should().NotContain(" as COUNT");
         sql.Should().Contain("GROUP BY");
     }
