@@ -133,11 +133,14 @@ public static class SqlViewTranslator
                 if (countField != null)
                 {
                     // Keyed by the VIEW PROPERTY, not by countField.Name (the SQL function name). TASK-129:
-                    // View.AddField skips a key it already holds, so two aggregates of the same function on
-                    // one table both keyed "COUNT" meant the second was dropped with no column, no error and
-                    // no log entry — read back as default(T). View properties are unique among themselves;
-                    // they can still coincide with a NON-aggregate field's source-column key in the same
-                    // dictionary — narrower, and TASK-207 owns it.
+                    // two aggregates of the same function on one table both keyed "COUNT" meant the second
+                    // was dropped with no column, no error and no log entry — read back as default(T).
+                    // TASK-207 made this the DEFAULT for every view field, so passing it here is now
+                    // explicit agreement with View.AddField rather than the thing that prevents the
+                    // collision. (TASK-129's note that view properties are "unique by construction" was
+                    // true only among view properties: non-aggregates were still keyed by source column in
+                    // the same dictionary, so a view property could collide with one. That is what
+                    // TASK-207 closed.)
                     view.AddField(table.Name, table.Type, countField, viewProp.Name);
                 }
             }
