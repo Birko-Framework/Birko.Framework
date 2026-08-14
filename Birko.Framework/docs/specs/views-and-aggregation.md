@@ -435,37 +435,25 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 
 - **Given** a definition selecting `Order.Total → TView.OrderTotal` alongside `Sum(Order.Amount) → TView.Total` — the aggregate's view property coincides with the non-aggregate's source column name
 - **When** `SqlViewTranslator.Translate` runs
-- **Then** both fields are present in the view metadata and, **on the `OnTheFly` query mode**, read back their own values. A per-table dictionary keyed by view property for aggregates and by source column for non-aggregates puts two namespaces in one key space, and whichever field is added second is lost
+- **Then** both fields are present in the view metadata and read back their own values on the persistent path (the `OnTheFly` path has its own PostgreSQL defect, TASK-211). A per-table dictionary keyed by view property for aggregates and by source column for non-aggregates puts two namespaces in one key space, and whichever field is added second is lost
 
-#### Scenario: Either collision shape still emits a duplicate column name in a persistent view's DDL
+#### Scenario: A persistent view's columns are its view properties, spelled the way the read spells them
 
-- **Given** either colliding definition above with `QueryMode == Persistent` or `Auto`
-- **When** the view DDL is generated
-- **Then** the duplicate is **relocated rather than closed**: `GetPersistentViewSelectFields()` returns `field.Name` (the *source column*) for non-aggregates and `ViewSelectSqlBuilder` projects them unaliased, so the colliding fixture emits `SELECT VkPersons.Name, VkOrders.Total, SUM(VkOrders.Amount) AS "Total"` — two output columns named `Total` — and `GetPersistentViewSelectFields()` returns `Total` twice. The persistent read selects **by name**, so both bind to the first column and the aggregate reads the non-aggregate's value. On MSSql and PostgreSQL `CREATE VIEW` rejects a duplicated output name, so such a view cannot be created at all. Closing this requires aliasing non-aggregates by their view property, which changes the DDL of every persistent view — tracked as TASK-209
+- **Given** any persistent (or `Auto`) view, aggregate or not
+- **When** its DDL is generated and later read back
+- **Then** all four producers of a column identifier agree on one rule — **quote table identifiers, never quote column identifiers**: the DDL projection qualifies with a quoted table and a bare column (`"AvPersons".Name`), aliases **every** column bare by its view property (`AS OrderCount`, `AS PersonName`), the join `ON` clause quotes only its table half, the persistent read selects those bare names, and the persistent `ORDER BY` interpolates the same bare view-property key. `GetPersistentViewSelectFields()` returns the **view property** for every column, aggregate or not
 
-#### Scenario: An unnamed view derives its name from the joined table names
+#### Scenario: A persistent view round-trips on PostgreSQL
 
-- **Given** a definition with `Name == null` spanning tables `Order` and `Customer`
-- **When** the translation completes
-- **Then** `View.Name` is the concatenation of the distinct non-empty table names in order (e.g. `"OrderCustomer"`)
+- **Given** a persistent view over PascalCase models on PostgreSQL — the only supported provider that case-folds an unquoted identifier
+- **When** the view is created and queried
+- **Then** it is created and returns its rows. Previously it could not be created at all: base-table DDL emits column definitions bare so every base column is folded, and the view DDL emitted an unquoted table qualifier (`missing FROM-clause entry for table "avpersons"`), a quoted join column (`column AvOrders.PersonId does not exist`) and a quoted read (`column "Name" does not exist`) — three failures in front of one another, so no SQLite-passing test could observe any of them
 
-#### Scenario: An unrecognised join type defaults to CROSS JOIN
+#### Scenario: Two view properties over one source column get distinct output columns
 
-- **Given** a `JoinClause` whose `JoinType` value is outside `Inner`/`LeftOuter`/`Cross`
-- **When** `TranslateJoinType` runs
-- **Then** `Conditions.JoinType.Cross` is produced — a cartesian product, not an error
-
-#### Scenario: An unrecognised query mode defaults to OnTheFly
-
-- **Given** a definition whose `QueryMode` value is outside the three declared members
-- **When** `TranslateQueryMode` runs
-- **Then** `Birko.Data.SQL.ViewQueryMode.OnTheFly` is produced
-
-#### Scenario: A single-source definition translates to a view that cannot be selected from
-
-- **Given** the minimal definition `From<Order>().Select<Order,string>(o => o.Number, v => v.Number)` with no `Join`/`LeftJoin` calls
-- **When** `SqlViewTranslator.Translate` runs and the resulting view is used
-- **Then** `View.Join` is `null` — joins are only ever added inside the `definition.Joins` loop — so `AbstractConnector.CreateSelectCommand` throws `ArgumentNullException` for `view.Join` on every `QueryAsync`/`QueryFirstAsync` and `ViewSelectSqlBuilder` throws `InvalidOperationException("View must have at least one join definition.")` from `EnsureAsync`; only multi-source definitions are queryable on this backend
+- **Given** `Select(Person.Name → DisplayName)` and `Select(Person.Name → SortName)` on a persistent view
+- **When** its DDL is generated
+- **Then** each column is aliased by its own view property, so the view has two distinct output names. Aliasing only aggregates left both under the source column name — one duplicated identifier, which the persistent read (selecting by name) bound twice to the first column, and which MSSql and PostgreSQL reject outright at `CREATE VIEW`
 
 ### Requirement: SQL view store execution
 

@@ -3,7 +3,7 @@ id: TASK-209
 parent: STORY-051
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 picked-by: fix-next
@@ -11,7 +11,7 @@ created: 2026-08-14
 depends-on: []
 blocks: []
 related: [TASK-110, TASK-128, TASK-129]
-pr: null
+pr: 6fa64c5
 github-issue: null
 jira-key: null
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
@@ -151,10 +151,27 @@ the filed defect, so this task cannot deliver a working persistent view on Postg
 Widening is therefore not scope creep; it is the minimum that makes the task's own acceptance testable.
 **That decision is deferred to the user** rather than taken here.
 
-**Risk the widening carries.** Going bare is only safe while no identifier *needs* quoting. An entity or
-property named after a reserved word (`Order`, `User`, `Group`, `Table`) currently survives sink #2 and #3
-*because* they quote, and would break if they go bare. No audit of consumer models for reserved words has
-been done — that belongs in whatever task takes the widening.
+**The reserved-word risk was raised, then measured, and it is void.** The concern was that an entity
+property named after a reserved word survives sinks #2/#3 *because* they quote, and would break going bare.
+Measured on the same server: the framework's own base-table DDL emits column definitions bare, so
+
+```sql
+CREATE TABLE "RwTest" (Guid uuid, Order text, Name text);
+-- ERROR: syntax error at or near "Order"
+```
+
+A reserved-word column **cannot have its table created at all** on PostgreSQL today. There is therefore no
+working case for unquoting to break — the breakage is pre-existing, framework-wide and upstream of every
+view. (`Rank`, a non-reserved PascalCase name, creates fine.) A grep of `Birko.Models.*` / `Birko.Data.*`
+for properties named after PostgreSQL reserved words returns only infrastructure types — `IndexedField.Order`,
+`IndexColumn.Order`, `AggregateQuery.Limit/Offset`, `AbstractField.Table` — none of them `[Table]`-mapped
+entities. **Scope decision (user, 2026-08-14): widen and fix all four sinks.**
+
+**Scope boundary held.** All four sinks above are in the **view** path. Sizing them turned up a *fifth*,
+outside it: `AbstractConnector_Select.cs:95` / `AbstractAsyncConnector_Select.cs:95` call the same
+`Table.GetSelectFields(true)` for ordinary **multi-table joined SELECTs**, so those are broken on PostgreSQL
+by the identical qualifier mechanism. Not fixed here — it is a different entry point with its own blast
+radius, and fixing the view path does not depend on it. Filed separately.
 
 ## Approach
 
@@ -176,28 +193,28 @@ exactly the same way.
 
 ## Acceptance criteria
 
-- [ ] The defect is **reproduced on real PostgreSQL** first (a container is acceptable; record how it was run)
+- [x] The defect is **reproduced on real PostgreSQL** first (a container is acceptable; record how it was run)
       — create a persistent view over a PascalCase model and read it back. Without a reproduction this task
       cannot distinguish a fix from a no-op, which is the trap that hid it
-- [ ] All three producers of a persistent view's column identifiers agree: the DDL projection, the persistent
+- [x] All three producers of a persistent view's column identifiers agree: the DDL projection, the persistent
       SELECT list and the persistent ORDER BY. The chosen convention is recorded in `CLAUDE.md` § Conventions
       alongside the existing bare-identifier rule, since that rule is currently true of two sinks out of three
-- [ ] A persistent view with non-aggregate PascalCase columns round-trips on PostgreSQL
-- [ ] **The duplicate-output-column defect above is closed with the same change**: TASK-207's
+- [x] A persistent view with non-aggregate PascalCase columns round-trips on PostgreSQL
+- [x] **The duplicate-output-column defect above is closed with the same change**: TASK-207's
       `VkCollidingView` under `Persistent` reads `OrderTotal = 70, Total = 5` (it currently reads
       `Total = 70`), and its shape-1 twin creates on MSSql/PostgreSQL rather than being rejected for a
       duplicated output name. TASK-207 left a corrected comment in
       `ViewFieldKeyCollisionTests.The_colliding_aggregate_and_non_aggregate_read_back_their_own_values`
       pointing here — turn it into an executing Persistent assertion as part of this task
-- [ ] The migration consequence is recorded and decided, not discovered: aliasing non-aggregates renames the
+- [x] The migration consequence is recorded and decided, not discovered: aliasing non-aggregates renames the
       columns of **every** existing persistent view, so already-deployed views must be recreated. Say so in
       `CLAUDE.md` § Recent Updates as a consumer-facing ⚠, the way the TASK-112 mapper change did
-- [ ] TASK-129's aggregate behaviour still round-trips — its
+- [x] TASK-129's aggregate behaviour still round-trips — its
       `The_ddl_alias_is_quoted_exactly_as_the_persistent_read_quotes_it` is updated together with the reader if
       option 1 is taken, never left asserting a convention the code no longer follows
-- [ ] Red-verified. Report the split as numbers and name any test that passes either way as a contract pin
+- [x] Red-verified. Report the split as numbers and name any test that passes either way as a contract pin
       rather than as evidence. **A SQLite-only assertion is a contract pin here by construction** — say so
-- [ ] `/specs regen views-and-aggregation`, and the spec's existing ORDER BY-vs-SELECT parenthetical is
+- [x] `/specs regen views-and-aggregation`, and the spec's existing ORDER BY-vs-SELECT parenthetical is
       updated rather than left describing the old three-way split
 
 ## Out of scope
@@ -207,6 +224,52 @@ exactly the same way.
   needs one reproduction, not a suite.
 - The framework-wide `Table.Column` qualifier-quoting inconsistency noted in TASK-110's Outcome — same family,
   affects the on-the-fly path, and larger.
+
+## Outcome
+
+**What was wrong.** SQL views did not work on PostgreSQL at all — the one supported provider that case-folds
+an unquoted identifier. Not degraded: a persistent view could not be created. `CreateTable` quotes the table
+and emits column definitions **bare**, so every base column is stored folded while every table keeps its
+PascalCase; a column reference must therefore be bare and a table reference quoted. Four view sinks
+disagreed. All four now follow one rule — **quote tables, never quote columns** — which is what
+§ Conventions already said and what the persistent `ORDER BY` was already doing.
+
+**The filed fix would have been a no-op, and criterion 1 is the only reason we know.** The three failures
+queue: unquoted qualifier, then quoted join column, then the quoted read that was actually filed. Fixing
+only the read changes nothing observable. Reproduced on real PostgreSQL 16.4 run from the scratchpad via
+EDB portable binaries — no Docker, no admin, no service (recipe in § Measured above).
+
+**Closes two of TASK-207's residues as a side effect**: `GetPersistentViewSelectFields` now returns the view
+property for every column, and every column is aliased, so two view properties over one source column can no
+longer produce one duplicated output name.
+
+**Split.** Live PostgreSQL: **3 of 3** new tests fail on revert. Offline: **9 of 567** across the five view
+suites. Green: 10/10 live PG + 808/808 across 12 offline SQL suites.
+
+**Judgement calls.**
+
+- **`A_persistent_view_is_created_on_postgresql` was written as `NotThrow()` and passed against the unfixed
+  code.** `CreateView` swallows the `PostgresException`. Rewritten to ask `information_schema.views`; that
+  one change took the live split from 2/3 to 3/3. A "did not throw" assertion over a swallowing call stack
+  asserts nothing — recorded in § Conventions, because it is the general reason this defect was invisible.
+- **The reserved-word risk was raised and then measured away** rather than mitigated: such a column already
+  cannot have its table created, so no working case existed to break.
+- **Nine existing tests asserted the replaced convention and were updated, not weakened.** Criterion 4
+  required exactly that. The rewritten quoting test now asserts the *property* (both halves agree) over the
+  whole column set instead of a literal — the wider assertion that failed under TASK-129 and produced this
+  task.
+- **The scope boundary was widened deliberately and with the user's decision**, then held: all four sinks
+  are in the view path. The fifth (on-the-fly, and plain joined SELECTs) is a different builder and is
+  filed, not silently absorbed.
+
+**Flagged, not fixed.**
+
+- **[[TASK-211]]** — the on-the-fly view path is broken on PostgreSQL by the same mechanism through
+  `AbstractConnector_CreateSelectCommand`, **and the error is swallowed so the caller gets an empty
+  collection**. The swallow is the more serious half and is why nothing was ever red. `AbstractConnector_Select.cs:95`
+  is very likely the same defect for plain multi-table SELECTs; that task owns checking it.
+- The PostgreSQL tests are env-gated (`BIRKO_PG_HOST`) and so do not run in CI. A permanent tier is
+  STORY-042's Docker work, not this task's.
 
 ## Human test plan
 
@@ -231,3 +294,18 @@ _Populated by `/tasks plan TASK-209` — leave empty until then._
   filed would be a no-op on PostgreSQL** — precisely the trap criterion 1 was written to catch. See
   § Measured on real PostgreSQL below. Not yet rescoped: the widening crosses this task's own
   § Out of scope, so it is a decision, not a correction. **No production code changed yet.**
+- step 4 — layer: local (Birko.Data.SQL + Birko.Data.SQL.View)
+- step 5 — fix in `AbstractField.GetSelectName`, `Table.GetSelectFields` (new optional `quoteTable`),
+  `View.GetPersistentViewSelectFields`, `ViewSelectSqlBuilder` (projection + alias + `QuoteFieldReference`),
+  `AbstractConnectorBase_View.CreatePersistentViewSelectCommand`, `DataBase_ViewOrderBy.ViewOrderFieldName`.
+  Tests: new `PostgreSqlViewRoundTripTests` (live PG) + 9 updated across 5 suites. 10/10 live, 808/808 offline.
+- step 6 — reverted production: **3 of 3** live PG tests failed; **9 of 567** offline. Fix-dependent (live) =
+  `A_persistent_view_is_created_on_postgresql`, `The_created_columns_are_exactly_what_the_persistent_read_asks_for`,
+  `A_persistent_view_round_trips_end_to_end_on_postgresql`. No contract pins among the new tests — the
+  9 offline failures are the updated convention assertions, which are fix-dependent by construction.
+- step 7 — respecced `views-and-aggregation`: replaced the duplicate-column scenario (now fixed) with three —
+  the one identifier rule, the PostgreSQL round-trip, and distinct output columns for two view properties
+  over one source column.
+- step 8 — closed `done`; production `7bc56bc` (Birko.Data.SQL) + `6fa64c5` (Birko.Data.SQL.View); tests
+  `7662ca1`, `fd8612c`, `6f7f1b7`, `c6d2dbd`, `9b335b7`. § Conventions gained the rule and TASK-129's
+  superseded bullet is marked. `tasks/README.md` not regenerated (unchanged reason: uncommitted intake).

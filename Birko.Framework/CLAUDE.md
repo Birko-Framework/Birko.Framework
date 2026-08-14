@@ -225,6 +225,10 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     (`ViewAttribute` is `AllowMultiple = true`, so `LoadView` legitimately re-presents every field, as a
     **fresh instance** — so the opt-out compares by value; reference equality would condemn every
     multi-`[View]` view).
+  - **⚠ SUPERSEDED by TASK-209 — read the entry below this list before applying the next bullet.** Its
+    reasoning (match the sink's reader) is sound; its *conclusion* for this sink was wrong, because it
+    reasoned from one reader instead of from the base-table DDL underneath both. Kept because the way it
+    was wrong is the lesson.
   - **A created identifier is quoted the way its reader quotes it — the bare-identifier rule below does NOT
     apply.** This is the one place this codebase quotes a column identifier, and the distinction is
     *creating* versus *referencing*: the DDL alias becomes a real column, and its only reader
@@ -239,6 +243,33 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     is bare + table-qualified for non-aggregates, the persistent SELECT quotes, the persistent ORDER BY
     interpolates bare. That means **non-aggregate** persistent view columns are still broken on PostgreSQL —
     TASK-209, found by this fix's own test and deliberately out of its scope.)
+- **Quote table identifiers; never quote column identifiers. The base-table DDL is what settles it, and it
+  is the thing to check before reasoning from any single sink.** `CreateTable` quotes the table name and
+  emits **column definitions bare**, so on PostgreSQL — the one supported provider that case-folds an
+  unquoted identifier — every base column is stored folded (`avpersons.name`) while every table keeps its
+  PascalCase. It follows mechanically that a column reference must be **bare** to resolve and a table
+  reference **quoted**. Four view sinks disagreed and SQL views were therefore **unusable on PostgreSQL** —
+  not degraded, unreachable — while the entire suite stayed green because every end-to-end view test runs on
+  case-insensitive SQLite (TASK-209, measured against 16.4). Four things generalise:
+  - **The failures queue, so the filed one is not necessarily the reachable one.** The DDL died on an
+    unquoted *qualifier* (`missing FROM-clause entry for table "avpersons"`), then on a *quoted join column*
+    (`column AvOrders.PersonId does not exist`), and only then on the quoted read that had actually been
+    filed. Fixing the filed defect alone would have changed nothing observable and closed the ticket.
+    **When a defect is provider-specific, reproduce on that provider before costing the fix** — the task's
+    own acceptance demanded it "cannot distinguish a fix from a no-op", and that is exactly what it caught.
+  - **"Match the sink's reader" is not enough when the readers disagree with the storage.** TASK-129 quoted
+    the DDL alias to agree with a reader that quoted, and that pairing was internally consistent and still
+    wrong, because both disagreed with the bare column the base DDL had created. Reason from where the
+    identifier is **created**, not from the nearest consumer of it.
+  - **An assertion that a DDL/query call "did not throw" is worth nothing here, because this layer swallows.**
+    `CreateView` swallowed `42P01` and reported success, so the first version of the PostgreSQL regression
+    test passed against the unfixed code; asking `information_schema.views` instead took the split from 2/3
+    to 3/3. The same swallow turns a broken on-the-fly view into an **empty result** rather than an error
+    (TASK-211) — which is why none of this was ever visible. **Assert against the catalogue or the rows.**
+  - **Check whether the "risk" of a convention change is already impossible.** Unquoting was challenged on
+    reserved words (`Order`, `User`). Measured: `CREATE TABLE "T" (Order text)` is already a syntax error, so
+    such a model cannot have its table created at all and there is no working case to break. A risk that
+    cannot be realised should be measured away, not mitigated.
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
