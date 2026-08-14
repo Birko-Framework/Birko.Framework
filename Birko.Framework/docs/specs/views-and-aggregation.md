@@ -1,6 +1,6 @@
 ---
 area: views-and-aggregation
-generated-at: 715caf9d0e013cdacf990f2fd80c4c0d9ea5199a
+generated-at: 91fdd9096f0ed5c2a513bb5099e533351a997bff
 generated-on: 2026-08-14
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
@@ -423,7 +423,19 @@ missing public instance view property, or a `Count(*)` whose base table has no f
 
 - **Given** a definition with `Sum(Order.Total) → TView.TotalSpent` and `Sum(Order.Tax) → TView.TotalTax` — the same SQL function over one table
 - **When** `SqlViewTranslator.Translate` runs
-- **Then** both aggregates are added to `View.Tables[…].Fields` under their **view property** keys (`TotalSpent`, `TotalTax`), so `GetPersistentViewSelectFields()` exposes both. Keying by the SQL function name would collide on `"SUM"`, and `View.AddField` skips a key it already holds — the second aggregate would be dropped with no column, no exception and no log entry, and its property would read back as `default(T)`
+- **Then** both aggregates are added to `View.Tables[…].Fields` under their **view property** keys (`TotalSpent`, `TotalTax`), so `GetPersistentViewSelectFields()` exposes both. Keying by the SQL function name would collide on `"SUM"`, and the second aggregate would be dropped with no column, no exception and no log entry, its property reading back as `default(T)`
+
+#### Scenario: Two view properties projecting one source column both survive translation
+
+- **Given** a definition with `Select(Person.Name → TView.DisplayName)` and `Select(Person.Name → TView.SortName)` — two view properties over one source column, which `ViewDefinitionBuilder.Build` does not reject
+- **When** `SqlViewTranslator.Translate` runs
+- **Then** both fields are present, keyed by their **view property** (`DisplayName`, `SortName`). Keying a non-aggregate by its source column name would put both under `"Name"` and the second would never populate
+
+#### Scenario: An aggregate whose view property matches a neighbouring column's source name survives
+
+- **Given** a definition selecting `Order.Total → TView.OrderTotal` alongside `Sum(Order.Amount) → TView.Total` — the aggregate's view property coincides with the non-aggregate's source column name
+- **When** `SqlViewTranslator.Translate` runs
+- **Then** both fields are present and read back their own values. A per-table dictionary keyed by view property for aggregates and by source column for non-aggregates puts two namespaces in one key space, and whichever field is added second is lost
 
 #### Scenario: An unnamed view derives its name from the joined table names
 

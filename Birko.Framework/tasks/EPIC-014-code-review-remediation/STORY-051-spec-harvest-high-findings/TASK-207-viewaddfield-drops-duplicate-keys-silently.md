@@ -3,14 +3,15 @@ id: TASK-207
 parent: STORY-051
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
+picked-by: fix-next
 created: 2026-08-14
 depends-on: []
 blocks: []
 related: [TASK-129]
-pr: null
+pr: c1d729a
 github-issue: null
 jira-key: null
 # findings: ids this task remediates, from a review/audit/spec-harvest pass (CR-* SEC-* SH-* VC-*)
@@ -92,29 +93,90 @@ duplicate key with a *different* field.
 
 ## Acceptance criteria
 
-- [ ] Every `View.AddField` call site is enumerated, with whether it can present a duplicate key carrying a
-      **different** field — the legitimate re-add paths (`_fieldsCache` reuse, multi-`LoadField`) named
-      explicitly and shown to remain silent
-- [ ] **Both** collision shapes in § Context are covered, including the aggregate-vs-source-column one
+- [x] Every `View.AddField` call site is enumerated, with whether it can present a duplicate key carrying a
+      **different** field — the legitimate re-add paths (`_fieldsCache` reuse, multi-`LoadField`, **and the
+      multi-`[View]`-attribute loop, which § Context missed**) named explicitly and shown to remain silent
+- [x] **Both** collision shapes in § Context are covered, including the aggregate-vs-source-column one
       TASK-129 introduced, each with a test
-- [ ] The two "unique by construction" comments TASK-129 left in `SqlViewTranslator` and `DataBase_View` are
+- [x] The two "unique by construction" comments TASK-129 left in `SqlViewTranslator` and `DataBase_View` are
       corrected — they are true among view properties only, not against the source-column keys sharing the
       dictionary
-- [ ] A genuine collision no longer disappears: it either throws with the view type, both properties and the
+- [x] A genuine collision no longer disappears: it either throws with the view type, both properties and the
       key in the message, or cannot occur because the key is now the view property
-- [ ] Red-verified: reverting the change fails the test. Report the split as numbers and name any test that
+- [x] Red-verified: reverting the change fails the test. Report the split as numbers and name any test that
       passes either way as a contract pin rather than as evidence
-- [ ] Measured against every `Birko.Data.SQL*.View*` / `.Views` suite plus the attribute-driven view fixtures
+- [x] Measured against every `Birko.Data.SQL*.View*` / `.Views` suite plus the attribute-driven view fixtures
       — this changes view *loading*, so a consumer view that currently loads is the thing at risk
-- [ ] TASK-129's aggregate keying still holds (its `Two_aggregates_of_the_same_function_*` and
+- [x] TASK-129's aggregate keying still holds (its `Two_aggregates_of_the_same_function_*` and
       `The_attribute_builder_also_keeps_both_same_function_aggregates` stay green), and its DDL alias still
       round-trips against the persistent read
-- [ ] `/specs regen views-and-aggregation`, spec diff reviewed
+- [x] `/specs regen views-and-aggregation`, spec diff reviewed
 
 ## Out of scope
 
 - **The aggregate collision** — closed by [[TASK-129]]; this task must not regress it.
 - Widening the spec map to cover the view DDL emitters — [[TASK-208]].
+
+## Outcome
+
+**What was wrong.** A SQL view's columns live in a per-table `Dictionary<string, AbstractField>`, and
+`View.AddField` ended with `if (!table.Fields.ContainsKey(fieldName))` — a key already present meant the
+incoming field was thrown away. No column, no exception, no log entry; the view property it belonged to read
+back as `default(T)`. [[TASK-129]] closed the aggregate instance by keying aggregates on their view property
+and left the guard alone, so two shapes stayed live: **two view properties projecting one source column**
+(both keyed on the source column), and — created by TASK-129's own change — **an aggregate whose view
+property matches a neighbouring column's source name**, because aggregates were then keyed by view property
+while non-aggregates beside them stayed keyed by source column, two namespaces in one key space.
+
+**The fix.** Every view field is now keyed by the property it populates (`View.ViewFieldKey`), so both
+collisions cannot occur rather than being reported — view properties are unique on a CLR type by
+construction, and the two namespaces become one. Done **at the producer** rather than at the three call
+sites, so a fourth caller is correct without being told: TASK-129's lesson applied to its own residue. A
+genuinely different field arriving on a taken key now throws `FieldAttributeException` naming the table, both
+properties and the key — the SH-H037 "refuse, don't drop quietly" rule — as a backstop for the paths the view
+builders no longer produce (`AddField`'s explicit `name`, and `AddTable`, whose fields carry a source
+property). Safe to re-key because nothing reads this key as a column name: the persistent read and the sort
+key both go through the field, the aggregate alias uses it only as a fallback when `Property` is unset, and
+`Table.GetField(string)` has no callers at all.
+
+**Step-6 split: 7 of 9.** Named in the progress log above. The two contract pins
+(`Re_adding_the_very_same_field_on_a_taken_key_stays_silent`,
+`A_view_with_two_view_attributes_still_loads_and_keeps_each_field_once`) assert the *old* silent-skip
+survives, which is what makes them blast-radius checks and not evidence. 813/813 green across 13 SQL suites.
+
+**Judgement calls.**
+
+- **§ Context's re-add inventory was incomplete, and that decided the design.** It named `_fieldsCache`
+  reuse and multi-`LoadField`; it missed that `ViewAttribute` is `AllowMultiple = true`, so `LoadView` runs
+  its whole per-property field loop **once per `[View]` attribute** — the ordinary way a three-table view
+  declares its second join — re-presenting every field as a *fresh* `AbstractField`. § Approach's option 1
+  ("throw, but only when the incoming field is genuinely different") would therefore have broken every
+  multi-`[View]` view had "different" been read as reference inequality, which is the natural reading. The
+  option-1-alone route was rejected for this; `IsSameField` compares by value, and the multi-`[View]` view
+  has a test.
+- **Option 2 over option 1, against the task's own recommendation.** § Approach called option 1 "the smaller
+  change and the one that cannot break a working view". Measurement said otherwise: option 1 is the one with
+  the re-add hazard, and it only *reports* a collision that option 2 makes impossible. Both were taken —
+  option 2 as the fix, option 1 as a backstop with its own test, since "I keyed it so it can't collide" is
+  construction, not evidence.
+- **The stricter option rejected: making the backstop unconditional.** Throwing on any duplicate key,
+  ignoring whether the field is the same, is simpler and would be a behaviour change in every
+  attribute-driven view — unmeasured, and § Conventions' SH-H037 rule says fail-fast is legitimate only once
+  the blast radius is measured and an opt-out is checked first. The idempotent-re-add path *is* that opt-out.
+
+**Flagged, not fixed.**
+
+- **The production change is in a file no spec area covers.** `View.cs` sits in the 90% of
+  `Birko.Data.SQL.View` the map deliberately excludes; the map's own comment predicted this, named TASK-129,
+  and asked for a DECISION — [[TASK-208]], still open, `assignee: human`. The two new spec scenarios are
+  grounded in `SqlViewTranslator.cs` instead, and the backstop throw is left unspecced rather than
+  quietly widening the map.
+- **`View.AddField` can still mutate a cached source table.** If a caller constructs
+  `new View(new[] { DataBase.LoadTable(typeof(X)) })`, `AddField` finds that table by name and adds to the
+  *shared* `LoadTable` instance, also setting `field.Table` on cached fields. Pre-existing, unchanged by this
+  task, and unreachable from any framework code path — both view builders start from `new View()` and
+  `View.AddTable` has no callers. Not filed: no reachable defect, and it is the same public-surface hazard
+  as `AddField` itself.
 
 ## Human test plan
 
@@ -123,3 +185,62 @@ N/A — a view either loads or throws at load time, which an automated test obse
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-207` — leave empty until then._
+
+## Progress log
+
+- step 2 — picked; ranked above TASK-209 because that task *throws* on the failing provider (bottom of the
+  severity ladder, and the silence key prefers a plausible wrong answer) and its first acceptance criterion
+  mandates a real PostgreSQL reproduction that this box cannot produce (Docker daemon not running), so it
+  cannot finish inside one session. TASK-207 loses a column silently.
+- step 3 — verified: **held, and shape 1's open question is answered — it is reachable, not latent.**
+  `ViewDefinitionBuilder.Build` does *not* reject two `Select()`s over one source column, so both shapes
+  reproduce off the public fluent API and off the attribute builder: 6 of 7 new tests fail against
+  unmodified production code. **One correction to § Context:** it names two legitimate re-add paths
+  (`_fieldsCache` reuse, multi-`LoadField`) and misses the load-bearing third — `ViewAttribute` is
+  `AllowMultiple = true`, so `LoadView` runs its whole field loop once per `[View]` attribute and re-adds
+  every field as a *fresh* `AbstractField` instance. An unconditional throw would break every multi-`[View]`
+  view; reference equality cannot distinguish that re-add from a collision. Criteria below amended.
+- step 4 — layer: local (`Birko.Data.SQL.View/SQL/Tables/View.cs`, with comment corrections in
+  `Birko.Data.SQL.Views/SqlViewTranslator.cs` and `Birko.Data.SQL.View/SQL/DataBase_View.cs`)
+- step 5 — fix in `View.cs` (`ViewFieldKey` + backstop throw), comments in `SqlViewTranslator.cs` +
+  `DataBase_View.cs`; tests in `Birko.Data.SQL.Views.Tests/ViewFieldKeyCollisionTests.cs`;
+  **813/813 green** across 13 SQL suites (Views 59, SQL 459, SqLite 146, SqLite.View 9, View.Migrations 14,
+  MSSql.View 19, MSSql 26, MySQL.View 7, PostgreSQL.View 7, Data.Views 36, SQL.ViewModel 18, Caching 7,
+  Providers 8)
+- step 6 — reverted fix surgically (key back to `field.Name`, throw short-circuited): **7 of 9 failed**.
+  Fix-dependent = `Two_view_properties_over_one_source_column_both_survive_translation`,
+  `Two_view_properties_over_one_source_column_both_read_back_their_value`,
+  `An_aggregate_whose_view_property_matches_another_columns_source_name_survives`,
+  `The_colliding_aggregate_and_non_aggregate_read_back_their_own_values`,
+  `The_attribute_builder_keeps_two_view_properties_over_one_source_column`,
+  `The_attribute_builder_keeps_a_colliding_aggregate_and_non_aggregate`,
+  `A_genuinely_different_field_on_a_taken_key_is_refused_rather_than_dropped`.
+  Contract pins (pass either way, **not** evidence) = `Re_adding_the_very_same_field_on_a_taken_key_stays_silent`
+  and `A_view_with_two_view_attributes_still_loads_and_keeps_each_field_once` — both assert the *old*
+  silent-skip behaviour survives, which is exactly what makes them blast-radius checks rather than proof.
+  TASK-129's 12 `AggregateViewDdlTests` also pass either way here: this revert touches only TASK-207's
+  change, so they pin that its aggregate keying is not regressed.
+- step 7 — respecced `views-and-aggregation`. Requirements changed: the *Two aggregates of the same
+  function* scenario dropped its now-false clause ("`View.AddField` skips a key it already holds"); two
+  scenarios added under *SQL view translation* — *Two view properties projecting one source column both
+  survive translation* and *An aggregate whose view property matches a neighbouring column's source name
+  survives*. Diff reviewed: nothing in it beyond this task's acceptance. **Coverage note:** the production
+  change is in `Birko.Data.SQL.View/SQL/Tables/View.cs`, which no area's globs reach — the map says so in
+  a comment naming TASK-129 and asking for a DECISION, which is [[TASK-208]]. The two new scenarios are
+  grounded in `SqlViewTranslator.cs` (in scope) rather than in `View.cs`, and the backstop throw is left
+  unspecced for the same reason. Left excluded rather than silently widened.
+- step 8 — merge gate. `verify-conventions` (project-local shadow): check 1 clean (**0 warnings**, no
+  CS86xx; the `NU1903` advisory on `SQLitePCLRaw` via `Microsoft.Data.Sqlite 9.0.0` is pre-existing and
+  untouched by this diff). Checks 2–8, 10 N/A. **Step 0b fired** — § Conventions' "one producer" rule
+  described *aggregates* only and is now inaccurate; updated in the same change, plus a `Recent Updates`
+  entry (check 9). `code-review` was launched and returned no readable result, so the correctness pass ran
+  **inline** per the TASK-117 rule — it added two test comments (why equal read-back values are sound for
+  the same-source-column shape, and why no Persistent variant is asserted). **Security: conditional pass
+  run** — the diff touches SQL identifier emission, and this family has shipped two injection findings. The
+  key reaches SQL only via `AggregateAlias`'s fallback, which fires when `Property == null`, where
+  `ViewFieldKey` returns `field.Name` exactly as before; the emitted SQL is unchanged, which the exact
+  projection assertions on four providers confirm rather than assume. No new surface.
+  `integration: single-branch`, so no branch or merge. Closed `done`; `pr: c1d729a`.
+  `tasks/README.md` deliberately **not** regenerated — same call as TASK-129's close, and for the same
+  reason: ~50 task files from an uncommitted `/tasks intake` run would land in the dashboard as links to
+  files no other checkout has. A `/tasks triage` is owed once that intake commits.

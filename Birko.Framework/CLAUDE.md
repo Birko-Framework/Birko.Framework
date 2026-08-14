@@ -212,7 +212,19 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     read back as `default(T)` with no exception and no log entry. Worse than the loud one, and found only by
     running the generator. Where an identity is used as a dictionary key, **check what happens on collision
     before trusting the key** (§ SH-H037's rule, arriving through a `ContainsKey` guard instead of a
-    `return null`).
+    `return null`). **TASK-129 re-keyed only the aggregates and left the guard, which moved the collision
+    rather than closing it** — non-aggregates stayed keyed by *source column* beside aggregates keyed by
+    *view property*, two namespaces in one key space, so an aggregate whose view property matched a
+    neighbouring column's source name silently lost one of them (TASK-207, which also found the older shape:
+    two view properties projecting one source column). **Every view field is now keyed by the property it
+    populates** (`View.ViewFieldKey`) — one namespace, collisions impossible rather than reported. Two things
+    generalise past views: **re-keying half a dictionary is not a fix, it is a narrower bug**, and a
+    partial-fix comment that calls the new key "unique by construction" is true only within the half that
+    changed — say which half. The residual guard now *throws* `FieldAttributeException` for a genuinely
+    different field on a taken key, with the idempotent re-add checked first as SH-H037's required opt-out
+    (`ViewAttribute` is `AllowMultiple = true`, so `LoadView` legitimately re-presents every field, as a
+    **fresh instance** — so the opt-out compares by value; reference equality would condemn every
+    multi-`[View]` view).
   - **A created identifier is quoted the way its reader quotes it — the bare-identifier rule below does NOT
     apply.** This is the one place this codebase quotes a column identifier, and the distinction is
     *creating* versus *referencing*: the DDL alias becomes a real column, and its only reader
@@ -343,6 +355,34 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Re-keying half a dictionary moved the collision instead of closing it (2026-08-14)
+
+TASK-207, the residue TASK-129 filed rather than widening its own scope. `View.AddField`'s
+`if (!table.Fields.ContainsKey(fieldName))` discarded any field whose key was taken — no column, no
+exception, no log entry, the property reading back as `default(T)`. TASK-129 closed the aggregate instance by
+keying aggregates on their view property and **left the guard**, which put two namespaces in one key space:
+aggregates keyed by view property, non-aggregates beside them keyed by source column. Both surviving shapes
+reproduce off the public fluent API and off the attribute builder — **6 of 7 first-pass tests failed against
+unmodified code**. Every view field is now keyed by the property it populates. The standing rule is folded
+into § Conventions' existing "one producer" entry above. Split: **7 of 9**. Three things worth carrying:
+
+- **The task's own § Context under-counted the legitimate re-add paths, and that decided the design.** It
+  named two; the load-bearing third is that `ViewAttribute` is `AllowMultiple = true`, so `LoadView` runs its
+  whole per-property field loop **once per `[View]` attribute** — the ordinary way a three-table view
+  declares its second join — re-presenting every field as a *fresh* `AbstractField`. § Approach's preferred
+  option ("throw when the incoming field is genuinely different") would have broken every such view under the
+  natural reading of "different". Fifth time in a month a prescribed remedy needed re-costing (TASK-111,
+  TASK-112, TASK-117, TASK-129). **Enumerate the callers before choosing between report-it and prevent-it.**
+- **Prevent beat report, and then both shipped.** Keying by view property makes the collision impossible;
+  the throw stays as a backstop for `AddField`'s explicit `name` and for `AddTable`, because "I keyed it so
+  it can't collide" is construction, not evidence — the same argument that put a test on `FlushDatabaseAsync`
+  being off `ICache` (TASK-117). The backstop has its own test and its own opt-out test.
+- **The fix landed in a file no spec area covers, exactly as the map predicted.** `View.cs` is in the 90% of
+  `Birko.Data.SQL.View` the map excludes; its comment names TASK-129 and asks for a DECISION (TASK-208, still
+  open). The new spec scenarios are grounded in `SqlViewTranslator.cs` instead and the backstop is left
+  unspecced — the second consecutive task to hit this, which is the argument for deciding TASK-208 rather
+  than routing around it a third time.
 
 ### An aggregate column had two names, so it got two aliases — and the quiet half lost a column (2026-08-14)
 
