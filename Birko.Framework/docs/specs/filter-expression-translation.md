@@ -1,6 +1,6 @@
 ---
 area: filter-expression-translation
-generated-at: 34fa9b2797a9cfa273ccb2c4fcb9189a9648f55e
+generated-at: b8fcec8ea7acabd9ffce7925a27b6bc51c1faba5
 generated-on: 2026-08-14
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
@@ -36,6 +36,9 @@ shaped-by:
   # TASK-137 — the empty NOT IN's `1 = 1` was both an injection lookalike and a tautology that satisfied
   # the whole-table write guard; always-true terms are now reduced away instead of rendered.
   - TASK-137
+  # TASK-213 — a COMPUTED operand inside a set Contains was recursed into as a predicate, fabricating a
+  # subcondition that replaced the IN with a different predicate. Now resolved via RenderValueFragment.
+  - TASK-213
 shaped-by-derived: false   # see the note above: no source glob resolves in this repo, so no evidence pass
 ---
 
@@ -416,6 +419,16 @@ the signature of `' OR 1=1--` and a non-empty `WHERE` that constrains nothing �
 whole-table write guard in § *bulk-filter-operations* and let an ordinary filter reach a whole-table
 DELETE.
 
+**The VALUE operand of a set `Contains` is a value expression, not a nested predicate.** The arm receives
+both the collection and the value as arguments, and SHALL resolve the parameter-referencing one to the
+condition's `Name` — a plain column through the ordinary column path, anything computed through
+`RenderValueFragment` (§ *SQL value-expression operands in predicates*). It SHALL NOT recurse into a
+computed operand as though it were a predicate: doing so fabricated a **subcondition** on the very
+condition being built, and because the renderer branches on `SubConditions` before it consults `Type`,
+the `In` and its values were then ignored and a **different predicate** was emitted — silently, with no
+exception and no log entry. An operand `RenderValueFragment` cannot express SHALL therefore raise
+`NotSupportedException` rather than resolve to something else.
+
 #### Scenario: Empty IN is always false on every provider
 
 - **Given** an `In` condition whose `Values` enumerates zero elements
@@ -473,6 +486,48 @@ DELETE.
 - **Given** `x => !(x.Amount > 20 && !ids.Contains(x.Amount))` with `ids` empty
 - **When** the always-true term is dropped, leaving one child
 - **Then** the group still renders as `NOT (…)` over the remaining condition, since `NOT (A AND TRUE)` is `NOT A`
+
+#### Scenario: An arithmetic operand becomes the condition's name
+
+- **Given** `x => ids.Contains(x.Amount + 1)` with `ids = { 1, 5 }`
+- **When** the `Contains` arm resolves the parameter-referencing argument
+- **Then** the condition is `Name = "(Table.Amount + 1)"`, `Type = In`, `Values = { 1, 5 }` and **no
+  subconditions**, rendering `(Table.Amount + 1) IN (@p0, @p1)`
+- **And** the row set equals the compiled-delegate oracle's, in both the plain and negated forms —
+  previously the emitted predicate was `Amount = 1`, answering 1 row where C# answers 0, and 3 where C#
+  answers 4
+
+#### Scenario: A coalescing operand becomes the condition's name
+
+- **Given** `x => ids.Contains(x.Score ?? 0)`
+- **When** the operand is resolved
+- **Then** the condition's `Name` is `COALESCE(Table.Score, 0)` with the `0` inlined, and `Type` stays `In`
+
+#### Scenario: A plain column operand keeps its existing path
+
+- **Given** `x => ids.Contains(x.Amount)`
+- **When** the operand is resolved
+- **Then** it takes the ordinary column path and the condition is `Name = "Table.Amount"`, `Type = In` —
+  the value-fragment route applies only to operands that are not directly resolvable columns, so no
+  already-working shape changes
+
+#### Scenario: An untranslatable Contains operand fails loud
+
+- **Given** `x => ids.Contains(x.Name.Length)`, whose operand has no fragment translation
+- **When** the arm resolves it through `RenderValueFragment`
+- **Then** `NotSupportedException` naming the operand is thrown — a caller sees the predicate refused
+  instead of receiving rows selected by a substituted predicate
+
+#### Scenario: An empty negated Contains over a computed operand still matches every row
+
+- **Given** `x => !empty.Contains(x.Score ?? 0)` with an empty collection
+- **When** the condition is built and then reduced
+- **Then** it is a well-formed always-true `In` (`Values` empty, `IsNot`), so
+  `IsAlwaysTrueCondition` recognises it and the term is reduced away, matching every row — including rows
+  whose `Score` is NULL, which the previously fabricated `NOT (Score = 0)` excluded under SQL's
+  three-valued logic
+- **And** on a `DELETE` / `UPDATE` it reaches the whole-table write refusal, which the fabricated
+  subcondition had hidden from the guard entirely
 
 #### Scenario: All-null collection collapses to matches-nothing
 
@@ -534,7 +589,9 @@ one child or when the group is negated, and SHALL prefix `NOT ` when the group's
 When either side of a comparison (after stripping `Convert`) is numeric arithmetic, a `Coalesce`, or a
 `ConditionalExpression`, `DataBase` SHALL render that side to a RAW SQL fragment — `(A + B)`,
 `COALESCE(a, b)`, `CASE WHEN … THEN … ELSE … END` — place it in the condition's `Name`, and compare it
-to the other side. Constants inside such a fragment SHALL be inlined as portable SQL literals rather
+to the other side. The same rendering SHALL serve the value operand of a set `Contains` (§ *SQL IN
+translation and empty sets*), so a computed operand resolves identically whether it appears in a
+comparison or in an `IN` — one renderer, not one per operator. Constants inside such a fragment SHALL be inlined as portable SQL literals rather
 than parameterised. When the value expression is on the LEFT and the constant on the right, the
 operator SHALL be used as-is; when the constant is on the left and the parameter-bearing expression on
 the right, the comparison SHALL be flipped via `FlipComparison`. When both sides reference the

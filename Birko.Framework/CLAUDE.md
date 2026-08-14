@@ -418,6 +418,40 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### A computed operand inside `Contains` was answered by a different predicate (2026-08-14)
+
+TASK-213, found by TASK-137's own spec step — adding its shapes to the compiled-delegate oracle made a case
+fail for an unrelated reason. `ids.Contains(x.Amount + 1)` never emitted an `IN`: the arm looped **every**
+argument through `ParseConditionExpression`, so a computed operand was parsed as a nested **predicate**, took
+the binary-comparison path, and fabricated a **subcondition** (`Amount = 1`) on the condition being built.
+`AppendConditionTo` branches on `SubConditions` before it consults `Type`, so the `In` and its values were
+discarded and the fabricated equality was emitted instead. Measured on SQLite: **1 row where C# says 0**, and
+**3 where C# says 4** — wrong in both directions, silently. The operand now resolves through
+`RenderValueFragment` exactly as a comparison's column side does. Split: **18 of 21**. Four things worth
+carrying:
+
+- **⚠ Consumers: an operand this parser cannot express now throws.** `ids.Contains(x.Name.Length)` (and an
+  unmapped collection property in the extension-method form) previously returned rows chosen by a substituted
+  predicate; they now raise `NotSupportedException` at parse time. That is § SH-H037's position, and the blast
+  radius was measured across 22 SQL-touching suites with no failures — but the change is visible to a consumer
+  whose predicate was quietly wrong.
+- **The fix was a reuse, and the task's own § Approach had budgeted for a translator.** `RenderValueFragment`
+  already rendered arithmetic / `COALESCE` / `CASE` / `.Value` and already threw for the rest, and
+  `BuildValueComparison` was already doing precisely this for comparisons — so "translate or refuse" was not
+  an open decision, it was answered by code that shipped months ago. Same shape as TASK-112, where the
+  per-provider type mapping the task called "the bulk of the work" already existed. **Look for the existing
+  producer before costing a new one.**
+- **A test written to pin the fix passed against the defect, and only the revert said so.** The always-true
+  read test used a seed with no NULL `Score`, and over non-null values the fabricated `NOT (Score = 0)`
+  returns exactly the right rows. Adding one NULL row made SQL's three-valued logic diverge from C# and took
+  the split from 17 to 18. Third instance of this in the epic (TASK-113, TASK-118) — **the revert is what
+  classifies a test, not the intent it was written with.**
+- **Two of the three surviving pins pass by arithmetic coincidence**, not by design: for
+  `Ids.Contains(x.Score ?? 0)` and `x.Amount > 4 && Ids.Contains(x.Amount + 1)` the correct answer and the
+  fabricated predicate's answer are both 0 rows on that seed. Their shapes are still covered by evidence
+  because the *positive-match* variants of each fail on revert. Worth designing sets that match rather than
+  sets that happen to exclude everything.
+
 ### The tautology chosen for being harmless was the thing that walked past the guard (2026-08-14)
 
 TASK-137. An empty `NOT IN` rendered `WHERE 1 = 1`, filed — correctly — as a log-hygiene defect: `1 = 1` is the

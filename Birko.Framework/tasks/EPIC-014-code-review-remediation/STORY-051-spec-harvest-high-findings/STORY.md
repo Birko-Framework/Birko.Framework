@@ -16,8 +16,8 @@ finding-ids: SH-H001 … SH-H057
 **17 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
-SH-H023 via [[TASK-111]]) — **18 of 21 tasks
-done, 1 in review, 2 todo.** [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
+SH-H023 via [[TASK-111]]) — **19 of 21 tasks
+done, 1 in review, 1 todo.** [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
 planned, and closed it much wider than filed: the empty `NOT IN`'s `1 = 1` was not merely an injection
 lookalike in a log, it was a **non-empty `WHERE` that constrains nothing**, so it satisfied the whole-table
 write guard TASK-109 had installed 18 days earlier and `Delete(x => !empty.Contains(x.Col))` emptied the
@@ -27,7 +27,13 @@ refuses only a *null* filter, so the same shape is unguarded there — mechanism
 **unverified**, since the driver owns the translation) and [[TASK-213]] (a *computed* operand inside
 `Contains` is silently replaced by a fabricated predicate, answering 1 row where the truth is 0 —
 pre-existing, unrelated, and found only because the fix added its shapes to the compiled-delegate oracle),
-taking the story to 21 tasks. TASK-126 completes the tenant trio with TASK-114 (write guard) and TASK-125 (read
+taking the story to 21 tasks. [[TASK-213]] then closed: `ids.Contains(x.Amount + 1)` never emitted an `IN` at
+all, because a computed operand was parsed as a nested *predicate* and fabricated a subcondition that the
+renderer preferred over the `In` — so the statement carried a **different** predicate, answering 1 row where
+C# says 0 and 3 where it says 4. Its fix is a **reuse**: `RenderValueFragment` and `BuildValueComparison`
+already did exactly this for comparisons, so the "translate or refuse" question the task posed had been
+answered by shipped code. Two of these three tasks were found by *instrumenting* rather than by reading —
+the oracle suite earned its place twice in one day. TASK-126 completes the tenant trio with TASK-114 (write guard) and TASK-125 (read
 bypass): a base class that documented its scoping contract in a comment and enforced none of it now
 re-checks every record its hooks return. Unlike the other two it is hardening rather than a reproduced
 leak — the framework ships no implementation of `TagServiceBase` — which is why it lost the ranking twice
