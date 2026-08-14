@@ -235,11 +235,24 @@ public class ViewFieldKeyCollisionTests : IDisposable
         // Total (SUM of Amount) is 5 and OrderTotal (the source column) is 70, so a dropped column reads 0
         // and a mis-wired one reads the other's number. Only correct keying gives 70/5.
         //
-        // OnTheFly, deliberately. A Persistent variant would exercise the DDL builder, but this fixture's
-        // non-aggregate `OrderTotal` is a PascalCase column and the DDL projects those unquoted while the
-        // persistent read quotes them — TASK-209, open and unfixed. SQLite is case-insensitive for
-        // identifiers so such a test would pass, encoding the broken behaviour as though it were correct.
-        // TASK-129 declined to assert that either way for the same reason; this follows it.
+        // OnTheFly ONLY — and the Persistent path is NOT merely untested here, it is still broken.
+        //
+        // An earlier revision of this comment claimed a Persistent variant would pass on SQLite and so
+        // would "encode the broken behaviour". That was wrong, and being wrong is why the gap shipped: the
+        // variant FAILS, returning 70 where 5 is expected. The close-gate review measured it.
+        //
+        // Cause: keying the field dictionary by view property is only three quarters of the "one producer"
+        // rule. `GetPersistentViewSelectFields()` still returns `field.Name` (the SOURCE column) for
+        // non-aggregates, and `ViewSelectSqlBuilder` still projects them unaliased — so this fixture's DDL
+        // is `SELECT VkPersons.Name, VkOrders.Total, SUM(VkOrders.Amount) AS "Total"`, two columns named
+        // `Total`, and the read (which selects BY NAME) binds both to the first one. The collision moved
+        // from the dictionary to the view DDL rather than being closed. On MSSql/PostgreSQL `CREATE VIEW`
+        // rejects a duplicated output name outright, so such a view cannot be created at all.
+        //
+        // Fixing it means aliasing non-aggregates by their view property too, which is TASK-209's
+        // territory (it owns the non-aggregate persistent column naming/quoting decision) and changes the
+        // DDL of EVERY persistent view — a migration concern for already-deployed views. Left to that
+        // task rather than taken silently here; see this task's ## Outcome › Flagged, not fixed.
         var connector = Seed();
         var definition = CollidingDefinition(PortableViewQueryMode.OnTheFly);
         var store = new SqlViewStore<VkCollidingView>(connector, definition);
