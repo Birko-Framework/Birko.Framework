@@ -137,32 +137,61 @@ namespace Birko.Data.SQL.Tests.Strategies
             sql.Should().NotContain("IN ()");
         }
 
+        // TASK-137 — the two tests below previously asserted `1 = 1` for the empty NOT IN, i.e. they pinned a
+        // guard bypass as the contract. An empty NOT IN does match every row, but a tautology is the wrong way
+        // to say so: `1 = 1` is a non-empty WHERE that constrains nothing, so it satisfied
+        // AbstractConnectorBase.AddRequiredWhere's whole-table write guard and `Delete(x => !empty.Contains(x))`
+        // emptied the table, silently (measured: 0 of 3 rows left, no exception). The term now has NO rendering
+        // at this layer — it is reduced away by the enclosing chain, where the AND/OR context is known.
+
         [Fact]
-        public void BuildSql_EmptyValues_WithIsNot_ShouldReturnAlwaysTrueConstant()
+        public void BuildSql_EmptyValues_WithIsNot_Throws_BecauseAnAlwaysTrueTermHasNoRendering()
         {
-            // Arrange — `NOT IN ()` must not silently invert to "matches nothing": every row is outside
-            // the empty set, so an empty NOT IN matches EVERYTHING.
+            // Arrange — every row is outside the empty set, so this matches EVERYTHING. It must not invert to
+            // "matches nothing", and it must not become a constant either.
             var condition = Condition.Create("Status", Array.Empty<object?>(), ConditionType.In, isNot: true);
 
             // Act
-            var sql = _strategy.BuildSql(condition, _command, _context);
+            var act = () => _strategy.BuildSql(condition, _command, _context);
 
-            // Assert
-            sql.Should().Be("1 = 1");
-            sql.Should().NotContain("NOT IN ()");
+            // Assert — a throw, not `""`: an empty string would be joined into the chain by its neighbours'
+            // separators and produce `A AND  AND B`, which is the silent version of the same bug.
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage("*matches every row*")
+                .WithMessage("*IsAlwaysTrueCondition*");
         }
 
         [Fact]
-        public void BuildSql_NullValues_WithIsNot_ShouldReturnAlwaysTrueConstant()
+        public void BuildSql_NullValues_WithIsNot_Throws_BecauseAnAlwaysTrueTermHasNoRendering()
         {
             // Arrange
             var condition = Condition.Create("Status", null, ConditionType.In, isNot: true);
 
             // Act
-            var sql = _strategy.BuildSql(condition, _command, _context);
+            var act = () => _strategy.BuildSql(condition, _command, _context);
 
             // Assert
-            sql.Should().Be("1 = 1");
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void BuildSql_NeverEmitsTheInjectionLookalike_ForAnyEmptySetShape()
+        {
+            // The property the fix actually owes, asserted positively rather than as "the old string is gone"
+            // from one input: no empty-set shape this strategy can be handed renders `1 = 1`.
+            foreach (var isNot in new[] { false, true })
+            {
+                foreach (System.Collections.IEnumerable? values in new System.Collections.IEnumerable?[] { null, Array.Empty<object?>() })
+                {
+                    var condition = new Condition("Status", values, ConditionType.In, isNot: isNot);
+                    string? sql = null;
+                    try { sql = _strategy.BuildSql(condition, _command, _context); }
+                    catch (InvalidOperationException) { /* the always-true half refuses, asserted above */ }
+
+                    sql?.Should().NotContain("1 = 1",
+                        $"isNot={isNot} must never render the `' OR 1=1--` signature");
+                }
+            }
         }
 
         [Fact]
