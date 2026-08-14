@@ -255,8 +255,8 @@ public class AggregateViewDdlTests : IDisposable
         var projection = sql.Substring("SELECT ".Length, sql.IndexOf(" FROM ", StringComparison.Ordinal) - "SELECT ".Length);
         var items = projection.Split(',').Select(x => x.Trim()).ToList();
 
-        items.Should().Contain(i => i.StartsWith("COUNT(", StringComparison.Ordinal) && i.EndsWith(" AS \"OrderCount\"", StringComparison.Ordinal));
-        items.Should().Contain(i => i.StartsWith("SUM(", StringComparison.Ordinal) && i.EndsWith(" AS \"TotalAmount\"", StringComparison.Ordinal));
+        items.Should().Contain(i => i.StartsWith("COUNT(", StringComparison.Ordinal) && i.EndsWith(" AS OrderCount", StringComparison.Ordinal));
+        items.Should().Contain(i => i.StartsWith("SUM(", StringComparison.Ordinal) && i.EndsWith(" AS TotalAmount", StringComparison.Ordinal));
         foreach (var item in items)
         {
             AliasKeywordCount(item).Should().BeLessThanOrEqualTo(1, $"'{item}' must carry at most one alias");
@@ -264,41 +264,40 @@ public class AggregateViewDdlTests : IDisposable
     }
 
     [Fact]
-    public void The_ddl_alias_is_quoted_exactly_as_the_persistent_read_quotes_it()
+    public void The_ddl_alias_is_spelled_exactly_as_the_persistent_read_spells_it()
     {
-        // The invariant that decides quoted-vs-bare, and the one an earlier draft of this fix got backwards.
+        // The invariant that decides quoted-vs-bare. TASK-129 answered "quoted" and TASK-209 reversed it
+        // after measuring against real PostgreSQL 16.4 — so the assertion is written against the property
+        // that has to hold (the two halves agree) rather than against either literal.
         //
-        // This alias *creates* an identifier rather than referencing one, and its only reader is
-        // CreatePersistentViewSelectCommand, which emits `QuoteIdentifier(GetPersistentViewSelectFields()[i])`
-        // through the SAME connector. So the DDL must quote it the way that reader quotes it, or the view is
-        // created and then cannot be queried: on PostgreSQL a bare `as OrderCount` creates `ordercount` while
-        // the reader asks for `"OrderCount"`.
+        // Why bare won. TASK-129's pairing (quoted alias + quoted read) was self-consistent but disagreed
+        // with the rest of the framework: base-table DDL emits COLUMN definitions bare, so every base
+        // column folds to lower case on PostgreSQL, and quoting anywhere else is a case-sensitive miss.
+        // Measured: the old DDL could not create the view at all (`missing FROM-clause entry for table
+        // "avpersons"`, then `column AvOrders.PersonId does not exist`), and once created by hand the
+        // quoted read failed with `column "Name" does not exist`. The rule is now uniform — quote TABLES,
+        // never quote COLUMNS — and the persistent ORDER BY, which was already bare, is the model.
         //
-        // SQLite is case-insensitive for identifiers, so an end-to-end SQLite test passes either way — which
-        // is exactly why this is asserted structurally, by generating both halves with one quoter and
-        // checking they agree, instead of trusting a green round-trip.
-        // Scoped to AGGREGATE columns, which is what this task owns. The non-aggregate columns have the
-        // same mismatch in the opposite direction and it is PRE-EXISTING: the DDL projects them as an
-        // unquoted `AvPersons.Name` (so PostgreSQL names the view column `name`) while the persistent read
-        // asks for `"Name"`. Asserting the whole column set here failed on exactly that, which is how it
-        // was found — filed as TASK-209, deliberately not fixed under this task, and not asserted here,
-        // because a test that encodes it either way would bless one side of an open question.
+        // SQLite is case-insensitive for identifiers, so an end-to-end SQLite test passes either way; that
+        // is exactly why this is asserted structurally, by generating both halves and checking they agree.
+        // The PostgreSQL round-trip itself is pinned by PostgreSqlViewRoundTripTests against a live server.
         RegisterMappings();
         var view = SqlViewTranslator.Translate(TotalsDefinition(PortableViewQueryMode.Persistent));
         Func<string, string> quote = id => "\"" + id.Replace("\"", "\"\"") + "\"";
 
         var ddl = ViewSelectSqlBuilder.BuildViewSelectSql(view, quote);
 
-        var aggregateColumns = view.GetTableFields()
-            .Where(f => f.IsAggregate && f.Property != null)
-            .Select(f => f.Property.Name)
-            .ToList();
-        aggregateColumns.Should().NotBeEmpty("the fixture has a Count and a Sum");
-        foreach (var column in aggregateColumns)
+        // EVERY column now, not just the aggregates — TASK-209 aliased non-aggregates too, which is what
+        // closed both the PostgreSQL mismatch and TASK-207's duplicate output column. Asserting the whole
+        // set is the check that failed under TASK-129 and was filed as this task rather than weakened.
+        var requested = view.GetPersistentViewSelectFields().Values.ToList();
+        requested.Should().BeEquivalentTo(new[] { "PersonName", "OrderCount", "TotalAmount" });
+        foreach (var column in requested)
         {
-            view.GetPersistentViewSelectFields().Values.Should().Contain(column);
-            ddl.Should().Contain(quote(column),
-                $"the persistent read emits {quote(column)}, so the DDL must create the column under exactly that spelling");
+            ddl.Should().Contain(" AS " + column,
+                $"the persistent read emits bare {column}, so the DDL must create the column under exactly that spelling");
+            ddl.Should().NotContain(" AS " + quote(column),
+                $"a quoted alias would create a case-sensitive column that the bare read cannot find on PostgreSQL");
         }
     }
 
@@ -314,8 +313,8 @@ public class AggregateViewDdlTests : IDisposable
 
         var sql = ViewSelectSqlBuilder.BuildViewSelectSql(view, id => "\"" + id + "\"");
 
-        sql.Should().Contain("AS \"TotalAmount\"");
-        sql.Should().Contain("AS \"TotalTax\"");
+        sql.Should().Contain("AS TotalAmount");
+        sql.Should().Contain("AS TotalTax");
         view.GetPersistentViewSelectFields().Values.Should().Contain(new[] { "TotalAmount", "TotalTax" });
     }
 
@@ -437,8 +436,8 @@ public class AggregateViewDdlTests : IDisposable
         view.Should().NotBeNull();
         var sql = ViewSelectSqlBuilder.BuildViewSelectSql(view!, id => "\"" + id + "\"");
 
-        sql.Should().Contain("AS \"TotalAmount\"");
-        sql.Should().Contain("AS \"TotalTax\"");
+        sql.Should().Contain("AS TotalAmount");
+        sql.Should().Contain("AS TotalTax");
         sql.Should().NotContain(" as SUM");
         view!.GetPersistentViewSelectFields().Values.Should().Contain(new[] { "TotalAmount", "TotalTax" });
     }

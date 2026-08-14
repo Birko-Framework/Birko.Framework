@@ -241,8 +241,11 @@ public class ViewOrderByResolutionTests : IDisposable
     [Fact]
     public void Persistent_emits_the_bare_source_column_not_the_qualified_one()
     {
-        // A persistent view's columns are the source column names its DDL projected — a Table.Column prefix
-        // would name a table that is not in the FROM clause at all.
+        // A persistent view's columns are the names its DDL projected — a Table.Column prefix would name a
+        // table that is not in the FROM clause at all. TASK-209 changed WHICH name that is: the DDL now
+        // aliases every column `AS <ViewProperty>`, not just aggregates, so the sort key is the view
+        // property (PersonName) rather than the source column (Name). Emitted bare, which is what the rest
+        // of that task made the SELECT list and the DDL alias do too.
         var connector = Seed();
         var definition = PersistentDefinition();
         CreatePhysicalView(definition);
@@ -250,7 +253,7 @@ public class ViewOrderByResolutionTests : IDisposable
 
         Query(store, OrderBy<VOrderView>.By(x => x.PersonName));
 
-        _executed.Should().ContainSingle(t => t.Contains("FROM \"VOrderPersistent\"") && t.Contains("ORDER BY Name ASC"));
+        _executed.Should().ContainSingle(t => t.Contains("FROM \"VOrderPersistent\"") && t.Contains("ORDER BY PersonName ASC"));
         _executed.Should().NotContain(t => t.Contains("ORDER BY VPersons.Name"));
     }
 
@@ -368,8 +371,11 @@ public class ViewOrderByResolutionTests : IDisposable
 
         Query(store, OrderBy<VOrderView>.ByName("Name")).Select(r => r.PersonName).Should().Equal("a", "b", "c");
 
-        // Byte-identical to the pre-fix clause on this path.
-        _executed.Should().ContainSingle(t => t.EndsWith("ORDER BY Name ASC"));
+        // Sorting by the SOURCE column name still resolves — ResolveViewOrderFields matches a key against
+        // Property.Name or Name, so "Name" still finds the field. TASK-209 changed only what is then
+        // EMITTED: the persistent view's column is now the view property, so the clause reads PersonName.
+        // The rows are the assertion that matters and they are unchanged.
+        _executed.Should().ContainSingle(t => t.EndsWith("ORDER BY PersonName ASC"));
     }
 
     [Fact]
