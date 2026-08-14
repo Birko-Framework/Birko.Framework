@@ -182,11 +182,13 @@ namespace Birko.Data.SQL
                                                         tableField = functionField;
                                                     }
                                                     // Keyed by the VIEW PROPERTY (`field`), not by tableField.Name — which after the
-                                                    // reassignment above is the SQL function name. TASK-129: View.AddField skips a key
-                                                    // it already holds, so two same-function aggregates both keyed "COUNT" silently lost
-                                                    // the second column. View properties are unique among themselves; one can
-                                                    // still coincide with a NON-aggregate field's source-column key in the same
-                                                    // dictionary — narrower, and TASK-207 owns it.
+                                                    // reassignment above is the SQL function name. TASK-129: two same-function
+                                                    // aggregates both keyed "COUNT" silently lost the second column. TASK-207 made
+                                                    // the view property the DEFAULT key for every view field, so this argument is now
+                                                    // explicit agreement with View.AddField rather than the thing preventing the
+                                                    // collision. (TASK-129's "unique by construction" was true only among view
+                                                    // properties — non-aggregates beside them were keyed by source column, so the two
+                                                    // namespaces could collide. TASK-207 closed that.)
                                                     //
                                                     // This replaces a dead `tableFieldName` local that concatenated
                                                     // `tableField.Name + functionField.Name` and was then never passed — an abandoned

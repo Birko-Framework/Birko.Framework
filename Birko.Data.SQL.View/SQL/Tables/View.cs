@@ -47,6 +47,10 @@ namespace Birko.Data.SQL.Tables
             return this;
         }
 
+        /// <param name="name">
+        /// Overrides the dictionary key. Leave null to use the field's <b>view property</b> — see the
+        /// remarks on <see cref="ViewFieldKey"/> for why that, and not the source column, is the identity.
+        /// </param>
         public View AddField(string tableName, Type tableType, AbstractField field, string? name = null)
         {
             if (!string.IsNullOrEmpty(tableName) && field != null)
@@ -69,15 +73,72 @@ namespace Birko.Data.SQL.Tables
                 {
                     table.Fields = new Dictionary<string, AbstractField>();
                 }
-                var fieldName = (!string.IsNullOrEmpty(name)) ? name : field.Name;
-                if (!table.Fields.ContainsKey(fieldName))
+                var fieldName = (!string.IsNullOrEmpty(name)) ? name : ViewFieldKey(field);
+                if (!table.Fields.TryGetValue(fieldName, out var existing))
                 {
                     field.Table = table;
                     table.Fields.Add(fieldName, field);
                 }
+                else if (!IsSameField(existing, field))
+                {
+                    // TASK-207. The backstop, not the fix: keying by the view property above means the two
+                    // reachable collision shapes cannot occur any more. This catches a key presented by a
+                    // caller that supplied its own `name`, or by `AddTable`, whose source fields carry the
+                    // source property rather than a view property.
+                    throw new Birko.Data.Exceptions.FieldAttributeException(
+                        $"View field key '{fieldName}' on table '{table.Name}' is already taken by "
+                        + $"'{Describe(existing)}' and cannot also hold '{Describe(field)}'. "
+                        + "Two view fields resolved to one key; the second would previously have been "
+                        + "dropped with no column, no error and no log entry, reading back as default(T).");
+                }
+                // else: an idempotent re-add of a field already present. Three paths do this legitimately —
+                // LoadView's `_fieldsCache` reuse branch, its multi-LoadField loop, and (the one that makes
+                // reference equality useless here) its outer `foreach (ViewAttribute attr in attrs)` loop:
+                // ViewAttribute is AllowMultiple = true, so a three-table view re-runs the whole per-property
+                // field loop and re-presents every field as a FRESH AbstractField instance.
             }
             return this;
         }
+
+        /// <summary>
+        /// The key a view field is stored under: the <b>view property it populates</b>, falling back to the
+        /// field's own name when no property is attached.
+        /// <para>
+        /// TASK-129 keyed aggregates this way after two <c>Sum</c>s on one table — both keyed <c>"SUM"</c>,
+        /// the SQL function name — silently produced one column. It left non-aggregates keyed on
+        /// <see cref="AbstractField.Name"/>, the <i>source column</i>, which kept two collision shapes alive
+        /// (TASK-207): two view properties projecting one source column, and — newly, because the two
+        /// namespaces then shared one key space — an aggregate whose view property happened to match a
+        /// neighbouring column's source name. Both are gone once every field is identified by the property
+        /// it populates, which is unique on a CLR type by construction.
+        /// </para>
+        /// <para>
+        /// Safe to change because nothing reads this key as a column name: the persistent read
+        /// (<see cref="GetPersistentViewSelectFields"/>) and the sort key both go through the field, the
+        /// aggregate alias uses the key only as a fallback when <c>Property</c> is unset, and
+        /// <c>Table.GetField(string)</c> has no callers.
+        /// </para>
+        /// </summary>
+        private static string ViewFieldKey(AbstractField field)
+            => field.Property != null ? field.Property.Name : field.Name;
+
+        /// <summary>
+        /// Whether an incoming field is the one already stored under its key — i.e. a re-add rather than a
+        /// collision. Compared by value, not by reference: the multi-<c>[View]</c> loop re-presents every
+        /// field as a new instance, so <c>ReferenceEquals</c> alone would report every such view as broken.
+        /// </summary>
+        private static bool IsSameField(AbstractField existing, AbstractField incoming)
+            => ReferenceEquals(existing, incoming)
+               || (existing.GetType() == incoming.GetType()
+                   && existing.Name == incoming.Name
+                   && existing.IsAggregate == incoming.IsAggregate
+                   && existing.Property?.Name == incoming.Property?.Name
+                   && existing.Property?.DeclaringType == incoming.Property?.DeclaringType);
+
+        private static string Describe(AbstractField field)
+            => field.Property != null
+                ? $"{field.Property.DeclaringType?.Name}.{field.Property.Name} ({field.Name})"
+                : field.Name;
 
         public View AddJoin(IEnumerable<Conditions.Join> conditions)
         {
