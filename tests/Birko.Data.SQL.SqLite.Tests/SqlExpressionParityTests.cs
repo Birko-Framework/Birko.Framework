@@ -78,6 +78,12 @@ public class SqlExpressionParityTests : IDisposable
     /// <summary>Empty by design — TASK-137's empty-`IN` / empty-`NOT IN` cases below.</summary>
     private static readonly int[] NoIds = Array.Empty<int>();
 
+    // TASK-213: sets chosen to make the computed-operand cases match POSITIVELY, not merely return nothing.
+    // Seed amounts are 1/5/5/9, so `Amount + 1` is 2/6/6/10 and this hits three rows; scores are
+    // 10/null/20/30, so `Score ?? 0` is 10/0/20/30 and this hits two.
+    private static readonly int[] PlusOneHits = { 6, 10 };
+    private static readonly int[] ScoreHits = { 0, 20 };
+
     // Each case: a label and the predicate. The oracle is expr.Compile() over the same seed.
     public static IEnumerable<object[]> Cases()
     {
@@ -131,6 +137,26 @@ public class SqlExpressionParityTests : IDisposable
             // encode that defect to stay green, which blesses it; it is filed as TASK-213 instead.
             ("emptyNotInTwice",  x => !NoIds.Contains(x.Amount) && !NoIds.Contains(x.Amount)),
             ("emptyBothKinds",   x => NoIds.Contains(x.Amount) || !NoIds.Contains(x.Amount)),
+
+            // TASK-213 — a COMPUTED operand inside a set `Contains` used to be recursed into as though it
+            // were a nested predicate, which fabricated a subcondition and made the renderer emit a
+            // DIFFERENT predicate: `Ids.Contains(x.Amount + 1)` answered 1 row where C# says 0, and the
+            // negated form 3 where C# says 4. The operand is now resolved as a value expression, the same
+            // way a comparison resolves its column side. The oracle is the whole point here — these shapes
+            // are exactly the ones where "looks like plausible SQL" and "means what C# means" diverged.
+            ("containsArith",        x => Ids.Contains(x.Amount + 1)),
+            ("containsArithNot",     x => !Ids.Contains(x.Amount + 1)),
+            ("containsArithMatches", x => PlusOneHits.Contains(x.Amount + 1)),
+            ("containsMultiply",     x => Ids.Contains(x.Amount * 1)),
+            ("containsCoalesce",     x => Ids.Contains(x.Score ?? 0)),
+            ("containsCoalesceNot",  x => !Ids.Contains(x.Score ?? 0)),
+            ("containsCoalesceHits", x => ScoreHits.Contains(x.Score ?? 0)),
+            ("containsArithInAnd",   x => x.Amount > 4 && Ids.Contains(x.Amount + 1)),
+            ("containsArithInOr",    x => x.Amount > 8 || Ids.Contains(x.Amount + 1)),
+            // Composes with TASK-137: an empty NOT IN over a computed operand is still always-true, so it
+            // must reduce away rather than emit the fabricated predicate the old path produced.
+            ("containsArithEmptyNot", x => !NoIds.Contains(x.Amount + 1)),
+            ("containsArithEmptyIn",  x => NoIds.Contains(x.Amount + 1)),
         };
         foreach (var c in cases)
             yield return new object[] { c.label, c.expr };
