@@ -299,20 +299,17 @@ public class ViewOrderByResolutionTests : IDisposable
     public void Persistent_aggregate_sort_uses_the_view_property_alias()
     {
         // The persistent path is the one place an aggregate is NOT named by its function: the view DDL
-        // aliases it AS "<ViewProperty>" (CR-L195, so two aggregates of one function cannot collide), and
+        // aliases it by <ViewProperty> (CR-L195, so two aggregates of one function cannot collide), and
         // GetPersistentViewSelectFields queries it back under that name. The sort key must agree.
         //
-        // The DDL is hand-written here rather than generated, because the generator cannot currently produce
-        // it: ViewSelectSqlBuilder emits a DOUBLE alias for an aggregate — `COUNT(VOrders.PersonId) as COUNT
-        // AS "OrderCount"` — which is a syntax error on every provider, so no persistent aggregate view can
-        // be created at all. Found while writing this test and filed as TASK-129; the SQL below is exactly
-        // what the generator intends, so this case still pins the resolution against the real column name.
+        // The DDL is generated (TASK-129). It used to be hand-written here because the generator emitted a
+        // DOUBLE alias — `COUNT(VOrders.PersonId) as COUNT AS "OrderCount"`, a syntax error on every
+        // provider — so no persistent aggregate view could be created at all. Now that it can, the hand-
+        // written SQL is gone: it was a guess at what the generator intended, and a guess is exactly what
+        // this test must not depend on.
         var connector = Seed();
         var definition = AggregateDefinition(PortableViewQueryMode.Persistent);
-        ExecuteDdl("CREATE VIEW IF NOT EXISTS \"VTotals\" AS "
-            + "SELECT VPersons.Name, COUNT(VOrders.PersonId) AS \"OrderCount\" "
-            + "FROM \"VOrders\" INNER JOIN \"VPersons\" ON (\"VOrders\".\"PersonId\" = \"VPersons\".\"Guid\") "
-            + "GROUP BY VPersons.Name");
+        CreatePhysicalView(definition);
         var store = new SqlViewStore<VTotalsView>(connector, definition);
 
         var rows = store.QueryAsync(null, OrderBy<VTotalsView>.By(x => x.OrderCount), null, null)
@@ -332,12 +329,11 @@ public class ViewOrderByResolutionTests : IDisposable
         //
         // Its sibling above happens to pass either way, because for an aggregate the view property name and
         // the resolved persistent column name coincide — so that one is a contract pin, and this is the proof.
+        //
+        // DDL generated rather than hand-written since TASK-129 — see the sibling above.
         var connector = Seed();
         var definition = AggregateDefinition(PortableViewQueryMode.Persistent);
-        ExecuteDdl("CREATE VIEW IF NOT EXISTS \"VTotals\" AS "
-            + "SELECT VPersons.Name, COUNT(VOrders.PersonId) AS \"OrderCount\" "
-            + "FROM \"VOrders\" INNER JOIN \"VPersons\" ON (\"VOrders\".\"PersonId\" = \"VPersons\".\"Guid\") "
-            + "GROUP BY VPersons.Name");
+        CreatePhysicalView(definition);
         var store = new SqlViewStore<VTotalsView>(connector, definition);
 
         var rows = store.QueryAsync(null, OrderBy<VTotalsView>.ByName("COUNT"), null, null)
