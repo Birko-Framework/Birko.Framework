@@ -132,7 +132,13 @@ public static class SqlViewTranslator
                 var countField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, firstField);
                 if (countField != null)
                 {
-                    view.AddField(table.Name, table.Type, countField, countField.Name);
+                    // Keyed by the VIEW PROPERTY, not by countField.Name (the SQL function name). TASK-129:
+                    // View.AddField skips a key it already holds, so two aggregates of the same function on
+                    // one table both keyed "COUNT" meant the second was dropped with no column, no error and
+                    // no log entry — read back as default(T). View properties are unique among themselves;
+                    // they can still coincide with a NON-aggregate field's source-column key in the same
+                    // dictionary — narrower, and TASK-207 owns it.
+                    view.AddField(table.Name, table.Type, countField, viewProp.Name);
                 }
             }
             else
@@ -147,7 +153,8 @@ public static class SqlViewTranslator
                 var functionField = FunctionField.CreateFunctionField(viewProp, sqlFuncName, sourceField);
                 if (functionField != null)
                 {
-                    view.AddField(table.Name, table.Type, functionField, functionField.Name);
+                    // Keyed by the view property — see the COUNT(*) branch above (TASK-129).
+                    view.AddField(table.Name, table.Type, functionField, viewProp.Name);
                 }
             }
         }
