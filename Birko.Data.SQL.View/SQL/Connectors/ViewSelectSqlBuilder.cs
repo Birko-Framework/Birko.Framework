@@ -48,7 +48,11 @@ namespace Birko.Data.SQL.Connectors
                 throw new InvalidOperationException("View must have at least one join definition.");
             }
 
-            var fields = view.GetSelectFields();
+            // TASK-129: request the projection WITHOUT its aggregate alias, because this method appends its
+            // own. Both emitting produced `COUNT(VOrders.PersonId) as COUNT AS "OrderCount"` — two aliases
+            // on one column, which SQLite rejects with `near "AS": syntax error` and which is a syntax error
+            // on every other provider, so no persistent (or Auto) aggregate view could be created at all.
+            var fields = view.GetSelectFields(aggregateAlias: false);
             if (fields == null || !fields.Any())
             {
                 throw new InvalidOperationException("View must have at least one field.");
@@ -61,10 +65,20 @@ namespace Birko.Data.SQL.Connectors
                 var fieldAtIndex = f.Key < tableFields.Length ? tableFields[f.Key] : null;
                 if (fieldAtIndex != null && fieldAtIndex.IsAggregate)
                 {
-                    // Alias aggregate columns by the unique view-property name, not the aggregate
-                    // function name (FunctionField.Name = "COUNT"/"SUM"/…): two aggregates of the same
-                    // function would otherwise collide on a duplicate column name in the view DDL, and
-                    // the alias must equal the column GetPersistentViewSelectFields queries back (CR-L195).
+                    // Alias aggregate columns by the unique view-property name, not the aggregate function
+                    // name (FunctionField.Name = "COUNT"/"SUM"/…): two aggregates of the same function would
+                    // otherwise collide on a duplicate column name in the view DDL, and the alias must equal
+                    // the column GetPersistentViewSelectFields queries back (CR-L195).
+                    //
+                    // QUOTED, and that is load-bearing rather than stylistic — it is the one place this
+                    // codebase quotes a column identifier, because this identifier is being *created*, not
+                    // referenced, and its only reader quotes it too: CreatePersistentViewSelectCommand emits
+                    // `QuoteIdentifier(GetPersistentViewSelectFields()[i])` through this same connector. On
+                    // PostgreSQL a bare `as OrderCount` would create `ordercount` while that read asks for
+                    // `"OrderCount"`, and the view would be created and then be unqueryable. (The persistent
+                    // ORDER BY interpolates its key bare, so it disagrees with the persistent SELECT list on
+                    // that provider — pre-existing, noted in docs/specs/views-and-aggregation.md, and not a
+                    // reason to make the DDL disagree with the reader that actually consumes this name.)
                     return f.Value + " AS " + quoteIdentifier(fieldAtIndex.Property.Name);
                 }
                 return f.Value;

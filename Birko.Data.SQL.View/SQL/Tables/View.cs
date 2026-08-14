@@ -115,13 +115,18 @@ namespace Birko.Data.SQL.Tables
             return this;
         }
 
-        public IDictionary<int, string> GetSelectFields(bool notAggregate = false)
+        /// <param name="aggregateAlias">
+        /// Whether aggregate projections carry their <c>as &lt;ViewProperty&gt;</c> suffix. The DDL builder
+        /// passes false and appends its own quoted alias instead (TASK-129) — see
+        /// <see cref="Birko.Data.SQL.Tables.Table.GetSelectFields"/>.
+        /// </param>
+        public IDictionary<int, string> GetSelectFields(bool notAggregate = false, bool aggregateAlias = true)
         {
             var result = new Dictionary<int, string>();
             int i = 0;
             foreach (var table in Tables)
             {
-                var fields = table?.GetSelectFields(true, notAggregate);
+                var fields = table?.GetSelectFields(true, notAggregate, aggregateAlias);
                 if (fields != null && fields.Any())
                 {
                     foreach (var field in fields)

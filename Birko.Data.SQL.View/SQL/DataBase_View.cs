@@ -174,17 +174,24 @@ namespace Birko.Data.SQL
                                             var tableField = table.GetFieldByPropertyName(fieldAttr.ModelProperyName!);
                                             if (tableField != null)
                                             {
-                                                string? tableFieldName = null;
                                                 if (fieldAttr is AggregateFieldAttribute)
                                                 {
-                                                    tableFieldName = tableField.Name;
                                                     var functionField = FunctionField.CreateFunctionAggregateField(field, (AggregateFieldAttribute)fieldAttr, tableField);
                                                     if (functionField != null)
                                                     {
-                                                        tableFieldName += functionField.Name;
                                                         tableField = functionField;
                                                     }
-                                                    view.AddField(table.Name, table.Type, tableField, tableField.Name);
+                                                    // Keyed by the VIEW PROPERTY (`field`), not by tableField.Name — which after the
+                                                    // reassignment above is the SQL function name. TASK-129: View.AddField skips a key
+                                                    // it already holds, so two same-function aggregates both keyed "COUNT" silently lost
+                                                    // the second column. View properties are unique among themselves; one can
+                                                    // still coincide with a NON-aggregate field's source-column key in the same
+                                                    // dictionary — narrower, and TASK-207 owns it.
+                                                    //
+                                                    // This replaces a dead `tableFieldName` local that concatenated
+                                                    // `tableField.Name + functionField.Name` and was then never passed — an abandoned
+                                                    // attempt at this same uniqueness.
+                                                    view.AddField(table.Name, table.Type, tableField, field.Name);
                                                 }
                                                 else
                                                 {
