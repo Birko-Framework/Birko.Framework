@@ -316,6 +316,58 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     reserved words (`Order`, `User`). Measured: `CREATE TABLE "T" (Order text)` is already a syntax error, so
     such a model cannot have its table created at all and there is no working case to break. A risk that
     cannot be realised should be measured away, not mitigated.
+- **A qualifier resolves against a bare ALIAS, not against a quoted table — and that is what makes the rule
+  above total instead of per-sink.** Fifth instance of the identifier family (TASK-211), and the one that
+  showed the previous four were the visible corner of it. Every read this framework builds qualifies its
+  columns — `Table.Column` from `GetSelectFields(withName: true)` for the projection, from
+  `ResolveColumnName(…, withTableName: true)` for the `WHERE`, and the same for `GROUP BY` / `ORDER BY` /
+  a join's `ON` — while `FROM` quoted its table. On PostgreSQL the bare qualifier folds and the quoted
+  relation does not, so **every read of every PascalCase-named entity returned zero rows, silently**: not
+  views, *everything*, `Read()` included, reaching consumer Symbio through
+  `TimescaleDBConnector : PostgreSQLConnector`. `CreateSelectCommand` now emits
+  **`FROM "Widgets" AS Widgets`** — quoted relation, bare alias — via `SelectTableReference`. Three parts
+  generalise:
+  - **Fix it where the identifier is RESOLVED, not at each producer, when the producers are open-ended.**
+    TASK-209 could thread a `quoteTable` delegate because the view DDL has one metadata-driven producer.
+    The read path does not: a qualifier can arrive function-wrapped (`LOWER(T.Col)`, `COALESCE`, the `.Date`
+    rewrite), so quoting each producer means enumerating them, and **a producer missed is the identical
+    silent empty result** — which is exactly how this survived four previous tasks in the same family. One
+    alias makes every qualifier correct by construction, including the ones nobody has written yet. It also
+    keeps `ParseConditionExpression` provider-independent (§ TASK-137's rule), which the alternative would
+    not: the parser has no connector and must not acquire one.
+  - **Never quote the alias.** A quoted alias is case-sensitive again and the bare qualifiers stop matching
+    it — the fix would silently undo itself. And a name that cannot take a bare alias (spaces, punctuation,
+    a reserved word) is emitted **unaliased**, because such a table already cannot be read through a
+    qualified SELECT on any provider (measured: `SELECT Order.Guid FROM "Order"` is a syntax error with or
+    without the alias) while an unqualified `SELECT COUNT(*)` over it works today and must keep working.
+  - **This does NOT reach writes, and the alias does not port there.** `DELETE FROM "T" WHERE T.Col = $1`
+    fails identically on PostgreSQL, but MSSql rejects `DELETE FROM t AS a`, so the write path needs its own
+    mechanism (TASK-216). It is also the *loud* half — the missing-FROM-clause wording is not the
+    missing-relation wording, so it throws rather than swallowing. Two failure modes, one root cause; fix
+    them separately and say which is which.
+- **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
+  be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
+  whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
+  instead of faulting, and every provider had widened it past its own name: PostgreSQL accepted **any**
+  `42P01` — which is also *"missing FROM-clause entry for table x"*, an error about the **statement**, where
+  the relation exists perfectly well — plus a bare `Message.Contains("does not exist")` that additionally
+  covered undefined column (measured: `SELECT NoSuchColumn FROM "T"` → empty, no exception), function and
+  type; MySQL had the same shape via `"doesn't exist"`. **The swallow hid the very defect that produced the
+  error it swallowed.** Now the SQLSTATE is the primary key and the message separates only the two shapes
+  that share `42P01`; the untyped fallback is kept (it is a shipped contract with tests) but narrowed to the
+  provider's *relation* / *table* wording. Three things travel with this:
+  - **The legitimate case is a genuinely absent relation** — lazy create-on-first-use and view-existence
+    probing (CR-M149) depend on it, so narrowing must not close that door; it has its own test, and it is a
+    **contract pin that passes either way**, which is what a guard's opt-out test is for.
+  - **`OnException` is the same decision wearing different clothes.** PostgreSQL's and MySQL's handlers ran
+    `DoInit()` and **returned** on the same substring, i.e. reported success for a statement that never ran —
+    that is what let `CreateView` swallow `42P01` and report success (TASK-209). Both now call the reader's
+    own predicate, so the two cannot disagree about what "the table is missing" means. **One producer**, the
+    same rule as the entries above, applied to a classification instead of to a name.
+  - **A narrowing will break tests that assert the wide behaviour, and those are the interesting ones.**
+    Two suites failed on exactly the removed catch-all. The fix was not to restore it but to ask what signal
+    the message actually carries: `relation "x" does not exist` names a *relation*, so requiring that word
+    keeps the fallback and excludes column/function/type. **Narrow on the signal, don't delete the seam.**
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
@@ -432,6 +484,53 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Every read on PostgreSQL returned zero rows, and the swallow hid the bug that caused it (2026-08-15)
+
+TASK-211, filed by TASK-209 as "on-the-fly views are broken". They were — and the measurement that confirmed
+it also showed the premise was two orders of magnitude too small. The task named *multi-table joined*
+SELECTs as the residue; the emitter qualifies **unconditionally**, so verbatim from the server:
+
+```sql
+SELECT OfPersons.Name, OfPersons.Guid FROM "OfPersons"
+-- ERROR: missing FROM-clause entry for table "ofpersons" at character 8
+```
+
+Every SQL store read funnels through that builder, so on PostgreSQL **every read of every entity whose table
+name is not already all-lower-case returned zero rows, silently** — `Read()`, `ReadFirst()`, filtered,
+unfiltered — and `TimescaleDBConnector : PostgreSQLConnector`, so it reached consumer Symbio. The fix is
+`FROM "Widgets" AS Widgets`: quoted relation, bare alias, one site, every qualifier correct by construction.
+The second half is the swallow that made it invisible — `IsMissingTableException` accepted any `42P01`
+(*missing FROM-clause entry* shares that SQLSTATE with *relation does not exist*) plus a
+`Contains("does not exist")` catch-all that also covered undefined **columns**. Both standing rules are in
+§ Conventions above. Split: **5 of 16** live PostgreSQL, **7 of 538** offline across three suites; 23 SQL
+suites green. Five things worth carrying:
+
+- **⚠ Consumers: reads that returned nothing on PostgreSQL will now return rows.** No API changed and no
+  behaviour that ever worked is altered — but code written around "this query is always empty" on
+  PostgreSQL/TimescaleDB will start seeing data, and a rejected statement that used to read as an empty
+  result now **throws** (an undefined column, function or type; a genuinely missing table still reads empty).
+- **The filed defect was real, correctly diagnosed, and one twentieth of the actual blast radius.** TASK-209
+  wrote the scope note from reading the emitter and got "multi-table" from the join it happened to be looking
+  at. One probe against a single-table read moved this from a view bug to a framework-wide one. **When a
+  residue is filed from reading rather than running, re-measure its boundary before costing it** — the
+  seventh time in a month a written remedy needed re-costing, and the first where the correction made the
+  task *bigger*.
+- **The choice of mechanism was decided by the failure mode, not by symmetry with the previous fix.**
+  TASK-209 quoted each qualifier through a `quoteTable` delegate, and copying that here looked obviously
+  right. It would have been a partial fix: the read path's qualifiers include function-wrapped ones
+  (`LOWER(T.Col)`, `COALESCE`, `.Date`), each a separate producer, and a missed producer reproduces the
+  identical silent empty result. An alias is one site and cannot be partial. **When the failure mode is
+  "silently incomplete", prefer the mechanism that cannot be incomplete.**
+- **A guard that swallows an error class must be narrower than the bug it can hide.** `42P01` is *undefined
+  table*, and PostgreSQL also raises it for a statement that merely mis-references an existing table — so
+  the framework's own qualifier defect produced an error its own swallow classified as "table missing, yield
+  empty". The two halves of this task are one story: nothing was ever red because the layer that should have
+  gone red was configured to interpret the failure as an empty table.
+- **The write path was measured, found broken, and NOT fixed here.** `DELETE FROM "T" WHERE T.Col = $1` fails
+  the same way, but the alias does not port (MSSql rejects `DELETE FROM t AS a`) and writes fail *loudly*
+  rather than silently. Filed as TASK-216 with its evidence, and the test that measured it was **removed
+  rather than left asserting the broken behaviour** (the TASK-111 precedent).
 
 ### A computed operand inside `Contains` was answered by a different predicate (2026-08-14)
 
