@@ -270,6 +270,11 @@ namespace Birko.Data.MongoDB.Stores
             // SH-M023: this override bypasses AbstractBulkStore's guard, so it repeats it. A null filter
             // reaches the driver as an empty predicate — DeleteMany over the whole collection.
             RequireFilter(filter, "delete");
+            // TASK-212: the filter is present but may still cover everything. The driver renders
+            // `!empty.Contains(x.F)` as `{ "F": { "$nin": [] } }` — a one-element document that
+            // matches every document while looking like an ordinary predicate, so no guard on the
+            // emitted query can see it. Checked here, on the expression, where the intent is plain.
+            RequireBoundedFilter(filter, "delete");
             if (Collection == null) return;
 
             if (TransactionContext != null)
@@ -283,6 +288,11 @@ namespace Birko.Data.MongoDB.Stores
         {
             // SH-M023 — see Delete.
             RequireFilter(filter, "update");
+            // TASK-212: the filter is present but may still cover everything. The driver renders
+            // `!empty.Contains(x.F)` as `{ "F": { "$nin": [] } }` — a one-element document that
+            // matches every document while looking like an ordinary predicate, so no guard on the
+            // emitted query can see it. Checked here, on the expression, where the intent is plain.
+            RequireBoundedFilter(filter, "update");
             if (Collection == null || updates.Assignments.Count == 0) return;
 
             var updateDefs = new List<UpdateDefinition<T>>();
