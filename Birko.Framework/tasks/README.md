@@ -13,10 +13,10 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 58                  |
+| done         | 1                  | 22                 | 59                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 27 · P2 83 · P3 6**
+Todo by priority: **P0 0 · P1 26 · P2 84 · P3 6**
 
 > Recounted 2026-08-15 from the tree, not incremented from the previous numbers — which were wrong in both
 > directions (`done` 44 vs 58, `review` 8 vs 10) because they had been hand-adjusted by arithmetic on
@@ -42,17 +42,16 @@ Todo by priority: **P0 0 · P1 27 · P2 83 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-216](_loose/TASK-216-filtered-writes-qualify-the-where-and-break-on-postgresql.md) A filtered
-  DELETE/UPDATE qualifies its `WHERE` with a bare table name, so every filtered write fails on PostgreSQL
-  (P1, ai) — spawned by TASK-211, which fixed the read half; loud rather than silent, which is why it ranks
-  below the reads did
 - [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md)
   A model deriving `MongoDBModel` cannot be serialized by the driver at all (P1, ai)
 - [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay
   duplicates a create (P1, ai)
+- [TASK-217](_loose/TASK-217-update-overload-builds-its-set-list-from-every-column.md) `Update(Table, values,
+  conditions)` builds its SET list from every column, so a partial update cannot work (P2, ai) — spawned by
+  TASK-216; loud on every provider and loses no data, which is why it ranks below the two above
 
-The previous three entries here (TASK-129, TASK-137, TASK-141) all closed 2026-08-12…14 and were left
-standing in this file for three days — the cost of adjusting the dashboard by hand instead of regenerating.
+TASK-211 and TASK-216 both closed 2026-08-15 — the PostgreSQL identifier pair — and are off this list.
+TASK-216's own close spawned TASK-217, which is why the tail of the list moved rather than shortened.
 
 TASK-111 closed 2026-08-12 — it was taken **ahead of** TASK-117, departing from this list's previous order.
 Two reasons, recorded because the departure should be visible: an injection sink outranks a destructive

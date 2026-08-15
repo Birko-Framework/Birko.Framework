@@ -340,11 +340,29 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     a reserved word) is emitted **unaliased**, because such a table already cannot be read through a
     qualified SELECT on any provider (measured: `SELECT Order.Guid FROM "Order"` is a syntax error with or
     without the alias) while an unqualified `SELECT COUNT(*)` over it works today and must keep working.
-  - **This does NOT reach writes, and the alias does not port there.** `DELETE FROM "T" WHERE T.Col = $1`
-    fails identically on PostgreSQL, but MSSql rejects `DELETE FROM t AS a`, so the write path needs its own
-    mechanism (TASK-216). It is also the *loud* half — the missing-FROM-clause wording is not the
-    missing-relation wording, so it throws rather than swallowing. Two failure modes, one root cause; fix
-    them separately and say which is which.
+  - **A write drops the qualifier instead, because it can.** `DELETE FROM "T" WHERE T.Col = $1` failed
+    identically on PostgreSQL, but the alias does not port — MSSql rejects `DELETE FROM t AS a` — so
+    `AddRequiredWhere` strips the target table's qualifier (`StripTargetTableQualifier`, TASK-216) and emits
+    `WHERE Col = $1`. A write targets exactly **one** table, so the qualifier carries no information there
+    and a bare column cannot be ambiguous. Quoting it instead would have made the write path the only place
+    a *qualifier* is quoted while reads resolve theirs against a bare alias — two conventions for one thing,
+    which is the shape this family keeps arriving in. **One invariant now holds framework-wide: a qualifier
+    is only ever emitted where a bare alias introduces it.** Three parts generalise:
+    - **`AddRequiredWhere` is the funnel, and that it has exactly four callers — all writes — is why the fix
+      is four lines.** Reads use `AddWhere`. Before inventing plumbing, check whether the parameter you need
+      (here the target `tableName`) is already being passed to a method only the affected paths call.
+    - **Rewrite the rendered clause, never the caller's `Condition` objects.** A qualifier arrives
+      function-wrapped — `LOWER(T.Col)`, `COALESCE(T.A, T.B)`, and the `.Date` rewrite's
+      `(T.Seen >= @a AND T.Seen < @b)`, all measured — so per-name rewriting misses exactly the shapes a
+      partial fix always misses; and this file has been bitten three times by writing to a caller-owned
+      object (CR-M168, TASK-113).
+    - **Guard the left edge of a textual identifier rewrite.** With target `Person`, a naive replace of
+      `Person.` turns a *different* table's `MyPerson.Col` into `MyCol` — a column that does not exist, i.e.
+      a silently wrong statement instead of a loud one. `(?<![A-Za-z0-9_."])` is the guard, and it has its
+      own test. Check the parameter names too before choosing a textual rewrite:
+      `SqlBuilderContext.GenerateParameterName` sanitizes with `[^a-zA-Z0-9_]`, so `@WHEREPersonName0_0`
+      carries no `Person.` to strip — had it kept the dot, this approach would have broken every
+      parameterized filter.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
@@ -484,3 +502,36 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The write half: a filtered DELETE/UPDATE drops the qualifier the read path aliases (2026-08-15)
+
+TASK-216, spawned by TASK-211 rather than absorbed into it, because the mechanism is shared but the fix is
+not. `ResolveColumnName(…, withTableName: true)` qualifies every condition name while a write quotes its
+target table, so on PostgreSQL every filtered `Delete`/`Update` on a PascalCase entity failed:
+
+```sql
+DELETE FROM "FwPeople" WHERE FwPeople.Name = $1
+-- ERROR: missing FROM-clause entry for table "fwpeople"
+```
+
+Fixed by **stripping** the target table's qualifier in `AddRequiredWhere` — not by quoting it and not by
+aliasing (MSSql rejects `DELETE FROM t AS a`). The standing rule is in § Conventions above. Split: **4 of 22**
+live PostgreSQL, **3 of 500** offline; 23 SQL suites green. Four things worth carrying:
+
+- **Unlike the read half this was loud, and that is the whole reason it was a separate task.** The
+  missing-FROM wording is not the missing-relation wording, so it threw rather than being swallowed. Same
+  root cause, opposite failure mode — worth separating, because severity follows the failure mode, not the
+  cause.
+- **The reproduction found all four shapes at once, including both function-wrapped ones.** `LOWER(T.Col)`
+  and the `.Date` rewrite's `(T.Seen >= @a AND T.Seen < @b)` are the shapes a per-condition-name rewrite
+  misses, and they were in the first run because the probes were written to include them *before* choosing
+  the mechanism. Design the reproduction against the fix you might get wrong, not the one you expect.
+- **Two of the six probes passed immediately, and both were worth writing.** `SelectCount` goes through
+  `CreateSelectCommand`, so TASK-211's alias already covered it — the task's acceptance asked whether a
+  fourth sink existed, and measuring answered *no* instead of leaving it to be rediscovered. The other pins
+  the whole-table write guard, which the rewrite runs after.
+- **The regression test found a second, unrelated defect and it was filed, not asserted.** The obvious
+  `Update(Table, values, conditions)` overload builds its SET list from **every** column while binding only
+  the caller's subset, so a partial update emits unbound placeholders. Measured on both providers before
+  filing (loud on each; SQLite leaves the row unchanged) — the initial guess, that unbound would bind NULL
+  and silently blank the other columns, was wrong and would have justified a much larger fix. TASK-217.
