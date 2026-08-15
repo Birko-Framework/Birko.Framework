@@ -157,6 +157,39 @@ namespace Birko.Data.Stores
             }
         }
 
+        /// <summary>
+        /// Refuses a filter-based destructive operation whose predicate constrains **nothing**, unless every
+        /// row was asked for explicitly. The scope companion to <see cref="RequireFilter"/>: that one catches
+        /// a filter that is missing, this one a filter that is present and covers everything anyway.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>TASK-212.</b> For a backend that hands the raw <see cref="Expression"/> to a driver, a
+        /// guard on the emitted query cannot see this. Measured on MongoDB.Driver 3.2.0,
+        /// <c>x =&gt; !empty.Contains(x.Field)</c> renders <c>{ "Field": { "$nin": [] } }</c> — a one-element
+        /// document indistinguishable by inspection from an ordinary predicate, while matching every document.
+        /// That is the same shape as the SQL side's <c>1 = 1</c>, which satisfied a guard testing whether
+        /// anything had been rendered (TASK-137). Both say the same thing: <b>test what the operation means,
+        /// not whether output was produced.</b></para>
+        /// <para>The refusal is <see cref="Data.Exceptions.WholeTableWriteException"/> — the same type the SQL
+        /// connectors throw — so one <c>catch</c> selects the refusal on every backend. It names the
+        /// deliberate door, which exists on this very class and is inherited by every store that reaches
+        /// here.</para>
+        /// <para><b>An explicit <c>x =&gt; true</c> is NOT refused.</b> It is the documented synonym for
+        /// <c>DeleteAll()</c> / <c>UpdateAll()</c>, checked first so the guard has a door rather than being a
+        /// wall (§ SH-H037). Only a predicate that *happens* to cover everything is refused.</para>
+        /// <para>Call it from any override that bypasses this class's own wrappers — the sweep behind SH-M023
+        /// found ten such overrides across three backends, so the guard has to be reachable, not implicit.</para>
+        /// </remarks>
+        protected static void RequireBoundedFilter(Expression<Func<T, bool>>? filter, string operation)
+        {
+            if (filter == null) return;                   // RequireFilter owns the null case.
+            if (Data.Expressions.PredicateScope.IsExplicitAllRows(filter)) return;
+            if (!Data.Expressions.PredicateScope.ReducesToAllRows(filter)) return;
+
+            throw new Data.Exceptions.WholeTableWriteException(
+                operation, typeof(T).Name, "every stored entity of that type");
+        }
+
 
         #endregion
     }

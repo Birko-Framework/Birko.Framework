@@ -198,6 +198,17 @@ namespace Birko.Data.Stores
             }
         }
 
+        /// <inheritdoc cref="AbstractBulkStore{T}.RequireBoundedFilter(Expression{Func{T, bool}}, string)"/>
+        protected static void RequireBoundedFilter(Expression<Func<T, bool>>? filter, string operation)
+        {
+            if (filter == null) return;                   // RequireFilter owns the null case.
+            if (Data.Expressions.PredicateScope.IsExplicitAllRows(filter)) return;
+            if (!Data.Expressions.PredicateScope.ReducesToAllRows(filter)) return;
+
+            throw new Data.Exceptions.WholeTableWriteException(
+                operation, typeof(T).Name, "every stored entity of that type");
+        }
+
 
         #endregion
     }
