@@ -301,9 +301,14 @@ public class EmptyNotInReductionTests
     public void ARealTermBesideAnAlwaysTrueTerm_IsNotRefused()
     {
         // The reduction must not make a bounded delete look unbounded.
+        //
+        // Asserted on the surviving TERM rather than on its qualified spelling. TASK-216 drops the target
+        // table's qualifier from a write's WHERE (`Widgets.Count` → `Count`) — a write targets exactly one
+        // table, and the bare qualifier matched nothing on PostgreSQL. What this test is about is that the
+        // real term is still there, which is independent of how the column is spelled.
         var command = Destructive(new[] { Group(isOr: false, isNot: false, Real(), EmptyNotIn()) });
 
-        command.CommandText.Should().Contain("WHERE Widgets.Count > ");
+        command.CommandText.Should().Contain("WHERE Count > ");
     }
 
     // ── the shared verdict: one producer for the guard and the renderer ──────────────────────────────────
