@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
@@ -12,9 +12,11 @@
   <ItemGroup>
     <!-- Exceptions -->
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\StoreException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\WholeTableWriteException.cs" />
     <!-- Expressions -->
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionParameterReplacer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionNormalizer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\PredicateScope.cs" />
     <!-- Filters -->
     <Compile Include="$(MSBuildThisFileDirectory)Filters\IFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByGuid.cs" />
