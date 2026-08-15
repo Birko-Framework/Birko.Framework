@@ -28,10 +28,22 @@ public class PostgreSQLConnectorTests
 
     // CR-L176: the missing-table seam recognizes PostgreSQL's 'relation "x" does not exist' wording
     // (plus the inherited SQLite base match) so a reader over a missing table yields empty, not a fault.
+    //
+    // TASK-211 narrowed it. This seam decides whether the reader answers an error with an EMPTY RESULT,
+    // which is a wrong answer rather than a failure, so everything it accepts had better really be a
+    // missing table. It used to accept any message containing "does not exist" — which is also how
+    // PostgreSQL phrases a missing COLUMN, function, type and object.
     [Theory]
     [InlineData("relation \"widgets\" does not exist", true)]
     [InlineData("no such table: widgets", true)]
     [InlineData("some other error", false)]
+    // ── the shapes the old catch-all wrongly swallowed ──
+    [InlineData("column \"Name\" does not exist", false)]
+    [InlineData("function lower(integer) does not exist", false)]
+    [InlineData("type \"foo\" does not exist", false)]
+    // 42P01's OTHER message. The relation exists; the STATEMENT is wrong — and this is the exact error
+    // the framework's own qualifier defect produced, so the swallow hid the bug that produced it.
+    [InlineData("missing FROM-clause entry for table \"widgets\"", false)]
     public void IsMissingTableException_matches_postgres_and_base_wording(string message, bool expected)
     {
         NewConnector().IsMissingTableException(new Exception(message)).Should().Be(expected);
