@@ -9,23 +9,19 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 113                 |
+| todo         | —                  | —                  | 116                 |
 | in-progress  | 6                  | 10                 | 1                   |
-| review       | —                  | —                  | 8                   |
+| review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 44                  |
+| done         | 1                  | 22                 | 58                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 81 · P3 6**
+Todo by priority: **P0 0 · P1 27 · P2 83 · P3 6**
 
-> Counts hand-adjusted 2026-08-12 for TASK-117 (`todo → done`) and the TASK-206 it spawned (new `todo`) —
-> the two cancel out in the todo total and shift one row from P1 to P2. Adjusted rather than regenerated
-> because the `Next up` section below carries hand-written ranking rationale a regen would discard; a full
-> `/tasks triage` is still owed.
->
-> The done column was **two** behind, not one: EPIC-014 measures 13 done · 1 review · 49 todo, so TASK-111
-> (closed earlier today) had not been rolled up either. Counted rather than incremented, which is why the gap
-> showed — a dashboard adjusted by arithmetic on its own stale numbers stays stale.
+> Recounted 2026-08-15 from the tree, not incremented from the previous numbers — which were wrong in both
+> directions (`done` 44 vs 58, `review` 8 vs 10) because they had been hand-adjusted by arithmetic on
+> themselves since 2026-08-09. A dashboard adjusted from its own stale figures stays stale; that note has
+> now been written twice, so the next maintenance pass should just run the full `/tasks triage`.
 
 ## In progress now
 
@@ -46,9 +42,17 @@ Todo by priority: **P0 0 · P1 26 · P2 81 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias (P1, ai) — self-reporting, so it ranks below the silent ones
-- [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2, ai) — coverage debt on a shipped destructive-write guard, assertable offline
-- [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders an injection lookalike (P2, ai)
+- [TASK-216](_loose/TASK-216-filtered-writes-qualify-the-where-and-break-on-postgresql.md) A filtered
+  DELETE/UPDATE qualifies its `WHERE` with a bare table name, so every filtered write fails on PostgreSQL
+  (P1, ai) — spawned by TASK-211, which fixed the read half; loud rather than silent, which is why it ranks
+  below the reads did
+- [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md)
+  A model deriving `MongoDBModel` cannot be serialized by the driver at all (P1, ai)
+- [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay
+  duplicates a create (P1, ai)
+
+The previous three entries here (TASK-129, TASK-137, TASK-141) all closed 2026-08-12…14 and were left
+standing in this file for three days — the cost of adjusting the dashboard by hand instead of regenerating.
 
 TASK-111 closed 2026-08-12 — it was taken **ahead of** TASK-117, departing from this list's previous order.
 Two reasons, recorded because the departure should be visible: an injection sink outranks a destructive
