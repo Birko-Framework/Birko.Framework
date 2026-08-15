@@ -63,11 +63,29 @@ namespace Birko.Data.SQL.Connectors
         /// MySQL phrases a missing table as "Table 'x' doesn't exist" (error 1146). Adds that to the base
         /// SQLite match so the reader yields an empty result rather than faulting.
         /// </summary>
+        /// <remarks>
+        /// TASK-211 dropped the bare <c>Message.Contains("doesn't exist")</c> catch-all that sat behind the
+        /// error-code test. MySQL uses that phrasing for more than a missing table — <c>1054 Unknown column</c>
+        /// aside, a missing routine reads <c>FUNCTION x doesn't exist</c> — and a reader that answers "no rows"
+        /// to any of them turns an error into a plausible wrong answer. <c>1146 ER_NO_SUCH_TABLE</c> is the
+        /// signal; the chain is walked because the driver wraps in some paths.
+        /// </remarks>
         public override bool IsMissingTableException(Exception ex)
         {
             if (base.IsMissingTableException(ex)) return true;
-            if (ex is MySqlException mysqlEx && (int)mysqlEx.ErrorCode == 1146) return true;
-            return ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase);
+
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is MySqlException mysqlEx) return (int)mysqlEx.ErrorCode == 1146;
+            }
+
+            // "Table 'db.widgets' doesn't exist" — the missing-TABLE wording, kept as the untyped fallback.
+            // A missing routine reads "FUNCTION db.f does not exist", so requiring "table" is what separates
+            // the error this may swallow from the ones it may not. (CR-L183 removed this pair from the
+            // OnException handler as dead code — it was, THERE, because of `&&`/`||` precedence. Here it is
+            // the whole test.)
+            return ex.Message.Contains("table", StringComparison.OrdinalIgnoreCase)
+                && ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase);
         }
 
         private void MySQLConnector_OnException(Exception ex, string? commandText)
@@ -75,7 +93,11 @@ namespace Birko.Data.SQL.Connectors
             // The second operand — `Message.Contains("Table") && Message.Contains("doesn't exist")` — was
             // dead: && binds tighter than ||, so it can only be true when the first operand is already
             // true. Reduced to the single meaningful check (CR-L183).
-            if (!IsInitializing && ex.Message.Contains("doesn't exist"))
+            //
+            // TASK-211: and that single check was still a message substring, so any "doesn't exist" error ran
+            // DoInit() and RETURNED — reporting success for a statement that never ran. Now the same typed
+            // test the reader uses, so the two cannot disagree about what "the table is missing" means.
+            if (!IsInitializing && IsMissingTableException(ex))
             {
                 DoInit();
             }
