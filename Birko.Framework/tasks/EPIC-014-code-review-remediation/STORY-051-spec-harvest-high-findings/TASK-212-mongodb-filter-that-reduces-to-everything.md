@@ -275,6 +275,31 @@ one C# language/runtime change has quietly reshaped this family's expression han
   carries a short cross-reference to where the behaviour is actually specced, rather than leaving a new public
   class with no spec presence.
 
+### Follow-up landed after close — the duplication this task introduced (98c0a74)
+
+The close left **two identical implementations of `IsExplicitAllRows`** — `DataBase.IsExplicitAllRows`
+(Birko.Data.SQL) and `PredicateScope.IsExplicitAllRows` (Birko.Data.Core) — same signature, same
+`LambdaExpression` input, same normalizer call, same body. The second appeared because
+`Birko.Data.Stores` cannot see the first; consolidating was considered during the work and dropped to avoid
+widening the blast radius mid-task, **and then not written down**, which is how it survived the merge gate.
+
+Worse than the usual duplication because **both copies feed destructive guards**: the SQL funnels ask one
+whether a whole-table DELETE was deliberate, `RequireBoundedFilter` asks the other. Two definitions of the
+deliberate door, free to drift, on the paths where drift destroys data — exactly what § Conventions'
+one-producer rule is for, and cited three times in this very task file while the tree was left in the state
+it warns about.
+
+`DataBase.IsExplicitAllRows` now forwards to `PredicateScope.IsExplicitAllRows`. The public overload stays
+(public API, and it reads naturally beside the SQL filter surface) but holds no logic. Behaviour unchanged:
+the 8 `IsExplicitAllRows` cases in `DestructiveFilterGuardTests` exercise the delegation, and 484 + 194 + 48
++ 69 plus nine further SQL-touching suites are green.
+
+**Not consolidated, and deliberately so:** `AbstractConnectorBase.IsAlwaysTrueCondition` (parsed SQL
+condition tree, post-translation) and `PredicateScope.ReducesToAllRows` (LINQ expression, pre-translation)
+encode the same *algebra* over different inputs and neither can do the other's job. That remains a
+maintenance hazard — a new "means everything" shape must be taught to both — and is recorded here rather
+than papered over.
+
 ## Progress log
 
 - step 2 — picked; ranked above the 45 per-area triage batches on severity key 1 (an unguarded
@@ -310,3 +335,4 @@ one C# language/runtime change has quietly reshaped this family's expression han
   and pins named in § Outcome, including why the "is NOT refused" half cannot witness revert (a) by
   construction.
 - step 8 — closed done; production 189b119 (Core) / 71001d4 (SQL) / e37bebf (Stores) / 7c66862 (MongoDB), tests 4242ed5 + 719e160.
+- step 8 (follow-up) — consolidated the duplicate `IsExplicitAllRows`; 98c0a74.
