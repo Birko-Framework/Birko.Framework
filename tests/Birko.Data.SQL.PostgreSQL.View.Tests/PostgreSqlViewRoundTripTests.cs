@@ -50,13 +50,11 @@ namespace Birko.Data.SQL.PostgreSQL.View.Tests;
 ///
 /// <para>
 /// <b>Scope, stated so a green run is not read as more than it is.</b> These cover the <b>persistent</b>
-/// path. The <b>on-the-fly</b> path is still broken on PostgreSQL by the same qualifier mechanism through a
-/// different builder (<c>AbstractConnector_CreateSelectCommand</c>, which emits
-/// <c>SELECT PgPersons.Name … FROM "PgOrders" INNER JOIN "PgPersons" ON (PgOrders.PersonId = …)</c> and
-/// draws <c>ERROR: missing FROM-clause entry for table "pgorders"</c>) — and the framework <b>swallows</b>
-/// that error and returns an empty result rather than throwing. Measured here; filed as TASK-211. No test
-/// in this file asserts the on-the-fly path, because the only assertion available today would encode the
-/// broken behaviour.
+/// path. The <b>on-the-fly</b> path — and, as it turned out, every ordinary entity read — was broken by the
+/// same qualifier mechanism through a different builder, and is closed by TASK-211 with executing
+/// assertions in <see cref="PostgreSqlOnTheFlyViewTests"/>. Filtered <b>writes</b> are still broken by that
+/// mechanism (<c>DELETE FROM "T" WHERE T.Col = $1</c>); they fail loudly rather than silently and need a
+/// different fix, filed as TASK-216.
 /// </para>
 ///
 /// <para>
