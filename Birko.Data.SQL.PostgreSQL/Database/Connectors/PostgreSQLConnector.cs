@@ -63,17 +63,71 @@ namespace Birko.Data.SQL.Connectors
         /// <summary>
         /// PostgreSQL phrases a missing table/relation as 'relation "x" does not exist' (SQLSTATE 42P01).
         /// Adds that to the base SQLite match so the reader yields an empty result rather than faulting.
+        /// <para>
+        /// <b>TASK-211 narrowed this on both axes, because a reader that answers "no rows" to an error is
+        /// a wrong answer, not a degraded one.</b> It used to accept any <c>42P01</c> plus a bare
+        /// <c>Message.Contains("does not exist")</c>. Both are wider than the name:
+        /// </para>
+        /// <list type="bullet">
+        /// <item><c>42P01</c> (<i>undefined_table</i>) is also what PostgreSQL raises for
+        /// <c>missing FROM-clause entry for table "x"</c> — an error about the STATEMENT, where the relation
+        /// exists perfectly well. That is the exact error the framework's own qualifier defect produced, so
+        /// the swallow hid the bug that produced it.</item>
+        /// <item>the message catch-all additionally covered <c>42703</c> undefined <b>column</b>,
+        /// <c>42883</c> undefined function and <c>42704</c> undefined object. Measured on 16.4:
+        /// <c>SELECT NoSuchColumn FROM "OfPersons"</c> returned an empty result with no exception.</item>
+        /// </list>
+        /// <para>
+        /// Now: the SQLSTATE is the primary key, and the message is consulted <b>only</b> to separate the two
+        /// shapes that share <c>42P01</c>. The one case this is entitled to swallow — a relation that
+        /// genuinely does not exist — still does, which the lazy create-on-first-use path and view-existence
+        /// probing (CR-M149) depend on. The untyped fallback is kept for an exception that reaches here
+        /// carrying only the wording (nothing in the framework produces one — <c>InitException</c> wraps and
+        /// preserves the inner <see cref="PostgresException"/> — but it is a shipped contract with tests on
+        /// it), narrowed from "does not exist" to PostgreSQL's <b>relation</b> phrasing, which is what makes
+        /// it a missing-table signal rather than a missing-anything one.
+        /// </para>
         /// </summary>
         public override bool IsMissingTableException(Exception ex)
         {
             if (base.IsMissingTableException(ex)) return true;
-            if (ex is PostgresException pgEx && pgEx.SqlState == "42P01") return true;
-            return ex.Message.Contains("does not exist", StringComparison.OrdinalIgnoreCase);
+
+            var pgEx = FindPostgresException(ex);
+            if (pgEx != null)
+            {
+                return pgEx.SqlState == "42P01"
+                    && pgEx.MessageText.Contains("does not exist", StringComparison.OrdinalIgnoreCase);
+            }
+
+            // 'relation "x" does not exist' — the missing-TABLE wording. A missing column reads
+            // 'column "x" does not exist' and a missing function 'function x(...) does not exist', so
+            // requiring "relation" is what separates the error this may swallow from the ones it may not.
+            return ex.Message.Contains("relation", StringComparison.OrdinalIgnoreCase)
+                && ex.Message.Contains("does not exist", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// The <see cref="PostgresException"/> in an exception chain, if any. Npgsql wraps in some paths, and
+        /// the message-substring test this replaced matched a wrapped exception by accident; walking the
+        /// chain keeps that reachability without the false positives.
+        /// </summary>
+        private static PostgresException? FindPostgresException(Exception? ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is PostgresException pgEx) return pgEx;
+            }
+            return null;
         }
 
         private void PostgreSQLConnector_OnException(Exception ex, string? commandText)
         {
-            if (!IsInitializing && ex.Message.Contains("does not exist"))
+            // TASK-211: the same narrowing, and for the same reason. This handler swallowed ANY message
+            // containing "does not exist" — it called DoInit() and RETURNED, so the caller was told the
+            // statement had succeeded. That is what let `CreateView` report success while creating nothing
+            // (measured by TASK-209, whose first regression test passed against the unfixed code because of
+            // it). Only a genuinely missing relation is a reason to run the lazy init and continue.
+            if (!IsInitializing && IsMissingTableException(ex))
             {
                 DoInit();
             }
