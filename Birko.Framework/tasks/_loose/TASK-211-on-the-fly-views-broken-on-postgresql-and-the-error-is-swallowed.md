@@ -3,7 +3,7 @@ id: TASK-211
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-14
@@ -133,7 +133,7 @@ into a *thrown exception*. The two halves have to ship together.
       on MSSql, and they fail loudly rather than silently
 - [x] Red-verified; split as numbers, contract pins named as pins
 - [x] Full SQL suite sweep (TASK-209 touched 13 suites; the same set applies) — **23 suites, all green**
-- [ ] `/specs regen views-and-aggregation` — **retargeted**: no file this task changed is in that area's
+- [x] `/specs regen views-and-aggregation` — **retargeted**: no file this task changed is in that area's
       globs. All three (`AbstractConnectorBase.cs`, `PostgreSQLConnector.cs`, `MySQLConnector.cs`) are in
       **`filter-expression-translation`**, which is what needs regenerating; `views-and-aggregation` is
       affected behaviourally (the on-the-fly read now works on a folding provider) with no source change,
@@ -173,8 +173,11 @@ the *relation* / *table* wording.
 `A_filtered_single_table_select_returns_rows_on_postgresql`,
 `A_plain_multi_table_select_returns_rows_on_postgresql`,
 `A_select_the_server_rejects_throws_instead_of_returning_an_empty_result`.
-Offline: **7 of 538** across three suites (3 alias-shape in `SelectTableAliasTests`, 3 PostgreSQL and 1
+Offline: **7 of 542** across three suites (3 alias-shape in `SelectTableAliasTests`, 3 PostgreSQL and 1
 MySQL swallow-narrowing cases). Green after restore: 16/16 live, 23 SQL suites offline.
+**Re-derived at the close gate**, after the security pass added four injection-payload cases and the
+correctness pass changed the PostgreSQL predicate — the earlier "7 of 538" expired the moment the suite
+changed, which is the standing rule.
 
 **Contract pins, named as pins.** `A_genuinely_missing_table_still_reads_as_an_empty_result` passes either
 way — that is its job: it guards the opt-out the narrowing must not close (§ SH-H037's rule that a guard's
@@ -289,3 +292,17 @@ built by reading the emitters, not a costing.
   for why) and the `/tasks close` gate itself (verify-conventions + code-review). Status stays
   `in-progress` rather than `review`: `## Human test plan` is `N/A`, so there is no human step to be waiting
   on, and `review` would misreport what is outstanding.
+- step 8 — close gate. `verify-conventions` (project-local): clean; no CS8xxx (0 warnings), no store
+  overriding public CRUD, `Recent Updates` + § Conventions both updated in the same change
+  (register-on-introduce). Pre-existing NU1510/NU1504 packaging warnings surface in two test csprojs only
+  under `TreatWarningsAsErrors` — untouched by this task, not spawned (build hygiene, not a defect).
+  **`code-review` (inline) found a real regression in this task's own fix**: keying the missing-relation
+  test on the English "does not exist" would break lazy create-on-first-use against a PostgreSQL server
+  whose `lc_messages` is not English. Inverted so the SQLSTATE decides and the message only excludes
+  (`6f7a12f`). **`security-review` (inline)**: the alias is the one identifier this builder interpolates
+  BARE — gated on `\A[A-Za-z_][A-Za-z0-9_]*\z`, § Conventions' sanctioned fallback, and now asserted with
+  four injection payloads rather than argued (`02ba5d3` + tests). Spec: `filter-expression-translation`
+  regenerated surgically per the stable-wording rule — one new requirement for the alias, one for the
+  missing-relation seam, and the rule-field section's "the table qualifier is pre-existing and broken on
+  PostgreSQL" paragraph corrected, since it no longer is.
+- step 9 — closed `done`.

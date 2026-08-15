@@ -1,6 +1,6 @@
 ---
 area: filter-expression-translation
-generated-at: 5d6f328455d8034ad7070ba877fb9f3af0b2db57
+generated-at: 37e259da0b7569232dc11e3e684ceec451a4f881
 generated-on: 2026-08-15
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
@@ -43,6 +43,10 @@ shaped-by:
   # TASK-212 — PredicateScope.cs lands in this area's Expressions glob; its behaviour is specced in
   # bulk-filter-operations, beside the guards that consume it.
   - TASK-212
+  # TASK-211 — a SELECT's FROM/JOIN now aliases the table bare, so the bare Table.Column qualifiers every
+  # other clause emits resolve on a case-folding provider; and the missing-relation seam was narrowed so a
+  # rejected statement stops reading as an empty result.
+  - TASK-211
 shaped-by-derived: false   # see the note above: no source glob resolves in this repo, so no evidence pass
 ---
 
@@ -804,6 +808,49 @@ backticks with `` ` `` doubled; SQLite and PostgreSQL SHALL keep the default.
 - **When** an identifier is quoted
 - **Then** the base double-quote form is used
 
+### Requirement: Only a genuinely missing relation may be answered with an empty result
+
+`AbstractConnectorBase.IsMissingTableException` is the seam a reader consults to decide whether to yield an
+empty sequence instead of faulting, so it SHALL answer true only for an error meaning *the relation does
+not exist*. The base SHALL match SQLite's `no such table`; `PostgreSQLConnector` SHALL require SQLSTATE
+`42P01` and SHALL EXCLUDE the `missing FROM-clause entry` shape that shares that SQLSTATE; `MySQLConnector`
+SHALL require error `1146`; each SHALL walk the exception chain, and SHALL keep an untyped fallback
+narrowed to its own missing-**table** wording (`relation … does not exist`, `table … doesn't exist`).
+`PostgreSQLConnector_OnException` and `MySQLConnector_OnException` SHALL consult that same predicate before
+running `DoInit()` and returning, and SHALL rethrow otherwise.
+
+An error answered with an empty result is a wrong answer rather than a degraded one, so the width of this
+seam bounds what any read can silently misreport.
+
+#### Scenario: An undefined column is not a missing table
+
+- **Given** a statement selecting a column that does not exist on a table that does (SQLSTATE `42703`)
+- **When** the reader runs
+- **Then** the exception surfaces to the caller. Previously a bare `Message.Contains("does not exist")`
+  matched it — as it also matched an undefined function or type — and the read returned zero rows
+
+#### Scenario: The framework's own malformed statement is not a missing table
+
+- **Given** a statement PostgreSQL rejects with `missing FROM-clause entry for table "x"`, which carries
+  SQLSTATE `42P01` — the same code as a genuinely absent relation
+- **When** the reader runs
+- **Then** the exception surfaces. Accepting every `42P01` meant the seam classified the framework's own
+  qualifier defect as a missing table, so the bug that produced the error was hidden by the handler for it
+
+#### Scenario: A genuinely absent relation still reads as empty
+
+- **Given** a read against a table that has not been created yet
+- **When** the reader runs
+- **Then** it yields an empty sequence and no exception, and the write path's `OnException` runs `DoInit()`
+  — the lazy create-on-first-use and view-existence probing that this seam exists for
+
+#### Scenario: The positive case does not depend on the server's language
+
+- **Given** a PostgreSQL server whose `lc_messages` is not English, raising `42P01` for an absent relation
+- **When** the reader runs
+- **Then** it still yields empty, because the SQLSTATE decides and the message is only ever used to
+  **exclude** a shape — keying the positive case on English text would fault on such a server alone
+
 ### Requirement: SQL WHERE assembly and pagination
 
 `AbstractConnectorBase.AddWhere` SHALL append ` WHERE ` plus the rendered clause only when both the
@@ -838,6 +885,45 @@ nothing when `limit` is null.
 - **When** `LimitOffsetDefinition` runs
 - **Then** the fragment is ` FETCH NEXT @LIMIT ROWS ONLY` with only `@LIMIT` bound — no ` OFFSET @OFFSET ROWS` precedes it, so the statement is invalid T-SQL
 
+### Requirement: SQL table references in a SELECT carry a bare alias
+
+`AbstractConnectorBase.CreateSelectCommand` SHALL emit every `FROM` and `JOIN` table reference as the
+**quoted** table name followed by a **bare** alias equal to that name (`SelectTableReference`), and SHALL
+emit the table unaliased when its name is not a plain identifier (`\A[A-Za-z_][A-Za-z0-9_]*\z`).
+
+Every other clause this builder produces qualifies its columns with the **bare** table name — the
+projection via `Table.GetSelectFields(withName: true)`, the `WHERE` via
+`DataBase.ResolveColumnName(…, withTableName: true)`, and `GROUP BY` / `ORDER BY` / a join's `ON`
+identically. The alias is what those qualifiers resolve against: on a provider that case-folds an unquoted
+identifier the alias folds exactly as the qualifiers do, whereas the quoted relation name does not. The
+alias SHALL NOT be quoted, since a quoted alias is case-sensitive again and the bare qualifiers would stop
+matching it.
+
+#### Scenario: A single-table read resolves on a case-folding provider
+
+- **Given** an entity mapped to table `OfPersons` on PostgreSQL, whose base-table DDL stored the columns
+  folded while the table kept its PascalCase
+- **When** a read is built
+- **Then** the statement is `SELECT OfPersons.Name, OfPersons.Guid FROM "OfPersons" AS OfPersons` and it
+  returns the rows. Without the alias it was `… FROM "OfPersons"`, which PostgreSQL rejects with
+  `missing FROM-clause entry for table "ofpersons"` — and the reader then classified that error as a
+  missing table and returned an **empty result**, so every read of every entity whose table name was not
+  already all-lower-case silently returned nothing
+
+#### Scenario: A table name that cannot take a bare alias is emitted unaliased
+
+- **Given** a table named `My Table`
+- **When** the select command is built
+- **Then** the reference is `"My Table"` with no alias. Such a table cannot be read through a qualified
+  SELECT on any provider regardless, and an unqualified `SELECT COUNT(*)` over it keeps working
+
+#### Scenario: An injection payload is never aliased
+
+- **Given** a table name of `Widgets; DROP TABLE Users; --`
+- **When** the select command is built
+- **Then** no alias is emitted and the name appears only in its quoted, escaped form — the alias is
+  interpolated bare, so it is gated on the anchored identifier pattern rather than on the caller
+
 ### Requirement: SQL join condition assembly
 
 `AbstractConnectorBase.CreateSelectCommand` SHALL map `JoinType.Inner` to ` INNER JOIN `,
@@ -849,7 +935,9 @@ group whose conditions collection is empty.
 
 - **Given** a `Join` from `Invoice` to `Customer` of type `Inner` carrying one condition
 - **When** the select command is built
-- **Then** the text contains ` INNER JOIN "Customer" ON (` followed by the rendered condition
+- **Then** the text contains ` INNER JOIN "Customer" AS Customer ON (` followed by the rendered
+  condition — the joined table is aliased on the same rule as the `FROM` table, because the `ON` clause's
+  own operands are bare-qualified
 
 #### Scenario: Conditionless join is dropped
 
@@ -940,10 +1028,11 @@ field (and, on the type-aware path, the entity type). A null `rule`/`ruleSet`/`e
 The resolved **column** identifier SHALL NOT be quoted, for the same reason recorded for the ORDER BY sink:
 this codebase emits column identifiers bare everywhere and quotes only table names, so quoting would break
 a working filter on PostgreSQL, where an unquoted DDL identifier folds to lower case. The **table
-qualifier** is a separate matter and that rationale does not extend to it — the emitted `Table.Column`
-leaves the table part unquoted while the `FROM` clause quotes it, which breaks a non-lower-case table on
-PostgreSQL. This is pre-existing and framework-wide (`GetSelectFields(true)` qualifies identically), so the
-rule path matches the surrounding convention rather than diverging in one sink.
+qualifier** is likewise emitted bare, and that now resolves: the `FROM` clause aliases each table to its
+own bare name (see *SQL table references in a SELECT carry a bare alias*), so a bare `Table.Column` folds
+onto the alias on a case-folding provider. Until that alias existed the bare qualifier matched nothing on
+PostgreSQL and the read returned an empty result — the rule path was correct to match the surrounding
+convention rather than diverge in one sink, and the convention itself was what needed fixing.
 
 Because a `[View]` type has no `[Table]`, its fields resolve only through the `ResolveFieldSelectName`
 delegate; that delegate SHALL therefore be registered at module load, not merely as a side effect of the
