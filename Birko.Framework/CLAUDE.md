@@ -201,6 +201,21 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     the refusal. The task file argued the opposite from a false premise ("otherwise it starts throwing, which
     would be a regression") — it does not throw today, it wipes the table. **Measure the shipped behaviour
     before costing a remedy against it.**
+  - **Where the backend hands the predicate to a driver, the scope test goes on the EXPRESSION** —
+    `Birko.Data.Expressions.PredicateScope` (`ReducesToAllRows` / `IsExplicitAllRows`), consumed by
+    `AbstractBulkStore.RequireBoundedFilter` and its async twin. Fourth instance of this family, and the one
+    that shows the rule is not about SQL at all: MongoDB renders `!empty.Contains(x.F)` as
+    `{ "F": { "$nin": [] } }` — a **one-element** document that matches everything while looking like an
+    ordinary field predicate, so the obvious guard ("refuse an empty filter document") never fires, exactly as
+    "refuse when nothing was rendered" never fired on `1 = 1`. Guarding the C# expression is also
+    translation-independent: `!empty.Contains(x)` is true of every entity whatever the driver later emits.
+    `WholeTableWriteException` lives in `Birko.Data.Core/Exceptions/` (beside `StoreException`, same
+    `Birko.Data.Exceptions` namespace) precisely so one `catch` selects the refusal on every backend — do not
+    invent a per-backend exception. **The guard is available to every store but must be WIRED per backend
+    after measuring that the shape reaches a destructive path there**; wiring it blind is how a refusal ends
+    up firing on a case it was never about. And keep the analyser narrow — it answers "no" when it cannot
+    prove a predicate unbounded (a per-entity collection, a null or unevaluatable one, any string `Contains`),
+    because a false refusal breaks working code and is worse than the hole.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks

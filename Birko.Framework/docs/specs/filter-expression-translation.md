@@ -1,10 +1,11 @@
 ---
 area: filter-expression-translation
-generated-at: b8fcec8ea7acabd9ffce7925a27b6bc51c1faba5
-generated-on: 2026-08-14
+generated-at: 5d6f328455d8034ad7070ba877fb9f3af0b2db57
+generated-on: 2026-08-15
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
+  - ../Birko.Data.Core/Expressions/PredicateScope.cs
   - ../Birko.Data.Core/Filters/IFilter.cs
   - ../Birko.Data.Core/Filters/ModelByGuid.cs
   - ../Birko.Data.Core/Filters/ModelsByGuid.cs
@@ -39,6 +40,9 @@ shaped-by:
   # TASK-213 — a COMPUTED operand inside a set Contains was recursed into as a predicate, fabricating a
   # subcondition that replaced the IN with a different predicate. Now resolved via RenderValueFragment.
   - TASK-213
+  # TASK-212 — PredicateScope.cs lands in this area's Expressions glob; its behaviour is specced in
+  # bulk-filter-operations, beside the guards that consume it.
+  - TASK-212
 shaped-by-derived: false   # see the note above: no source glob resolves in this repo, so no evidence pass
 ---
 
@@ -583,6 +587,18 @@ one child or when the group is negated, and SHALL prefix `NOT ` when the group's
 - **Given** a sequence of three sibling conditions where the second and third have `IsOr = true`
 - **When** `ConditionDefinition(IEnumerable<Condition>, DbCommand)` renders them
 - **Then** the separators are taken from each subsequent element's `IsOr`, so the SQL is `c1 OR c2 OR c3`
+
+### Requirement: Predicate SCOPE is analysed separately from predicate translation
+
+`Birko.Data.Expressions.PredicateScope` falls inside this area's `Expressions/*.cs` glob but answers a
+different question from everything else here: not *how does this predicate become a query* but *how much
+does it constrain*. It is consumed by the destructive-write guards, and its requirements and scenarios live
+with them in [`bulk-filter-operations`](bulk-filter-operations.md) — recorded here so a reader of this area
+knows the file is specced rather than uncovered.
+
+In outline: `IsExplicitAllRows` is the one-node normalized-constant test (the `DeleteAll()` synonym) and
+`ReducesToAllRows` is the broader "covers every entity" reduction over `&&` / `||` / `!` and an empty
+negated `Contains`. It deliberately answers `false` when uncertain, because its consumers refuse writes.
 
 ### Requirement: SQL value-expression operands in predicates
 

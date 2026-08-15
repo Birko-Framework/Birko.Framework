@@ -1,11 +1,11 @@
 ---
 area: bulk-filter-operations
-generated-at: 34fa9b2797a9cfa273ccb2c4fcb9189a9648f55e
-generated-on: 2026-08-14
+generated-at: 5d6f328455d8034ad7070ba877fb9f3af0b2db57
+generated-on: 2026-08-15
 sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
   - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
-  - ../Birko.Data.SQL/Exceptions/WholeTableWriteException.cs
+  - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Select.cs
   - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
@@ -81,6 +81,16 @@ store overloads that call into it, so a future fix confined to that file would p
 area. The third instance of exactly this shape (after the TASK-110 and TASK-109 notes above), which is the
 argument for deciding TASK-208 rather than routing around it again. `.map.yml` is human-owned and was not
 edited.
+
+Scoped regen at `5d6f328455d8034ad7070ba877fb9f3af0b2db57` for **TASK-212** — the MongoDB half of the same rule. `RequireFilter`
+refused only a *null* filter, so a filter that was present and covered everything went straight to
+`DeleteMany`. Measured offline (the driver renders a filter with no connection):
+`x => !empty.Contains(x.Field)` becomes `{ "Field": { "$nin": [] } }` — **one element**, so the
+"refuse an empty filter document" guard that seemed obvious would never have fired. The guard is therefore on
+the **expression**, in `Birko.Data.Stores`, shared by every backend that overrides the public destructive
+methods; `WholeTableWriteException` moved to `Birko.Data.Core/Exceptions/` so one `catch` still selects it.
+Note this area's globs **do** cover both MongoDB stores, so unlike the `AbstractConnectorBase.cs` gap above,
+this diff is real evidence for the change.
 
 ## Requirements
 
@@ -684,6 +694,84 @@ added and its failure mode is a refused destructive operation on working code.
 - **Then** it directs them to `Destroy()` — `DeleteAll` empties, `Destroy` drops, and the two SHALL NOT
   be conflated
 
+### Requirement: A present filter that constrains nothing is refused, on the expression
+
+A filter being **non-null** does not make it bounded. The system SHALL refuse a filter-based destructive
+operation whose predicate covers every entity, unless every entity was requested explicitly, and SHALL
+decide that on the **LINQ expression** — before any backend translates it — via
+`AbstractBulkStore<T>.RequireBoundedFilter` / its async twin, backed by
+`Birko.Data.Expressions.PredicateScope`.
+
+The decision cannot be made on the translated query. Measured on MongoDB.Driver 3.2.0,
+`x => !empty.Contains(x.Field)` renders `{ "Field": { "$nin": [] } }` — a **one-element** document,
+indistinguishable by inspection from an ordinary field predicate, while selecting every document. A guard
+asking "is the emitted filter empty?" therefore does not fire. This is the same shape as the SQL side's
+`1 = 1`, which satisfied a guard testing whether anything had been rendered: **the guard tests what the
+operation means, not whether output was produced.**
+
+The refusal SHALL be `WholeTableWriteException` — the same type the SQL connectors throw, which for this
+reason lives in `Birko.Data.Core/Exceptions/` beside `StoreException` rather than in `Birko.Data.SQL` — so
+one `catch` selects the refusal on every backend. Its message SHALL name the deliberate door
+(`DeleteAll()` / `UpdateAll(updates)`) and SHALL NOT reference SQL machinery a document store does not
+have.
+
+An **explicit** `x => true` (and every spelling `ExpressionNormalizer` folds into it) SHALL be checked
+**first** and allowed through: it is the documented `DeleteAll()` synonym, and a guard whose opt-out is
+also refused is a wall rather than a door. Only a predicate that *happens* to cover everything is refused.
+
+`PredicateScope` SHALL be narrow and answer `false` when uncertain, because a refusal that fires on a
+predicate which does constrain something breaks working code. Specifically it SHALL NOT treat as unbounded:
+a string `Contains` (a substring test, not set membership), a collection that references the entity (its
+emptiness varies per entity), a null collection, or a collection it cannot evaluate.
+
+#### Scenario: An empty negated Contains is refused on all four MongoDB overrides
+
+- **Given** `MongoDBStore<T>` / `AsyncMongoDBStore<T>` and the filter `x => !empty.Contains(x.Amount)` over
+  an empty collection
+- **When** `Delete` / `Update` / `DeleteAsync` / `UpdateAsync` is called
+- **Then** each throws `WholeTableWriteException` before any driver call, so the whole-collection
+  `DeleteMany` never issues
+
+#### Scenario: An OR chain containing an unbounded term is refused
+
+- **Given** `x => x.Amount > 4 || !empty.Contains(x.Amount)`, which the driver renders as a `$or` whose
+  second branch is `$nin: []`
+- **When** a destructive method is called
+- **Then** it is refused — `A || TRUE` is `TRUE`, so the chain still selects everything
+
+#### Scenario: The explicit synonym is not refused
+
+- **Given** `x => true`, or a captured true flag, or `x => 1 == 1`
+- **When** a destructive method is called
+- **Then** the guard allows it through, because the explicit-door check runs before the scope check
+
+#### Scenario: A bounded filter and a matches-nothing filter are both allowed
+
+- **Given** `x => x.Amount > 4`, `x => !some.Contains(x.Amount)` over a non-empty set, or
+  `x => empty.Contains(x.Amount)` (which matches nothing)
+- **When** a destructive method is called
+- **Then** none is refused — the guard fires on "everything", never on "something" or on "nothing"
+
+#### Scenario: An AND chain is unbounded only when every term is
+
+- **Given** `x => x.Amount > 4 && !empty.Contains(x.Amount)`
+- **When** the scope is analysed
+- **Then** it is bounded, because `A && TRUE` is `A`
+
+#### Scenario: A per-entity collection cannot make a predicate unbounded
+
+- **Given** `x => !x.Tags.Contains(1)`, whose collection is a property of the entity
+- **When** the scope is analysed
+- **Then** it is not reported unbounded: the collection's emptiness varies per entity, and it cannot be
+  evaluated without one
+
+#### Scenario: A null filter keeps its own distinct refusal
+
+- **Given** `Delete(null!)`
+- **When** the call is made
+- **Then** `RequireFilter` still throws `ArgumentNullException` — passing null for a parameter declared
+  non-nullable is a different mistake from asking for an unbounded scope, and the two guards stay separate
+
 ### Requirement: A backend overriding the public destructive methods repeats the guard
 
 The system SHALL enforce the require-a-filter guard in every store that overrides the **public**
@@ -710,6 +798,8 @@ contained fix, and converting them to `*Core` is separate work.
 - **When** a null filter is passed to any of them
 - **Then** each refuses, so the guard holds on the native `$set` / `DeleteMany` paths as well as on the
   portable ones
+- **And** each also calls `RequireBoundedFilter`, so a *present* filter that covers every document is
+  refused there too — the null case was only half the guard
 
 #### Scenario: The ElasticSearch stores are already covered by their own filter boundary
 

@@ -101,7 +101,9 @@ areas:
       - ../Birko.Data.SQL/SQL/Connectors/AbstractConnector_Update.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Delete.cs
       - ../Birko.Data.SQL/SQL/Connectors/AbstractAsyncConnector_Update.cs
-      - ../Birko.Data.SQL/Exceptions/WholeTableWriteException.cs
+      # moved to Birko.Data.Core by TASK-212 so a non-SQL backend can throw it; path repaired here,
+      # the area is unchanged
+      - ../Birko.Data.Core/Exceptions/WholeTableWriteException.cs
       # backend implementors that override the PUBLIC Delete/Update and so must repeat the guard —
       # cross-backend conformance is the whole point of this contract (§ Areas include their backend
       # implementors). InMemory's pair is already reached via store-crud-contract's Stores/*.cs glob;
