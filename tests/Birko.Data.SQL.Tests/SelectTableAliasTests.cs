@@ -112,6 +112,24 @@ public class SelectTableAliasTests
         sql.Should().NotContain(" AS ");
     }
 
+    [Theory]
+    [InlineData("Widgets; DROP TABLE Users; --")]
+    [InlineData("Widgets\" ; DROP TABLE Users; --")]
+    [InlineData("Widgets' OR 1=1--")]
+    [InlineData("Widgets\nDROP TABLE Users")]   // \A..\z, not ^..$: .NET's $ also matches before a trailing newline
+    public void An_injection_payload_never_reaches_the_statement_unquoted(string table)
+    {
+        // The alias is emitted BARE and unescaped, which is the one thing in this change that could widen a
+        // sink. § Conventions: an identifier reaching interpolated SQL is resolved against metadata, and
+        // where a type is not available the sanctioned fallback is a bare identifier check anchored \A..\z.
+        // Asserted rather than argued — "the regex handles it" is construction, not evidence.
+        var sql = Sql(new[] { table }, new Dictionary<int, string> { { 0, "COUNT(*)" } });
+
+        sql.Should().NotContain(" AS ", "a payload must never be aliased, because the alias is unescaped");
+        sql.Should().Be($"SELECT COUNT(*) FROM {new FakeConnector().PublicQuote(table)}",
+            "the only rendering left is the quoted one, which escapes the payload exactly as before");
+    }
+
     // Minimal concrete connector to reach the base virtual (the base is abstract).
     private sealed class FakeConnector : Birko.Data.SQL.Connectors.AbstractConnectorBase
     {
@@ -123,5 +141,7 @@ public class SelectTableAliasTests
             => throw new NotSupportedException();
         public override string FieldDefinition(Birko.Data.SQL.Fields.AbstractField field)
             => throw new NotSupportedException();
+
+        public string PublicQuote(string identifier) => QuoteIdentifier(identifier);
     }
 }
