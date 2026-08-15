@@ -95,8 +95,14 @@ namespace Birko.Data.SQL.Connectors
             var pgEx = FindPostgresException(ex);
             if (pgEx != null)
             {
-                return pgEx.SqlState == "42P01"
-                    && pgEx.MessageText.Contains("does not exist", StringComparison.OrdinalIgnoreCase);
+                // The SQLSTATE decides, and it EXCLUDES rather than includes on the message. Keying the
+                // positive case on English text would break lazy create-on-first-use against a server whose
+                // `lc_messages` is not English — PostgreSQL localizes these — turning a missing table into a
+                // thrown exception there and nowhere else. Excluding on text degrades the other way: on a
+                // localized server the missing-FROM-clause shape is swallowed again, which is where this
+                // started but is now only defence in depth, since the builders no longer emit it (TASK-211).
+                if (pgEx.SqlState != "42P01") return false;
+                return !pgEx.MessageText.Contains("missing FROM-clause entry", StringComparison.OrdinalIgnoreCase);
             }
 
             // 'relation "x" does not exist' — the missing-TABLE wording. A missing column reads
