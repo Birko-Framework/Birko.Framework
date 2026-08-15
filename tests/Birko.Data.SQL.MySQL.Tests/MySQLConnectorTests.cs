@@ -28,10 +28,14 @@ public class MySQLConnectorTests
 
     // CR-L176: the missing-table seam recognizes MySQL's "Table 'x' doesn't exist" wording (plus the
     // inherited SQLite base match) so a reader over a missing table yields empty instead of faulting.
+    //
+    // TASK-211 narrowed it: the bare "doesn't exist" catch-all also matched a missing routine, and this
+    // seam decides whether a reader answers an error with an empty result rather than a failure.
     [Theory]
     [InlineData("Table 'db.widgets' doesn't exist", true)]
     [InlineData("no such table: widgets", true)]
     [InlineData("some other error", false)]
+    [InlineData("FUNCTION db.f doesn't exist", false)]
     public void IsMissingTableException_matches_mysql_and_base_wording(string message, bool expected)
     {
         NewConnector().IsMissingTableException(new Exception(message)).Should().Be(expected);
