@@ -18,9 +18,9 @@ created: 2026-06-18
 | D5 | Integration-test tier — the Docker-gated remediation findings ([[STORY-042]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-07-14 | ai | — (tracked in prose) |
 | D6 | Workflow backends — unify the serialization seam (ISerializer everywhere) ([[STORY-043]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-07-17 | ai | — (tracked in prose) |
 | D7 | Spec-harvest — high findings ([[STORY-051]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | [[TASK-108]], [[TASK-109]], [[TASK-110]], [[TASK-111]], [[TASK-112]], [[TASK-113]], [[TASK-114]], [[TASK-115]], [[TASK-116]], [[TASK-117]], [[TASK-118]], [[TASK-125]], [[TASK-126]], [[TASK-128]], [[TASK-129]], [[TASK-137]], [[TASK-141]] |
-| D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-07-30 | ai | — (tracked in prose) |
-| D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `planned`. | 2026-07-30 | ai | — (tracked in prose) |
-| D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-30 | ai | — (tracked in prose) |
+| D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
+| D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
+| D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
 | D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
@@ -75,3 +75,23 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   of depending on each implementor to filter. Hardening rather than a reproduced leak: the framework ships
   no implementation of the base. No state change; D7 stays `approved`.
 
+- 2026-08-09 — **D8 / D9 / D10** — decomposed by `/tasks intake --epic EPIC-014` into **45 tasks**
+  ([[TASK-151]]–[[TASK-195]]): 22 per-area triage tasks for the mediums, 22 for the lows, and one bounded
+  task for the recovered unrated set. No state change; all three stay `approved` — this records *how* the
+  approved scope is now tracked, not a change to what was approved.
+
+  **Why now.** All three rows read `— (tracked in prose)` and their stories said "extract on demand". In the
+  ten days since filing, **zero** extractions happened, and that is structural rather than a lapse: only
+  `status: todo` **tasks** are ranked by `/tasks pick`, by the `Next up` snapshot, or by `/fix-next`, so 808
+  findings sat where no picker could see them. The `/roadmap` DV12 audit is what surfaced it — the rule
+  exists precisely to catch a review that reads as drained while part of it was never scheduled.
+
+  **Why per-area and not per-finding.** Findings in one area share a spec, a source-glob set and often a root
+  cause, so they are fixed in one edit — the intake rule for what belongs in one task. 808 individual tasks
+  would have been as unusable as none. Per-finding extraction still happens *inside* an area task, via
+  `/tasks spawn`, when triage confirms something too large to fix there.
+
+  **A constraint this created.** Each task carries an **explicit contiguous** `findings:` list, because that
+  is what `/fix-next` greps to build its pool — a range string would match nothing. Appending new `SH-` ids
+  past the current maxima stays safe; renumbering inside an existing range now silently invalidates up to 44
+  files at once. [[TASK-195]] carries that constraint as an acceptance criterion.

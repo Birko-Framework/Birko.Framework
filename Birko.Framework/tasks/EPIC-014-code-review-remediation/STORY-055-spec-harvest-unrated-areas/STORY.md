@@ -86,6 +86,24 @@ now committed in `RECOVERED-FINDINGS.md`, which is the point of that file.
 Proposed split: **1 high** (UOW-1, an ES commit retry double-applying items that already succeeded),
 **9 medium**, **6 low**. Severities are this story's proposal — the harvester emitted none.
 
+## Tasks
+
+**Decomposed 2026-08-09** by `/tasks intake --epic EPIC-014` into a single task, [[TASK-195]], which carries
+every remaining acceptance criterion below. Until then this story's work existed only as unticked bullets,
+which no picker ranks — the [[roadmap]] DV12 audit surfaced it alongside [[STORY-053]] and [[STORY-054]].
+
+One task, not sixteen: rating, ID-assigning, de-duplicating and folding are a single edit pass over one
+document, and splitting them would mean four tasks that cannot be done in any order but one.
+
+**Two constraints [[TASK-195]] adds to the list below**, both created by that same intake:
+
+- The 44 per-area triage tasks carry **explicit contiguous** `findings:` lists, so renumbering inside an
+  existing `SH-` range now silently invalidates up to 44 files. The "do not renumber" criterion has a price
+  attached to it now.
+- Those tasks cover the **22** areas that had medium/low findings. These three areas are exactly the ones
+  that did not, so they have **no triage task** — folding ids in without creating one reproduces the very
+  gap this intake closed.
+
 ## Out of scope
 
 Fixing anything. This story ends when the findings are rated, given `SH-` ids, and routed to
@@ -99,8 +117,10 @@ Fixing anything. This story ends when the findings are rated, given `SH-` ids, a
 - [ ] Severities confirmed for all 16
 - [ ] `SH-` ids assigned, continuing the existing ranges — **do not renumber** `SH-H`/`SH-M`/`SH-L`
 - [ ] Folded into `SPEC-HARVEST-FINDINGS-2026-07-30.md` under their severity sections
-- [ ] Header total corrected from 865 to **881** (58 high · 430 medium · 393 low), and each severity story's
-      `finding-count` updated
+- [ ] Header total corrected from 865, with the split recomputed **after** de-duplication, and each severity
+      story's `finding-count` updated. ~~881 (58 · 430 · 393)~~ was this story's original arithmetic and is
+      wrong: it adds all 16, but `SLI-4`/`SLI-6` are already filed as `SH-L297`/`SH-L298`, so at least two of
+      them must not be counted again. The real number falls out of the de-duplication criterion below
 - [ ] The coverage-gaps note rewritten or deleted — it currently says "complete"
 - [ ] Duplicates cross-referenced rather than double-filed. **Known overlap:** two `SH-L` entries near lines
       4829/4835 of the findings doc already describe SLI-4 (non-volatile double-checked read) and SLI-6
