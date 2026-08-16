@@ -61,6 +61,14 @@ MongoDB implementation for the Birko data layer providing document-based storage
 
 ## Connection
 
+**`Settings.RawConnectionString` is the escape hatch.** When set (non-empty) it is returned verbatim and
+every other property is ignored. The composed form emits only `authSource`, `replicaSet`, `tls`,
+`retryWrites` and `retryReads`, so anything else a deployment needs — `maxPoolSize`, `appName`,
+`connectTimeoutMS`, `serverSelectionTimeoutMS`, `readPreference`, write concern, `directConnection`, or
+the SOCKS `proxyHost`/`proxyPort` pair — must come through the raw string (TASK-225). Identical in shape
+to `Birko.Redis.RedisSettings.RawConnectionString`; an explicit `""` deliberately falls through to the
+composed form rather than being returned as an invalid string.
+
 Connection string format:
 ```
 mongodb://[username:password@]host[:port][/database][?options]
