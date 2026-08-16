@@ -206,7 +206,8 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
+        filter = Data.Expressions.SpanContains.Rewrite(filter);
+        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return null;
 
         var queryable = _container.GetItemLinqQueryable<T>();
@@ -263,7 +264,8 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
+        filter = Data.Expressions.SpanContains.Rewrite(filter);
+        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return 0;
 
         var queryable = _container.GetItemLinqQueryable<T>();
@@ -315,7 +317,8 @@ public class AsyncCosmosDBStore<T>
         CancellationToken ct = default)
     {
         if (_container == null) return Enumerable.Empty<T>();
-        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
+        filter = Data.Expressions.SpanContains.Rewrite(filter);
+        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
 
         IQueryable<T> query = _container.GetItemLinqQueryable<T>();
 

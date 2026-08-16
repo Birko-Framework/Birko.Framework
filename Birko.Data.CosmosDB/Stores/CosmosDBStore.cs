@@ -207,6 +207,7 @@ public class CosmosDBStore<T>
         // where the caller's expression arrives, so every use below sees one shape. Same defect and
         // same fix as MongoDB (TASK-218); measured separately rather than assumed.
         filter = Data.Expressions.SpanContains.Rewrite(filter);
+        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224
         if (_container == null) return null;
 
         var queryable = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
@@ -246,7 +247,8 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override long CountCore(Expression<Func<T, bool>>? filter = null)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
+        filter = Data.Expressions.SpanContains.Rewrite(filter);
+        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return 0;
 
         var queryable = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
@@ -266,7 +268,8 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
-        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
+        filter = Data.Expressions.SpanContains.Rewrite(filter);
+        filter = Data.Expressions.DateTruncation.Rewrite(filter);   // TASK-224   // TASK-220 — see above
         if (_container == null) return Enumerable.Empty<T>();
 
         IQueryable<T> query = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
