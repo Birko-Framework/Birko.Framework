@@ -13,7 +13,7 @@ created: 2026-07-17
 |----|----------|-------|-----------|------|----|---------|
 | D1 | Opt-in strict (fail-closed) tenancy mode ([[STORY-044]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-07-17 | ai | — (tracked in prose) |
 | D2 | Fix decorator ordering so per-tenant uniqueness probes are tenant-scoped ([[STORY-045]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `done`. | 2026-07-17 | ai | — (tracked in prose) |
-| D3 | Restore ambient (tenant) scope for background event dispatch ([[STORY-046]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-17 | ai | — (tracked in prose) |
+| D3 | Restore ambient (tenant) scope for background event dispatch ([[STORY-046]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`. | 2026-07-17 | ai | [[TASK-148]] (+ prose) |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -34,3 +34,9 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   reconstructed. Where a real dated decision with reasoning exists it lives in `CHANGELOG.md` or
   `CLAUDE.md` § Recent Updates, which remain the authority for *why*. Rows carry no invented `deferred`
   or `removed` history, so the absence of such rows means "not recorded", not "never considered".
+- 2026-08-16 — **D3's `→ Tasks` now names [[TASK-148]]**, and the task carries `feature: FEATURE-017`.
+  Raised by [[roadmap]] as **DV3 + DV9**: the task was filed under STORY-046 on 2026-08-08 with
+  `feature: null`, so this ledger did not know about its own only tracked item and `status.md` reported
+  `0 / 0 tasks` — indistinguishable from a feature nobody had started. A broken back-link, not a scope
+  change: no decision state moved, and D3 stays `approved`. D1 and D2 keep `— (tracked in prose)`
+  legitimately; their stories are `done` and were never decomposed into task files.

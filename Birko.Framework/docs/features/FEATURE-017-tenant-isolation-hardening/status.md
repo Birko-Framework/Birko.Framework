@@ -1,6 +1,6 @@
 ---
 id: FEATURE-017
-generated: 2026-08-01
+generated: 2026-08-16
 ---
 
 # Tenant isolation hardening — Status
@@ -21,13 +21,17 @@ generated: 2026-08-01
 
 ## Build progress
 
-0 / 0 tasks done.
+0 / 1 tasks done.
 
-_No task files under this feature — its work is tracked at story level in prose ledgers._
+- [ ] TASK-148 `ScopeRestorationBehavior` for the distributed-consumer dispatch path — blocked
 
 ## What can be tested now
 
-Nothing yet — no tracked item under this feature has been completed.
+Nothing yet. The one tracked item is **blocked** and has not been started.
+
+Until 2026-08-16 this feature reported no tracked items at all: the task existed but was missing
+the link back to this feature, so the stakeholder view could not see its own work. Its other two
+work streams are tracked at story level in prose ledgers rather than as task files.
 
 ## Prototype
 
@@ -35,4 +39,4 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Pick the next todo item under this feature.
+Clear what is blocking TASK-148, or record why it stays blocked.

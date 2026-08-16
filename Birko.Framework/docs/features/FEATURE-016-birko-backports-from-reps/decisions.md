@@ -44,3 +44,9 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   originating consumer still carries its **own** fix (Reps `ec69529`) rather than the component's, which is
   precisely the fork STORY-052 exists to prevent, and the mode's premise is a WebKit behaviour no headless
   harness can demonstrate.
+- 2026-08-16 — **Coarse marker `idea` → `review`.** Raised by [[roadmap]] as **DV2**: every one of this
+  feature's 14 tasks is now `done` except TASK-042 and TASK-135, which are both at `review`, so the stored
+  marker had been lying about a feature whose build work is finished. Set from the audit rather than by
+  `/feature review`, because the gate itself cannot pass yet — the two open items are the sign-off, and one
+  of them needs a physical device. **Not `done`, and not "done pending"**: the word for built-but-unverified
+  is `review`. Flips to `done` when TASK-042 and TASK-135 are signed off; no decision row changed state.

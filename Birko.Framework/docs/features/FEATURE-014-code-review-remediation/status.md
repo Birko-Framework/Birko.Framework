@@ -21,7 +21,7 @@ generated: 2026-08-16
 
 ## Build progress
 
-21 / 70 tasks done (1 awaiting sign-off).
+30 / 78 tasks done (1 awaiting sign-off).
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
@@ -91,14 +91,28 @@ generated: 2026-08-16
 - [x] TASK-209 A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL
 - [x] TASK-212 A MongoDB `Delete(filter)` guards only a NULL filter — a filter that *reduces* to everything is not refused
 - [x] TASK-213 A COMPUTED operand inside `Contains` is silently discarded and replaced by a different predicate
-- [ ] TASK-214 A model deriving `MongoDBModel` cannot be serialized by the driver at all
+- [x] TASK-214 A model deriving `MongoDBModel` cannot be serialized by the driver at all
 - [x] TASK-215 Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch
+- [x] TASK-218 An `IN` filter over a C# **array** does not translate on MongoDB — `NotSupportedException`
+- [x] TASK-219 `Birko.Data.MongoDB` has two contradictory answers for what `_id` is
+- [x] TASK-220 CosmosDB has the same array-`Contains` defect as MongoDB — audit the rest of the family
+- [x] TASK-221 RavenDB cannot translate **any** set-membership filter — `Contains` is unsupported in every spelling
+- [x] TASK-222 RavenDB diverges on 6 filter shapes — and one of them is a **silent wrong answer**
+- [x] TASK-223 CosmosDB's connection mode cannot be selected — Gateway is unreachable, so the emulator is too
+- [x] TASK-224 `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and silently matches nothing
+- [x] TASK-225 MongoDB's connection string is composed with no escape hatch — no driver option can be set
+
 ## What can be tested now
 
-21 of 70 tracked items are complete and exercisable, and one more is code-complete awaiting
-sign-off. The earlier "10 of 18" reflected the backlog as it stood on 2026-08-01, before the
-spec-harvest intake filed the medium, low and unrated findings as tasks — the denominator grew
-because more was found, not because progress reversed.
+30 of 78 tracked items are complete and exercisable, and one more is code-complete awaiting
+sign-off. The denominator keeps growing because fixing a finding keeps uncovering the next one: the
+2026-08-16 run closed nine items, and **eight of those nine did not exist when it started** — they
+were found while fixing the ninth, mostly by finally being able to run a test suite that had never
+been able to run before. That is the backlog working, not progress reversing; "10 of 18" and
+"21 of 70" were each honest when written.
+
+The one item awaiting sign-off is TASK-118 (tenant header/claim guard). It needs a real
+sign-in-protected test application, which no automated run here can stand up.
 
 ## Prototype
 
@@ -106,4 +120,4 @@ N/A — backfilled feature; see [idea.md](idea.md) § Prototype.
 
 ## Next step
 
-Pick the next todo item under this feature.
+Sign off TASK-118, the one item awaiting verification, then continue the backlog.

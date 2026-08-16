@@ -1,6 +1,6 @@
 # Features — Birko.Framework
 
-_Generated 2026-08-01. **Do not hand-edit** — re-run `/feature status`. The human entry point to the
+_Generated 2026-08-16. **Do not hand-edit** — re-run `/feature status`. The human entry point to the
 stakeholder-facing feature tree; each row links to a feature folder._
 
 **This whole tree was backfilled on 2026-08-01** from the pre-existing `tasks/` epics, to close the
@@ -9,10 +9,15 @@ stakeholder-facing feature tree; each row links to a feature folder._
 been built. One feature per epic, ids aligned (`FEATURE-0NN` ↔ `EPIC-0NN`) so the join is unambiguous.
 Each feature's `decisions.md` § History log states exactly what its backfilled rows do and do not claim.
 
-> ⚠ **Awaiting sign-off (10):** FEATURE-001 (5), FEATURE-016 (5) — these are verification debt; finish them before new scope.
-> Two of them need a **consumer** surface, not the playground: FEATURE-016 TASK-135 wants a real
-> comma-keypad phone (the fault is a keyboard refusing a character, which no headless run reproduces), and
-> FEATURE-001 TASK-136 wants Symbio's tax-rate edit path.
+> ⚠ **Awaiting sign-off (8):** FEATURE-001 (5), FEATURE-016 (2), FEATURE-014 (1) — these are verification
+> debt; finish them before new scope. **Three of them cannot be cleared here at all**, because they need a
+> surface this repo does not contain: FEATURE-016 TASK-135 wants a real comma-keypad phone (the fault is a
+> keyboard refusing a character, which no headless run reproduces), FEATURE-001 TASK-136 wants Symbio's
+> tax-rate edit path, and FEATURE-014 TASK-118 wants a sign-in-protected application to correlate the
+> tenant header against a real JWT claim.
+>
+> Two more sit in `tasks/_loose/` and so appear in no row below: **TASK-201** and **TASK-204**. See
+> *Not covered by this tree*.
 >
 > 💭 **Awaiting a decision (1):** FEATURE-001 D8 — whether `b-form` starts rejecting more kinds of invalid
 > input (`typeMismatch` first). Run `/feature decide FEATURE-001`; [[TASK-134]] gathers the evidence and must
@@ -35,10 +40,10 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-011](FEATURE-011-test-coverage-gaps/) | Birko.Framework — Test coverage gaps | idea | 4/0/0/0/0 | 0/7 | n/a (backfilled) | [EPIC-011](../../tasks/EPIC-011-test-coverage-gaps/EPIC.md) |
 | [FEATURE-012](FEATURE-012-mqtt-v5-features/) | Birko.MessageQueue.MQTT — v5 features | idea | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-012](../../tasks/EPIC-012-mqtt-v5-features/EPIC.md) |
 | [FEATURE-013](FEATURE-013-reference-consumers/) | Reference consumers — integration smoke harness + Web playground | building | 1/0/0/0/0 | 1/2 | n/a (backfilled) | [EPIC-013](../../tasks/EPIC-013-reference-consumers/EPIC.md) |
-| [FEATURE-014](FEATURE-014-code-review-remediation/) | Code review — audit remediation | building | 11/0/0/0/0 | 5/16 | n/a (backfilled) | [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) |
+| [FEATURE-014](FEATURE-014-code-review-remediation/) | Code review — audit remediation | building | 11/0/0/0/0 | 30/78 | n/a (backfilled) | [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) |
 | [FEATURE-015](FEATURE-015-birko-xaml-ui-framework/) | Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web | building | 12/0/0/0/0 | 10/22 | n/a (backfilled) | [EPIC-015](../../tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md) |
-| [FEATURE-016](FEATURE-016-birko-backports-from-reps/) | Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) | building | 6/0/0/0/0 | 9/14 | n/a (backfilled) | [EPIC-016](../../tasks/EPIC-016-birko-backports-from-reps/EPIC.md) |
-| [FEATURE-017](FEATURE-017-tenant-isolation-hardening/) | Tenant isolation hardening | building | 3/0/0/0/0 | 0/0 | n/a (backfilled) | [EPIC-017](../../tasks/EPIC-017-tenant-isolation-hardening/EPIC.md) |
+| [FEATURE-016](FEATURE-016-birko-backports-from-reps/) | Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) | **review** | 6/0/0/0/0 | 12/14 | n/a (backfilled) | [EPIC-016](../../tasks/EPIC-016-birko-backports-from-reps/EPIC.md) |
+| [FEATURE-017](FEATURE-017-tenant-isolation-hardening/) | Tenant isolation hardening | building | 3/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-017](../../tasks/EPIC-017-tenant-isolation-hardening/EPIC.md) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.
@@ -46,8 +51,25 @@ Tasks = done/total of tasks carrying `feature: FEATURE-NNN`.
 
 ## Not covered by this tree
 
-Six tasks in `tasks/_loose/` carry `parent: null` and therefore no feature: **TASK-036**, **TASK-058**,
-**TASK-059**, **TASK-106**, **TASK-127**, **TASK-130**. Five are framework-wide *decision* tickets that
-belong to no single epic (and deliberately declare no parent, so the dashboard does not render them
-twice); TASK-130 spans the token/theme layer that no epic covers. They are tracked, just not
-feature-homed — a real gap rather than an oversight, and the honest place to record it is here.
+**Thirty-two** tasks in `tasks/_loose/` carry `parent: null` and `feature: null`, so none of them appears
+in any row above. On 2026-08-01 there were six; the pile has grown five-fold, which makes it the largest
+single blind spot in this view rather than the footnote it started as.
+
+Three kinds live there, and only the first was ever intended:
+
+- **Framework-wide *decision* tickets** (TASK-059, TASK-106, TASK-127, TASK-139) — questions that belong
+  to no single epic, and that deliberately declare no parent so the dashboard does not render them twice.
+- **Cross-cutting work no epic covers** — TASK-130 (token/theme layer), TASK-142 and TASK-149 (gaps in the
+  planning machinery itself).
+- **Defects and follow-ups filed mid-work** — 25 of the 32, and where all the growth came from: 22 of
+  those were filed by `/tasks spawn` and `/fix-next` between 2026-08-03 and 2026-08-15 alone. Ten are
+  already `done`, two are in `review` (**TASK-201**, **TASK-204** — counted in the sign-off callout above
+  but visible in no row), and the rest are open. Most are ordinary framework remediation that belongs
+  under [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) / FEATURE-014, so landing in
+  `_loose` is a spawn-time omission rather than a decision. Two are genuinely homeless: TASK-200 and
+  TASK-201 are defects found *in a consumer* (Symbio, Reps) and tracked here because the fix is upstream.
+
+> **Flagged, not acted on:** **TASK-205** looks superseded by **TASK-211** (done, 2026-08-16) — both name
+> the unquoted `Table.Column` qualifier against a quoted `FROM "Table"` on PostgreSQL, and TASK-211 is the
+> measured version that fixed it via a bare `AS` alias. Confirm and `/tasks cancel TASK-205`, or record
+> what it still covers. Not closed here because retiring a task is a judgment call, not a status regen.

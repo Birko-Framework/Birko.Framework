@@ -3,7 +3,7 @@ id: FEATURE-016
 created: 2026-07-06
 owner: ai
 # status: idea | review (built, sign-off pending) | done | dropped | superseded
-status: idea
+status: review
 ---
 
 # Birko framework backports from Reps (+ cross-provider & Xaml follow-ups)
