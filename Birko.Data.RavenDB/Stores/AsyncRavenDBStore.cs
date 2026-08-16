@@ -206,7 +206,7 @@ public class AsyncRavenDBStore<T>
     /// <inheritdoc />
     protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
-        filter = Expressions.RavenSetMembership.Rewrite(filter);   // TASK-221 — see above
+        filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null)
         {
             return null;
@@ -290,7 +290,7 @@ public class AsyncRavenDBStore<T>
     /// <inheritdoc />
     protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
     {
-        filter = Expressions.RavenSetMembership.Rewrite(filter);   // TASK-221 — see above
+        filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null)
         {
             return 0;
@@ -364,7 +364,7 @@ public class AsyncRavenDBStore<T>
             return Enumerable.Empty<T>();
         }
 
-        filter = Expressions.RavenSetMembership.Rewrite(filter);   // TASK-221 — see above
+        filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
 
         var session = TransactionContext ?? _documentStore.OpenAsyncSession();
         try

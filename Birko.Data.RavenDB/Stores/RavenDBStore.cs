@@ -215,7 +215,7 @@ public class RavenDBStore<T>
         // filter that works on every other backend works here too. Only
         // constCollection.Contains(x.Member) is rewritten; x.CollectionMember.Contains(const) is the
         // opposite direction, already translates, and is left alone.
-        filter = Expressions.RavenSetMembership.Rewrite(filter);
+        filter = Expressions.RavenFilterRewriter.Rewrite(filter);
         if (_documentStore == null) return null;
 
         if (TransactionContext != null)
@@ -290,7 +290,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     protected override long CountCore(Expression<Func<T, bool>>? filter = null)
     {
-        filter = Expressions.RavenSetMembership.Rewrite(filter);   // TASK-221 — see above
+        filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return 0;
 
         if (TransactionContext != null)
@@ -319,7 +319,7 @@ public class RavenDBStore<T>
     /// <inheritdoc />
     protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
-        filter = Expressions.RavenSetMembership.Rewrite(filter);   // TASK-221 — see above
+        filter = Expressions.RavenFilterRewriter.Rewrite(filter);   // TASK-221 — see above
         if (_documentStore == null) return Enumerable.Empty<T>();
 
         var session = TransactionContext ?? _documentStore.OpenSession();

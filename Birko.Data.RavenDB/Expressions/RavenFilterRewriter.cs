@@ -45,7 +45,7 @@ namespace Birko.Data.RavenDB.Expressions;
 /// <c>ElasticSearch.ParseContains</c> makes for the same reason.
 /// </para>
 /// </remarks>
-public static class RavenSetMembership
+public static class RavenFilterRewriter
 {
     private static readonly MethodInfo? InMethod = typeof(RavenQueryableExtensions)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -72,6 +72,18 @@ public static class RavenSetMembership
         // PredicateScope.IsExplicitAllRows, the framework's single producer of that judgement, so this
         // cannot disagree with the destructive guards about what "explicitly everything" means.
         if (PredicateScope.IsExplicitAllRows(filter)) return null;
+
+        // TASK-222: desugar boolean ternary / `??` before the driver sees them. RavenDB does not reject
+        // those — it renders NOTHING for them, silently. Measured: `x => c ? a : b` produces
+        // `from 'Docs'` with no `where` at all (so every document matches), and the same ternary as one
+        // conjunct produces the MALFORMED `from 'Docs' where Active = $p0 and`. A refusal would be
+        // survivable; a dropped predicate is a wrong answer nobody sees. ExpressionNormalizer already
+        // existed for exactly this and its own doc comment wrongly excluded the native-LINQ backends.
+        var normalized = ExpressionNormalizer.Normalize(filter.Body)!;
+        if (!ReferenceEquals(normalized, filter.Body))
+        {
+            filter = Expression.Lambda<Func<T, bool>>(normalized, filter.Parameters);
+        }
 
         if (InMethod == null) return filter;
 
