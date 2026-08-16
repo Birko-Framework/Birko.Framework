@@ -62,8 +62,9 @@ namespace Birko.Data.MongoDB.Tests.Serialization
         {
             var doc = new MgDoc { Guid = Id, Name = "x" }.ToBsonDocument();
 
-            doc["Guid"].BsonType.Should().Be(BsonType.String, "the canonical id is stored as a string");
-            doc["Guid"].AsString.Should().Be(Id.ToString());
+            doc.Contains("Guid").Should().BeFalse("the canonical id is _id, not a second element");
+            doc["_id"].BsonType.Should().Be(BsonType.String, "the canonical id is stored as a string");
+            doc["_id"].AsString.Should().Be(Id.ToString());
 
             var back = BsonSerializer.Deserialize<MgDoc>(doc);
             back.Guid.Should().Be(Id);
@@ -77,7 +78,7 @@ namespace Birko.Data.MongoDB.Tests.Serialization
             // when GuidRepresentation is Unspecified".
             var doc = new PlainDoc { Guid = Id, Name = "y" }.ToBsonDocument();
 
-            doc["Guid"].AsString.Should().Be(Id.ToString());
+            doc["_id"].AsString.Should().Be(Id.ToString());
 
             var back = BsonSerializer.Deserialize<PlainDoc>(doc);
             back.Guid.Should().Be(Id);
@@ -89,7 +90,7 @@ namespace Birko.Data.MongoDB.Tests.Serialization
         {
             var doc = new MgDoc { Guid = null, Name = "z" }.ToBsonDocument();
 
-            doc["Guid"].IsBsonNull.Should().BeTrue();
+            doc["_id"].IsBsonNull.Should().BeTrue();
             BsonSerializer.Deserialize<MgDoc>(doc).Guid.Should().BeNull();
         }
 
@@ -157,24 +158,33 @@ namespace Birko.Data.MongoDB.Tests.Serialization
         };
 
         [Fact]
-        public void A_derived_model_cannot_opt_back_into_strict_extra_element_handling()
+        public void A_derived_model_can_still_choose_strict_extra_element_handling()
         {
-            // Pinning a KNOWN COST of the fix, not endorsing it. IgnoreExtraElements is set on the
-            // AbstractModel class map with IsInherited, because every real entity is a derived type
-            // with its own automapped map and would otherwise throw on the driver-generated _id.
-            // The driver's Freeze() then copies the base flag over the derived one unconditionally,
-            // so [BsonIgnoreExtraElements(false)] on a model has no effect. Measured, not assumed.
-            // This is a real conflict with the framework's "never drops it quietly" convention and
-            // is why the alternative — mapping the canonical Guid AS _id, which removes the extra
-            // element entirely — is filed as its own task rather than silently adopted here.
-            var doc = new BsonDocument
-            {
-                { "Guid", Id.ToString() }, { "Name", "n" }, { "Unexpected", 1 },
-            };
+            // TASK-219 replaced this test's predecessor, which pinned the OPPOSITE and was labelled a
+            // known cost: while _id was a driver-generated ObjectId, this map needed
+            // IgnoreExtraElements(IsInherited) to tolerate it, and the driver's Freeze() then copied
+            // that flag over any derived [BsonIgnoreExtraElements(false)] — so no model could be
+            // strict. Now that the canonical Guid IS _id there is no extra element to tolerate, the
+            // flag is gone, and a model that asks for strictness gets it.
+            var doc = new BsonDocument { { "_id", Id.ToString() }, { "Name", "n" }, { "Unexpected", 1 } };
 
-            BsonSerializer.Deserialize<StrictDoc>(doc).Name.Should().Be("n");
-            BsonClassMap.LookupClassMap(typeof(StrictDoc)).IgnoreExtraElements.Should().BeTrue(
-                "the base map's inherited flag overrides the derived attribute");
+            var act = () => BsonSerializer.Deserialize<StrictDoc>(doc);
+
+            act.Should().Throw<FormatException>("a model opting into strictness must not silently drop a field");
+            BsonClassMap.LookupClassMap(typeof(StrictDoc)).IgnoreExtraElements.Should().BeFalse();
+        }
+
+        [Fact]
+        public void An_unexpected_element_is_not_silently_dropped_by_default()
+        {
+            // The framework-wide half of the same change: no Birko entity is a silent-drop reader now.
+            // This is the standing "a mapper that cannot express something refuses; it never drops it
+            // quietly" rule, which the previous _id answer had forced a framework-wide exception to.
+            var doc = new BsonDocument { { "_id", Id.ToString() }, { "Name", "n" }, { "Unexpected", 1 } };
+
+            var act = () => BsonSerializer.Deserialize<MgDoc>(doc);
+
+            act.Should().Throw<FormatException>();
         }
 
         [BsonIgnoreExtraElements(false)]
