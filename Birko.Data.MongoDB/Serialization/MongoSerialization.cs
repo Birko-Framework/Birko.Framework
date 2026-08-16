@@ -34,6 +34,15 @@ namespace Birko.Data.MongoDB.Serialization
     /// </item>
     /// </list>
     /// <para>
+    /// <b>The canonical <see cref="AbstractModel.Guid"/> IS <c>_id</c></b> (TASK-219). One identity per
+    /// document, stored as a string. The framework briefly held two contradictory answers here — this
+    /// registration said <c>_id</c> was a driver-generated ObjectId while
+    /// <c>MongoViewTranslator.GetFieldName</c> mapped the <c>Guid</c> property to <c>_id</c> — and under
+    /// the former, every view projecting the canonical id threw and every view filtering on it returned
+    /// <i>silently zero</i> rows. Mapping the id here settles it in the translator's favour and removes
+    /// the <c>IgnoreExtraElements</c> that tolerating a second id had required.
+    /// </para>
+    /// <para>
     /// <b>Consumer configuration wins.</b> Both calls are <c>TryRegister*</c>, and this runs from the
     /// <see cref="MongoDBClient"/> constructor — i.e. when a store is given its settings, which is after
     /// application start-up. A consumer that registers its own Guid serializer or its own
@@ -101,15 +110,17 @@ namespace Birko.Data.MongoDB.Serialization
 
             guid.SetSerializer(new NullableSerializer<Guid>(new GuidSerializer(BsonType.String)));
 
-            // No Birko model declares _id, by design: the canonical id is an ordinary Guid
-            // field and the driver auto-generates an ObjectId for _id (the assumption
-            // ChangeStreamDocumentKeyResolver is written around). Without this the write
-            // succeeds and the READ throws
-            // FormatException("Element '_id' does not match any field or property").
-            // IsInherited, because a derived model gets its own automapped class map and the
-            // flag is not inherited by default — the entity types are all derived.
-            cm.SetIgnoreExtraElements(true);
-            cm.SetIgnoreExtraElementsIsInherited(true);
+            // The canonical Guid IS _id (TASK-219). There is exactly one identity per document,
+            // stored as a string, and no driver-generated ObjectId beside it.
+            //
+            // The alternative — leaving _id to the driver and keeping Guid as an ordinary field —
+            // is what TASK-214 shipped, and it cost an IgnoreExtraElements(IsInherited) on this map
+            // purely to stop the unwanted ObjectId breaking every read. That turned every Birko
+            // entity into a silent-drop reader with no per-model opt-out, against the framework's
+            // own "never drops it quietly" rule, and it left MongoViewTranslator — which maps the
+            // Guid property to _id — projecting the ObjectId: measured as a throw on a Guid-typed
+            // view property, and as a silently empty result when filtering on it.
+            cm.SetIdMember(guid);
         }
 
         /// <summary>
@@ -152,25 +163,27 @@ namespace Birko.Data.MongoDB.Serialization
         }
 
         /// <summary>
+        /// True when <paramref name="map"/> already agrees with the framework about identity: the
+        /// canonical <see cref="AbstractModel.Guid"/> is the document's <c>_id</c>. Either a consumer
+        /// map that reached the same conclusion, or this class's own map from an earlier call.
+        /// </summary>
+        internal static bool MapsTheCanonicalId(BsonClassMap? map)
+            => map?.IdMemberMap is { } id && id.MemberName == nameof(AbstractModel.Guid);
+
+        /// <summary>
         /// Called when <c>TryRegisterClassMap</c> refused because a class map for
         /// <see cref="AbstractModel"/> already exists. Same two causes as the serializer above.
         /// </summary>
         private static void VerifyExistingAbstractModelClassMap()
         {
-            var existing = BsonClassMap.LookupClassMap(typeof(AbstractModel));
-
-            // Anything that already string-represents the canonical id is a consumer map that
-            // agrees with the framework, or the framework's own map from an earlier call.
-            var guid = existing.GetMemberMap(nameof(AbstractModel.Guid));
-            if (guid?.GetSerializer() is NullableSerializer<Guid>) return;
-            if (existing.IgnoreExtraElements) return;
+            if (MapsTheCanonicalId(BsonClassMap.LookupClassMap(typeof(AbstractModel)))) return;
 
             throw new InvalidOperationException(
                 "MongoDB serialization could not be registered: a class map for AbstractModel was "
-                + "already frozen before the first MongoDBClient was constructed, and it maps neither "
-                + "the canonical Guid as a string nor tolerates the driver-generated _id — so reads "
-                + "and writes of Birko entities will fail. Call MongoSerialization.EnsureRegistered() "
-                + "during application start-up, before any AbstractModel-derived type is serialized.");
+                + "already frozen before the first MongoDBClient was constructed, and it does not map "
+                + "the canonical Guid as the document _id — so reads and writes of Birko entities will "
+                + "not agree on identity. Call MongoSerialization.EnsureRegistered() during application "
+                + "start-up, before any AbstractModel-derived type is serialized.");
         }
     }
 }

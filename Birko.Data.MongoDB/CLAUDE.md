@@ -30,10 +30,15 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - `MongoSerialization.EnsureRegistered()` — the framework's **one** registration of driver
   serialization, called from the `MongoDBClient` constructor (the single point both stores'
   `SetSettings` pass through), idempotent and thread-safe.
-- It registers three things: `AbstractModel.Guid` as a BSON **string**, a default `GuidSerializer`
-  with `GuidRepresentation.Standard` for every other `Guid` member, and `IgnoreExtraElements`
-  (**inherited**) so the driver-generated ObjectId `_id` — which no Birko model declares — does not
-  break the read.
+- It registers two things: **`AbstractModel.Guid` as the document `_id`**, represented as a BSON
+  string, and a default `GuidSerializer` with `GuidRepresentation.Standard` for every other `Guid`
+  member.
+- **One identity per document.** TASK-214 first shipped the opposite — `_id` left to the driver as an
+  auto-generated ObjectId, the Guid stored beside it — which needed an `IgnoreExtraElements` on the
+  base class map just to stop the unwanted `_id` breaking every read. That made every Birko entity a
+  silent-drop reader with no per-model opt-out, and it contradicted `Birko.Data.MongoDB.Views`, whose
+  translator maps the `Guid` property to `_id`: a view projecting the canonical id threw, and a view
+  filtering on it returned zero rows silently (TASK-219). Do not reintroduce a second id.
 - **Do not add a member to a model that shadows an `AbstractModel` one.** `BsonClassMap` maps
   *declared* members per class, so a re-declared `Guid` claims the same element name twice and the
   class map refuses to freeze — every derived model becomes unserializable, at first write, not at
@@ -162,7 +167,8 @@ collection.Indexes.CreateOne(new CreateIndexModel<Customer>(indexKeysDefinition)
 ## Data Types
 
 Common .NET to BSON type mappings:
-- `AbstractModel.Guid` (the canonical id) → `String` — set by `MongoSerialization`, see § Components
+- `AbstractModel.Guid` (the canonical id) → the document `_id`, as a `String` — set by
+  `MongoSerialization`, see § Components. There is no separate `Guid` element
 - any other `Guid` → `BinData(4)` (UUID **standard**, i.e. `GuidRepresentation.Standard`) — also set
   by `MongoSerialization`. Driver 3.x has no usable default here: it ships `Unspecified`, which
   throws rather than choosing, so nothing serializes until the registration runs
