@@ -21,6 +21,31 @@ namespace Birko.Data.MongoDB.Stores
         public string? ReplicaSet { get; set; }
 
         /// <summary>
+        /// Gets or sets a raw MongoDB connection string.
+        /// If set, <see cref="GetConnectionString"/> returns this verbatim, ignoring other properties.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The composed form below emits a <b>fixed</b> set of query parameters — <c>authSource</c>,
+        /// <c>replicaSet</c>, <c>tls</c>, <c>retryWrites</c>, <c>retryReads</c> — and nothing else can be
+        /// added. Everything a real deployment eventually needs is therefore unreachable:
+        /// <c>maxPoolSize</c>, <c>appName</c>, <c>connectTimeoutMS</c>, <c>serverSelectionTimeoutMS</c>,
+        /// <c>readPreference</c>, write concern, <c>directConnection</c>, and the SOCKS
+        /// <c>proxyHost</c>/<c>proxyPort</c> pair — MongoDB's nearest equivalent to the CosmosDB Gateway
+        /// mode added in TASK-223. The only workaround was to subclass this type and override
+        /// <see cref="GetConnectionString"/>, which the framework's own live probes had to do three times
+        /// in one session (TASK-214, TASK-219) merely to set a timeout.
+        /// </para>
+        /// <para>
+        /// Deliberately identical in shape to <c>Birko.Redis.RedisSettings.RawConnectionString</c> — one
+        /// answer for the family rather than two — including that only a <b>non-empty</b> value overrides.
+        /// An explicit <c>""</c> falls through to the composed form; returning it verbatim would yield an
+        /// invalid connection string (the same correction Redis needed in CR-L331).
+        /// </para>
+        /// </remarks>
+        public string? RawConnectionString { get; set; }
+
+        /// <summary>
         /// Initializes a new instance of the Settings class.
         /// </summary>
         public Settings() : base()
@@ -46,6 +71,13 @@ namespace Birko.Data.MongoDB.Stores
         /// <returns>A MongoDB connection string.</returns>
         public virtual string GetConnectionString()
         {
+            // Only an actually-set raw string overrides; an explicit "" falls through to the composed
+            // form. Mirrors RedisSettings, including that correction (CR-L331).
+            if (!string.IsNullOrEmpty(RawConnectionString))
+            {
+                return RawConnectionString;
+            }
+
             var connectionString = "mongodb://";
 
             // Add credentials if provided
@@ -110,6 +142,7 @@ namespace Birko.Data.MongoDB.Stores
                 base.LoadFrom((Birko.Configuration.RemoteSettings)data);
                 AuthDatabase = data.AuthDatabase;
                 ReplicaSet = data.ReplicaSet;
+                RawConnectionString = data.RawConnectionString;
             }
         }
 
