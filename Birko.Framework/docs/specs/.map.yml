@@ -49,6 +49,13 @@ areas:
     sources:
       - ../Birko.Contracts/Models/*.cs
       - ../Birko.Data.Core/Models/*.cs
+      # AbstractModel.Guid's MongoDB wire contract. Not a "per-backend store body" (the exclusion
+      # recorded under store-crud-contract) — these two files decide whether an AbstractModel can be
+      # serialized AT ALL, and until TASK-214 the answer was no, for every entity, in both stores.
+      # Fifth instance of the .map.yml under-coverage pattern: no glob reached them, so the harvest
+      # never specced the defect and the regen for its fix would have been blind to it.
+      - ../Birko.Data.MongoDB/Models/MongoDBModel.cs
+      - ../Birko.Data.MongoDB/Serialization/*.cs
 
   - name: store-crud-contract
     title: Store CRUD contract and template-method hierarchy

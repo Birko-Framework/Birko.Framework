@@ -9,17 +9,22 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 115                 |
+| todo         | —                  | —                  | 116                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 60                  |
+| done         | 1                  | 22                 | 61                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 83 · P3 6**
+Todo by priority: **P0 0 · P1 27 · P2 83 · P3 6**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
+>
+> Adjusted 2026-08-16 (TASK-214 close): todo 115 -> 116, done 60 -> 61, tasks 187 -> 189.
+> TASK-214 closed done and spawned **two** tasks, so the todo pool grew across a close —
+> TASK-218 (array `.Contains` does not translate on MongoDB) and TASK-219 (two contradictory
+> answers for what `_id` is), both P1, both under STORY-051.
 >
 > The STORY-051 tree block below was rebuilt at the same time and had drifted further than the counts:
 > it claimed 13/17 while the story holds **23** tasks, listed TASK-129 / 137 / 141 as open when all three
@@ -45,19 +50,26 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md)
-  A model deriving `MongoDBModel` cannot be serialized by the driver at all (P1, ai)
+- [TASK-219](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-219-mongodb-has-two-contradictory-answers-for-what-id-is.md)
+  `Birko.Data.MongoDB` has two contradictory answers for what `_id` is (P1, ai) — spawned by TASK-214's
+  close-gate review. A Mongo view filtering on `Guid` matches **nothing** today: a silent empty result,
+  which is why it outranks the loud one below. Cheap *now* and only now — TASK-214 proved no consumer can
+  hold Birko-written MongoDB data to migrate, and that stops being true as soon as the fixed stores are used
 - [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay
   duplicates a create (P1, ai)
+- [TASK-218](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-218-array-contains-in-a-filter-does-not-translate-on-mongodb.md)
+  An `IN` filter over a C# array throws `NotSupportedException` on MongoDB (P1, ai) — also spawned by
+  TASK-214. Loud, and a working look-alike (`List<T>`) is one keystroke away
 - [TASK-217](_loose/TASK-217-update-overload-builds-its-set-list-from-every-column.md) `Update(Table, values,
   conditions)` builds its SET list from every column, so a partial update cannot work (P2, ai) — spawned by
   TASK-216; loud on every provider and loses no data, which is why it ranks below the two above
 
-TASK-215 closed 2026-08-16 and is off this list. It was ranked **above** TASK-214 by `/fix-next`:
-TASK-214 fails *loudly* (a `BsonSerializationException`) and its first acceptance step needs a live
-MongoDB, while TASK-215 was silent data loss and finishable offline. Severity follows the failure mode —
-a wrong answer nobody sees outranks a crash that reports itself. TASK-214 therefore returns to the top,
-still needing the server it always needed.
+TASK-214 and TASK-215 both closed 2026-08-16 and are off this list. TASK-215 was correctly ranked above
+TASK-214 (silent data loss, finishable offline, versus a loud `BsonSerializationException` needing a live
+server). Worth recording what the live run then showed: TASK-214's "loud" classification held for the two
+filed failures but **understated the defect** — nothing could be written to MongoDB at all, by either store,
+and a third failure hiding behind them made every *read* throw once writes worked. The severity key ranks
+what a finding *says*; only measurement ranks what it *is*.
 
 TASK-211 and TASK-216 both closed 2026-08-15 — the PostgreSQL identifier pair — and are off this list.
 TASK-216's own close spawned TASK-217, which is why the tail of the list moved rather than shortened.
@@ -170,7 +182,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (21/23, 1 in review)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (22/25, 1 in review, 2 new)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
@@ -194,6 +206,9 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
     - [x] [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2, ai) · FEATURE-014
     - [x] [TASK-207](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-207-viewaddfield-drops-duplicate-keys-silently.md) `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect (P2, ai) · FEATURE-014
     - [x] [TASK-215](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-215-wire-bounded-filter-guard-into-remaining-backends.md) Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch (P2, ai) · FEATURE-014
+    - [x] [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md) A model deriving `MongoDBModel` cannot be serialized by the driver at all — in fact nothing could be written to MongoDB at all (P1, ai) · FEATURE-014
+    - [ ] [TASK-218](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-218-array-contains-in-a-filter-does-not-translate-on-mongodb.md) An `IN` filter over a C# **array** does not translate on MongoDB — `NotSupportedException` (P1, ai) · FEATURE-014
+    - [ ] [TASK-219](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-219-mongodb-has-two-contradictory-answers-for-what-id-is.md) `Birko.Data.MongoDB` has two contradictory answers for what `_id` is (P1, ai) · FEATURE-014
   - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/22)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1, ai) · FEATURE-014
     - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1, ai) · FEATURE-014

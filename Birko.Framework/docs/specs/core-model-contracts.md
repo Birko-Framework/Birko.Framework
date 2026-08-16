@@ -1,7 +1,7 @@
 ---
 area: core-model-contracts
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 8f57e5eec1505d1dc829e5a3be28e6f7eb449b93
+generated-on: 2026-08-16
 sources:
   - ../Birko.Contracts/Models/ICopyable.cs
   - ../Birko.Contracts/Models/IDefault.cs
@@ -15,7 +15,10 @@ sources:
   - ../Birko.Data.Core/Models/IDefault.cs
   - ../Birko.Data.Core/Models/ILoadable.cs
   - ../Birko.Data.Core/Models/ITimestamped.cs
+  - ../Birko.Data.MongoDB/Models/MongoDBModel.cs
+  - ../Birko.Data.MongoDB/Serialization/MongoSerialization.cs
 shaped-by: []
+shaped-by-derived: false
 ---
 
 # Zero-dependency model contracts (loadable, copyable, default, timestamped)
@@ -304,3 +307,66 @@ declarations in additional parts and replace property behaviour.
 - **Given** `ICopyable<AbstractModel>` declaring `AbstractModel CopyTo(AbstractModel clone)` with a non-nullable parameter, and `AbstractModel` implementing it as `CopyTo(AbstractModel? clone = null)`
 - **When** the code is compiled with `<Nullable>enable</Nullable>`
 - **Then** no nullability diagnostic is produced, because accepting a nullable argument where the interface promises non-null widens the accepted input and is permitted
+
+### Requirement: The MongoDB wire contract for the canonical identity is registered once, centrally
+
+The system SHALL register the MongoDB driver serialization that `AbstractModel`-derived entities depend on
+exactly once per process, from `Birko.Data.MongoDB.Serialization.MongoSerialization.EnsureRegistered()`, and
+SHALL invoke it from the `MongoDBClient` constructor — the single point through which both
+`MongoDBStore.SetSettings` and `AsyncMongoDBStore.SetSettings` obtain a client. The registration SHALL map
+`AbstractModel.Guid` as a BSON **string**, SHALL install a default `GuidSerializer` carrying
+`GuidRepresentation.Standard` for un-attributed `Guid` members, and SHALL make the class map tolerate extra
+elements, inherited by derived maps.
+
+This requirement replaces the `[BsonRepresentation(BsonType.String)]` override that `MongoDBModel` used to
+declare. Both `TryRegisterSerializer` and `TryRegisterClassMap` are used, so a consumer that configured its
+own Guid serializer or `AbstractModel` class map before constructing a store keeps its own choice.
+
+#### Scenario: A model deriving MongoDBModel can be class-mapped
+
+- **Given** a document type deriving `MongoDBModel` and a process in which `EnsureRegistered()` has run
+- **When** `BsonSerializer.SerializerRegistry.GetSerializer<T>()` is called for it
+- **Then** a serializer is returned — the class map freezes, because `MongoDBModel` declares no member that shadows `AbstractModel.Guid`
+
+#### Scenario: The canonical identity round-trips as a string
+
+- **Given** an entity whose `Guid` is set
+- **When** it is serialized to BSON and deserialized back
+- **Then** the `Guid` element is a BSON string holding the Guid's text form, and the deserialized entity carries the same value
+
+#### Scenario: A null canonical identity round-trips as null
+
+- **Given** an entity whose `Guid` is null
+- **When** it is serialized to BSON and deserialized back
+- **Then** the `Guid` element is BSON null and the deserialized entity's `Guid` is null
+
+#### Scenario: An un-attributed Guid member serializes as standard binary
+
+- **Given** a model carrying an additional `Guid` property with no `[BsonRepresentation]`
+- **When** it is serialized to BSON
+- **Then** that member is BSON binary of subtype `UuidStandard`, the representation `ChangeStreamDocumentKeyResolver` already assumes when reading a binary `_id`
+
+#### Scenario: The driver-generated _id does not break the read
+
+- **Given** an entity written through either store, for which the driver auto-generated an ObjectId `_id` because no Birko model declares one
+- **When** the document is read back into the model type
+- **Then** the extra `_id` element is ignored rather than raising `FormatException`, because the `AbstractModel` class map sets `IgnoreExtraElements` and marks it inherited
+
+#### Scenario: Registration is idempotent across many stores
+
+- **Given** a process that constructs several stores, each of which constructs a `MongoDBClient`
+- **When** `EnsureRegistered()` runs on each construction
+- **Then** only the first performs the registration and no duplicate-registration exception is raised
+
+### Requirement: MongoDBModel declares no state of its own
+
+The system SHALL keep `MongoDBModel` free of declared members. It exists solely as the type constraint of the
+synchronous `MongoDBStore<T>` and its repositories; any member it declares that shadows an `AbstractModel`
+member makes the driver's class map unfreezable, and it does so at the first serialization attempt rather
+than at compile time.
+
+#### Scenario: The class contributes no declared property
+
+- **Given** `typeof(MongoDBModel)` queried for public instance properties declared on that type only
+- **When** the result is counted
+- **Then** it is empty

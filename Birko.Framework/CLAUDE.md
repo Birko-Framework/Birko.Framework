@@ -442,6 +442,32 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   radius before turning silence into a throw**: this one was cleared against 19 SQL-touching suites,
   including every `Birko.Models.*.SQL` domain suite, because the change breaks any consumer model carrying
   a property the mapper never covered
+- **Where a driver has no usable default, the framework picks one — once, at a funnel, with the
+  consumer winning.** Sibling of the "one producer" rules above, applied to *global* driver state
+  rather than to a name or a scope, and it arrives with its own failure mode: not two answers, but
+  **no answer at all, in a capability that reports green.** `Birko.Data.MongoDB` registered nothing —
+  no class map, no convention pack, no serializer — and `MongoDBModel` "compensated" with a
+  `[BsonRepresentation(BsonType.String)]` **override** of `AbstractModel.Guid`. `BsonClassMap` maps
+  *declared* members per class, so that override claimed an element name the base already claimed and
+  the map refused to freeze. Measured against MongoDB 7: **neither store could write a single entity**
+  — sync died on the class map, async on driver 3.x's `GuidRepresentation.Unspecified` (which throws
+  instead of choosing), and a read-back returned 0 rows (TASK-214). Four parts generalise:
+  - **A shadowing member is not a local decision.** Re-declaring a base member to hang an attribute on
+    it is invisible at compile time and fatal at the first serialize. Configure the member on the class
+    map of the type that **declares** it — which also made the fix cover the async store's
+    `AbstractModel` constraint, something the override never could.
+  - **Register at the funnel, not in a module initializer, so the CONSUMER wins.** `MongoDBClient`'s
+    constructor is the one point both stores' `SetSettings` reach, and it runs after start-up, so a
+    consumer that registered its own serializer first keeps it (`TryRegister*`, first-wins). A module
+    initializer is stricter — it cannot be missed — and that is exactly why it is wrong here: it runs
+    before consumer code and would silently override it. **Precedence beat coverage.**
+  - **A default that "looks safe" can be the one that throws.** Driver 3.x *removed*
+    `BsonDefaults.GuidRepresentation`; the remaining default is `Unspecified`, which refuses. Do not
+    assume an unset knob means a sane fallback — measure what the unset state actually does.
+  - **A framework-global flag needs its inheritance checked.** `IgnoreExtraElements` on the base class
+    map applies to that class alone unless `SetIgnoreExtraElementsIsInherited(true)` — and every real
+    entity is a derived type with its own automapped map. The narrower call compiles, reads correctly,
+    and fixes nothing.
 - **Lazy schema-ensure degrades and reports; an explicit schema call throws.** Stores run schema-ensure on
   first data access and set `_initialized` only *after* it returns, so anything that throws in there leaves
   the store permanently uninitialised and re-throws on **every** later operation — reads included. An
@@ -527,6 +553,38 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Nothing could be saved to MongoDB — the store was never able to serialize an entity (2026-08-16)
+
+TASK-214, verified against a live **MongoDB 7** rather than the offline registry the finding was filed
+from. The finding held and was **wider than filed**: not "the sync store cannot serialize", but
+**neither store could persist a single entity**, and repositories inherited it through the same
+constraints. `Birko.Data.MongoDB` registered no driver serialization at all, and `MongoDBModel`'s
+attempt to compensate — a `[BsonRepresentation(BsonType.String)]` **override** of `AbstractModel.Guid`
+— is what made the class map unfreezable. Fixed by deleting the override and adding one
+`MongoSerialization.EnsureRegistered()`, called from the `MongoDBClient` constructor. The standing rule
+is in § Conventions above. Split: **Revert A 7 of 78** (6 fix-dependent), **Revert B 6 of 78**
+(5 fix-dependent); ungated 78/78, 6 dependent suites 39/39. Four things worth carrying:
+
+- **The live server found a third failure the offline probe structurally could not.** With the writes
+  finally landing, every *read* threw `FormatException: Element '_id' does not match any field or
+  property` — no Birko model declares `_id`, by design, so the driver's auto-generated ObjectId had
+  nowhere to go. **Failures queue** (§ TASK-209's rule), and the ones behind the filed one only appear
+  once you clear it.
+- **The env-gated suite had never run, and running it was most of the value.** `MongoFilterMatrixLiveTests`
+  no-ops without `BIRKO_MONGO_HOST`, so the entire MongoDB surface was green while unable to write.
+  Starting a container took a minute. The new serialization suite is deliberately **non-gated** —
+  class-mapping and BSON round-trip need no server, which is precisely why gating them was indefensible.
+- **Registration goes at a funnel and lets the consumer win.** `MongoDBClient`'s constructor, not a
+  `[ModuleInitializer]`: shared projects compile into the consumer's assembly, so an initializer would
+  run *first* and the framework would always beat the consumer's own configuration. Stricter coverage,
+  wrong precedence.
+- **`.map.yml` under-coverage, fifth instance — and this time it bit before the fix, not after.** None
+  of the four changed files was reachable by any glob, so the harvest never specced the defect *and*
+  this fix's own regen would have produced a clean diff over unread code. Added to
+  `core-model-contracts`; `ChangeStreams/*.cs` + `MongoDBLogModel.cs` remain unmapped (TASK-208).
+  Also spawned **TASK-218**: with writes working, the matrix suite reported 26/27, and the 27th is real
+  — an array's `.Contains` binds to `MemoryExtensions.Contains` on .NET 9+ and the driver rejects it.
 
 ### The unbounded-filter guard was never wired into the base it lives on (2026-08-16)
 
