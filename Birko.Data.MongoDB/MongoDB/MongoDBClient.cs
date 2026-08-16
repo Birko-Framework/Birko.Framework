@@ -32,6 +32,12 @@ namespace Birko.Data.MongoDB
         {
             Settings = settings ?? throw new ArgumentNullException(nameof(settings));
 
+            // Single funnel: both MongoDBStore.SetSettings and AsyncMongoDBStore.SetSettings construct
+            // a client here, so registering once at this point covers every store and repository path
+            // without any of them having to remember. See MongoSerialization for why it is here and not
+            // in a module initializer (TASK-214).
+            Serialization.MongoSerialization.EnsureRegistered();
+
             var connectionString = settings.GetConnectionString();
             Client = new MongoClient(connectionString);
 

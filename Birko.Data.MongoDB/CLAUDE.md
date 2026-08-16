@@ -26,6 +26,22 @@ MongoDB implementation for the Birko data layer providing document-based storage
 - `AsyncMongoDBRepository<T>` - Async repository
 - `AsyncMongoDBBulkRepository<T>` - Async bulk repository
 
+### Serialization
+- `MongoSerialization.EnsureRegistered()` — the framework's **one** registration of driver
+  serialization, called from the `MongoDBClient` constructor (the single point both stores'
+  `SetSettings` pass through), idempotent and thread-safe.
+- It registers three things: `AbstractModel.Guid` as a BSON **string**, a default `GuidSerializer`
+  with `GuidRepresentation.Standard` for every other `Guid` member, and `IgnoreExtraElements`
+  (**inherited**) so the driver-generated ObjectId `_id` — which no Birko model declares — does not
+  break the read.
+- **Do not add a member to a model that shadows an `AbstractModel` one.** `BsonClassMap` maps
+  *declared* members per class, so a re-declared `Guid` claims the same element name twice and the
+  class map refuses to freeze — every derived model becomes unserializable, at first write, not at
+  compile time. This is what `MongoDBModel` used to do (TASK-214).
+- Both registrations are `TryRegister*` and run after start-up, so a **consumer that configures its
+  own** Guid serializer or `AbstractModel` class map first keeps it. Deliberate: a module
+  initializer would run earlier and silently override the consumer.
+
 ### Change Streams
 - Real-time data change notifications via MongoDB Change Streams
 - Supports filtering by operation type (insert, update, delete, replace)
@@ -146,7 +162,10 @@ collection.Indexes.CreateOne(new CreateIndexModel<Customer>(indexKeysDefinition)
 ## Data Types
 
 Common .NET to BSON type mappings:
-- `Guid` → `BinData(3)` (UUID)
+- `AbstractModel.Guid` (the canonical id) → `String` — set by `MongoSerialization`, see § Components
+- any other `Guid` → `BinData(4)` (UUID **standard**, i.e. `GuidRepresentation.Standard`) — also set
+  by `MongoSerialization`. Driver 3.x has no usable default here: it ships `Unspecified`, which
+  throws rather than choosing, so nothing serializes until the registration runs
 - `string` → `String`
 - `int` → `Int32`
 - `long` → `Int64`

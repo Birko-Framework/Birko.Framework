@@ -15,6 +15,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\MongoDBLogModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\MongoDBModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoDB\MongoDBClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Serialization\MongoSerialization.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\MongoDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncMongoDBStore.cs" />

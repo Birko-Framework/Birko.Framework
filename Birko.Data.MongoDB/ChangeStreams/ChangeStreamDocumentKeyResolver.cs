@@ -8,8 +8,10 @@ namespace Birko.Data.MongoDB.ChangeStreams
     /// Resolves the framework <see cref="Guid"/> identity of a change-stream event.
     /// </summary>
     /// <remarks>
-    /// The framework's canonical id (<see cref="AbstractModel.Guid"/>) is mapped with
-    /// <c>[BsonRepresentation(BsonType.String)]</c> and, on <c>MongoDBModel</c>, is not marked
+    /// The framework's canonical id (<see cref="AbstractModel.Guid"/>) is mapped as a string by
+    /// <c>Serialization.MongoSerialization</c> (until TASK-214 that was a
+    /// <c>[BsonRepresentation(BsonType.String)]</c> override on <c>MongoDBModel</c>, which made the
+    /// class map unfreezable) and is not marked
     /// <c>[BsonId]</c>, so the driver stores it as an ordinary string field and auto-generates an
     /// ObjectId for <c>_id</c>. The previous mapper only set the event key when
     /// <c>change.DocumentKey["_id"].IsGuid</c> was true — which is never the case for these models —
