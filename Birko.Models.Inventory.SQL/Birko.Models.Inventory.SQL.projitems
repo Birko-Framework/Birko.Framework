@@ -12,5 +12,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\StockItemMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\StorageLocationMapping.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Mappings\InventoryDocumentLineMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\StockBalanceMapping.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Mappings\StockMovementMapping.cs" />
   </ItemGroup>
 </Project>
