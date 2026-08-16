@@ -16,6 +16,7 @@
     <!-- Expressions -->
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionParameterReplacer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionNormalizer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\DateTruncation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\PredicateScope.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\SpanContains.cs" />
     <!-- Filters -->
