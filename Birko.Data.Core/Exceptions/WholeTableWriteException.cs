@@ -63,12 +63,19 @@ namespace Birko.Data.Exceptions
         /// </summary>
         /// <param name="scope">What the write would have covered, in the backend's own words — e.g.
         /// <c>"every document in the collection"</c>.</param>
-        public WholeTableWriteException(string operation, string tableName, string scope)
+        /// <param name="explicitDoor">The all-rows method the caller actually has, e.g.
+        /// <c>"DeleteAllAsync()"</c>. Defaults to the synchronous spelling.
+        /// <para><b>TASK-215, § SH-H037.</b> This parameter exists because the default was wrong for half its
+        /// callers: an async store's caller has <c>DeleteAllAsync()</c>, and a refusal telling them to use
+        /// <c>DeleteAll()</c> points at a method that does not compile. The rule is that a guard's opt-out
+        /// must be one the reader can actually take — a message naming an unreachable door is a wall wearing
+        /// a door's label, the same defect the Redis flush guard shipped in louder form.</para></param>
+        public WholeTableWriteException(string operation, string tableName, string scope, string? explicitDoor = null)
             : base($"Refusing to {operation} in \"{tableName}\": the filter constrains nothing, so the "
                  + $"operation would affect {scope}. "
                  + "A predicate that reduces to `true` is indistinguishable, once translated, from an "
                  + "ordinary one. To target everything deliberately use "
-                 + $"{(operation == "delete" ? "DeleteAll()" : "UpdateAll(updates)")} or an explicit "
+                 + $"{explicitDoor ?? (operation == "delete" ? "DeleteAll()" : "UpdateAll(updates)")} or an explicit "
                  + "`x => true` filter.")
         {
             Operation = operation;
