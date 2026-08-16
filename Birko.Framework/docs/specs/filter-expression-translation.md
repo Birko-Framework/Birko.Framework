@@ -1,6 +1,6 @@
 ---
 area: filter-expression-translation
-generated-at: c78cfca
+generated-at: f3e900a
 generated-on: 2026-08-15
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
@@ -405,10 +405,21 @@ contains no such node. The three-argument overload SHALL be rewritten only when 
 `null`; a real comparer SHALL be left intact rather than silently dropped. `SpanContains.UnwrapSpanConversion`
 SHALL be the single producer of the span-unwrap, shared with `PredicateScope`.
 
-The rewrite SHALL be wired into the MongoDB stores, at each method that accepts a caller filter, and SHALL
-NOT be wired into SQL or ElasticSearch. Measured 2026-08-16 on driver 3.2.0 / .NET 10: of the backends that
-translate a filter expression, only MongoDB is affected — SQL renders `IN (1,5)` and ElasticSearch
-`terms=(1,5)` for all four spellings, because they evaluate the operand themselves.
+The rewrite SHALL be wired into the **MongoDB and CosmosDB** stores, at each method that accepts a caller
+filter, and SHALL NOT be wired into any other backend. The full classification, measured 2026-08-16 on
+.NET 10 (TASK-218, TASK-220):
+
+- **Compile the delegate — not at risk:** InMemory, JSON, XML, InfluxDB. The lambda runs on the real
+  runtime, which knows `MemoryExtensions.Contains`.
+- **Hand-rolled parser — measured correct already:** SQL (four providers) renders `IN (1,5)` and
+  ElasticSearch `terms=(1,5)` for all four spellings, because both evaluate the operand themselves.
+- **Raw expression to a driver — affected:** MongoDB and CosmosDB both raise
+  `NotSupportedException: Specified method is not supported` for the array spelling while rendering the
+  `List<T>` one correctly.
+- **RavenDB — excluded deliberately.** *Every* collection `Contains` spelling fails there with
+  `Expression type not supported: TypedParameterExpression`, not just the span-bound one, so the rewrite
+  would change one failure into an identical one. Raven requires `RavenQueryableExtensions.In`; tracked
+  as its own defect.
 
 #### Scenario: An array Contains binds MemoryExtensions, not Enumerable
 
@@ -439,6 +450,18 @@ translate a filter expression, only MongoDB is affected — SQL renders `IN (1,5
 - **Given** `MemoryExtensions.Contains(arr, x.Count, EqualityComparer<int>.Default)`
 - **When** the rewrite runs
 - **Then** the node is unchanged, because `Enumerable.Contains(source, item)` cannot honour a comparer and rewriting would silently change the predicate's meaning
+
+#### Scenario: CosmosDB renders the array spelling identically to the list spelling
+
+- **Given** `int[] arr` and `List<int> list` holding the same values, and a CosmosDB store
+- **When** each is used as `x => set.Contains(x.Amount)` and the query is rendered
+- **Then** both produce `SELECT VALUE root FROM root WHERE (root["Amount"] IN (1, 5))`; without the rewrite the array spelling raises `NotSupportedException`
+
+#### Scenario: The stores apply the rewrite, not merely expose it
+
+- **Given** a MongoDB or CosmosDB store constructed against an unreachable backend
+- **When** a read is issued with an array-backed `Contains` filter
+- **Then** it fails reaching the backend rather than with `NotSupportedException` — the filter translated, so the rewrite was applied by the store and not only available to it
 
 #### Scenario: A predicate with no span Contains is returned unchanged
 

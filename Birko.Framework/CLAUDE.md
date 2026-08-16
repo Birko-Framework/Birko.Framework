@@ -482,12 +482,17 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   method at all and threw `NotSupportedException: Specified method is not supported`, naming nothing
   (TASK-218). `Birko.Data.Expressions.SpanContains` now owns both halves — the unwrap and the rewrite to
   `Enumerable.Contains` — and `PredicateScope` calls the same unwrap. Four parts generalise:
-  - **Measure every translator before deciding the fix's scope; "it must affect all of them" is a guess.**
-    Of the backends that translate a filter expression, **only MongoDB** was broken: SQL rendered
-    `IN (1,5)` and ElasticSearch `terms=(1,5)` for all four spellings, because both evaluate the operand
-    themselves. So the helper is in Core, available to all, and **wired only in MongoDB** — the same
-    discipline as `PredicateScope` / `RequireBoundedFilter`, and the reason the task's own acceptance made
-    the measurement its first row.
+  - **Measure every translator before deciding the fix's scope — the audit both widens and narrows it.**
+    Classified (TASK-218 + TASK-220): backends that *compile* the delegate are never at risk (InMemory,
+    JSON, XML, InfluxDB — the runtime knows the method); the hand-rolled parsers were already correct
+    (SQL `IN (1,5)`, ElasticSearch `terms=(1,5)`) because they evaluate the operand themselves; the
+    raw-expression-to-driver backends **MongoDB and CosmosDB** were both broken. **RavenDB looks like the
+    obvious fourth and is not**: *every* `Contains` spelling fails there, so the rewrite would have turned
+    one failure into an identical one — it needs `.In()`, a different fix. One pass caught a backend the
+    original task had waved off as needing a live service *and* stopped the fix going somewhere it would
+    have achieved nothing. **"Needs a live service" is itself worth testing** — Cosmos renders SQL
+    offline via `ToQueryDefinition()` and Raven builds RQL from an uninitialised-to-network
+    `DocumentStore`, so both were measurable all along.
   - **Rewrite at the entry point, not at each hand-off.** The two MongoDB stores hand a filter to the
     driver from ~30 sites, but the caller's expression *arrives* at only nine methods. Normalising there
     means the guard, the whole-collection check and the driver all see one shape, and a new hand-off site
@@ -620,10 +625,15 @@ supported` on the driver, while `List<int>` renders `$in` — a look-alike one k
 either way. The standing rule is in § Conventions above. Split: unwiring the rewrite **2 of 85**, gutting
 it **2 of 85 + 2 of 59**; 5 suites green (85 + 59 + 500 + 129 + 69). Four things worth carrying:
 
-- **The measurement was the deliverable, and it shrank the fix.** The task's first acceptance row demanded
-  SQL and ElasticSearch be measured before choosing per-backend or shared. Both were already correct for
-  all four spellings, so what could have been a normalisation pass on every translator became one helper
-  wired into one backend.
+- **The measurement was the deliverable, and it both shrank and widened the fix.** The task's first
+  acceptance row demanded SQL and ElasticSearch be measured. Both were already correct, so a normalisation
+  pass over every translator became one helper. The follow-up audit (TASK-220) then found CosmosDB
+  *equally* broken — TASK-218 had waved it off as needing a live service, and it renders SQL offline.
+- **A test that calls the helper is not a test that the wiring exists.** TASK-220's first three Cosmos
+  tests invoked `SpanContains.Rewrite` in their own render helper; unwiring all six store entry points
+  left the suite green at 47/47. Only running the revert exposed it. The fix discriminates on failure
+  *phase* — unwired throws at translation before any I/O, wired reaches the network — which needs no
+  server.
 - **Three symptoms, one cause, found from three directions over three months.** The same overload change
   had already produced an unguarded destructive filter (`PredicateScope`) and a silently-empty SQL result
   (Symbio TASK-249/254). Only writing them down together made it obvious they were one thing — and that
