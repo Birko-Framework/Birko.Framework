@@ -630,6 +630,31 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### CosmosDB rendered `.Date` as a JSON sub-property and matched nothing (2026-08-16)
+
+TASK-223 made `CosmosFilterMatrixLiveTests` runnable — it was gated *and* unreachable, because the
+framework could not select Gateway mode and the emulator serves nothing else. Its first run ever reported
+26 of 27. TASK-224 closed the 27th: `x.When.Date == d` emitted
+`WHERE (root["CreatedAt"]["Date"] = "…")`, addressing a member of a *string* (Cosmos stores a DateTime as
+ISO text), so the query ran and returned **zero rows with no error**. Now 27/27. Split: unwiring **1 of
+54**, gutting the rewriter **3 of 86**; 1,168 tests green across 8 suites. Four things worth carrying:
+
+- **The whole thread was one dark suite deep.** TASK-214 → 218 → 220 → 221 → 222 → 223 → 224, and every
+  single defect was found by running a suite that had never run. The last two needed a Docker emulator
+  that took a minute to start. **"Needs a live service" is a claim to test, not a reason to skip** —
+  Cosmos renders SQL offline, Raven builds RQL offline, and both emulators run in one `docker run`.
+- **A per-backend rewrite family now has three members**, all in `Birko.Data.Core/Expressions/` and all
+  wired only where measured: `SpanContains` (Mongo, Cosmos), `RavenFilterRewriter` (Raven),
+  `DateTruncation` (Cosmos). The shape is settled; the discipline is that the helper is available to
+  everyone and the wiring follows a measurement.
+- **Handle the whole operator family or none of it.** `.Date` needed all six comparisons plus operand
+  mirroring — `d < x.When.Date` inverts silently if only `==` is rewritten, which is the same defect in
+  a different coat. Same rule as TASK-215's "guard the whole verb family".
+- **Two implementations of one semantics is recorded debt, not an oversight.** The SQL connector has
+  had this exact rewrite since Symbio TASK-355 but emits `Condition` objects, so it could not be shared
+  as-is. Both operator tables now name the other, and the consolidation (run the pre-pass before the SQL
+  parser, delete the method) is written down rather than done as a side effect of a Cosmos fix.
+
 ### RavenDB dropped a boolean ternary's WHERE clause entirely (2026-08-16)
 
 TASK-222, the last of the five TASK-214 spawned. RavenDB does not *reject* a boolean ternary — it emits

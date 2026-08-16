@@ -9,14 +9,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 116                 |
+| todo         | —                  | —                  | 115                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 67                  |
+| done         | 1                  | 22                 | 68                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 84 · P3 6**
+Todo by priority: **P0 0 · P1 25 · P2 84 · P3 6**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -56,10 +56,11 @@ Todo by priority: **P0 0 · P1 26 · P2 84 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-224](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-224-cosmos-date-renders-as-a-subproperty.md)
-  `DateTime.Date` on CosmosDB renders as `root["When"]["Date"]` — a sub-property of a string, so
-  it matches nothing and reports no error (P1, ai). **Silent wrong answer**, which outranks every
-  loud refusal in the backlog. Already diagnosed to the emitted SQL, so close to turnkey
+- [TASK-225](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-225-mongodb-connection-string-has-no-escape-hatch.md)
+  MongoDB's connection string is composed with no escape hatch (P2, ai) — no driver option can be
+  set: maxPoolSize, appName, directConnection, SOCKS proxy. Redis already solved this with
+  RawConnectionString. A workaround exists (subclass Settings), which is why it is P2 — but it was
+  needed three times in one session
 - **TASK-118 first — it is verification debt, not new scope.** `status: review`, code landed, waiting on
   a human test plan that needs a JWT-authenticated app stood up by hand. Debt surfaces before new work
 
@@ -195,7 +196,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (28/31, 1 in review, 2 new)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (29/31, 1 in review)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
@@ -225,7 +226,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
     - [x] [TASK-221](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-221-ravendb-cannot-translate-a-set-membership-filter.md) RavenDB cannot translate **any** set-membership filter — `Contains` is unsupported in every spelling (P1, ai) · FEATURE-014
     - [x] [TASK-222](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-222-ravendb-diverges-on-six-filter-shapes.md) RavenDB diverges on 6 filter shapes — and one of them is a **silent wrong answer** (P1, ai) · FEATURE-014
     - [x] [TASK-223](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-223-cosmos-connection-mode-cannot-be-selected.md) CosmosDB's connection mode cannot be selected — Gateway is unreachable, so the emulator is too (P1, ai) · FEATURE-014
-    - [ ] [TASK-224](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-224-cosmos-date-renders-as-a-subproperty.md) `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and **silently matches nothing** (P1, ai) · FEATURE-014
+    - [x] [TASK-224](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-224-cosmos-date-renders-as-a-subproperty.md) `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and **silently matches nothing** (P1, ai) · FEATURE-014
     - [ ] [TASK-225](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-225-mongodb-connection-string-has-no-escape-hatch.md) MongoDB's connection string is composed with no escape hatch — no driver option can be set (P2, ai) · FEATURE-014
     - [x] [TASK-219](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-219-mongodb-has-two-contradictory-answers-for-what-id-is.md) `Birko.Data.MongoDB` has two contradictory answers for what `_id` is (P1, ai) · FEATURE-014
   - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/22)
