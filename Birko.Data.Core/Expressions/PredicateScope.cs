@@ -143,14 +143,15 @@ namespace Birko.Data.Expressions
             var collection = call.Object ?? (call.Arguments.Count > 0 ? call.Arguments[0] : null);
             if (collection == null) return false;
 
-            // On .NET 9+ an ARRAY `set.Contains(x.Col)` binds to
-            // MemoryExtensions.Contains(ReadOnlySpan<T>, T, IEqualityComparer<T>?) rather than to
+            // On .NET 9+ an ARRAY `set.Contains(x.Col)` binds to MemoryExtensions.Contains rather than to
             // Enumerable.Contains, so the collection arrives wrapped in an implicit ReadOnlySpan conversion.
             // A span is a ref struct and cannot be boxed, so evaluating the wrapper throws and the analyser
-            // would silently decline — leaving every array-typed caller unguarded. Unwrap to the underlying
-            // collection first. (The SQL parser hit the same overload change from the other direction; see
+            // would silently decline — leaving every array-typed caller unguarded. Unwrap first. The unwrap
+            // is shared with SpanContains.Rewrite (TASK-218), which fixes the same binding for the MongoDB
+            // driver — one producer, so the guard and the rewriter cannot disagree about what a span-bound
+            // Contains looks like. (The SQL parser hit it from a third direction; see
             // DataBase.IsNonOperandArgument.)
-            collection = UnwrapSpanConversion(collection);
+            collection = SpanContains.UnwrapSpanConversion(collection);
 
             // The collection must be evaluatable without the entity — a captured local, a field, a constant.
             // Anything referencing the lambda parameter is a per-entity collection and says nothing about
@@ -183,42 +184,7 @@ namespace Birko.Data.Expressions
         private static bool ReferencesParameter(Expression expr)
             => new ParameterFinder().Found(expr);
 
-        /// <summary>
-        /// Strips the implicit <c>ReadOnlySpan&lt;T&gt;</c> / <c>Span&lt;T&gt;</c> conversion the compiler
-        /// inserts when an array binds <c>MemoryExtensions.Contains</c>, so the underlying collection can be
-        /// evaluated. A conversion operator is a <see cref="MethodCallExpression"/> named <c>op_Implicit</c>
-        /// on the span type, not a <see cref="UnaryExpression"/>, so <see cref="Unwrap"/> does not see it.
-        /// </summary>
-        private static Expression UnwrapSpanConversion(Expression expr)
-        {
-            while (true)
-            {
-                var unwrapped = Unwrap(expr);
-                if (unwrapped == null) return expr;
-                expr = unwrapped;
-
-                if (expr is MethodCallExpression conversion
-                    && conversion.Method.IsSpecialName
-                    && (conversion.Method.Name == "op_Implicit" || conversion.Method.Name == "op_Explicit")
-                    && conversion.Object == null
-                    && conversion.Arguments.Count == 1)
-                {
-                    expr = conversion.Arguments[0];
-                    continue;
-                }
-                return expr;
-            }
-        }
-
-        private static Expression? Unwrap(Expression? expr)
-        {
-            while (expr is UnaryExpression u
-                && u.NodeType is ExpressionType.Convert or ExpressionType.ConvertChecked or ExpressionType.Quote)
-            {
-                expr = u.Operand;
-            }
-            return expr;
-        }
+        private static Expression? Unwrap(Expression? expr) => SpanContains.UnwrapConvert(expr);
 
         private sealed class ParameterFinder : ExpressionVisitor
         {

@@ -17,6 +17,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionParameterReplacer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\ExpressionNormalizer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\PredicateScope.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Expressions\SpanContains.cs" />
     <!-- Filters -->
     <Compile Include="$(MSBuildThisFileDirectory)Filters\IFilter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByGuid.cs" />
