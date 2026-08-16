@@ -58,7 +58,7 @@ public class CosmosSpanContainsTests
 
     private static string Render(Expression<Func<Doc, bool>> filter)
         => Offline().GetItemLinqQueryable<Doc>()
-            .Where(Birko.Data.Expressions.SpanContains.Rewrite(filter))
+            .Where(Birko.Data.Expressions.SpanContains.Rewrite(filter)!)
             .ToQueryDefinition().QueryText;
 
     [Fact]
