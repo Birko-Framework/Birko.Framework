@@ -28,6 +28,7 @@ namespace Birko.Data.CosmosDB.Tests;
 public class CosmosFilterMatrixLiveTests
 {
     private const string ConnEnv = "BIRKO_COSMOS_CONNECTION";
+    private const string ModeEnv = "BIRKO_COSMOS_CONNECTION_MODE";
     private static readonly DateTime Base = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     public enum Status { New, Active, Closed }
@@ -110,7 +111,15 @@ public class CosmosFilterMatrixLiveTests
             return; // opt-in live test — set BIRKO_COSMOS_CONNECTION to run it
 
         var dbName = "birko_matrixtest_" + Guid.NewGuid().ToString("N");
-        var store = new AsyncCosmosDBStore<FilterModel>(conn, dbName);
+        // BIRKO_COSMOS_CONNECTION_MODE=Gateway is what makes the Docker emulator reachable — it serves
+        // Gateway only, and the SDK's Direct default fails in physical-address resolution. Also the
+        // setting a real deployment behind a proxy needs (TASK-223). Absent, behaviour is unchanged.
+        var settings = new Settings();
+        if (string.Equals(Environment.GetEnvironmentVariable(ModeEnv), "Gateway", StringComparison.OrdinalIgnoreCase))
+        {
+            settings.ConnectionMode = ConnectionMode.Gateway;
+        }
+        var store = new AsyncCosmosDBStore<FilterModel>(conn, dbName, null, settings);
 
         try
         {
