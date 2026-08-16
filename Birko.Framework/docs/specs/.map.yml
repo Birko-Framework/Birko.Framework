@@ -110,6 +110,12 @@ areas:
       # MongoDB's was reached by nothing, which is how its 4 overrides went unguarded until TASK-109.
       - ../Birko.Data.MongoDB/Stores/MongoDBStore.cs
       - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
+      # ElasticSearch's four overrides — the third instance of the exact under-coverage the two notes
+      # above describe. TASK-215 found them unguarded and reachable by no glob in this area, so the
+      # regen for that fix could not have seen the behaviour change either. The InMemory note above
+      # holds: its pair arrives via store-crud-contract's Stores/*.cs glob.
+      - ../Birko.Data.ElasticSearch/Stores/ElasticSearchStore.cs
+      - ../Birko.Data.ElasticSearch/Stores/AsyncElasticSearchStore.cs
 
   - name: filter-expression-translation
     title: LINQ filter expression translation to backend queries

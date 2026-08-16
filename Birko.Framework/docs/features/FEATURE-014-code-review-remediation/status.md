@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-01
+generated: 2026-08-16
 ---
 
 # Code review — audit remediation — Status
@@ -21,30 +21,84 @@ generated: 2026-08-01
 
 ## Build progress
 
-10 / 18 tasks done.
+21 / 70 tasks done (1 awaiting sign-off).
 
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
 - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted
-- [ ] TASK-111 `rule.Field` reaches the WHERE clause unresolved and unquoted
-- [ ] TASK-112 `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist
+- [x] TASK-111 `rule.Field` reaches the WHERE clause unresolved and unquoted
+- [x] TASK-112 `long` / `double` / `float` / `short` / `byte[]` map to no column and never persist
 - [x] TASK-113 `TenantSyncProvider` scopes only saves — reads, previews and deletes span every tenant
 - [x] TASK-114 The item-level tenant write guard trusts the caller-supplied `TenantGuid`
 - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope
 - [x] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths
-- [ ] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set
-- [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id`
+- [x] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set
+- [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` — awaiting sign-off
 - [x] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator
 - [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing
 - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover
-- [ ] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created
+- [x] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created
 - [ ] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire
-- [ ] TASK-137 An empty `NOT IN` renders `1 = 1` — indistinguishable from an injection payload in a query log
-- [ ] TASK-141 MongoDB's four null-filter guards have no regression test
-
+- [x] TASK-137 An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log
+- [x] TASK-141 MongoDB's four null-filter guards have no regression test
+- [ ] TASK-151 Triage the 36 medium spec-harvest findings in `views-and-aggregation`
+- [ ] TASK-152 Triage the 33 medium spec-harvest findings in `migrations`
+- [ ] TASK-153 Triage the 29 medium spec-harvest findings in `filter-expression-translation`
+- [ ] TASK-154 Triage the 25 medium spec-harvest findings in `schema-index-and-ddl`
+- [ ] TASK-155 Triage the 24 medium spec-harvest findings in `event-bus-and-messaging`
+- [ ] TASK-156 Triage the 22 medium spec-harvest findings in `validation-and-rules`
+- [ ] TASK-157 Triage the 21 medium spec-harvest findings in `data-sync`
+- [ ] TASK-158 Triage the 21 medium spec-harvest findings in `background-jobs`
+- [ ] TASK-159 Triage the 20 medium spec-harvest findings in `store-decorator-composition`
+- [ ] TASK-160 Triage the 20 medium spec-harvest findings in `llm-provider-and-agents`
+- [ ] TASK-161 Triage the 18 medium spec-harvest findings in `tenant-isolation`
+- [ ] TASK-162 Triage the 16 medium spec-harvest findings in `repository-contract`
+- [ ] TASK-163 Triage the 15 medium spec-harvest findings in `store-crud-contract`
+- [ ] TASK-164 Triage the 15 medium spec-harvest findings in `settings-configuration-chain`
+- [ ] TASK-165 Triage the 15 medium spec-harvest findings in `security-and-authorization`
+- [ ] TASK-166 Triage the 15 medium spec-harvest findings in `entity-tagging`
+- [ ] TASK-167 Triage the 14 medium spec-harvest findings in `serialization`
+- [ ] TASK-168 Triage the 14 medium spec-harvest findings in `entity-localization`
+- [ ] TASK-169 Triage the 14 medium spec-harvest findings in `caching`
+- [ ] TASK-170 Triage the 13 medium spec-harvest findings in `bulk-filter-operations`
+- [ ] TASK-171 Triage the 12 medium spec-harvest findings in `specifications-and-paging`
+- [ ] TASK-172 Triage the 9 medium spec-harvest findings in `workflow-state-machine`
+- [ ] TASK-173 Triage the 31 low spec-harvest findings in `llm-provider-and-agents`
+- [ ] TASK-174 Triage the 29 low spec-harvest findings in `event-bus-and-messaging`
+- [ ] TASK-175 Triage the 24 low spec-harvest findings in `background-jobs`
+- [ ] TASK-176 Triage the 23 low spec-harvest findings in `security-and-authorization`
+- [ ] TASK-177 Triage the 23 low spec-harvest findings in `data-sync`
+- [ ] TASK-178 Triage the 22 low spec-harvest findings in `migrations`
+- [ ] TASK-179 Triage the 21 low spec-harvest findings in `workflow-state-machine`
+- [ ] TASK-180 Triage the 20 low spec-harvest findings in `views-and-aggregation`
+- [ ] TASK-181 Triage the 19 low spec-harvest findings in `validation-and-rules`
+- [ ] TASK-182 Triage the 19 low spec-harvest findings in `store-crud-contract`
+- [ ] TASK-183 Triage the 18 low spec-harvest findings in `settings-configuration-chain`
+- [ ] TASK-184 Triage the 17 low spec-harvest findings in `caching`
+- [ ] TASK-185 Triage the 15 low spec-harvest findings in `tenant-isolation`
+- [ ] TASK-186 Triage the 14 low spec-harvest findings in `entity-tagging`
+- [ ] TASK-187 Triage the 13 low spec-harvest findings in `store-decorator-composition`
+- [ ] TASK-188 Triage the 13 low spec-harvest findings in `specifications-and-paging`
+- [ ] TASK-189 Triage the 13 low spec-harvest findings in `filter-expression-translation`
+- [ ] TASK-190 Triage the 13 low spec-harvest findings in `bulk-filter-operations`
+- [ ] TASK-191 Triage the 10 low spec-harvest findings in `serialization`
+- [ ] TASK-192 Triage the 10 low spec-harvest findings in `schema-index-and-ddl`
+- [ ] TASK-193 Triage the 10 low spec-harvest findings in `repository-contract`
+- [ ] TASK-194 Triage the 10 low spec-harvest findings in `entity-localization`
+- [ ] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog
+- [x] TASK-207 `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect
+- [ ] TASK-208 DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part
+- [x] TASK-209 A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL
+- [x] TASK-212 A MongoDB `Delete(filter)` guards only a NULL filter — a filter that *reduces* to everything is not refused
+- [x] TASK-213 A COMPUTED operand inside `Contains` is silently discarded and replaced by a different predicate
+- [ ] TASK-214 A model deriving `MongoDBModel` cannot be serialized by the driver at all
+- [x] TASK-215 Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch
 ## What can be tested now
 
-10 of 18 tracked items are complete and exercisable.
+21 of 70 tracked items are complete and exercisable, and one more is code-complete awaiting
+sign-off. The earlier "10 of 18" reflected the backlog as it stood on 2026-08-01, before the
+spec-harvest intake filed the medium, low and unrated findings as tasks — the denominator grew
+because more was found, not because progress reversed.
 
 ## Prototype
 

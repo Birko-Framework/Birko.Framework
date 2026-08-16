@@ -9,19 +9,22 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 116                 |
+| todo         | —                  | —                  | 115                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 59                  |
+| done         | 1                  | 22                 | 60                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 84 · P3 6**
+Todo by priority: **P0 0 · P1 26 · P2 83 · P3 6**
 
-> Recounted 2026-08-15 from the tree, not incremented from the previous numbers — which were wrong in both
-> directions (`done` 44 vs 58, `review` 8 vs 10) because they had been hand-adjusted by arithmetic on
-> themselves since 2026-08-09. A dashboard adjusted from its own stale figures stays stale; that note has
-> now been written twice, so the next maintenance pass should just run the full `/tasks triage`.
+> Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
+> increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
+>
+> The STORY-051 tree block below was rebuilt at the same time and had drifted further than the counts:
+> it claimed 13/17 while the story holds **23** tasks, listed TASK-129 / 137 / 141 as open when all three
+> were `done`, and omitted TASK-207, 209, 212, 213, 214 and 215 entirely. Counts and tree drift
+> independently — checking one is not checking the other.
 
 ## In progress now
 
@@ -49,6 +52,12 @@ _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`
 - [TASK-217](_loose/TASK-217-update-overload-builds-its-set-list-from-every-column.md) `Update(Table, values,
   conditions)` builds its SET list from every column, so a partial update cannot work (P2, ai) — spawned by
   TASK-216; loud on every provider and loses no data, which is why it ranks below the two above
+
+TASK-215 closed 2026-08-16 and is off this list. It was ranked **above** TASK-214 by `/fix-next`:
+TASK-214 fails *loudly* (a `BsonSerializationException`) and its first acceptance step needs a live
+MongoDB, while TASK-215 was silent data loss and finishable offline. Severity follows the failure mode —
+a wrong answer nobody sees outranks a crash that reports itself. TASK-214 therefore returns to the top,
+still needing the server it always needed.
 
 TASK-211 and TASK-216 both closed 2026-08-15 — the PostgreSQL identifier pair — and are off this list.
 TASK-216's own close spawned TASK-217, which is why the tail of the list moved rather than shortened.
@@ -161,7 +170,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (13/17, 1 in review)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (21/23, 1 in review)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
@@ -170,15 +179,21 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
     - [x] [TASK-114](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-114-tenant-write-guard-trusts-caller-supplied-tenantguid.md) The item-level tenant write guard trusts the caller-supplied `TenantGuid` (P0, ai) · FEATURE-014
     - [x] [TASK-116](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-116-rulespecification-leaves-degrade-to-match-all.md) `RuleSpecification` leaves degrade to match-all — on the destructive paths (P0, ai) · FEATURE-014
     - [x] [TASK-128](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-128-view-order-by-identifier-unresolved.md) The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover (P0, ai) · FEATURE-014
-    - [x] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved — a payload created a table (P1, ai) · FEATURE-014
+    - [x] [TASK-111](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-111-rule-field-unresolved-in-where-clause.md) `rule.Field` reaches the WHERE clause unresolved and unquoted (P1, ai) · FEATURE-014
     - [x] [TASK-115](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-115-nested-withtenant-does-not-narrow-reads.md) A nested `WithTenant` does not narrow reads inside an all-tenants scope (P1, ai) · FEATURE-014
     - [x] [TASK-117](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-117-rediscache-clearasync-flushdb.md) `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set (P1, ai) · FEATURE-014
     - [ ] [TASK-118](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-118-tenant-header-guard-covers-only-x-tenant-id.md) The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` (P1, ai) 🔍 review · FEATURE-014
     - [x] [TASK-125](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-125-readone-bypasses-store-decorators.md) `ReadOne` queries the connector directly, bypassing every store decorator (P1, ai) · FEATURE-014
     - [x] [TASK-126](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-126-tagging-has-no-tenant-assertion.md) `TagServiceBase` states its tenant contract in a comment and enforces nothing (P1, ai) · FEATURE-014
-    - [ ] [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created (P1, ai) · FEATURE-014
-    - [ ] [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log (P2, ai) · FEATURE-014
-    - [ ] [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2, ai) · FEATURE-014
+    - [x] [TASK-129](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-129-aggregate-view-ddl-double-alias.md) An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created (P1, ai) · FEATURE-014
+    - [x] [TASK-209](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-209-persistent-view-nonaggregate-columns-quoting-mismatch.md) A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL (P1, ai) · FEATURE-014
+    - [x] [TASK-212](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-212-mongodb-filter-that-reduces-to-everything.md) A MongoDB `Delete(filter)` guards only a NULL filter — a filter that *reduces* to everything is not refused (P1, ai) · FEATURE-014
+    - [x] [TASK-213](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-213-computed-operand-inside-contains-is-silently-rewritten.md) A COMPUTED operand inside `Contains` is silently discarded and replaced by a different predicate (P1, ai) · FEATURE-014
+    - [ ] [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md) A model deriving `MongoDBModel` cannot be serialized by the driver at all (P1, ai) · FEATURE-014
+    - [x] [TASK-137](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-137-empty-not-in-renders-injection-lookalike.md) An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log (P2, ai) · FEATURE-014
+    - [x] [TASK-141](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-141-mongodb-null-filter-guards-are-untested.md) MongoDB's four null-filter guards have no regression test (P2, ai) · FEATURE-014
+    - [x] [TASK-207](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-207-viewaddfield-drops-duplicate-keys-silently.md) `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect (P2, ai) · FEATURE-014
+    - [x] [TASK-215](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-215-wire-bounded-filter-guard-into-remaining-backends.md) Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch (P2, ai) · FEATURE-014
   - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/22)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1, ai) · FEATURE-014
     - [ ] [TASK-152](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-152-triage-medium-migrations.md) Triage the 33 medium spec-harvest findings in `migrations` (P1, ai) · FEATURE-014

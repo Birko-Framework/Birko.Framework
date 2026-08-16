@@ -92,6 +92,19 @@ methods; `WholeTableWriteException` moved to `Birko.Data.Core/Exceptions/` so on
 Note this area's globs **do** cover both MongoDB stores, so unlike the `AbstractConnectorBase.cs` gap above,
 this diff is real evidence for the change.
 
+Scoped regen at `e37bebf` for **TASK-215**, which set out to wire the same guard into two more backends and
+found the hole one layer up: `AbstractBulkStore`'s **own** six filter-based destructive wrappers never
+called `RequireBoundedFilter` either. TASK-212 added the helper to the base and wired only MongoDB's
+overrides. Measured on `JsonStore`, which overrides none of the six, `Delete(x => !empty.Contains(x.Value))`
+left **0 of 3** rows with no exception — so the defect was live on every portable backend, not on the two
+this task named. Guarding the base fixes JSON, XML, RavenDB, CosmosDB and InfluxDB by construction, and is
+what stops a partially-overriding backend presenting a refusing `Delete` beside a wiping `Update`.
+
+**`.map.yml` was edited** — the fourth instance of the under-coverage the notes above describe twice.
+ElasticSearch's four overrides were reachable by no glob in this area, so a regen could not have seen their
+behaviour change at all; both store files are now sources. The `AbstractConnectorBase.cs` gap is unchanged
+and still waiting on TASK-208.
+
 ## Requirements
 
 ### Requirement: Bulk read surface
@@ -702,6 +715,15 @@ decide that on the **LINQ expression** — before any backend translates it — 
 `AbstractBulkStore<T>.RequireBoundedFilter` / its async twin, backed by
 `Birko.Data.Expressions.PredicateScope`.
 
+The guard SHALL be called by the **base classes' own** filter-based destructive wrappers — all six of
+`Delete(filter)`, `Update(filter, PropertyUpdate)`, `Update(filter, Action)` and their async twins — and
+not only by the backends that override them. Those wrappers are read-then-loop, so an unbounded predicate
+reaches `Read(filter)`, matches every entity, and deletes or rewrites the lot; every statement issued
+carries its own key, so no backend query guard downstream can see it. Enforcing it on the base makes every
+portable backend that overrides nothing (JSON, XML, RavenDB, CosmosDB, InfluxDB) correct by construction,
+and is the only placement under which a backend that overrides *some* of the six cannot end up with a
+`Delete` that refuses beside an `Update` that does not.
+
 The decision cannot be made on the translated query. Measured on MongoDB.Driver 3.2.0,
 `x => !empty.Contains(x.Field)` renders `{ "Field": { "$nin": [] } }` — a **one-element** document,
 indistinguishable by inspection from an ordinary field predicate, while selecting every document. A guard
@@ -714,6 +736,11 @@ reason lives in `Birko.Data.Core/Exceptions/` beside `StoreException` rather tha
 one `catch` selects the refusal on every backend. Its message SHALL name the deliberate door
 (`DeleteAll()` / `UpdateAll(updates)`) and SHALL NOT reference SQL machinery a document store does not
 have.
+
+The named door SHALL be one the refused caller can actually take. An asynchronous store has no
+`DeleteAll()`, so its refusal SHALL name `DeleteAllAsync()` / `UpdateAllAsync(updates)` — a message
+pointing at a method that does not exist for that caller is a wall wearing a door's label, the same defect
+as a refusal whose opt-out throws.
 
 An **explicit** `x => true` (and every spelling `ExpressionNormalizer` folds into it) SHALL be checked
 **first** and allowed through: it is the documented `DeleteAll()` synonym, and a guard whose opt-out is
@@ -731,6 +758,39 @@ emptiness varies per entity), a null collection, or a collection it cannot evalu
 - **When** `Delete` / `Update` / `DeleteAsync` / `UpdateAsync` is called
 - **Then** each throws `WholeTableWriteException` before any driver call, so the whole-collection
   `DeleteMany` never issues
+
+#### Scenario: The base wrappers refuse it on a backend that overrides nothing
+
+- **Given** `JsonStore<T>`, which overrides none of the six filter-based destructive methods, holding
+  three rows, and the filter `x => !empty.Contains(x.Value)`
+- **When** `Delete(filter)` or `Update(filter, updates)` is called
+- **Then** each throws `WholeTableWriteException` and all three rows survive unchanged — before the guard
+  reached the base, the delete left **0 of 3** and the update rewrote **3 of 3**, in both cases with no
+  exception and no log entry
+
+#### Scenario: A backend's Update paths are guarded even when only its Delete is overridden
+
+- **Given** `AbstractInMemoryStore<T>`, which overrides `Delete(filter)` but inherits all four
+  `Update(filter, …)` paths
+- **When** an unbounded filter is passed to any of the six
+- **Then** every one refuses — the override repeats the guard and the inherited paths get it from the
+  base, so the store cannot present a `Delete` that refuses beside an `Update` that rewrites every row
+
+#### Scenario: An empty negated Contains is refused on all four ElasticSearch overrides
+
+- **Given** `ElasticSearchStore<T>` / `AsyncElasticSearchStore<T>` and `x => !empty.Contains(x.Count)`
+- **When** `Delete` / `Update` / `DeleteAsync` / `UpdateAsync` is called
+- **Then** each throws `WholeTableWriteException` **before** `EnsureInitialized()`, so the refusal holds
+  identically whether or not a cluster is reachable and no `_delete_by_query` is issued
+
+#### Scenario: The ElasticSearch rendering is why the guard cannot sit on the query
+
+- **Given** `x => !empty.Contains(x.Count)` and `x => !some.Contains(x.Count)`
+- **When** each is translated by `ParseRequiredFilterQuery`
+- **Then** the first becomes `bool { must_not: [ match_none ] }` — which selects **every** document — and
+  the second becomes `bool { must_not: [ terms ] }`; the two are the same query structure differing only
+  in the inner type, so a guard inspecting the rendered query would have to enumerate every backend's
+  spellings of "everything"
 
 #### Scenario: An OR chain containing an unbounded term is refused
 
@@ -790,6 +850,9 @@ contained fix, and converting them to `*Core` is separate work.
 - **When** `Delete(null!)` is called
 - **Then** the override throws `ArgumentNullException` itself rather than deleting the whole collection —
   reaching the base's guard is not possible from an override of the public method
+- **And** it repeats `RequireBoundedFilter` too, because the predicate here is compiled and run as a C#
+  delegate: `!empty.Contains(x.Field)` is true of every entity by definition, and there is no translation
+  layer that could ever have noticed
 
 #### Scenario: The MongoDB store repeats the guard on all four overrides
 
@@ -801,12 +864,16 @@ contained fix, and converting them to `*Core` is separate work.
 - **And** each also calls `RequireBoundedFilter`, so a *present* filter that covers every document is
   refused there too — the null case was only half the guard
 
-#### Scenario: The ElasticSearch stores are already covered by their own filter boundary
+#### Scenario: The ElasticSearch filter boundary covers the null case but not the scope case
 
 - **Given** the ElasticSearch stores' four public overrides
 - **When** an untranslatable or null filter reaches a destructive path
-- **Then** `ParseRequiredFilterQuery` already refuses it (CR-H047), so no additional repeat is required
-  there — the invariant is enforced, by a different mechanism at the same boundary
+- **Then** `ParseRequiredFilterQuery` refuses it (CR-H047) — the invariant is enforced there by a
+  different mechanism at the same boundary, so the null half needs no repeat
+- **And when** a filter that is present but covers every document reaches the same path
+- **Then** that boundary does **not** fire, because a query *is* produced and it looks ordinary; the
+  overrides SHALL therefore call `RequireBoundedFilter` themselves. A null check is not a scope check —
+  the same distinction that separates `RequireFilter` from `RequireBoundedFilter` everywhere else
 
 ### Requirement: Bulk collection operations initialise lazily and default to per-item loops
 

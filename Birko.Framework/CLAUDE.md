@@ -216,6 +216,31 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     up firing on a case it was never about. And keep the analyser narrow — it answers "no" when it cannot
     prove a predicate unbounded (a per-entity collection, a null or unevaluatable one, any string `Contains`),
     because a false refusal breaks working code and is worse than the hole.
+  - **"Wire it per backend" does not mean "wire it only in backends" — the shared base is itself a
+    wiring site, and it is the one that was missed.** TASK-212 put `RequireBoundedFilter` *on*
+    `AbstractBulkStore` and wired it into MongoDB's four overrides; nobody wired it into the base's **own
+    six** filter-based destructive wrappers, which are read-then-loop and therefore the purest instance of
+    the defect. Measured on `JsonStore`, which overrides none of them:
+    `Delete(x => !empty.Contains(x.Value))` left **0 of 3** rows, no exception — so the hole was live on
+    every portable backend (JSON, XML, RavenDB, CosmosDB, InfluxDB), none of which the finding named.
+    Three parts generalise (TASK-215):
+    - **A per-backend rule still has to be applied to the layer the backends inherit.** "Measure before
+      wiring" is about not guessing whether a shape reaches a destructive path — it is not a licence to
+      skip the one implementation every unlisted backend runs. Where a guard's helper and its callers live
+      in the same class, check the callers in that class *first*.
+    - **Guard the whole verb family or none of it.** InMemory overrides `Delete(filter)` but inherits all
+      four `Update(filter, …)` paths, so fixing only the filed overrides would have shipped a store whose
+      `Delete` refuses beside an `Update` that rewrites every row. The scope of a guard is the set of
+      methods that reach the same destruction, not the set of methods a finding happened to list.
+    - **A refusal names the door THIS caller has.** The async twin threw the shared message naming
+      `DeleteAll()`, which an async store does not have — an opt-out that does not compile, § SH-H037's
+      rule in its quietest form. `WholeTableWriteException`'s scope constructor now takes the door name;
+      async passes `DeleteAllAsync()` / `UpdateAllAsync(updates)`. **Cost of the base wiring, recorded
+      because it is not free:** `PredicateScope` evaluates the collection operand, and
+      `Update(filter, PropertyUpdate)` guards then delegates to `Update(filter, Action)` which guards
+      again, so a side-effecting operand is now evaluated three times instead of once, on every portable
+      backend. Both guards are kept deliberately — each covers a distinct partial-override case, and the
+      placement mirrors `RequireFilter` — but put captured collections, not method calls, in a filter.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -502,6 +527,33 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The unbounded-filter guard was never wired into the base it lives on (2026-08-16)
+
+TASK-215 set out to wire `RequireBoundedFilter` into two more backends and found the hole one layer up:
+`AbstractBulkStore` / `AbstractAsyncBulkStore`'s **own six** filter-based destructive wrappers never called
+it. Measured on `JsonStore`, which overrides none of them, `Delete(x => !empty.Contains(x.Value))` left
+**0 of 3** rows with no exception — so the defect was live on JSON, XML, RavenDB, CosmosDB and InfluxDB,
+none of which the finding named. Now called by all twelve paths: six base wrappers, InMemory's two
+overrides, ElasticSearch's four. The standing rule is in § Conventions above. Split: **18 of 34** on the
+whole revert (InMemory 10/16, JSON 2/5, ES 6/13), plus **2 of 69** on an isolating revert of the door-name
+fix alone; 35 suites / ~2,100 tests green. Four things worth carrying:
+
+- **A "wire it per backend" rule got read as "wire it only in backends".** The guard's helper and its
+  unguarded callers were in the *same class*, and three tasks walked past them. When a rule says measure
+  before wiring, that is about not guessing which shapes reach destruction — not a licence to skip the
+  implementation every unlisted backend inherits.
+- **The probe for the filed half found the real half.** The InMemory measurement was only supposed to
+  confirm two overrides; including the four non-overridden `Update` paths in the same probe table is what
+  exposed the base. Probe the whole verb family, not the methods the finding lists.
+- **ElasticSearch is the third backend where the defect shape renders as ordinary output.**
+  `!empty.Contains(x)` → `bool { must_not: [match_none] }` (selects everything) versus the legitimate
+  `bool { must_not: [terms] }` — same structure, different inner type, so CR-H047's null-check guard never
+  fired. After SQL's `1 = 1` and MongoDB's `$nin: []`, this is settled: guard the expression.
+- **`.map.yml` under-coverage, fourth instance, this time caught before it mattered.** The ES stores were
+  reachable by no glob in `bulk-filter-operations`, so the regen for this very fix would have been blind to
+  them. Added. The older `AbstractConnectorBase.cs` gap the file already documents twice is still open
+  (TASK-208).
 
 ### The write half: a filtered DELETE/UPDATE drops the qualifier the read path aliases (2026-08-15)
 
