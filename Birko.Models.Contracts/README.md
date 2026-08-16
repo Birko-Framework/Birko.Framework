@@ -24,7 +24,7 @@ Shared project — import in your `.csproj`:
 | **IPriceable** | Price, PriceVAT, VAT | ValueData |
 | **IVariantable\<T\>** | Variants collection | — |
 | **ICategorizeable** | CategoryGuid | Item |
-| **IBatchable** | BatchNumber, ExpiryDate | — |
+| **IBatchable** | BatchNumber (`string?`), ExpiryDate (`DateTime?`) | StockBalance, StockMovement, InventoryDocumentLine |
 | **ILocatable** | LocationGuid | — |
 | **IHierarchical** | ParentGuid, Path | AbstractTree |
 | **IDocument\<TLine\>** | DocumentNumber, Status, Lines | — |

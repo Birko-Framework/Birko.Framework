@@ -13,7 +13,11 @@ Domain contract interfaces for the Birko Framework. Defines cross-cutting behavi
 - **IPriceable** — Price, PriceVAT, VAT. Implemented by: `ValueData`
 - **IVariantable\<TVariant\>** — Generic variants collection
 - **ICategorizeable** — CategoryGuid. Implemented by: `Warehouse.Item`
-- **IBatchable** — BatchNumber, ExpiryDate
+- **IBatchable** — BatchNumber (`string?`), ExpiryDate (`DateTime?`). **Both optional**: batch
+  tracking is a per-item choice and a batch may never expire. Implemented by
+  `Inventory.StockBalance`, `Inventory.StockMovement`, `Inventory.InventoryDocumentLine`.
+  `BatchNumber` was non-nullable until TASK-444, which is the likely reason the contract had zero
+  implementors for its whole life — the entities it was written for could not satisfy it.
 - **ILocatable** — LocationGuid
 - **IHierarchical** — ParentGuid, Path. Implemented by: `AbstractTree`
 - **IDocument\<TLine\>** — DocumentNumber, Status, Lines collection
