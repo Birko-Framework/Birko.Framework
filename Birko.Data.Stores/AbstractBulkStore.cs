@@ -68,6 +68,7 @@ namespace Birko.Data.Stores
         public virtual void Update(Expression<Func<T, bool>> filter, PropertyUpdate<T> updates)
         {
             RequireFilter(filter, "update");
+            RequireBoundedFilter(filter, "update");
             Update(filter, entity => updates.ApplyTo(entity));
         }
 
@@ -75,6 +76,7 @@ namespace Birko.Data.Stores
         public virtual void Update(Expression<Func<T, bool>> filter, Action<T> updateAction)
         {
             RequireFilter(filter, "update");
+            RequireBoundedFilter(filter, "update");
             var items = Read(filter, null, null, null).ToList();
             foreach (var item in items)
             {
@@ -120,6 +122,7 @@ namespace Birko.Data.Stores
         public virtual void Delete(Expression<Func<T, bool>> filter)
         {
             RequireFilter(filter, "delete");
+            RequireBoundedFilter(filter, "delete");
             var items = Read(filter, null, null, null).ToList();
             Delete(items);
         }

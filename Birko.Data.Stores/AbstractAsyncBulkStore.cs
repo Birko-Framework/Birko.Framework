@@ -106,6 +106,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             RequireFilter(filter, "update");
+            RequireBoundedFilter(filter, "update");
             return UpdateAsync(filter, entity => updates.ApplyTo(entity), ct);
         }
 
@@ -116,6 +117,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             RequireFilter(filter, "update");
+            RequireBoundedFilter(filter, "update");
             var items = (await ReadAsync(filter, null, null, null, ct).ConfigureAwait(false)).ToList();
             foreach (var item in items)
             {
@@ -146,6 +148,7 @@ namespace Birko.Data.Stores
             CancellationToken ct = default)
         {
             RequireFilter(filter, "delete");
+            RequireBoundedFilter(filter, "delete");
             var items = (await ReadAsync(filter, null, null, null, ct).ConfigureAwait(false)).ToList();
             await DeleteAsync(items, ct).ConfigureAwait(false);
         }
@@ -205,8 +208,11 @@ namespace Birko.Data.Stores
             if (Data.Expressions.PredicateScope.IsExplicitAllRows(filter)) return;
             if (!Data.Expressions.PredicateScope.ReducesToAllRows(filter)) return;
 
+            // TASK-215 / § SH-H037: name the door this caller actually HAS. An async store has no
+            // DeleteAll() — pointing at it would be a refusal whose opt-out does not compile.
             throw new Data.Exceptions.WholeTableWriteException(
-                operation, typeof(T).Name, "every stored entity of that type");
+                operation, typeof(T).Name, "every stored entity of that type",
+                operation == "delete" ? "DeleteAllAsync()" : "UpdateAllAsync(updates)");
         }
 
 
