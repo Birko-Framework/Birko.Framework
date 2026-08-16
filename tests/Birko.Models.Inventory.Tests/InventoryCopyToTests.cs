@@ -50,7 +50,8 @@ public class InventoryCopyToTests
         var src = new StockMovement
         {
             StockItemGuid = Guid.NewGuid(), Quantity = 7m, UnitPrice = 3.5m,
-            Batch = "B1", MovementDate = new DateTime(2026, 1, 1), TenantGuid = Guid.NewGuid()
+            BatchNumber = "B1", ExpiryDate = new DateTime(2027, 6, 30),
+            MovementDate = new DateTime(2026, 1, 1), TenantGuid = Guid.NewGuid()
         };
 
         var clone = src.CopyTo(new StockMovement());
@@ -58,7 +59,8 @@ public class InventoryCopyToTests
         clone.StockItemGuid.Should().Be(src.StockItemGuid);
         clone.Quantity.Should().Be(7m);
         clone.UnitPrice.Should().Be(3.5m);
-        clone.Batch.Should().Be("B1");
+        clone.BatchNumber.Should().Be("B1");
+        clone.ExpiryDate.Should().Be(new DateTime(2027, 6, 30));
         clone.MovementDate.Should().Be(new DateTime(2026, 1, 1));
         clone.TenantGuid.Should().Be(src.TenantGuid);
     }
@@ -69,12 +71,17 @@ public class InventoryCopyToTests
         var src = new InventoryDocumentLine
         {
             Name = "Item", Quantity = 2m, UnitPrice = 10m, TotalPrice = 20m,
+            // TASK-444: BatchNumber/ExpiryDate were previously `Batch` and untested here, so the rename
+            // could have dropped the copy silently. Covered now.
+            BatchNumber = "L-9", ExpiryDate = new DateTime(2028, 2, 2),
             InventoryDocumentGuid = Guid.NewGuid()
         };
 
         var clone = src.CopyTo(new InventoryDocumentLine());
 
         clone.Name.Should().Be("Item");
+        clone.BatchNumber.Should().Be("L-9");
+        clone.ExpiryDate.Should().Be(new DateTime(2028, 2, 2));
         clone.Quantity.Should().Be(2m);
         clone.UnitPrice.Should().Be(10m);
         clone.TotalPrice.Should().Be(20m);
