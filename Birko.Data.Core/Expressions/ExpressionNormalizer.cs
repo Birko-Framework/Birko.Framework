@@ -30,12 +30,30 @@ namespace Birko.Data.Expressions;
 /// render as <c>CASE WHEN … END</c> / <c>COALESCE(…)</c>.</item>
 /// </list>
 /// </item>
+/// <item>
+/// <b>Boolean-constant reduction.</b> The two expansions above routinely leave <c>X &amp;&amp; true</c>,
+/// <c>X &amp;&amp; false</c> and their Or duals — a ternary with literal branches yields nothing else —
+/// so those are reduced away. Semantically trivial, but a parser is entitled to be surprised by them:
+/// RavenDB rendered the unreduced <c>X &amp;&amp; true</c> as the <b>malformed</b> RQL
+/// <c>where (Score = $p0 and)</c> rather than rejecting it (TASK-222).
+/// </item>
 /// </list>
 ///
 /// The result is semantically identical to the input for every tree the C# compiler can produce;
-/// only the tree <i>shape</i> changes. Compiled-delegate backends (InMemory / JSON / XML) and
-/// native-LINQ backends (Mongo / Cosmos / Raven) never need it — they honour the raw constructs
-/// already — so this runs only inside the hand-rolled translators.
+/// only the tree <i>shape</i> changes.
+///
+/// <para>
+/// <b>Who needs it.</b> The hand-rolled translators (SQL, ElasticSearch) always did. Compiled-delegate
+/// backends (InMemory / JSON / XML) never do — they run the real delegate.
+/// <b>⚠ This comment used to add "and native-LINQ backends (Mongo / Cosmos / Raven) never need it —
+/// they honour the raw constructs already". That was measured false for RavenDB</b> (TASK-222): its
+/// provider does not reject a boolean ternary, it silently emits <i>no <c>where</c> clause at all</i>,
+/// so <c>x =&gt; c ? a : b</c> matched every document. RavenDB now runs this pre-pass.
+/// <b>MongoDB</b> genuinely does honour them — its filter matrix reports ternary, coalesce and
+/// arithmetic OK against a live server — so it does not run this. <b>CosmosDB is UNVERIFIED</b>: its
+/// matrix suite is gated on <c>BIRKO_COSMOS_CONNECTION</c> and has never run, so the original claim is
+/// unsupported for it either way. Measure before assuming it of any driver rather than inheriting it.
+/// </para>
 /// </summary>
 public sealed class ExpressionNormalizer : ExpressionVisitor
 {
@@ -82,7 +100,7 @@ public sealed class ExpressionNormalizer : ExpressionVisitor
                 var eqTrue = Expression.Equal(left, Expression.Constant(true, left.Type));
                 var eqNull = Expression.Equal(left, Expression.Constant(null, left.Type));
                 var rightBool = right.Type == typeof(bool) ? right : Expression.Convert(right, typeof(bool));
-                return Visit(Expression.OrElse(eqTrue, Expression.AndAlso(eqNull, rightBool)))!;
+                return Visit(SimplifyOr(eqTrue, SimplifyAnd(eqNull, rightBool)))!;
             }
 
             // Value use (numeric / string operand): keep it — the value parser renders COALESCE(a, b).
@@ -107,14 +125,45 @@ public sealed class ExpressionNormalizer : ExpressionVisitor
         // Boolean-position ternary: c ? t : f  ≡  (c && t) || (!c && f).
         if (node.Type == typeof(bool) && ifTrue.Type == typeof(bool) && ifFalse.Type == typeof(bool))
         {
-            return Expression.OrElse(
-                Expression.AndAlso(test, ifTrue),
-                Expression.AndAlso(Expression.Not(test), ifFalse));
+            return SimplifyOr(
+                SimplifyAnd(test, ifTrue),
+                SimplifyAnd(Negate(test), ifFalse));
         }
 
         // Non-boolean (value position) ternary: leave it for the value parser to render as CASE WHEN.
         return node.Update(test, ifTrue, ifFalse);
     }
+
+    // ---- boolean-constant simplification -------------------------------------------------------
+    //
+    // The expansions above routinely produce `X && true`, `X && false` and their Or duals — a ternary
+    // whose branches are literals (`c ? true : false`) yields nothing else. Those are semantically
+    // trivial and a parser is entitled to be surprised by them: RavenDB renders `X && true` as the
+    // MALFORMED RQL `where (Score = $p0 and)` (measured, TASK-222) rather than rejecting it. Reducing
+    // them here keeps the contract "the output is semantically identical, only the shape changes" while
+    // handing every downstream parser a tree with no dangling constant operands.
+
+    private static bool IsBool(Expression e, bool value)
+        => e is ConstantExpression { Value: bool b } && b == value;
+
+    private static Expression SimplifyAnd(Expression left, Expression right)
+    {
+        if (IsBool(left, false) || IsBool(right, false)) return Expression.Constant(false);
+        if (IsBool(left, true)) return right;
+        if (IsBool(right, true)) return left;
+        return Expression.AndAlso(left, right);
+    }
+
+    private static Expression SimplifyOr(Expression left, Expression right)
+    {
+        if (IsBool(left, true) || IsBool(right, true)) return Expression.Constant(true);
+        if (IsBool(left, false)) return right;
+        if (IsBool(right, false)) return left;
+        return Expression.OrElse(left, right);
+    }
+
+    private static Expression Negate(Expression test)
+        => test is ConstantExpression { Value: bool b } ? Expression.Constant(!b) : Expression.Not(test);
 
     private static bool TryFold(Expression node, out Expression folded)
     {
