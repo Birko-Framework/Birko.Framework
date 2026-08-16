@@ -64,7 +64,13 @@ public class AsyncCosmosDBStore<T>
     /// <param name="connectionString">The Cosmos DB connection string.</param>
     /// <param name="databaseName">The database name.</param>
     /// <param name="containerName">The container name. Defaults to the type name.</param>
-    public AsyncCosmosDBStore(string connectionString, string databaseName, string? containerName = null)
+    /// <param name="settings">
+    /// Optional settings supplying the client options — chiefly <c>ConnectionMode</c>, which cannot be
+    /// expressed in a Cosmos connection string and defaults to Direct. Pass a Settings with
+    /// <c>ConnectionMode = Gateway</c> to reach an account through a proxy/firewall, or the emulator
+    /// (TASK-223). Omit for the previous behaviour.
+    /// </param>
+    public AsyncCosmosDBStore(string connectionString, string databaseName, string? containerName = null, Settings? settings = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -75,7 +81,7 @@ public class AsyncCosmosDBStore<T>
             throw new ArgumentException("Database name cannot be empty", nameof(databaseName));
         }
 
-        _settings = new Settings();
+        _settings = settings ?? new Settings();
         _databaseName = databaseName;
         _containerName = containerName ?? typeof(T).Name;
 

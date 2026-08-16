@@ -28,6 +28,20 @@ namespace Birko.Data.CosmosDB.Stores
         /// </summary>
         public bool AllowBulkExecution { get; set; } = true;
 
+        /// <summary>
+        /// Gets or sets how the client reaches the account. Default is
+        /// <see cref="Microsoft.Azure.Cosmos.ConnectionMode.Direct"/>, which is also the SDK's default,
+        /// so existing consumers are unaffected.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Microsoft.Azure.Cosmos.ConnectionMode.Gateway"/> routes everything over HTTPS on the
+        /// account endpoint instead of opening TCP connections to per-partition replicas. It is slower, and
+        /// it is the only mode that works where the Direct-mode port range is blocked — behind a corporate
+        /// proxy or a restrictive firewall, and against the Azure Cosmos DB emulator, which serves Gateway
+        /// only. Without this setting neither was reachable at all (TASK-223).
+        /// </remarks>
+        public ConnectionMode ConnectionMode { get; set; } = ConnectionMode.Direct;
+
         public Settings() : base() { }
 
         public Settings(string location, string name, string? password = null, string? containerName = null)
@@ -42,6 +56,7 @@ namespace Birko.Data.CosmosDB.Stores
             {
                 RequestTimeout = RequestTimeout,
                 AllowBulkExecution = AllowBulkExecution,
+                ConnectionMode = ConnectionMode,
                 // Ensures every AbstractModel document carries an 'id' == its Guid, so point
                 // reads/writes keyed by guid.ToString() resolve against the '/id' partition key (CR-C04).
                 Serializer = new Serialization.CosmosGuidIdSerializer()
@@ -61,6 +76,7 @@ namespace Birko.Data.CosmosDB.Stores
                 PartitionKeyPath = data.PartitionKeyPath;
                 RequestTimeout = data.RequestTimeout;
                 AllowBulkExecution = data.AllowBulkExecution;
+                ConnectionMode = data.ConnectionMode;
             }
         }
 
