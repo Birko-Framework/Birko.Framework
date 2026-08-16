@@ -49,10 +49,10 @@ namespace Birko.Data.Expressions;
 /// they honour the raw constructs already". That was measured false for RavenDB</b> (TASK-222): its
 /// provider does not reject a boolean ternary, it silently emits <i>no <c>where</c> clause at all</i>,
 /// so <c>x =&gt; c ? a : b</c> matched every document. RavenDB now runs this pre-pass.
-/// <b>MongoDB</b> genuinely does honour them — its filter matrix reports ternary, coalesce and
-/// arithmetic OK against a live server — so it does not run this. <b>CosmosDB is UNVERIFIED</b>: its
-/// matrix suite is gated on <c>BIRKO_COSMOS_CONNECTION</c> and has never run, so the original claim is
-/// unsupported for it either way. Measure before assuming it of any driver rather than inheriting it.
+/// <b>MongoDB and CosmosDB</b> genuinely do honour them — ternary, coalesce and arithmetic all match a
+/// compiled-delegate oracle against a live MongoDB and against the Azure Cosmos DB emulator — so neither
+/// runs this. Measure before assuming it of any driver rather than inheriting the claim: that is how the
+/// RavenDB half of the original sentence survived unchallenged.
 /// </para>
 /// </summary>
 public sealed class ExpressionNormalizer : ExpressionVisitor
