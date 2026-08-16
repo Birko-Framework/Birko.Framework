@@ -64,12 +64,15 @@ Three kinds live there, and only the first was ever intended:
 - **Defects and follow-ups filed mid-work** — 25 of the 32, and where all the growth came from: 22 of
   those were filed by `/tasks spawn` and `/fix-next` between 2026-08-03 and 2026-08-15 alone. Ten are
   already `done`, two are in `review` (**TASK-201**, **TASK-204** — counted in the sign-off callout above
-  but visible in no row), and the rest are open. Most are ordinary framework remediation that belongs
+  but visible in no row), one is `cancelled` (**TASK-205**, resolved below), and the rest are open. Most
+  are ordinary framework remediation that belongs
   under [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) / FEATURE-014, so landing in
   `_loose` is a spawn-time omission rather than a decision. Two are genuinely homeless: TASK-200 and
   TASK-201 are defects found *in a consumer* (Symbio, Reps) and tracked here because the fix is upstream.
 
-> **Flagged, not acted on:** **TASK-205** looks superseded by **TASK-211** (done, 2026-08-16) — both name
-> the unquoted `Table.Column` qualifier against a quoted `FROM "Table"` on PostgreSQL, and TASK-211 is the
-> measured version that fixed it via a bare `AS` alias. Confirm and `/tasks cancel TASK-205`, or record
-> what it still covers. Not closed here because retiring a task is a judgment call, not a status regen.
+> **Resolved 2026-08-16:** **TASK-205** was checked against **TASK-211** criterion by criterion and
+> **cancelled** — same defect, and all six of its acceptance rows are satisfied by TASK-211 (read path)
+> and TASK-216 (write path). It was filed 2026-08-12 as an *inferred, unmeasured* claim; the measured
+> version arrived three days later as a separate `_loose` task and neither recognised the other. Its
+> § Disposition records why, because an inferred task is the shape most likely to be silently re-filed
+> from evidence later.
