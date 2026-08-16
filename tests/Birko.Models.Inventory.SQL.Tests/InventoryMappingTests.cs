@@ -27,6 +27,10 @@ public class InventoryMappingTests
         Configure(new StockItemMapping()).TableName.Should().Be("Items");
         Configure(new StorageLocationMapping()).TableName.Should().Be("Repositories");
         Configure(new InventoryDocumentLineMapping()).TableName.Should().Be("WareHouseDocumentItems");
+        // TASK-444: a NEW table, not a preserved legacy name — the concept had no model, so there is no
+        // old schema to stay compatible with. The three above keep their Warehouse-era names on purpose.
+        Configure(new StockBalanceMapping()).TableName.Should().Be("StockBalances");
+        Configure(new StockMovementMapping()).TableName.Should().Be("StockMovements");
     }
 
     [Fact]
@@ -35,6 +39,8 @@ public class InventoryMappingTests
         AssertGuidKey(Configure(new StockItemMapping()));
         AssertGuidKey(Configure(new StorageLocationMapping()));
         AssertGuidKey(Configure(new InventoryDocumentLineMapping()));
+        AssertGuidKey(Configure(new StockBalanceMapping()));
+        AssertGuidKey(Configure(new StockMovementMapping()));
 
         static void AssertGuidKey<T>(ModelMap<T> map) where T : class
         {
@@ -67,6 +73,50 @@ public class InventoryMappingTests
     public void StockItem_StringColumns_AreBounded(string column)
     {
         Configure(new StockItemMapping()).Properties.Single(p => p.Name == column)
+            .Precision.Should().NotBe(0);
+    }
+
+    [Fact]
+    public void StockBalance_Quantity_HasTheSamePrecisionAsADocumentLine()
+    {
+        // The reason StockBalance is mapped at all while StockMovement is not: an unmapped decimal takes
+        // the provider default, which for several is 18,2 — silently truncating the fractional
+        // quantities this domain exists to track. 22,6 here matches InventoryDocumentLine so a quantity
+        // survives a line and a balance identically.
+        var field = Configure(new StockBalanceMapping()).Properties.Single(p => p.Name == "Quantity");
+        field.Precision.Should().Be(22);
+        field.Scale.Should().Be(6);
+    }
+
+    [Theory]
+    [InlineData("Quantity")]
+    [InlineData("UnitPrice")]
+    public void StockMovement_DecimalColumns_HavePrecisionAndScale(string column)
+    {
+        // StockMovement was unmapped until TASK-444, so both decimals took the provider default —
+        // 18,2 on several, silently truncating fractional quantities and unit prices.
+        var field = Configure(new StockMovementMapping()).Properties.Single(p => p.Name == column);
+        field.Precision.Should().Be(22);
+        field.Scale.Should().Be(6);
+    }
+
+    [Theory]
+    [InlineData("StockBalances")]
+    [InlineData("StockMovements")]
+    public void TheNewMappings_DoNotClaimARetiredTableName(string table)
+    {
+        // Both concepts DID have retired tables — ItemRepositories and ItemRepositoryMovements — but
+        // every coordinate was renamed (ItemGuid to StockItemGuid, RepositoryGuid to StorageLocationGuid,
+        // AgendaGuid to TenantGuid, Batch to BatchNumber, Amount to Quantity) and a column name defaults
+        // to the property name. Reusing either name would promise a drop-in compatibility the columns
+        // break. The three legacy names above are kept precisely because their columns did survive.
+        table.Should().NotBe("ItemRepositories").And.NotBe("ItemRepositoryMovements");
+    }
+
+    [Fact]
+    public void StockBalance_BatchNumber_IsBounded()
+    {
+        Configure(new StockBalanceMapping()).Properties.Single(p => p.Name == "BatchNumber")
             .Precision.Should().NotBe(0);
     }
 }
