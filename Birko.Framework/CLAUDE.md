@@ -464,10 +464,38 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **A default that "looks safe" can be the one that throws.** Driver 3.x *removed*
     `BsonDefaults.GuidRepresentation`; the remaining default is `Unspecified`, which refuses. Do not
     assume an unset knob means a sane fallback — measure what the unset state actually does.
-  - **A framework-global flag needs its inheritance checked.** `IgnoreExtraElements` on the base class
-    map applies to that class alone unless `SetIgnoreExtraElementsIsInherited(true)` — and every real
-    entity is a derived type with its own automapped map. The narrower call compiles, reads correctly,
-    and fixes nothing.
+  - **A framework-global flag needs its inheritance checked — and then ask why you need the flag.**
+    `IgnoreExtraElements` on the base class map applies to that class alone unless
+    `SetIgnoreExtraElementsIsInherited(true)`, because every real entity is a derived type with its own
+    automapped map; the narrower call compiles, reads correctly, and fixes nothing. **⚠ The flag itself
+    is gone as of TASK-219** — it was only ever tolerating a *second* id, and the entry below removes
+    the second id instead. Kept here because "check the inheritance semantics of a global flag" is the
+    part that generalises; needing such a flag at all was the smell.
+- **Where two layers can each define an identity, ONE of them owns it — and the tell is a silently
+  empty result, not an error.** Same one-producer family as the identifier rules above, at the layer
+  where a *document* gets its key. TASK-214 fixed serialization by leaving `_id` to the driver as an
+  auto-generated ObjectId with the canonical `Guid` beside it; `Birko.Data.MongoDB.Views`'s translator
+  had always rewritten the `Guid` property to `_id`. Both were self-consistent and they disagreed, so
+  every Mongo view was wrong: measured on MongoDB 7, projecting the canonical id **threw**
+  (`Cannot deserialize a 'Guid' from BsonType 'ObjectId'`) and filtering on it returned **0 rows for a
+  document that exists** — no error, no log. Settled by making the canonical `Guid` **be** `_id`
+  (`SetIdMember`), which is also what let `IgnoreExtraElements` be deleted. Four parts generalise:
+  - **Resolve the contradiction, don't patch the louder side.** Fixing the translator would have left
+    two ids in every document and kept the framework-wide silent-drop reader that tolerating them
+    required. The cheaper edit was the wrong one.
+  - **A migration objection can be measured away.** Changing an id layout is normally expensive; here
+    TASK-214 had just proved *no write had ever succeeded*, so there was no stored data to migrate.
+    That window closes the moment the fixed stores are used — **check whether a cost is real before
+    paying to avoid it, and check whether it is about to become real.**
+  - **A projection type is not an entity, and the driver assumes otherwise.** A view's class map must
+    mirror the projection: canonical-id property string-represented (or the rendered `$match` compares
+    BinData to a string and matches nothing), **no id member**, and element names equal to property
+    names (or the driver's `NamedIdMemberConvention` binds a view property called `Id` to `_id`, which
+    the projection explicitly suppresses). All three are one registration, `MongoViewSerialization`.
+  - **The filter and the reader must share one map, because the filter fails quietly.** `MongoViewStore`
+    renders `$match` through the same class map it deserializes with. A map that disagrees with storage
+    produces a *wrong answer* on the filter and an *exception* on the read — so the read is what you
+    notice, and the filter is what costs you.
 - **Lazy schema-ensure degrades and reports; an explicit schema call throws.** Stores run schema-ensure on
   first data access and set `_initialized` only *after* it returns, so anything that throws in there leaves
   the store permanently uninitialised and re-throws on **every** later operation — reads included. An
@@ -553,6 +581,35 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Two answers for what MongoDB's `_id` is — so every view was silently wrong (2026-08-16)
+
+TASK-219, spawned by TASK-214's close-gate review and picked immediately after it. Yesterday's fix left
+`_id` to the driver as an auto-generated ObjectId with the canonical `Guid` beside it;
+`Birko.Data.MongoDB.Views`'s translator had always rewritten the `Guid` property to `_id`. Each layer was
+self-consistent; together they made **every Mongo view wrong** — measured on MongoDB 7, projecting the
+canonical id **threw** and filtering on it returned **0 rows for a document that exists**. Settled by
+making the canonical `Guid` **be** `_id`. The standing rule is in § Conventions above. Split: Revert A
+(back to ObjectId `_id`) **6 of 84** + **1 of 12**, Revert B (drop the view class map) **1 of 12**;
+ungated 84/84 + 12/12, 7 suites green. Four things worth carrying:
+
+- **The cheaper edit was the wrong one.** Patching the translator would have satisfied the filed finding
+  and left two ids per document — plus the framework-wide silent-drop reader that tolerating the second
+  one required. Resolve the contradiction, don't patch the louder side.
+- **The migration objection was measured away, and it was expiring.** Changing an id layout is normally
+  expensive; TASK-214 had just proved no write had ever succeeded, so there was nothing stored to
+  migrate. That is only true until the fixed stores are used — which is why this was worth doing
+  *immediately after* TASK-214 rather than scheduling it.
+- **Fixing the entity half did not fix the view half, and the probe said so.** After `SetIdMember` the
+  projection worked but the filter still returned 0: `MongoViewStore` renders `$match` through the *view
+  type's* class map, where a `Guid?` property still used the global binary serializer and compared
+  BinData to a string. A second registration (`MongoViewSerialization`) was needed. **Re-run the whole
+  probe after the fix — the first symptom clearing is not the finding clearing.**
+- **A projection type is not an entity.** The same registration also clears the id member and pins
+  element names, because the driver's `NamedIdMemberConvention` binds a view property called `Id` to
+  `_id` — which the projection explicitly suppresses. Found by accident: my first probe named its view
+  property `Id` and threw for that reason, which looked like the defect and was not. **Check whether a
+  reproduction failed for the reason you think.**
 
 ### Nothing could be saved to MongoDB — the store was never able to serialize an entity (2026-08-16)
 

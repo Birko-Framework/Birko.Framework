@@ -1,7 +1,7 @@
 ---
 area: views-and-aggregation
-generated-at: 91fdd9096f0ed5c2a513bb5099e533351a997bff
-generated-on: 2026-08-14
+generated-at: de598e6
+generated-on: 2026-08-16
 sources:
   - ../Birko.Data.CosmosDB.Views/CosmosViewManager.cs
   - ../Birko.Data.CosmosDB.Views/CosmosViewStore.cs
@@ -10,6 +10,7 @@ sources:
   - ../Birko.Data.ElasticSearch.Views/ElasticSearchViewStore.cs
   - ../Birko.Data.ElasticSearch/Aggregation/StoreAggregationHelper.cs
   - ../Birko.Data.MongoDB.Views/MongoViewManager.cs
+  - ../Birko.Data.MongoDB.Views/MongoViewSerialization.cs
   - ../Birko.Data.MongoDB.Views/MongoViewStore.cs
   - ../Birko.Data.MongoDB.Views/MongoViewTranslator.cs
   - ../Birko.Data.RavenDB.Views/RavenViewManager.cs
@@ -649,7 +650,32 @@ translated pipeline — it is added at query time. A null definition SHALL raise
 
 - **Given** a field selector or join key named `Guid`
 - **When** the field path is resolved
-- **Then** the Mongo field name used is `_id`
+- **Then** the Mongo field name used is `_id` — which agrees with storage, because `MongoSerialization` maps the canonical `AbstractModel.Guid` to be the document's `_id`
+
+### Requirement: A view type is class-mapped to mirror its projection
+
+The system SHALL, on construction of a `MongoViewStore<TView>`, register a driver class map for
+`TView` via `MongoViewSerialization.EnsureRegistered<TView>` that matches the projection
+`MongoViewTranslator` emits for the same definition: a view property carrying an entity's canonical
+`Guid` SHALL be string-represented, `TView` SHALL have no id member, and every element name SHALL
+equal its property name. Registration SHALL use `TryRegisterClassMap`, so a consumer that mapped the
+view type first keeps its own map, and SHALL raise `ArgumentNullException` for a null definition.
+
+This exists because `MongoViewStore` renders its query-time `$match` through this same class map. A
+map that disagrees with the projection therefore produces a filter that **matches nothing** rather
+than an error — a silently wrong answer, not a failure.
+
+#### Scenario: A filter on the canonical id matches the entity
+
+- **Given** an entity stored through a Birko store and a view selecting its `Guid` into a `Guid?` view property
+- **When** the view is queried with a filter comparing that property to the entity's `Guid`
+- **Then** the entity is returned, because the rendered `$match` carries the id as a BSON string — the representation the projected `_id` actually holds
+
+#### Scenario: A view property named Id is not treated as the document id
+
+- **Given** a view type whose canonical-id property is named `Id`
+- **When** a view row is deserialized
+- **Then** it binds from the element `Id`, not `_id`, because the registered map clears the id member and pins element names to property names — the projection emits `_id: 0` and never produces an `_id` to bind
 
 #### Scenario: Aggregate views project grouped fields from the root
 

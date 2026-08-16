@@ -314,9 +314,8 @@ The system SHALL register the MongoDB driver serialization that `AbstractModel`-
 exactly once per process, from `Birko.Data.MongoDB.Serialization.MongoSerialization.EnsureRegistered()`, and
 SHALL invoke it from the `MongoDBClient` constructor — the single point through which both
 `MongoDBStore.SetSettings` and `AsyncMongoDBStore.SetSettings` obtain a client. The registration SHALL map
-`AbstractModel.Guid` as a BSON **string**, SHALL install a default `GuidSerializer` carrying
-`GuidRepresentation.Standard` for un-attributed `Guid` members, and SHALL make the class map tolerate extra
-elements, inherited by derived maps.
+`AbstractModel.Guid` as the document's `_id`, represented as a BSON **string**, and SHALL install a default
+`GuidSerializer` carrying `GuidRepresentation.Standard` for un-attributed `Guid` members.
 
 This requirement replaces the `[BsonRepresentation(BsonType.String)]` override that `MongoDBModel` used to
 declare. Both `TryRegisterSerializer` and `TryRegisterClassMap` are used, so a consumer that configured its
@@ -328,17 +327,17 @@ own Guid serializer or `AbstractModel` class map before constructing a store kee
 - **When** `BsonSerializer.SerializerRegistry.GetSerializer<T>()` is called for it
 - **Then** a serializer is returned — the class map freezes, because `MongoDBModel` declares no member that shadows `AbstractModel.Guid`
 
-#### Scenario: The canonical identity round-trips as a string
+#### Scenario: The canonical identity is the document id, round-tripping as a string
 
 - **Given** an entity whose `Guid` is set
 - **When** it is serialized to BSON and deserialized back
-- **Then** the `Guid` element is a BSON string holding the Guid's text form, and the deserialized entity carries the same value
+- **Then** the `_id` element is a BSON string holding the Guid's text form, no separate `Guid` element is written, and the deserialized entity carries the same value
 
 #### Scenario: A null canonical identity round-trips as null
 
 - **Given** an entity whose `Guid` is null
 - **When** it is serialized to BSON and deserialized back
-- **Then** the `Guid` element is BSON null and the deserialized entity's `Guid` is null
+- **Then** the `_id` element is BSON null and the deserialized entity's `Guid` is null
 
 #### Scenario: An un-attributed Guid member serializes as standard binary
 
@@ -346,11 +345,17 @@ own Guid serializer or `AbstractModel` class map before constructing a store kee
 - **When** it is serialized to BSON
 - **Then** that member is BSON binary of subtype `UuidStandard`, the representation `ChangeStreamDocumentKeyResolver` already assumes when reading a binary `_id`
 
-#### Scenario: The driver-generated _id does not break the read
+#### Scenario: An unexpected element is refused rather than dropped
 
-- **Given** an entity written through either store, for which the driver auto-generated an ObjectId `_id` because no Birko model declares one
-- **When** the document is read back into the model type
-- **Then** the extra `_id` element is ignored rather than raising `FormatException`, because the `AbstractModel` class map sets `IgnoreExtraElements` and marks it inherited
+- **Given** a stored document carrying an element no member of the model maps
+- **When** it is read back into the model type
+- **Then** a `FormatException` is raised — no Birko entity silently drops data, and a model carrying `[BsonIgnoreExtraElements(false)]` is likewise honoured, because the class map sets no framework-wide `IgnoreExtraElements`
+
+#### Scenario: A view projecting or filtering on the canonical id agrees with storage
+
+- **Given** a `ViewDefinition` selecting an entity's `Guid` into a view property, which `MongoViewTranslator` rewrites to `_id`
+- **When** the view is queried, and filtered on that property
+- **Then** the projected value deserializes as the entity's `Guid` and the filter matches that entity, because `MongoViewSerialization` maps the view type to mirror the projection — the canonical-id property string-represented, no id member, and element names equal to property names
 
 #### Scenario: Registration is idempotent across many stores
 
