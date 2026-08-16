@@ -195,6 +195,12 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
     {
+        // TASK-220: on .NET 9+ an array's `set.Contains(x.Col)` binds to MemoryExtensions.Contains,
+        // which the Cosmos LINQ provider does not know — NotSupportedException("Specified method is
+        // not supported"), naming no method, while the List<T> spelling renders IN (1, 5). Rewrite it
+        // where the caller's expression arrives, so every use below sees one shape. Same defect and
+        // same fix as MongoDB (TASK-218); measured separately rather than assumed.
+        filter = Data.Expressions.SpanContains.Rewrite(filter);
         if (_container == null) return null;
 
         var queryable = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
@@ -234,6 +240,7 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override long CountCore(Expression<Func<T, bool>>? filter = null)
     {
+        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
         if (_container == null) return 0;
 
         var queryable = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
@@ -253,6 +260,7 @@ public class CosmosDBStore<T>
     /// <inheritdoc />
     protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
     {
+        filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-220 — see above
         if (_container == null) return Enumerable.Empty<T>();
 
         IQueryable<T> query = _container.GetItemLinqQueryable<T>(allowSynchronousQueryExecution: true);
