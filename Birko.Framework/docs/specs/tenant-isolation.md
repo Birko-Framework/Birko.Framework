@@ -35,9 +35,9 @@ sources:
   - ../Birko.Security.AspNetCore/Tenant/TenantContextAdapter.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantHeaderClaimGuardMiddleware.cs
   - ../Birko.Security.AspNetCore/Tenant/TenantMiddleware.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Sync.Tenant: 01c78d0
+source-commits:   # sibling HEADs when this spec was last written (2026-08-03 12:58:04,
+                  # commit 8bd8e8a). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Sync.Tenant: 86c8247
   ../Birko.Data.Tenant: c4dd307
   ../Birko.EventBus.Tenant: 6967992
   ../Birko.Security.AspNetCore: 0c4a494

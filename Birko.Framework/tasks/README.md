@@ -1,10 +1,13 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Drift (3):** **specs DV7 ×15 — 15 of 25 areas are stale, 40 changed source files** (worst: `filter-expression-translation` 9, `bulk-filter-operations` 5, `caching` 3) · DV5 (32 tasks in `_loose/` carry no epic and no feature, so they appear in no feature row — ~22 belong under EPIC-014) · specs DV11 ×25 (`shaped-by` provenance never derived, so DV8 is suppressed everywhere) — run `/roadmap --check`.
+> ⚠ **Drift (2):** DV5 (32 tasks in `_loose/` carry no epic and no feature, so they appear in no feature row — ~22 belong under EPIC-014) · specs DV11 ×25 (`shaped-by` provenance never derived, so DV8 is suppressed everywhere) — run `/roadmap --check`.
 >
-> **DV7 is newly *visible*, not newly true.** [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) landed 2026-08-16: every area globs into a sibling repo, so `git diff <generated-at>..HEAD` matched nothing and all 25 reported **fresh forever** — a guard green by construction. Specs now carry a per-sibling `source-commits:` baseline and the check resolves each glob in its own repo. The 15 were already stale; nothing could see them. Expect this count to fall as areas are regenerated.
->
-> Cleared 2026-08-16: **DV2** (FEATURE-016 read `idea` with 12/14 done), **DV3 + DV9** (TASK-148 was `feature: null`, so FEATURE-017 reported `0 / 0 tasks`), and **DV9** on FEATURE-014 (15 tasks absent from the `→ Tasks` column). DV7 is no longer listed as drift because it is **not measurable here at all** rather than currently-stale — every one of the 25 areas globs into a sibling repo, so `git diff <generated-at>..HEAD` can never observe a source change. That is owned by [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md), which demonstrates it; leaving it in this banner implied a refresh would fix it.
+> **specs DV7: 0 stale, 25 of 25 fresh** — first time this has been a measured statement rather than a
+> vacuous one. [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) made the
+> check able to fire at all; draining it then found the first count (15 areas / 40 files) was itself
+> inflated by an early anchor — the real backlog was **6 areas / 10 files**, now regenerated. The
+> over-report has its own task ([TASK-227](EPIC-014-code-review-remediation/TASK-227-generated-at-always-precedes-the-spec-it-stamps.md)):
+> `generated-at` is stamped before the spec is committed, so it always names the preceding commit.
 
 _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
@@ -13,14 +16,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 113                 |
+| todo         | —                  | —                  | 114                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
 | done         | 1                  | 22                 | 70                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 25 · P2 81 · P3 7**
+Todo by priority: **P0 0 · P1 26 · P2 81 · P3 7**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -49,6 +52,9 @@ Todo by priority: **P0 0 · P1 25 · P2 81 · P3 7**
 >
 > Adjusted 2026-08-16 (TASK-131 close): done 69 -> 70, tasks 195 -> 196, P2 82 -> 81, P3 6 -> 7. TASK-131
 > closed `done` and spawned **TASK-226** (P3), so todo stays at 113 — one left the pool and one entered.
+>
+> Adjusted again 2026-08-16 (DV7 drain): tasks 196 -> 197, todo 113 -> 114, P1 25 -> 26. Regenerating the
+> 6 genuinely-stale spec areas spawned **TASK-227** and closed nothing, so the pool grew by one.
 
 ## In progress now
 

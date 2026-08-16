@@ -83,8 +83,8 @@ sources:
   - ../Birko.MessageQueue/Serialization/IMessageSerializer.cs
   - ../Birko.MessageQueue/Serialization/JsonMessageSerializer.cs
   - ../Birko.MessageQueue/Transactions/ITransactionalProducer.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
+                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.EventBus: e2eab6c
   ../Birko.EventBus.EventSourcing: 23cc837
   ../Birko.EventBus.MessageQueue: cfa3d21

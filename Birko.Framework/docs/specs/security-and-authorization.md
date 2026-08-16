@@ -1,7 +1,7 @@
 ---
 area: security-and-authorization
-generated-at: 0fc2d23a0139b275a82516cf65fe6f006585d560
-generated-on: 2026-07-31
+generated-at: 96738ef
+generated-on: 2026-08-16
 sources:
   - ../Birko.Security.AspNetCore/Authentication/JwtAuthenticationOptions.cs
   - ../Birko.Security.AspNetCore/Authentication/JwtBearerExtensions.cs
@@ -46,10 +46,9 @@ sources:
   - ../Birko.Security/Core/ITokenProvider.cs
   - ../Birko.Security/Encryption/AesEncryptionProvider.cs
   - ../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Security: 6aa0ae7
-  ../Birko.Security.AspNetCore: 4d74b7c
+source-commits:   # recorded at this regen, not reconstructed
+  ../Birko.Security: 2a19150
+  ../Birko.Security.AspNetCore: 0c4a494
   ../Birko.Security.AzureKeyVault: fc64ec7
   ../Birko.Security.BCrypt: 835427c
   ../Birko.Security.Jwt: c476230

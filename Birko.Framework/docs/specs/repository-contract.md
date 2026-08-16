@@ -30,12 +30,12 @@ sources:
   - ../Birko.Data.ViewModel/Repositories/IAsyncViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/IBulkViewModelRepository.cs
   - ../Birko.Data.ViewModel/Repositories/IViewModelRepository.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # sibling HEADs when this spec was last written (2026-08-07 14:22:58,
+                  # commit 04d6575). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.Core: 11da2ac
   ../Birko.Data.Repositories: 8a2c6c7
-  ../Birko.Data.SQL.ViewModel: d1e4aa6
-  ../Birko.Data.ViewModel: f4f5d23
+  ../Birko.Data.SQL.ViewModel: 6017a4d
+  ../Birko.Data.ViewModel: 093c15b
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes

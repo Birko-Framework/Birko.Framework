@@ -1,7 +1,7 @@
 ---
 area: filter-expression-translation
-generated-at: ba8f755
-generated-on: 2026-08-15
+generated-at: 96738ef
+generated-on: 2026-08-16
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
@@ -31,14 +31,13 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Core: 11da2ac
-  ../Birko.Data.ElasticSearch: bfe668f
-  ../Birko.Data.SQL: ea8db51
+source-commits:   # recorded at this regen, not reconstructed
+  ../Birko.Data.Core: 0308617
+  ../Birko.Data.ElasticSearch: 9b523e2
+  ../Birko.Data.SQL: 7b60044
   ../Birko.Data.SQL.MSSql: 64a4932
-  ../Birko.Data.SQL.MySQL: 7703a26
-  ../Birko.Data.SQL.PostgreSQL: 4706aa0
+  ../Birko.Data.SQL.MySQL: 72cac6d
+  ../Birko.Data.SQL.PostgreSQL: 6f7a12f
   ../Birko.Data.SQL.SqLite: ef71921
 shaped-by:
   # TASK-111 / SH-H023 — rule fields resolve against table metadata. The evidence pass cannot run from this

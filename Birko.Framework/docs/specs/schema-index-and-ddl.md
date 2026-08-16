@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: 715caf9d0e013cdacf990f2fd80c4c0d9ea5199a
-generated-on: 2026-08-14
+generated-at: 96738ef
+generated-on: 2026-08-16
 sources:
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexInfo.cs
@@ -40,14 +40,13 @@ sources:
   - ../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs
   - ../Birko.Data.SQL/SQL/Tables/IndexDefinition.cs
   - ../Birko.Data.SQL/SQL/Tables/Table.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.ElasticSearch: bfe668f
+source-commits:   # recorded at this regen, not reconstructed
+  ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.Patterns: 87c0ed3
-  ../Birko.Data.SQL: a210cd6
+  ../Birko.Data.SQL: 7b60044
   ../Birko.Data.SQL.MSSql: 64a4932
-  ../Birko.Data.SQL.MySQL: 7703a26
-  ../Birko.Data.SQL.PostgreSQL: 4706aa0
+  ../Birko.Data.SQL.MySQL: 72cac6d
+  ../Birko.Data.SQL.PostgreSQL: 6f7a12f
   ../Birko.Data.SQL.SqLite: ef71921
 shaped-by: []
 # false, not an empty answer: every source glob in this area points into a sibling repo, so no
@@ -355,6 +354,24 @@ The system SHALL additionally accept an `aggregateAlias` flag (default true) tha
 the column it creates is read back quoted; with both emitting, an aggregate carried two aliases and the
 statement was a syntax error on every provider.
 
+The system SHALL further accept an optional `quoteTable` delegate on `AbstractField.GetSelectName` (and
+through `GetSelectFields`) that quotes the **table** half of a qualified reference, defaulting to null,
+which keeps the historical bare form. The **column** half SHALL stay bare in every case.
+
+That asymmetry is the framework-wide identifier rule, not a local choice: `CreateTable` quotes the table
+name and emits column definitions **bare**, so on PostgreSQL — the one supported provider that case-folds
+an unquoted identifier — every base column is stored folded while every table keeps its declared case. A
+column reference must therefore be bare to resolve, and a table reference quoted. Before the delegate
+existed the view DDL emitted `AvPersons.Name` against a `FROM "AvPersons"`, PostgreSQL folded the
+qualifier to `avpersons`, and the statement failed with *missing FROM-clause entry for table "avpersons"*
+— measured against PostgreSQL 16.4.
+
+> The read path solves the same disagreement differently, and deliberately: `CreateSelectCommand` emits
+> `FROM "T" AS T`, so a *bare* qualifier resolves against the alias. A delegate works for the view DDL
+> because that projection has one metadata-driven producer; the read path's qualifiers can arrive
+> function-wrapped (`LOWER(T.Col)`, `COALESCE`, the `.Date` rewrite), each its own producer, so quoting
+> them one by one would mean enumerating producers and a missed one is a silent empty result.
+
 #### Scenario: Select list is keyed by ordinal position
 
 - **Given** a table with three fields
@@ -369,6 +386,22 @@ statement was a syntax error on every provider.
 - **When** `GetSelectFields(withName: true)` is called
 - **Then** its value ends with `" as TotalSpent"` — the property, not the key — whereas a non-aggregate
   field's value is `"<TableName>.<ColumnName>"` with no alias
+
+#### Scenario: The table half of a qualifier is quoted only when a delegate asks for it
+
+- **Given** a plain field on table `AvPersons` mapped to column `Name`
+- **When** `GetSelectName(withName: true)` is called with no `quoteTable`, and again with a delegate that
+  applies the provider's quoting
+- **Then** the first yields `AvPersons.Name` and the second `"AvPersons".Name` — the column half is bare in
+  both, because base-table DDL created that column bare and a quoted column name would be a case-sensitive
+  miss on PostgreSQL
+
+#### Scenario: A function field's parameters take the same qualifier treatment
+
+- **Given** an aggregate `FunctionField` whose parameters are column names on the same table
+- **When** `GetSelectName(withName: true, quoteTable: q)` is called
+- **Then** every parameter carries the same quoted-table/bare-column prefix as a plain field, rather than
+  the prefix being applied to the outer reference only
 
 #### Scenario: An aggregate field with no view property falls back to its dictionary key
 

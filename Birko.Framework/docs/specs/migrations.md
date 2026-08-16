@@ -54,8 +54,8 @@ sources:
   - ../Birko.Data.Migrations/IMigrationStore.cs
   - ../Birko.Data.Migrations/MigrationDirection.cs
   - ../Birko.Data.Migrations/MigrationResult.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:19:33,
+                  # commit d40aba2). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.Migrations: 4dd7e1b
   ../Birko.Data.Migrations.CosmosDB: 9755c1a
   ../Birko.Data.Migrations.ElasticSearch: e244e85

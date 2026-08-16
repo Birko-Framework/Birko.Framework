@@ -1,7 +1,7 @@
 ---
 area: store-crud-contract
-generated-at: 5b4c2b4ef9fa19a2e1d6ed48378861579a3bf5a4
-generated-on: 2026-08-06
+generated-at: 96738ef
+generated-on: 2026-08-16
 sources:
   - ../Birko.Data.Core/Exceptions/StoreException.cs
   - ../Birko.Data.InMemory/Stores/AbstractAsyncInMemoryStore.cs
@@ -15,11 +15,10 @@ sources:
   - ../Birko.Data.Stores/IStoreWrapper.cs
   - ../Birko.Data.Stores/StoreExtensions.cs
   - ../Birko.Data.Stores/StoreLocator.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Core: 11da2ac
-  ../Birko.Data.InMemory: 4f680b7
-  ../Birko.Data.Stores: 3cd8b2a
+source-commits:   # recorded at this regen, not reconstructed
+  ../Birko.Data.Core: 0308617
+  ../Birko.Data.InMemory: 89e3ed5
+  ../Birko.Data.Stores: c828ef1
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried — see the identical note in bulk-filter-operations.md: every
 # source glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` in this
@@ -485,18 +484,26 @@ The system SHALL treat a `null` collection as a no-op in bulk `CreateCore`, `Upd
 - **When** bulk `Create(null)`, `Update(null)` or `Delete(null)` runs
 - **Then** the method returns immediately (`Task.CompletedTask` in the async store) leaving `_items` untouched
 
-### Requirement: In-memory filter-based delete requires a filter, then snapshots the matches before removing them
+### Requirement: In-memory filter-based delete requires a filter that is both present and bounded, then snapshots the matches before removing them
 
 The system SHALL override the public `Delete(Expression<Func<T, bool>> filter)` /
-`DeleteAsync(filter, ct)` in the in-memory stores to **first refuse a null filter**, then open the
-initialization gate, compile the predicate, materialize the matching key/value pairs with `.ToList()`, and
-`TryRemove` each key.
+`DeleteAsync(filter, ct)` in the in-memory stores to run **two** guards before doing anything else —
+`RequireFilter` (the filter is present) and `RequireBoundedFilter` (it does not cover every row) — then
+open the initialization gate, compile the predicate, materialize the matching key/value pairs with
+`.ToList()`, and `TryRemove` each key.
 
-The null check SHALL be repeated **in the override itself** rather than inherited. Overriding the *public*
-method bypasses the base class's guard entirely, so the base cannot enforce the invariant for it — which
+Both checks SHALL be repeated **in the override itself** rather than inherited. Overriding the *public*
+method bypasses the base class's guards entirely, so the base cannot enforce the invariant for it — which
 is precisely why the family convention has concrete stores override `protected *Core` and not the public
-CRUD methods (SH-M023). These overrides predate the guard and stand against that convention; repeating
-the check is the contained fix, and converting them to `*Core` is separate work.
+CRUD methods (SH-M023). These overrides predate the guards and stand against that convention; repeating
+the checks is the contained fix, and converting them to `*Core` is separate work.
+
+**The scope guard is not redundant with the null guard, and in this store it is the more dangerous of the
+two.** The predicate here is compiled and run as an ordinary C# delegate, with no translation layer
+between the caller's expression and the deletion — so a filter such as `!empty.Contains(x.Field)` is
+simply *true for every entity*, by definition rather than by mistranslation. Measured before the guard was
+added: **0 of 3 rows left, and no exception**. Nothing downstream could have observed it, because nothing
+downstream is involved.
 
 #### Scenario: Deleting all entities matching a predicate
 
@@ -518,12 +525,21 @@ the check is the contained fix, and converting them to `*Core` is separate work.
 - **Then** the override throws `ArgumentNullException` naming the `filter` parameter, and **no** entity is
   removed — a compiled null predicate would otherwise have matched everything
 
+#### Scenario: A filter that is present but covers every entity is refused
+
+- **Given** an in-memory store holding three entities and an empty collection `empty`
+- **When** `Delete(x => !empty.Contains(x.Field))` is called
+- **Then** the override throws `WholeTableWriteException` naming the deliberate door, and all three
+  entities remain — the predicate is true of every entity, so before the guard this left **0 of 3** rows
+  with no exception raised
+
 #### Scenario: Every row is still reachable deliberately
 
 - **Given** a caller that genuinely wants the collection emptied
 - **When** they call `DeleteAll()` (or pass an explicit `x => true`)
-- **Then** the operation proceeds — the guard removes the *accidental* whole-collection delete, not the
-  deliberate one
+- **Then** the operation proceeds — the guards remove the *accidental* whole-collection delete, not the
+  deliberate one. `x => true` is a single explicit constant node and is recognised as the synonym, whereas
+  a predicate that merely *reduces* to always-true is refused
 
 ### Requirement: In-memory stores support aggregation over the live entity set
 

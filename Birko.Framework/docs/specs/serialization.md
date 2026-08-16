@@ -11,8 +11,8 @@ sources:
   - ../Birko.Serialization/Core/SerializationFormat.cs
   - ../Birko.Serialization/Json/SystemJsonSerializer.cs
   - ../Birko.Serialization/Xml/SystemXmlSerializer.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10:48:14,
+                  # commit 3728969). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Serialization: f852468
   ../Birko.Serialization.MessagePack: a52501a
   ../Birko.Serialization.Newtonsoft: befecef

@@ -36,9 +36,9 @@ sources:
   - ../Birko.Validation/Rules/RangeRule.cs
   - ../Birko.Validation/Rules/RegexRule.cs
   - ../Birko.Validation/Rules/RequiredRule.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Rules: 142c308
+source-commits:   # sibling HEADs when this spec was last written (2026-08-07 13:16:35,
+                  # commit 55e37bd). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Rules: 839d712
   ../Birko.Validation: 0455677
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source

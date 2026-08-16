@@ -1,15 +1,14 @@
 ---
 area: store-lazy-initialization
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 96738ef
+generated-on: 2026-08-16
 sources:
   - ../Birko.Data.Stores/AbstractAsyncBulkStore.cs
   - ../Birko.Data.Stores/AbstractAsyncStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
   - ../Birko.Data.Stores/AbstractStore.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Stores: c164f94
+source-commits:   # recorded at this regen, not reconstructed
+  ../Birko.Data.Stores: c828ef1
 shaped-by: []
 ---
 
@@ -262,17 +261,43 @@ The system SHALL implement the composed bulk operations — `Update(filter, Prop
 direct `EnsureInitialized` call, relying on the delegated `Read` / `ReadAsync` (and then the per-item
 `Update` / `UpdateAsync` or the bulk `Delete` / `DeleteAsync`) to perform initialization.
 
+**The filter guards run ahead of that delegated read, so a refused operation never initializes the
+store.** Each of the six filter-based destructive wrappers calls `RequireFilter` (the filter is present)
+and then `RequireBoundedFilter` (it does not cover every row) as its first two statements, before the
+`Read` that would otherwise open the initialization gate. A store that has only ever been asked to perform
+a refused delete therefore remains uninitialized, and `InitCore` has not run.
+
+This ordering is deliberate and is the safe one: initialization can have side effects — schema-ensure,
+index creation, file or collection creation — and performing them on behalf of an operation that is about
+to be refused would be work done for a caller who achieved nothing.
+
 #### Scenario: Delete by filter on a never-initialized store
 
 - **Given** a never-initialized `AbstractBulkStore<T>` subclass
 - **When** the caller invokes `Delete(x => x.Guid == someGuid)`
 - **Then** initialization happens inside the `Read(filter, null, null, null)` call that `Delete(filter)` makes first, and the subsequent `Delete(items)` finds `_initialized` already `true`
 
+#### Scenario: A refused filter leaves the store uninitialized
+
+- **Given** a never-initialized `AbstractBulkStore<T>` subclass and an empty collection `empty`
+- **When** the caller invokes `Delete(x => !empty.Contains(x.Field))`, or `Delete(null!)`
+- **Then** the guard throws before the delegated `Read` is reached, `InitCore` has **not** run, and
+  `_initialized` is still `false` — a later legitimate call still initializes normally
+
 #### Scenario: PropertyUpdate by filter routes through the Action overload
 
 - **Given** a never-initialized `AbstractAsyncBulkStore<T>` subclass
 - **When** the caller awaits `UpdateAsync(filter, propertyUpdate, ct)`
 - **Then** it forwards to `UpdateAsync(filter, entity => updates.ApplyTo(entity), ct)`, which awaits `ReadAsync(filter, null, null, null, ct)` — the operation that actually initializes — and then awaits the single-entity `UpdateAsync(item, ct: ct)` once per matched item
+
+#### Scenario: The PropertyUpdate overload evaluates its filter's collection operand more than once
+
+- **Given** a filter whose collection operand is a *method call* rather than a captured collection
+- **When** `Update(filter, propertyUpdate)` is called
+- **Then** the operand is evaluated three times, not once — the `PropertyUpdate` wrapper guards, then
+  delegates to the `Action` overload which guards again, and the delegated `Read` evaluates it a third
+  time. Both guards are kept deliberately, because each covers a distinct partial-override case, so
+  callers put captured collections rather than method calls in a filter
 
 #### Scenario: Filter matching nothing still reaches the backend once
 

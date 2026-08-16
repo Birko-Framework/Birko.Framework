@@ -22,11 +22,11 @@ sources:
 # TASK-113's `86c8247` is an unknown revision in this repo). Hence derived: false, and
 # shaped-by-unresolved is omitted because nothing ran to count. Per-sub-repo spec trees (TASK-131) are
 # the fix.
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Caching: ebb58c0
+source-commits:   # sibling HEADs when this spec was last written (2026-08-12 14:42:55,
+                  # commit 715caf9). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Caching: 26e6a3f
   ../Birko.Caching.Hybrid: 74deeb8
-  ../Birko.Caching.Redis: be0976c
+  ../Birko.Caching.Redis: 333ba76
   ../Birko.Data.SQL.Caching: f9bbc81
 shaped-by: [FEATURE-014]
 shaped-by-derived: false

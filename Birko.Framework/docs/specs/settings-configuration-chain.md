@@ -1,7 +1,7 @@
 ---
 area: settings-configuration-chain
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 96738ef
+generated-on: 2026-08-16
 sources:
   - ../Birko.Configuration/Settings.cs
   - ../Birko.Data.CosmosDB/Stores/Settings.cs
@@ -16,19 +16,18 @@ sources:
   - ../Birko.Data.SQL/Stores/SqlSettings.cs
   - ../Birko.Data.TimescaleDB/Stores/Settings.cs
   - ../Birko.Redis/RedisSettings.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Configuration: 31f7355
-  ../Birko.Data.CosmosDB: ab9ba88
-  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.CosmosDB: 9e94ace
+  ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.InfluxDB: 14fa370
-  ../Birko.Data.MongoDB: 77fd9ce
-  ../Birko.Data.RavenDB: fb8d98f
-  ../Birko.Data.SQL: a8f06a9
+  ../Birko.Data.MongoDB: 0b60ac3
+  ../Birko.Data.RavenDB: eedaa09
+  ../Birko.Data.SQL: 7b60044
   ../Birko.Data.SQL.MSSql: 64a4932
-  ../Birko.Data.SQL.MySQL: 7703a26
-  ../Birko.Data.SQL.PostgreSQL: 4706aa0
-  ../Birko.Data.SQL.SqLite: dcc3c97
+  ../Birko.Data.SQL.MySQL: 72cac6d
+  ../Birko.Data.SQL.PostgreSQL: 6f7a12f
+  ../Birko.Data.SQL.SqLite: ef71921
   ../Birko.Data.TimescaleDB: 4978d7a
   ../Birko.Redis: 5902d08
 shaped-by: []
@@ -468,13 +467,32 @@ only when `Password` is non-empty, and always append `;Default Timeout={CommandT
 - **When** its members are enumerated
 - **Then** it has `CommandTimeout` (default 30) but no `ConnectionTimeout`, no `Port`, no `UserName` and no `UseSecure`
 
-### Requirement: MongoDB composes a mongodb:// URI, including credentials only when both parts are present
+### Requirement: MongoDB prefers an explicit raw connection string and otherwise composes a mongodb:// URI
 
-The system SHALL build the MongoDB connection string starting from `mongodb://`, SHALL prepend
+The system SHALL return `RawConnectionString` verbatim from `GetConnectionString()` whenever it is
+non-empty, bypassing composition entirely, and SHALL carry it through `LoadFrom`.
+
+This is the **escape hatch** for any driver option the composed URI cannot express. Composition is a
+closed set — credentials, host, port, database, `authSource`, `replicaSet`, `tls`, `retryWrites`,
+`retryReads` — so without this a consumer needing any other option (a `mongodb+srv://` seed list, a
+read preference, a compressor, an alternate auth mechanism) had no way to set it at all. The shape is
+deliberately identical to `RedisSettings.RawConnectionString`, so the two backends' escape hatches are
+learned once rather than per provider.
+
+When `RawConnectionString` is empty the system SHALL build the connection string starting from
+`mongodb://`, SHALL prepend
 `{UserName}:{Password}@` only when **both** `UserName` and `Password` are non-empty, SHALL append
 `{Location}:{Port}`, SHALL append `/{Name}` when `Name` is non-empty, and SHALL append a query string
 composed of `authSource={AuthDatabase}` (when non-empty), `replicaSet={ReplicaSet}` (when non-empty),
 `tls=true` (when `UseSecure`), and unconditionally `retryWrites=true` and `retryReads=true`.
+
+#### Scenario: A raw connection string wins over every composed field
+
+- **Given** settings carrying both a populated `RawConnectionString` and a full set of composable fields
+  (`UserName`, `Password`, `Location`, `Port`, `Name`, `ReplicaSet`)
+- **When** `GetConnectionString()` is called
+- **Then** the raw string is returned exactly as given and none of the composed fields appear — the
+  escape hatch is a replacement, not an overlay
 
 #### Scenario: Fully configured MongoDB connection string
 
@@ -613,12 +631,22 @@ otherwise it SHALL return false.
 - **When** `RetryPolicy` is read
 - **Then** it is `RetryPolicy.None` — the classifier has no effect until a caller assigns a policy
 
-### Requirement: CosmosDB settings produce CosmosClientOptions carrying a Guid-id serializer
+### Requirement: CosmosDB settings produce CosmosClientOptions carrying a Guid-id serializer and a selectable connection mode
 
 The system SHALL implement `CosmosDB.Stores.Settings.GetCosmosClientOptions()` to return a
-`CosmosClientOptions` with `RequestTimeout` and `AllowBulkExecution` taken from the settings and
-`Serializer` set to a new `Serialization.CosmosGuidIdSerializer`, and SHALL NOT include
+`CosmosClientOptions` with `RequestTimeout`, `AllowBulkExecution` and `ConnectionMode` taken from the
+settings and `Serializer` set to a new `Serialization.CosmosGuidIdSerializer`, and SHALL NOT include
 `PartitionKeyPath` in the client options.
+
+`ConnectionMode` SHALL default to `Direct`, matching the SDK's own default so the addition changes no
+existing deployment, and SHALL be carried by `LoadFrom`. `Gateway` routes every request over HTTPS on the
+account's single endpoint.
+
+**Without this the framework could not talk to the Cosmos emulator at all.** The linux emulator's
+`vnext-preview` image serves Gateway only, and `Direct` mode additionally makes some client options
+invalid (`OpenTcpConnectionTimeout` throws when the mode is not `Direct`), so a setting the framework
+hard-coded decided which servers were reachable. The gap was invisible because the suite that would have
+caught it was environment-gated *and* could not have passed if ungated.
 
 #### Scenario: Default client options
 

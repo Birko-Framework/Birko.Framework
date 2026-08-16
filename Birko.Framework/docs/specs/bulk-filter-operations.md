@@ -21,12 +21,12 @@ sources:
   - ../Birko.Data.Stores/IBulkStore.cs
   - ../Birko.Data.Stores/OrderBy.cs
   - ../Birko.Data.Stores/PropertyUpdate.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.Data.Core: 11da2ac
-  ../Birko.Data.MongoDB: 88f96ee
-  ../Birko.Data.SQL: ea8db51
-  ../Birko.Data.Stores: 3cd8b2a
+source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:55:41,
+                  # commit f3e900a). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Core: aaa9b3e
+  ../Birko.Data.MongoDB: 77d9aba
+  ../Birko.Data.SQL: 7b60044
+  ../Birko.Data.Stores: c828ef1
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator at all.
 # Every source glob above points into a sibling repo, so no task's `pr:` sha resolves under `git show`

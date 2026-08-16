@@ -44,16 +44,16 @@ sources:
   - ../Birko.Data.Views/ViewMapRegistry.cs
   - ../Birko.Data.Views/ViewQueryMode.cs
   - ../Birko.Data.Views/ViewResult.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16:17:32,
+                  # commit c78cfca). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.CosmosDB.Views: 1b91192
-  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.ElasticSearch.Views: 3881649
-  ../Birko.Data.MongoDB.Views: 3085645
+  ../Birko.Data.MongoDB.Views: 1a69f29
   ../Birko.Data.RavenDB.Views: 3b3f9dd
   ../Birko.Data.SQL.View: 6fa64c5
   ../Birko.Data.SQL.Views: 6095b16
-  ../Birko.Data.Stores: e37bebf
+  ../Birko.Data.Stores: c828ef1
   ../Birko.Data.Views: cd516af
 shaped-by: []
 # false, not an empty answer: every source glob in this area points into a sibling repo, so no

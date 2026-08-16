@@ -27,12 +27,23 @@
 # areas stale, 40 changed source files, none of it previously visible.
 #
 # BASELINE AMNESTY, one time: nothing recorded each sibling's HEAD at regen time, so
-# the 128 baselines were RECONSTRUCTED from each spec's own `generated-on` date --
-# the sibling's last commit before that day began. Deliberately conservative: a
-# commit made on the regen day itself reads as drift, so this over-reports rather
-# than under-reports. Drift *within* a spec's regen day is the one thing it cannot
-# see. Regens from here on record the shas exactly, and this note stops applying to
-# any spec regenerated after 2026-08-16.
+# the baselines had to be RECONSTRUCTED. Anchor chosen by measurement, after two
+# worse candidates were tried and discarded:
+#   - today's HEAD          -> amnesties everything; 12 specs date from 2026-07-30,
+#                              so 17 days of drift would have been forgiven silently.
+#   - `generated-on`        -> hand-written, and measured to disagree with the real
+#                              harvest by a full day on 6 of 25 specs.
+#   - the commit that last  -> USED. Precise to the second and derived from git, not
+#     WROTE the spec           from a field a human typed.
+# The last of those is right because `generated-at` is itself systematically too
+# early: regen stamps `rev-parse HEAD` BEFORE the spec file is committed, so the
+# stamp always names the commit preceding the one carrying the spec. Measured: true
+# for all 25, with gaps up to 8 hours. Anchoring on generated-at manufactured 9 false
+# stale areas (15 -> 6 once corrected). See TASK-227.
+#
+# Regens from here on record the shas exactly and this note stops applying to them;
+# 6 areas already carry `# recorded at this regen`. What no reconstruction can see is
+# drift between a sibling commit and the spec commit that followed it minutes later.
 #
 # Per-sub-repo specs (each Birko.X/docs/specs/) were long recorded here as "the fix".
 # Measured: only 4 of 25 areas are single-repo, so that move addresses 16% of the map

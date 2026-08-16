@@ -45,8 +45,8 @@ sources:
   - ../Birko.BackgroundJobs/Serialization/JobSerializationHelper.cs
   - ../Birko.BackgroundJobs/Serialization/JsonJobSerializer.cs
   - ../Birko.Contracts/Retry/RetryPolicy.cs
-source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
-                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
+                  # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.BackgroundJobs: 4480520
   ../Birko.BackgroundJobs.CosmosDB: beb9c68
   ../Birko.BackgroundJobs.ElasticSearch: 7317cdd
