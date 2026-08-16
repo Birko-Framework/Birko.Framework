@@ -1,6 +1,6 @@
 ---
 area: filter-expression-translation
-generated-at: 3e810ab
+generated-at: ba8f755
 generated-on: 2026-08-15
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
@@ -167,6 +167,30 @@ SHALL be left intact for the value parser. A `ConditionalExpression` whose test 
 - **Given** a ternary whose test funcletized to `Constant(true)`
 - **When** `VisitConditional` runs
 - **Then** the `ifTrue` branch is returned and the `ifFalse` branch is discarded
+
+### Requirement: Boolean constants left by the expansions are reduced away
+
+`ExpressionNormalizer` SHALL reduce the boolean constants its own expansions produce: `X && true` to
+`X`, `X && false` to `Constant(false)`, `X || false` to `X`, `X || true` to `Constant(true)`, and the
+negation of a constant test to the opposite constant. The reduction SHALL be semantics-preserving — the
+normalized predicate SHALL agree with the original lambda for every input — and SHALL NOT suppress the
+expansion itself: a ternary with non-constant branches still yields an `OrElse` of two `AndAlso` nodes.
+
+This exists because a downstream parser is entitled to be surprised by a dangling constant operand.
+RavenDB renders the unreduced `X && true` as the malformed RQL `where (Score = $p0 and)` rather than
+rejecting it (TASK-222).
+
+#### Scenario: A ternary with literal branches collapses to its test
+
+- **Given** the predicate body `x.Score == null ? true : false`
+- **When** the expansion `(c && true) || (!c && false)` is reduced
+- **Then** only the test survives — the result is the `Equal` node, with no boolean constant anywhere in the tree
+
+#### Scenario: The expansion itself is not suppressed
+
+- **Given** a ternary whose branches are both real predicates
+- **When** the normalizer runs
+- **Then** the result is still an `OrElse` of two `AndAlso` nodes — SQL and ElasticSearch depend on receiving AND/OR/NOT here, so the reduction must not go further than the constants
 
 ### Requirement: Parameter-sharing predicate composition
 
@@ -484,6 +508,24 @@ provider rejects a spelling every other backend accepts:
 It SHALL NOT rewrite `x.CollectionMember.Contains(constValue)`, which is the opposite direction of
 membership and already translates, nor `string.Contains`, which RavenDB refuses deliberately with
 guidance naming `Search()`.
+
+It SHALL additionally run `ExpressionNormalizer` over the filter. RavenDB does **not** reject a boolean
+ternary or boolean `??` — it emits **no `where` clause at all**, or malformed RQL, and returns every
+document (TASK-222). Five further shapes — `string.Contains`, `ToLower`, and the three computed-operand
+shapes (`?? `, `+`, `*` inside a comparison) — are **accepted refusals**: they need a Raven static index
+or an analyzer, not a tree rewrite, and each is recorded in the matrix suite's ledger with its reason.
+
+#### Scenario: A boolean ternary produces a where clause instead of vanishing
+
+- **Given** `x => x.Amount > 4 ? x.Active : x.Score == null` and a RavenDB store
+- **When** the query is rendered
+- **Then** it emits boolean algebra (`where (Amount > $p0 and Active = $p1) or (...)`) and returns the same documents as the compiled delegate; untranslated it emitted `from 'Docs'` with **no** `where` clause and matched everything
+
+#### Scenario: A ternary with literal branches collapses rather than emitting malformed RQL
+
+- **Given** `x => x.Score == null ? true : false`
+- **When** the normalizer's expansion is reduced and the query rendered
+- **Then** the dangling `&& true` is gone and the clause is well formed; unreduced, RavenDB emitted `where (Score = $p0 and)`
 
 #### Scenario: The portable set-membership spelling translates
 

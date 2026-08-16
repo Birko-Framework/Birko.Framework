@@ -482,6 +482,12 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   method at all and threw `NotSupportedException: Specified method is not supported`, naming nothing
   (TASK-218). `Birko.Data.Expressions.SpanContains` now owns both halves — the unwrap and the rewrite to
   `Enumerable.Contains` — and `PredicateScope` calls the same unwrap. Four parts generalise:
+  - **A driver that SILENTLY drops what it cannot translate is the worst case, and it is not rare.**
+    RavenDB emits no `where` clause for a boolean ternary and malformed RQL for a ternary inside a
+    conjunct — never an exception (TASK-222). Rank a dropped predicate above any number of loud refusals,
+    and treat the two oppositely: **fix what lies, document what refuses.** The five loud Raven shapes are
+    accepted in a ledger with a reason each; the silent ones were fixed. A ledger like that must fail on a
+    listed entry that starts *passing*, or it stops being a record and becomes a blanket.
   - **A backend can reject a portable spelling for its OWN reasons, and then it needs its own rewrite.**
     RavenDB was excluded from the span rewrite correctly and still needed fixing: it translates no
     collection `Contains` at all, and refuses `x => true` — the documented read-all synonym — outright
@@ -623,6 +629,29 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### RavenDB dropped a boolean ternary's WHERE clause entirely (2026-08-16)
+
+TASK-222, the last of the five TASK-214 spawned. RavenDB does not *reject* a boolean ternary — it emits
+**no `where` clause at all** and returns every document, or emits malformed RQL like
+`where Active = $p0 and`. `ExpressionNormalizer` already existed to desugar exactly that and its own doc
+comment excluded the native-LINQ backends; running it for Raven fixes the whole silent class. Split:
+Revert A **1 of 51**, Revert B **2 of 70**; 1,147 tests green across 8 suites. Four things worth carrying:
+
+- **The filed hypothesis was wrong in the useful direction.** The task guessed the normalizer would close
+  4 of 6 shapes; it closes **1** — the normalizer keeps non-boolean coalesce and arithmetic intact *by
+  design*. But probing the silent class found **three more unfiled shapes**, all silent or malformed. The
+  count went down and the coverage went up: **count the mechanism, not the symptoms.**
+- **Silent beats loud, and they need opposite treatments.** One dropped predicate outranked five loud
+  refusals, and the loud five were then *accepted* — computed operands need a Raven static index, not a
+  tree rewrite. Fix what lies; document what refuses.
+- **A ledger must fail in both directions.** The matrix's accepted-divergence list fails the run on an
+  unlisted divergence **and** on a listed one that starts passing. Without the second half an entry
+  silently becomes a blanket and masks the next regression in that shape.
+- **A unit test proving a transform is not a test that anyone benefits.** Reverting the boolean-constant
+  reduction failed 2 of 70 in Core while RavenDB's live suite stayed green at 51/51 — its shape list had
+  no literal-branch ternary. Two shapes were added there. Same lesson as TASK-221's dead wiring, from the
+  other end: there, the helper was tested and uncalled; here, the transform was tested and unexercised.
 
 ### RavenDB could not express `IN`, and its matrix suite was broken in its own setup (2026-08-16)
 
