@@ -1,6 +1,8 @@
 # Tasks — Birko.Framework
 
-> ⚠ **Drift (2):** DV5 (32 tasks in `_loose/` carry no epic and no feature, so they appear in no feature row — ~22 belong under EPIC-014) · specs DV11 ×25 (`shaped-by` provenance never derived, so DV8 is suppressed everywhere) — run `/roadmap --check`.
+> ⚠ **Drift (3):** **specs DV7 ×15 — 15 of 25 areas are stale, 40 changed source files** (worst: `filter-expression-translation` 9, `bulk-filter-operations` 5, `caching` 3) · DV5 (32 tasks in `_loose/` carry no epic and no feature, so they appear in no feature row — ~22 belong under EPIC-014) · specs DV11 ×25 (`shaped-by` provenance never derived, so DV8 is suppressed everywhere) — run `/roadmap --check`.
+>
+> **DV7 is newly *visible*, not newly true.** [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) landed 2026-08-16: every area globs into a sibling repo, so `git diff <generated-at>..HEAD` matched nothing and all 25 reported **fresh forever** — a guard green by construction. Specs now carry a per-sibling `source-commits:` baseline and the check resolves each glob in its own repo. The 15 were already stale; nothing could see them. Expect this count to fall as areas are regenerated.
 >
 > Cleared 2026-08-16: **DV2** (FEATURE-016 read `idea` with 12/14 done), **DV3 + DV9** (TASK-148 was `feature: null`, so FEATURE-017 reported `0 / 0 tasks`), and **DV9** on FEATURE-014 (15 tasks absent from the `→ Tasks` column). DV7 is no longer listed as drift because it is **not measurable here at all** rather than currently-stale — every one of the 25 areas globs into a sibling repo, so `git diff <generated-at>..HEAD` can never observe a source change. That is owned by [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md), which demonstrates it; leaving it in this banner implied a refresh would fix it.
 
@@ -15,10 +17,10 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 69                  |
+| done         | 1                  | 22                 | 70                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 25 · P2 82 · P3 6**
+Todo by priority: **P0 0 · P1 25 · P2 81 · P3 7**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -44,6 +46,9 @@ Todo by priority: **P0 0 · P1 25 · P2 82 · P3 6**
 > accumulated seven hand-edits on top of the last full count. Totals: **17 epics, 56 stories, 195 tasks**;
 > the six task buckets now sum to 195 exactly. TASK-205 is this tree's first `cancelled` task: it was
 > superseded by TASK-211/216 and retired rather than closed `done`, because it did no work of its own.
+>
+> Adjusted 2026-08-16 (TASK-131 close): done 69 -> 70, tasks 195 -> 196, P2 82 -> 81, P3 6 -> 7. TASK-131
+> closed `done` and spawned **TASK-226** (P3), so todo stays at 113 — one left the pool and one entered.
 
 ## In progress now
 

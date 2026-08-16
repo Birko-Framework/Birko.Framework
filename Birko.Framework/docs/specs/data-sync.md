@@ -54,6 +54,17 @@ sources:
   - ../Birko.Data.Sync/Stores/ISyncKnowledgeStore.cs
   - ../Birko.Data.Sync/SyncProvider.cs
   - ../Birko.Data.Sync/SyncQueue.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Aggregates: 8988d3b
+  ../Birko.Data.Sync: 981530f
+  ../Birko.Data.Sync.CosmosDB: 34cf848
+  ../Birko.Data.Sync.ElasticSearch: ecdb2b7
+  ../Birko.Data.Sync.Json: 655e991
+  ../Birko.Data.Sync.MongoDb: 8e6bc94
+  ../Birko.Data.Sync.RavenDB: fa93f5f
+  ../Birko.Data.Sync.Sql: 60d30a6
+  ../Birko.Data.Sync.Xml: a56a3ff
 shaped-by: []
 ---
 

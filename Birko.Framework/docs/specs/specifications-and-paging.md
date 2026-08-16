@@ -13,6 +13,9 @@ sources:
   - ../Birko.Data.Patterns/Specification/OrSpecification.cs
   - ../Birko.Data.Patterns/Specification/RuleSpecification.cs
   - ../Birko.Data.Patterns/Specification/Specification.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Patterns: 4663f80
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes

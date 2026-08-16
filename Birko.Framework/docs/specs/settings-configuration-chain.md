@@ -16,6 +16,21 @@ sources:
   - ../Birko.Data.SQL/Stores/SqlSettings.cs
   - ../Birko.Data.TimescaleDB/Stores/Settings.cs
   - ../Birko.Redis/RedisSettings.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Configuration: 31f7355
+  ../Birko.Data.CosmosDB: ab9ba88
+  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.InfluxDB: 14fa370
+  ../Birko.Data.MongoDB: 77fd9ce
+  ../Birko.Data.RavenDB: fb8d98f
+  ../Birko.Data.SQL: a8f06a9
+  ../Birko.Data.SQL.MSSql: 64a4932
+  ../Birko.Data.SQL.MySQL: 7703a26
+  ../Birko.Data.SQL.PostgreSQL: 4706aa0
+  ../Birko.Data.SQL.SqLite: dcc3c97
+  ../Birko.Data.TimescaleDB: 4978d7a
+  ../Birko.Redis: 5902d08
 shaped-by: []
 ---
 

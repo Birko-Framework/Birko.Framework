@@ -44,6 +44,16 @@ sources:
   - ../Birko.Workflow/Visualization/DotDiagramGenerator.cs
   - ../Birko.Workflow/Visualization/IWorkflowDiagramGenerator.cs
   - ../Birko.Workflow/Visualization/MermaidDiagramGenerator.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Workflow: d8fc1ea
+  ../Birko.Workflow.CosmosDB: f5c4f6a
+  ../Birko.Workflow.ElasticSearch: 6c0f5e3
+  ../Birko.Workflow.JSON: a77cc6c
+  ../Birko.Workflow.MongoDB: 6cf4a45
+  ../Birko.Workflow.RavenDB: 040f2c2
+  ../Birko.Workflow.SQL: c279867
+  ../Birko.Workflow.XML: d357d38
 shaped-by: []
 ---
 

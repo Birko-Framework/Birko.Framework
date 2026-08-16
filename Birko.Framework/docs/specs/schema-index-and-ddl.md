@@ -40,6 +40,15 @@ sources:
   - ../Birko.Data.SQL/SQL/IndexManagement/SqlIndexManager.cs
   - ../Birko.Data.SQL/SQL/Tables/IndexDefinition.cs
   - ../Birko.Data.SQL/SQL/Tables/Table.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.Patterns: 87c0ed3
+  ../Birko.Data.SQL: a210cd6
+  ../Birko.Data.SQL.MSSql: 64a4932
+  ../Birko.Data.SQL.MySQL: 7703a26
+  ../Birko.Data.SQL.PostgreSQL: 4706aa0
+  ../Birko.Data.SQL.SqLite: ef71921
 shaped-by: []
 # false, not an empty answer: every source glob in this area points into a sibling repo, so no
 # task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run

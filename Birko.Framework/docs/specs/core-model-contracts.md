@@ -17,6 +17,11 @@ sources:
   - ../Birko.Data.Core/Models/ITimestamped.cs
   - ../Birko.Data.MongoDB/Models/MongoDBModel.cs
   - ../Birko.Data.MongoDB/Serialization/MongoSerialization.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Contracts: dc3575c
+  ../Birko.Data.Core: 189b119
+  ../Birko.Data.MongoDB: 7c66862
 shaped-by: []
 shaped-by-derived: false
 ---

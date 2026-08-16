@@ -7,6 +7,9 @@ sources:
   - ../Birko.Data.Stores/AbstractAsyncStore.cs
   - ../Birko.Data.Stores/AbstractBulkStore.cs
   - ../Birko.Data.Stores/AbstractStore.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Stores: c164f94
 shaped-by: []
 ---
 

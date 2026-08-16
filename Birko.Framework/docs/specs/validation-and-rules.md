@@ -36,6 +36,10 @@ sources:
   - ../Birko.Validation/Rules/RangeRule.cs
   - ../Birko.Validation/Rules/RegexRule.cs
   - ../Birko.Validation/Rules/RequiredRule.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Rules: 142c308
+  ../Birko.Validation: 0455677
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes

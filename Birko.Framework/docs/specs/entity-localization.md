@@ -15,6 +15,9 @@ sources:
   - ../Birko.Data.Localization/Models/EntityTranslationModel.cs
   - ../Birko.Data.Localization/Models/IEntityLocalizationContext.cs
   - ../Birko.Data.Localization/Models/ILocalizable.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Localization: e2e01bb
 shaped-by: []
 ---
 

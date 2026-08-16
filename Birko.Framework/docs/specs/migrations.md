@@ -54,6 +54,16 @@ sources:
   - ../Birko.Data.Migrations/IMigrationStore.cs
   - ../Birko.Data.Migrations/MigrationDirection.cs
   - ../Birko.Data.Migrations/MigrationResult.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Migrations: 4dd7e1b
+  ../Birko.Data.Migrations.CosmosDB: 9755c1a
+  ../Birko.Data.Migrations.ElasticSearch: e244e85
+  ../Birko.Data.Migrations.InfluxDB: 23b63c3
+  ../Birko.Data.Migrations.MongoDB: 8a7acf5
+  ../Birko.Data.Migrations.RavenDB: 99d8d33
+  ../Birko.Data.Migrations.SQL: f72bf7d
+  ../Birko.Data.Migrations.TimescaleDB: 531d816
 shaped-by: []
 ---
 

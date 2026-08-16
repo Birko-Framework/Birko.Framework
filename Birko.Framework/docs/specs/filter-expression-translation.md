@@ -31,6 +31,15 @@ sources:
   - ../Birko.Data.SQL/SQL/DataBase.cs
   - ../Birko.Data.SQL/SQL/DataBase_OrderBy.cs
   - ../Birko.Data.SQL/SQL/DataBase_RuleField.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Core: 11da2ac
+  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.SQL: ea8db51
+  ../Birko.Data.SQL.MSSql: 64a4932
+  ../Birko.Data.SQL.MySQL: 7703a26
+  ../Birko.Data.SQL.PostgreSQL: 4706aa0
+  ../Birko.Data.SQL.SqLite: ef71921
 shaped-by:
   # TASK-111 / SH-H023 — rule fields resolve against table metadata. The evidence pass cannot run from this
   # aggregator: every source above is in a sibling repo, so the sha resolves under no `git show` here.

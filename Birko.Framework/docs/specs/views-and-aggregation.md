@@ -44,6 +44,17 @@ sources:
   - ../Birko.Data.Views/ViewMapRegistry.cs
   - ../Birko.Data.Views/ViewQueryMode.cs
   - ../Birko.Data.Views/ViewResult.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.CosmosDB.Views: 1b91192
+  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.ElasticSearch.Views: 3881649
+  ../Birko.Data.MongoDB.Views: 3085645
+  ../Birko.Data.RavenDB.Views: 3b3f9dd
+  ../Birko.Data.SQL.View: 6fa64c5
+  ../Birko.Data.SQL.Views: 6095b16
+  ../Birko.Data.Stores: e37bebf
+  ../Birko.Data.Views: cd516af
 shaped-by: []
 # false, not an empty answer: every source glob in this area points into a sibling repo, so no
 # task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run

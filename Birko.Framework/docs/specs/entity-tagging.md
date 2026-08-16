@@ -9,6 +9,9 @@ sources:
   - ../Birko.Data.Tagging/Models/Tag.cs
   - ../Birko.Data.Tagging/Services/ITagService.cs
   - ../Birko.Data.Tagging/Services/TagService.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Tagging: 2ff95f1
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here.

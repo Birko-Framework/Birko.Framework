@@ -25,6 +25,10 @@ sources:
   - ../Birko.AI/Tools/RunCommandTool.cs
   - ../Birko.AI/Tools/SearchCodeTool.cs
   - ../Birko.AI/Tools/WriteFileTool.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.AI: ed540db
+  ../Birko.AI.Contracts: 52e43f8
 shaped-by: []
 ---
 

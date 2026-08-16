@@ -35,6 +35,11 @@ sources:
   - ../Birko.Time.Abstractions/Core/IDateTimeProvider.cs
   - ../Birko.Time.Abstractions/Providers/SystemDateTimeProvider.cs
   - ../Birko.Time.Abstractions/Providers/TestDateTimeProvider.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Composition: dfdb6fb
+  ../Birko.Data.Patterns: 4663f80
+  ../Birko.Time.Abstractions: 47fa6a9
 shaped-by: []
 ---
 

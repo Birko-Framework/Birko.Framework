@@ -15,6 +15,11 @@ sources:
   - ../Birko.Data.Stores/IStoreWrapper.cs
   - ../Birko.Data.Stores/StoreExtensions.cs
   - ../Birko.Data.Stores/StoreLocator.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.Core: 11da2ac
+  ../Birko.Data.InMemory: 4f680b7
+  ../Birko.Data.Stores: 3cd8b2a
 shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried — see the identical note in bulk-filter-operations.md: every
 # source glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` in this

@@ -83,6 +83,16 @@ sources:
   - ../Birko.MessageQueue/Serialization/IMessageSerializer.cs
   - ../Birko.MessageQueue/Serialization/JsonMessageSerializer.cs
   - ../Birko.MessageQueue/Transactions/ITransactionalProducer.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.EventBus: e2eab6c
+  ../Birko.EventBus.EventSourcing: 23cc837
+  ../Birko.EventBus.MessageQueue: cfa3d21
+  ../Birko.EventBus.Outbox: ec4ceb9
+  ../Birko.MessageQueue: f40961a
+  ../Birko.MessageQueue.InMemory: 106f689
+  ../Birko.MessageQueue.MQTT: 23a9f74
+  ../Birko.MessageQueue.Redis: fef0353
 shaped-by: []
 ---
 

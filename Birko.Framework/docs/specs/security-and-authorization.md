@@ -46,6 +46,15 @@ sources:
   - ../Birko.Security/Core/ITokenProvider.cs
   - ../Birko.Security/Encryption/AesEncryptionProvider.cs
   - ../Birko.Security/Hashing/Pbkdf2PasswordHasher.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Security: 6aa0ae7
+  ../Birko.Security.AspNetCore: 4d74b7c
+  ../Birko.Security.AzureKeyVault: fc64ec7
+  ../Birko.Security.BCrypt: 835427c
+  ../Birko.Security.Jwt: c476230
+  ../Birko.Security.Vault: 02a7f07
+  ../Birko.Security.Vault.Configuration: 9e39e40
 shaped-by: []
 ---
 

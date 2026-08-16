@@ -16,11 +16,29 @@
 # contract-only spec cannot catch. Areas whose backends are large standalone
 # surfaces (see out-of-scope list) keep the contract only.
 #
-# Staleness caveat: `generated-at` stamps THIS repo's HEAD, while sources live in
-# sibling repos with independent histories. `/specs verify` can still diff file
-# content, but commit-based staleness is weaker here than for a spec sitting next
-# to its own code. Per-sub-repo specs (each Birko.X/docs/specs/) are the fix and
-# remain deliberate follow-up work.
+# Staleness: `generated-at` stamps THIS repo's HEAD, while sources live in sibling
+# repos with independent histories — so for the whole life of this map, commit-based
+# staleness could not fire at all and every area reported fresh forever. Not a weaker
+# guard: a guard that was green by construction (TASK-131).
+#
+# Fixed 2026-08-16. Each spec now carries `source-commits:`, a per-sibling baseline
+# keyed by the path prefix as it appears in `sources`, and `/specs verify` resolves
+# each external glob with `git -C <sibling> diff <sha>..HEAD`. First run: 15 of 25
+# areas stale, 40 changed source files, none of it previously visible.
+#
+# BASELINE AMNESTY, one time: nothing recorded each sibling's HEAD at regen time, so
+# the 128 baselines were RECONSTRUCTED from each spec's own `generated-on` date --
+# the sibling's last commit before that day began. Deliberately conservative: a
+# commit made on the regen day itself reads as drift, so this over-reports rather
+# than under-reports. Drift *within* a spec's regen day is the one thing it cannot
+# see. Regens from here on record the shas exactly, and this note stops applying to
+# any spec regenerated after 2026-08-16.
+#
+# Per-sub-repo specs (each Birko.X/docs/specs/) were long recorded here as "the fix".
+# Measured: only 4 of 25 areas are single-repo, so that move addresses 16% of the map
+# and cannot host a cross-repo area at all. Still worth doing on its own merits for
+# those 4 plus the 64 unspecced single-repo projects -- TASK-226 -- but it is not the
+# staleness fix and should not be cited as one.
 #
 # Note: test code lives in a SIBLING BUCKET (C:\Source\Birko\Framework.Tests), so
 # no glob below can reach it. The test entries in `ignore:` are therefore inert

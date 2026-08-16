@@ -45,6 +45,18 @@ sources:
   - ../Birko.BackgroundJobs/Serialization/JobSerializationHelper.cs
   - ../Birko.BackgroundJobs/Serialization/JsonJobSerializer.cs
   - ../Birko.Contracts/Retry/RetryPolicy.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.BackgroundJobs: 4480520
+  ../Birko.BackgroundJobs.CosmosDB: beb9c68
+  ../Birko.BackgroundJobs.ElasticSearch: 7317cdd
+  ../Birko.BackgroundJobs.JSON: 5d38962
+  ../Birko.BackgroundJobs.MongoDB: d34d67c
+  ../Birko.BackgroundJobs.RavenDB: 2af4814
+  ../Birko.BackgroundJobs.Redis: 896667c
+  ../Birko.BackgroundJobs.SQL: 0b71709
+  ../Birko.BackgroundJobs.XML: ccd3960
+  ../Birko.Contracts: dc3575c
 shaped-by: []
 ---
 

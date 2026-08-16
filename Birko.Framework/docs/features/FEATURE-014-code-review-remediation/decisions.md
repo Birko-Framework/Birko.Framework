@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -102,3 +102,12 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   additions are spec-harvest high findings, which is exactly what D7 approved. The gap is a `/tasks spawn`
   omission that recurs whenever a fix uncovers its successor mid-run, and it will recur again — the
   ledger's `→ Tasks` column has no writer other than a human remembering to update it.
+- 2026-08-16 — **D11 gains [[TASK-226]]**, spawned from [[TASK-131]] and backfilled *at creation* rather
+  than by a later audit — the first task to exercise the rule change that closed the gap named in the line
+  above (`/tasks new` step 10b now fires on the `feature:` link instead of on `--from-feature`). Inside
+  D11's approved scope: epic-direct spec-layer infrastructure, same as TASK-131 itself, so no new decision
+  row. **TASK-131 also changed shape without changing state** — it set out to build per-sub-repo spec
+  trees and measured that those cover 4 of 25 areas, so it fixed staleness with a per-sibling baseline
+  instead and re-homed the per-sub-repo work as TASK-226. The decision D11 approved ("work tracked
+  directly on the epic") is unaffected; the *mechanism* inside one of its tasks changed, which is a task
+  concern and is recorded there.

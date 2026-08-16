@@ -9,6 +9,12 @@ sources:
   - ../Birko.Data.SQL/Stores/SqlTransactionContext.cs
   - ../Birko.Data.SQL/UnitOfWork/SqlUnitOfWork.cs
   - ../Birko.Data.Stores/ITransactionalStore.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Data.ElasticSearch: bfe668f
+  ../Birko.Data.Patterns: 4663f80
+  ../Birko.Data.SQL: a8f06a9
+  ../Birko.Data.Stores: c164f94
 shaped-by: []
 ---
 

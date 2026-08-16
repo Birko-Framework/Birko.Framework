@@ -11,6 +11,13 @@ sources:
   - ../Birko.Serialization/Core/SerializationFormat.cs
   - ../Birko.Serialization/Json/SystemJsonSerializer.cs
   - ../Birko.Serialization/Xml/SystemXmlSerializer.cs
+source-commits:   # sibling baselines. RECONSTRUCTED 2026-08-16 from generated-on, not
+                  # recorded at regen time -- see .map.yml § BASELINE AMNESTY.
+  ../Birko.Serialization: f852468
+  ../Birko.Serialization.MessagePack: a52501a
+  ../Birko.Serialization.Newtonsoft: befecef
+  ../Birko.Serialization.Protobuf: 158da6c
+  ../Birko.Serialization.Yaml: ee94017
 shaped-by: []
 ---
 
