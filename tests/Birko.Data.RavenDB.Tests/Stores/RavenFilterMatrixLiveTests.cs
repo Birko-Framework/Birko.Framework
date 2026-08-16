@@ -94,11 +94,35 @@ public class RavenFilterMatrixLiveTests
             // confirm the driver agrees with the compiled-delegate oracle. A THROW/DIVERGE here is a
             // recordable per-backend finding (e.g. arithmetic-in-filter unsupported by the driver).
             ("ternary",      x => (x.Amount > 4 ? x.Active : x.Score == null)),
+            // TASK-222: literal branches are the shape that produced MALFORMED RQL — RavenDB rendered
+            // the unreduced `X && true` as `where (Score = $p0 and)`. Kept distinct from `ternary`
+            // because only this one exercises ExpressionNormalizer's boolean-constant reduction.
+            ("ternLiteral",  x => (x.Score == null ? true : false)),
+            // A ternary as one conjunct of a larger predicate: unreduced this silently produced
+            // `where Active = $p0 and`, i.e. a truncated clause rather than a refusal.
+            ("ternConj",     x => x.Active && (x.Amount > 4 ? x.Active : x.Score == null)),
             ("coalesceCmp",  x => (x.Score ?? 0) > 15),
             ("arithAdd",     x => x.Amount + (x.Score ?? 0) > 10),
             ("arithMul",     x => x.Amount * 2 >= 10),
         };
     }
+
+    /// <summary>
+    /// Shapes RavenDB is MEASURED not to translate, each with the decision behind accepting it
+    /// (TASK-222). Every one of these is a <b>loud</b> refusal — the run still fails on any divergence
+    /// not listed here, and it also fails if a listed one starts passing, so the ledger cannot quietly
+    /// become a blanket. The silent class — boolean ternary and <c>??</c>, which RavenDB rendered as
+    /// <i>no <c>where</c> clause at all</i> or as malformed RQL — is fixed, not accepted.
+    /// </summary>
+    private static readonly Dictionary<string, string> Accepted = new()
+    {
+        ["contains"] = "INTENDED. RavenDB refuses substring search deliberately and its message names "
+                     + "Search() as the supported approach — better guidance than a rewrite could give",
+        ["toLowerEq"] = "case handling belongs to a Raven analyzer, not an expression rewrite",
+        ["coalesceCmp"] = "computed operand — needs a Raven static index, out of reach of a tree rewrite",
+        ["arithAdd"] = "computed operand — see coalesceCmp",
+        ["arithMul"] = "computed operand — see coalesceCmp",
+    };
 
     [Fact]
     public async Task FilterShapes_MatchCompiledDelegateOracle()
@@ -129,6 +153,7 @@ public class RavenFilterMatrixLiveTests
 
             var report = new StringBuilder();
             int diverged = 0;
+            var unexpectedlyPassing = new List<string>();
             foreach (var (label, expr) in Shapes(guidTarget))
             {
                 var oracle = all.Where(expr.Compile()).Select(d => d.Guid).OrderBy(g => g).ToList();
@@ -144,18 +169,23 @@ public class RavenFilterMatrixLiveTests
                         await Task.Delay(250);
                     }
                     var ok = oracle.SequenceEqual(actual);
-                    if (!ok) diverged++;
+                    if (ok && Accepted.ContainsKey(label)) unexpectedlyPassing.Add(label);
+                    if (!ok && !Accepted.ContainsKey(label)) diverged++;
                     line = ok ? "OK" : $"DIVERGE oracle={oracle.Count} actual={actual.Count}";
                 }
                 catch (Exception e)
                 {
-                    diverged++;
+                    if (!Accepted.ContainsKey(label)) diverged++;
                     line = "THROW " + e.GetType().Name + ": " + e.Message.Split('\n')[0];
                 }
+                if (Accepted.TryGetValue(label, out var why)) line += $"   [ACCEPTED: {why}]";
                 report.AppendLine($"{label,-14} -> {line}");
             }
 
             diverged.Should().Be(0, "RavenDB filter translation should match C# semantics:\n" + report);
+            unexpectedlyPassing.Should().BeEmpty(
+                "an ACCEPTED divergence that now translates must be removed from the ledger, not left "
+                + "masking a future regression in that shape:\n" + report);
         }
         finally
         {

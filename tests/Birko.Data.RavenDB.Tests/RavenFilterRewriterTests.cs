@@ -29,11 +29,11 @@ namespace Birko.Data.RavenDB.Tests;
 /// needs no database. The store is pointed at a port nothing listens on and never executes.
 /// </para>
 /// </summary>
-public class RavenSetMembershipTests : IDisposable
+public class RavenFilterRewriterTests : IDisposable
 {
     private readonly IDocumentStore _store;
 
-    public RavenSetMembershipTests()
+    public RavenFilterRewriterTests()
     {
         _store = new DocumentStore { Urls = new[] { "http://127.0.0.1:65001" }, Database = "spec" };
         _store.Initialize();
@@ -51,7 +51,7 @@ public class RavenSetMembershipTests : IDisposable
     private string Rql(Expression<Func<Doc, bool>> filter)
     {
         using var session = _store.OpenSession();
-        return session.Query<Doc>().Where(RavenSetMembership.Rewrite(filter)!).ToString()!;
+        return session.Query<Doc>().Where(RavenFilterRewriter.Rewrite(filter)!).ToString()!;
     }
 
     private string RawRql(Expression<Func<Doc, bool>> filter)
@@ -151,12 +151,12 @@ public class RavenSetMembershipTests : IDisposable
     {
         Expression<Func<Doc, bool>> e = x => x.Amount > 3 && x.Name == "a";
 
-        RavenSetMembership.Rewrite(e).Should().BeSameAs(e);
+        RavenFilterRewriter.Rewrite(e).Should().BeSameAs(e);
     }
 
     [Fact]
     public void A_null_predicate_stays_null()
     {
-        RavenSetMembership.Rewrite<Doc>(null).Should().BeNull();
+        RavenFilterRewriter.Rewrite<Doc>(null).Should().BeNull();
     }
 }
