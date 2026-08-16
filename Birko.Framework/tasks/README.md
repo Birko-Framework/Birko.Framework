@@ -13,7 +13,7 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 64                  |
+| done         | 1                  | 22                 | 65                  |
 | cancelled    | 0                  | 0                  | 0                   |
 
 Todo by priority: **P0 0 · P1 26 · P2 83 · P3 6**
@@ -56,11 +56,10 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 6**
 
 _No P0 remains open._ Next by blast radius (`/fix-next` ranking, not `priority:`):
 
-- [TASK-221](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-221-ravendb-cannot-translate-a-set-membership-filter.md)
-  RavenDB cannot translate **any** set-membership filter (P1, ai) — `IN` is the canonical batch-load
-  pattern, so the store is not substitutable for the others. Loud, not silent, and Raven has no
-  filter-matrix suite at all, which is arguably the larger finding. Approach is a real choice
-  (rewrite `Contains` → `.In()`, or document), so read it before picking
+- [TASK-222](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-222-ravendb-diverges-on-six-filter-shapes.md)
+  RavenDB diverges on 6 filter shapes (P1, ai) — one is **silently wrong**: a boolean ternary returns
+  every document where C# says one. Outranks the five loud ones by itself. `ExpressionNormalizer` already
+  exists to desugar exactly that and is the likely one-line fix for 4 of the 6
 - [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay
   duplicates a create (P1, ai) — **not `/fix-next` work**, despite the ranking. Its Approach is an
   unsettled consumer decision, and its own measured correction shows the headline defect does not
@@ -193,7 +192,7 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
   - STORY-027 [Low findings](EPIC-014-code-review-remediation/STORY-027-low-findings/STORY.md) — done (0/0) (done)
   - STORY-042 [Integration-test tier — the Docker-gated remediation findings](EPIC-014-code-review-remediation/STORY-042-integration-test-tier/STORY.md) — planned (0/0)
   - STORY-043 [Workflow backends — unify the serialization seam (ISerializer everywhere)](EPIC-014-code-review-remediation/STORY-043-workflow-serializer-seam/STORY.md) — done (0/0) (done)
-  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (25/27, 1 in review, 1 new)
+  - STORY-051 [Spec-harvest — high findings](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/STORY.md) — in-progress (26/28, 1 in review, 1 new)
     - [x] [TASK-108](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-108-pbkdf2-empty-segment-auth-bypass.md) `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash (P0, ai) · FEATURE-014
     - [x] [TASK-109](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-109-sql-bulk-null-filter-whole-table-statement.md) A null or untranslatable filter renders `DELETE FROM "T"` — the whole table (P0, ai) · FEATURE-014
     - [x] [TASK-110](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-110-order-by-identifier-unresolved-and-unquoted.md) ORDER BY identifiers reach SQL text unresolved and unquoted (P0, ai) · FEATURE-014
@@ -220,7 +219,8 @@ The 45 spec-harvest triage tasks filed 2026-08-09 (TASK-151 … TASK-195) are de
     - [x] [TASK-214](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-214-mongodbmodel-cannot-be-class-mapped.md) A model deriving `MongoDBModel` cannot be serialized by the driver at all — in fact nothing could be written to MongoDB at all (P1, ai) · FEATURE-014
     - [x] [TASK-218](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-218-array-contains-in-a-filter-does-not-translate-on-mongodb.md) An `IN` filter over a C# **array** does not translate on MongoDB — `NotSupportedException` (P1, ai) · FEATURE-014
     - [x] [TASK-220](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-220-cosmosdb-has-the-same-array-contains-defect.md) CosmosDB has the same array-`Contains` defect as MongoDB — audit the rest of the family (P1, ai) · FEATURE-014
-    - [ ] [TASK-221](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-221-ravendb-cannot-translate-a-set-membership-filter.md) RavenDB cannot translate **any** set-membership filter — `Contains` is unsupported in every spelling (P1, ai) · FEATURE-014
+    - [x] [TASK-221](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-221-ravendb-cannot-translate-a-set-membership-filter.md) RavenDB cannot translate **any** set-membership filter — `Contains` is unsupported in every spelling (P1, ai) · FEATURE-014
+    - [ ] [TASK-222](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-222-ravendb-diverges-on-six-filter-shapes.md) RavenDB diverges on 6 filter shapes — and one of them is a **silent wrong answer** (P1, ai) · FEATURE-014
     - [x] [TASK-219](EPIC-014-code-review-remediation/STORY-051-spec-harvest-high-findings/TASK-219-mongodb-has-two-contradictory-answers-for-what-id-is.md) `Birko.Data.MongoDB` has two contradictory answers for what `_id` is (P1, ai) · FEATURE-014
   - STORY-053 [Spec-harvest — medium findings](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/STORY.md) — planned (0/22)
     - [ ] [TASK-151](EPIC-014-code-review-remediation/STORY-053-spec-harvest-medium-findings/TASK-151-triage-medium-views-and-aggregation.md) Triage the 36 medium spec-harvest findings in `views-and-aggregation` (P1, ai) · FEATURE-014

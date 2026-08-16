@@ -1,6 +1,6 @@
 ---
 area: filter-expression-translation
-generated-at: f3e900a
+generated-at: 3e810ab
 generated-on: 2026-08-15
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
@@ -416,10 +416,9 @@ filter, and SHALL NOT be wired into any other backend. The full classification, 
 - **Raw expression to a driver — affected:** MongoDB and CosmosDB both raise
   `NotSupportedException: Specified method is not supported` for the array spelling while rendering the
   `List<T>` one correctly.
-- **RavenDB — excluded deliberately.** *Every* collection `Contains` spelling fails there with
-  `Expression type not supported: TypedParameterExpression`, not just the span-bound one, so the rewrite
-  would change one failure into an identical one. Raven requires `RavenQueryableExtensions.In`; tracked
-  as its own defect.
+- **RavenDB — excluded from *this* rewrite deliberately.** *Every* collection `Contains` spelling fails
+  there, not just the span-bound one, so this rewrite would change one failure into an identical one. It
+  has its own rewrite instead — see the requirement below.
 
 #### Scenario: An array Contains binds MemoryExtensions, not Enumerable
 
@@ -468,6 +467,47 @@ filter, and SHALL NOT be wired into any other backend. The full classification, 
 - **Given** a filter using only `List<T>.Contains` and a comparison
 - **When** the rewrite runs
 - **Then** the same lambda instance is returned, so the pre-pass allocates nothing on the overwhelming majority of reads
+
+### Requirement: RavenDB's rejected portable spellings are rewritten to its own operators
+
+`Birko.Data.RavenDB.Expressions.RavenSetMembership.Rewrite` SHALL be applied to the caller's filter at
+each RavenDB store method that accepts one, and SHALL perform two rewrites, both because RavenDB's LINQ
+provider rejects a spelling every other backend accepts:
+
+- `constCollection.Contains(x.Member)` SHALL become `x.Member.In(constCollection)`, in every collection
+  spelling including an array (whose span conversion is unwrapped via
+  `SpanContains.UnwrapSpanConversion`);
+- a predicate that is **explicitly all rows** — `x => true`, this framework's documented read-all / `*All`
+  synonym — SHALL become **no predicate**, judged by `PredicateScope.IsExplicitAllRows` so that this and
+  the destructive guards cannot disagree about what "explicitly everything" means.
+
+It SHALL NOT rewrite `x.CollectionMember.Contains(constValue)`, which is the opposite direction of
+membership and already translates, nor `string.Contains`, which RavenDB refuses deliberately with
+guidance naming `Search()`.
+
+#### Scenario: The portable set-membership spelling translates
+
+- **Given** a captured collection of ids and a filter `x => ids.Contains(x.Amount)`, in any of the array, `List<T>`, `IEnumerable<T>` or `Enumerable.Contains` spellings
+- **When** the RavenDB store reads with it
+- **Then** the query renders `from 'Docs' where Amount in ($p0)` and returns the matching documents; untranslated, every one of those spellings raises `NotSupportedException`
+
+#### Scenario: A collection field holding a constant is untouched
+
+- **Given** `x => x.Tags.Contains("red")` — membership running the other way, which RavenDB already translates
+- **When** the rewrite runs
+- **Then** the rendered RQL is identical to the un-rewritten query (`from 'Docs' where Tags = $p0`)
+
+#### Scenario: The read-all synonym drops its predicate
+
+- **Given** `x => true`, which RavenDB rejects with *"Constants expressions such as Where(x => true) are not allowed"*
+- **When** the RavenDB store reads with it
+- **Then** no `where` clause is emitted and every document is returned
+
+#### Scenario: RavenDB's own deliberate refusals survive
+
+- **Given** `x => x.Name.Contains("et")`, a substring test RavenDB refuses on purpose
+- **When** the rewrite runs
+- **Then** the same exception is raised with the same message, still naming `Search()` — the rewrite neither translates it nor rewords the guidance
 
 ### Requirement: SQL non-operand method arguments are skipped
 

@@ -482,6 +482,14 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   method at all and threw `NotSupportedException: Specified method is not supported`, naming nothing
   (TASK-218). `Birko.Data.Expressions.SpanContains` now owns both halves — the unwrap and the rewrite to
   `Enumerable.Contains` — and `PredicateScope` calls the same unwrap. Four parts generalise:
+  - **A backend can reject a portable spelling for its OWN reasons, and then it needs its own rewrite.**
+    RavenDB was excluded from the span rewrite correctly and still needed fixing: it translates no
+    collection `Contains` at all, and refuses `x => true` — the documented read-all synonym — outright
+    (TASK-221). Both are one root cause, "a spelling every other backend accepts", so they are one
+    rewriter. **The dangerous half is what a rewrite must leave alone**: `x.CollectionMember.Contains(const)`
+    is membership in the opposite direction and already worked, so a blanket rewrite would have broken it.
+    Where a discrimination like that already exists somewhere in the framework — here
+    `ElasticSearch.ParseContains` — reuse the test rather than re-derive it.
   - **Measure every translator before deciding the fix's scope — the audit both widens and narrows it.**
     Classified (TASK-218 + TASK-220): backends that *compile* the delegate are never at risk (InMemory,
     JSON, XML, InfluxDB — the runtime knows the method); the hand-rolled parsers were already correct
@@ -615,6 +623,34 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### RavenDB could not express `IN`, and its matrix suite was broken in its own setup (2026-08-16)
+
+TASK-220's audit excluded RavenDB from the span rewrite because *every* `Contains` spelling fails there,
+not just the array one — a different defect, filed as TASK-221 and fixed here. `IN` is the canonical
+batch-load pattern, so the portable spelling that works on SQL, ElasticSearch, MongoDB and CosmosDB threw
+on RavenDB alone. `RavenSetMembership` now rewrites it to Raven's own `.In()`. Split: **6 of 51**;
+6 suites green. Four things worth carrying:
+
+- **The suite that would have caught it was gated AND broken in setup.** `RavenFilterMatrixLiveTests`
+  built its oracle with `ReadAsync(x => true)`, which RavenDB refuses outright — so even with
+  `BIRKO_RAVEN_URL` set it threw before reporting a single shape. Worse than TASK-214's plain gating:
+  there the suite would at least have run. Its first run ever, after both fixes, reports **21 of 27**;
+  the other 6 are TASK-222, one of them a **silent wrong answer** (`ternary` returns 6 rows where C#
+  says 1).
+- **The live run caught dead wiring that 15 offline tests walked straight past.** The bulk
+  `ReadCoreAsync` rewrite had been inserted *inside* `if (_documentStore == null) { return …; }` —
+  unreachable. Every non-gated test passed because they call the rewriter directly. **Offline tests pin
+  a helper; only an end-to-end run pins that anything calls it.** The Cosmos and MongoDB wirings were
+  then checked for the same slip — both fine, verified rather than assumed.
+- **The dangerous half of a rewrite is what it must NOT touch.** `x.Tags.Contains("red")` is membership
+  in the opposite direction and already worked; a blanket `Contains` → `In` would have broken it. The
+  discrimination — which operand references the lambda parameter — was already written in
+  `ElasticSearch.ParseContains`, so it was reused rather than re-derived.
+- **`ls *.cs` is not a survey of a test project.** I filed the task asserting Raven had no matrix suite
+  at all and called that the larger finding. It had one, in a subdirectory. Corrected in the task rather
+  than quietly dropped, because the claim had also been reported verbally and an acceptance criterion was
+  written against it.
 
 ### An array-backed `IN` filter could not be translated on MongoDB (2026-08-16)
 
