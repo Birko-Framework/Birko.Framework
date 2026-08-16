@@ -1,6 +1,6 @@
 ---
 area: bulk-filter-operations
-generated-at: 5d6f328455d8034ad7070ba877fb9f3af0b2db57
+generated-at: c78cfca
 generated-on: 2026-08-15
 sources:
   - ../Birko.Data.MongoDB/Stores/AsyncMongoDBStore.cs
@@ -91,6 +91,17 @@ the **expression**, in `Birko.Data.Stores`, shared by every backend that overrid
 methods; `WholeTableWriteException` moved to `Birko.Data.Core/Exceptions/` so one `catch` still selects it.
 Note this area's globs **do** cover both MongoDB stores, so unlike the `AbstractConnectorBase.cs` gap above,
 this diff is real evidence for the change.
+
+Scoped regen at `c78cfca` for **TASK-218**, which touches this area only because the MongoDB stores are
+where the rewrite is wired. On .NET 9+ an **array**'s `set.Contains(x.Col)` binds to
+`MemoryExtensions.Contains`, which the driver's LINQ translator does not know — `NotSupportedException:
+Specified method is not supported`, naming no method, with a working `List<T>` look-alike one keystroke
+away. Both destructive overloads in each store now normalise the caller's filter through
+`SpanContains.Rewrite` before `RequireFilter` / `RequireBoundedFilter` / the driver see it, so all three
+observe one shape. Worth noting for this area specifically: **the guard was never affected** —
+`PredicateScope` already unwrapped the span conversion, and that unwrap is now the shared producer both it
+and the rewrite call. The behavioural requirement lives in `filter-expression-translation`; what changed
+here is only that a previously-untranslatable filter now reaches the destructive paths at all.
 
 Scoped regen at `e37bebf` for **TASK-215**, which set out to wire the same guard into two more backends and
 found the hole one layer up: `AbstractBulkStore`'s **own** six filter-based destructive wrappers never

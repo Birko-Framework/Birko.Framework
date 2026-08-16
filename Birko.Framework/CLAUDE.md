@@ -471,6 +471,35 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     is gone as of TASK-219** — it was only ever tolerating a *second* id, and the entry below removes
     the second id instead. Kept here because "check the inheritance semantics of a global flag" is the
     part that generalises; needing such a flag at all was the smell.
+- **A language-level overload change is a framework-wide event: normalise it ONCE, wire it where it
+  actually breaks.** On .NET 9+ an **array**'s instance-style `set.Contains(x.Col)` binds to
+  `MemoryExtensions.Contains(ReadOnlySpan<T>, T)` — or its `IEqualityComparer<T>` overload when `T` is not
+  `IEquatable<T>`, which is every enum — instead of `Enumerable.Contains`. Nothing in the source changed;
+  a recompile moved it. This framework has now been bitten **three times, in three different ways**, and
+  that is the real lesson: `PredicateScope` could not evaluate the ref-struct operand and left every
+  array-typed caller unguarded; the SQL parser fed the trailing comparer in as an operand and flipped the
+  condition to `IS NULL` (0 rows against 21, Symbio TASK-249/254); MongoDB's driver does not know the
+  method at all and threw `NotSupportedException: Specified method is not supported`, naming nothing
+  (TASK-218). `Birko.Data.Expressions.SpanContains` now owns both halves — the unwrap and the rewrite to
+  `Enumerable.Contains` — and `PredicateScope` calls the same unwrap. Four parts generalise:
+  - **Measure every translator before deciding the fix's scope; "it must affect all of them" is a guess.**
+    Of the backends that translate a filter expression, **only MongoDB** was broken: SQL rendered
+    `IN (1,5)` and ElasticSearch `terms=(1,5)` for all four spellings, because both evaluate the operand
+    themselves. So the helper is in Core, available to all, and **wired only in MongoDB** — the same
+    discipline as `PredicateScope` / `RequireBoundedFilter`, and the reason the task's own acceptance made
+    the measurement its first row.
+  - **Rewrite at the entry point, not at each hand-off.** The two MongoDB stores hand a filter to the
+    driver from ~30 sites, but the caller's expression *arrives* at only nine methods. Normalising there
+    means the guard, the whole-collection check and the driver all see one shape, and a new hand-off site
+    is correct without being told — the same "fix where it is resolved, not at each producer" rule the
+    identifier family above arrives at.
+  - **Keep the rewrite narrow and reference-identical.** A real comparer is left alone (it cannot be
+    honoured by `Enumerable.Contains(source, item)`, and a silent meaning change is worse than the throw),
+    and a predicate with no span node is returned **by reference** so the pre-pass costs nothing on the
+    overwhelming majority of reads. Assert that identity in a test; "it's a no-op" is otherwise a claim.
+  - **Pin the premise, not only the fix.** A test asserts that `arr.Contains(x)` really does bind
+    `MemoryExtensions` on this runtime. If a future .NET moves it back, the rewrite becomes dead code —
+    and that test is what says so, rather than the rewrite silently never firing again.
 - **Where two layers can each define an identity, ONE of them owns it — and the tell is a silently
   empty result, not an error.** Same one-producer family as the identifier rules above, at the layer
   where a *document* gets its key. TASK-214 fixed serialization by leaving `_id` to the driver as an
@@ -581,6 +610,29 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### An array-backed `IN` filter could not be translated on MongoDB (2026-08-16)
+
+TASK-218, the last of the three tasks TASK-214 made visible. `MongoFilterMatrixLiveTests` had never run
+until TASK-214 fixed serialization; on its first run it reported 26 of 27 shapes correct, and the 27th was
+real. `x => arr.Contains(x.Amount)` over an `int[]` throws `NotSupportedException: Specified method is not
+supported` on the driver, while `List<int>` renders `$in` — a look-alike one keystroke away and no warning
+either way. The standing rule is in § Conventions above. Split: unwiring the rewrite **2 of 85**, gutting
+it **2 of 85 + 2 of 59**; 5 suites green (85 + 59 + 500 + 129 + 69). Four things worth carrying:
+
+- **The measurement was the deliverable, and it shrank the fix.** The task's first acceptance row demanded
+  SQL and ElasticSearch be measured before choosing per-backend or shared. Both were already correct for
+  all four spellings, so what could have been a normalisation pass on every translator became one helper
+  wired into one backend.
+- **Three symptoms, one cause, found from three directions over three months.** The same overload change
+  had already produced an unguarded destructive filter (`PredicateScope`) and a silently-empty SQL result
+  (Symbio TASK-249/254). Only writing them down together made it obvious they were one thing — and that
+  the unwrap should have one producer.
+- **Nine entry points, not thirty hand-offs.** The stores pass a filter to the driver from ~30 call sites
+  but the caller's expression *arrives* at nine methods. Normalising on arrival is what makes the guard,
+  the whole-collection check and the driver agree, and what makes the next hand-off site correct for free.
+- **A test pins the premise.** `arr.Contains(x)` binding `MemoryExtensions` is a runtime fact, not a law;
+  if it reverts, the rewrite becomes dead code and that test is the only thing that would notice.
 
 ### Two answers for what MongoDB's `_id` is — so every view was silently wrong (2026-08-16)
 

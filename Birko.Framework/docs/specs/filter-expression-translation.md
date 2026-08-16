@@ -1,11 +1,12 @@
 ---
 area: filter-expression-translation
-generated-at: 37e259da0b7569232dc11e3e684ceec451a4f881
+generated-at: c78cfca
 generated-on: 2026-08-15
 sources:
   - ../Birko.Data.Core/Expressions/ExpressionNormalizer.cs
   - ../Birko.Data.Core/Expressions/ExpressionParameterReplacer.cs
   - ../Birko.Data.Core/Expressions/PredicateScope.cs
+  - ../Birko.Data.Core/Expressions/SpanContains.cs
   - ../Birko.Data.Core/Filters/IFilter.cs
   - ../Birko.Data.Core/Filters/ModelByGuid.cs
   - ../Birko.Data.Core/Filters/ModelsByGuid.cs
@@ -56,7 +57,9 @@ shaped-by-derived: false   # see the note above: no source glob resolves in this
 
 Every Birko store accepts its filter as a C# lambda — `Expression<Func<T, bool>>`. Backends that own a
 LINQ provider (MongoDB, CosmosDB, RavenDB) hand the tree straight to their driver; backends that
-compile a delegate (InMemory, JSON, XML) just run it. The two backends specified here — **SQL** (four
+compile a delegate (InMemory, JSON, XML) just run it. Handing the tree over is not the same as it being
+understood: a driver's translator supports the methods it knows, and `SpanContains` (below) exists
+because MongoDB's does not know the one the C# compiler now picks for `array.Contains`. The two backends specified here — **SQL** (four
 providers: SQLite, PostgreSQL, MySQL, MSSQL) and **ElasticSearch** — have neither, so each carries a
 hand-rolled translator that walks the expression tree and emits a native query: a tree of
 `Birko.Data.SQL.Conditions.Condition` objects rendered into a parameterised `WHERE` clause, or a NEST
@@ -391,6 +394,57 @@ condition.
 - **Given** the `op_Implicit` array-to-span conversion .NET inserts as the source argument of `MemoryExtensions.Contains`
 - **When** the call reaches the method-call branch, matches no case, and its arguments are parsed
 - **Then** the wrapped array expression is reached and evaluated as the condition's values, so the `In` condition is still populated
+
+### Requirement: A span-bound array Contains is rewritten before a driver sees it
+
+`Birko.Data.Expressions.SpanContains.Rewrite` SHALL rewrite every
+`MemoryExtensions.Contains(ReadOnlySpan<T>, T)` node — the method the C# compiler binds on .NET 9+ for an
+**array**'s instance-style `set.Contains(x.Col)` — to the equivalent
+`Enumerable.Contains(IEnumerable<T>, T)`, and SHALL return the predicate unchanged (by reference) when it
+contains no such node. The three-argument overload SHALL be rewritten only when its comparer is a constant
+`null`; a real comparer SHALL be left intact rather than silently dropped. `SpanContains.UnwrapSpanConversion`
+SHALL be the single producer of the span-unwrap, shared with `PredicateScope`.
+
+The rewrite SHALL be wired into the MongoDB stores, at each method that accepts a caller filter, and SHALL
+NOT be wired into SQL or ElasticSearch. Measured 2026-08-16 on driver 3.2.0 / .NET 10: of the backends that
+translate a filter expression, only MongoDB is affected — SQL renders `IN (1,5)` and ElasticSearch
+`terms=(1,5)` for all four spellings, because they evaluate the operand themselves.
+
+#### Scenario: An array Contains binds MemoryExtensions, not Enumerable
+
+- **Given** `int[] arr` and the lambda `x => arr.Contains(x.Count)` compiled on .NET 9+
+- **When** the body's `MethodCallExpression` is inspected
+- **Then** its declaring type is `MemoryExtensions` and its first argument is typed `ReadOnlySpan<int>` — the premise the rewrite exists for
+
+#### Scenario: MongoDB rejects the span-bound call untranslated
+
+- **Given** the same lambda handed to the MongoDB driver's LINQ translator without the rewrite
+- **When** the filter is rendered
+- **Then** it throws `NotSupportedException: Specified method is not supported`, naming no method — while the `List<T>` spelling one keystroke away renders `{ "Amount": { "$in": [1, 5] } }`
+
+#### Scenario: The rewritten predicate selects the same documents
+
+- **Given** documents with `Amount` 1, 5 and 9 and the filter `x => wanted.Contains(x.Amount)` where `wanted` is `int[] { 1, 5 }`
+- **When** the MongoDB store reads with that filter, and with its negation
+- **Then** the first returns exactly the 1 and 5 documents and the second exactly the 9 — a rewrite that widened to match everything would satisfy "no longer throws" while being equally wrong
+
+#### Scenario: An enum array still binds the comparer overload and is still rewritten
+
+- **Given** `Status[] states` and `x => states.Contains(x.State)`, where an enum is not `IEquatable<T>` so the three-argument overload binds with a compiler-inserted `null` comparer
+- **When** the rewrite runs
+- **Then** the node becomes a two-argument `Enumerable.Contains` — the null comparer carries no meaning to preserve
+
+#### Scenario: A real comparer is left for the driver to reject
+
+- **Given** `MemoryExtensions.Contains(arr, x.Count, EqualityComparer<int>.Default)`
+- **When** the rewrite runs
+- **Then** the node is unchanged, because `Enumerable.Contains(source, item)` cannot honour a comparer and rewriting would silently change the predicate's meaning
+
+#### Scenario: A predicate with no span Contains is returned unchanged
+
+- **Given** a filter using only `List<T>.Contains` and a comparison
+- **When** the rewrite runs
+- **Then** the same lambda instance is returned, so the pre-pass allocates nothing on the overwhelming majority of reads
 
 ### Requirement: SQL non-operand method arguments are skipped
 
