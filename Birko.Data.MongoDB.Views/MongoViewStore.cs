@@ -27,6 +27,10 @@ public class MongoViewStore<TView> : IViewStore<TView> where TView : class, new(
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _basePipeline = MongoViewTranslator.TranslatePipeline(definition);
+
+        // The rendered $match below and DeserializeView both read TView's class map, so it has to
+        // agree with the projection this same definition produces (TASK-219).
+        MongoViewSerialization.EnsureRegistered<TView>(definition);
     }
 
     public MongoViewStore(MongoDBClient client, ViewDefinition definition)

@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)MongoViewTranslator.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MongoViewSerialization.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoViewStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoViewManager.cs" />
   </ItemGroup>
