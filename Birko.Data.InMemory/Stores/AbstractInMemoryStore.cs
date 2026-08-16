@@ -196,6 +196,10 @@ namespace Birko.Data.InMemory.Stores
             // SH-M023: this override bypasses AbstractBulkStore's guard, so it repeats it. Without this a
             // null filter reached filter.Compile() and threw a bare NullReferenceException.
             RequireFilter(filter, "delete");
+            // TASK-215: and the scope half. The predicate is compiled and run as a C# delegate here, so
+            // `!empty.Contains(x.Field)` is true for every entity by definition — measured: 0 of 3 rows left,
+            // no exception. No translation layer is involved, which is exactly why nothing downstream can see it.
+            RequireBoundedFilter(filter, "delete");
             EnsureInitialized();
             var predicate = filter.Compile();
             foreach (var pair in _items.Where(pair => predicate(pair.Value)).ToList())

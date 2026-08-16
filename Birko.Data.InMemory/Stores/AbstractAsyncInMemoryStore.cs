@@ -206,8 +206,9 @@ namespace Birko.Data.InMemory.Stores
         /// </summary>
         public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
         {
-            // SH-M023 — see AbstractInMemoryStore.Delete.
+            // SH-M023 / TASK-215 — see AbstractInMemoryStore.Delete.
             RequireFilter(filter, "delete");
+            RequireBoundedFilter(filter, "delete");
             await EnsureInitializedAsync(ct).ConfigureAwait(false);
             var predicate = filter.Compile();
             foreach (var pair in _items.Where(pair => predicate(pair.Value)).ToList())
