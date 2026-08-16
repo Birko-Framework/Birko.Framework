@@ -92,6 +92,13 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
+            // TASK-218: on .NET 9+ an array's `set.Contains(x.Col)` binds to
+            // MemoryExtensions.Contains, which the driver's LINQ translator does not know —
+            // NotSupportedException("Specified method is not supported"), naming no method. Rewrite it
+            // to Enumerable.Contains here, where the caller's expression arrives, so every driver
+            // hand-off below sees one shape. Measured: only MongoDB needs this; SQL and
+            // ElasticSearch evaluate the operand themselves and were already correct.
+            filter = Data.Expressions.SpanContains.Rewrite(filter);
             if (Collection == null)
             {
                 return null;
@@ -123,6 +130,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override async Task<long> CountCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
             if (Collection == null)
             {
                 return 0;
@@ -248,6 +256,7 @@ namespace Birko.Data.MongoDB.Stores
             {
                 return await Task.FromResult(Enumerable.Empty<T>());
             }
+            filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
 
             var query = Collection.Find(filter ?? FilterDefinition<T>.Empty);
 
@@ -370,6 +379,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override async Task DeleteAsync(Expression<Func<T, bool>> filter, CancellationToken ct = default)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter)!;   // TASK-218 — see ReadCore
             // SH-M023 — see MongoDBStore.Delete; this override bypasses the base guard, so it repeats it.
             RequireFilter(filter, "delete");
             // TASK-212: the filter is present but may still cover everything. The driver renders
@@ -388,6 +398,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override async Task UpdateAsync(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates, CancellationToken ct = default)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter)!;   // TASK-218 — see ReadCore
             // SH-M023 — see MongoDBStore.Delete.
             RequireFilter(filter, "update");
             // TASK-212: the filter is present but may still cover everything. The driver renders

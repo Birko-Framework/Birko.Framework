@@ -104,6 +104,13 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override T? ReadCore(Expression<Func<T, bool>>? filter = null)
         {
+            // TASK-218: on .NET 9+ an array's `set.Contains(x.Col)` binds to
+            // MemoryExtensions.Contains, which the driver's LINQ translator does not know —
+            // NotSupportedException("Specified method is not supported"), naming no method. Rewrite it
+            // to Enumerable.Contains here, where the caller's expression arrives, so every driver
+            // hand-off below sees one shape. Measured: only MongoDB needs this; SQL and
+            // ElasticSearch evaluate the operand themselves and were already correct.
+            filter = Data.Expressions.SpanContains.Rewrite(filter);
             if (Collection == null) return null;
 
             if (filter == null)
@@ -117,6 +124,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override long CountCore(Expression<Func<T, bool>>? filter = null)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
             if (Collection == null) return 0;
 
             if (filter == null)
@@ -174,6 +182,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         protected override IEnumerable<T> ReadCore(Expression<Func<T, bool>>? filter = null, Data.Stores.OrderBy<T>? orderBy = null, int? limit = null, int? offset = null)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
             if (Collection == null) return Enumerable.Empty<T>();
 
             var query = Collection.Find(filter ?? FilterDefinition<T>.Empty);
@@ -267,6 +276,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Delete(Expression<Func<T, bool>> filter)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter)!;   // TASK-218 — see ReadCore
             // SH-M023: this override bypasses AbstractBulkStore's guard, so it repeats it. A null filter
             // reaches the driver as an empty predicate — DeleteMany over the whole collection.
             RequireFilter(filter, "delete");
@@ -286,6 +296,7 @@ namespace Birko.Data.MongoDB.Stores
         /// <inheritdoc />
         public override void Update(Expression<Func<T, bool>> filter, Data.Stores.PropertyUpdate<T> updates)
         {
+            filter = Data.Expressions.SpanContains.Rewrite(filter)!;   // TASK-218 — see ReadCore
             // SH-M023 — see Delete.
             RequireFilter(filter, "update");
             // TASK-212: the filter is present but may still cover everything. The driver renders
