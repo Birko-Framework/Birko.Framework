@@ -10,7 +10,8 @@ namespace Birko.Models.Inventory.ViewModels
         public Guid? StorageLocationGuid { get; set; }
         public string Name { get; set; } = null!;
         public string? Description { get; set; }
-        public string? Batch { get; set; }
+        public string? BatchNumber { get; set; }
+        public DateTime? ExpiryDate { get; set; }
         public decimal Quantity { get; set; }
         public Guid? MeasureUnitGuid { get; set; }
         public decimal? UnitPrice { get; set; }

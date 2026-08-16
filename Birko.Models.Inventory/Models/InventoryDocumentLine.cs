@@ -11,6 +11,7 @@ namespace Birko.Models.Inventory
     public class InventoryDocumentLine
         : AbstractLogModel
         , IDocumentLine
+        , IBatchable
         , ILoadable<ViewModels.InventoryDocumentLine>
         , ICopyable<InventoryDocumentLine>
     {
@@ -20,7 +21,15 @@ namespace Birko.Models.Inventory
         public Guid? StorageLocationGuid { get; set; }
         public string Name { get; set; } = null!;
         public string? Description { get; set; }
-        public string? Batch { get; set; }
+        /// <inheritdoc />
+        /// <remarks>Renamed from <c>Batch</c> in TASK-444 to match <see cref="IBatchable"/>, alongside
+        /// <see cref="StockMovement"/> and the new <see cref="StockBalance"/> — one word for one concept
+        /// across the namespace.</remarks>
+        public string? BatchNumber { get; set; }
+
+        /// <inheritdoc />
+        public DateTime? ExpiryDate { get; set; }
+
         public decimal Quantity { get; set; }
         public Guid? MeasureUnitGuid { get; set; }
         public decimal? UnitPrice { get; set; }
@@ -44,7 +53,8 @@ namespace Birko.Models.Inventory
             clone.StorageLocationGuid = StorageLocationGuid;
             clone.Name = Name;
             clone.Description = Description;
-            clone.Batch = Batch;
+            clone.BatchNumber = BatchNumber;
+            clone.ExpiryDate = ExpiryDate;
             clone.Quantity = Quantity;
             clone.MeasureUnitGuid = MeasureUnitGuid;
             clone.UnitPrice = UnitPrice;
@@ -66,7 +76,8 @@ namespace Birko.Models.Inventory
             StorageLocationGuid = data.StorageLocationGuid;
             Name = data.Name;
             Description = data.Description;
-            Batch = data.Batch;
+            BatchNumber = data.BatchNumber;
+            ExpiryDate = data.ExpiryDate;
             Quantity = data.Quantity;
             MeasureUnitGuid = data.MeasureUnitGuid;
             UnitPrice = data.UnitPrice;

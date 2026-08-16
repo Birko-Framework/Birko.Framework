@@ -34,7 +34,8 @@ Shared project — import in your `.csproj`:
 | **StockItem** | ICatalogItem, ICategorizeable | Inventory item with code, barcode, name |
 | **StockItemVariant** | — | Size/color/config variant of an item |
 | **StorageLocation** | IHierarchical | Warehouse location (shelf, bin, zone) |
-| **StockMovement** | IDocumentLine | Stock in/out/transfer record |
+| **StockMovement** | IDocumentLine, IBatchable | Stock in/out/transfer record (a *change*) |
+| **StockBalance** | IBatchable | Quantity of an item at a location right now (the *state*), keyed item x variant x location x batch |
 | **InventoryDocument** | IDocument | Document header (receipt/issue/transfer) |
 | **InventoryDocumentLine** | IDocumentLine | Line item with quantity and pricing |
 

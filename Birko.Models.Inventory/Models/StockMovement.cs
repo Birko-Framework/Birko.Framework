@@ -10,6 +10,7 @@ namespace Birko.Models.Inventory
     public class StockMovement
         : AbstractLogModel
         , IDocumentLine
+        , IBatchable
         , ILoadable<ViewModels.StockMovement>
         , ICopyable<StockMovement>
     {
@@ -19,7 +20,23 @@ namespace Birko.Models.Inventory
         public Guid? ToLocationGuid { get; set; }
         public decimal Quantity { get; set; }
         public decimal? UnitPrice { get; set; }
-        public string? Batch { get; set; }
+        /// <inheritdoc />
+        /// <remarks>
+        /// Renamed from <c>Batch</c> in TASK-444 to match <see cref="IBatchable"/>. The old name came
+        /// from the retired <c>Warehouse.AbstractItemRepository.Batch</c> and left the framework using
+        /// two words for one concept in a single namespace. Breaking, and taken deliberately while
+        /// nothing in the framework or in Symbio read it.
+        /// </remarks>
+        public string? BatchNumber { get; set; }
+
+        /// <inheritdoc />
+        /// <remarks>
+        /// A receipt is where a batch's expiry enters the system, so the movement is the natural place
+        /// to capture it — without it, <see cref="StockBalance.ExpiryDate"/> would have no source in
+        /// the model.
+        /// </remarks>
+        public DateTime? ExpiryDate { get; set; }
+
         public DateTime MovementDate { get; set; }
         public Guid TenantGuid { get; set; }
 
@@ -38,7 +55,8 @@ namespace Birko.Models.Inventory
             clone.ToLocationGuid = ToLocationGuid;
             clone.Quantity = Quantity;
             clone.UnitPrice = UnitPrice;
-            clone.Batch = Batch;
+            clone.BatchNumber = BatchNumber;
+            clone.ExpiryDate = ExpiryDate;
             clone.MovementDate = MovementDate;
             clone.TenantGuid = TenantGuid;
             return clone;
@@ -55,7 +73,8 @@ namespace Birko.Models.Inventory
             ToLocationGuid = data.ToLocationGuid;
             Quantity = data.Quantity;
             UnitPrice = data.UnitPrice;
-            Batch = data.Batch;
+            BatchNumber = data.BatchNumber;
+            ExpiryDate = data.ExpiryDate;
             MovementDate = data.MovementDate;
             TenantGuid = data.TenantGuid;
         }
