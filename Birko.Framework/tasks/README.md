@@ -116,6 +116,17 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 >   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
 >   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
 >
+> Adjusted again 2026-08-17 (TASK-227 close, TASK-240 filed+closed): tasks 209 -> 210, todo 114 -> 113,
+> done 81 -> 83, P2 81 -> 80. Both are defects in the **generic `specs` skill**, fixed in
+> `project-lifecycle-skills` db652cd — the third and fourth found in one staleness check, after
+> [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md).
+> **TASK-227**: `generated-at` is stamped before the spec is committed, and `regen` step 7 tells you to
+> commit the spec *with the related work* — so the sources it was written from land in a commit the stamp
+> cannot include. `verify` now anchors on the **later** of the stamp and the spec's own last commit.
+> **TASK-240**, found by running TASK-227's worked example rather than reasoning about it: `.map.yml` globs
+> were passed to git as pathspecs, and `X/**/*.cs` silently misses any file sitting directly in `X/` —
+> **47 of 74 globs here, 124 files the check could never see.** Partial blindness, so it looked alive.
+>
 > Adjusted again 2026-08-17 (TASK-236 close): todo 115 -> 114, done 80 -> 81, P3 9 -> 8. The lock-provider
 > question for the six remaining job backends, answered as **2 implemented / 4 recorded no**. The task's own
 > flag was right: **the JSON/XML guess was backwards.** Measured on Windows and Linux/.NET 9 before writing

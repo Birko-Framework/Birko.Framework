@@ -3,7 +3,7 @@ id: TASK-227
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-16
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-131, TASK-226]
 findings: []
-pr: null
+pr: "project-lifecycle-skills db652cd"
 github-issue: null
 jira-key: null
 ---
@@ -53,18 +53,62 @@ configuration TASK-131 just made measurable.
 
 ## Acceptance criteria
 
-- [ ] Decide the fix. The two candidates, both cheap, neither obviously better:
+- [x] Decide the fix. The two candidates, both cheap, neither obviously better:
       **(a)** `verify` prefers the spec file's own last-commit date over `generated-at` when the spec is
       git-tracked, falling back to the stamp — self-correcting, needs no regen, but makes staleness depend
       on commit history rather than on a recorded field, which is a real semantic change;
       **(b)** `regen` re-stamps in a second pass, or the commit step amends the stamp — keeps `generated-at`
       authoritative but adds a write-after-commit that a non-git or dirty-tree project cannot always do.
-- [ ] Whichever is chosen, `verify`'s § *Staleness definition* states the ordering hazard explicitly, so
+- [x] Whichever is chosen, `verify`'s § *Staleness definition* states the ordering hazard explicitly, so
       the next reader does not have to rediscover that a stamp predates its own spec
-- [ ] A test or worked example pins that a source committed **between** the stamp and the spec's own
+- [x] A test or worked example pins that a source committed **between** the stamp and the spec's own
       commit is not reported as drift
-- [ ] `regen`'s existing dirty-tree note is reconciled with whatever is decided — it already half-knows
+- [x] `regen`'s existing dirty-tree note is reconciled with whatever is decided — it already half-knows
       about this ("`generated-at` refers to HEAD while uncommitted changes were included")
+
+## Outcome
+
+**Chosen: (a), refined — `verify` anchors on the LATER of `generated-at` and the spec's own last commit**,
+not simply on the spec's commit. Both directions are real: after a regen that has not been committed yet,
+the stamp is the *newer* of the two and preferring the commit blindly would lose that. Guarded by
+`git merge-base --is-ancestor`, so a cherry-pick or a rewritten history falls back to the stamp rather than
+comparing dates across unrelated lines.
+
+**(b) was rejected on the constraint the task already named**: re-stamping after the commit needs an amend
+or a second commit, which a dirty tree or a non-git project cannot do — and it would still be wrong for
+anyone whose commit habits differ. The stamp stays a **floor** and now says so; the reader resolves the
+rest.
+
+**The mechanism, which the finding stated but did not name.** The defect needs an **uncommitted source
+change at harvest time** — which is the normal way this is used, because `regen` step 7 explicitly tells you
+to commit the spec *with the related work*. If the source had been committed before the harvest,
+`generated-at` would already name it and the stamp would be fine. **That is why the defect is invisible when
+you reason about it from a clean tree**, and it is why the first worked example written for this fix was
+wrong: `git diff c1..HEAD` excludes c1's own changes, so the sequence as drafted demonstrated nothing.
+Running it in a scratch repo is what corrected it.
+
+Reproduced end to end, old anchor versus new:
+
+```
+old anchor (generated-at): [src/RedisCache.cs]   -> "stale"
+new anchor (spec commit):  []                    -> fresh
+```
+
+**Two things carried into the skill rather than left implicit:**
+
+- **The known bias is written down.** Anchoring on the spec's own commit treats everything in that commit as
+  absorbed, and a commit that *touches* a spec without regenerating it — a frontmatter fix, a bulk
+  re-stamp, a rename — still moves its anchor. Observed here: `e6a16e0` touched all 25 specs while
+  regenerating only 6. Under-reporting in that narrow case is the deliberate trade against structurally
+  over-reporting on every spec.
+- **Spawned [[TASK-240]]**, found by running the example: the same check was passing `.map.yml` globs to git
+  as pathspecs, so `X/**/*.cs` silently missed every file sitting directly in `X/`. **47 of 74 globs in this
+  repo's map, 124 files.** Fixed in the same commit.
+
+**Not verifiable against this repo's own numbers, and worth saying so.** Every area here sources from
+sibling repos, so the in-repo anchor path never runs and both anchors report 0 stale. The measurement that
+matters — 25 of 25 stamps older than their spec's own commit — reproduces exactly; the behavioural proof had
+to be a scratch repo.
 
 ## Out of scope
 
