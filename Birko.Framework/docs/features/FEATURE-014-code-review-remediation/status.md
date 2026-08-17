@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-16
+generated: 2026-08-17
 ---
 
 # Code review — audit remediation — Status
@@ -21,8 +21,9 @@ generated: 2026-08-16
 
 ## Build progress
 
-30 / 78 tasks done (1 awaiting sign-off).
+42 / 98 tasks done (1 awaiting sign-off).
 
+- [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
 - [x] TASK-109 A null or untranslatable filter renders `DELETE FROM "T"` — the whole table
 - [x] TASK-110 ORDER BY identifiers reach SQL text unresolved and unquoted
@@ -38,9 +39,12 @@ generated: 2026-08-16
 - [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing
 - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover
 - [x] TASK-129 An aggregate view's generated DDL carries a double alias, so no persistent aggregate view can be created
-- [ ] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire
+- [x] TASK-131 Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire
 - [x] TASK-137 An empty `NOT IN` renders `1 = 1` — indistinguishable from `' OR 1=1--` in a query log
 - [x] TASK-141 MongoDB's four null-filter guards have no regression test
+- [ ] TASK-144 `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model
+- [ ] TASK-146 Nothing pins that the async repository has no connector-bypassing read
+- [ ] TASK-150 `char?`, `TimeSpan` and `DateTimeOffset` have no column mapping — they now fail loudly instead of quietly
 - [ ] TASK-151 Triage the 36 medium spec-harvest findings in `views-and-aggregation`
 - [ ] TASK-152 Triage the 33 medium spec-harvest findings in `migrations`
 - [ ] TASK-153 Triage the 29 medium spec-harvest findings in `filter-expression-translation`
@@ -86,13 +90,21 @@ generated: 2026-08-16
 - [ ] TASK-193 Triage the 10 low spec-harvest findings in `repository-contract`
 - [ ] TASK-194 Triage the 10 low spec-harvest findings in `entity-localization`
 - [ ] TASK-195 Rate, ID and fold the 16 recovered findings into the severity backlog
+- [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day
+- [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down
+- [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently
+- [x] TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart
 - [x] TASK-207 `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect
 - [ ] TASK-208 DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part
 - [x] TASK-209 A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL
+- [x] TASK-210 `MongoDB.Driver 3.2.0` pulls two vulnerable transitive packages, and nothing reports it
+- [x] TASK-211 On-the-fly views are broken on PostgreSQL — and the error is swallowed, so they return an empty result
 - [x] TASK-212 A MongoDB `Delete(filter)` guards only a NULL filter — a filter that *reduces* to everything is not refused
 - [x] TASK-213 A COMPUTED operand inside `Contains` is silently discarded and replaced by a different predicate
 - [x] TASK-214 A model deriving `MongoDBModel` cannot be serialized by the driver at all
 - [x] TASK-215 Wire `RequireBoundedFilter` into the base wrappers, InMemory and ElasticSearch
+- [x] TASK-216 A filtered DELETE / UPDATE qualifies its `WHERE` with a bare table name, so every filtered write fails on PostgreSQL
+- [ ] TASK-217 `Update(Table, values, conditions)` builds its SET list from every column, so a partial update cannot work
 - [x] TASK-218 An `IN` filter over a C# **array** does not translate on MongoDB — `NotSupportedException`
 - [x] TASK-219 `Birko.Data.MongoDB` has two contradictory answers for what `_id` is
 - [x] TASK-220 CosmosDB has the same array-`Contains` defect as MongoDB — audit the rest of the family
@@ -101,6 +113,14 @@ generated: 2026-08-16
 - [x] TASK-223 CosmosDB's connection mode cannot be selected — Gateway is unreachable, so the emulator is too
 - [x] TASK-224 `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and silently matches nothing
 - [x] TASK-225 MongoDB's connection string is composed with no escape hatch — no driver option can be set
+- [ ] TASK-226 Per-sub-repo `docs/specs/` trees for the 4 single-repo areas (and the 64 unspecced projects)
+- [ ] TASK-227 `generated-at` always names the commit *before* the spec it stamps, so staleness is measured from too early
+- [x] TASK-229 Two shared projects `using` a driver they do not declare — and three sources disagree about whose job it is
+- [x] TASK-230 The remaining vulnerable transitives — 7 advisories across 37 of 246 projects
+- [x] TASK-231 `Birko.EventBus.Outbox.SQL` shipped complete but registered nowhere — unbuilt, untested, invisible
+- [ ] TASK-232 DECISION: six of eight job backends cannot supply a lock, and nothing consumes the new interface yet
+- [ ] TASK-233 DECISION: the CosmosDB span-`Contains` rewrite may now be redundant — the SDK fixed it upstream
+- [ ] TASK-234 38 more shared projects use an external package they never declare
 
 ## What can be tested now
 

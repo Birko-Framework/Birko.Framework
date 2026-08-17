@@ -1,6 +1,6 @@
 # Features — Birko.Framework
 
-_Generated 2026-08-16. **Do not hand-edit** — re-run `/feature status`. The human entry point to the
+_Generated 2026-08-17. **Do not hand-edit** — re-run `/feature status`. The human entry point to the
 stakeholder-facing feature tree; each row links to a feature folder._
 
 **This whole tree was backfilled on 2026-08-01** from the pre-existing `tasks/` epics, to close the
@@ -16,8 +16,9 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 > tax-rate edit path, and FEATURE-014 TASK-118 wants a sign-in-protected application to correlate the
 > tenant header against a real JWT claim.
 >
-> Two more sit in `tasks/_loose/` and so appear in no row below: **TASK-201** and **TASK-204**. See
-> *Not covered by this tree*.
+> One more sits in `tasks/_loose/` and so appears in no row below: **TASK-201**, a Reps-origin defect whose
+> fix is upstream. Its former companion **TASK-204** — a **P0** — was re-homed to FEATURE-014 on 2026-08-17
+> and has since been signed off; it had been invisible here for five days. See *Not covered by this tree*.
 >
 > 💭 **Awaiting a decision (1):** FEATURE-001 D8 — whether `b-form` starts rejecting more kinds of invalid
 > input (`typeMismatch` first). Run `/feature decide FEATURE-001`; [[TASK-134]] gathers the evidence and must
@@ -40,7 +41,7 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-011](FEATURE-011-test-coverage-gaps/) | Birko.Framework — Test coverage gaps | idea | 4/0/0/0/0 | 0/7 | n/a (backfilled) | [EPIC-011](../../tasks/EPIC-011-test-coverage-gaps/EPIC.md) |
 | [FEATURE-012](FEATURE-012-mqtt-v5-features/) | Birko.MessageQueue.MQTT — v5 features | idea | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-012](../../tasks/EPIC-012-mqtt-v5-features/EPIC.md) |
 | [FEATURE-013](FEATURE-013-reference-consumers/) | Reference consumers — integration smoke harness + Web playground | building | 1/0/0/0/0 | 1/2 | n/a (backfilled) | [EPIC-013](../../tasks/EPIC-013-reference-consumers/EPIC.md) |
-| [FEATURE-014](FEATURE-014-code-review-remediation/) | Code review — audit remediation | building | 11/0/0/0/0 | 30/78 | n/a (backfilled) | [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) |
+| [FEATURE-014](FEATURE-014-code-review-remediation/) | Code review — audit remediation | building | 11/0/0/0/0 | 42/98 | n/a (backfilled) | [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) |
 | [FEATURE-015](FEATURE-015-birko-xaml-ui-framework/) | Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web | building | 12/0/0/0/0 | 10/22 | n/a (backfilled) | [EPIC-015](../../tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md) |
 | [FEATURE-016](FEATURE-016-birko-backports-from-reps/) | Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) | **review** | 6/0/0/0/0 | 12/14 | n/a (backfilled) | [EPIC-016](../../tasks/EPIC-016-birko-backports-from-reps/EPIC.md) |
 | [FEATURE-017](FEATURE-017-tenant-isolation-hardening/) | Tenant isolation hardening | building | 3/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-017](../../tasks/EPIC-017-tenant-isolation-hardening/EPIC.md) |
@@ -51,24 +52,30 @@ Tasks = done/total of tasks carrying `feature: FEATURE-NNN`.
 
 ## Not covered by this tree
 
-**Thirty-two** tasks in `tasks/_loose/` carry `parent: null` and `feature: null`, so none of them appears
-in any row above. On 2026-08-01 there were six; the pile has grown five-fold, which makes it the largest
-single blind spot in this view rather than the footnote it started as.
+**Twenty-one** tasks in `tasks/_loose/` carry `parent: null` and `feature: null`, so none of them appears
+in any row above. It was 6 on 2026-08-01 and peaked at 33; **12 were re-homed to
+[EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) / FEATURE-014 on 2026-08-17** — framework
+Data/SQL defects that were already being worked under that feature's remit and merely sat where it could
+not see them. That was not cosmetic: **TASK-204 was a P0 in `review`** and appeared in no rollup and no
+sign-off callout, which is how it sat unnoticed for five days.
 
-Three kinds live there, and only the first was ever intended:
+**The remaining 21 are not a backlog to drain — most belong here.** Four groups:
 
-- **Framework-wide *decision* tickets** (TASK-059, TASK-106, TASK-127, TASK-139) — questions that belong
-  to no single epic, and that deliberately declare no parent so the dashboard does not render them twice.
-- **Cross-cutting work no epic covers** — TASK-130 (token/theme layer), TASK-142 and TASK-149 (gaps in the
-  planning machinery itself).
-- **Defects and follow-ups filed mid-work** — 25 of the 32, and where all the growth came from: 22 of
-  those were filed by `/tasks spawn` and `/fix-next` between 2026-08-03 and 2026-08-15 alone. Ten are
-  already `done`, two are in `review` (**TASK-201**, **TASK-204** — counted in the sign-off callout above
-  but visible in no row), one is `cancelled` (**TASK-205**, resolved below), and the rest are open. Most
-  are ordinary framework remediation that belongs
-  under [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) / FEATURE-014, so landing in
-  `_loose` is a spawn-time omission rather than a decision. Two are genuinely homeless: TASK-200 and
-  TASK-201 are defects found *in a consumer* (Symbio, Reps) and tracked here because the fix is upstream.
+- **Framework-wide *decision* tickets** (TASK-059, TASK-106, TASK-127, TASK-139) — questions owned by no
+  single epic, which deliberately declare no parent so the dashboard does not render them twice.
+- **Consumer-origin defects** (TASK-200 Symbio, TASK-201 Reps, TASK-235 FisData) — found *in* a consumer,
+  tracked here because the fix or the warning is upstream. Not framework scope.
+- **Process and tooling** (TASK-036 workspace layout, TASK-142 spec-map coverage, TASK-149 story
+  visibility, TASK-138 an API-ergonomics papercut recorded as deliberately out-of-feature).
+- **`Birko.Web`-surface defects** (TASK-130, TASK-198, TASK-199, TASK-202, TASK-203) — these *do* have a
+  home, most likely EPIC-016's STORY-052 ("a consumer adopted it and the adoption found what it gets
+  wrong") or EPIC-001. **Deliberately not moved**, because assigning them is a judgment about which epic
+  owns the Web surface and guessing would be worse than leaving them visible here.
+
+> **The audit rule cannot tell these apart.** [[roadmap]]'s DV5 flags any parentless task, and the
+> rationale for a deliberate one lives in prose inside the task body — or, for TASK-138, in a feature
+> ledger entry rather than the task at all. There is no machine-readable marker, so DV5 will keep counting
+> the legitimate ones. Giving it one is a change to the shared skill, recorded here rather than improvised.
 
 > **Resolved 2026-08-16:** **TASK-205** was checked against **TASK-211** criterion by criterion and
 > **cancelled** — same defect, and all six of its acceptance rows are satisfied by TASK-211 (read path)

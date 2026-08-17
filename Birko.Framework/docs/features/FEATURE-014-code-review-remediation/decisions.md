@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -158,3 +158,16 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   a courtesy warning that a *consumer* (`FisData.Stock.Angular.Server`) will hit `NETSDK1087` once its net10
   migration builds, because a duplicate `FrameworkReference` is a hard error. Consumer work, blocked on an
   external condition, and recorded here only so the spawn is traceable from the feature its cause belongs to.
+- 2026-08-17 — **D11 gains 12 re-homed tasks**: TASK-058, 144, 146, 150, 196, 197, 204, 205, 210, 211, 216
+  and 217, moved out of `tasks/_loose/` and re-parented to EPIC-014 / FEATURE-014. Raised by [[roadmap]] as
+  **DV5**. No decision state changed and no work moved — these are framework Data/SQL defects that were
+  already being worked under this feature's remit; they simply sat parentless, so **this feature could not
+  see its own tasks**. That is not cosmetic: TASK-204 was a **P0 in `review`** and TASK-205 a cancelled
+  duplicate, and neither appeared in any feature rollup or the sign-off callout — which is precisely how a
+  P0 sat unnoticed for five days.
+  **The loose pile is not emptied, and should not be.** 21 tasks remain there legitimately: 4 framework-wide
+  *decision* tickets that belong to no single epic, 3 consumer-origin defects (Symbio, Reps, FisData), the
+  process/tooling items, and 6 `Birko.Web`-surface defects whose right home is EPIC-016's STORY-052 or
+  EPIC-001 rather than here — deliberately not moved on a guess. **DV5 cannot distinguish deliberate
+  parentlessness from an oversight**, and prose rationales inside task bodies are not machine-readable;
+  giving it a marker is a [[roadmap]] skill change, recorded rather than improvised.
