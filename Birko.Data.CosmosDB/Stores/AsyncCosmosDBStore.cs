@@ -45,10 +45,45 @@ public class AsyncCosmosDBStore<T>
     /// <inheritdoc />
     public TransactionalBatch? TransactionContext { get; private set; }
 
+    // The partition key every item added to the current batch has had so far. A TransactionalBatch is
+    // scoped to ONE logical partition; this store derives each item's partition key from its Guid, so the
+    // first item added fixes the batch's partition and anything else cannot legally join it.
+    private string? _batchPartitionKey;
+
     /// <inheritdoc />
     public void SetTransactionContext(TransactionalBatch? context)
     {
         TransactionContext = context;
+        _batchPartitionKey = null;
+    }
+
+    /// <summary>
+    /// Refuses an item whose partition key differs from the one the current batch is already pinned to.
+    /// </summary>
+    /// <remarks>
+    /// TASK-240. Cosmos transactional batches are limited to a single logical partition key. This store
+    /// partitions by <c>Guid</c>, so <b>every document is its own logical partition</b> and a boundary
+    /// spanning two entities is impossible by construction — the second <c>CreateItem</c> was accepted
+    /// silently and the whole batch then failed at <c>ExecuteAsync</c> with an opaque BadRequest, or, if
+    /// the caller never inspected the response, was simply lost.
+    /// <para>
+    /// Refusing at the call site names the limit while the caller's stack still points at the write that
+    /// broke it. It is deliberately checked here rather than trusted to the server, because "the API let
+    /// me type it" is exactly how a boundary silently stops covering what a caller thinks it covers.
+    /// </para>
+    /// </remarks>
+    private void RequireBatchPartition(Guid guid)
+    {
+        var key = guid.ToString();
+        if (_batchPartitionKey == null)
+        {
+            _batchPartitionKey = key;
+            return;
+        }
+        if (!string.Equals(_batchPartitionKey, key, StringComparison.Ordinal))
+        {
+            throw new CosmosTransactionScopeException(_batchPartitionKey, key);
+        }
     }
 
     /// <summary>
@@ -175,6 +210,7 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
+            RequireBatchPartition(data.Guid.Value);
             TransactionContext.CreateItem(data);
             return data.Guid.Value;
         }
@@ -236,6 +272,7 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
+            RequireBatchPartition(data.Guid.Value);
             TransactionContext.ReplaceItem(data.Guid.Value.ToString(), data);
             return;
         }
@@ -250,6 +287,7 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
+            RequireBatchPartition(data.Guid.Value);
             TransactionContext.DeleteItem(data.Guid.Value.ToString());
             return;
         }
@@ -296,6 +334,7 @@ public class AsyncCosmosDBStore<T>
 
         if (TransactionContext != null)
         {
+            RequireBatchPartition(data.Guid.Value);
             TransactionContext.UpsertItem(data);
             return data.Guid.Value;
         }
@@ -381,6 +420,7 @@ public class AsyncCosmosDBStore<T>
                 if (item == null) continue;
                 item.Guid ??= Guid.NewGuid();
                 storeDelegate?.Invoke(item);
+                RequireBatchPartition(item.Guid!.Value);
                 TransactionContext.CreateItem(item);
             }
             return;
@@ -411,6 +451,7 @@ public class AsyncCosmosDBStore<T>
             {
                 if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
                 storeDelegate?.Invoke(item);
+                RequireBatchPartition(item.Guid.Value);
                 TransactionContext.ReplaceItem(item.Guid.Value.ToString(), item);
             }
             return;
@@ -438,6 +479,7 @@ public class AsyncCosmosDBStore<T>
             foreach (var item in data)
             {
                 if (item == null || item.Guid == null || item.Guid == Guid.Empty) continue;
+                RequireBatchPartition(item.Guid.Value);
                 TransactionContext.DeleteItem(item.Guid.Value.ToString());
             }
             return;

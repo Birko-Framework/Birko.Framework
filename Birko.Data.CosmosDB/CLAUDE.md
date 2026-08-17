@@ -60,6 +60,30 @@ Settings mapping from `RemoteSettings`:
 - Bulk execution is enabled by default via `Settings.AllowBulkExecution = true`
 - Sync store operations use `.GetAwaiter().GetResult()` wrappers; prefer async store for production
 
+## Transaction boundary (TASK-240)
+
+`CosmosDbUnitOfWork` wraps a `TransactionalBatch`: **atomic, but scoped to ONE logical partition key**.
+
+- **In practice that means one entity.** `AsyncCosmosDBStore<T>` derives an item's partition key from its
+  `Guid`, so **every document is its own logical partition** and a boundary spanning two entities is
+  impossible by construction -- whatever the API lets you type. `Capabilities.Scope` is `SinglePartition`.
+- **The limit is enforced at the call site**, not left to the server. Adding a second entity throws
+  `CosmosTransactionScopeException` naming both partition keys. Previously the second `CreateItem` was
+  accepted silently and the whole batch failed at `ExecuteAsync` with an opaque BadRequest -- or, if the
+  caller never inspected the response, the writes were simply lost. Enforced on the whole verb family
+  (create / update / upsert / delete, single and bulk), because a refused create beside an escaping delete
+  is the same defect wearing a quieter coat.
+- **Reads do NOT see the batch's own writes.** Operations are buffered client-side until `ExecuteAsync` and
+  the batch exposes no read, so read-then-write logic inside a Cosmos boundary reads the pre-transaction
+  state. `Capabilities.ReadsSeeUncommittedWrites` is `false`. This one is not fixable -- it is what a
+  `TransactionalBatch` is.
+- `SetTransactionContext(null)`, or a new batch, resets the pinned partition.
+
+Pinned by `Birko.Data.CosmosDB.Tests.CosmosTransactionBoundaryTests` (7). **Deliberately not gated**: the
+guard and the batch are both client-side, so a `Container` handle that never contacts a server exercises
+them end to end -- gating the one assertion that matters is the failure mode this work exists to remove.
+Mutation-tested: disabling the guard fails 3 of 61.
+
 ## Maintenance
 
 ### README Updates

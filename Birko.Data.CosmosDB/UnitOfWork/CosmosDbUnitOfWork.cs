@@ -21,6 +21,25 @@ public sealed class CosmosDbUnitOfWork : IUnitOfWork<TransactionalBatch>
     public bool IsActive => _batch is not null;
     public TransactionalBatch? Context => _batch;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// A <see cref="TransactionalBatch"/> is scoped to the ONE partition key supplied at construction. A
+    /// boundary spanning two logical partitions cannot exist, whatever the API lets a caller type — see
+    /// <see cref="Stores.AsyncCosmosDBStore{T}"/>, which refuses an entity whose partition key differs
+    /// from the batch's rather than letting the write silently escape the boundary.
+    /// <para>
+    /// Reads do NOT see the batch's own writes: operations are buffered client-side until
+    /// <see cref="CommitAsync"/> and the batch exposes no read. Read-then-write logic inside a Cosmos
+    /// boundary therefore reads the pre-transaction state.
+    /// </para>
+    /// </remarks>
+    public ITransactionCapabilities Capabilities { get; } = new TransactionCapabilities(
+        TransactionAtomicity.Atomic,
+        TransactionBoundaryScope.SinglePartition,
+        readsSeeUncommittedWrites: false,
+        limitations: "Scoped to a single logical partition key. Reads inside the batch do not see the "
+                   + "batch's own writes — operations are buffered client-side until ExecuteAsync.");
+
     /// <summary>
     /// Creates a new CosmosDbUnitOfWork for a specific partition key.
     /// Cosmos DB transactional batches are scoped to a single partition.
