@@ -3,7 +3,7 @@ id: TASK-231
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-17
@@ -123,10 +123,10 @@ realised. Luck, not a guarantee.
 `.code-workspace` are two independent lists and updating one is not updating the other; that is now a
 sentence in the checklist, because it is the same class of mistake the task was filed for.
 
-**Held at `review`, not `done`, for one reason.** The Sandbox aggregator import is real and verified by a
-build, but `Birko.Sandbox` **is not a git repository** ([[TASK-228]]) — so that one edit is machine-local
-and will not survive a clean clone. Every other criterion is committed. This flips to `done` when 228
-lands and the import is versioned; the alternative was to claim a criterion that only holds on this disk.
+**Closed `done` 2026-08-17.** It was briefly held at `review` because the Sandbox aggregator import was
+machine-local — `Birko.Sandbox` was not a git repository. [[TASK-228]] then tracked that repo, and the
+import is versioned in `Birko.Sandbox@b5329c2`, so the criterion now holds off this disk. Nothing about
+the import changed; only whether it survives a clone.
 
 ## Human test plan
 

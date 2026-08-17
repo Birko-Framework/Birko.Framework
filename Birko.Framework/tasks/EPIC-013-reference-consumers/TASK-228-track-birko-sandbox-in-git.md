@@ -3,7 +3,7 @@ id: TASK-228
 parent: EPIC-013
 feature: FEATURE-013
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: review
 priority: P1
 assignee: ai
 created: 2026-08-17
@@ -11,7 +11,7 @@ depends-on: []
 blocks: [TASK-229]
 related: [TASK-037, TASK-210]
 findings: []
-pr: null
+pr: b5329c2 + 2b26f97 (Birko.Sandbox, new repo)
 github-issue: null
 jira-key: null
 ---
@@ -60,7 +60,7 @@ The 2.1.11 there is load-bearing for [[TASK-230]]: it proves the SQLite advisory
 
 ## Acceptance criteria
 
-- [ ] `Birko.Sandbox` is a git repository with its sources committed, `.gitignore` covering `bin/`, `obj/`
+- [x] `Birko.Sandbox` is a git repository with its sources committed, `.gitignore` covering `bin/`, `obj/`
       and any local run artefacts, matching how the other 15 consumers are set up
 - [ ] Decide and record whether it stays a **consumer** (its own repo under `Consumers/`, like the other 15)
       or is really part of the framework's own test surface given the README calls it the first test place —
@@ -68,9 +68,9 @@ The 2.1.11 there is load-bearing for [[TASK-230]]: it proves the SQLite advisory
 - [ ] `README.md`'s description matches reality: either the aggregator is trimmed to the "lean slice" the
       text claims, or the text is corrected to describe a 165-projitems aggregator. **Do not leave the two
       disagreeing** — a reader following the current text builds something different from what is here
-- [ ] `dotnet run` still exits non-zero on failure and zero on success after the move, verified by running
+- [x] `dotnet run` exits non-zero on failure and zero on success after the move, verified by running
       it, not by inspection
-- [ ] The 17-package manifest is preserved verbatim in the commit, since [[TASK-229]] consumes it
+- [x] The 17-package manifest is preserved verbatim in the commit, since [[TASK-229]] consumes it
 
 ## Out of scope
 
@@ -78,6 +78,49 @@ The 2.1.11 there is load-bearing for [[TASK-230]]: it proves the SQLite advisory
   the fix is versioned rather than machine-local.
 - Moving the driver declarations into `.projitems` — [[TASK-229]].
 - The other 15 consumers, all of which are already tracked.
+
+## Outcome
+
+**It was tracked, and it did not build.** `git init` was the easy half. Running the harness for the first
+time in who-knows-how-long produced two errors, one spurious and one real:
+
+- **Spurious** — duplicate assembly attributes (CS0579) from stale `obj/` output. Cleared by deleting
+  `obj/` and `bin/`. Worth naming because it masked the real one on the first run.
+- **Real** — `SandboxLlmProvider` declared the three-argument `SendMessageAsync` /
+  `SendMessageStreamingAsync` while `ILlmProvider` had gained
+  `CancellationToken cancellationToken = default` on both. Two signature lines.
+
+**That is the finding, not a footnote.** A harness whose entire purpose is to catch framework drift early
+had itself drifted, and nothing noticed — because nothing runs it. It was untracked, therefore in no CI,
+and 168 of the family's 176 repos have no CI either. Worse: the check the drift disabled is *"AI provider
+wiring (no call)"*, the one that constructs this very stub. **The drift broke the check that would have
+caught the drift.**
+
+Committed **as found** (`b5329c2`) before fixing (`2b26f97`), deliberately, so the history records what
+being untracked cost rather than presenting a tidy tree that was never tidy.
+
+**Verified by running, and in both directions:**
+
+| | |
+|---|---|
+| `dotnet run` | `All 6 smoke checks passed.` **exit 0** |
+| forced `TryConfiguration` to return false | `1 of 6 smoke checks FAILED.` **exit 1** |
+
+The failure path needed proving because a harness that cannot report failure reports success. My first
+mutation was placed *after* the `return` and was unreachable — it printed a pass and proved nothing, which
+looks identical to a working guard. Second attempt broke a real check.
+
+**Side effect worth recording:** the aggregator import for `Birko.EventBus.Outbox.SQL` — added under
+[[TASK-231]] and, until this commit, machine-local — is now versioned in `b5329c2`. That was 231's one
+outstanding criterion, so this task closing is what closes that one.
+
+**`.gitignore` was already present** at both levels: someone prepared this for git and never ran `init`.
+11 files tracked, `bin`/`obj` (39M of a 39M directory) correctly excluded.
+
+**Still open, and why this is `review` not `done`:** the two remaining criteria are decisions, not work —
+whether Sandbox stays a consumer or is really part of the framework's own test surface, and whether the
+README's "lean slice" description gets corrected or the 165-projitems aggregator gets trimmed to match it.
+Both want the user's call; trimming a smoke harness's coverage is not a documentation edit.
 
 ## Human test plan
 

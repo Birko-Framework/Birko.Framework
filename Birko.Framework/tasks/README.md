@@ -16,14 +16,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 117                 |
+| todo         | —                  | —                  | 116                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 72                  |
+| done         | 1                  | 22                 | 73                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 27 · P2 83 · P3 7**
+Todo by priority: **P0 0 · P1 26 · P2 83 · P3 7**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -77,6 +77,13 @@ Todo by priority: **P0 0 · P1 27 · P2 83 · P3 7**
 > in all four places, 17 tests written, and the first-ever build of `Birko.EventBus.Outbox.SQL` succeeded.
 > Held at `review` rather than `done` because the Sandbox aggregator import is machine-local until
 > **TASK-228** tracks that repo — every other criterion is committed.
+>
+> Adjusted again 2026-08-17 (TASK-228 to review, TASK-231 to done): todo 117 -> 116, done 72 -> 73,
+> P1 27 -> 26. `Birko.Sandbox` is now a git repo — and running it for the first time showed it **did not
+> build**: `SandboxLlmProvider` had never followed `ILlmProvider`'s added cancellation parameter, which had
+> silently disabled the very check that constructs it. Fixed; 6/6 smoke checks pass, and the failure path
+> was proven too (forced failure -> exit 1). That also versioned TASK-231's last machine-local criterion,
+> so 231 closed. TASK-228 stays `review` on two **decisions**, not work.
 
 ## In progress now
 
