@@ -74,7 +74,13 @@ public sealed class RedisCache : ICache
         var serialized = CacheSerializer.Serialize(value);
         var expiry = GetExpiry(opts);
 
-        await db.StringSetAsync(fullKey, serialized, expiry);
+        // `When.Always` is spelled out rather than left to the default. StackExchange.Redis 2.9 added
+        // StringSetAsync(key, value, Expiration, ValueCondition, CommandFlags), whose trailing
+        // parameters are optional — so a three-argument call now binds THAT overload, and a
+        // `TimeSpan?` does not convert to `Expiration` (only a non-nullable `TimeSpan` does). Naming
+        // the fourth argument selects the TimeSpan? overload explicitly and compiles against 2.8 and
+        // 2.13 alike, with the semantics unchanged: `When.Always` was the old default (TASK-234).
+        await db.StringSetAsync(fullKey, serialized, expiry, When.Always);
 
         // Store sliding expiration metadata if needed. The absolute cap is persisted as a fixed
         // DEADLINE (unix seconds), not the original window — otherwise every refresh recomputes
