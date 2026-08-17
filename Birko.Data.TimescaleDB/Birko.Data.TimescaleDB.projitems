@@ -8,6 +8,11 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data.TimescaleDB</Import_RootNamespace>
   </PropertyGroup>
+  <!-- External dependency: Npgsql, declared by Birko.Data.SQL.PostgreSQL.projitems and deliberately NOT
+       repeated here. A consumer imports this projitems alongside that one — TimescaleDBConnector derives from PostgreSQLConnector, so this project cannot work without it — so a
+       second declaration lands in the same project file and restore reports NU1504, which the
+       -warnaserror that verify-conventions runs turns into an error. Import Birko.Data.SQL.PostgreSQL.projitems to
+       get the driver (TASK-234). -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\TimescaleDBConnector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\Settings.cs" />
