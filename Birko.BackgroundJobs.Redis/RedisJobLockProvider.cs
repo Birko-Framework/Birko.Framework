@@ -11,7 +11,7 @@ namespace Birko.BackgroundJobs.Redis
     /// Prevents multiple workers from processing the same jobs simultaneously.
     /// Uses Redis SET NX with expiry (Redlock single-instance pattern).
     /// </summary>
-    public class RedisJobLockProvider : IAsyncDisposable, IDisposable
+    public class RedisJobLockProvider : IJobLockProvider
     {
         private readonly RedisConnectionManager _connectionManager;
         private readonly RedisSettings _settings;
