@@ -191,6 +191,61 @@ Spawned [[TASK-238]]: the sweep's `-warnaserror` surfaced five `Birko.Data.Sync.
 `ProjectReference` to another `.projitems`, which MSBuild cannot honour (`MSB9008`). Pre-existing and inert,
 but it is noise in every remaining batch's sweep.
 
+### ✅ Batch 2 — `StackExchange.Redis` (4 of 5 projects), 2026-08-17
+
+`Birko.Redis` declares `StackExchange.Redis 2.*`; `BackgroundJobs.Redis`, `Caching.Redis` and
+`MessageQueue.Redis` record the pairing. Duplicates removed from 4 test projects and the Sandbox. **130
+tests green** across 5 suites, run against a **live Redis 7** — including TASK-237's leader-election tests,
+which is the point of running them here rather than trusting an offline build.
+
+**Unlike batch 1, this float actually moved a version: 2.8.24 / 2.8.41 → 2.13.17.** It broke two things,
+which is precisely the risk the task's own Context describes ("the dependency can vanish without anyone
+touching it… any of the 38 may be in the same position and nobody would know until an unrelated bump"). Both
+are now fixed:
+
+- **`RedisCache.SetAsync` stopped compiling.** 2.9 added
+  `StringSetAsync(key, value, Expiration, ValueCondition, CommandFlags)` with optional trailing parameters,
+  so a *three-argument* call now binds **that** overload — and `TimeSpan?` does not convert to `Expiration`
+  (only a non-nullable `TimeSpan` does). Fixed by naming `When.Always`, which was the old default, so
+  semantics are unchanged and it compiles against 2.8 and 2.13 alike.
+- **Seven `Birko.MessageQueue.Redis` tests failed with the production code untouched.** `StreamAddAsync`
+  and `StreamReadGroupAsync` each gained an all-optional overload (`limit` + `StreamTrimMode`;
+  `claimMinIdleTime`), and `maxLength` widened `int?` → `long?`. Production bound the new overloads
+  silently and correctly; the **Moq setups still named the old ones**, so the callbacks never fired and the
+  captured value was null. A mock names an overload, so it is a version-coupled assertion — worth knowing
+  before the next float moves a driver under a mocked API.
+
+**This is the strongest evidence so far that the float is worth its cost.** Nobody edited
+`Birko.Caching.Redis` or `Birko.MessageQueue.Redis`; declaring a dependency in a *different* project
+surfaced a latent incompatibility in both. Pinning would have hidden it until an advisory forced the bump.
+
+### ⏸ Batch 2 remainder — `Birko.Health.Redis` needs a decision, not a keystroke
+
+It uses `StackExchange.Redis` directly and depends on **nothing** from `Birko.Redis` — so it is not a
+satellite. But `Birko.Sandbox` imports both, so if both declare, that project file gets two
+`PackageReference` items and NU1504 fires, which the sweep's `-warnaserror` turns into an error. The two
+available answers both cost something real, and the choice sets the rule for every later batch:
+
+- **(A) Couple it** — record the pairing and require consumers to import `Birko.Redis`. **Measured cost:
+  five extra shared projects**, not one. `Birko.Redis` is two files but `RedisSettings` extends
+  `RemoteSettings` and implements `ILoadable`, so it drags `Birko.Configuration`, `Birko.Data.Core`,
+  `Birko.Data.Stores`, `Birko.Contracts` and `Birko.Time` behind it. Tried it: both Health test projects
+  failed with `CS0246: RemoteSettings could not be found` until the whole chain was added. A consumer that
+  wants one health check takes the settings hierarchy with it.
+- **(B) Let it declare** — accept a benign NU1504 wherever both are imported, and `NoWarn` it in the
+  Sandbox. The duplicate is harmless (identical `Include` and version; NuGet's warning exists for
+  *differing* versions), but suppressing a code in the sweep is the shape that produced "166 of 166 clean"
+  while 10 projects were broken.
+
+Reverted to a neutral state pending the decision — `Birko.Health.Redis` still declares nothing and its test
+projects keep their own `PackageReference`, so nothing is broken and nothing is half-done.
+
+**This is not only about Health.Redis.** The `Microsoft.AspNetCore.App` batch has **four** independent
+projects with no base between them, and `NETSDK1087` is a hard error that cannot be `NoWarn`ed — so (B) is
+not even available there. Its answer is probably a third one: **nobody declares it**, because a
+`FrameworkReference` genuinely *is* consumer-supplied (an ASP.NET Core host gets it from
+`Microsoft.NET.Sdk.Web`), which criterion 1 already admits as legitimate. Worth settling all three together.
+
 ## Out of scope
 
 - The 13 already done — [[TASK-229]] (10) and [[TASK-230]] (3).
