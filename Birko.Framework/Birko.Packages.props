@@ -46,6 +46,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" /><!-- Birko.Data.Repositories\Birko.Data.Repositories.projitems -->
     <PackageVersion Include="MongoDB.Driver" Version="3.*" />                                    <!-- Birko.Data.MongoDB\Birko.Data.MongoDB.projitems -->
     <PackageVersion Include="MySqlConnector" Version="2.*" />                                    <!-- Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems -->
+    <PackageVersion Include="NEST" Version="7.*" />                                              <!-- Birko.Data.ElasticSearch\Birko.Data.ElasticSearch.projitems -->
     <PackageVersion Include="Npgsql" Version="10.*" />                                           <!-- Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems -->
     <PackageVersion Include="OpenTelemetry" Version="1.*" />                                     <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />                  <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->

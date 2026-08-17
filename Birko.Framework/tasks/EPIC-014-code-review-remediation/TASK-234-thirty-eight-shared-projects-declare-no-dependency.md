@@ -145,6 +145,52 @@ Approach point 4 already says so, and it is the batch to do last, not first.
       (`Birko.Sandbox`, `Birko.Xaml.Gallery`, `Birko.Web.Playground`) are fair game; the rest are not
 - [ ] `audit-dependencies.ps1` reports no *new* findings, and no project newly **unauditable**
 
+## Batches
+
+### ✅ Batch 1 — `NEST` (7 projects), 2026-08-17
+
+`Birko.Data.ElasticSearch` declares `NEST 7.*` in the dual form; the 6 satellites record the pairing in
+their own `.projitems` rather than declaring. Duplicates removed from 7 test projects and from
+`Birko.Sandbox` (Birko-owned). **187 tests green** across all 7 ElasticSearch suites.
+
+Both halves proven rather than asserted:
+
+- **The CPM half was measured with a synthetic consumer**, because no Birko-owned consumer uses CPM — the
+  three that do are off-limits, so "it works under CPM" would otherwise have been an untested claim about
+  the exact thing TASK-229 got wrong. A throwaway project with `ManagePackageVersionsCentrally=true`
+  importing `Birko.Packages.props` builds, and resolves `NEST [7.*, )`. Removing the `PackageVersion` line
+  and rebuilding gives `error NU1010`, so the check can fail.
+- **The duplicate half**: NU1504 is a **warning** on a plain build and an **error** only under
+  `-warnaserror`. That matters for scoping — `Affiliate` and `Symbio` both import
+  `Birko.Data.ElasticSearch.projitems` *and* declare `NEST` themselves, and they are off-limits, so they
+  now carry a warning until their owners remove it. A warning, not a break; had it been an error this batch
+  would have needed the consumer-warning treatment of [[TASK-235]] first.
+
+Two things that cost time and will recur in later batches:
+
+- **A stale `obj/` made the Sandbox report `CS0579` eight times** and look like this change had broken it.
+  It had not — cleaning `Birko.Framework/obj` as well as the outer `obj` cleared it. When a `.projitems`
+  changes, clean the aggregator's *inner* obj too before believing a failure.
+- **`Birko.Data.ElasticSearch.Tests` reported 12 errors on its first `-warnaserror` build and 0 on the
+  next**, with no edit in between — a restore that had not yet picked up the changed `.projitems`. Build
+  twice before recording a number.
+
+**Audit**: `dotnet list package --vulnerable --include-transitive` over the 8 affected projects —
+**0 findings, 0 unauditable**. Scoped to the blast radius rather than the whole family on purpose:
+`audit-dependencies.ps1` restores every `.csproj` under `Framework.Tests` and `Consumers` (~200 of them), so
+it is a task-level gate, not a batch-level one. Run it once at the end, not once per batch. Note the float
+`7.*` resolves to the same 7.17.5 the pins named, because that is the last 7.x release — this batch changes
+no resolved version anywhere.
+
+**Left alone deliberately, and worth knowing about**: the same 8 project files also pin
+`Elasticsearch.Net 7.17.5`, which is NEST's *own* dependency. It is not a duplicate of anything declared
+here, so it is out of this task's scope — but a pinned transitive sitting beside a floating `NEST 7.*` is a
+skew waiting for the next bump. Inert today only because 7.17.5 is the last 7.x release.
+
+Spawned [[TASK-238]]: the sweep's `-warnaserror` surfaced five `Birko.Data.Sync.*` projitems carrying a
+`ProjectReference` to another `.projitems`, which MSBuild cannot honour (`MSB9008`). Pre-existing and inert,
+but it is noise in every remaining batch's sweep.
+
 ## Out of scope
 
 - The 13 already done — [[TASK-229]] (10) and [[TASK-230]] (3).
