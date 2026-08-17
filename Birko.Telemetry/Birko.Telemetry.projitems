@@ -8,6 +8,20 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Telemetry</Import_RootNamespace>
   </PropertyGroup>
+  <!-- Framework dependency: Microsoft.AspNetCore.App — CONSUMER-SUPPLIED, and never owned by a Birko
+       project. It is not a library this framework wraps; an ASP.NET Core host already has it from
+       Microsoft.NET.Sdk.Web. A non-web host that imports this projitems adds it itself:
+
+         <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+       This is stricter than an ordinary package, which is why the rule is absolute: a duplicate
+       FrameworkReference is NETSDK1087, a hard ERROR that cannot be suppressed, where a duplicate
+       PackageReference is only NU1504. Four Birko projitems use ASP.NET Core types and none of them
+       declares it (TASK-234).
+
+       Note Birko.Data.Tenant DOES declare it, which predates this rule. Any consumer importing that
+       project alongside this one already has the reference, and declaring it here would break every
+       such consumer at once. -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)BirkoTelemetryConventions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)StoreInstrumentation.cs" />
