@@ -23,15 +23,37 @@ namespace Birko.BackgroundJobs.SQL
         private readonly RetryPolicy _retryPolicy;
 
         /// <summary>
+        /// How long a job may sit in <see cref="JobStatus.Processing"/> before it is presumed abandoned
+        /// and offered to another worker.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Defaults to <c>JobQueueOptions.JobTimeout</c>'s own default of 30 minutes, and that is a
+        /// DERIVED bound rather than a chosen one: the processor cancels a job at <c>JobTimeout</c>, so a
+        /// row still <c>Processing</c> after longer than that cannot be legitimately running — whoever
+        /// held it is gone. A host that raises <c>JobTimeout</c> must raise this to match, or it will
+        /// reclaim jobs that are still working.
+        /// </para>
+        /// <para>
+        /// ⚠ It is a presumption, not knowledge. Nothing here can tell a dead holder from a slow one, so
+        /// a job that outlives the timeout while genuinely running WILL be handed to a second worker.
+        /// That is why reclaiming is only safe for idempotent jobs, and why the alternative — leaving the
+        /// row stranded forever — was the previous behaviour rather than an oversight.
+        /// </para>
+        /// </remarks>
+        private readonly TimeSpan _claimTimeout;
+
+        /// <summary>
         /// Creates a new SQL job queue.
         /// </summary>
         /// <param name="settings">Connection settings for the SQL database.</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
-        public SqlJobQueue(SqlSettings settings, RetryPolicy? retryPolicy = null)
+        public SqlJobQueue(SqlSettings settings, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = new AsyncDataBaseBulkStore<DB, JobDescriptorModel>();
             _store.SetSettings(settings);
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = claimTimeout ?? TimeSpan.FromMinutes(30);
         }
 
         /// <summary>
@@ -39,10 +61,11 @@ namespace Birko.BackgroundJobs.SQL
         /// </summary>
         /// <param name="store">A pre-configured store instance.</param>
         /// <param name="retryPolicy">Default retry policy for failed jobs.</param>
-        public SqlJobQueue(AsyncDataBaseBulkStore<DB, JobDescriptorModel> store, RetryPolicy? retryPolicy = null)
+        public SqlJobQueue(AsyncDataBaseBulkStore<DB, JobDescriptorModel> store, RetryPolicy? retryPolicy = null, TimeSpan? claimTimeout = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _retryPolicy = retryPolicy ?? RetryPolicy.Default;
+            _claimTimeout = claimTimeout ?? TimeSpan.FromMinutes(30);
         }
 
         /// <summary>
@@ -73,12 +96,20 @@ namespace Birko.BackgroundJobs.SQL
             {
                 var now = DateTime.UtcNow;
 
+                // TASK-451: a row left Processing by a worker that died is offered again once it has been
+                // held longer than the claim timeout. Before this, DequeueAsync selected only Pending and
+                // due-Scheduled rows, so an interrupted job was stranded FOREVER — durability created that
+                // state, because the in-memory queue simply lost the whole queue on restart instead.
+                var staleBefore = now - _claimTimeout;
+
                 // Find the next eligible job.
                 IEnumerable<JobDescriptorModel> candidates;
                 if (queueName != null)
                 {
                     candidates = await _store.ReadAsync(
-                        filter: j => (j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now))
+                        filter: j => (j.Status == pendingStatus
+                                   || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                   || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore))
                                   && (j.QueueName == null || j.QueueName == queueName),
                         orderBy: OrderBy<JobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
                         limit: 1,
@@ -88,7 +119,9 @@ namespace Birko.BackgroundJobs.SQL
                 else
                 {
                     candidates = await _store.ReadAsync(
-                        filter: j => j.Status == pendingStatus || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now),
+                        filter: j => j.Status == pendingStatus
+                                  || (j.Status == scheduledStatus && j.ScheduledAt != null && j.ScheduledAt <= now)
+                                  || (j.Status == processingStatus && j.LastAttemptAt != null && j.LastAttemptAt < staleBefore),
                         orderBy: OrderBy<JobDescriptorModel>.ByDescending(j => j.Priority).ThenBy(j => j.EnqueuedAt),
                         limit: 1,
                         ct: cancellationToken
@@ -108,6 +141,20 @@ namespace Birko.BackgroundJobs.SQL
                 var claimId = candidate.Guid;
                 var originalStatus = candidate.Status;
                 var claimToken = Guid.NewGuid();
+
+                // TASK-451: reclaiming has to be bounded, or a job that kills its worker every time is
+                // handed round forever and the failure never surfaces. MaxRetries is already on the row
+                // and already means "how many attempts this job gets", so it is reused rather than a
+                // second cap invented beside it.
+                if (originalStatus == processingStatus && candidate.AttemptCount >= candidate.MaxRetries)
+                {
+                    candidate.Status = (int)JobStatus.Dead;
+                    candidate.CompletedAt = now;
+                    candidate.LastError = $"Abandoned: held in Processing for longer than {_claimTimeout} "
+                        + $"after {candidate.AttemptCount} attempt(s), and the attempt budget is spent.";
+                    await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
 
                 await _store.UpdateAsync(
                     filter: j => j.Guid == claimId && j.Status == originalStatus,
