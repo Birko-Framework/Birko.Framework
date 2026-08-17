@@ -16,7 +16,7 @@ namespace Birko.BackgroundJobs.SQL
     /// Jobs survive process restarts and support distributed processing.
     /// </summary>
     /// <typeparam name="DB">The SQL connector type (e.g., PostgreSqlConnector, MSSqlConnector).</typeparam>
-    public class SqlJobQueue<DB> : IJobQueue
+    public class SqlJobQueue<DB> : IJobQueue, IJobQueueCounts
         where DB : AbstractConnector
     {
         private readonly AsyncDataBaseBulkStore<DB, JobDescriptorModel> _store;
@@ -248,6 +248,31 @@ namespace Birko.BackgroundJobs.SQL
             ).ConfigureAwait(false);
 
             return models.Select(m => m.ToDescriptor()).ToList();
+        }
+
+        /// <summary>
+        /// Counts jobs per status with a real <c>COUNT</c> per status rather than by fetching rows.
+        /// </summary>
+        /// <remarks>
+        /// One query per status — seven, bounded by the enum rather than by how much data exists, so it
+        /// does not grow with the table. That is the distinction the N+1 rule turns on: a loop over a
+        /// fixed, tiny set is not the defect, a loop over rows is. The alternative, a single grouped
+        /// query, is not expressible through the store's expression API.
+        /// </remarks>
+        public async Task<IReadOnlyDictionary<JobStatus, int>> CountByStatusAsync(CancellationToken cancellationToken = default)
+        {
+            var counts = new Dictionary<JobStatus, int>();
+
+            foreach (JobStatus status in Enum.GetValues(typeof(JobStatus)))
+            {
+                var value = (int)status;
+                var total = await _store.CountAsync(j => j.Status == value, ct: cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (total > 0) counts[status] = (int)total;
+            }
+
+            return counts;
         }
 
         public async Task<int> PurgeAsync(TimeSpan olderThan, CancellationToken cancellationToken = default)
