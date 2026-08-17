@@ -20,11 +20,11 @@ namespace Birko.Data.RavenDB.Tests.Stores;
 /// <para>
 /// RavenDB <i>looks</i> like the one backend that honoured the context on both reads and writes —
 /// <c>AsyncRavenDBStore</c> does route <c>LoadAsync</c> and <c>Query&lt;T&gt;()</c> through the session as
-/// well as <c>StoreAsync</c>. Measured against RavenDB 7.2 it does not: a session query is answered by
-/// the server from indexes and never sees unsaved documents, and the Load-by-id path that would consult
-/// the identity map is separately broken (TASK-241 — <c>StoreAsync</c> lets Raven auto-generate the
-/// document id while every read addresses <c>guid.ToString()</c>). Writes and rollback are sound; the
-/// read half is not, and the capability declaration says so.
+/// well as <c>StoreAsync</c>. Measured against RavenDB 7.2, the read half splits. Load-by-id sees the
+/// session's unsaved writes as of TASK-241, which aligned the document id with the entity Guid; a session
+/// <b>query</b> never does, because it is answered by the server from indexes. That second half is a
+/// RavenDB property, not a defect, and is why the capability declaration stays conservative — the
+/// query-based reads are the common case.
 /// </para>
 ///
 /// <para>
@@ -141,17 +141,22 @@ public class RavenTransactionBoundaryLiveTests
     }
 
     /// <summary>
-    /// Read-your-own-writes does NOT hold inside a Raven boundary — measured, not assumed.
+    /// A QUERY inside a Raven boundary does not see the session's unsaved writes — measured, not assumed.
     /// </summary>
     /// <remarks>
     /// The brief's survey marked RavenDB as honouring the context in its write paths, and the store does
-    /// route reads through the session too, so it looks like the one backend that had both halves. Probed
-    /// against RavenDB 7.2, it does not: a session <c>Query</c> is answered by the server from indexes and
-    /// never sees documents the session has not saved. Load-by-id would consult the identity map, but that
-    /// path is separately broken (TASK-241).
+    /// route reads through the session too, so it looked like the one backend that had both halves.
+    /// Probed against RavenDB 7.2, only half holds: a session <c>Query</c> is answered by the server from
+    /// indexes and never sees documents the session has not saved.
     /// <para>
-    /// This test pins the limitation rather than the wish, so that the day TASK-241 lands, this fails and
-    /// forces the capability declaration to be revisited instead of quietly becoming a lie.
+    /// The other half was a genuine defect and is fixed — Load-by-id now consults the identity map, since
+    /// TASK-241 aligned the document id with the entity Guid; that direction is pinned by
+    /// <c>RavenDocumentIdLiveTests.Load_by_id_inside_a_session_now_sees_the_sessions_unsaved_write</c>.
+    /// </para>
+    /// <para>
+    /// This one pins the part that is a RavenDB property rather than a bug, which is why
+    /// <c>Capabilities.ReadsSeeUncommittedWrites</c> stays false: a single bool cannot say "id yes, query
+    /// no", so it says the answer a caller is unsafe to get wrong.
     /// </para>
     /// </remarks>
     [Fact]
@@ -233,8 +238,9 @@ public class RavenTransactionBoundaryLiveTests
         uow.Capabilities.Scope.Should().Be(TransactionBoundaryScope.Cluster,
             "the session is opened with TransactionMode.ClusterWide, not single-node");
         uow.Capabilities.ReadsSeeUncommittedWrites.Should().BeFalse(
-            "measured: a session query is answered from server-side indexes and Load-by-id is unusable "
-          + "until TASK-241 — declaring true here would be the survey's mistake written into the contract");
+            "deliberately conservative: Load-by-id does see the session's unsaved writes since TASK-241, "
+          + "but every query-based read is answered from server-side indexes and does not. A single bool "
+          + "must state the answer a caller is unsafe to get wrong, and query reads are the common case");
         uow.Capabilities.RequiresServerTopology.Should().BeFalse();
         uow.Capabilities.Limitations.Should().Contain("Cluster-wide",
             "cluster-wide transactions forbid patching, attachments, counters and time-series, and a "
