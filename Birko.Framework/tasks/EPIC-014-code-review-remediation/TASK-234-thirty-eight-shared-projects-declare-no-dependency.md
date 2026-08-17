@@ -354,6 +354,42 @@ suites, `-warnaserror` clean; Sandbox and a CPM probe build clean.
   in the comment *body* (the first version of that check fired on `<!--` itself, which is why the assertion
   is on the body rather than the whole string).
 
+### ✅ Batch 9 — AspNetCore, IdentityModel and gRPC (the last group), 2026-08-17
+
+**320 tests green** across 8 suites; Sandbox and a CPM probe build clean. This was the group the settled
+rule was supposed to answer in advance, and it did — but it also turned up the two findings the earlier
+batches could not.
+
+| Package | Owner | Note |
+|---|---|---|
+| `Microsoft.AspNetCore.App` | **nobody** | documented in 4 projects — a `FrameworkReference` is never owned |
+| `System.IdentityModel.Tokens.Jwt` | `Birko.Security.Jwt` | `Security.AspNetCore` records the pairing |
+| `Microsoft.AspNetCore.Authentication.JwtBearer` | `Birko.Security.AspNetCore` | **not in the original 38** |
+| `Grpc.Net.Client` | `Birko.Communication.gRPC` | client half |
+| `Grpc.AspNetCore` | `Birko.Communication.gRPC.Server` | server half — different package, so no collision |
+
+- **The count of 38 was built from a namespace→package map, and the map had a hole.**
+  `Microsoft.AspNetCore.Authentication.JwtBearer` has no entry in it, so `Birko.Security.AspNetCore`'s use
+  of it was invisible to every survey — including the re-measurement that opened this task. Found by reading
+  the project's `using` lines directly. **A scan is only as complete as its lookup table**, and the task's
+  own note about the map ("keep that distinction, or the number drifts upward") warned about false positives
+  while this was a false *negative*.
+- **The float is worth more here than anywhere else in the task.** Three test projects pinned **three
+  different versions** of `System.IdentityModel.Tokens.Jwt` — 8.1.2, 8.4.0, 8.7.0 — so the framework's JWT
+  surface was built against three token libraries depending on which project you looked at. And JwtBearer
+  was pinned to `10.0.0-preview.1.25120.3`: the framework's authentication was on a **preview build of an
+  auth library**. One owner plus a float removes both by construction.
+- **`Birko.Data.Tenant` already declares the `Microsoft.AspNetCore.App` FrameworkReference**, which predates
+  the "never owned" rule and is now an anomaly. Left alone deliberately: the Sandbox and 8 test projects
+  dropped theirs when it took ownership, so removing it now would break them all. The four documented
+  projects say so, rather than leaving the next reader to rediscover it.
+- **Neither gRPC projitems is imported by `Birko.Sandbox`**, so the build-validation aggregator does not
+  compile them — TASK-231's shape, recorded rather than fixed here.
+
+**Spawned [[TASK-239]]** — `NU1510`, the mirror image of this task: a project declaring a package .NET 10
+already provides. Seen in three test projects across three batches, and `Birko.Packages.props` carries a
+`PackageVersion` for the same package, so a *shared* project may be over-declaring too.
+
 ## Out of scope
 
 - The 13 already done — [[TASK-229]] (10) and [[TASK-230]] (3).

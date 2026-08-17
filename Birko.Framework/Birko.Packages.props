@@ -37,8 +37,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Grpc.AspNetCore" Version="2.*" />                                        <!-- Birko.Communication.gRPC.Server\Birko.Communication.gRPC.Server.projitems -->
+    <PackageVersion Include="Grpc.Net.Client" Version="2.*" />                                        <!-- Birko.Communication.gRPC\Birko.Communication.gRPC.projitems -->
     <PackageVersion Include="InfluxDB.Client" Version="5.*" />                                        <!-- Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems -->
     <PackageVersion Include="MessagePack" Version="3.*" />                                            <!-- Birko.Serialization.MessagePack\Birko.Serialization.MessagePack.projitems -->
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />         <!-- Birko.Security.AspNetCore\Birko.Security.AspNetCore.projitems -->
     <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.*" />                                 <!-- Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.*" />                               <!-- Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems -->
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.*" />                                 <!-- Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems -->
@@ -56,6 +59,7 @@
     <PackageVersion Include="RavenDB.Client" Version="7.*" />                                         <!-- Birko.Data.RavenDB\Birko.Data.RavenDB.projitems -->
     <PackageVersion Include="RazorLight" Version="2.*" />                                             <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
     <PackageVersion Include="StackExchange.Redis" Version="2.*" />                                    <!-- Birko.Redis\Birko.Redis.projitems -->
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />                        <!-- Birko.Security.Jwt\Birko.Security.Jwt.projitems -->
     <PackageVersion Include="YamlDotNet" Version="16.*" />                                            <!-- Birko.Serialization.Yaml\Birko.Serialization.Yaml.projitems -->
   </ItemGroup>
 
