@@ -13,10 +13,16 @@
     <Compile Include="$(MSBuildThisFileDirectory)Stores\SqlSyncKnowledgeStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncSqlSyncKnowledgeStore.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Birko.Data.Sync\Birko.Data.Sync.projitems">
-      <Visible>false</Visible>
-      <Link>Properties\AssemblyInfo.cs</Link>
-    </ProjectReference>
-  </ItemGroup>
+  <!-- This project extends Birko.Data.Sync and a consumer must import
+       Birko.Data.Sync.projitems alongside it.
+
+       That used to be written as a <ProjectReference> to that .projitems, which MSBuild cannot honour:
+       a .projitems is an include file, not a build target, and the path resolves against the CONSUMING
+       project's directory rather than this one — so it emitted `warning MSB9008: The referenced
+       project ..\Birko.Data.Sync\Birko.Data.Sync.projitems does not exist` in every importer, and an
+       error under the -warnaserror the build sweep runs. It was inert: every consumer already imports
+       Birko.Data.Sync explicitly.
+
+       MSBuild has no way to express a shared project depending on another shared project, which is why
+       this is a comment. Do not re-add the ProjectReference (TASK-238). -->
 </Project>
