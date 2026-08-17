@@ -41,6 +41,30 @@ Birko.BackgroundJobs/
 - **DI via factory function** — `JobExecutor` takes `Func<Type, object>` instead of depending on `IServiceProvider` directly, keeping the core DI-container-agnostic
 - **Typed and untyped jobs** — `IJob` for simple parameterless work, `IJob<TInput>` for jobs with serialized input data
 - **In-memory queue for testing** — `InMemoryJobQueue` allows unit testing without external dependencies; jobs are lost on restart
+- **`IJobLockProvider` is a separate extension point, and only 2 of 8 backends implement it** — a durable
+  queue makes *claiming* a job safe, because dequeue is atomic. It does not make *deciding to enqueue*
+  safe: `RecurringJobScheduler` keeps `NextRunAt` in process memory, so every worker independently
+  concludes a job is due and enqueues its own copy. The lock is what prevents that.
+
+  | Backend | Locking | Semantics |
+  |---|---|---|
+  | **SQL** (PostgreSQL / MSSql / MySQL) | ✅ `SqlJobLockProvider<DB>` | **session** — advisory lock on a dedicated connection; the server releases it when the holder dies |
+  | **Redis** | ✅ `RedisJobLockProvider` | **lease**, renewed on a heartbeat — `IsLeaseBased == true` |
+  | SQL (**SQLite**) | ❌ returns `false` | no portable cross-connection advisory lock; callers must fall back deliberately |
+  | CosmosDB · ElasticSearch · MongoDB · RavenDB · JSON · XML | ❌ none | see TASK-236 |
+
+  **Two durations, not one.** `TryAcquireAsync(name, acquireTimeout, leaseDuration?, ct)`. The first
+  version had a single `timeout` and the two implementations read it as different things — SQL as the wait,
+  Redis as the key's expiry, PostgreSQL not at all — so one call meant three things. Splitting them is
+  TASK-232.
+
+  **`IsLeaseBased` is on the interface on purpose.** A session lock's failure mode is a *stuck* lock nobody
+  can take over; a lease's is **releasing while the holder is still working**, which is what mutual
+  exclusion exists to prevent. Those need different caller behaviour, so the distinction is exposed rather
+  than smoothed over. On a lease-based provider, work that must not run twice has to be idempotent.
+
+  **Nothing in this project consumes the interface yet** — leader election in `RecurringJobScheduler` is
+  the agreed shape (TASK-232 decision 3a) and is TASK-237.
 
 ## Maintenance
 
