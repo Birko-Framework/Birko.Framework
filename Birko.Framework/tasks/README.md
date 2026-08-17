@@ -116,6 +116,18 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 >   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
 >   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
 >
+> Adjusted again 2026-08-17 (**TASK-234 closed**, TASK-238 closed, TASK-239 filed): tasks 208 -> 209,
+> todo 116 -> 115, done 78 -> 80, P2 82 -> 81, P3 8 -> 9. TASK-234 drained in **9 batches by package**
+> across ~45 repos. Its shape changed twice under measurement: the filed "38 projects must declare" became
+> **10 packages owned / 25 pairs documented / 2 consumer-supplied carve-outs / 4 documenting a
+> `FrameworkReference` nobody owns**, and the ownership rule itself was reversed twice before landing (see
+> the task's Batch 2 section — only the third state rests on a measurement). New checker
+> `audit-declarations.ps1` reports **0**, and it was proven able to fail. Along the way: a package the
+> original survey never saw (`Microsoft.AspNetCore.Authentication.JwtBearer` — the namespace map had no
+> entry), three test projects pinning **three different versions** of one JWT library, and the framework's
+> authentication on a **preview** build. **TASK-239** filed for the mirror-image defect (`NU1510`, declaring
+> what .NET 10 already provides).
+>
 > Adjusted again 2026-08-17 (TASK-234 batches 1-3, TASK-238 close): tasks 207 -> 208, todo 116 -> 116,
 > done 77 -> 78. **TASK-234 is being drained in batches by package**, and the re-measurement before starting
 > changed its shape: the count reproduces (38 projects / 40 project-by-package pairs) but only **15 may

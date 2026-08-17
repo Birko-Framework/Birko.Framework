@@ -3,7 +3,7 @@ id: TASK-234
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-17
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-229, TASK-230]
 findings: []
-pr: null
+pr: "9 batches across ~45 repos — see each batch section; aggregator 5e91cdf..b2f57f7"
 github-issue: null
 jira-key: null
 ---
@@ -127,23 +127,29 @@ Approach point 4 already says so, and it is the batch to do last, not first.
 
 ## Acceptance criteria
 
-- [ ] Each of the 38 either declares its dependency, or records why it should not (a genuinely
+- [x] Each of the 38 either declares its dependency, or records why it should not (a genuinely
       consumer-supplied choice is a legitimate answer — say so rather than declaring blindly).
       **Re-measured: that split is 15 declare / 23 record** — see the boxed section above. For the 23, the
       record goes in the `.projitems` itself, naming the base whose declaration covers it, because a
       comment in a task file is not where the next person looks
-- [ ] Every declaration is in the dual `$(ManagePackageVersionsCentrally)` form, with its `PackageVersion`
+- [x] Every declaration is in the dual `$(ManagePackageVersionsCentrally)` form, with its `PackageVersion`
       added to `Birko.Packages.props` in the same change
-- [ ] Dependents' duplicate declarations removed in the same change as the declaration that duplicates them
-- [ ] **The build sweep matches any `error <CODE>`, not a hand-listed set of prefixes.** TASK-229 reported
+- [x] Dependents' duplicate declarations removed in the same change as the declaration that duplicates them
+- [x] **The build sweep matches any `error <CODE>`, not a hand-listed set of prefixes.** TASK-229 reported
       "166 of 166 clean" while 10 projects were failing, because its pattern omitted `NETSDK`
-- [ ] The sweep covers `Consumers/` as well as `Framework.Tests/`. `Birko.Sandbox` caught two defects in
+- [x] The sweep covers `Consumers/` as well as `Framework.Tests/`. `Birko.Sandbox` caught two defects in
       this thread that no test project could, because it consumes the framework through `$(BirkoSrc)` and an
       aggregator — the path every real consumer takes
-- [ ] **Scope every cleanup by ownership, not by glob.** A `Consumers/*` glob edited
+- [x] **Scope every cleanup by ownership, not by glob.** A `Consumers/*` glob edited
       `FisData.Stock.Angular`, which held substantial uncommitted work. Birko-owned consumers
       (`Birko.Sandbox`, `Birko.Xaml.Gallery`, `Birko.Web.Playground`) are fair game; the rest are not
-- [ ] `audit-dependencies.ps1` reports no *new* findings, and no project newly **unauditable**
+- [x] `audit-dependencies.ps1` reports no *new* findings, and no project newly **unauditable**
+
+All seven met. The first one's split changed from "15 declare / 23 record" to **10 packages owned /
+25 pairs documented**, because two of the projects the re-measurement listed as declarers turned out
+to be carve-outs (`Birko.Health.Redis`, `Birko.Data.Migrations.InfluxDB`) and the four
+`Microsoft.AspNetCore.App` rows are a `FrameworkReference` nobody owns. The re-measurement was right
+that 38 was not the number of declarations needed, and still wrong about which 15.
 
 ## Batches
 
@@ -389,6 +395,26 @@ batches could not.
 **Spawned [[TASK-239]]** — `NU1510`, the mirror image of this task: a project declaring a package .NET 10
 already provides. Seen in three test projects across three batches, and `Birko.Packages.props` carries a
 `PackageVersion` for the same package, so a *shared* project may be over-declaring too.
+
+### ✅ Closed — and the checker that says so can fail
+
+**0 findings**, from a scan that now encodes the rule rather than counting `PackageReference` items:
+`audit-declarations.ps1`, added beside `audit-dependencies.ps1`. Before it learned the rule it reported
+**25 findings against 25 projects that were all following it** — the same failure this epic keeps meeting,
+a checker that cannot tell compliance from the defect.
+
+**Proven able to fail**: delete the TASK-234 comment from `Birko.Workflow.MongoDB.projitems` and it reports
+exactly that one project; restore it and the count returns to 0.
+
+The script carries the two things that would otherwise be rediscovered: the namespace→package map is the
+limit of what it can see (that hole is what hid `Microsoft.AspNetCore.Authentication.JwtBearer` from every
+survey), and shortcutting the map by treating a namespace root as a package id is what inflated the first
+count from 38 to 43.
+
+**Final tally**: 40 project×package pairs at the start → **10 packages given an owner**, **25 pairs
+documented as satellite or carve-out**, **2 carve-outs** (`Birko.Health.Redis`,
+`Birko.Data.Migrations.InfluxDB`), **4 projects documenting a `FrameworkReference` nobody owns**, and one
+package the original survey never saw.
 
 ## Out of scope
 
