@@ -9,7 +9,7 @@
     <Import_RootNamespace>Birko.Data.MongoDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="MongoDB.Driver" Version="3.2.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.11.0" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Models\MongoDBLogModel.cs" />
