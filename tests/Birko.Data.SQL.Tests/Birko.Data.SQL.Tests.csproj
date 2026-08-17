@@ -25,7 +25,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <Import Project="..\..\Framework\Birko.Time\Birko.Time.projitems" Label="Shared" />
