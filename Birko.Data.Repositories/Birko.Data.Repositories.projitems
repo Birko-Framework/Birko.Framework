@@ -9,6 +9,11 @@
     <Import_RootNamespace>Birko.Data</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- TASK-229: ServiceCollectionExtensions uses IServiceCollection and ServiceLifetime.
+         Abstractions is the right package for a library: the contracts, not the container. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)IBaseRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IAsyncRepository.cs" />
