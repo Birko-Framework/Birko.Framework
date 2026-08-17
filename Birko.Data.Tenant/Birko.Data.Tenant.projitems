@@ -9,6 +9,13 @@
     <Import_RootNamespace>Birko.Data.Tenant</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- TASK-229: Middleware/ uses Microsoft.AspNetCore.Http, .Builder and .Routing.
+         A FrameworkReference, not a PackageReference: these ship in the shared framework.
+         Until now this was borrowed transitively from RavenDB.Client, which stopped
+         providing it at 7.2.5 — so the dependency was real and simply undeclared. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Filters\ModelByTenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ITenant.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\ITenantContext.cs" />
