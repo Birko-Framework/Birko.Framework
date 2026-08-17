@@ -116,6 +116,15 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 >   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
 >   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
 >
+> Adjusted again 2026-08-17 (TASK-236 close): todo 115 -> 114, done 80 -> 81, P3 9 -> 8. The lock-provider
+> question for the six remaining job backends, answered as **2 implemented / 4 recorded no**. The task's own
+> flag was right: **the JSON/XML guess was backwards.** Measured on Windows and Linux/.NET 9 before writing
+> anything — an exclusive file handle blocks a second process and is freed by the kernel when the holder is
+> **killed**, which is a *session* lock, the stronger guarantee, and the only one besides SQL in this family.
+> `FileJobLockProvider` lives in core (BCL-only, and a shared project cannot depend on another). The four
+> document stores could each express only a lease, so implementing them would mean four renewal loops to
+> offer something weaker than what already ships — and a provider need not match the queue's backend.
+>
 > Adjusted again 2026-08-17 (**TASK-234 closed**, TASK-238 closed, TASK-239 filed): tasks 208 -> 209,
 > todo 116 -> 115, done 78 -> 80, P2 82 -> 81, P3 8 -> 9. TASK-234 drained in **9 batches by package**
 > across ~45 repos. Its shape changed twice under measurement: the filed "38 projects must declare" became
