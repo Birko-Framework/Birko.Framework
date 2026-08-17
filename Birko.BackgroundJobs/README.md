@@ -111,12 +111,34 @@ await processor.RunAsync(cts.Token);
 ```csharp
 using Birko.BackgroundJobs.Processing;
 
-var scheduler = new RecurringJobScheduler(queue);
+var scheduler = new RecurringJobScheduler(queue, clock);
 scheduler.Register<CleanupJob>("daily-cleanup", TimeSpan.FromHours(24));
 
 // Run scheduler loop
 await scheduler.RunAsync(cancellationToken);
 ```
+
+#### Running more than one worker
+
+The schedule lives in each process's memory, so **N workers enqueue N copies of every recurring job** — a
+durable queue does not help, because its atomic dequeue makes *claiming* a job safe, not *deciding to
+enqueue* one. Pass an `IJobLockProvider` and only the process holding the lock runs the schedule:
+
+```csharp
+await using var locks = new RedisJobLockProvider(redisSettings);   // or SqlJobLockProvider<DB>
+
+var scheduler = new RecurringJobScheduler(queue, clock, locks);
+scheduler.Register<CleanupJob>("daily-cleanup", TimeSpan.FromHours(24));
+
+await scheduler.RunAsync(cancellationToken);   // followers idle and keep knocking
+```
+
+Followers re-attempt every `leadershipRetryInterval` (default 15s), so a leader that dies is replaced
+without restarting anything, and a new leader restarts the schedule from the moment it takes over rather
+than replaying occurrences the previous leader already enqueued. Only `Birko.BackgroundJobs.SQL`
+(PostgreSQL / MSSql / MySQL) and `Birko.BackgroundJobs.Redis` can supply a provider today; **omit it and
+behaviour is unchanged**, which is what makes this additive. A lock reduces duplication — it does not
+abolish it, so a job that must not run twice still has to be idempotent.
 
 ## API Reference
 
@@ -141,7 +163,7 @@ await scheduler.RunAsync(cancellationToken);
 | `JobExecutor` | Default `IJobExecutor` with DI factory support |
 | `JobDispatcher` | High-level API for enqueuing and scheduling jobs |
 | `BackgroundJobProcessor` | Concurrent polling processor |
-| `RecurringJobScheduler` | Interval-based recurring job scheduler |
+| `RecurringJobScheduler` | Interval-based recurring job scheduler; optionally leader-elected via `IJobLockProvider` |
 
 ### Serialization
 | Type | Description |

@@ -63,8 +63,37 @@ Birko.BackgroundJobs/
   exclusion exists to prevent. Those need different caller behaviour, so the distinction is exposed rather
   than smoothed over. On a lease-based provider, work that must not run twice has to be idempotent.
 
-  **Nothing in this project consumes the interface yet** — leader election in `RecurringJobScheduler` is
-  the agreed shape (TASK-232 decision 3a) and is TASK-237.
+- **`RecurringJobScheduler` consumes it as leader election, and the provider is optional** (TASK-237).
+  Pass an `IJobLockProvider` and only the holder of the named lock runs the schedule; pass nothing — the
+  default — and behaviour is bit-for-bit what it was, because six of the eight backends cannot supply a
+  provider at all. Four rules, each of which is a way to get this wrong:
+
+  - **A new leader re-baselines the schedule** (`NextRunAt = now + interval` for every definition) instead
+    of firing every occurrence that elapsed while it was a follower. It has no idea what the previous
+    leader enqueued, and replaying is the same duplication in a different coat. This is also why a
+    **follower touches `NextRunAt` not at all**: advancing it is a scheduling decision a follower is not
+    entitled to make, and code that advances is one edit away from code that enqueues.
+  - **Leadership is re-attempted, never decided once**, or the death of a leader leaves nothing scheduling
+    until every worker restarts. Rate-limited by `leadershipRetryInterval` (default 15s) because
+    `SqlJobLockProvider` opens a real connection per attempt. A failed attempt is swallowed rather than
+    propagated — a follower that faults out of the loop stops re-attempting, which is worse than the
+    duplication it was there to prevent.
+  - **Leadership is re-read every tick, never cached.** On an `IsLeaseBased` provider `IsLocked` goes
+    false on its own, and a scheduler that trusted its earlier answer would carry on as the second leader
+    the lease exists to prevent.
+  - **The release on exit passes `CancellationToken.None`.** The loop exits precisely *because* its token
+    was cancelled and both providers' `ReleaseAsync` open with `ThrowIfCancellationRequested`, so
+    forwarding the loop's token would skip the release on the only path that ever runs — leaving a session
+    lock held until the connection drops and a lease held for its full duration.
+
+  **The idempotency answer is the better one and is deliberately not this.** Locking each individual
+  decision does *not* work: every process releases right after enqueueing, so one whose clock or loop lags
+  arrives later, finds the lock free and enqueues a duplicate. Closing that means holding until the *next*
+  due instant, which is not a lock but a record saying "10:00 was already enqueued". **"Has this occurrence
+  already been enqueued?" is an idempotency question, not a mutual-exclusion one** — its right answer is a
+  unique key on the queue (job name + due instant), which every durable backend can enforce and which would
+  cover all eight rather than the two that can express a lock. Recorded as the long-term shape; it is a
+  queue-contract change across eight backends, so it is its own decision.
 
 ## Maintenance
 
