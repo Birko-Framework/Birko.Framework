@@ -10,7 +10,6 @@
 
   <ItemGroup>
     <!-- Birko.Data.Tenant's middleware references ASP.NET Core -->
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
