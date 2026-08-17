@@ -9,6 +9,24 @@
     <Import_RootNamespace>Birko.Security.Jwt</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Conditioning on
+         the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps System.IdentityModel.Tokens.Jwt and owns it. Microsoft.IdentityModel.Tokens
+         and Microsoft.IdentityModel.JsonWebTokens arrive with it and are deliberately not declared
+         separately.
+
+         Birko.Security.AspNetCore uses Microsoft.IdentityModel.Tokens too, and does not declare it: it
+         references Birko.Security.Jwt.JwtTokenProvider, so a consumer imports the two together and a
+         second declaration would be NU1504.
+
+         Floats within its major. Three test projects previously pinned three DIFFERENT versions of this
+         package — 8.1.2, 8.4.0 and 8.7.0 — which is the drift one owner removes (TASK-234). -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)JwtTokenProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\OidcProviderOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OpenIdConnect\OidcVerificationResult.cs" />
