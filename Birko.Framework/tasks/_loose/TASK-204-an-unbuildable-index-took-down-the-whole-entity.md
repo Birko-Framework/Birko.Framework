@@ -3,11 +3,11 @@ id: TASK-204
 parent: null
 feature: null
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: review
+status: done
 priority: P0
 assignee: ai
 created: 2026-08-12
-completed: null
+completed: 2026-08-17
 depends-on: []
 blocks: []
 findings: []
@@ -90,7 +90,7 @@ reader may be tempted to skip known-failed indexes for the DDL cost; that would 
 - [x] Per-request store instances do not accumulate duplicate reports or repeat the event.
 - [x] Repairing the data clears the report and the index self-heals on the next schema-ensure.
 - [x] The async schema-ensure overload degrades identically.
-- [ ] Full `Birko.Data.SQL` + `Birko.Data.SQL.SqLite` suites green — **blocked, see below**.
+- [x] Full `Birko.Data.SQL` + `Birko.Data.SQL.SqLite` suites green — **194/194** and **500/500**, 2026-08-17.
 
 ## Verification
 
@@ -120,13 +120,37 @@ file's history is still text end to end (`git diff HEAD~2 HEAD` renders 112 inse
 intermediate commit's diff is binary, which is why it was fixed forward rather than amended — `83651e0`
 was already referenced by this task and by the aggregator commit message.
 
-### Blocked: no .NET 10 SDK on this machine
+### Resolved: the .NET 10 SDK is back, and the four unrun tests pass
 
-The four **dedupe/recovery/async tests added for the second defect have not been run.** Mid-session an
-`msiexec` (started 09:19:32, 2026-08-12) removed .NET 10: `C:\Program Files\dotnet\host\fxr` now holds
-only 6.0.16 / 6.0.36 / 8.0.30, `shared/Microsoft.NETCore.App` likewise, and `sdk/10.0.{102,103,200,301}`
-are empty shells of 0–1 items. Everything here targets `net10.0`, so no build or test can run.
+Mid-session on 2026-08-12 an `msiexec` (09:19:32) removed .NET 10 — `host/fxr` held only 6.0.x/8.0.x and
+`sdk/10.0.*` were empty shells — so nothing targeting `net10.0` could build, and the four
+dedupe/recovery/async tests added for the second defect **had never been executed**. The task was held at
+`review` rather than `done` for exactly that reason.
 
-**Next step:** restart the machine (a reboot is already pending, so .NET 10 most likely comes back
-with it; reinstall only if it does not), then run both suites and flip the last criterion. Until then
-the dedupe half is reviewed but unverified, and this task stays `review`, not `done`.
+**2026-08-17: SDK 10.0.400 and runtime 10.0.11 are present again** (the pending reboot evidently restored
+them; no reinstall was needed). Both suites run:
+
+- `Birko.Data.SQL.SqLite.Tests` — **194 / 194** (was 131/131 when the fix landed; the suite has grown since
+  with TASK-211 / TASK-216 work)
+- `Birko.Data.SQL.Tests` — **500 / 500** (was 417/417, same reason)
+
+The nine `UnbuildableIndexEndToEndTests` were **run by name**, not merely counted in a total — a suite that
+grew by 63 tests could otherwise hide an absent class. All nine passed, including the four this task was
+blocked on:
+
+- `PerRequestStores_DoNotAccumulateDuplicateReports`
+- `PerRequestStores_RaiseTheEventOnceNotPerRequest`
+- `RepairingTheDataClearsTheReportOnTheNextSchemaEnsure`
+- `TheAsyncSchemaEnsurePathDegradesTheSameWay`
+
+Their red-verification status is unchanged from what § Verification records: two of the original five are
+genuine red→green evidence, the rest are **pins** because they do not compile against the reverted fix.
+Running them now closes the "never executed" gap; it does not upgrade a pin into evidence.
+
+## Human test plan
+
+N/A — nothing here needs a human. The degradation is observed directly by automated tests driving real
+stores against a real SQLite file: an unbuildable index either leaves the read surface working or it does
+not, and the event either fires once or per request. The one part a human would judge — how a *host*
+surfaces `OnIndexCreationFailed` at startup — is deliberately out of scope, because the framework only
+provides the seam and each consumer decides how to report it.

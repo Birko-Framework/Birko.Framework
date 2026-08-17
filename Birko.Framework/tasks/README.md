@@ -18,9 +18,9 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | planned      | 10                 | 24                 | —                   |
 | todo         | —                  | —                  | 116                 |
 | in-progress  | 6                  | 10                 | 1                   |
-| review       | —                  | —                  | 10                  |
+| review       | —                  | —                  | 9                   |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 71                  |
+| done         | 1                  | 22                 | 72                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
 Todo by priority: **P0 0 · P1 27 · P2 82 · P3 7**
@@ -61,6 +61,10 @@ Todo by priority: **P0 0 · P1 27 · P2 82 · P3 7**
 > spawned three: **TASK-228** (Birko.Sandbox is not a git repo, P1, EPIC-013), **TASK-229** (2 shared
 > projects use a driver they do not declare, P2) and **TASK-230** (the 4 remaining advisories, P2).
 > TASK-210 then closed `done`: in-progress 2 -> 1, done 70 -> 71.
+>
+> Adjusted again 2026-08-17 (TASK-204 close): review 10 -> 9, done 71 -> 72. It had sat at `review` since
+> 2026-08-12 because an `msiexec` removed the .NET 10 SDK mid-session and four of its tests had never run;
+> the SDK is back and they pass. **This clears the last P0 from the review queue.**
 
 ## In progress now
 
