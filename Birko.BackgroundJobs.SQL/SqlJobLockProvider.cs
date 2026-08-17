@@ -36,11 +36,41 @@ namespace Birko.BackgroundJobs.SQL
         }
 
         /// <summary>
+        /// Session-scoped, not lease-based: the lock lives on a dedicated connection, so the server
+        /// releases it if this process dies. <see cref="IJobLockProvider.IsLeaseBased"/> is false.
+        /// </summary>
+        public bool IsLeaseBased => false;
+
+        /// <summary>
         /// Attempts to acquire a named advisory lock. Returns true if acquired.
         /// The lock is held on a dedicated connection until released or disposed.
         /// </summary>
-        public async Task<bool> TryAcquireAsync(string lockName, TimeSpan timeout, CancellationToken cancellationToken = default)
+        /// <remarks>
+        /// <paramref name="acquireTimeout"/> is the wait for a current holder, which is what MSSql's
+        /// <c>@LockTimeout</c> and MySQL's <c>GET_LOCK</c> take. PostgreSQL's <c>pg_try_advisory_lock</c>
+        /// does not block at all, so it returns immediately whatever is passed — documented rather than
+        /// simulated, because busy-waiting to fake blocking would burn a connection and a core to no
+        /// benefit.
+        /// <para>
+        /// <paramref name="leaseDuration"/> must be <c>null</c>. A SQL advisory lock has no expiry: it is
+        /// released explicitly or when the connection drops. Accepting a duration and silently ignoring it
+        /// would promise a bound this provider cannot enforce, so it throws instead (TASK-232).
+        /// </para>
+        /// </remarks>
+        public async Task<bool> TryAcquireAsync(
+            string lockName,
+            TimeSpan acquireTimeout,
+            TimeSpan? leaseDuration = null,
+            CancellationToken cancellationToken = default)
         {
+            if (leaseDuration.HasValue)
+            {
+                throw new ArgumentException(
+                    "SQL advisory locks are session-scoped and cannot expire, so a lease duration cannot be " +
+                    "honoured. Pass null for a session lock, or use a provider whose IsLeaseBased is true.",
+                    nameof(leaseDuration));
+            }
+
             if (IsLocked)
             {
                 return true;
@@ -63,7 +93,7 @@ namespace Birko.BackgroundJobs.SQL
                 await _lockConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
                 using var cmd = _lockConnection.CreateCommand();
-                cmd.CommandTimeout = (int)timeout.TotalSeconds + 1;
+                cmd.CommandTimeout = (int)acquireTimeout.TotalSeconds + 1;
 
                 switch (dialect)
                 {
@@ -77,7 +107,7 @@ namespace Birko.BackgroundJobs.SQL
                         // sp_getapplock returns its status via the RETURN value (>= 0 == granted).
                         cmd.CommandText = "DECLARE @r int; EXEC @r = sp_getapplock @Resource = @res, @LockMode = 'Exclusive', @LockOwner = 'Session', @LockTimeout = @to; SELECT @r;";
                         AddParam(cmd, "@res", lockName);
-                        AddParam(cmd, "@to", (int)timeout.TotalMilliseconds);
+                        AddParam(cmd, "@to", (int)acquireTimeout.TotalMilliseconds);
                         var ms = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                         IsLocked = ms != null && ms != DBNull.Value && Convert.ToInt32(ms) >= 0;
                         break;
@@ -86,7 +116,7 @@ namespace Birko.BackgroundJobs.SQL
                         // GET_LOCK returns 1 on success, 0 on timeout, NULL on error.
                         cmd.CommandText = "SELECT GET_LOCK(@res, @to)";
                         AddParam(cmd, "@res", lockName);
-                        AddParam(cmd, "@to", (int)timeout.TotalSeconds);
+                        AddParam(cmd, "@to", (int)acquireTimeout.TotalSeconds);
                         var my = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
                         IsLocked = my != null && my != DBNull.Value && Convert.ToInt64(my) == 1;
                         break;
