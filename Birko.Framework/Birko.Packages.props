@@ -52,7 +52,6 @@
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />                  <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
     <PackageVersion Include="RavenDB.Client" Version="7.*" />                                    <!-- Birko.Data.RavenDB\Birko.Data.RavenDB.projitems -->
     <PackageVersion Include="RazorLight" Version="2.*" />                                        <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
-    <PackageVersion Include="StackExchange.Redis" Version="2.*" />                               <!-- Birko.Redis\Birko.Redis.projitems -->
   </ItemGroup>
 
 </Project>

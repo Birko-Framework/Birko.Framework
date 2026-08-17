@@ -219,7 +219,22 @@ are now fixed:
 `Birko.Caching.Redis` or `Birko.MessageQueue.Redis`; declaring a dependency in a *different* project
 surfaced a latent incompatibility in both. Pinning would have hidden it until an advisory forced the bump.
 
-### ⏸ Batch 2 remainder — `Birko.Health.Redis` needs a decision, not a keystroke
+### ⚖ Batch 2 outcome — **the Redis family is consumer-supplied**, decided by the user 2026-08-17
+
+The batch first landed with `Birko.Redis` as the declaring owner and was then **reverted to
+consumer-supplied across all five projects** — none of them declares `StackExchange.Redis`; each records
+that the consumer does. The reasoning below is what the decision was taken against, kept because it is why
+the rule now exists rather than a preference.
+
+**The rule this establishes: a family may own a package only if every project needing that package belongs
+to the family.** The Redis family fails that test and the ElasticSearch family passes it, which is why
+batch 1 stands and batch 2 does not.
+
+What the test projects and the Sandbox do now: **declare it themselves, floating `2.*`**. Pinning back to
+2.8 was rejected on this batch's own evidence — see the two breaks below; a pin would re-hide them, and it
+would break the Moq setups this batch just moved onto 2.13's overloads.
+
+The case that forced it — `Birko.Health.Redis`:
 
 It uses `StackExchange.Redis` directly and depends on **nothing** from `Birko.Redis` — so it is not a
 satellite. But `Birko.Sandbox` imports both, so if both declare, that project file gets two
@@ -237,14 +252,20 @@ available answers both cost something real, and the choice sets the rule for eve
   *differing* versions), but suppressing a code in the sweep is the shape that produced "166 of 166 clean"
   while 10 projects were broken.
 
-Reverted to a neutral state pending the decision — `Birko.Health.Redis` still declares nothing and its test
-projects keep their own `PackageReference`, so nothing is broken and nothing is half-done.
+**Chosen: (C) — neither declares; the consumer supplies it**, and applied to the whole family rather than to
+`Health.Redis` alone. It costs the compile-error-on-first-use ergonomics this task exists to improve, and it
+buys a rule with no suppressions and no artificial coupling. 221 tests green across 6 suites against a live
+Redis 7 after the revert.
 
-**This is not only about Health.Redis.** The `Microsoft.AspNetCore.App` batch has **four** independent
-projects with no base between them, and `NETSDK1087` is a hard error that cannot be `NoWarn`ed — so (B) is
-not even available there. Its answer is probably a third one: **nobody declares it**, because a
-`FrameworkReference` genuinely *is* consumer-supplied (an ASP.NET Core host gets it from
-`Microsoft.NET.Sdk.Web`), which criterion 1 already admits as legitimate. Worth settling all three together.
+**And it settles `Microsoft.AspNetCore.App` the same way.** Four independent projects, no base between them,
+and `NETSDK1087` is a hard error that cannot even be `NoWarn`ed — so (B) was never available there. All four
+will record that the `FrameworkReference` is consumer-supplied, which is what an ASP.NET Core host gets from
+`Microsoft.NET.Sdk.Web` anyway; criterion 1 already admits that as a legitimate answer.
+
+**⚠ Open, and larger than this task**: the user's view is that *all* external dependencies should behave
+this way. That is a reversal of the convention TASK-229 established and TASK-230 extended, and it would
+retire `Birko.Packages.props` along with the 13 declarations already landed. Not acted on here — see the
+question at the end of this section.
 
 ## Out of scope
 
