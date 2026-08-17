@@ -9,6 +9,23 @@
     <Import_RootNamespace>Birko.Messaging.Razor</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- TASK-230/TASK-229: this project `using`s RazorLight and declared nothing. -->
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="RazorLight" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="RazorLight" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+    <!-- NOT used directly — this overrides a vulnerable TRANSITIVE. RazorLight 2.3.1 is the
+         latest release and hard-pins Microsoft.Extensions.Caching.Memory 6.0.0, which carries
+         GHSA-qj66-m88j-hmgj (high). No RazorLight bump can clear it, so per the convention
+         ("pin only where no bump clears it") a direct reference wins the resolution. Floated
+         at 10.* to match the framework TFM; drop this line if RazorLight ever moves past
+         6.0.0 on its own. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Core -->
     <Compile Include="$(MSBuildThisFileDirectory)RazorTemplateEngine.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RazorTemplateOptions.cs" />
