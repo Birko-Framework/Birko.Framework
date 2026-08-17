@@ -295,6 +295,33 @@ Built-in time-series data support (RavenDB 5.2+).
 - Easier development experience
 - Better .NET integration
 
+## Transaction boundary (TASK-240)
+
+`RavenDbUnitOfWork` opens its session with **`TransactionMode.ClusterWide`** -- a compare-exchange backed
+cluster transaction, not a single-node one. That is the stronger guarantee and also the more restrictive:
+no patching, attachments, counters or time-series inside the boundary, and conflicts surface as concurrency
+exceptions at `SaveChanges`. Which mode you get is stated on `Capabilities`, not left to be discovered.
+
+Writes and rollback are sound: a Raven session sends nothing until `SaveChanges`, so a discarded session
+leaves no trace.
+
+- **Reads do NOT see the session's own unsaved writes** -- measured against RavenDB 7.2, not assumed. A
+  session `Query` is answered by the server from indexes and never sees unsaved documents; only Load-by-id
+  consults the identity map, and that path is broken (see below). `Capabilities.ReadsSeeUncommittedWrites`
+  is therefore `false`. The framework survey originally recorded Raven as honouring the context on both
+  reads and writes -- it routes them through the session, so it looks that way -- and the live probe
+  disagreed.
+- **Load-by-id does not work at all: see TASK-241.** `StoreAsync(data)` lets Raven auto-generate the
+  document id (`TxDocs/1-A`) while every read/update/delete addresses `guid.ToString()`. Measured
+  consequences, outside any transaction: `ReadAsync(Guid)` returns `null` for a document that exists,
+  `DeleteAsync(entity)` is a **silent no-op**, and `UpdateAsync(entity)` **inserts a duplicate**. That is a
+  pre-existing data-integrity defect, not a transaction one.
+
+Pinned by `Birko.Data.RavenDB.Tests.Stores.RavenTransactionBoundaryLiveTests` (5, gated on
+`BIRKO_RAVEN_URL`; set `BIRKO_REQUIRE_LIVE` to make a skip a failure). One test deliberately pins **today's**
+read behaviour, so it fails the day TASK-241 lands and forces the capability declaration to be revisited
+rather than quietly becoming a lie.
+
 ## Maintenance
 
 ### README Updates

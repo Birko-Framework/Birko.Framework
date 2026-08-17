@@ -20,6 +20,29 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
     public bool IsActive => _session is not null;
     public IAsyncDocumentSession? Context => _session;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The session is opened with <see cref="TransactionMode.ClusterWide"/>, so the boundary is a
+    /// cluster-wide (compare-exchange backed) transaction rather than a single-node one. That is the
+    /// stronger guarantee, and it is stated here because the two modes differ in what they permit:
+    /// cluster-wide transactions do not support patching or attachments/counters/time-series, and
+    /// conflicts surface as concurrency exceptions at SaveChanges rather than being merged.
+    /// </remarks>
+    public ITransactionCapabilities Capabilities { get; } = new TransactionCapabilities(
+        TransactionAtomicity.Atomic,
+        TransactionBoundaryScope.Cluster,
+        // Measured against RavenDB 7.2, not assumed. A session query is answered by the server from
+        // indexes and therefore does NOT see documents the session has not saved yet; only Load-by-id
+        // consults the session's identity map. AsyncRavenDBStore's Load-by-id path is separately broken
+        // (TASK-241 — StoreAsync lets Raven auto-generate the document id while every read addresses
+        // guid.ToString()), so today NO read through this store sees the boundary's own writes.
+        readsSeeUncommittedWrites: false,
+        limitations: "Cluster-wide transaction: no patching, attachments, counters or time-series inside "
+                   + "the boundary; conflicts surface at SaveChanges as concurrency exceptions. Reads do "
+                   + "not see the session's unsaved writes — a session query is answered from server-side "
+                   + "indexes, and Load-by-id is unusable until TASK-241 aligns the document id with the "
+                   + "entity Guid.");
+
     /// <summary>
     /// Creates a new RavenDbUnitOfWork from a document store.
     /// </summary>
