@@ -48,17 +48,41 @@ namespace Birko.EventBus.Outbox.SQL
     {
         private readonly AsyncDataBaseBulkStore<DB, OutboxEntryModel> _store;
 
+        /// <summary>
+        /// How long an entry may sit in <c>Publishing</c> before it is presumed abandoned and offered
+        /// again.
+        /// </summary>
+        /// <remarks>
+        /// Five minutes, and unlike the job queue's equivalent this is a CHOSEN bound rather than a
+        /// derived one — <c>OutboxOptions</c> declares no publish timeout to read it off. Publishing is an
+        /// in-process dispatch to handlers, orders of magnitude shorter than five minutes in anything
+        /// observed, so the margin is generous. A handler that legitimately runs longer WILL have its
+        /// entry republished; that is within the at-least-once contract this store already documents, but
+        /// it is a real consequence rather than a theoretical one.
+        /// </remarks>
+        private readonly TimeSpan _claimTimeout;
+
+        /// <summary>
+        /// Attempts before a repeatedly-reclaimed entry is given up on. Defaults to
+        /// <c>OutboxOptions.MaxAttempts</c>'s own default so the two do not silently disagree.
+        /// </summary>
+        private readonly int _maxAttempts;
+
         /// <summary>Creates a store over the given connection settings.</summary>
-        public SqlOutboxStore(SqlSettings settings)
+        public SqlOutboxStore(SqlSettings settings, TimeSpan? claimTimeout = null, int maxAttempts = 5)
         {
             _store = new AsyncDataBaseBulkStore<DB, OutboxEntryModel>();
             _store.SetSettings(settings);
+            _claimTimeout = claimTimeout ?? TimeSpan.FromMinutes(5);
+            _maxAttempts = maxAttempts;
         }
 
         /// <summary>Creates a store over a pre-configured store instance (SQLite passes one in).</summary>
-        public SqlOutboxStore(AsyncDataBaseBulkStore<DB, OutboxEntryModel> store)
+        public SqlOutboxStore(AsyncDataBaseBulkStore<DB, OutboxEntryModel> store, TimeSpan? claimTimeout = null, int maxAttempts = 5)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _claimTimeout = claimTimeout ?? TimeSpan.FromMinutes(5);
+            _maxAttempts = maxAttempts;
         }
 
         /// <summary>The underlying store, for transaction contexts.</summary>
@@ -78,28 +102,54 @@ namespace Birko.EventBus.Outbox.SQL
             var pending = (int)OutboxStatus.Pending;
             var publishing = (int)OutboxStatus.Publishing;
 
+            var now = DateTime.UtcNow;
+
+            // TASK-451: an entry left Publishing by a processor that died is offered again once it has
+            // been held longer than the claim timeout. Without this it stayed Publishing forever - the
+            // "a claim is not a lease" limitation this store's own remarks called out.
+            var staleBefore = now - _claimTimeout;
+
             var candidates = await _store.ReadAsync(
-                filter: e => e.Status == pending,
+                filter: e => e.Status == pending
+                          || (e.Status == publishing && e.ClaimedAt != null && e.ClaimedAt < staleBefore),
                 orderBy: OrderBy<OutboxEntryModel>.By(e => e.CreatedAt),
                 limit: batchSize,
                 ct: cancellationToken).ConfigureAwait(false);
 
             var claimed = new List<OutboxEntry>();
-            var now = DateTime.UtcNow;
 
             foreach (var candidate in candidates ?? Enumerable.Empty<OutboxEntryModel>())
             {
                 var id = candidate.Guid;
                 var token = Guid.NewGuid();
+                var origin = candidate.Status;
+                var reclaiming = origin == publishing;
 
-                // Conditional on the row still being Pending, so the database serializes the write and
-                // only one processor's WHERE can match. Same shape as SqlJobQueue's dequeue claim.
+                // TASK-451: reclaiming has to be bounded, or an entry whose publish kills the processor
+                // every time is handed round forever and the failure never surfaces.
+                if (reclaiming && candidate.Attempts + 1 >= _maxAttempts)
+                {
+                    candidate.Attempts += 1;
+                    candidate.Status = (int)OutboxStatus.Failed;
+                    candidate.ClaimToken = null;
+                    candidate.ClaimedAt = null;
+                    candidate.LastError = $"Abandoned: held in Publishing for longer than {_claimTimeout} "
+                        + $"after {candidate.Attempts} attempt(s), and the attempt budget is spent.";
+                    await _store.UpdateAsync(candidate, ct: cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                // Conditional on the row still being in the status we read it in, so the database
+                // serializes the write and only one processor's WHERE can match. Same shape as
+                // SqlJobQueue's dequeue claim.
                 await _store.UpdateAsync(
-                    filter: e => e.Guid == id && e.Status == pending,
+                    filter: e => e.Guid == id && e.Status == origin,
                     updates: new PropertyUpdate<OutboxEntryModel>()
                         .Set(e => e.Status, publishing)
                         .Set(e => e.ClaimToken, token)
-                        .Set(e => e.ClaimedAt, now),
+                        .Set(e => e.ClaimedAt, now)
+                        // A redelivery is counted, or the attempt budget above could never run out.
+                        .Set(e => e.Attempts, reclaiming ? candidate.Attempts + 1 : candidate.Attempts),
                     ct: cancellationToken).ConfigureAwait(false);
 
                 // The API exposes no rows-affected count, so the token is how we learn whether we won.
