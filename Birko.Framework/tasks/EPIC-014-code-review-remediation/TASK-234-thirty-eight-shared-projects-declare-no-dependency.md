@@ -76,10 +76,62 @@ measured:
 **Do it in batches by package, not all at once** — one package, its dependents, verify, commit. A single
 sweep of 38 would produce a change set whose failures cannot be attributed.
 
+### ⚠ Re-measured 2026-08-17 — **only 15 of the 38 may declare; for the other 23 declaring is the defect**
+
+The count reproduces exactly (38 projects, 40 project×package pairs — two projects need two packages each,
+which is why the table above sums to 40 while the headline says 38). What does *not* survive re-measurement
+is the assumption that all 38 should end up with a declaration.
+
+**23 of the 38 are satellites of a base `.projitems` that already declares the package**, and a shared
+project cannot express "I depend on that other shared project" — the consumer imports both, so both
+declarations land in one project file. Measured, not inferred: adding the Cosmos declaration to
+`Birko.Data.CosmosDB.Views` and building `Birko.Data.CosmosDB.Views.Tests` gives
+
+```
+error NU1504: Duplicate 'PackageReference' items found. … Microsoft.Azure.Cosmos 3.*, Microsoft.Azure.Cosmos 3.*
+```
+
+— an **error** under the `-warnaserror` that `verify-conventions` runs, which is Approach point 3 arriving
+from the other direction. Every satellite was checked against the test tree and **every one is imported
+alongside its base**, which is structural rather than incidental: a `.Views` / `.ViewModel` / `Migrations.*`
+/ `Sync.*` project extends the base store and cannot function without it.
+
+| | Projects | Action |
+|---|---|---|
+| **Declare** (base or standalone) | **15** (17 pairs) | the actual work |
+| **Do not declare** (base covers it) | **23** | record the pairing in the `.projitems`, per criterion 1 |
+
+The 15 that declare:
+
+| Package | Projects |
+|---|---|
+| `NEST` | `Birko.Data.ElasticSearch` — **the base itself is undeclared**, so its 6 satellites are blocked on it |
+| `StackExchange.Redis` | `Birko.Redis` (base, undeclared) · `Birko.Health.Redis` (uses the driver directly and imports no base) |
+| `Microsoft.AspNetCore.App` | `Birko.Communication.AspNetCore` · `Birko.Communication.WebSocket` · `Birko.Security.AspNetCore` · `Birko.Telemetry` |
+| `Microsoft.IdentityModel.Tokens` | `Birko.Security.AspNetCore` · `Birko.Security.Jwt` |
+| `System.IdentityModel.Tokens.Jwt` | `Birko.Security.Jwt` |
+| `Grpc.Net.Client` / `Grpc.AspNetCore` | `Birko.Communication.gRPC` · `Birko.Communication.gRPC.Server` |
+| `InfluxDB.Client` | `Birko.Data.Migrations.InfluxDB` — the one `Migrations.*` that does **not** import its base |
+| `MQTTnet` · `Newtonsoft.Json` · `protobuf-net` · `YamlDotNet` | `Birko.MessageQueue.MQTT` · `.Serialization.Newtonsoft` · `.Serialization.Protobuf` · `.Serialization.Yaml` |
+
+**`Birko.Data.ElasticSearch` and `Birko.Redis` declare nothing at all**, which contradicts TASK-229's
+summary that "all 8 storage backends declare their own driver" — those two were not among its 8. They are
+the highest-value items here, because each unblocks a family (6 and 3 satellites respectively).
+
+**Order follows from that**: base first, then record its satellites in the same batch. Doing a satellite
+first produces either a duplicate or a declaration that has to be taken out again.
+
+**Ordering caveat for the `FrameworkReference` batch**: `NETSDK1087` is a hard error rather than NU1504's
+warning-promoted-to-error, so those 4 break every importer that also declares one, in the same change —
+Approach point 4 already says so, and it is the batch to do last, not first.
+
 ## Acceptance criteria
 
 - [ ] Each of the 38 either declares its dependency, or records why it should not (a genuinely
-      consumer-supplied choice is a legitimate answer — say so rather than declaring blindly)
+      consumer-supplied choice is a legitimate answer — say so rather than declaring blindly).
+      **Re-measured: that split is 15 declare / 23 record** — see the boxed section above. For the 23, the
+      record goes in the `.projitems` itself, naming the base whose declaration covers it, because a
+      comment in a task file is not where the next person looks
 - [ ] Every declaration is in the dual `$(ManagePackageVersionsCentrally)` form, with its `PackageVersion`
       added to `Birko.Packages.props` in the same change
 - [ ] Dependents' duplicate declarations removed in the same change as the declaration that duplicates them
