@@ -325,6 +325,35 @@ this task's — an over-declaration rather than a missing one. Worth a sweep of 
 done, because `Birko.Packages.props` carries a `PackageVersion` for that same package
 (`Birko.Data.Repositories`), so the shared project may be declaring something net10 provides.
 
+### ✅ Batches 4–8 — RavenDB, Cosmos, Npgsql, InfluxDB and the four singles, 2026-08-17
+
+Done together because the settled rule made every one of them mechanical. **483 tests green** across 19
+suites, `-warnaserror` clean; Sandbox and a CPM probe build clean.
+
+| Batch | Package | Shape |
+|---|---|---|
+| 4 | `RavenDB.Client` | 4 satellites record the pairing; base already declared |
+| 5 | `Microsoft.Azure.Cosmos` | 4 satellites record the pairing; base already declared |
+| 6 | `Npgsql` | `Birko.Data.TimescaleDB` records it — `TimescaleDBConnector` derives from `PostgreSQLConnector` |
+| 7 | `InfluxDB.Client` | `Birko.Data.Migrations.InfluxDB` documents it — **second carve-out** |
+| 8 | `MQTTnet` `Newtonsoft.Json` `protobuf-net` `YamlDotNet` | **4 new declarations**, each the sole user of its package |
+
+- **The second carve-out was predicted by the rule and confirmed by measurement, not assumed.**
+  `Birko.Data.Migrations.InfluxDB` references no type from `Birko.Data.InfluxDB` and its own test project
+  does not import it, yet `Birko.Sandbox` imports both — exactly `Birko.Health.Redis`'s shape. Two of 38 is
+  the size of the exception; the rule covers the other 36.
+- **Batch 8's four are the only genuinely new declarations left in the task**, and all four were clean:
+  sole user, no sibling, no independent user. `MQTTnet 4.*` (4.3.7 is the last 4.x — 5.x is an API break),
+  `Newtonsoft.Json 13.*`, `protobuf-net 3.*`, `YamlDotNet 16.*`.
+- **CPM verified for three of the four** — a synthetic CPM consumer importing the three serialization
+  projects resolves `Newtonsoft.Json 13.0.4`, `YamlDotNet 16.3.0`, `protobuf-net 3.3.21`. **MQTTnet's CPM
+  path was not probed directly**; its `PackageVersion` sits in the same file with the same shape, and
+  NU1010's failure mode is a *missing* entry, but that is an argument rather than a measurement and is
+  recorded as such.
+- **The `--` hazard from TASK-238 now has a guard in the tooling** — the comment generator asserts no `--`
+  in the comment *body* (the first version of that check fired on `<!--` itself, which is why the assertion
+  is on the body rather than the whole string).
+
 ## Out of scope
 
 - The 13 already done — [[TASK-229]] (10) and [[TASK-230]] (3).

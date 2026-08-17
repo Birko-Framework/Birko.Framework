@@ -37,22 +37,26 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="InfluxDB.Client" Version="5.*" />                                   <!-- Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems -->
-    <PackageVersion Include="MessagePack" Version="3.*" />                                       <!-- Birko.Serialization.MessagePack\Birko.Serialization.MessagePack.projitems -->
-    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.*" />                            <!-- Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems -->
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.*" />                          <!-- Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems -->
-    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.*" />                            <!-- Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems -->
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.*" />              <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" /><!-- Birko.Data.Repositories\Birko.Data.Repositories.projitems -->
-    <PackageVersion Include="MongoDB.Driver" Version="3.*" />                                    <!-- Birko.Data.MongoDB\Birko.Data.MongoDB.projitems -->
-    <PackageVersion Include="MySqlConnector" Version="2.*" />                                    <!-- Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems -->
-    <PackageVersion Include="NEST" Version="7.*" />                                              <!-- Birko.Data.ElasticSearch\Birko.Data.ElasticSearch.projitems -->
-    <PackageVersion Include="Npgsql" Version="10.*" />                                           <!-- Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems -->
-    <PackageVersion Include="OpenTelemetry" Version="1.*" />                                     <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />                  <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
-    <PackageVersion Include="RavenDB.Client" Version="7.*" />                                    <!-- Birko.Data.RavenDB\Birko.Data.RavenDB.projitems -->
-    <PackageVersion Include="RazorLight" Version="2.*" />                                        <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
-    <PackageVersion Include="StackExchange.Redis" Version="2.*" />                               <!-- Birko.Redis\Birko.Redis.projitems -->
+    <PackageVersion Include="InfluxDB.Client" Version="5.*" />                                        <!-- Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems -->
+    <PackageVersion Include="MessagePack" Version="3.*" />                                            <!-- Birko.Serialization.MessagePack\Birko.Serialization.MessagePack.projitems -->
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.*" />                                 <!-- Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems -->
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.*" />                               <!-- Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.*" />                                 <!-- Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems -->
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.*" />                   <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" /> <!-- Birko.Data.Repositories\Birko.Data.Repositories.projitems -->
+    <PackageVersion Include="MongoDB.Driver" Version="3.*" />                                         <!-- Birko.Data.MongoDB\Birko.Data.MongoDB.projitems -->
+    <PackageVersion Include="MQTTnet" Version="4.*" />                                                <!-- Birko.MessageQueue.MQTT\Birko.MessageQueue.MQTT.projitems -->
+    <PackageVersion Include="MySqlConnector" Version="2.*" />                                         <!-- Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems -->
+    <PackageVersion Include="NEST" Version="7.*" />                                                   <!-- Birko.Data.ElasticSearch\Birko.Data.ElasticSearch.projitems -->
+    <PackageVersion Include="Newtonsoft.Json" Version="13.*" />                                       <!-- Birko.Serialization.Newtonsoft\Birko.Serialization.Newtonsoft.projitems -->
+    <PackageVersion Include="Npgsql" Version="10.*" />                                                <!-- Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems -->
+    <PackageVersion Include="OpenTelemetry" Version="1.*" />                                          <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />                       <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
+    <PackageVersion Include="protobuf-net" Version="3.*" />                                           <!-- Birko.Serialization.Protobuf\Birko.Serialization.Protobuf.projitems -->
+    <PackageVersion Include="RavenDB.Client" Version="7.*" />                                         <!-- Birko.Data.RavenDB\Birko.Data.RavenDB.projitems -->
+    <PackageVersion Include="RazorLight" Version="2.*" />                                             <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
+    <PackageVersion Include="StackExchange.Redis" Version="2.*" />                                    <!-- Birko.Redis\Birko.Redis.projitems -->
+    <PackageVersion Include="YamlDotNet" Version="16.*" />                                            <!-- Birko.Serialization.Yaml\Birko.Serialization.Yaml.projitems -->
   </ItemGroup>
 
 </Project>
