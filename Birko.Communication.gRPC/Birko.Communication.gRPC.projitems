@@ -9,6 +9,17 @@
     <Import_RootNamespace>Birko.Communication.gRPC</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Conditioning on
+         the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps Grpc.Net.Client and owns it. Birko.Communication.gRPC.Server declares
+         Grpc.AspNetCore instead — a different package for the server half, so the two never collide
+         even where both are imported (TASK-234). -->
+    <PackageReference Include="Grpc.Net.Client" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Grpc.Net.Client" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)GrpcSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)GrpcChannelPool.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)GrpcClientFactory.cs" />
