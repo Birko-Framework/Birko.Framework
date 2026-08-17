@@ -9,7 +9,7 @@
     <Import_RootNamespace>Birko.Data.InfluxDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="InfluxDB.Client" Version="5.0.0" />
+    <PackageReference Include="InfluxDB.Client" Version="5.*" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)InfluxDB\InfluxDBClient.cs" />
