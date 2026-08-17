@@ -90,6 +90,29 @@ namespace Birko.Data.MongoDB.Stores
         // ReadAsync(filter) → ReadCoreAsync with correct init/cancellation behavior.
 
         /// <inheritdoc />
+
+        /// <summary>
+        /// Starts a find that participates in <see cref="TransactionContext"/> when one is set.
+        /// </summary>
+        /// <remarks>
+        /// TASK-240. Every read used to go straight to <c>Collection.Find(...)</c> with no session, so
+        /// inside a transaction a caller could not see its own uncommitted writes — read-then-write logic
+        /// got the pre-transaction snapshot. That is a wrong answer rather than a missing feature, and it
+        /// was invisible because the write paths did pass the session, so the store looked transactional.
+        /// </remarks>
+        private IFindFluent<T, T> FindIn(FilterDefinition<T> filter)
+            => TransactionContext != null
+                ? Collection.Find(TransactionContext, filter)
+                : Collection.Find(filter);
+
+        /// <summary>
+        /// Counts within <see cref="TransactionContext"/> when one is set. See <see cref="FindIn"/>.
+        /// </summary>
+        private Task<long> CountIn(FilterDefinition<T> filter, CancellationToken ct)
+            => TransactionContext != null
+                ? Collection.CountDocumentsAsync(TransactionContext, filter, null, ct)
+                : Collection.CountDocumentsAsync(filter, null, ct);
+
         protected override async Task<T?> ReadCoreAsync(Expression<Func<T, bool>>? filter = null, CancellationToken ct = default)
         {
             // TASK-218: on .NET 9+ an array's `set.Contains(x.Col)` binds to
@@ -106,10 +129,10 @@ namespace Birko.Data.MongoDB.Stores
 
             if (filter == null)
             {
-                return await Collection.Find(FilterDefinition<T>.Empty).FirstOrDefaultAsync(ct);
+                return await FindIn(FilterDefinition<T>.Empty).FirstOrDefaultAsync(ct);
             }
 
-            return await Collection.Find(filter).FirstOrDefaultAsync(ct);
+            return await FindIn(filter).FirstOrDefaultAsync(ct);
         }
 
         /// <summary>
@@ -122,9 +145,7 @@ namespace Birko.Data.MongoDB.Stores
                 return await Task.FromResult(Enumerable.Empty<T>());
             }
 
-            var filter = Builders<T>.Filter.Empty;
-            var cursor = await Collection.FindAsync(filter, null, ct);
-            return await cursor.ToListAsync(ct);
+            return await FindIn(Builders<T>.Filter.Empty).ToListAsync(ct);
         }
 
         /// <inheritdoc />
@@ -138,10 +159,10 @@ namespace Birko.Data.MongoDB.Stores
 
             if (filter == null)
             {
-                return await Collection.CountDocumentsAsync(FilterDefinition<T>.Empty, null, ct);
+                return await CountIn(FilterDefinition<T>.Empty, ct);
             }
 
-            return await Collection.CountDocumentsAsync(filter, null, ct);
+            return await CountIn(filter, ct);
         }
 
         /// <inheritdoc />
@@ -258,7 +279,7 @@ namespace Birko.Data.MongoDB.Stores
             }
             filter = Data.Expressions.SpanContains.Rewrite(filter);   // TASK-218 — see above
 
-            var query = Collection.Find(filter ?? FilterDefinition<T>.Empty);
+            var query = FindIn(filter ?? FilterDefinition<T>.Empty);
 
             if (orderBy?.Fields.Count > 0)
             {

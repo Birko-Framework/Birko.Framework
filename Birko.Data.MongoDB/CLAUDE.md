@@ -263,6 +263,36 @@ using (var session = Client.StartSession())
 - Real-time analytics
 - Time-series data (with appropriate schema)
 
+## Transaction boundary (TASK-240)
+
+`MongoDbUnitOfWork` gives an **atomic, cluster-scoped** boundary, and both reads and writes honour it.
+
+```csharp
+await using var uow = MongoDbUnitOfWork.FromStore(store);
+await uow.BeginAsync();
+store.SetTransactionContext(uow.Context);   // per-store instance state - safe while the store is per-scope
+try { await store.CreateAsync(a); await store.CreateAsync(b); await uow.CommitAsync(); }
+finally { store.SetTransactionContext(null); }
+```
+
+- **Requires a replica set or sharded cluster.** Against a standalone `mongod` `BeginAsync` succeeds and
+  the first write fails at runtime, not at startup. `Capabilities.RequiresServerTopology` is `true` so a
+  caller can discover this without hitting it. Start one with
+  `docker run -d -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all` then `mongosh --eval "rs.initiate()"`.
+- **Reads join the session as of TASK-240.** Every read path -- `ReadCoreAsync` (both overloads),
+  `CountCoreAsync`, `ReadAllAsync` -- used to call `Collection.Find(...)` with **no session**, so a caller
+  inside a transaction could not see its own uncommitted writes and read-then-write logic silently used the
+  pre-transaction snapshot. The write paths *did* pass the session, which is exactly what made the store
+  look transactional. They now go through the `FindIn` / `CountIn` helpers, which is the one place that
+  decision is made.
+- Create the collection **before** opening the transaction; implicit collection creation inside one fails
+  on older servers, and it fails for the wrong reason.
+
+Pinned by `Birko.Data.MongoDB.Tests.Stores.MongoTransactionBoundaryLiveTests` (6, gated on
+`BIRKO_MONGO_HOST`; set `BIRKO_REQUIRE_LIVE` to make a skip a failure). Its first test asserts the server
+really is a replica set, so nothing below it can be a vacuous pass. Mutation-tested: unwiring the session
+from the read helpers fails 2 of 97.
+
 ## Limitations
 - No foreign key constraints
 - Document size limit (16MB)

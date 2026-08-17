@@ -19,6 +19,22 @@ public sealed class MongoDbUnitOfWork : IUnitOfWork<IClientSessionHandle>
     public bool IsActive => _session?.IsInTransaction ?? false;
     public IClientSessionHandle? Context => _session;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Multi-document transactions require a replica set or a sharded cluster. Against a standalone
+    /// <c>mongod</c> <see cref="BeginAsync"/> succeeds and the first write fails at runtime — which is why
+    /// <see cref="ITransactionCapabilities.RequiresServerTopology"/> is stated rather than assumed.
+    /// Reads issued through <c>AsyncMongoDBStore</c> inside the session see the session's own uncommitted
+    /// writes (TASK-240); before that fix they silently bypassed it.
+    /// </remarks>
+    public ITransactionCapabilities Capabilities { get; } = new TransactionCapabilities(
+        TransactionAtomicity.Atomic,
+        TransactionBoundaryScope.Cluster,
+        readsSeeUncommittedWrites: true,
+        requiresServerTopology: true,
+        limitations: "Requires a replica set or sharded cluster. Against a standalone mongod the "
+                   + "transaction fails at first write, not at BeginAsync.");
+
     /// <summary>
     /// Creates a new MongoDbUnitOfWork from a MongoClient.
     /// </summary>
