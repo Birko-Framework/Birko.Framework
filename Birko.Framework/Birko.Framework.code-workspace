@@ -433,6 +433,10 @@
 			"path": "../Birko.EventBus.Outbox"
 		},
 		{
+			"name": "EventBus / Birko.EventBus.Outbox.SQL",
+			"path": "../Birko.EventBus.Outbox.SQL"
+		},
+		{
 			"name": "EventBus / Birko.EventBus.Tenant",
 			"path": "../Birko.EventBus.Tenant"
 		},
@@ -1035,6 +1039,10 @@
 		{
 			"name": "Tests / Birko.EventBus.Outbox.Tests",
 			"path": "../../Framework.Tests/Birko.EventBus.Outbox.Tests"
+		},
+		{
+			"name": "Tests / Birko.EventBus.Outbox.SQL.Tests",
+			"path": "../../Framework.Tests/Birko.EventBus.Outbox.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.EventBus.Tenant.Tests",

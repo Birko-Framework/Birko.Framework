@@ -16,14 +16,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 118                 |
+| todo         | —                  | —                  | 117                 |
 | in-progress  | 6                  | 10                 | 1                   |
-| review       | —                  | —                  | 9                   |
+| review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
 | done         | 1                  | 22                 | 72                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 28 · P2 83 · P3 7**
+Todo by priority: **P0 0 · P1 27 · P2 83 · P3 7**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -72,6 +72,11 @@ Todo by priority: **P0 0 · P1 28 · P2 83 · P3 7**
 > or tests it. The only such project of 341 swept. **TASK-232** (P2, decision) — `IJobLockProvider` is
 > implemented by both existing providers, but only 2 of 8 job backends can supply one, and nothing consumes
 > the interface yet.
+>
+> Adjusted again 2026-08-17 (TASK-231 to review): todo 118 -> 117, review 9 -> 10, P1 28 -> 27. Registered
+> in all four places, 17 tests written, and the first-ever build of `Birko.EventBus.Outbox.SQL` succeeded.
+> Held at `review` rather than `done` because the Sandbox aggregator import is machine-local until
+> **TASK-228** tracks that repo — every other criterion is committed.
 
 ## In progress now
 

@@ -71,11 +71,19 @@ where a human is present to judge it. Making it a global error would break every
 with floating versions, could break any build at any time from an upstream publication nobody chose.
 
 ## Solution & Workspace Registration
-When adding a new project, register in both:
+When adding a new project, register in **all four**:
 
 1. **`Birko.Framework.slnx`** — Add `<Project>` in the appropriate `<Folder>`. Shared projects use `.shproj`, test projects use `.csproj`. Paths relative to `.slnx`.
 
-2. **`Birko.Framework.code-workspace`** — Add folder entry with `"Group / Birko.ProjectName"` name convention. Keep entries sorted alphabetically.
+2. **`Birko.Framework.code-workspace`** — Add folder entry with `"Group / Birko.ProjectName"` name convention. Keep entries sorted alphabetically. **A test project needs its own entry too**, under the `Tests /` group — the `.slnx` and the workspace are separate lists and it is easy to add to one and not the other.
+
+3. **A sibling `Birko.{ProjectName}.Tests` project** in `Framework.Tests/`, importing the new `.projitems`. This is not only about coverage: a shared project is `.shproj`/`.projitems` and **cannot build on its own**, so until something imports it, *nothing in the family compiles it*. The test project is the cheapest thing that does, and it is tracked in its own repo.
+
+4. **The build-validation aggregator** (`Consumers/Birko.Sandbox/Birko.Framework/Birko.Framework.csproj`) — add the `<Import>` beside its siblings, so the project is compiled by the smoke harness as well as by its tests.
+
+> **Why steps 3 and 4 are listed.** `Birko.EventBus.Outbox.SQL` was added with steps 1 and 2 missed and steps 3 and 4 absent, so a finished project — own repo, `IOutboxStore` implemented — was **compiled by nothing and tested by nothing** for as long as it existed. It happened to still build when this was found, which is luck, not a guarantee: a change to its interface or to `Birko.Data.SQL` would have broken it silently. See [[TASK-231]].
+>
+> Verify with a sweep rather than by eye — every project directory under `Framework/` and `Framework.Tests/` holding a `.shproj` or `.csproj` should appear in both the `.slnx` and the `.code-workspace`. As of 2026-08-17 that is **342 of 342**.
 
 Existing folder groups:
 - **BackgroundJobs/** — Birko.BackgroundJobs.*
