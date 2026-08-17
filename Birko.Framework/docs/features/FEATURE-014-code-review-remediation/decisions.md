@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -171,3 +171,21 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   EPIC-001 rather than here — deliberately not moved on a guess. **DV5 cannot distinguish deliberate
   parentlessness from an oversight**, and prose rationales inside task bodies are not machine-readable;
   giving it a marker is a [[roadmap]] skill change, recorded rather than improvised.
+- 2026-08-17 — **D11 gains [[TASK-236]] and [[TASK-237]]**, both backfilled at creation and both split out
+  of [[TASK-232]], which closed `done`. Inside D11's scope, no new decision row.
+  TASK-232 was filed as "which of the six remaining job backends should get a lock provider" and the
+  question underneath it turned out to be prior: **the two existing providers did not implement the same
+  contract**, while `IJobLockProvider` had been introduced that morning specifically to declare them
+  substitutable. One call meant three things — SQL/PostgreSQL ignored `timeout`, SQL/MSSql+MySQL waited on
+  it, and Redis used it as the key's expiry, **releasing the lock while the holder was still working**.
+  **Three user decisions, 2026-08-17:** split the durations (`acquireTimeout` + `leaseDuration?`); keep
+  session semantics *and* expose `IsLeaseBased`, with Redis renewing its lease on a heartbeat; and adopt
+  leader election rather than a per-decision lock. The breaking signature change was taken now because the
+  interface had **zero consumers** — a window that closes on first adoption.
+  TASK-237 carries the leader election, and records why the per-decision alternative was rejected: with a
+  lock it cannot work, because a late process finds the lock free and duplicates — *"has this occurrence
+  already been enqueued"* is an idempotency question, whose right answer is a unique key on the queue and
+  would serve all eight backends rather than the two that can express a lock. TASK-236 carries the six
+  missing providers, and flags that this task's own first guess about `JSON`/`XML` may be **backwards**: an
+  OS file lock is released by the kernel on process death, which is genuine session semantics — the one
+  guarantee none of the document stores can offer.

@@ -16,14 +16,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 116                 |
+| todo         | —                  | —                  | 117                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 2                   |
-| done         | 1                  | 22                 | 75                  |
+| done         | 1                  | 22                 | 76                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 82 · P3 8**
+Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -90,6 +90,31 @@ Todo by priority: **P0 0 · P1 26 · P2 82 · P3 8**
 > projects build clean. The float cleared **29 of 44** advisory findings with no per-project edit, and
 > exposed two further undeclared dependencies plus a defect in `audit-dependencies.ps1` (a failed restore
 > read as "clean"). Spawned **TASK-233** (P3) — Cosmos may no longer need the span rewrite.
+>
+> **Recounted from the tree 2026-08-17**, covering four closes whose narrative notes were lost: their count
+> edits landed but three of the four prose notes silently failed to apply, so this replaces them rather than
+> reconstructing each. Current totals: **207 tasks — todo 117, in-progress 1, review 10, blocked 2, done 76,
+> cancelled 1**, summing to 207 exactly.
+>
+> - **TASK-230** (advisories) — three of four cleared: MessagePack -> 3.1.8, OpenTelemetry -> 1.17.0,
+>   Caching.Memory -> 10.0.11. The fourth, `Tmds.DBus.Protocol`, has **no fix Avalonia supports** (only
+>   0.94.2 is clean; even Avalonia 11.3.20 ships 0.21.3) and is recorded as accepted exposure. The float
+>   also collided with **Central Package Management** — 14 projects in three CPM consumers became
+>   unrestorable — fixed with dual conditioned declarations plus a new `Birko.Packages.props`. Family audit
+>   for the whole thread: **44 findings / 37 projects -> 11 / 9**, all remaining ones consumer-owned.
+> - **TASK-234 / TASK-235** filed — 38 more shared projects still declare no dependency they use, and a
+>   consumer (`FisData.Stock.Angular.Server`) will hit `NETSDK1087` once its net10 migration builds.
+> - **DV5 halved: 33 loose tasks -> 21.** Twelve framework Data/SQL defects re-homed to EPIC-014, which now
+>   reports **42/98**. Among them **TASK-204, a P0 in `review`** that had appeared in no feature rollup and
+>   no sign-off callout — which is how it sat unnoticed for five days. The remaining 21 are mostly
+>   legitimate, and **DV5 cannot tell a deliberate orphan from an oversight**; that needs a marker in the
+>   shared skill.
+> - **TASK-232** (job locks) — filed as "which backends need a provider", and the prior question was that
+>   the two existing ones **disagreed**: Redis used its `timeout` argument as the key's expiry and was
+>   **releasing locks while the holder was still working**. Durations split, session semantics kept, Redis
+>   renews on a heartbeat, `IsLeaseBased` exposed. No test had ever touched a lock provider — 15 added, both
+>   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
+>   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
 
 ## In progress now
 
