@@ -158,6 +158,16 @@ public class AsyncRavenDBStore<T>
 
     #region Core CRUD Operations - Single Item
 
+    /// <summary>
+    /// The RavenDB document id for a canonical entity <see cref="Guid"/>.
+    /// </summary>
+    /// <remarks>
+    /// TASK-241. Every write, read, update and delete in this class goes through here, so the id the
+    /// writer creates and the id the reader asks for cannot disagree. See <see cref="RavenDocumentId"/>
+    /// for what went wrong when they did.
+    /// </remarks>
+    private string IdOf(Guid guid) => RavenDocumentId.For(_documentStore!, typeof(T), guid);
+
     /// <inheritdoc />
     protected override async Task<Guid> CreateCoreAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
@@ -171,12 +181,12 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            await TransactionContext.StoreAsync(data, ct);
+            await TransactionContext.StoreAsync(data, IdOf(data.Guid.Value), ct);
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        await session.StoreAsync(data, ct);
+        await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
         await session.SaveChangesAsync(ct);
 
         return data.Guid.Value;
@@ -196,11 +206,11 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            return await TransactionContext.LoadAsync<T>(guid.ToString(), ct);
+            return await TransactionContext.LoadAsync<T>(IdOf(guid), ct);
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        return await session.LoadAsync<T>(guid.ToString(), ct);
+        return await session.LoadAsync<T>(IdOf(guid), ct);
     }
 
     /// <inheritdoc />
@@ -243,24 +253,24 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            var existing = await TransactionContext.LoadAsync<T>(data.Guid.Value.ToString(), ct);
+            var existing = await TransactionContext.LoadAsync<T>(IdOf(data.Guid.Value), ct);
             if (existing != null)
             {
                 TransactionContext.Advanced.Evict(existing);
             }
-            await TransactionContext.StoreAsync(data, ct);
+            await TransactionContext.StoreAsync(data, IdOf(data.Guid.Value), ct);
             return;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        var existingItem = await session.LoadAsync<T>(data.Guid.Value.ToString(), ct);
+        var existingItem = await session.LoadAsync<T>(IdOf(data.Guid.Value), ct);
 
         if (existingItem != null)
         {
             session.Advanced.Evict(existingItem);
         }
 
-        await session.StoreAsync(data, ct);
+        await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
         await session.SaveChangesAsync(ct);
     }
 
@@ -274,12 +284,12 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            TransactionContext.Delete(data.Guid.Value.ToString());
+            TransactionContext.Delete(IdOf(data.Guid.Value));
             return;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        session.Delete(data.Guid.Value.ToString());
+        session.Delete(IdOf(data.Guid.Value));
         await session.SaveChangesAsync(ct);
     }
 
@@ -322,6 +332,12 @@ public class AsyncRavenDBStore<T>
     /// <inheritdoc />
     public override async Task<Guid> SaveAsync(T data, StoreDataDelegate<T>? processDelegate = null, CancellationToken ct = default)
     {
+        // This overrides the PUBLIC wrapper, so it has to run the lazy-init + cancellation gate itself —
+        // the same slip CR-H077 fixed for ReadAsync(Guid) in this class. Without it a Save as the first
+        // operation on a store threw DatabaseDoesNotExistException instead of creating the database.
+        // Found by TASK-241's upsert regression test; unrelated to the document id, and fixed here
+        // because it is one line in a method that change already touches.
+        await EnsureInitializedAsync(ct);
         if (_documentStore == null || data == null)
         {
             return Guid.Empty;
@@ -336,12 +352,12 @@ public class AsyncRavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            await TransactionContext.StoreAsync(data, ct);
+            await TransactionContext.StoreAsync(data, IdOf(data.Guid.Value), ct);
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenAsyncSession();
-        await session.StoreAsync(data, ct);
+        await session.StoreAsync(data, IdOf(data.Guid.Value), ct);
         await session.SaveChangesAsync(ct);
 
         return data.Guid.Value;
@@ -435,7 +451,7 @@ public class AsyncRavenDBStore<T>
                 if (item == null) continue;
                 item.Guid = Guid.NewGuid();
                 storeDelegate?.Invoke(item);
-                await TransactionContext.StoreAsync(item, ct);
+                await TransactionContext.StoreAsync(item, IdOf(item.Guid.Value), ct);
             }
             return;
         }
@@ -452,7 +468,7 @@ public class AsyncRavenDBStore<T>
             item.Guid = Guid.NewGuid();
             storeDelegate?.Invoke(item);
 
-            await bulkInsert.StoreAsync(item);
+            await bulkInsert.StoreAsync(item, IdOf(item.Guid.Value));
         }
     }
 
@@ -476,13 +492,13 @@ public class AsyncRavenDBStore<T>
 
                 storeDelegate?.Invoke(item);
 
-                var existing = await session.LoadAsync<T>(item.Guid.Value.ToString(), ct);
+                var existing = await session.LoadAsync<T>(IdOf(item.Guid.Value), ct);
                 if (existing != null)
                 {
                     session.Advanced.Evict(existing);
                 }
 
-                await session.StoreAsync(item, ct);
+                await session.StoreAsync(item, IdOf(item.Guid.Value), ct);
             }
 
             if (TransactionContext == null)
@@ -517,7 +533,7 @@ public class AsyncRavenDBStore<T>
                     continue;
                 }
 
-                session.Delete(item.Guid.Value.ToString());
+                session.Delete(IdOf(item.Guid.Value));
             }
 
             if (TransactionContext == null)

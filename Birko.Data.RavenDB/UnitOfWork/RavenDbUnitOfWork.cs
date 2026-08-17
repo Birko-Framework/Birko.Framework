@@ -31,17 +31,22 @@ public sealed class RavenDbUnitOfWork : IUnitOfWork<IAsyncDocumentSession>
     public ITransactionCapabilities Capabilities { get; } = new TransactionCapabilities(
         TransactionAtomicity.Atomic,
         TransactionBoundaryScope.Cluster,
-        // Measured against RavenDB 7.2, not assumed. A session query is answered by the server from
-        // indexes and therefore does NOT see documents the session has not saved yet; only Load-by-id
-        // consults the session's identity map. AsyncRavenDBStore's Load-by-id path is separately broken
-        // (TASK-241 — StoreAsync lets Raven auto-generate the document id while every read addresses
-        // guid.ToString()), so today NO read through this store sees the boundary's own writes.
+        // Measured against RavenDB 7.2, not assumed, and deliberately CONSERVATIVE.
+        //
+        // Raven splits here and a single bool cannot say both halves, so it says the one a caller is
+        // unsafe to get wrong. ReadAsync(Guid) — Load-by-id — DOES see the session's unsaved writes as of
+        // TASK-241, which aligned the document id with the entity Guid. Every other read does not: a
+        // session query is answered by the server from indexes, so ReadAsync(filter), Read(), ReadFirst
+        // and Count all return the pre-transaction state. Those are the common case, so declaring true
+        // here would tell a caller its read-then-write logic is covered when usually it is not.
+        //
+        // The query half is a RavenDB property rather than a defect, and is not fixable from this side.
         readsSeeUncommittedWrites: false,
         limitations: "Cluster-wide transaction: no patching, attachments, counters or time-series inside "
-                   + "the boundary; conflicts surface at SaveChanges as concurrency exceptions. Reads do "
-                   + "not see the session's unsaved writes — a session query is answered from server-side "
-                   + "indexes, and Load-by-id is unusable until TASK-241 aligns the document id with the "
-                   + "entity Guid.");
+                   + "the boundary; conflicts surface at SaveChanges as concurrency exceptions. Reads are "
+                   + "split: Load-by-id (ReadAsync(Guid)) sees the session's unsaved writes, but every "
+                   + "query-based read — ReadAsync(filter), Read(), ReadFirst, Count — is answered from "
+                   + "server-side indexes and returns the pre-transaction state.");
 
     /// <summary>
     /// Creates a new RavenDbUnitOfWork from a document store.

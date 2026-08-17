@@ -20,6 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\RavenDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Repositories\AsyncRavenDBModelRepository.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Expressions\RavenFilterRewriter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDocumentId.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\RavenDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Stores\AsyncRavenDBStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\RavenDbUnitOfWork.cs" />

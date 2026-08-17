@@ -154,6 +154,16 @@ public class RavenDBStore<T>
 
     #region Core CRUD Operations - Single Item
 
+    /// <summary>
+    /// The RavenDB document id for a canonical entity <see cref="Guid"/>.
+    /// </summary>
+    /// <remarks>
+    /// TASK-241. Every write, read, update and delete in this class goes through here, so the id the
+    /// writer creates and the id the reader asks for cannot disagree. See <see cref="RavenDocumentId"/>
+    /// for what went wrong when they did.
+    /// </remarks>
+    private string IdOf(Guid guid) => RavenDocumentId.For(_documentStore!, typeof(T), guid);
+
     /// <inheritdoc />
     protected override Guid CreateCore(T data, StoreDataDelegate<T>? storeDelegate = null)
     {
@@ -164,12 +174,12 @@ public class RavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            TransactionContext.Store(data);
+            TransactionContext.Store(data, IdOf(data.Guid.Value));
             return data.Guid.Value;
         }
 
         using var session = _documentStore.OpenSession();
-        session.Store(data);
+        session.Store(data, IdOf(data.Guid.Value));
         session.SaveChanges();
 
         return data.Guid.Value;
@@ -185,11 +195,11 @@ public class RavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            return TransactionContext.Load<T>(guid.ToString());
+            return TransactionContext.Load<T>(IdOf(guid));
         }
 
         using var session = _documentStore.OpenSession();
-        return session.Load<T>(guid.ToString());
+        return session.Load<T>(IdOf(guid));
     }
 
     /// <inheritdoc />
@@ -246,24 +256,24 @@ public class RavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            var existing = TransactionContext.Load<T>(data.Guid.Value.ToString());
+            var existing = TransactionContext.Load<T>(IdOf(data.Guid.Value));
             if (existing != null)
             {
                 TransactionContext.Advanced.Evict(existing);
             }
-            TransactionContext.Store(data);
+            TransactionContext.Store(data, IdOf(data.Guid.Value));
             return;
         }
 
         using var session = _documentStore.OpenSession();
-        var existingItem = session.Load<T>(data.Guid.Value.ToString());
+        var existingItem = session.Load<T>(IdOf(data.Guid.Value));
 
         if (existingItem != null)
         {
             session.Advanced.Evict(existingItem);
         }
 
-        session.Store(data);
+        session.Store(data, IdOf(data.Guid.Value));
         session.SaveChanges();
     }
 
@@ -274,12 +284,12 @@ public class RavenDBStore<T>
 
         if (TransactionContext != null)
         {
-            TransactionContext.Delete(data.Guid.Value.ToString());
+            TransactionContext.Delete(IdOf(data.Guid.Value));
             return;
         }
 
         using var session = _documentStore.OpenSession();
-        session.Delete(data.Guid.Value.ToString());
+        session.Delete(IdOf(data.Guid.Value));
         session.SaveChanges();
     }
 
@@ -388,7 +398,7 @@ public class RavenDBStore<T>
                 if (item == null) continue;
                 item.Guid = Guid.NewGuid();
                 storeDelegate?.Invoke(item);
-                TransactionContext.Store(item);
+                TransactionContext.Store(item, IdOf(item.Guid.Value));
             }
             return;
         }
@@ -402,7 +412,7 @@ public class RavenDBStore<T>
             item.Guid = Guid.NewGuid();
             storeDelegate?.Invoke(item);
 
-            bulkInsert.Store(item);
+            bulkInsert.Store(item, IdOf(item.Guid.Value));
         }
     }
 
@@ -423,13 +433,13 @@ public class RavenDBStore<T>
 
                 storeDelegate?.Invoke(item);
 
-                var existing = session.Load<T>(item.Guid.Value.ToString());
+                var existing = session.Load<T>(IdOf(item.Guid.Value));
                 if (existing != null)
                 {
                     session.Advanced.Evict(existing);
                 }
 
-                session.Store(item);
+                session.Store(item, IdOf(item.Guid.Value));
             }
 
             if (TransactionContext == null)
@@ -461,7 +471,7 @@ public class RavenDBStore<T>
                     continue;
                 }
 
-                session.Delete(item.Guid.Value.ToString());
+                session.Delete(IdOf(item.Guid.Value));
             }
 
             if (TransactionContext == null)

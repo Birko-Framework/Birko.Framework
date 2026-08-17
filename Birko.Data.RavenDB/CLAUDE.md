@@ -305,22 +305,57 @@ exceptions at `SaveChanges`. Which mode you get is stated on `Capabilities`, not
 Writes and rollback are sound: a Raven session sends nothing until `SaveChanges`, so a discarded session
 leaves no trace.
 
-- **Reads do NOT see the session's own unsaved writes** -- measured against RavenDB 7.2, not assumed. A
-  session `Query` is answered by the server from indexes and never sees unsaved documents; only Load-by-id
-  consults the identity map, and that path is broken (see below). `Capabilities.ReadsSeeUncommittedWrites`
-  is therefore `false`. The framework survey originally recorded Raven as honouring the context on both
-  reads and writes -- it routes them through the session, so it looks that way -- and the live probe
-  disagreed.
-- **Load-by-id does not work at all: see TASK-241.** `StoreAsync(data)` lets Raven auto-generate the
-  document id (`TxDocs/1-A`) while every read/update/delete addresses `guid.ToString()`. Measured
-  consequences, outside any transaction: `ReadAsync(Guid)` returns `null` for a document that exists,
-  `DeleteAsync(entity)` is a **silent no-op**, and `UpdateAsync(entity)` **inserts a duplicate**. That is a
-  pre-existing data-integrity defect, not a transaction one.
+- **Reads SPLIT, and the capability declaration is deliberately conservative.** Measured against RavenDB
+  7.2, not assumed. `ReadAsync(Guid)` -- Load-by-id -- *does* see the session's unsaved writes, since
+  TASK-241 aligned the document id with the entity `Guid` and Raven's identity map can therefore find it.
+  Every **query-based** read does not: `ReadAsync(filter)`, `Read()`, `ReadFirst` and `Count` are answered
+  by the server from indexes, which know nothing about an unsaved session.
+  `Capabilities.ReadsSeeUncommittedWrites` stays **`false`**, because a single bool cannot say "id yes,
+  query no" and query reads are the common case -- it states the answer a caller is unsafe to get wrong.
+  The query half is a RavenDB property, not a defect, and is not fixable from this side.
 
-Pinned by `Birko.Data.RavenDB.Tests.Stores.RavenTransactionBoundaryLiveTests` (5, gated on
-`BIRKO_RAVEN_URL`; set `BIRKO_REQUIRE_LIVE` to make a skip a failure). One test deliberately pins **today's**
-read behaviour, so it fails the day TASK-241 lands and forces the capability declaration to be revisited
-rather than quietly becoming a lie.
+Pinned by `Birko.Data.RavenDB.Tests.Stores.RavenTransactionBoundaryLiveTests` (5) and
+`RavenDocumentIdLiveTests` (11), both gated on `BIRKO_RAVEN_URL`; set `BIRKO_REQUIRE_LIVE` to make a skip
+a failure.
+
+## Document ids: the entity `Guid` IS the document id (TASK-241)
+
+`RavenDocumentId.For(store, entityType, guid)` is the **single producer** of a document's id, and every
+write, read, update and delete in both stores routes through it. The id is `{collection}/{guid}`.
+
+**What went wrong.** The stores used to have two answers. The write path called `StoreAsync(data)` with no
+id, so Raven's default convention generated one from the collection (`Docs/1-A`), while every
+read/update/delete addressed `data.Guid.ToString()`. Those never match. Measured against RavenDB 7.2, with
+no transaction anywhere in the picture:
+
+- `ReadAsync(Guid)` returned `null` for a document that exists
+- `DeleteAsync(entity)` deleted nothing **and reported success**
+- `UpdateAsync(entity)` **inserted a duplicate** instead of replacing
+
+The silent no-op delete is the worst of the three -- a caller deleting a record got no exception and no
+deletion. Same family as TASK-219, where MongoDB had two answers for what `_id` is.
+
+- **Why not a Raven id convention.** `Conventions.RegisterAsyncIdConvention<T>` would be one registration
+  at a funnel, normally the better shape. It cannot be used: conventions **freeze** on
+  `DocumentStore.Initialize()` and Raven *throws* on any later change (measured -- "Conventions has frozen
+  after 'DocumentStore.Initialize()'"), and both stores accept an externally-supplied, already-initialised
+  `IDocumentStore`. A convention-based fix would have had to be skipped for exactly the constructor a
+  consumer with its own `DocumentStore` uses -- the silent half-fix this defect is made of.
+- **Why the collection prefix**, rather than the bare guid the reads already used. Two entity types
+  deliberately sharing one identity -- a `User` and its `UserProfile` keyed by the same `Guid` -- is an
+  ordinary modelling pattern, and a bare-guid id would let the second silently overwrite the first: the
+  same class of silent data loss. It costs nothing and matches what Raven's own conventions produce, so
+  ids stay navigable in the Studio. Pinned by `Two_types_sharing_one_Guid_do_not_overwrite_each_other`,
+  which fails if the prefix is dropped.
+- **Migration.** Changing an id layout normally costs a migration. Measured before the change: no consumer
+  uses RavenDB (Symbio is the only repo that references these stores and is configured for SQLite), so
+  there was no stored data to orphan. **That window closes the moment a consumer stores data on Raven** --
+  check before assuming it is still free.
+- ⚠ **A new write path must supply the id.** Unlike a convention, this cannot enforce itself. Any new
+  `Store`/`StoreAsync` call has to pass `IdOf(...)`; the round-trip tests are what would catch a miss.
+
+Mutation-tested: unwiring the id from the nine write sites fails 8 of 66; dropping the collection prefix
+fails 2 of 66.
 
 ## Maintenance
 
