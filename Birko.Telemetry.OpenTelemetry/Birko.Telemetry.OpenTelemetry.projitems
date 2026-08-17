@@ -9,6 +9,22 @@
     <Import_RootNamespace>Birko.Telemetry.OpenTelemetry</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- TASK-230/TASK-229: this project `using`s OpenTelemetry.Metrics / .Trace and declared
+         nothing. Consumers all supplied 1.15.0, which carries advisories on OpenTelemetry.Api
+         (GHSA-g94r-2vxg-569j) and .Exporter.OpenTelemetryProtocol (GHSA-q834-8qmm-v933 and
+         two more). Declared here and floating within major 1, which is where this family
+         keeps its compatible releases. Exporters stay with the consumer: which exporter to
+         ship is the host's choice, not the framework's. -->
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="OpenTelemetry" Version="1.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="OpenTelemetry" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)BirkoOpenTelemetryOptions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OpenTelemetryServiceExtensions.cs" />
   </ItemGroup>
