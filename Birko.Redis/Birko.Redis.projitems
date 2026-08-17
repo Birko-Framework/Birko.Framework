@@ -9,6 +9,24 @@
     <Import_RootNamespace>Birko.Redis</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         Declared HERE and nowhere else in the Redis family. Four sibling projitems use
+         StackExchange.Redis too — BackgroundJobs, Caching, MessageQueue and Health — and a consumer
+         imports them alongside this one, so a second declaration lands in the same project file and
+         restore reports NU1504, an error under the -warnaserror that verify-conventions runs.
+         Birko.Health.Redis is the interesting one: it uses the driver directly and needs nothing
+         else from this project, so it is not a satellite in the way the other three are. It still
+         must not declare, because the invariant that makes this scheme work is *at most one
+         declaration among any set of projitems that can be imported together* — and the Sandbox
+         imports every one of them (TASK-234). -->
+    <PackageReference Include="StackExchange.Redis" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="StackExchange.Redis" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)RedisSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RedisConnectionManager.cs" />
   </ItemGroup>
