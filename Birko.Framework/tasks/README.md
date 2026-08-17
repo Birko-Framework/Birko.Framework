@@ -20,10 +20,10 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 73                  |
+| done         | 1                  | 22                 | 74                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 83 · P3 7**
+Todo by priority: **P0 0 · P1 26 · P2 82 · P3 8**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -84,6 +84,12 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 7**
 > silently disabled the very check that constructs it. Fixed; 6/6 smoke checks pass, and the failure path
 > was proven too (forced failure -> exit 1). That also versioned TASK-231's last machine-local criterion,
 > so 231 closed. TASK-228 stays `review` on two **decisions**, not work.
+>
+> Adjusted again 2026-08-17 (TASK-229 close): done 73 -> 74, tasks 202 -> 203, todo stays 116, P2 83 -> 82,
+> P3 7 -> 8. All 8 storage backends now declare their driver, floating within its major; 166/166 test
+> projects build clean. The float cleared **29 of 44** advisory findings with no per-project edit, and
+> exposed two further undeclared dependencies plus a defect in `audit-dependencies.ps1` (a failed restore
+> read as "clean"). Spawned **TASK-233** (P3) — Cosmos may no longer need the span rewrite.
 
 ## In progress now
 

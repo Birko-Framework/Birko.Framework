@@ -435,10 +435,20 @@ A minimal aggregator `csproj` looks like:
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <!-- NuGet packages required by the Birko.* projitems imported below -->
-    <PackageReference Include="Npgsql"        Version="9.*" />
-    <PackageReference Include="MongoDB.Driver" Version="3.*" />
-    <!-- … -->
+
+    <!-- Packages YOUR code needs. You do NOT declare the storage drivers:
+         each Birko.* shared project declares its own (Npgsql, MongoDB.Driver,
+         Microsoft.Data.Sqlite, RavenDB.Client, Microsoft.Azure.Cosmos,
+         Microsoft.Data.SqlClient, MySqlConnector, InfluxDB.Client), floating
+         within its major so a published advisory heals on the next restore.
+         Declaring one again here produces NU1504 — an ERROR under -warnaserror. -->
+    <PackageReference Include="Serilog" Version="4.*" />
+  </ItemGroup>
+
+  <!-- Need a different driver version? Use Update, not Include — Update retunes the
+       item the projitems already contributed, so there is no duplicate and no NU1504. -->
+  <ItemGroup>
+    <PackageReference Update="Npgsql" Version="10.0.5" />
   </ItemGroup>
 
   <!-- Birko.* shared projects — pick what this aggregator needs -->

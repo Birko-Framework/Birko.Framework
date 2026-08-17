@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -138,3 +138,11 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   correctly implemented by both existing providers, but only **2 of 8** job backends can supply one at all,
   and nothing in the framework consumes the interface yet. What the six should do — and whether a
   TTL *lease* may masquerade as the documented *session*-scoped lock — has to be settled before any code.
+- 2026-08-17 — **D11 gains [[TASK-233]]**, backfilled at creation, spawned by [[TASK-229]]'s float. Inside
+  D11's scope, no new decision row. Floating `Microsoft.Azure.Cosmos` to `3.*` moved 3.46.1 → 3.62.1 and
+  the SDK now translates the span-bound `Contains` natively, rendering byte-identical SQL — so
+  [[TASK-220]]'s Cosmos rewrite may be retirable. **Found by the premise-pinning test written for exactly
+  this**, whose comment predicted it verbatim. TASK-229 itself closed `done`: all 8 backends declare their
+  driver floating, 166/166 projects build clean, and the float cleared 29 of 44 advisory findings with no
+  per-project edit — while exposing two further undeclared dependencies (`Birko.Data.Repositories`,
+  `Birko.Data.Tenant`) that had been borrowing assemblies transitively from RavenDB.Client.

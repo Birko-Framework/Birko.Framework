@@ -59,12 +59,29 @@ $projects = foreach ($b in $buckets) {
 Write-Host "Auditing $($projects.Count) projects under $Root" -ForegroundColor Cyan
 
 $findings = [System.Collections.Generic.List[object]]::new()
+$unauditable = [System.Collections.Generic.List[object]]::new()
 $i = 0
 foreach ($p in $projects) {
     $i++
     Write-Progress -Activity 'dotnet list package --vulnerable' -Status $p.Name `
                    -PercentComplete ([int](100 * $i / [Math]::Max($projects.Count, 1)))
     $out = & dotnet list $p.FullName package --vulnerable --include-transitive 2>&1 | Out-String
+
+    # A project whose restore fails emits NO vulnerability rows, which is indistinguishable from a clean
+    # one unless you look. Measured the hard way: floating InfluxDB.Client pulled a Newtonsoft.Json
+    # requirement that conflicted with Birko.Sandbox's pin, restore failed with NU1605, and this script
+    # reported the sandbox as having no findings — while it still had four. A checker that reads
+    # "could not check" as "nothing to report" is worse than no checker, because it is trusted.
+    if ($out -match 'error NU\d+|Failed to restore|error MSB\d+|not a valid project') {
+        $reason = ([regex]::Matches($out, 'error (NU\d+|MSB\d+)') | ForEach-Object { $_.Groups[1].Value } |
+                   Select-Object -Unique) -join ', '
+        $unauditable.Add([pscustomobject]@{
+            Project = $p.Name
+            Reason  = if ($reason) { $reason } else { 'restore failed' }
+        })
+        continue
+    }
+
     foreach ($line in ($out -split "`r?`n")) {
         # rows look like:  > PackageName   [requested]  resolved  Severity  url
         if ($line -match '^\s+>\s+(\S+)\s+(.*?)\s+(Low|Moderate|High|Critical)\s+(\S+)\s*$') {
@@ -80,7 +97,23 @@ foreach ($p in $projects) {
 }
 Write-Progress -Activity 'dotnet list package --vulnerable' -Completed
 
+function Write-Unauditable {
+    if (-not $unauditable.Count) { return }
+    Write-Host ''
+    Write-Host "$($unauditable.Count) project(s) COULD NOT BE AUDITED — treat as unknown, not as clean:" -ForegroundColor Magenta
+    $unauditable | ForEach-Object { Write-Host ("    {0}  ({1})" -f $_.Project, $_.Reason) -ForegroundColor Magenta }
+    Write-Host '    A failed restore yields no vulnerability rows. Fix the restore, then re-run.' -ForegroundColor Magenta
+}
+
 if (-not $findings.Count) {
+    $checked = $projects.Count - $unauditable.Count
+    if ($unauditable.Count) {
+        Write-Host "No vulnerable packages found across $checked audited project(s)." -ForegroundColor Green
+        Write-Unauditable
+        # Unknown is not success: an unauditable project is exactly where a finding hides.
+        if ($FailOnFinding) { exit 1 }
+        exit 0
+    }
     Write-Host "No vulnerable packages found across $($projects.Count) projects." -ForegroundColor Green
     exit 0
 }
@@ -100,6 +133,8 @@ $findings |
         Write-Host ("    {0}" -f $f.Advisory) -ForegroundColor DarkGray
         $_.Group.Project | Sort-Object -Unique | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
     }
+
+Write-Unauditable
 
 Write-Host ''
 Write-Host 'Remediation: prefer bumping the TOP-LEVEL package that pulls the vulnerable one' -ForegroundColor Cyan
