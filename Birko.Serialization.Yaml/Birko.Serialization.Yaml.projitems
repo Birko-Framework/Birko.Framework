@@ -9,6 +9,18 @@
     <Import_RootNamespace>Birko.Serialization.Yaml</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps YamlDotNet and is its only user in the framework, so it owns the dependency
+         outright: a consumer imports this projitems and never learns the package name. Floats within
+         the major so a published advisory heals on the next restore (TASK-234). -->
+    <PackageReference Include="YamlDotNet" Version="16.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="YamlDotNet" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)YamlDotNetSerializer.cs" />
   </ItemGroup>
 </Project>
