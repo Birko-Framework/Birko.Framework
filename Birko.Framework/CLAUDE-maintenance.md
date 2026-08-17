@@ -42,6 +42,26 @@ Every project directory must contain:
   dependents in the same change.
 - Shipping the backends as real NuGet packages is **deferred** until the libraries stabilise. Declaring here
   is forward-compatible with that: a package's dependency list is exactly this set.
+- **Write the declaration in the dual, CPM-compatible form.** A consumer using Central Package Management
+  cannot accept a `PackageReference` that carries a `Version` — restore fails `NU1008`. Three Birko consumers
+  (BardStudio, Latent, Presenter) use CPM, and a version-carrying declaration made **14 of their projects
+  unrestorable**. So every declaration is two conditioned items:
+
+  ```xml
+  <PackageReference Include="Npgsql" Version="10.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+  <PackageReference Include="Npgsql"                Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  ```
+
+- **And add it to [`Birko.Packages.props`](Birko.Packages.props) in the same change.** Under CPM the version
+  has to come from the consumer's central file, so that file carries a `PackageVersion` for every package a
+  shared project declares, and CPM consumers import it. **Forgetting an entry breaks every CPM consumer with
+  `NU1010`.** That file also sets `CentralPackageFloatingVersionsEnabled`, because CPM rejects a floating
+  `PackageVersion` outright (`NU1011`) and every version here floats — the property is a consequence of the
+  float decision, not a separate choice.
+- **A `FrameworkReference` is stricter than a `PackageReference`: a duplicate is an ERROR** (`NETSDK1087`),
+  not a warning. So when a shared project declares one, every importer that also declares it must drop
+  theirs in the same change — there is no tolerated-duplicate state to land in. Measured: adding one to
+  `Birko.Data.Tenant` broke 8 test projects, `Birko.Sandbox` and a consumer at once.
 
 ## Dependency vulnerability audit
 

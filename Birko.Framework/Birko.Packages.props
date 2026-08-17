@@ -1,0 +1,56 @@
+<Project>
+
+  <!--
+    Birko.Packages.props - the PackageVersion items a CENTRAL PACKAGE MANAGEMENT consumer needs.
+
+    Each Birko.* shared project declares its own external dependency (CLAUDE-maintenance.md
+    section "External dependencies"). Under CPM a PackageReference must not carry a Version
+    (NU1008), so those declarations are conditioned on $(ManagePackageVersionsCentrally) and the
+    version must come from the consumer's central file instead - without it, restore fails NU1010.
+
+    Import this from your Directory.Packages.props, inside the Project element and before your own
+    ItemGroup, using the path to your framework checkout:
+
+        Import Project="$(MSBuildThisFileDirectory)..\..\Framework\Birko.Framework\Birko.Packages.props"
+
+    Only the entries for projitems you actually import take effect; the rest are inert. Versions
+    float within their major so a published advisory heals on the next restore. To pin one, declare
+    your own PackageVersion for it AFTER the import - the last definition wins.
+
+    Generated from the .projitems declarations. When a shared project gains a dependency, add it
+    here in the same change, or every CPM consumer breaks on NU1010.
+  -->
+
+  <PropertyGroup>
+    <!--
+      Required, not optional. CPM rejects a floating PackageVersion unless this is set (NU1011), and
+      every version below floats within its major - that is the framework's decision, taken so a
+      published advisory heals on the next restore instead of needing an edit in every consumer.
+      Set here rather than left to the consumer because it is a consequence of importing this file,
+      not a separate choice: without it the import cannot work at all.
+
+      If you need reproducible restores more than you need self-healing, do not import this file.
+      Declare your own pinned PackageVersion for each package listed below instead - the list is the
+      contract, the floats are ours.
+    -->
+    <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Include="InfluxDB.Client" Version="5.*" />                                   <!-- Birko.Data.InfluxDB\Birko.Data.InfluxDB.projitems -->
+    <PackageVersion Include="MessagePack" Version="3.*" />                                       <!-- Birko.Serialization.MessagePack\Birko.Serialization.MessagePack.projitems -->
+    <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.*" />                            <!-- Birko.Data.CosmosDB\Birko.Data.CosmosDB.projitems -->
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.*" />                          <!-- Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems -->
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.*" />                            <!-- Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems -->
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.*" />              <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" /><!-- Birko.Data.Repositories\Birko.Data.Repositories.projitems -->
+    <PackageVersion Include="MongoDB.Driver" Version="3.*" />                                    <!-- Birko.Data.MongoDB\Birko.Data.MongoDB.projitems -->
+    <PackageVersion Include="MySqlConnector" Version="2.*" />                                    <!-- Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems -->
+    <PackageVersion Include="Npgsql" Version="10.*" />                                           <!-- Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems -->
+    <PackageVersion Include="OpenTelemetry" Version="1.*" />                                     <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />                  <!-- Birko.Telemetry.OpenTelemetry\Birko.Telemetry.OpenTelemetry.projitems -->
+    <PackageVersion Include="RavenDB.Client" Version="7.*" />                                    <!-- Birko.Data.RavenDB\Birko.Data.RavenDB.projitems -->
+    <PackageVersion Include="RazorLight" Version="2.*" />                                        <!-- Birko.Messaging.Razor\Birko.Messaging.Razor.projitems -->
+  </ItemGroup>
+
+</Project>
