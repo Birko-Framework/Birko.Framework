@@ -133,12 +133,28 @@ scheduler.Register<CleanupJob>("daily-cleanup", TimeSpan.FromHours(24));
 await scheduler.RunAsync(cancellationToken);   // followers idle and keep knocking
 ```
 
+`FileJobLockProvider` is the option that needs no service at all — an exclusive file handle, shared by every
+process pointing at the same directory:
+
+```csharp
+await using var locks = new FileJobLockProvider("/var/lib/myapp/locks");
+```
+
+It is **session-scoped**: the kernel releases the lock if the holding process dies, so a crashed leader is
+replaced without waiting for anything to expire. That makes it the same class of guarantee as
+`SqlJobLockProvider`, and a stronger one than the Redis lease. Its limit is that it coordinates only
+processes sharing a filesystem — two machines with their own disks will both acquire.
+
 Followers re-attempt every `leadershipRetryInterval` (default 15s), so a leader that dies is replaced
 without restarting anything, and a new leader restarts the schedule from the moment it takes over rather
-than replaying occurrences the previous leader already enqueued. Only `Birko.BackgroundJobs.SQL`
-(PostgreSQL / MSSql / MySQL) and `Birko.BackgroundJobs.Redis` can supply a provider today; **omit it and
-behaviour is unchanged**, which is what makes this additive. A lock reduces duplication — it does not
-abolish it, so a job that must not run twice still has to be idempotent.
+than replaying occurrences the previous leader already enqueued. Three providers ship: `FileJobLockProvider`
+(here, no service needed), `SqlJobLockProvider<DB>` in `Birko.BackgroundJobs.SQL` (PostgreSQL / MSSql /
+MySQL) and `RedisJobLockProvider` in `Birko.BackgroundJobs.Redis`. **Omit the provider and behaviour is
+unchanged**, which is what makes this additive.
+
+The provider does not have to match the queue's backend — a CosmosDB or MongoDB queue can elect its leader
+with the file or SQL provider, both session-scoped. A lock reduces duplication; it does not abolish it, so a
+job that must not run twice still has to be idempotent.
 
 ## API Reference
 
@@ -164,6 +180,7 @@ abolish it, so a job that must not run twice still has to be idempotent.
 | `JobDispatcher` | High-level API for enqueuing and scheduling jobs |
 | `BackgroundJobProcessor` | Concurrent polling processor |
 | `RecurringJobScheduler` | Interval-based recurring job scheduler; optionally leader-elected via `IJobLockProvider` |
+| `FileJobLockProvider` | Session-scoped `IJobLockProvider` backed by an exclusive file handle; needs no service |
 
 ### Serialization
 | Type | Description |

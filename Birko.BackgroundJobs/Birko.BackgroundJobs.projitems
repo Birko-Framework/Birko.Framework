@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Serialization\JobSerializationHelper.cs" />
     <!-- Processing -->
     <Compile Include="$(MSBuildThisFileDirectory)Processing\BackgroundJobProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Processing\FileJobLockProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Processing\InMemoryJobQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Processing\JobDispatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Processing\JobExecutor.cs" />

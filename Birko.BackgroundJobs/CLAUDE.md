@@ -49,9 +49,37 @@ Birko.BackgroundJobs/
   | Backend | Locking | Semantics |
   |---|---|---|
   | **SQL** (PostgreSQL / MSSql / MySQL) | ✅ `SqlJobLockProvider<DB>` | **session** — advisory lock on a dedicated connection; the server releases it when the holder dies |
+  | **JSON · XML** (and any single-host deployment) | ✅ `FileJobLockProvider` | **session** — an exclusive file handle; the kernel releases it when the process dies |
   | **Redis** | ✅ `RedisJobLockProvider` | **lease**, renewed on a heartbeat — `IsLeaseBased == true` |
   | SQL (**SQLite**) | ❌ returns `false` | no portable cross-connection advisory lock; callers must fall back deliberately |
-  | CosmosDB · ElasticSearch · MongoDB · RavenDB · JSON · XML | ❌ none | see TASK-236 |
+  | CosmosDB · ElasticSearch · MongoDB · RavenDB | ❌ none, deliberately | a lease each could express, and none is worth the machinery — see below (TASK-236) |
+
+  **The file stores were the inverted case, and the earlier guess was backwards** (TASK-236). TASK-232
+  sketched JSON/XML as "probably no locking" because file locking is unportable. Measured on Windows and
+  Linux/.NET 9 instead: a second process is refused while the first holds the handle, and after the holder
+  is killed outright — `taskkill /F`, `kill -9` — the next caller acquires immediately. That is a **session
+  lock**, the *stronger* guarantee, and the only one besides SQL in this family. Its scope is processes
+  sharing a filesystem, which is exactly what the JSON and XML queues already assume.
+
+  ⚠ **A lock does not make the file-backed queues cross-process safe.** `JsonJobQueue` serializes its
+  read-claim-update with an in-process semaphore and says so: the file store has no compare-and-swap, so
+  two processes can still claim the same job. `FileJobLockProvider` buys coordination *around* the queue —
+  leader election, where one process is entitled to enqueue.
+
+  **The four document stores are a recorded "no", not a gap.** Each could express a lock — Cosmos via etag
+  or TTL, ElasticSearch via `if_seq_no`, MongoDB via `findAndModify` + a TTL index, RavenDB via
+  compare-exchange, which is *designed* for distributed locks. None is implemented, on purpose:
+
+  - **Every one of them could offer only a lease**, because none has a server-side notion of "release this
+    when that client disappears". So each would need the renewal heartbeat Redis has, and each would carry
+    the failure mode a lease brings — expiring while its holder is still working.
+  - **A consumer that needs a lock on one of these backends already has a better one available.** Nothing
+    ties the lock provider to the queue's backend: a CosmosDB queue can elect its leader with
+    `SqlJobLockProvider` or `FileJobLockProvider`, both session-scoped. Adding four lease-based providers
+    would mean four new renewal loops to get right in order to offer something *weaker* than what is
+    already there.
+  - **The one that would be worth revisiting is RavenDB**, whose compare-exchange is purpose-built for
+    this. It is a "no" today because the demand is hypothetical, not because the primitive is unsuitable.
 
   **Two durations, not one.** `TryAcquireAsync(name, acquireTimeout, leaseDuration?, ct)`. The first
   version had a single `timeout` and the two implementations read it as different things — SQL as the wait,
