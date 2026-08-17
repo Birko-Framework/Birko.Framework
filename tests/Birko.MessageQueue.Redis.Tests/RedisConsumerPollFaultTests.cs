@@ -56,7 +56,8 @@ namespace Birko.MessageQueue.Redis.Tests
             var db = DbWithGroup();
             db.Setup(d => d.StreamReadGroupAsync(
                     It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(),
-                    It.IsAny<RedisValue?>(), It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<CommandFlags>()))
+                    It.IsAny<RedisValue?>(), It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<TimeSpan?>(),
+                    It.IsAny<CommandFlags>()))
                 .ThrowsAsync(new InvalidOperationException("boom"));
 
             using var consumer = new RedisConsumer(() => db.Object, new JsonMessageSerializer(), Settings());
@@ -105,7 +106,8 @@ namespace Birko.MessageQueue.Redis.Tests
             var served = 0;
             db.Setup(d => d.StreamReadGroupAsync(
                     It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(),
-                    It.IsAny<RedisValue?>(), It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<CommandFlags>()))
+                    It.IsAny<RedisValue?>(), It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<TimeSpan?>(),
+                    It.IsAny<CommandFlags>()))
                 .ReturnsAsync(() => Interlocked.Increment(ref served) == 1 ? new[] { entry } : Array.Empty<StreamEntry>());
 
             var acked = false;
@@ -130,8 +132,9 @@ namespace Birko.MessageQueue.Redis.Tests
             var names = new ConcurrentBag<string>();
             db.Setup(d => d.StreamReadGroupAsync(
                     It.IsAny<RedisKey>(), It.IsAny<RedisValue>(), It.IsAny<RedisValue>(),
-                    It.IsAny<RedisValue?>(), It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<CommandFlags>()))
-                .Callback((RedisKey _, RedisValue _, RedisValue consumer, RedisValue? _, int? _, bool _, CommandFlags _) => names.Add(consumer.ToString()))
+                    It.IsAny<RedisValue?>(), It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<TimeSpan?>(),
+                    It.IsAny<CommandFlags>()))
+                .Callback((RedisKey _, RedisValue _, RedisValue consumer, RedisValue? _, int? _, bool _, TimeSpan? _, CommandFlags _) => names.Add(consumer.ToString()))
                 .ReturnsAsync(Array.Empty<StreamEntry>());
 
             using var consumer = new RedisConsumer(() => db.Object, new JsonMessageSerializer(), Settings("fixed"));

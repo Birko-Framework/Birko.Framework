@@ -17,9 +17,10 @@ namespace Birko.MessageQueue.Redis.Tests
             NameValueEntry[]? captured = null;
             db.Setup(d => d.StreamAddAsync(
                     It.IsAny<RedisKey>(), It.IsAny<NameValueEntry[]>(), It.IsAny<RedisValue?>(),
-                    It.IsAny<int?>(), It.IsAny<bool>(), It.IsAny<CommandFlags>()))
-                .Callback<RedisKey, NameValueEntry[], RedisValue?, int?, bool, CommandFlags>(
-                    (k, e, id, ml, approx, flags) => captured = e)
+                    It.IsAny<long?>(), It.IsAny<bool>(), It.IsAny<long?>(),
+                    It.IsAny<StreamTrimMode>(), It.IsAny<CommandFlags>()))
+                .Callback<RedisKey, NameValueEntry[], RedisValue?, long?, bool, long?, StreamTrimMode, CommandFlags>(
+                    (k, e, id, ml, approx, limit, trim, flags) => captured = e)
                 .ReturnsAsync((RedisValue)"1-0");
             return (db, () => captured);
         }
