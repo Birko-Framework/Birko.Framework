@@ -9,7 +9,7 @@
     <Import_RootNamespace>Birko.Data.CosmosDB</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.46.1" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.*" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Stores\CosmosDBStore.cs" />
