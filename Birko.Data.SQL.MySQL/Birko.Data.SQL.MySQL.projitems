@@ -9,7 +9,7 @@
     <Import_RootNamespace>Birko.Data.SQL.MySQL</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="MySqlConnector" Version="2.4.0" />
+    <PackageReference Include="MySqlConnector" Version="2.*" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Database\Connectors\MySQLConnector.cs" />
