@@ -8,6 +8,11 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Workflow.MongoDB</Import_RootNamespace>
   </PropertyGroup>
+  <!-- External dependency: MongoDB.Driver, declared by Birko.Data.MongoDB.projitems and deliberately
+       NOT repeated here. A consumer imports this projitems alongside that one — this project builds on
+       the MongoDB store and cannot work without it — so a second declaration lands in the same project
+       file and restore reports NU1504, which the -warnaserror that verify-conventions runs turns into
+       an error. Import Birko.Data.MongoDB.projitems to get the driver (TASK-234). -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Models\MongoWorkflowInstanceModel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MongoDBWorkflowInstanceStore.cs" />
