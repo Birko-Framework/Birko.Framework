@@ -8,24 +8,29 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Redis</Import_RootNamespace>
   </PropertyGroup>
-  <ItemGroup>
-    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
-         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
-         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
-         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+  <!-- External dependency: StackExchange.Redis — CONSUMER-SUPPLIED, deliberately not declared here.
+       Declare it yourself, e.g.
 
-         Declared HERE and nowhere else in the Redis family. Four sibling projitems use
-         StackExchange.Redis too — BackgroundJobs, Caching, MessageQueue and Health — and a consumer
-         imports them alongside this one, so a second declaration lands in the same project file and
-         restore reports NU1504, an error under the -warnaserror that verify-conventions runs.
-         Birko.Health.Redis is the interesting one: it uses the driver directly and needs nothing
-         else from this project, so it is not a satellite in the way the other three are. It still
-         must not declare, because the invariant that makes this scheme work is *at most one
-         declaration among any set of projitems that can be imported together* — and the Sandbox
-         imports every one of them (TASK-234). -->
-    <PackageReference Include="StackExchange.Redis" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
-    <PackageReference Include="StackExchange.Redis" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
-  </ItemGroup>
+         <PackageReference Include="StackExchange.Redis" Version="2.*" />
+
+       A shared project normally declares its own external dependency (TASK-229), and the Redis family
+       is the exception, decided in TASK-234. The rule that produced it: **a family may own a package
+       only if every project needing that package belongs to the family.** Five projitems use
+       StackExchange.Redis — this one, BackgroundJobs, Caching, MessageQueue and Health — and
+       Birko.Health.Redis is not a satellite of this project at all: it talks to the driver directly
+       and needs none of the types here. So no project can own the declaration without either coupling
+       Health.Redis to five shared projects it does not use (RedisSettings extends RemoteSettings and
+       implements ILoadable, so importing this drags Configuration, Data.Core, Data.Stores, Contracts
+       and Time), or emitting two PackageReference items wherever both are imported — NU1504, which
+       the -warnaserror the build sweep runs turns into an error.
+
+       Contrast Birko.Data.ElasticSearch, which DOES declare NEST: there all six other users are true
+       satellites of it, so the family is closed and one declaration covers it.
+
+       Float within the major (`2.*`) rather than pinning. TASK-234 measured why: the float moved this
+       family 2.8 -> 2.13 and immediately surfaced two latent breaks — an overload of StringSetAsync
+       that no longer bound, and seven tests whose Moq setups named superseded StreamAdd /
+       StreamReadGroup signatures. A pin hides that until an advisory forces the bump. -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)RedisSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RedisConnectionManager.cs" />
