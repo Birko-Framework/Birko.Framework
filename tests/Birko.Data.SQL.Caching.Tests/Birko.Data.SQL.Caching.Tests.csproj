@@ -21,7 +21,6 @@
 
   <ItemGroup>
     <!-- Birko.Data.Tenant's middleware references ASP.NET Core -->
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <Import Project="..\..\Framework\Birko.Helpers\Birko.Helpers.projitems" Label="Shared" />
