@@ -8,6 +8,37 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Security.AspNetCore</Import_RootNamespace>
   </PropertyGroup>
+  <!-- Framework dependency: Microsoft.AspNetCore.App — CONSUMER-SUPPLIED, and never owned by a Birko
+       project. It is not a library this framework wraps; an ASP.NET Core host already has it from
+       Microsoft.NET.Sdk.Web. A non-web host that imports this projitems adds it itself:
+
+         <FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+       This is stricter than an ordinary package, which is why the rule is absolute: a duplicate
+       FrameworkReference is NETSDK1087, a hard ERROR that cannot be suppressed, where a duplicate
+       PackageReference is only NU1504. Four Birko projitems use ASP.NET Core types and none of them
+       declares it (TASK-234).
+
+       Note Birko.Data.Tenant DOES declare it, which predates this rule. Any consumer importing that
+       project alongside this one already has the reference, and declaring it here would break every
+       such consumer at once. -->
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Conditioning on
+         the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps Microsoft.AspNetCore.Authentication.JwtBearer and is its only user, so it
+         owns it outright. The package was missed by TASK-234's original survey, whose namespace map had
+         no entry for it — found only when this batch read the usings directly.
+
+         It was pinned to 10.0.0-preview.1.25120.3 in the one project that declared it; the float moves
+         it to a released 10.0.x, which is a deliberate improvement rather than a side effect.
+
+         Microsoft.IdentityModel.Tokens is used here as well and is NOT declared: Birko.Security.Jwt owns
+         it, and a consumer imports the two together (TASK-234). -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
   <ItemGroup>
     <!-- User -->
     <Compile Include="$(MSBuildThisFileDirectory)User/ICurrentUser.cs" />
