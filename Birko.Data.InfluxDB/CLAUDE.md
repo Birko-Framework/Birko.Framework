@@ -184,6 +184,17 @@ This implementation targets InfluxDB 2.x with:
 - Buckets instead of databases
 - Built-in UI and task management
 
+## Transactions: there are none (TASK-240)
+
+InfluxDB has no transaction concept. `InfluxDbUnitOfWork` accumulates points and writes them in one call:
+`Capabilities.Atomicity` is `BestEffort` and `Capabilities.Scope` is `None`. A partial write is possible and
+nothing can be rolled back once written.
+
+Like ElasticSearch, `AsyncInfluxDBStore` deliberately does **not** implement `IAsyncTransactionalStore` --
+there is no context to hand it, which is the honest "no". Do not add one: a hook that accepts a context and
+silently drops it reads as available and is worse than an absent feature (that was the SQL async store's
+defect, TASK-240).
+
 ## Maintenance
 
 ### README Updates

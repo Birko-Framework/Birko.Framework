@@ -65,6 +65,19 @@ public sealed class InfluxDbUnitOfWork : IUnitOfWork<BatchPointContext>
     public bool IsActive => _context is not null;
     public BatchPointContext? Context => _context;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// InfluxDB has no transaction concept. Points are accumulated and written in one call; a partial
+    /// write is possible and nothing can be undone after the write. Like ElasticSearch, the store does
+    /// not implement <c>IAsyncTransactionalStore</c>, so there is no context to hand it.
+    /// </remarks>
+    public ITransactionCapabilities Capabilities { get; } = new TransactionCapabilities(
+        TransactionAtomicity.BestEffort,
+        TransactionBoundaryScope.None,
+        readsSeeUncommittedWrites: false,
+        limitations: "InfluxDB has no transactions. Points are batched into a single write; a partial "
+                   + "write is possible and cannot be rolled back.");
+
     public InfluxDbUnitOfWork(global::InfluxDB.Client.InfluxDBClient client, string bucket, string organization)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
