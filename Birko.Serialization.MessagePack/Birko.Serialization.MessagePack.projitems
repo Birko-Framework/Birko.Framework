@@ -9,6 +9,18 @@
     <Import_RootNamespace>Birko.Serialization.MessagePack</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- TASK-230/TASK-229: this project `using`s MessagePack and declared nothing, so every
+         consumer had to supply it — and each supplied 3.1.3, which carries four advisories
+         (GHSA-vh6j-jc39-fggf high, plus three moderate). Declared here and floating, so the
+         fix reaches every consumer at once instead of one edit per repository. -->
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="MessagePack" Version="3.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="MessagePack" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)MessagePackBinarySerializer.cs" />
   </ItemGroup>
 </Project>
