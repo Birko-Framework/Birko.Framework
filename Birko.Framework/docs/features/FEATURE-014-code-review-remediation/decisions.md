@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -126,3 +126,15 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   than pinned, accepting non-reproducible builds in exchange for advisories that self-heal on restore.
   Shipping the backends as real NuGet packages stays **deferred** until the libraries stabilise — TASK-229
   is forward-compatible with it rather than a substitute.
+- 2026-08-17 — **D11 gains [[TASK-231]] and [[TASK-232]]**, both backfilled at creation. Inside D11's scope
+  (work tracked directly on the epic) and both framework-consistency findings, so no new decision row.
+  TASK-231: `Birko.EventBus.Outbox.SQL` is a complete project — own repo, `.shproj`, `IOutboxStore`
+  implemented — that is registered in **nothing**: absent from the `.slnx`, the `.code-workspace`, the
+  build-validation aggregator (so **no build compiles it**) and with no sibling `.Tests` project. The only
+  such project of 341 swept. Raised P1 because unbuilt-and-untested is a different class from
+  undocumented, and because the `AddOutbox(storeFactory)` overload added in
+  `Birko.EventBus.Outbox@bbd9389` was written *for* this store.
+  TASK-232 is a **DECISION** ticket, not a fix: `IJobLockProvider` (`Birko.BackgroundJobs@9b1395d`) is
+  correctly implemented by both existing providers, but only **2 of 8** job backends can supply one at all,
+  and nothing in the framework consumes the interface yet. What the six should do — and whether a
+  TTL *lease* may masquerade as the documented *session*-scoped lock — has to be settled before any code.

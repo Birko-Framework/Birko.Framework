@@ -16,14 +16,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 116                 |
+| todo         | —                  | —                  | 118                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 9                   |
 | blocked      | —                  | —                  | 1                   |
 | done         | 1                  | 22                 | 72                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 27 · P2 82 · P3 7**
+Todo by priority: **P0 0 · P1 28 · P2 83 · P3 7**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -65,6 +65,13 @@ Todo by priority: **P0 0 · P1 27 · P2 82 · P3 7**
 > Adjusted again 2026-08-17 (TASK-204 close): review 10 -> 9, done 71 -> 72. It had sat at `review` since
 > 2026-08-12 because an `msiexec` removed the .NET 10 SDK mid-session and four of its tests had never run;
 > the SDK is back and they pass. **This clears the last P0 from the review queue.**
+>
+> Adjusted again 2026-08-17 (registration + provider audit): tasks 200 -> 202, todo 116 -> 118, P1 27 -> 28,
+> P2 82 -> 83. **TASK-231** (P1) — `Birko.EventBus.Outbox.SQL` is registered in nothing: not the `.slnx`,
+> not the workspace, not the build-validation aggregator, and with no `.Tests` project, so nothing compiles
+> or tests it. The only such project of 341 swept. **TASK-232** (P2, decision) — `IJobLockProvider` is
+> implemented by both existing providers, but only 2 of 8 job backends can supply one, and nothing consumes
+> the interface yet.
 
 ## In progress now
 
