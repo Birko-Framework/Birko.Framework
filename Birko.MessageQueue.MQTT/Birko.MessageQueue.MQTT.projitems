@@ -9,6 +9,18 @@
     <Import_RootNamespace>Birko.MessageQueue.Mqtt</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
+
+         This project wraps MQTTnet and is its only user in the framework, so it owns the dependency
+         outright: a consumer imports this projitems and never learns the package name. Floats within
+         the major so a published advisory heals on the next restore (TASK-234). -->
+    <PackageReference Include="MQTTnet" Version="4.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="MQTTnet" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)MqttMessageQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttProducer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)MqttConsumer.cs" />
