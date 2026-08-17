@@ -8,6 +8,14 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Health.Redis</Import_RootNamespace>
   </PropertyGroup>
+  <!-- External dependency: StackExchange.Redis — CONSUMER-SUPPLIED, deliberately not declared here:
+
+         <PackageReference Include="StackExchange.Redis" Version="2.*" />
+
+       See Birko.Redis.projitems for the reasoning. In short: five projitems in this family use the
+       driver and Birko.Health.Redis is not a satellite of any of them, so no single project can own
+       the declaration without either coupling unrelated projects or emitting a duplicate
+       PackageReference wherever two of them are imported together (NU1504) — TASK-234. -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)RedisHealthCheck.cs" />
   </ItemGroup>
