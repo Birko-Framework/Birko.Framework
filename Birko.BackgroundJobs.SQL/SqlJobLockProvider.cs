@@ -13,7 +13,7 @@ namespace Birko.BackgroundJobs.SQL
     /// Prevents multiple workers from processing the same jobs simultaneously.
     /// Uses a Birko.Data.SQL connector for connection creation.
     /// </summary>
-    public class SqlJobLockProvider<DB> : IAsyncDisposable, IDisposable
+    public class SqlJobLockProvider<DB> : IJobLockProvider
         where DB : AbstractConnector
     {
         private readonly AbstractConnectorBase _connector;
