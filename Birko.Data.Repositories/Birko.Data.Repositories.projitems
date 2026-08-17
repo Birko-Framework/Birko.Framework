@@ -11,7 +11,12 @@
   <ItemGroup>
     <!-- TASK-229: ServiceCollectionExtensions uses IServiceCollection and ServiceLifetime.
          Abstractions is the right package for a library: the contracts, not the container. -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)IBaseRepository.cs" />
