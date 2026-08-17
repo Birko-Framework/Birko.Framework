@@ -8,29 +8,37 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Redis</Import_RootNamespace>
   </PropertyGroup>
-  <!-- External dependency: StackExchange.Redis — CONSUMER-SUPPLIED, deliberately not declared here.
-       Declare it yourself, e.g.
+  <ItemGroup>
+    <!-- Two forms, one dependency. Under Central Package Management a PackageReference must NOT
+         carry a Version (NU1008) — the consumer's Directory.Packages.props owns it. Three Birko
+         consumers use CPM, so a version-carrying declaration made their solutions unrestorable.
+         Conditioning on the well-known $(ManagePackageVersionsCentrally) serves both.
 
-         <PackageReference Include="StackExchange.Redis" Version="2.*" />
+         This project wraps StackExchange.Redis, so it owns the dependency: a consumer that imports
+         this projitems gets the driver without ever learning its package name. That is the point of
+         the framework, and it costs a consumer importing only a subset nothing — measured (TASK-234):
+         a PackageReference inside a .projitems materialises ONLY in a project that imports that
+         .projitems, so an ElasticSearch consumer resolves NEST and no Redis, and this one resolves
+         StackExchange.Redis and no NEST.
 
-       A shared project normally declares its own external dependency (TASK-229), and the Redis family
-       is the exception, decided in TASK-234. The rule that produced it: **a family may own a package
-       only if every project needing that package belongs to the family.** Five projitems use
-       StackExchange.Redis — this one, BackgroundJobs, Caching, MessageQueue and Health — and
-       Birko.Health.Redis is not a satellite of this project at all: it talks to the driver directly
-       and needs none of the types here. So no project can own the declaration without either coupling
-       Health.Redis to five shared projects it does not use (RedisSettings extends RemoteSettings and
-       implements ILoadable, so importing this drags Configuration, Data.Core, Data.Stores, Contracts
-       and Time), or emitting two PackageReference items wherever both are imported — NU1504, which
-       the -warnaserror the build sweep runs turns into an error.
+         Three siblings — BackgroundJobs.Redis, Caching.Redis, MessageQueue.Redis — build on this
+         project and therefore do NOT declare the driver: a consumer imports them alongside this one,
+         and two PackageReference items in one project file is NU1504, an error under the
+         -warnaserror the build sweep runs.
 
-       Contrast Birko.Data.ElasticSearch, which DOES declare NEST: there all six other users are true
-       satellites of it, so the family is closed and one declaration covers it.
+         Birko.Health.Redis is the deliberate exception and is documented in its own projitems. It
+         uses the driver directly and needs nothing from here, so it neither declares (it would
+         collide wherever both are imported — Birko.Sandbox imports both) nor takes a dependency on
+         this project (that would drag Configuration, Data.Core, Data.Stores, Contracts and Time into
+         a consumer that wanted one health check). It documents the package instead.
 
-       Float within the major (`2.*`) rather than pinning. TASK-234 measured why: the float moved this
-       family 2.8 -> 2.13 and immediately surfaced two latent breaks — an overload of StringSetAsync
-       that no longer bound, and seven tests whose Moq setups named superseded StreamAdd /
-       StreamReadGroup signatures. A pin hides that until an advisory forces the bump. -->
+         Floats within the major rather than pinning, and TASK-234 measured why: the float moved this
+         family 2.8 -> 2.13 and immediately surfaced two latent breaks a pin had been hiding — an
+         overload of StringSetAsync that no longer bound, and seven tests whose Moq setups named
+         superseded StreamAdd / StreamReadGroup signatures. -->
+    <PackageReference Include="StackExchange.Redis" Version="2.*" Condition="'$(ManagePackageVersionsCentrally)' != 'true'" />
+    <PackageReference Include="StackExchange.Redis" Condition="'$(ManagePackageVersionsCentrally)' == 'true'" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)RedisSettings.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RedisConnectionManager.cs" />
