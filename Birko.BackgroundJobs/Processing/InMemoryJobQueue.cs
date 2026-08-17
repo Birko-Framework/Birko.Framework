@@ -13,7 +13,7 @@ namespace Birko.BackgroundJobs.Processing
     /// In-memory job queue implementation. Suitable for single-process applications,
     /// testing, and development. Jobs are lost on process restart.
     /// </summary>
-    public class InMemoryJobQueue : IJobQueue
+    public class InMemoryJobQueue : IJobQueue, IJobQueueCounts
     {
         private readonly ConcurrentDictionary<Guid, JobDescriptor> _jobs = new();
         private readonly SemaphoreSlim _lock = new(1, 1);
@@ -118,6 +118,19 @@ namespace Birko.BackgroundJobs.Processing
         {
             _jobs.TryGetValue(jobId, out var descriptor);
             return Task.FromResult(descriptor);
+        }
+
+        /// <summary>
+        /// Counts by status without materialising the jobs — see <see cref="IJobQueueCounts"/> for why
+        /// taking the length of <see cref="GetByStatusAsync"/> is not the same thing (it is capped).
+        /// </summary>
+        public Task<IReadOnlyDictionary<JobStatus, int>> CountByStatusAsync(CancellationToken cancellationToken = default)
+        {
+            var counts = _jobs.Values
+                .GroupBy(j => j.Status)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            return Task.FromResult<IReadOnlyDictionary<JobStatus, int>>(counts);
         }
 
         public Task<IReadOnlyList<JobDescriptor>> GetByStatusAsync(JobStatus status, int limit = 100, CancellationToken cancellationToken = default)
