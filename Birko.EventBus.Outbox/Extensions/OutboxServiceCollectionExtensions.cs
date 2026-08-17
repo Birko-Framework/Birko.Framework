@@ -37,6 +37,37 @@ namespace Birko.EventBus.Outbox.Extensions
 
             services.AddSingleton(options);
             services.AddSingleton<IOutboxStore, TStore>();
+            return AddOutboxProcessor(services, options);
+        }
+
+        /// <summary>
+        /// Registers the outbox with a store built by a factory, for stores that need configuration the
+        /// container cannot supply — connection settings, a connector type, a pre-built data store.
+        /// </summary>
+        /// <remarks>
+        /// The generic overload activates <c>TStore</c> through the container, which works only for a
+        /// store whose constructor arguments are themselves registered services. A SQL-backed store is
+        /// parameterised by settings and a connector type chosen from configuration, so it cannot be —
+        /// and without this overload a consumer has to re-implement the processor and hosted-service
+        /// registrations by hand, duplicating the decorator-unwrapping the generic path gets right.
+        /// </remarks>
+        public static IServiceCollection AddOutbox(
+            this IServiceCollection services,
+            Func<IServiceProvider, IOutboxStore> storeFactory,
+            Action<OutboxOptions>? configure = null)
+        {
+            if (storeFactory == null) throw new ArgumentNullException(nameof(storeFactory));
+
+            var options = new OutboxOptions();
+            configure?.Invoke(options);
+
+            services.AddSingleton(options);
+            services.AddSingleton(storeFactory);
+            return AddOutboxProcessor(services, options);
+        }
+
+        private static IServiceCollection AddOutboxProcessor(IServiceCollection services, OutboxOptions options)
+        {
             services.AddSingleton<OutboxProcessor>(sp =>
             {
                 // Resolve the registered bus once, then unwrap the OutboxEventBus decorator (if present) so
