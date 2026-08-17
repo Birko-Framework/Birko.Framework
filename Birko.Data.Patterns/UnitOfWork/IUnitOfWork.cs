@@ -16,6 +16,16 @@ public interface IUnitOfWork : IAsyncDisposable, IDisposable
     bool IsActive { get; }
 
     /// <summary>
+    /// What this backend's boundary actually promises.
+    /// </summary>
+    /// <remarks>
+    /// The backends differ in ways a general contract must not hide — Mongo needs a replica set, Cosmos
+    /// cannot span two partition keys, ElasticSearch has no transactions. Read this before assuming a
+    /// boundary covers what you are about to do.
+    /// </remarks>
+    ITransactionCapabilities Capabilities { get; }
+
+    /// <summary>
     /// Begins a new transaction.
     /// </summary>
     Task BeginAsync(CancellationToken ct = default);

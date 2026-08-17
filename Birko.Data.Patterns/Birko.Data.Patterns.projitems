@@ -14,6 +14,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Models\IAuditable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Models\IAuditContext.cs" />
     <!-- UnitOfWork -->
+    <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\ITransactionCapabilities.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\IUnitOfWork.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)UnitOfWork\UnitOfWorkException.cs" />
     <!-- Paging -->

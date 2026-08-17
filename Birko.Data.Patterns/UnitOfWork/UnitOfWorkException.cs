@@ -28,3 +28,19 @@ public class TransactionAlreadyActiveException : UnitOfWorkException
     public TransactionAlreadyActiveException()
         : base("A transaction is already active. Commit or rollback before starting a new one.") { }
 }
+
+/// <summary>
+/// Thrown when a unit of work is asked to commit a boundary that a nested participant already rolled back.
+/// </summary>
+/// <remarks>
+/// A nested unit of work joins the enclosing boundary rather than opening its own transaction, so its
+/// rollback cannot undo anything on its own. Marking the boundary rollback-only and refusing the owner's
+/// commit is what stops the participant's decision being silently discarded — the alternative is an
+/// operation that reports success having thrown half of itself away.
+/// </remarks>
+public class TransactionRollbackOnlyException : UnitOfWorkException
+{
+    public TransactionRollbackOnlyException()
+        : base("The transaction was marked rollback-only by a nested unit of work and cannot be committed. "
+             + "Call RollbackAsync() instead.") { }
+}
