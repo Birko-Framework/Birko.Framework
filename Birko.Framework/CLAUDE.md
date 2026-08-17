@@ -630,6 +630,38 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Every worker enqueued its own copy of every recurring job (2026-08-17)
+
+TASK-237. `RecurringJobScheduler` kept `NextRunAt` in process memory, so N workers each concluded
+independently that a job was due — N copies, on every backend **including the two that have a lock**,
+because nothing consumed `IJobLockProvider`: it appeared in exactly three files, its declaration and its two
+implementations. Now wired as leader election, opt-in: pass a provider and only its holder schedules; pass
+nothing and behaviour is bit-for-bit unchanged, which is what lets the two shipped consumer call sites stay
+untouched. Reverts: un-wiring **5 of 86** offline + **3 of 20** Redis + **3 of 25** PostgreSQL; removing only
+the re-baseline **1 of 86**. 166 tests green across 9 job suites. Four things worth carrying:
+
+- **The filed acceptance criterion had its own mechanism inverted, and implementing it literally would have
+  shipped the bug it warned about.** It paired "skips enqueueing but still advances `NextRunAt`" with "fires
+  immediately on becoming leader" — opposite halves. Advancing keeps a follower *in phase*; not advancing is
+  what leaves it overdue. The answer was neither: a follower makes **no scheduling decision at all**, and the
+  new leader **re-baselines** (`NextRunAt = now + interval`), because it cannot know what the previous leader
+  enqueued. Re-derive a criterion's mechanism before implementing to it.
+- **"Has this occurrence already been enqueued?" is an idempotency question, not a mutual-exclusion one.**
+  Locking each individual decision cannot work — every process releases right after enqueueing, so one whose
+  clock lags arrives later, finds the lock free and duplicates. Closing that means holding until the *next*
+  due instant, which is a persistent record, not a lock. The right long-term answer is a unique key on the
+  queue (job name + due instant), which all eight backends could enforce rather than the two that can express
+  a lock. Recorded, not built: it is a queue-contract change.
+- **A test that could not fail was caught by reading it, not by running it.** The cancellation test cancelled
+  the loop from outside, which its own `Task.Delay` observes essentially every time — so it passed with and
+  without the fix. Only a provider that cancels *during acquire* reaches the path. Same family as this
+  epic's recurring finding, arriving in a test this time rather than a checker.
+- **A guard's catch has to be narrowed as well as added.** Swallowing every `OperationCanceledException`
+  would end the loop on a cancellation belonging to someone else's timeout — permanently stopping scheduling
+  over a transient. And the *release* passes `CancellationToken.None` deliberately: the loop exits precisely
+  because its token was cancelled, and both providers' `ReleaseAsync` open with `ThrowIfCancellationRequested`,
+  so forwarding it would skip the release on the only path that ever runs.
+
 ### CosmosDB rendered `.Date` as a JSON sub-property and matched nothing (2026-08-16)
 
 TASK-223 made `CosmosFilterMatrixLiveTests` runnable — it was gated *and* unreachable, because the

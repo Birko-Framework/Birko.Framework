@@ -3,7 +3,7 @@ id: TASK-237
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-17
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-232, TASK-236]
 findings: []
-pr: null
+pr: "Birko.BackgroundJobs d6817dc · Birko.BackgroundJobs.Tests 91e80e7 · Birko.BackgroundJobs.Redis.Tests 35219b0 · Birko.BackgroundJobs.SQL.Tests 36117ec"
 github-issue: null
 jira-key: null
 ---
@@ -60,24 +60,31 @@ holds it for as long as it lives, and only the leader runs the loop.
 
 ## Acceptance criteria
 
-- [ ] `RecurringJobScheduler` optionally takes an `IJobLockProvider`. **Absent means today's behaviour
-      exactly** — every instance schedules — so this is additive and no existing consumer changes
-- [ ] With a provider, only the lock holder enqueues. A non-leader must not merely skip enqueueing while
+- [x] `RecurringJobScheduler` optionally takes an `IJobLockProvider`. **Absent means today's behaviour
+      exactly** — every instance schedules — so this is additive and no existing consumer changes.
+      Optional trailing parameters, so the two shipped consumer call sites (`Symbio`, `DraCode`) still
+      compile untouched; pinned by `Without_a_lock_provider_both_schedulers_still_enqueue`
+- [x] With a provider, only the lock holder enqueues. A non-leader must not merely skip enqueueing while
       still advancing `NextRunAt`, or it will fire immediately on becoming leader — that is a distinct
-      duplicate-work bug and the easy one to write by accident
-- [ ] Leadership is **re-attempted**, not decided once at startup. A process that loses the race must keep
-      trying, or the death of the leader leaves nothing scheduling until every worker restarts
-- [ ] On a `IsLeaseBased` provider the loop tolerates losing the lock mid-run: `IsLocked` can go false on
-      its own (Redis sets it when a renewal finds the key gone), and the scheduler must stop enqueueing
-      rather than carry on believing it leads
-- [ ] Red→green proven against **more than one process's worth of schedulers** — two scheduler instances
-      sharing one lock provider backend, asserting one enqueue rather than two. Reverting the wiring must
-      turn that test red; a single-instance test proves nothing here
-- [ ] Verified on a **session** provider (SQL) *and* a **lease** provider (Redis), because their failure
-      modes are opposite: a stuck session lock blocks handover forever, while an expired lease lets two
-      leaders coexist
-- [ ] `Birko.BackgroundJobs/CLAUDE.md` records the wiring and that absence of a provider means unchanged
-      behaviour
+      duplicate-work bug and the easy one to write by accident.
+      **Neither half of that pairing is what shipped**, and the criterion's own wording had them the wrong
+      way round: *not* advancing is what leaves `NextRunAt` in the past, so a follower that simply skipped
+      would fire every missed occurrence the instant it took over. A follower therefore touches nothing,
+      and **the new leader re-baselines** (`NextRunAt = now + interval`) on the transition
+- [x] Leadership is **re-attempted**, not decided once at startup — rate-limited by
+      `leadershipRetryInterval` (default 15s), because `SqlJobLockProvider` opens a real connection per
+      attempt. A failed knock returns false rather than propagating: a follower that faulted out of the
+      loop would stop re-attempting, which is worse than the duplication
+- [x] On a `IsLeaseBased` provider the loop tolerates losing the lock mid-run — leadership is re-read every
+      tick *and* between definitions, so nothing is enqueued once the loss is known
+- [x] Red→green proven against **more than one process's worth of schedulers**. Un-wiring leadership:
+      **5 of 86** offline, **3 of 20** Redis, **3 of 25** PostgreSQL. Removing only the re-baseline:
+      **1 of 86** — the one test that isolates it
+- [x] Verified on a **session** provider (PostgreSQL 16) *and* a **lease** provider (Redis 7), both live in
+      Docker. SQLite could not stand in: `SqlJobLockProvider` returns `false` there by design, so both
+      schedulers would be followers and "one enqueue, not two" would pass while nothing was scheduled
+- [x] `Birko.BackgroundJobs/CLAUDE.md` records the wiring, the four rules and that absence of a provider
+      means unchanged behaviour; `README.md` gains a "Running more than one worker" section
 
 ## Out of scope
 
@@ -94,4 +101,77 @@ N/A — "two schedulers, one enqueue" is observable by an automated test against
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-237` — leave empty until then._
+### Production — `Birko.BackgroundJobs/Processing/RecurringJobScheduler.cs`
+
+1. Constructor grows three **optional trailing parameters**: `IJobLockProvider? lockProvider = null`,
+   `string lockName = DefaultLockName`, `TimeSpan? leadershipRetryInterval = null`. Source-compatible, so
+   `new RecurringJobScheduler(queue, clock)` still means today's behaviour exactly.
+2. `RunAsync` asks `EnsureLeadershipAsync` once per tick and skips the whole enqueue pass when it is not
+   the leader. **Leadership is never cached across ticks** — `IsLocked` is the provider's own belief and a
+   lease-based provider clears it on its own when a renewal finds the key gone.
+3. **A new leader re-baselines the schedule** (`NextRunAt = now + interval` for every definition) instead
+   of firing every occurrence that elapsed while it was a follower. That is the distinct duplicate-work
+   bug the acceptance criteria warn about, and it is the reason a follower must not touch `NextRunAt` at
+   all: mutating schedule state from a decision it was not allowed to make is one refactor away from
+   enqueueing too.
+4. Re-attempt is **rate-limited, not once-only** — `leadershipRetryInterval` (default 15s) bounds how often
+   a follower knocks, because `SqlJobLockProvider` opens and closes a real connection per attempt.
+5. A failed attempt **returns false rather than propagating** — a follower that throws out of the loop stops
+   re-attempting, which is precisely the failure this task exists to prevent.
+6. `RunAsync` releases the lock in a `finally`, with `CancellationToken.None`: the loop exits *because* its
+   token was cancelled, and both providers' `ReleaseAsync` start with `ThrowIfCancellationRequested`.
+7. `IsLeader` exposed for observability and for asserting the follower half in tests.
+
+### Tests
+
+- `Birko.BackgroundJobs.Tests` — an in-process `IJobLockProvider` double giving real cross-instance
+  exclusion, so the two-scheduler proof runs offline. Covers: one enqueue not two, no provider means
+  unchanged behaviour, the follower takes over when the leader releases, the new leader does not replay,
+  and a lease lost mid-run stops enqueueing.
+- `Birko.BackgroundJobs.Redis.Tests` — the same two-scheduler assertion on the **lease** provider, gated on
+  `BIRKO_REDIS_HOST`.
+- `Birko.BackgroundJobs.SQL.Tests` — the same on the **session** provider, gated on `BIRKO_PG_HOST`;
+  needs the PostgreSQL projitems import added to that test project.
+
+### Docs
+
+`Birko.BackgroundJobs/CLAUDE.md` — replace "nothing consumes the interface yet" with the wiring, the
+re-baseline rule, and that absence of a provider is unchanged behaviour.
+
+## Outcome
+
+**166 tests green across 9 job suites** (86 offline core, 20 Redis, 25 SQL, plus the six backend suites at
+36). Three reverts measured rather than asserted — see the acceptance list above for the splits.
+
+Four things worth carrying past this task:
+
+- **The criterion's own reasoning was inverted, and following it literally would have shipped the bug it
+  warned about.** It paired "skips enqueueing but still advances `NextRunAt`" with "fires immediately on
+  becoming leader"; those are opposite halves. Advancing keeps a follower in phase; *not* advancing is what
+  leaves it overdue. The right answer was neither — a follower makes no scheduling decision at all, and the
+  new leader re-baselines, because it cannot know what the previous one enqueued. **Re-derive a filed
+  criterion's mechanism before implementing to it.**
+- **A test that cannot fail was written and caught in review, not by the runner.** The first version of
+  `Cancelling_a_coordinated_loop_completes_it_rather_than_faulting_it` cancelled the loop from outside —
+  which the loop's own `Task.Delay` observes essentially every time, so it passed with and without the fix.
+  The path is only deterministically reachable if the *provider* cancels during acquire. Same family as this
+  epic's recurring finding: **ask whether a green check could ever have gone red.**
+- **The catch had to be narrowed as well as added.** Swallowing every `OperationCanceledException` would
+  have ended the loop on a cancellation belonging to someone else's timeout — permanently stopping
+  scheduling over a transient. `when (cancellationToken.IsCancellationRequested)` separates ours from
+  everyone's; a foreign one is just a knock that did not land.
+- **`Birko.BackgroundJobs.SQL.Tests` was structurally unable to test its own lock provider.** It imports
+  only SQLite, where `SqlJobLockProvider` returns `false` by design — so every lock assertion it could make
+  was about the *absence* of a lock. The PostgreSQL projitems import added here is what makes the session
+  half testable at all.
+
+### Spawned / follow-ups
+
+- **Symbio duplicates this in `RecurringSchedulerLeader` (its TASK-383), and its election is
+  once-at-startup.** `TryBecomeLeaderAsync` is called once; a follower never knocks again, so the death of
+  Symbio's leader stops all twelve recurring jobs on every node until a restart — the exact failure the
+  third acceptance criterion here exists to prevent. Symbio can now delete that class and pass its
+  `IJobLockProvider` to the framework scheduler instead. **Not filed in Symbio's tracker**: that repo is
+  off-limits this session (large uncommitted work), so this is recorded here for the user to route.
+- The idempotency/unique-key approach remains the better long-term answer and remains out of scope — a
+  queue-contract change across eight backends.

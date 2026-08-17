@@ -116,6 +116,16 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 >   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
 >   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
 >
+> Adjusted again 2026-08-17 (TASK-237 close): todo 117 -> 116, done 76 -> 77. `RecurringJobScheduler` now
+> consumes `IJobLockProvider` as leader election — before this, the interface appeared in exactly three
+> files (its declaration and its two implementations), so every worker enqueued its own copy of every
+> recurring job on all eight backends *including* the two that could have prevented it. Verified live on
+> **Redis 7** and **PostgreSQL 16**; the SQL test project could not previously test its own lock provider
+> at all, because it imported only SQLite where `SqlJobLockProvider` returns `false` by design. No task
+> spawned in this tree — the one follow-up found (Symbio's `RecurringSchedulerLeader` elects once at
+> startup, so its followers never re-attempt) belongs to a consumer repo that is off-limits this session
+> and is recorded in TASK-237's Outcome for routing.
+>
 > Adjusted again 2026-08-17 (EPIC-018 created): **18 epics** (in-progress 6 -> 7), tasks unchanged at 207.
 > **DV5: 21 -> 17.** The four `Birko.Web.Core` defects had no home because *the runtime had no epic* — it
 > appears in four epics' `affects:` lists and none of them is about it, EPIC-001 is `Birko.Web.Components`,
