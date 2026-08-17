@@ -2,8 +2,8 @@
 id: TASK-238
 parent: EPIC-014
 feature: FEATURE-014
-# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+status: done
 priority: P3
 assignee: ai
 created: 2026-08-17
@@ -16,7 +16,7 @@ github-issue: null
 jira-key: null
 ---
 
-# Five `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems`
+# Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems`
 
 ## Context
 
@@ -38,7 +38,8 @@ declaring one, so from `Framework.Tests/Birko.Data.Sync.ElasticSearch.Tests/` it
 warning MSB9008: The referenced project ..\Birko.Data.Sync\Birko.Data.Sync.projitems does not exist.
 ```
 
-**Seven projects carry it** (filed as five — see Outcome): `Birko.Data.Sync.CosmosDB`, `.ElasticSearch`, `.Json`, `.MongoDb`, `.RavenDB`.
+**Seven projects carry it** (filed as five — see Outcome): `Birko.Data.Sync.CosmosDB`, `.ElasticSearch`,
+`.Json`, `.MongoDb`, `.RavenDB`, `.Sql`, `.Xml`.
 
 **It is a warning today and does nothing** — the reference is inert, and every consumer already imports
 `Birko.Data.Sync.projitems` explicitly, which is why nothing has ever been broken by it. That is also why

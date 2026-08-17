@@ -116,6 +116,18 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 >   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
 >   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
 >
+> Adjusted again 2026-08-17 (TASK-234 batches 1-3, TASK-238 close): tasks 207 -> 208, todo 116 -> 116,
+> done 77 -> 78. **TASK-234 is being drained in batches by package**, and the re-measurement before starting
+> changed its shape: the count reproduces (38 projects / 40 project-by-package pairs) but only **15 may
+> declare** — the other 23 are satellites whose base already declares, where declaring is itself the defect
+> (`NU1504`, an error under the sweep's `-warnaserror`). Batches 1-3 done: **NEST**, **StackExchange.Redis**,
+> **MongoDB.Driver**. The ownership rule was settled after two reversals and now lives in
+> `CLAUDE-maintenance.md`: the project that *wraps* a library owns it, siblings record the pairing, a project
+> using the same library independently documents it as consumer-supplied, and a `FrameworkReference` is never
+> owned. The premise that decided it was measured, not argued — a `PackageReference` in a `.projitems`
+> materialises only in a project that imports it, so ownership *is* the subset model. **TASK-238** was filed
+> and closed inside the work (7 projects, not the 5 filed).
+>
 > Adjusted again 2026-08-17 (TASK-237 close): todo 117 -> 116, done 76 -> 77. `RecurringJobScheduler` now
 > consumes `IJobLockProvider` as leader election — before this, the interface appeared in exactly three
 > files (its declaration and its two implementations), so every worker enqueued its own copy of every
