@@ -8,6 +8,22 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Data.Migrations.InfluxDB</Import_RootNamespace>
   </PropertyGroup>
+  <!-- External dependency: InfluxDB.Client — CONSUMER-SUPPLIED for this project alone:
+
+         <PackageReference Include="InfluxDB.Client" Version="5.*" />
+
+       Every other Birko project that wraps a library declares it, so importing the project is all a
+       consumer has to do. This is the second documented exception (the first is Birko.Health.Redis),
+       and it is here for the same reason: this project uses the driver directly and needs nothing
+       from Birko.Data.InfluxDB — no type of its is referenced, and its own test project does not
+       import it.
+
+       It cannot declare, because Birko.Data.InfluxDB.projitems does and Birko.Sandbox imports both:
+       two PackageReference items in one project file is NU1504, an error under the sweep's
+       -warnaserror. And it must not take a dependency on Birko.Data.InfluxDB purely to inherit the
+       declaration, because a consumer takes only the subset it needs.
+
+       Declare the line above only if you import this project without Birko.Data.InfluxDB (TASK-234). -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)InfluxMigrationStore.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InfluxMigrationRunner.cs" />
