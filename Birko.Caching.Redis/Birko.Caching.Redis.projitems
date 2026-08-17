@@ -8,11 +8,14 @@
   <PropertyGroup Label="Configuration">
     <Import_RootNamespace>Birko.Caching.Redis</Import_RootNamespace>
   </PropertyGroup>
-  <!-- External dependency: StackExchange.Redis, declared by Birko.Redis.projitems and deliberately
-       NOT repeated here. A consumer imports this projitems alongside that one — this project builds
-       on Birko.Redis and cannot work without it — so a second declaration lands in the same project
-       file and restore reports NU1504, which the -warnaserror that verify-conventions runs turns
-       into an error. Import Birko.Redis.projitems to get the driver (TASK-234). -->
+  <!-- External dependency: StackExchange.Redis — CONSUMER-SUPPLIED, deliberately not declared here:
+
+         <PackageReference Include="StackExchange.Redis" Version="2.*" />
+
+       See Birko.Redis.projitems for the reasoning. In short: five projitems in this family use the
+       driver and Birko.Health.Redis is not a satellite of any of them, so no single project can own
+       the declaration without either coupling unrelated projects or emitting a duplicate
+       PackageReference wherever two of them are imported together (NU1504) — TASK-234. -->
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\WholeDatabaseDeleteException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RedisCache.cs" />
