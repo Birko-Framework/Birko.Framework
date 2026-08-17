@@ -2,7 +2,7 @@
 id: TASK-238
 parent: EPIC-014
 feature: FEATURE-014
-# status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
+# status: done | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
 priority: P3
 assignee: ai
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-234]
 findings: []
-pr: null
+pr: "Birko.Data.Sync.CosmosDB 6c58737 · .ElasticSearch db21280 · .Json 9cdc574 · .MongoDb 8a2c81d · .RavenDB f01bb34 · .Sql 0677c75 · .Xml 8bf0101"
 github-issue: null
 jira-key: null
 ---
@@ -38,7 +38,7 @@ declaring one, so from `Framework.Tests/Birko.Data.Sync.ElasticSearch.Tests/` it
 warning MSB9008: The referenced project ..\Birko.Data.Sync\Birko.Data.Sync.projitems does not exist.
 ```
 
-**Five projects carry it**: `Birko.Data.Sync.CosmosDB`, `.ElasticSearch`, `.Json`, `.MongoDb`, `.RavenDB`.
+**Seven projects carry it** (filed as five — see Outcome): `Birko.Data.Sync.CosmosDB`, `.ElasticSearch`, `.Json`, `.MongoDb`, `.RavenDB`.
 
 **It is a warning today and does nothing** — the reference is inert, and every consumer already imports
 `Birko.Data.Sync.projitems` explicitly, which is why nothing has ever been broken by it. That is also why
@@ -74,3 +74,18 @@ N/A — mechanical.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-238` — leave empty until then._
+
+## Outcome
+
+Closed 2026-08-17, taken out of order because it failed [[TASK-234]]'s build sweep twice — the
+ElasticSearch batch and then the MongoDB batch — and each remaining batch would have paid the same toll.
+
+- **Seven projects, not five.** `Birko.Data.Sync.Sql` and `.Xml` also carried it. The filing greped only
+  the projects a failing build had named, which is a survey of symptoms rather than of the pattern. The
+  acceptance criterion that caught it was the third one — *grep confirms no other `.projitems` carries a
+  `ProjectReference` to a `.projitems`* — which is now true framework-wide.
+- **The replacement comment broke all seven**, because `--` is illegal inside an XML comment and the text
+  used it as a dash: `MSB4024: An XML comment cannot contain '--'`. The earlier batches' comments used `—`,
+  which is precisely why the hazard was invisible until now. A note about a build convention took down the
+  build; caught by running it, not by reading it.
+- All seven Sync suites build `-warnaserror` clean and **54 tests pass**.

@@ -298,6 +298,33 @@ underneath the reversal — that ownership pushes packages onto consumers wantin
 to be false when measured. **The decision was reversed twice and only the third state rests on a
 measurement.** Both earlier states were internally coherent; that is exactly why neither was safe to keep.
 
+### ✅ Batch 3 — `MongoDB.Driver` (5 projects), 2026-08-17
+
+**Documentation only.** `Birko.Data.MongoDB` already declared the driver (TASK-229) and no test project or
+consumer declared it, so there was nothing to remove — the five satellites simply had no comment saying the
+absence was deliberate. That is the whole content of the batch, and it is worth doing: the next audit reads
+an undocumented absence as the defect and adds a declaration that would collide.
+
+**135 tests green** across 7 MongoDB suites against a **live MongoDB 7**, `-warnaserror` clean.
+
+Two things fell out of it:
+
+- **[[TASK-238]] closed on the way through**, because it failed this batch's sweep — the second batch in a
+  row. **Seven projects carried the dead `ProjectReference`, not the five it was filed with**:
+  `Birko.Data.Sync.Sql` and `.Xml` were missed because the original survey greped only the ones a failing
+  build had named. All seven Sync suites now build `-warnaserror` clean; 54 tests green.
+- **`--` is illegal inside an XML comment**, and the replacement text for TASK-238 used it as a dash. Every
+  one of the seven `.projitems` failed to load with `MSB4024: An XML comment cannot contain '--'`. The
+  earlier batches' comments used `—` and were fine, which is exactly why it was not noticed sooner. Caught
+  by the build, not by review.
+
+**Filed nothing for it, but recorded here**: `Birko.Data.Sync.RavenDB.Tests` emits
+`NU1510: PackageReference Microsoft.Extensions.DependencyInjection.Abstractions will not be pruned — this
+package is automatically available`. Pre-existing, unrelated to this batch, and the *opposite* defect to
+this task's — an over-declaration rather than a missing one. Worth a sweep of its own once the batches are
+done, because `Birko.Packages.props` carries a `PackageVersion` for that same package
+(`Birko.Data.Repositories`), so the shared project may be declaring something net10 provides.
+
 ## Out of scope
 
 - The 13 already done — [[TASK-229]] (10) and [[TASK-230]] (3).
