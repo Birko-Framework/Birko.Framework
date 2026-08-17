@@ -72,16 +72,30 @@ public class CosmosSpanContainsTests
     }
 
     [Fact]
-    public void Without_the_rewrite_the_provider_rejects_the_array_spelling()
+    public void The_provider_now_handles_the_array_spelling_itself_and_agrees_with_the_rewrite()
     {
-        // Pins the defect itself, so the test above cannot quietly become vacuous if the provider
-        // starts supporting MemoryExtensions.Contains on its own — this is what would fail first.
+        // This test was written as `Without_the_rewrite_the_provider_rejects_the_array_spelling`, asserting
+        // a NotSupportedException, and its comment said it existed so the test above "cannot quietly become
+        // vacuous if the provider starts supporting MemoryExtensions.Contains on its own — this is what
+        // would fail first."
+        //
+        // It did exactly that. Floating Microsoft.Azure.Cosmos to 3.* (TASK-229) moved 3.46.1 -> 3.62.1,
+        // and the newer SDK translates the span-bound overload natively. So the premise the rewrite works
+        // around is fixed upstream, and on this SDK the rewrite is redundant — though harmless, because
+        // both spellings render the same SQL.
+        //
+        // The assertion is now EQUIVALENCE rather than rejection, which keeps it a live premise pin in
+        // both directions: if a future SDK regresses and rejects the raw spelling again, this throws and
+        // says the rewrite is load-bearing once more. Whether the Cosmos wiring can be retired is
+        // TASK-233 — a measurement across the version range 3.* admits, not a guess from one version.
         var arr = new[] { 1, 5 };
         Expression<Func<Doc, bool>> raw = x => arr.Contains(x.Amount);
 
-        var act = () => Offline().GetItemLinqQueryable<Doc>().Where(raw).ToQueryDefinition();
+        var rawSql = Offline().GetItemLinqQueryable<Doc>().Where(raw).ToQueryDefinition().QueryText;
 
-        act.Should().Throw<NotSupportedException>();
+        rawSql.Should().Contain("IN (1, 5)");
+        rawSql.Should().Be(Render(x => arr.Contains(x.Amount)),
+            "the rewrite must not change the query on an SDK that needs no rewriting");
     }
 
     [Fact]
