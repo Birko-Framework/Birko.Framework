@@ -219,22 +219,57 @@ are now fixed:
 `Birko.Caching.Redis` or `Birko.MessageQueue.Redis`; declaring a dependency in a *different* project
 surfaced a latent incompatibility in both. Pinning would have hidden it until an advisory forced the bump.
 
-### ⚖ Batch 2 outcome — **the Redis family is consumer-supplied**, decided by the user 2026-08-17
+### ⚖ Batch 2 outcome — **the wrapping project owns the driver; `Birko.Health.Redis` is the one carve-out**
 
-The batch first landed with `Birko.Redis` as the declaring owner and was then **reverted to
-consumer-supplied across all five projects** — none of them declares `StackExchange.Redis`; each records
-that the consumer does. The reasoning below is what the decision was taken against, kept because it is why
-the rule now exists rather than a preference.
+Settled 2026-08-17 after two reversals, which are recorded because the second one only became decidable
+once a premise was measured.
 
-**The rule this establishes: a family may own a package only if every project needing that package belongs
-to the family.** The Redis family fails that test and the ElasticSearch family passes it, which is why
-batch 1 stands and batch 2 does not.
+**The framing that settled it** (the user's): *Birko is the unifying middleware between necessary libraries
+— database drivers, cache providers — and the consumer's code.* If that is what the framework is, then the
+shared project owning its driver **is the product**: a consumer imports `Birko.Data.MongoDB` and never
+learns the package is `MongoDB.Driver 3.*`. Consumer-supplied inverts that and also discards TASK-229's
+measured benefit — one float cleared **29 advisory findings across 25 projects with no per-project edit**,
+precisely because the declaration sat in the shared project.
 
-What the test projects and the Sandbox do now: **declare it themselves, floating `2.*`**. Pinning back to
-2.8 was rejected on this batch's own evidence — see the two breaks below; a pin would re-hide them, and it
-would break the Moq setups this batch just moved onto 2.13's overloads.
+**The objection, and the measurement that answered it.** The concern was that a consumer needs only a
+*subset* of the framework, so ownership would push packages onto projects that do not want them. It does
+not: a `PackageReference` inside a `.projitems` materialises **only in a project that imports that
+`.projitems`**. Measured from the resolved assets files:
 
-The case that forced it — `Birko.Health.Redis`:
+| Consumer imports | Libraries resolved | Drivers pulled in |
+|---|---|---|
+| `Birko.Data.ElasticSearch` | 24 | NEST only |
+| `Birko.Redis` | 25 | StackExchange.Redis only |
+| `Birko.Data.MongoDB` | 33 | MongoDB.Driver only |
+| `Birko.Health.Redis` | 28 | StackExchange.Redis only |
+
+**Ownership is the subset model**, not a threat to it. Consumer-supplied does not shrink the subset; it only
+makes the consumer name each driver by hand.
+
+**What is genuinely subset-hostile is coupling one `.projitems` to another** — and that is why the obvious
+"fix the layering" answer was rejected. `Birko.Health.Redis` bypasses `Birko.Redis` and talks to the driver
+directly, which looks like a layering smell (and is one: `RedisConnectionManager` exposes `GetDatabase()`
+but no multiplexer, so the health check *could not* go through it). Making it depend on `Birko.Redis` would
+close the family — and drag `Configuration`, `Data.Core`, `Data.Stores`, `Contracts` and `Time` into a
+consumer that wanted one health check. **A design fix that violates the constraint is not a fix.**
+
+**Settled rule:**
+- **The project that wraps a driver owns it** — declared, floating within its major, dual CPM form.
+- **Siblings built on it do not re-declare** — they record the pairing (NU1504 otherwise).
+- **A project that uses the same driver independently documents it as consumer-supplied** — the narrowest
+  possible carve-out, costing a standalone consumer one line and everyone else nothing.
+- **A `FrameworkReference` is never owned.** `Microsoft.AspNetCore.App` is not a driver Birko wraps; the
+  host has it from `Microsoft.NET.Sdk.Web`. All four projects will document it. Not an exception — a
+  different category.
+- **NuGet packages dissolve the whole class of problem** and remain the long-term answer. What is being
+  written into these `.projitems` now *is* a package's dependency list, so none of it is wasted.
+
+**Final state**: `Birko.Redis` declares `StackExchange.Redis 2.*`; `BackgroundJobs.Redis`, `Caching.Redis`
+and `MessageQueue.Redis` record the pairing; `Birko.Health.Redis` documents the standalone case; its two
+test projects keep their own `2.*` declaration; four other test projects and the Sandbox drop theirs.
+**221 tests green** across 6 suites against a live Redis 7; Sandbox and the CPM probe both build clean.
+
+The case that forced the carve-out — `Birko.Health.Redis`:
 
 It uses `StackExchange.Redis` directly and depends on **nothing** from `Birko.Redis` — so it is not a
 satellite. But `Birko.Sandbox` imports both, so if both declare, that project file gets two
@@ -252,20 +287,16 @@ available answers both cost something real, and the choice sets the rule for eve
   *differing* versions), but suppressing a code in the sweep is the shape that produced "166 of 166 clean"
   while 10 projects were broken.
 
-**Chosen: (C) — neither declares; the consumer supplies it**, and applied to the whole family rather than to
-`Health.Redis` alone. It costs the compile-error-on-first-use ergonomics this task exists to improve, and it
-buys a rule with no suppressions and no artificial coupling. 221 tests green across 6 suites against a live
-Redis 7 after the revert.
+**Chosen: (C) for this project only** — `Birko.Health.Redis` documents the package and declares nothing,
+while `Birko.Redis` owns it. (A) was rejected on the measured five-project import chain, (B) on the
+suppression.
 
-**And it settles `Microsoft.AspNetCore.App` the same way.** Four independent projects, no base between them,
-and `NETSDK1087` is a hard error that cannot even be `NoWarn`ed — so (B) was never available there. All four
-will record that the `FrameworkReference` is consumer-supplied, which is what an ASP.NET Core host gets from
-`Microsoft.NET.Sdk.Web` anyway; criterion 1 already admits that as a legitimate answer.
-
-**⚠ Open, and larger than this task**: the user's view is that *all* external dependencies should behave
-this way. That is a reversal of the convention TASK-229 established and TASK-230 extended, and it would
-retire `Birko.Packages.props` along with the 13 declarations already landed. Not acted on here — see the
-question at the end of this section.
+**Two reversals happened before that landed, and the sequence is the lesson.** The batch first shipped with
+`Birko.Redis` owning the driver; it was then reverted to consumer-supplied across the whole family on the
+reading that a package with any outside user cannot be owned; it was then restored, because the premise
+underneath the reversal — that ownership pushes packages onto consumers wanting only a subset — turned out
+to be false when measured. **The decision was reversed twice and only the third state rests on a
+measurement.** Both earlier states were internally coherent; that is exactly why neither was safe to keep.
 
 ## Out of scope
 
