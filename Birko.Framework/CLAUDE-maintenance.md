@@ -28,10 +28,32 @@ Every project directory must contain:
 - Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (8-4-4-4-12 characters). Do NOT use human-readable names or non-hex letters (`g-z`) in GUIDs.
 - Each project must have a unique GUID. Generate a proper random GUID (e.g., `b3a8c1d4-e5f6-4a7b-9c0d-1e2f3a4b5c6d`).
 
-**External dependencies — the shared project declares its own driver:**
+**External dependencies — the project that WRAPS a library owns it:**
 - If a `Birko.X` shared project `using`s an external package, **declare it in that project's `.projitems`**,
   with a **floating** version (`Version="9.*"`). Do not leave it for the consumer to discover as a compile
   error. 6 of 8 storage backends already do this; the two that did not are [[TASK-229]].
+- **This is the framework's whole proposition, not bookkeeping.** Birko is the unifying middleware between
+  necessary libraries — drivers, cache providers — and the consumer's code, so a consumer imports
+  `Birko.Data.MongoDB` and never learns the package is `MongoDB.Driver 3.*`.
+- **Ownership does not cost a consumer that imports only a subset — measured, because the opposite is the
+  obvious guess** (TASK-234). A `PackageReference` inside a `.projitems` materialises **only in a project
+  that imports that `.projitems`**: an ElasticSearch consumer resolves 24 libraries with NEST and no Redis;
+  a Redis consumer resolves 25 with StackExchange.Redis and no NEST. Ownership *is* the subset model.
+- **Three shapes, and the third is the one that gets argued about:**
+  1. **The wrapping project owns it.** One declaration.
+  2. **A sibling built on that project does not re-declare** — a consumer imports both, and two
+     `PackageReference` items in one project file is `NU1504`. Record the pairing in a comment instead;
+     MSBuild gives a shared project no way to say "I depend on that other shared project", so the comment is
+     the only place it can live. Without it the next audit reads the absence as the defect and adds it back.
+  3. **A project that uses the same library *independently* documents it as consumer-supplied.** It cannot
+     declare (it would collide wherever both are imported — `Birko.Sandbox` imports everything), and it must
+     **not** take a dependency on the owning project to inherit the declaration: `Birko.Health.Redis` doing
+     so would drag `Configuration`, `Data.Core`, `Data.Stores`, `Contracts` and `Time` into a consumer that
+     wanted one health check. **A design fix that violates the subset rule is not a fix.** Cost is one line
+     for a standalone consumer and nothing for anyone else.
+- **A `FrameworkReference` is never owned.** `Microsoft.AspNetCore.App` is not a library Birko wraps — the
+  host already has it from `Microsoft.NET.Sdk.Web`. All such projects document it. A different category, not
+  an exception to the rule.
 - **Floating, not pinned** — a published advisory then self-heals on the next restore instead of needing an
   edit in every consumer. The accepted cost is that builds are not reproducible from source alone and a bad
   upstream release lands without anyone opting in; the periodic audit below is the safety net that choice
