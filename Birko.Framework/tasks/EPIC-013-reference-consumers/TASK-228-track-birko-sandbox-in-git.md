@@ -62,10 +62,10 @@ The 2.1.11 there is load-bearing for [[TASK-230]]: it proves the SQLite advisory
 
 - [x] `Birko.Sandbox` is a git repository with its sources committed, `.gitignore` covering `bin/`, `obj/`
       and any local run artefacts, matching how the other 15 consumers are set up
-- [ ] Decide and record whether it stays a **consumer** (its own repo under `Consumers/`, like the other 15)
+- [x] Decide and record whether it stays a **consumer** (its own repo under `Consumers/`, like the other 15)
       or is really part of the framework's own test surface given the README calls it the first test place —
       a one-line rationale, because the answer changes who is expected to keep it green
-- [ ] `README.md`'s description matches reality: either the aggregator is trimmed to the "lean slice" the
+- [x] `README.md`'s description matches reality: either the aggregator is trimmed to the "lean slice" the
       text claims, or the text is corrected to describe a 165-projitems aggregator. **Do not leave the two
       disagreeing** — a reader following the current text builds something different from what is here
 - [x] `dotnet run` exits non-zero on failure and zero on success after the move, verified by running
@@ -117,10 +117,34 @@ outstanding criterion, so this task closing is what closes that one.
 **`.gitignore` was already present** at both levels: someone prepared this for git and never ran `init`.
 11 files tracked, `bin`/`obj` (39M of a 39M directory) correctly excluded.
 
-**Still open, and why this is `review` not `done`:** the two remaining criteria are decisions, not work —
-whether Sandbox stays a consumer or is really part of the framework's own test surface, and whether the
-README's "lean slice" description gets corrected or the 165-projitems aggregator gets trimmed to match it.
-Both want the user's call; trimming a smoke harness's coverage is not a documentation edit.
+**Both decisions taken by the user, 2026-08-17, and the answer was sharper than either option offered.**
+
+*"Sandbox is a test surface but it's moved to consumers by purpose — it does not belong to tests or
+framework."*
+
+It is a test **surface** and not a test **project**, and the distinction is mechanical rather than
+philosophical — verified in the build files:
+
+| | How it imports the framework |
+|---|---|
+| `Framework.Tests\*` | hard relative path — `..\..\Framework\Birko.X\Birko.X.projitems` |
+| `Birko.Sandbox` | `$(BirkoSrc)` through its own `Directory.Build.props` — CLI parameter, then `BIRKO_SRC`, then a relative default |
+
+The second is precisely what this repo's README tells every consumer to do. So **Sandbox is the only thing
+in the family that exercises the consumption mechanism itself** — the `$(BirkoSrc)` resolution chain and
+the single-aggregator pattern. A test project cannot cover that, because a test project does not use it.
+Moving it into `Framework.Tests` would delete the only coverage of the path every real consumer takes.
+
+That also settles the second decision without a trade-off: the **165 imports are correct, and the README
+text was wrong.** Bundling the whole framework into one aggregator is the default this README recommends
+("Default to a single aggregator; split only when concrete pain shows up"), and the harness is what proves
+that default still works. Corrected the wording rather than trimming the aggregator — trimming would have
+narrowed real coverage to match a stale sentence.
+
+**Why this is still `review` and not `done`:** only the human test plan remains, and it is not a formality.
+The whole point of the task is that the harness now survives a clean clone, and that **cannot be checked on
+this machine** — this is the machine that already had the untracked copy. It needs one `git clone` plus
+`dotnet run` elsewhere.
 
 ## Human test plan
 

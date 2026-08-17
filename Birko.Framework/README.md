@@ -456,7 +456,8 @@ A minimal aggregator `csproj` looks like:
 **Live examples** of these patterns:
 - `Symbio.Birko.csproj` — single aggregator, ~90 Birko shared projects consolidated into one DLL (large enterprise platform)
 - `WebFinstatApiTester.csproj` — no aggregator at all; the app `csproj` directly imports a lean subset (~10 projitems) because the project is small and overlapping-import risk is nil
-- `Birko.Sandbox` (`Birko\Consumers\Birko.Sandbox`) — the runnable integration **smoke harness**: app csproj directly imports the lean slice it exercises and runs a tiny round-trip per layer (`dotnet run`, exits non-zero on failure). The "first test place" for framework changes
+- `Birko.Sandbox` (`Birko\Consumers\Birko.Sandbox`) — the runnable integration **smoke harness** and the "first test place" for framework changes: `dotnet run` does a tiny round-trip per layer and exits non-zero on failure. It uses a **single aggregator importing all ~165 `.projitems`** — not a lean slice — because bundling the whole framework into one assembly is the pattern this README recommends by default, and the harness is what proves it still works.
+  > **It lives in `Consumers\`, not in `Framework.Tests\`, on purpose.** It is a test *surface* but not a test *project*, and the difference is the import mechanism: `Framework.Tests` projects import `.projitems` by hard relative path (`..\..\Framework\…`), whereas Sandbox resolves `$(BirkoSrc)` through its own `Directory.Build.props` — CLI parameter, then `BIRKO_SRC`, then a relative default. That is exactly what a real consumer does, so Sandbox is the only thing in the family that exercises the **consumption mechanism itself**. A test project cannot cover it, because a test project does not use it.
 
 ### Locating Birko.Framework sources — `$(BirkoSrc)` / `BIRKO_SRC`
 
