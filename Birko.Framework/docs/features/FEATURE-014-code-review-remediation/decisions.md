@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -117,3 +117,12 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   `generated-at` is stamped before the spec file is committed, so it always names the preceding commit and
   staleness is measured from too early — true for 25 of 25 areas here, and the reason TASK-131's first
   pass over-reported 15 stale areas where the real count is 6.
+- 2026-08-17 — **D11 gains [[TASK-229]] and [[TASK-230]]**, both backfilled at creation, both spawned from
+  [[TASK-210]]'s sweep criterion. Inside D11's scope (work tracked directly on the epic) and surfaced by a
+  review gate, so no new decision row. TASK-230 carries the 4 remaining advisories across 13 test projects
+  plus the sandbox; TASK-229 carries the architectural cause — **2 of 171 shared projects `using` a driver
+  they do not declare**, so one advisory class costs one line in MongoDB and ten repos in SQLite.
+  A **user decision is recorded in TASK-229**: shared projects declare their own drivers, floating rather
+  than pinned, accepting non-reproducible builds in exchange for advisories that self-heal on restore.
+  Shipping the backends as real NuGet packages stays **deferred** until the libraries stabilise — TASK-229
+  is forward-compatible with it rather than a substitute.

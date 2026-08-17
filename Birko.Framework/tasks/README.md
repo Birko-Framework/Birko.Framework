@@ -16,14 +16,14 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 114                 |
+| todo         | —                  | —                  | 116                 |
 | in-progress  | 6                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 1                   |
-| done         | 1                  | 22                 | 70                  |
+| done         | 1                  | 22                 | 71                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 81 · P3 7**
+Todo by priority: **P0 0 · P1 27 · P2 82 · P3 7**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
 > increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
@@ -55,6 +55,12 @@ Todo by priority: **P0 0 · P1 26 · P2 81 · P3 7**
 >
 > Adjusted again 2026-08-16 (DV7 drain): tasks 196 -> 197, todo 113 -> 114, P1 25 -> 26. Regenerating the
 > 6 genuinely-stale spec areas spawned **TASK-227** and closed nothing, so the pool grew by one.
+>
+> Adjusted again 2026-08-17 (TASK-210 in flight): tasks 197 -> 200, todo 114 -> 116, in-progress 1 -> 2,
+> P1 26 -> 27, P2 81 -> 82. TASK-210 (MongoDB vulnerable transitives) is picked and its sweep criterion
+> spawned three: **TASK-228** (Birko.Sandbox is not a git repo, P1, EPIC-013), **TASK-229** (2 shared
+> projects use a driver they do not declare, P2) and **TASK-230** (the 4 remaining advisories, P2).
+> TASK-210 then closed `done`: in-progress 2 -> 1, done 70 -> 71.
 
 ## In progress now
 

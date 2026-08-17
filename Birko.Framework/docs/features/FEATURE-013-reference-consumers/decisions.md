@@ -11,7 +11,7 @@ created: 2026-06-18
 
 | ID | Decision | State | Rationale | Date | By | → Tasks |
 |----|----------|-------|-----------|------|----|---------|
-| D1 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-037]], [[TASK-038]] |
+| D1 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-037]], [[TASK-038]], [[TASK-228]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -32,3 +32,9 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   reconstructed. Where a real dated decision with reasoning exists it lives in `CHANGELOG.md` or
   `CLAUDE.md` § Recent Updates, which remain the authority for *why*. Rows carry no invented `deferred`
   or `removed` history, so the absence of such rows means "not recorded", not "never considered".
+- 2026-08-17 — **D1 gains [[TASK-228]]**, backfilled at creation. Inside D1's approved scope (work tracked
+  directly on the epic), so no new decision row: the smoke harness [[TASK-037]] extracted is this epic's
+  own subject. It records that `Birko.Sandbox` **is not a git repository** — the only untracked directory
+  among 16 consumers — so the harness this repo's README calls the "first test place for framework changes"
+  ships to nobody, and the only complete manifest of the framework's external dependency surface (17
+  packages) exists on one disk.

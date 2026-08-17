@@ -28,6 +28,48 @@ Every project directory must contain:
 - Format: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (8-4-4-4-12 characters). Do NOT use human-readable names or non-hex letters (`g-z`) in GUIDs.
 - Each project must have a unique GUID. Generate a proper random GUID (e.g., `b3a8c1d4-e5f6-4a7b-9c0d-1e2f3a4b5c6d`).
 
+**External dependencies — the shared project declares its own driver:**
+- If a `Birko.X` shared project `using`s an external package, **declare it in that project's `.projitems`**,
+  with a **floating** version (`Version="9.*"`). Do not leave it for the consumer to discover as a compile
+  error. 6 of 8 storage backends already do this; the two that did not are [[TASK-229]].
+- **Floating, not pinned** — a published advisory then self-heals on the next restore instead of needing an
+  edit in every consumer. The accepted cost is that builds are not reproducible from source alone and a bad
+  upstream release lands without anyone opting in; the periodic audit below is the safety net that choice
+  depends on.
+- A package declared in a `.projitems` is *injected* into the importing project, so a consumer that also
+  declares it gets **NU1504 duplicate PackageReference** — a warning normally, an **error** under the
+  `-warnaserror` that `verify-conventions` check 1 runs. So when you add a declaration, remove it from the
+  dependents in the same change.
+- Shipping the backends as real NuGet packages is **deferred** until the libraries stabilise. Declaring here
+  is forward-compatible with that: a package's dependency list is exactly this set.
+
+## Dependency vulnerability audit
+
+**NuGet's audit is already on** — `NuGetAudit=true`, `NuGetAuditMode=all`, `NuGetAuditLevel=low` are SDK
+defaults (verified 2026-08-17), so every ordinary `dotnet build` already prints `NU1901`–`NU1904` for an
+affected project. **Do not add these properties to a props file; it is a no-op.**
+
+What the build cannot do is notice an advisory published against code nobody is building. That is a
+time-based gap, not a build-configuration one, so it is covered by a **periodic sweep**:
+
+```powershell
+.\audit-dependencies.ps1                 # report
+.\audit-dependencies.ps1 -FailOnFinding  # exit 1 — for a scheduled job
+```
+
+Run it on a schedule, before a release, and after any dependency bump. Two rules it enforces by construction
+and that are easy to get wrong by hand:
+
+- **Sweep consumers, not just `Framework.Tests`.** A test-only sweep once reported `SQLitePCLRaw` 2.1.10 and
+  implied anything newer was fine, while `Birko.Sandbox` — on a *newer* `Microsoft.Data.Sqlite` — was still
+  affected at **2.1.11**. Scoping to one tree produced a remedy that looked complete and was not.
+- **Check the resolved transitive, not the top-level version number.** `Microsoft.Data.Sqlite` 10.0.0 is
+  newer than 9.0.19 and *worse*: 10.0.0 resolves `SQLitePCLRaw` 2.1.11, 9.0.19 resolves the fixed 2.1.12.
+
+Promotion to a build error stays where it is — `verify-conventions` check 1, on the diff of the task in hand,
+where a human is present to judge it. Making it a global error would break every affected project today and,
+with floating versions, could break any build at any time from an upstream publication nobody chose.
+
 ## Solution & Workspace Registration
 When adding a new project, register in both:
 
