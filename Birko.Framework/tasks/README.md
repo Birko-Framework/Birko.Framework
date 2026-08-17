@@ -17,7 +17,7 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
 | todo         | —                  | —                  | 117                 |
-| in-progress  | 6                  | 10                 | 1                   |
+| in-progress  | 7                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 2                   |
 | done         | 1                  | 22                 | 76                  |
@@ -115,6 +115,14 @@ Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
 >   renews on a heartbeat, `IsLeaseBased` exposed. No test had ever touched a lock provider — 15 added, both
 >   guards proven by mutation. Spawned **TASK-236** (6 remaining backends) and **TASK-237** (leader election
 >   for `RecurringJobScheduler`, which duplicates every recurring job per worker today).
+>
+> Adjusted again 2026-08-17 (EPIC-018 created): **18 epics** (in-progress 6 -> 7), tasks unchanged at 207.
+> **DV5: 21 -> 17.** The four `Birko.Web.Core` defects had no home because *the runtime had no epic* — it
+> appears in four epics' `affects:` lists and none of them is about it, EPIC-001 is `Birko.Web.Components`,
+> and EPIC-016's STORY-052 is explicitly component-shaped. EPIC-018 + FEATURE-018 created and the four
+> moved. Two of them were **tracking backfills** for fixes that shipped with no aggregator commit at all,
+> which is the cost of having nowhere to file work. TASK-130 stays loose deliberately: it spans
+> Web.Components *and* Xaml, so it belongs to one of FEATURE-001 / FEATURE-015 and guessing would bury it.
 
 ## In progress now
 

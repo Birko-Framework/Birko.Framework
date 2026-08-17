@@ -10,7 +10,10 @@ been built. One feature per epic, ids aligned (`FEATURE-0NN` ↔ `EPIC-0NN`) so 
 Each feature's `decisions.md` § History log states exactly what its backfilled rows do and do not claim.
 
 > ⚠ **Awaiting sign-off (8):** FEATURE-001 (5), FEATURE-016 (2), FEATURE-014 (1) — these are verification
-> debt; finish them before new scope. **Three of them cannot be cleared here at all**, because they need a
+> debt; finish them before new scope. **FEATURE-018 also reads `review` but is not in this count**: all four
+> of its tasks were individually closed with their own tests, so what is outstanding there is a
+> *feature-level close-out*, not unverified code. It says `review` because `done` means signed off and this
+> repo allows no "done pending" hybrid. **Three of them cannot be cleared here at all**, because they need a
 > surface this repo does not contain: FEATURE-016 TASK-135 wants a real comma-keypad phone (the fault is a
 > keyboard refusing a character, which no headless run reproduces), FEATURE-001 TASK-136 wants Symbio's
 > tax-rate edit path, and FEATURE-014 TASK-118 wants a sign-in-protected application to correlate the
@@ -41,10 +44,11 @@ Each feature's `decisions.md` § History log states exactly what its backfilled 
 | [FEATURE-011](FEATURE-011-test-coverage-gaps/) | Birko.Framework — Test coverage gaps | idea | 4/0/0/0/0 | 0/7 | n/a (backfilled) | [EPIC-011](../../tasks/EPIC-011-test-coverage-gaps/EPIC.md) |
 | [FEATURE-012](FEATURE-012-mqtt-v5-features/) | Birko.MessageQueue.MQTT — v5 features | idea | 1/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-012](../../tasks/EPIC-012-mqtt-v5-features/EPIC.md) |
 | [FEATURE-013](FEATURE-013-reference-consumers/) | Reference consumers — integration smoke harness + Web playground | building | 1/0/0/0/0 | 1/2 | n/a (backfilled) | [EPIC-013](../../tasks/EPIC-013-reference-consumers/EPIC.md) |
-| [FEATURE-014](FEATURE-014-code-review-remediation/) | Code review — audit remediation | building | 11/0/0/0/0 | 42/98 | n/a (backfilled) | [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) |
+| [FEATURE-014](FEATURE-014-code-review-remediation/) | Code review — audit remediation | building | 11/0/0/0/0 | 43/100 | n/a (backfilled) | [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) |
 | [FEATURE-015](FEATURE-015-birko-xaml-ui-framework/) | Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web | building | 12/0/0/0/0 | 10/22 | n/a (backfilled) | [EPIC-015](../../tasks/EPIC-015-birko-xaml-ui-framework/EPIC.md) |
 | [FEATURE-016](FEATURE-016-birko-backports-from-reps/) | Birko framework backports from Reps (+ cross-provider & Xaml follow-ups) | **review** | 6/0/0/0/0 | 12/14 | n/a (backfilled) | [EPIC-016](../../tasks/EPIC-016-birko-backports-from-reps/EPIC.md) |
 | [FEATURE-017](FEATURE-017-tenant-isolation-hardening/) | Tenant isolation hardening | building | 3/0/0/0/0 | 0/1 | n/a (backfilled) | [EPIC-017](../../tasks/EPIC-017-tenant-isolation-hardening/EPIC.md) |
+| [FEATURE-018](FEATURE-018-birko-web-core-runtime/) | Birko.Web.Core — the browser-side runtime | **review** | 1/0/0/0/0 | 4/4 | n/a (already ships) | [EPIC-018](../../tasks/EPIC-018-birko-web-core-runtime/EPIC.md) |
 
 Phase ∈ idea · prototyping · deciding · building · review · done · dropped · superseded.
 Decisions column = approved/changed/deferred/removed/proposed counts.
@@ -52,14 +56,14 @@ Tasks = done/total of tasks carrying `feature: FEATURE-NNN`.
 
 ## Not covered by this tree
 
-**Twenty-one** tasks in `tasks/_loose/` carry `parent: null` and `feature: null`, so none of them appears
+**Seventeen** tasks in `tasks/_loose/` carry `parent: null` and `feature: null`, so none of them appears
 in any row above. It was 6 on 2026-08-01 and peaked at 33; **12 were re-homed to
 [EPIC-014](../../tasks/EPIC-014-code-review-remediation/EPIC.md) / FEATURE-014 on 2026-08-17** — framework
 Data/SQL defects that were already being worked under that feature's remit and merely sat where it could
 not see them. That was not cosmetic: **TASK-204 was a P0 in `review`** and appeared in no rollup and no
 sign-off callout, which is how it sat unnoticed for five days.
 
-**The remaining 21 are not a backlog to drain — most belong here.** Four groups:
+**The remaining 17 are not a backlog to drain — most belong here.** Four groups:
 
 - **Framework-wide *decision* tickets** (TASK-059, TASK-106, TASK-127, TASK-139) — questions owned by no
   single epic, which deliberately declare no parent so the dashboard does not render them twice.
@@ -67,10 +71,21 @@ sign-off callout, which is how it sat unnoticed for five days.
   tracked here because the fix or the warning is upstream. Not framework scope.
 - **Process and tooling** (TASK-036 workspace layout, TASK-142 spec-map coverage, TASK-149 story
   visibility, TASK-138 an API-ergonomics papercut recorded as deliberately out-of-feature).
-- **`Birko.Web`-surface defects** (TASK-130, TASK-198, TASK-199, TASK-202, TASK-203) — these *do* have a
-  home, most likely EPIC-016's STORY-052 ("a consumer adopted it and the adoption found what it gets
-  wrong") or EPIC-001. **Deliberately not moved**, because assigning them is a judgment about which epic
-  owns the Web surface and guessing would be worse than leaving them visible here.
+- **One theme/token defect** (TASK-130) — colour-contrast gating that spans `Birko.Web.Components` **and**
+  `Birko.Xaml.Avalonia`, so it belongs to FEATURE-001 or FEATURE-015 and not to both. Still deliberately
+  unmoved: a wrong home is less visible than no home.
+
+> **Resolved 2026-08-17 — the four `Birko.Web.Core` defects had no home because the runtime had no epic.**
+> TASK-198, 199, 202 and 203 were expected to fit EPIC-016's STORY-052 or EPIC-001. Neither works:
+> STORY-052 is explicitly about `b-*` catalogue components (*"the fix lives in the component or it is not a
+> fix"*) and an HTTP timeout is not a component fix, while EPIC-001's six stories are all component work.
+> `Birko.Web.Core` appears in **four** epics' `affects:` lists and none of them is *about* it — being named
+> as affected is not ownership. [EPIC-018](../../tasks/EPIC-018-birko-web-core-runtime/EPIC.md) and
+> FEATURE-018 were created for it and the four moved there.
+>
+> The absence had a measurable cost: **two of the four are tracking backfills** for fixes that shipped in
+> `Birko.Web.Core` with no aggregator commit, no task and no spec regen, found only by diffing the sibling
+> repository's `git log` against this one. Work with nowhere to be filed ships untracked.
 
 > **The audit rule cannot tell these apart.** [[roadmap]]'s DV5 flags any parentless task, and the
 > rationale for a deliberate one lives in prose inside the task body — or, for TASK-138, in a feature
