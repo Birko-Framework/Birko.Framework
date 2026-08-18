@@ -532,4 +532,87 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         store.Delete(loaded);
         Committed().Should().Be(0);
     }
+
+    // ================================================================ TASK-253: CreateHypertableAsync
+
+    /// <summary>
+    /// <b><c>CreateHypertableAsync</c> escaped every boundary, and on PostgreSQL that was silent.</b> It opened
+    /// its own <c>CreateConnection</c> + <c>OpenAsync</c> instead of going through <c>DoDdlCommandAsync</c>, so
+    /// a caller who wrapped it in a transaction got a conversion that survived their rollback with no error
+    /// either way — TASK-242's defect in a method that sweep never reached, because it is not a bulk path.
+    /// <para>
+    /// The assertion counts the catalogue <b>on a connection of its own, after the rollback</b>. "It did not
+    /// throw" passes against the broken code: two connections are perfectly legal here, which is exactly what
+    /// made this invisible.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task CreateHypertableAsync_inside_a_rolled_back_boundary_leaves_a_plain_table()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS \"{TableName}\" CASCADE");
+        // A plain table, deliberately NOT a hypertable yet: the conversion is what is under test.
+        Exec($"CREATE TABLE \"{TableName}\" (Guid uuid, Name text, Amount int, Ts timestamp NOT NULL)");
+        IsHypertableNow().Should().BeFalse("the premise: nothing has converted it yet");
+
+        var store = AsyncStore();
+        await using (var uow = SqlUnitOfWork.FromStore(store))
+        {
+            await uow.BeginAsync();
+            await new TimescaleDBConnector(Settings()).CreateHypertableAsync(TableName, "Ts", "1 day");
+            await uow.RollbackAsync();
+        }
+
+        IsHypertableNow().Should().BeFalse(
+            "the conversion must join the caller's boundary and die with it. Opening its own connection let it "
+          + "commit independently and survive the rollback — silently, because PostgreSQL is happy to grant a "
+          + "second connection");
+    }
+
+    /// <summary>The committed case, so the test above cannot pass by the conversion simply never working.</summary>
+    [Fact]
+    public async Task CreateHypertableAsync_inside_a_committed_boundary_converts_the_table()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS \"{TableName}\" CASCADE");
+        Exec($"CREATE TABLE \"{TableName}\" (Guid uuid, Name text, Amount int, Ts timestamp NOT NULL)");
+
+        var store = AsyncStore();
+        await using (var uow = SqlUnitOfWork.FromStore(store))
+        {
+            await uow.BeginAsync();
+            await new TimescaleDBConnector(Settings()).CreateHypertableAsync(TableName, "Ts", "1 day");
+            await uow.CommitAsync();
+        }
+
+        IsHypertableNow().Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The <c>name</c> argument is pre-folded, so a PascalCase-declared time column resolves against the
+    /// bare-emitted stored one. Without a boundary, to isolate the identifier half from the transaction half.
+    /// </summary>
+    [Fact]
+    public async Task CreateHypertableAsync_foldsThePascalCaseTimeColumn()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS \"{TableName}\" CASCADE");
+        Exec($"CREATE TABLE \"{TableName}\" (Guid uuid, Name text, Amount int, Ts timestamp NOT NULL)");
+
+        await new TimescaleDBConnector(Settings()).CreateHypertableAsync(TableName, "Ts", "1 day");
+
+        IsHypertableNow().Should().BeTrue(
+            "'Ts' must be folded to 'ts' to match pg_attribute.attname, and the table must carry its own "
+          + "identifier quotes to resolve as a regclass");
+    }
+
+    private static bool IsHypertableNow()
+    {
+        using var conn = new NpgsqlConnection(Settings().GetConnectionString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM timescaledb_information.hypertables "
+                        + $"WHERE hypertable_name = '{TableName}'";
+        return Convert.ToInt32(cmd.ExecuteScalar()) == 1;
+    }
 }
