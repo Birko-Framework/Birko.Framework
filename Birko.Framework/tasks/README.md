@@ -1,31 +1,29 @@
 # Tasks — Birko.Framework
 
 > ⚠ **Feature drift (2):** DV5 ×17 (every task in `_loose/` carries no epic **and** no feature, so none
-> appears in a feature row — down from 32 at the last regeneration) · specs DV11 ×25 (`shaped-by` has never
-> been derived on **any** of the 25 specs, so DV8 is suppressed everywhere and "a feature never shipped its
-> spec" cannot be distinguished from "nobody computed it") — run `/roadmap --check`.
+> appears in a feature row) · specs DV11 ×25 (`shaped-by` has never been derived on **any** of the 25 specs, so
+> DV8 is suppressed everywhere and "a feature never shipped its spec" cannot be distinguished from "nobody
+> computed it") — run `/roadmap --check`.
 >
-> ℹ **Backlog integrity: clear.** The four findings the 2026-08-18 regeneration raised are resolved —
-> duplicate id `TASK-240` renumbered to [[TASK-250]] (the transaction task keeps the id; it is the one
-> CLAUDE.md § Conventions cites), the spent `TASK-036-move.ps1` deleted from the task tree, EPIC-018's
-> status documented as deliberate rather than flipped, and the task-less-story count folded into
-> [[TASK-149]] as evidence instead of a duplicate task.
+> ℹ **Backlog integrity: clear.** No duplicate ids, no non-`.md` files in the tree, so a `TASK-*` path count and
+> the task count agree. The four findings raised by the 2026-08-18 regeneration are resolved — duplicate id
+> `TASK-240` renumbered to [[TASK-250]], the spent `TASK-036-move.ps1` deleted, EPIC-018's status documented as
+> deliberate, and the task-less-story count folded into [[TASK-149]] as evidence.
 >
-> **EPIC-018 will keep tripping the parent-contradiction check, and that is expected.** All four of its
-> tasks are `done` while it stays `in-progress`, because it is an area-of-concern epic created to give
-> `Birko.Web.Core` an owner — closing it would recreate the orphaning it exists to prevent. The reasoning
-> is recorded in its own `EPIC.md` (§ *Why this epic stays `in-progress` with no open tasks*); treat the
-> flag as a known false positive there, not as work.
+> **EPIC-018 will keep tripping the parent-contradiction check, and that is expected.** All four of its tasks
+> are `done` while it stays `in-progress`, because it is an area-of-concern epic created to give
+> `Birko.Web.Core` an owner — closing it would recreate the orphaning it exists to prevent. The reasoning is in
+> its own `EPIC.md` (§ *Why this epic stays `in-progress` with no open tasks*); treat the flag as a known false
+> positive there, not as work.
 >
-> **18 of the 56 stories hold zero task files**, and that splits into two tracking models — only one is a
-> problem. **Four are deliberate findings pools working as designed:** EPIC-014's STORY-024/025/026/027 each
-> state *"Not pre-created — extract tasks from `CODE-REVIEW-AUDIT-2026-06-17.md` on demand"*, so the
-> schedulable pool is the audit document and tasks are spawned as they are picked. `(0/0)` there means
-> "nothing currently extracted", not "nothing tracked" — do **not** decompose them. **Thirteen are the real
-> instance:** `done` stories whose shipped work lives only in the story body (the Xaml build-out
-> STORY-029…038, STORY-043, and STORY-044/045). Tracked as [[TASK-149]], now carrying the split and the
-> measured list. STORY-042 is `planned` and probably a pool too; its wording differs so it was not matched
-> mechanically.
+> **18 of the 56 stories hold zero task files**, and that splits two ways — only one is a problem. **Four are
+> deliberate findings pools working as designed:** EPIC-014's STORY-024/025/026/027 each state *"Not
+> pre-created — extract tasks from `CODE-REVIEW-AUDIT-2026-06-17.md` on demand"*, so the schedulable pool is
+> the audit document and tasks are spawned as they are picked. `(0/0)` there means "nothing currently
+> extracted", not "nothing tracked" — do **not** decompose them. **Thirteen are the real instance:** `done`
+> stories whose shipped work lives only in the story body (the Xaml build-out STORY-029…038, STORY-043, and
+> STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
+> so it was not matched mechanically.
 
 _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
@@ -43,11 +41,12 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 
 Todo by priority: **P0 0 · P1 25 · P2 80 · P3 10**
 
-> Regenerated 2026-08-18 by a full walk of every frontmatter in `tasks/` — 18 epics, 56 stories,
-> **220 task files**, now with one id each and no non-`.md` files in the tree, so a `TASK-*` path count and
-> the task count finally agree. The figures before this run had been hand-patched incrementally while
-> closing TASK-245 and TASK-249 and were wrong by two, which is the reason a dashboard is regenerated
-> rather than incremented.
+> Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
+> **220 tasks** (115 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
+> the previous run corrected the totals but left the body from the 2026-08-09 walk.
+>
+> The five-task index-DDL thread closed today — [[TASK-245]] → [[TASK-246]] → [[TASK-247]] → [[TASK-248]] →
+> [[TASK-249]] — which is most of the `done` movement in EPIC-014.
 
 ## In progress now
 
@@ -161,7 +160,7 @@ Todo by priority: **P0 0 · P1 25 · P2 80 · P3 10**
     - [ ] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
     - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
     - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (54/113 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (57/113 tasks done)
   - **STORY-024** Critical findings — done (0/0) (done)
   - **STORY-025** High findings — done (0/0) (done)
   - **STORY-026** Medium findings — in-progress (0/0)
