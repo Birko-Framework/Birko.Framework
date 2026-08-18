@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -290,7 +290,18 @@ namespace Birko.Data.Migrations.SQL.Context
 
             public IIndexBuilder WithField(string name, bool descending = false, IndexFieldType fieldType = IndexFieldType.Standard)
             {
-                _fields.Add((name, descending));
+                // Validated HERE rather than in Build(), so a bad name fails at the declaration site and
+                // covers both of Build()'s routes at once.
+                //
+                // TASK-249. This is the second caller-derived index-column sink, and it was missed when
+                // TASK-245 made index columns be emitted BARE (required: a quoted column cannot resolve the
+                // case-folded one PostgreSQL stores). `Build()`'s connector path puts this text straight into
+                // Tables.IndexColumn.ColumnName and hands it to CreateIndexes -> CreateIndexSql, where
+                // QuoteIdentifier had been incidentally containing it. Bare, a migration calling
+                // WithField("Rank); CREATE TABLE Pwned (x INTEGER); --") emits and executes two statements —
+                // the SH-H023 shape. The guard on SqlIndexManager.ToSqlIndexDefinition does not cover this
+                // route: nothing here goes through that translator.
+                _fields.Add((Birko.Data.SQL.DataBase.ValidateIndexFieldIdentifier(name), descending));
                 return this;
             }
 
