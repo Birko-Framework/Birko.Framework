@@ -1,7 +1,7 @@
 ---
 area: event-bus-and-messaging
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: b7bfb63
+generated-on: 2026-08-18
 sources:
   - ../Birko.EventBus.EventSourcing/DomainEventPublished.cs
   - ../Birko.EventBus.EventSourcing/EventReplayService.cs
@@ -88,7 +88,7 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.EventBus: e2eab6c
   ../Birko.EventBus.EventSourcing: 23cc837
   ../Birko.EventBus.MessageQueue: cfa3d21
-  ../Birko.EventBus.Outbox: ec4ceb9
+  ../Birko.EventBus.Outbox: bbd93890d9274cfe069fa2e084021b9deca2d66e
   ../Birko.MessageQueue: f40961a
   ../Birko.MessageQueue.InMemory: 106f689
   ../Birko.MessageQueue.MQTT: 23a9f74
@@ -884,11 +884,29 @@ take up to `batchSize` `Pending` entries ordered by `CreatedAt`, flipping each t
 
 ### Requirement: Outbox DI wiring unwraps the decorator so the processor publishes through the real bus
 
-The system SHALL, in `AddOutbox<TStore>`, register `OutboxOptions`, the store, an `OutboxProcessor`
-whose publisher is the resolved `IEventBus` — unwrapped to `OutboxEventBus.Inner` when the resolved
-bus is an `OutboxEventBus` — and an `OutboxProcessorHostedService`; and `AddOutboxEventBus` SHALL
-replace the existing `IEventBus` registration with an `OutboxEventBus` wrapping it, preserving the
+The system SHALL, in **either** `AddOutbox` overload, register `OutboxOptions`, the store, an
+`OutboxProcessor` whose publisher is the resolved `IEventBus` — unwrapped to `OutboxEventBus.Inner` when
+the resolved bus is an `OutboxEventBus` — and an `OutboxProcessorHostedService`; and `AddOutboxEventBus`
+SHALL replace the existing `IEventBus` registration with an `OutboxEventBus` wrapping it, preserving the
 original lifetime.
+
+#### Scenario: A store the container cannot activate is supplied by a factory
+
+- **Given** `AddOutbox(sp => new SqlOutboxStore(settings, connectorType))` — the factory overload
+- **When** the registrations are built
+- **Then** the factory is registered as the `IOutboxStore` source and the processor plus hosted service are
+  wired exactly as the generic overload wires them, both paths sharing one `AddOutboxProcessor` helper so the
+  decorator-unwrapping cannot diverge between them
+- **And** a null factory is rejected with `ArgumentNullException`
+
+#### Scenario: Why the generic overload is not sufficient on its own
+
+- **Given** a SQL-backed outbox store parameterised by settings and a connector type chosen from
+  configuration
+- **When** a consumer tries `AddOutbox<TStore>()`
+- **Then** container activation cannot supply those constructor arguments, because they are not themselves
+  registered services — which without the factory overload forces the consumer to re-implement the processor
+  and hosted-service registrations by hand and re-derive the decorator-unwrapping
 
 #### Scenario: Registration order reversed
 

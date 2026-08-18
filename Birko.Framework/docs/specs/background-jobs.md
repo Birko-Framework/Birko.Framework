@@ -1,7 +1,7 @@
 ---
 area: background-jobs
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: b7bfb63
+generated-on: 2026-08-18
 sources:
   - ../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueue.cs
   - ../Birko.BackgroundJobs.CosmosDB/CosmosDBJobQueueSchema.cs
@@ -47,7 +47,7 @@ sources:
   - ../Birko.Contracts/Retry/RetryPolicy.cs
 source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16:07:38,
                   # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
-  ../Birko.BackgroundJobs: 4480520
+  ../Birko.BackgroundJobs: 1be4e59d494f56f79f213a832b9f86acd88e43b0
   ../Birko.BackgroundJobs.CosmosDB: beb9c68
   ../Birko.BackgroundJobs.ElasticSearch: 7317cdd
   ../Birko.BackgroundJobs.JSON: 5d38962
@@ -79,8 +79,10 @@ The queue itself is an interface with nine shipped implementations: an in-proces
 Elasticsearch, RavenDB, Cosmos DB, Redis, a JSON file and an XML file. They agree on the descriptor
 model and the status lifecycle but **differ materially** in how they claim a job under concurrency,
 whether they honour the queue-level retry budget, whether cancellation is status-guarded, and where
-they read "now" from. Those divergences are recorded per backend below. Two auxiliary lock
-providers (`SqlJobLockProvider`, `RedisJobLockProvider`) exist so a consumer can serialise its own
+they read "now" from. Those divergences are recorded per backend below. Lock providers
+(`SqlJobLockProvider`, `RedisJobLockProvider`, `FileJobLockProvider`) share the `IJobLockProvider`
+contract and are consumed by the recurring scheduler's leader election as well as by a consumer
+serialising its own
 worker coordination; nothing in this area uses them internally.
 
 ## Requirements
@@ -543,6 +545,83 @@ SHALL return the number of jobs removed.
 - **Given** a `BackgroundJobProcessor` configured with `JobQueueOptions.RetentionPeriod = 7 days`
 - **When** the processor runs indefinitely
 - **Then** `PurgeAsync` is never called; `RetentionPeriod` is not read anywhere in this capability and purging is entirely the consumer's responsibility
+
+### Requirement: Recurring scheduling is coordinated by leader election, and is opt-in
+
+The system SHALL keep each recurring definition's `NextRunAt` in the scheduler's own memory, and SHALL
+therefore, when given an `IJobLockProvider`, enqueue occurrences only while it holds a named leadership
+lock. Without a provider it SHALL behave exactly as before — every scheduler enqueues — so the feature is
+opt-in and existing call sites are unaffected.
+
+#### Scenario: Without a lock provider every worker still schedules
+
+- **Given** a `RecurringJobScheduler` constructed with no `lockProvider`
+- **When** a definition becomes due in several processes at once
+- **Then** each enqueues its own occurrence, bit-for-bit the prior behaviour, and `IsLeader` reports true
+  — because `NextRunAt` is per-process memory, so N workers independently conclude the job is due
+
+#### Scenario: Only the lock holder enqueues
+
+- **Given** several schedulers sharing one `lockName` and a lock provider
+- **When** a definition becomes due
+- **Then** only the holder enqueues; a follower makes **no scheduling decision at all** rather than
+  skipping the enqueue while advancing `NextRunAt`
+
+#### Scenario: A new leader re-baselines rather than firing immediately
+
+- **Given** leadership passes to another scheduler
+- **When** it takes the lock
+- **Then** it sets `NextRunAt = now + interval` for each definition, because it cannot know what the
+  previous leader already enqueued — so it neither fires immediately nor inherits a stale overdue instant
+
+#### Scenario: A leadership lock needs a name and a positive retry interval
+
+- **Given** a lock provider with a blank `lockName`, or a non-positive `leadershipRetryInterval`
+- **When** the scheduler is constructed
+- **Then** `ArgumentException` is thrown
+
+#### Scenario: Leadership is re-checked, not assumed once
+
+- **Given** a scheduler that acquired leadership and then lost the lock
+- **When** the loop next considers a due definition
+- **Then** `IsLeader` is `_isLeader && _lockProvider.IsLocked`, so a lost lock stops it enqueueing, and
+  the death of a leader is recovered from without restarting every worker
+
+### Requirement: A lock's two durations are distinct, and lease-vs-session is advertised
+
+The system SHALL expose `TryAcquireAsync(lockName, acquireTimeout, leaseDuration?, ct)` on
+`IJobLockProvider`, separating how long to wait for the lock from how long it is held, and SHALL declare
+`IsLeaseBased` so a caller can tell a lease that expires from a session that dies with its owner.
+
+#### Scenario: One argument had meant three different things
+
+- **Given** the earlier single-`timeout` signature
+- **When** it reached each implementation
+- **Then** SQL/PostgreSQL ignored it, SQL/MSSql and MySQL waited on it, and Redis used it as the key's
+  expiry — releasing the lock while the holder was still working. Splitting the durations is what makes
+  the providers substitutable behind one interface
+
+#### Scenario: A session lock refuses a lease duration
+
+- **Given** `FileJobLockProvider`, whose `IsLeaseBased` is `false`
+- **When** `TryAcquireAsync` is called with a non-null `leaseDuration`
+- **Then** it throws, stating that a file lock is session-scoped and cannot expire, and naming both the
+  null-lease option and the lease-based alternative
+- **And** the lock itself is a `FileStream` opened `FileShare.None`, so the OS releases it if the process
+  dies — genuine session semantics no document store in this family can offer
+
+### Requirement: Counting jobs is an optional capability, not a queue-contract member
+
+The system SHALL expose `CountByStatusAsync` on a separate `IJobQueueCounts` interface that a queue may
+implement, rather than adding a member to the queue contract.
+
+#### Scenario: A capability only some backends can answer efficiently
+
+- **Given** nine queue implementations
+- **When** a counting capability is needed
+- **Then** it is advertised by implementing `IJobQueueCounts`; adding the member to the shared contract
+  would break every implementation for a capability only some can serve efficiently, so a caller feature-
+  detects instead
 
 ### Requirement: Clock source differs per backend
 
