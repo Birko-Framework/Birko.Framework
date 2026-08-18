@@ -53,7 +53,7 @@ namespace Birko.Data.SQL.Connectors
 
             var selectSql = BuildViewSelectSql(view);
 
-            await DoCommandWithTransactionAsync(async (command) =>
+            await DoDdlCommandAsync(async (command) =>
             {
                 command.CommandText = BuildCreateViewSql(name!, selectSql);
                 await Task.CompletedTask;
@@ -87,7 +87,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (string.IsNullOrWhiteSpace(viewName)) throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            await DoCommandWithTransactionAsync(async (command) =>
+            await DoDdlCommandAsync(async (command) =>
             {
                 command.CommandText = "DROP VIEW IF EXISTS " + QuoteIdentifier(viewName);
                 await Task.CompletedTask;

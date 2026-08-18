@@ -51,7 +51,7 @@ namespace Birko.Data.SQL.Connectors
 
             var selectSql = BuildViewSelectSql(view);
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = BuildCreateViewSql(name!, selectSql);
             }, (command) =>
@@ -84,7 +84,7 @@ namespace Birko.Data.SQL.Connectors
         {
             if (string.IsNullOrWhiteSpace(viewName)) throw new ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = "DROP VIEW IF EXISTS " + QuoteIdentifier(viewName);
             }, (command) =>
