@@ -96,9 +96,22 @@ public class LiteralIdentifierProducerTests
         escaped.Should().NotEndWith("'");
     }
 
+    /// <summary>
+    /// <b>Refuses null rather than escaping it to empty — reversed from the first version of this helper, and
+    /// the convergence is what exposed why.</b> Returning <see cref="string.Empty"/> looked accommodating,
+    /// but once the framework's 18 hand-rolled copies were converged onto it (step 7), every one of those
+    /// sinks would have turned a null identifier into an <i>empty</i> one — a silently malformed statement,
+    /// where the hand-written <c>Replace</c> threw. Loud beats quiet (§ SH-H037), and the message names where
+    /// to handle it.
+    /// </summary>
     [Fact]
-    public void EscapeLiteral_TreatsNullAsEmpty()
-        => SqlLiteral.EscapeLiteral(null).Should().BeEmpty();
+    public void EscapeLiteral_RefusesNull()
+    {
+        var act = () => SqlLiteral.EscapeLiteral(null!);
+
+        act.Should().Throw<ArgumentNullException>()
+            .WithMessage("*empty identifier*", "the refusal has to say what the quiet alternative would emit");
+    }
 
     // ── RegclassLiteral — quote as an identifier, THEN escape for the literal ──
 
