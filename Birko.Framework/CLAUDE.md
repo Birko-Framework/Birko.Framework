@@ -277,6 +277,41 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     lock taken by a standalone copy dies with that copy; taken inside somebody else's boundary it is held
     until *their* commit, serialising every other writer against the table for the life of a transaction
     that never asked for it.
+  - **DDL is not a write like the others: on a provider whose DDL is not transactional it must be issued
+    OFF the boundary, and that is a stated provider capability rather than a blanket rule.** Stores
+    initialise lazily, so a store's *first* data access issues `CREATE TABLE IF NOT EXISTS` — and once the
+    single-command paths joined the ambient, that DDL did too. **MySQL implicitly commits an open
+    transaction before and after every DDL statement**, so a store whose first operation happened inside a
+    boundary committed it before the caller's own write ran, and the rollback undid nothing: three rows
+    survived a rolled-back boundary, silent on the way in and on the way out (TASK-243, measured on 8.4).
+    `AbstractConnectorBase.SupportsTransactionalDdl` is the switch — false for MySQL alone — and
+    `AbstractConnector.DoDdlCommand` / `DoDdlCommandAsync` the single funnel that consults it, suppressing
+    the ambient via `AmbientSqlTransaction.Suppress()`. Four parts generalise:
+    - **The blanket version of this fix is a HANG, not a smaller win.** "Run schema-ensure outside any
+      boundary" is the obvious provider-independent answer and it is wrong: SQLite serialises at the file
+      level, so a second connection cannot take the write lock the boundary holds and blocks for the whole
+      busy timeout. Measured by making the suppression unconditional — 3 of 3 SQLite tests failed with
+      `SQLite Error 5: 'database is locked'`. **The two halves of the trade land on opposite providers**:
+      the one that needs DDL on the boundary's connection is exactly the one with transactional DDL, and
+      the one that needs it off is exactly the one where a second connection is legal. That is what makes
+      the switch safe rather than lucky, and it is why the answer is a capability and not a rule.
+    - **A funnel with four overrides is not a funnel.** The base emitters were rewired first and the fix
+      measured as *not working* (5 of 7 still red): `MySQLConnector`, `PostgreSQLConnector`,
+      `MSSqlConnector` and `TimescaleDBConnector` each **override** `CreateTable(string, IEnumerable<string>)`
+      with their own `DoCommand`. Third instance of this shape in a fortnight — TASK-215's base wrappers,
+      TASK-242's store `*Core` overrides, this. **When introducing a funnel, grep `override` on every
+      method that reaches it before believing the wiring**, and confirm with a revert rather than a read.
+    - **Suppression is for DDL and nothing else.** `AmbientSqlTransaction.Suppress()` installs a fresh cell
+      with no head, so it hides the whole chain and restores exactly what was there. Anything else that
+      suppresses a boundary is *escaping* it, which is the defect TASK-240 and TASK-242 exist to remove.
+      The legacy `ExternalConnection`/`ExternalTransaction` pair is deliberately **not** suppressed: its
+      only user is the migrations `SqlSchemaBuilder`, which exists to run DDL in a transaction it owns.
+    - **The two providers now give opposite answers about whether a created table survives a rollback, and
+      both are pinned.** On MySQL it survives (the DDL is no longer in the boundary); on PostgreSQL, MSSql
+      and SQLite it is rolled back with it. Asserting both is what stops the next reader "unifying" them
+      from symmetry. Whether schema-ensure should be in a caller's unit of work at all is TASK-244, still
+      open — and the residue is that a store whose schema-ensure was rolled back still believes it is
+      initialised.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -669,6 +704,38 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### A store's first operation inside a boundary silently committed it on MySQL (2026-08-18)
+
+TASK-243, spawned by TASK-242's own regression suite. Stores initialise lazily, so the first data access
+issues `CREATE TABLE IF NOT EXISTS` — and after TASK-240 that DDL ran on the ambient boundary's connection.
+**MySQL implicitly commits an open transaction on any DDL**, so the boundary was committed before the
+caller's own write ran and the rollback undid nothing: 3 rows survived, no error either way. Fixed with
+`SupportsTransactionalDdl` (false for MySQL alone) consulted by one DDL funnel; the standing rule is in
+§ Conventions above. 24 new tests across four suites; reverts **7 of 38** (MySQL rejoins), **3 of 3**
+(suppress unconditionally → SQLite deadlock), **7 of 38** (provider override bypasses the funnel); 19 SQL
+suites / 1,129 tests green. Five things worth carrying:
+
+- **The obvious provider-independent fix is a hang.** "Run schema-ensure outside any boundary" was this
+  task's own filed first option; measured, it fails 3 of 3 on SQLite with `database is locked`. The two
+  halves of the trade land on opposite providers — SQLite *needs* DDL on the boundary's connection, MySQL
+  needs it off — which is exactly why the answer is a stated capability and not a rule.
+- **A funnel with four overrides is not a funnel.** The base emitters were rewired and the fix measured as
+  not working: all four server connectors override `CreateTable(string, IEnumerable<string>)` with their
+  own `DoCommand`. Third instance in a fortnight after TASK-215 and TASK-242. Grep `override` before
+  believing a funnel is wired, and prove it with a revert.
+- **Measure the objection before mitigating it.** Issuing DDL on a second connection looked like a
+  metadata-lock hazard worth a much larger fix. One `docker exec` settled it: on MySQL 8.4 an open
+  transaction holding a row lock does not block a concurrent `CREATE TABLE IF NOT EXISTS` on that table
+  (17 ms).
+- **A warm-up in a test is a claim that needs an owner.** TASK-242 added `WarmUpAsync` to three MySQL
+  tests with a comment naming this task; closing it removed the warm-up and all 38 pass cold. A warm-up
+  whose reason is not written down is indistinguishable from a bug being hidden.
+- **Two providers now answer oppositely and both are pinned.** A table created by schema-ensure inside a
+  boundary survives the rollback on MySQL and dies with it everywhere else. Asserting both is the record
+  of why they are allowed to differ. Also spawned **TASK-245**: MySQL cannot create *any* declared index —
+  the base emits `CREATE INDEX IF NOT EXISTS`, a syntax error there, and MySQL is the one provider that
+  neither overrides nor supports it. Silent since TASK-204 made schema-ensure record rather than throw.
+
 ### Bulk writes escaped every transaction boundary — silently on three providers (2026-08-18)
 
 TASK-242, completing [TASK-240] which wired `AmbientSqlTransaction` into the single-command paths and left
@@ -872,35 +939,3 @@ ungated 84/84 + 12/12, 7 suites green. Four things worth carrying:
   `_id` — which the projection explicitly suppresses. Found by accident: my first probe named its view
   property `Id` and threw for that reason, which looked like the defect and was not. **Check whether a
   reproduction failed for the reason you think.**
-
-### Nothing could be saved to MongoDB — the store was never able to serialize an entity (2026-08-16)
-
-TASK-214, verified against a live **MongoDB 7** rather than the offline registry the finding was filed
-from. The finding held and was **wider than filed**: not "the sync store cannot serialize", but
-**neither store could persist a single entity**, and repositories inherited it through the same
-constraints. `Birko.Data.MongoDB` registered no driver serialization at all, and `MongoDBModel`'s
-attempt to compensate — a `[BsonRepresentation(BsonType.String)]` **override** of `AbstractModel.Guid`
-— is what made the class map unfreezable. Fixed by deleting the override and adding one
-`MongoSerialization.EnsureRegistered()`, called from the `MongoDBClient` constructor. The standing rule
-is in § Conventions above. Split: **Revert A 7 of 78** (6 fix-dependent), **Revert B 6 of 78**
-(5 fix-dependent); ungated 78/78, 6 dependent suites 39/39. Four things worth carrying:
-
-- **The live server found a third failure the offline probe structurally could not.** With the writes
-  finally landing, every *read* threw `FormatException: Element '_id' does not match any field or
-  property` — no Birko model declares `_id`, by design, so the driver's auto-generated ObjectId had
-  nowhere to go. **Failures queue** (§ TASK-209's rule), and the ones behind the filed one only appear
-  once you clear it.
-- **The env-gated suite had never run, and running it was most of the value.** `MongoFilterMatrixLiveTests`
-  no-ops without `BIRKO_MONGO_HOST`, so the entire MongoDB surface was green while unable to write.
-  Starting a container took a minute. The new serialization suite is deliberately **non-gated** —
-  class-mapping and BSON round-trip need no server, which is precisely why gating them was indefensible.
-- **Registration goes at a funnel and lets the consumer win.** `MongoDBClient`'s constructor, not a
-  `[ModuleInitializer]`: shared projects compile into the consumer's assembly, so an initializer would
-  run *first* and the framework would always beat the consumer's own configuration. Stricter coverage,
-  wrong precedence.
-- **`.map.yml` under-coverage, fifth instance — and this time it bit before the fix, not after.** None
-  of the four changed files was reachable by any glob, so the harvest never specced the defect *and*
-  this fix's own regen would have produced a clean diff over unread code. Added to
-  `core-model-contracts`; `ChangeStreams/*.cs` + `MongoDBLogModel.cs` remain unmapped (TASK-208).
-  Also spawned **TASK-218**: with writes working, the matrix suite reported 26/27, and the 27th is real
-  — an array's `.Contains` binds to `MemoryExtensions.Contains` on .NET 9+ and the driver rejects it.

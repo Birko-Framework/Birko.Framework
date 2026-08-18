@@ -4,6 +4,40 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-08-16 — Nothing could be saved to MongoDB — the store was never able to serialize an entity
+
+TASK-214, verified against a live **MongoDB 7** rather than the offline registry the finding was filed
+from. The finding held and was **wider than filed**: not "the sync store cannot serialize", but
+**neither store could persist a single entity**, and repositories inherited it through the same
+constraints. `Birko.Data.MongoDB` registered no driver serialization at all, and `MongoDBModel`'s
+attempt to compensate — a `[BsonRepresentation(BsonType.String)]` **override** of `AbstractModel.Guid`
+— is what made the class map unfreezable. Fixed by deleting the override and adding one
+`MongoSerialization.EnsureRegistered()`, called from the `MongoDBClient` constructor. The standing rule
+is in § Conventions above. Split: **Revert A 7 of 78** (6 fix-dependent), **Revert B 6 of 78**
+(5 fix-dependent); ungated 78/78, 6 dependent suites 39/39. Four things worth carrying:
+
+- **The live server found a third failure the offline probe structurally could not.** With the writes
+  finally landing, every *read* threw `FormatException: Element '_id' does not match any field or
+  property` — no Birko model declares `_id`, by design, so the driver's auto-generated ObjectId had
+  nowhere to go. **Failures queue** (§ TASK-209's rule), and the ones behind the filed one only appear
+  once you clear it.
+- **The env-gated suite had never run, and running it was most of the value.** `MongoFilterMatrixLiveTests`
+  no-ops without `BIRKO_MONGO_HOST`, so the entire MongoDB surface was green while unable to write.
+  Starting a container took a minute. The new serialization suite is deliberately **non-gated** —
+  class-mapping and BSON round-trip need no server, which is precisely why gating them was indefensible.
+- **Registration goes at a funnel and lets the consumer win.** `MongoDBClient`'s constructor, not a
+  `[ModuleInitializer]`: shared projects compile into the consumer's assembly, so an initializer would
+  run *first* and the framework would always beat the consumer's own configuration. Stricter coverage,
+  wrong precedence.
+- **`.map.yml` under-coverage, fifth instance — and this time it bit before the fix, not after.** None
+  of the four changed files was reachable by any glob, so the harvest never specced the defect *and*
+  this fix's own regen would have produced a clean diff over unread code. Added to
+  `core-model-contracts`; `ChangeStreams/*.cs` + `MongoDBLogModel.cs` remain unmapped (TASK-208).
+  Also spawned **TASK-218**: with writes working, the matrix suite reported 26/27, and the 27th is real
+  — an array's `.Contains` binds to `MemoryExtensions.Contains` on .NET 9+ and the driver rejects it.
+
+---
+
 ## 2026-08-16 — The unbounded-filter guard was never wired into the base it lives on
 
 TASK-215 set out to wire `RequireBoundedFilter` into two more backends and found the hole one layer up:
