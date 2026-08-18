@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -316,3 +316,16 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   rushed: each spans ~10 tasks' worth of behaviour and the spec **diff review** — "was this change
   intended" — is the actual deliverable, which a hurried pass cannot answer. It also records the 5 unknown
   baselines that could *not* be measured away, so nobody stamps them on assumption.
+- 2026-08-18 — **D11 gains [[TASK-252]]**, backfilled at creation. Inside D11's scope, no new decision row.
+  It collects six per-provider gaps the index-DDL thread surfaced and correctly kept out of the task in
+  hand — `RENAME COLUMN` not being universal, composite primary keys being unsupported through the schema
+  builder, `Sparse()`/`WithProperty()` as silent no-ops, MySQL's 3072-byte key ceiling for *bounded*
+  columns, `byte[]` still unindexable there, and `AsyncDataBaseStore.InitCoreAsync` being sync-over-async so
+  the async schema-ensure loop has no store-level caller.
+  **Filed because each had come to rest as prose in a closed task's out-of-scope section**, which is
+  [[TASK-149]]'s defect arriving in the shape it warns about: only `status: todo` tasks are ranked by `pick`,
+  `Next up` or `fix-next`, so six paragraphs inside finished tasks were filed but not schedulable. Grouped
+  rather than split six ways because they are one family and splitting would bury the connection that makes
+  them cheap together. Each requires a **measurement before a fix**, explicitly — the same thread produced
+  TASK-248, whose honest-looking fix was measured and rejected for breaking seven live consumer entities, and
+  the task records the traps already visible for four of the six.

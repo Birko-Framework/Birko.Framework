@@ -37,17 +37,17 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 116   |
+| todo         | —     | —       | 117   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
 | done         | 1     | 22      | 91    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 25 · P2 81 · P3 10**
+Todo by priority: **P0 0 · P1 25 · P2 82 · P3 10**
 
 > Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
-> **221 tasks** (116 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
+> **222 tasks** (117 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
 > the previous run corrected the totals but left the body from the 2026-08-09 walk.
 >
 > The five-task index-DDL thread closed today — [[TASK-245]] → [[TASK-246]] → [[TASK-247]] → [[TASK-248]] →
