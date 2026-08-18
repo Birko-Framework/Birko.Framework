@@ -1,4 +1,4 @@
-using Birko.Data.SQL.Connectors;
+﻿using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.MSSql.Stores;
 using FluentAssertions;
 using Xunit;
@@ -90,5 +90,72 @@ public class MSSqlSettingsAndQuotingTests
         target.TrustServerCertificate.Should().BeTrue();
         target.Location.Should().Be("srv");
         target.UserName.Should().Be("u");
+    }
+
+    // ------------------------------------------------------------------ TASK-245: index DDL
+
+    private static Birko.Data.SQL.Tables.IndexDefinition Index(string name, bool unique, params string[] columns)
+    {
+        var index = new Birko.Data.SQL.Tables.IndexDefinition { Name = name, Unique = unique };
+        for (int i = 0; i < columns.Length; i++)
+        {
+            index.Columns.Add(new Birko.Data.SQL.Tables.IndexColumn { ColumnName = columns[i], Order = i });
+        }
+        return index;
+    }
+
+    /// <summary>
+    /// MSSql has no <c>IF NOT EXISTS</c> on <c>CREATE INDEX</c>, so it synthesises the conditional form with
+    /// a <c>sys.indexes</c> guard. That is why the MySQL defect never showed on this provider.
+    /// </summary>
+    [Fact]
+    public void CreateIndexSql_wraps_the_statement_in_a_sys_indexes_guard_by_default()
+    {
+        var sql = new MSSqlConnector(new MSSqlSettings("localhost", "db"))
+            .CreateIndexSql("IdxRows", Index("ux_docnum", true, "TenantGuid", "Number"));
+
+        sql.Should().StartWith("IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='ux_docnum' AND object_id=OBJECT_ID('IdxRows')) ");
+        sql.Should().EndWith("CREATE UNIQUE INDEX [ux_docnum] ON [IdxRows] ([TenantGuid], [Number])");
+    }
+
+    /// <summary>
+    /// …and drops the guard when the caller asks for the non-conditional form, so
+    /// <c>CreateIndexes(..., throwIfExists: true)</c> genuinely raises here instead of being silently
+    /// ignored — a flag honoured on one provider and no-op'd on three is the shape § Conventions ranks worst.
+    /// </summary>
+    [Fact]
+    public void CreateIndexSql_drops_the_guard_when_not_conditional()
+    {
+        var sql = new MSSqlConnector(new MSSqlSettings("localhost", "db"))
+            .CreateIndexSql("IdxRows", Index("ix_status", false, "Status"), conditional: false);
+
+        sql.Should().Be("CREATE INDEX [ix_status] ON [IdxRows] ([Status])");
+        sql.Should().NotContain("sys.indexes");
+    }
+
+    /// <summary>
+    /// Column identifiers stay bracket-quoted on MSSql, deliberately unlike the base emitter (which emits
+    /// them bare so PostgreSQL can resolve its case-folded columns). MSSql resolves either spelling under the
+    /// default collation, so there is no defect to fix here and no live measurement backing a change —
+    /// pinned so the divergence reads as deliberate rather than as an oversight.
+    /// </summary>
+    [Fact]
+    public void CreateIndexSql_keeps_bracket_quoted_columns_on_mssql()
+    {
+        new MSSqlConnector(new MSSqlSettings("localhost", "db"))
+            .CreateIndexSql("IdxRows", Index("ix_a", false, "Status"), conditional: false)
+            .Should().Contain("([Status])");
+    }
+
+    /// <summary>
+    /// The MySQL 1061 tolerance must never engage on MSSql: its guard means the condition never reaches the
+    /// client. This asserts the "no behaviour change off MySQL" claim rather than arguing it.
+    /// </summary>
+    [Fact]
+    public void IsIndexAlreadyExistsException_is_false_on_mssql()
+    {
+        var connector = new MSSqlConnector(new MSSqlSettings("localhost", "db"));
+
+        connector.IsIndexAlreadyExistsException(new System.Exception("already exists")).Should().BeFalse();
     }
 }
