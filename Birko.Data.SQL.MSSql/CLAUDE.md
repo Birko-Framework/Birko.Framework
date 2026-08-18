@@ -131,6 +131,33 @@ using (var transaction = Connector.BeginTransaction())
 }
 ```
 
+## Index DDL (TASK-245)
+
+MSSql has **no `CREATE INDEX IF NOT EXISTS`**, so `MSSqlConnector.CreateIndexSql` synthesises the
+conditional form:
+
+```sql
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='<ix>' AND object_id=OBJECT_ID('<table>'))
+CREATE [UNIQUE] INDEX [<ix>] ON [<table>] ([col] [DESC], ...)
+```
+
+That override is why the MySQL defect (which had **no** declared index building on that provider) never
+showed here. Two things changed on this provider in TASK-245:
+
+- **`CreateIndexSql` takes `bool conditional = true`.** Passing false drops the `sys.indexes` guard, so
+  `CreateIndexes(..., throwIfExists: true)` genuinely raises for an already-present index here. Without it
+  the flag would have been honourable on MySQL alone and a silent no-op on the three providers whose
+  conditional DDL cannot raise — the shape § Conventions ranks worst.
+- **`MSSqlIndexManager.CreateUniqueIndexSql` was deleted.** It was byte-equivalent to what this connector
+  already emits once `Unique` survives `SqlIndexManager.ToSqlIndexDefinition` (which used to drop the flag —
+  the sole reason a parallel unique emitter existed in three classes). Unique index DDL now comes from the
+  connector, which is the single producer for every dialect. Measured on SQL Server 2022 rather than read.
+
+**Index columns stay bracket-quoted here, deliberately unlike the base emitter**, which emits them bare so
+PostgreSQL can resolve its case-folded columns. MSSql resolves either spelling under the default collation,
+so there is no defect to fix and no live measurement justifying the churn. `IsIndexAlreadyExistsException`
+stays `false` — the guard means the condition never reaches the client.
+
 ## Limitations
 - Requires SQL Server 2012 or later
 - Some features may require specific SQL Server editions

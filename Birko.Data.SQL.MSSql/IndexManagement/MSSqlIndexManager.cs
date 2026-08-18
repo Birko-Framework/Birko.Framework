@@ -1,4 +1,4 @@
-using Birko.Data.SQL.Connectors;
+﻿using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.IndexManagement;
 using System.Linq;
 
@@ -39,15 +39,9 @@ WHERE i.object_id = OBJECT_ID('{safeTable}')
 ORDER BY i.name, ic.key_ordinal";
         }
 
-        protected override string CreateUniqueIndexSql(string tableName, Tables.IndexDefinition index)
-        {
-            var columns = string.Join(", ", index.Columns.Select(c =>
-                Connector.QuoteIdentifier(c.ColumnName) + (c.IsDescending ? " DESC" : "")));
-
-            var safeIndex = index.Name.Replace("'", "''");
-            var safeTable = tableName.Replace("'", "''");
-            return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{safeIndex}' AND object_id=OBJECT_ID('{safeTable}')) "
-                 + $"CREATE UNIQUE INDEX {Connector.QuoteIdentifier(index.Name)} ON {Connector.QuoteIdentifier(tableName)} ({columns})";
-        }
+        // TASK-245 removed CreateUniqueIndexSql: it was byte-identical to what
+        // MSSqlConnector.CreateIndexSql already emits for an index whose Unique flag is set, and the
+        // duplicate existed only because SqlIndexManager.ToSqlIndexDefinition never copied that flag.
+        // The connector emitter is now the single producer of index DDL for every dialect.
     }
 }

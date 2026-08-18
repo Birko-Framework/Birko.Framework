@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -280,15 +280,37 @@ namespace Birko.Data.SQL.Connectors
             }, true, inOwnTransaction: false);
         }
 
-        public override string CreateIndexSql(string tableName, Tables.IndexDefinition index)
+        /// <summary>
+        /// MSSql has no <c>IF NOT EXISTS</c> on <c>CREATE INDEX</c>, so the conditional form is synthesised
+        /// with a <c>sys.indexes</c> guard.
+        /// </summary>
+        /// <remarks>
+        /// TASK-245 — when <paramref name="conditional"/> is false the guard is omitted, so an
+        /// already-present index raises rather than being skipped. That is what makes
+        /// <c>CreateIndexes(..., throwIfExists: true)</c> mean the same thing here as on every other
+        /// provider instead of being silently ignored.
+        /// <para>
+        /// Column identifiers stay bracket-quoted here, deliberately unlike the base (which emits them bare
+        /// for PostgreSQL's sake). MSSql resolves either spelling — its identifiers are case-insensitive
+        /// under the default collation — so there is no defect to fix and no live MSSql measurement backing
+        /// a change. Note the guard matches on index <b>name</b> only, so a same-name index over different
+        /// columns is skipped; that matches MySQL 1061 and PostgreSQL's own IF NOT EXISTS.
+        /// </para>
+        /// </remarks>
+        public override string CreateIndexSql(string tableName, Tables.IndexDefinition index, bool conditional = true)
         {
             var columns = string.Join(", ", index.Columns.Select(c =>
                 QuoteIdentifier(c.ColumnName) + (c.IsDescending ? " DESC" : "")));
 
             var indexName = index.Name.Replace("'", "''");
             var unique = index.Unique ? "UNIQUE " : "";
+            var create = $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+            if (!conditional)
+            {
+                return create;
+            }
             return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{tableName.Replace("'", "''")}')) "
-                 + $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+                 + create;
         }
 
         public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
