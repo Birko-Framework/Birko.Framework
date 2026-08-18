@@ -148,7 +148,7 @@ namespace Birko.Data.SQL.Connectors
             var indexName = "IX_" + name;
 
             // Step 1: Create the view with SCHEMABINDING
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = "CREATE OR ALTER VIEW " + QuoteIdentifier(name!) + " WITH SCHEMABINDING AS " + selectSql;
             }, (command) =>
@@ -166,7 +166,7 @@ namespace Birko.Data.SQL.Connectors
                 return QuoteIdentifier(c);
             }));
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = "CREATE UNIQUE CLUSTERED INDEX " + QuoteIdentifier(indexName!) + " ON " + QuoteIdentifier(name!) + " (" + columnsSql + ")";
             }, (command) =>
@@ -208,7 +208,7 @@ namespace Birko.Data.SQL.Connectors
             var indexName = "IX_" + name;
 
             // Step 1: Create the view with SCHEMABINDING
-            await DoCommandWithTransactionAsync(async (command) =>
+            await DoDdlCommandAsync(async (command) =>
             {
                 command.CommandText = "CREATE OR ALTER VIEW " + QuoteIdentifier(name!) + " WITH SCHEMABINDING AS " + selectSql;
                 await System.Threading.Tasks.Task.CompletedTask;
@@ -227,7 +227,7 @@ namespace Birko.Data.SQL.Connectors
                 return QuoteIdentifier(c);
             }));
 
-            await DoCommandWithTransactionAsync(async (command) =>
+            await DoDdlCommandAsync(async (command) =>
             {
                 command.CommandText = "CREATE UNIQUE CLUSTERED INDEX " + QuoteIdentifier(indexName!) + " ON " + QuoteIdentifier(name!) + " (" + columnsSql + ")";
                 await System.Threading.Tasks.Task.CompletedTask;
@@ -249,7 +249,7 @@ namespace Birko.Data.SQL.Connectors
             if (string.IsNullOrWhiteSpace(viewName))
                 throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = "DROP VIEW IF EXISTS " + QuoteIdentifier(viewName);
             }, (command) =>
@@ -272,7 +272,7 @@ namespace Birko.Data.SQL.Connectors
                 throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
             // CR-M139: genuine async instead of Task.Run(sync).
-            await DoCommandWithTransactionAsync(async (command) =>
+            await DoDdlCommandAsync(async (command) =>
             {
                 command.CommandText = "DROP VIEW IF EXISTS " + QuoteIdentifier(viewName);
                 await System.Threading.Tasks.Task.CompletedTask;
