@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -305,6 +305,97 @@ namespace Birko.Data.SQL.Connectors
                 command.ExecuteNonQuery();
             }, true, inOwnTransaction: false);
         }
+
+        #region Index DDL — MySQL has no conditional form (TASK-245)
+
+        /// <summary>
+        /// MySQL rejects <c>IF NOT EXISTS</c> on <c>CREATE INDEX</c>, so this never emits it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-245. Measured on MySQL 8.4: <c>CREATE INDEX IF NOT EXISTS ix ON T (v)</c> is
+        /// <c>ERROR 1064</c>, a syntax error — so the base statement never ran and <b>every</b> declared
+        /// index on a MySQL entity was absent, silently, since TASK-204 made schema-ensure record rather
+        /// than throw. MSSql overrides the emitter with a <c>sys.indexes</c> guard and PostgreSQL/SQLite
+        /// support the clause natively, which left MySQL as the one provider that neither overrode nor
+        /// supported it.
+        /// </para>
+        /// <para>
+        /// The <c>conditional</c> parameter is therefore accepted and <b>ignored for the statement</b>:
+        /// MySQL has no conditional spelling either way. What it controls is whether
+        /// <c>CreateIndexes</c> tolerates the resulting error — see
+        /// <see cref="IsIndexAlreadyExistsException"/>. Columns are emitted bare and the table quoted,
+        /// inherited from the base rather than re-decided here (§ Conventions).
+        /// </para>
+        /// </remarks>
+        public override string CreateIndexSql(string tableName, Tables.IndexDefinition index, bool conditional = true)
+        {
+            var columns = string.Join(", ", index.Columns.Select(c =>
+                c.ColumnName + (c.IsDescending ? " DESC" : "")));
+
+            var unique = index.Unique ? "UNIQUE " : "";
+            return $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+        }
+
+        /// <summary>
+        /// MySQL's <c>DROP INDEX</c> takes no <c>IF EXISTS</c> and <b>requires</b> <c>ON &lt;table&gt;</c>.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-245 — the base emitted <c>DROP INDEX IF EXISTS `name`</c>, which is wrong twice over on
+        /// MySQL: measured <c>ERROR 1064</c> for the <c>IF EXISTS</c>, and the mandatory <c>ON</c> clause
+        /// missing entirely. So no declared index could be dropped here either.
+        /// </para>
+        /// <para>
+        /// <b>Dropping an absent index therefore throws</b> (<c>ERROR 1091</c>), where the base's
+        /// <c>IF EXISTS</c> tolerated it. That is deliberate and provider-local: a <c>DropIndexes</c> caller
+        /// named a specific index, and the migrations <c>SqlSchemaBuilder.DropIndex</c> step should fail
+        /// loudly rather than silently skip. It is <b>not</b> paired with an "already gone" tolerance,
+        /// because unlike <c>CREATE</c> there is no conditional form being emulated here.
+        /// </para>
+        /// </remarks>
+        public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
+        {
+            return $"DROP INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)}";
+        }
+
+        /// <summary>
+        /// MySQL error <b>1061</b> — <c>Duplicate key name</c> — is "the index you asked for is already
+        /// there", which is what the other three providers report as success.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-245. Matched on the error <b>code</b>, never the message, and the <c>InnerException</c> chain
+        /// is walked because <c>AbstractConnector.InitException</c> re-throws every command failure as
+        /// <c>new Exception(commandText, ex)</c> — the same reason
+        /// <see cref="IsMissingTableException"/> walks it.
+        /// </para>
+        /// <para>
+        /// <b>1061 only.</b> 1062 (<c>Duplicate entry</c>) is a UNIQUE index over data that already violates
+        /// it — genuinely unbuildable, and it must keep reaching the recorder so TASK-204 holds; 1170
+        /// (<c>BLOB/TEXT column used in key specification without a key length</c>) is an unbounded string
+        /// column, also unbuildable. Widening this predicate to any <c>MySqlException</c> would swallow both.
+        /// </para>
+        /// <para>
+        /// Note 1061 also fires for a same-name index over <i>different</i> columns, so such an index is
+        /// silently accepted. That is faithful rather than a hole: measured on PostgreSQL 16,
+        /// <c>CREATE INDEX IF NOT EXISTS</c> likewise reports <i>"relation already exists, skipping"</i> and
+        /// keeps the old definition, and MSSql's guard compares the name alone.
+        /// </para>
+        /// </remarks>
+        public override bool IsIndexAlreadyExistsException(Exception ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is MySqlException mysqlEx)
+                {
+                    return (int)mysqlEx.ErrorCode == 1061;  // ER_DUP_KEYNAME
+                }
+            }
+            return false;
+        }
+
+        #endregion
 
         #region Native Bulk Operations
 

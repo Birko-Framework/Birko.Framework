@@ -155,10 +155,45 @@ MySQL doesn't have a native UUID type. Options:
 - `CHAR(36)` - String representation (more readable)
 - `BINARY(16)` - Compact storage (requires conversion)
 
+## Index DDL (TASK-245)
+
+MySQL has **no conditional form for `CREATE INDEX`** — `CREATE INDEX IF NOT EXISTS` is `ERROR 1064`, a
+syntax error. Before TASK-245 the framework emitted exactly that, so **every** `[IndexedField]` /
+`[CompositeIndex]` on a MySQL entity produced no index and, for a UNIQUE one, no constraint. It was silent
+because TASK-204 makes schema-ensure record rather than throw and nothing subscribes to the report.
+
+`MySQLConnector` therefore overrides three things:
+
+| member | why |
+|---|---|
+| `CreateIndexSql` | never emits `IF NOT EXISTS`; columns bare, table quoted (inherited from the base) |
+| `DropIndexSql` | ``DROP INDEX `n` ON `T` `` — MySQL takes no `IF EXISTS` and **requires** the `ON` clause; the base got both wrong |
+| `IsIndexAlreadyExistsException` | matches error **1061** (`Duplicate key name`) so `CreateIndexes` can fake the conditional form |
+
+Error codes that matter here, all measured on MySQL 8.4:
+
+- **1061** `Duplicate key name` — "already there". Tolerated at the `CreateIndexes` funnel, which is what
+  the other three providers already report as success. Also fires for a same-name index over *different*
+  columns, so such an index is silently accepted — faithful, since PostgreSQL's `IF NOT EXISTS` and MSSql's
+  `sys.indexes` guard are both name-only too.
+- **1062** `Duplicate entry` — a UNIQUE index over data that already violates it. Genuinely unbuildable, so
+  it is **not** tolerated: recorded by schema-ensure, thrown by the explicit path. TASK-204 intact.
+- **1091** `Can't DROP` — dropping an absent index now throws here, where the base's `IF EXISTS` tolerated
+  it. Deliberate: a `DropIndexes` caller named a specific index.
+- **1170** `BLOB/TEXT column used in key specification without a key length` — **still broken**, tracked as
+  TASK-248. An unbounded `string` maps to `LONGTEXT` (see Data Types) and cannot be indexed at all; use
+  `[MaxLengthField(n)]` so the column is `VARCHAR(n)`. This is the shape the canonical SQLite example uses,
+  so it is easy to hit.
+
+Match on the **code**, never the message, and walk `InnerException` — `AbstractConnector.InitException`
+re-wraps every command failure as `new Exception(commandText, ex)`.
+
 ## Limitations
 - Requires MySQL 5.7 or later
 - JSON type requires MySQL 5.7.8+
 - Some features may vary by MySQL edition
+- **An index over an unbounded `string` (`LONGTEXT`) cannot be created** — error 1170. Declare
+  `[MaxLengthField(n)]` on any indexed string column. TASK-248.
 
 ## Maintenance
 
