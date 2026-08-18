@@ -268,7 +268,7 @@ namespace Birko.Data.SQL.Connectors
             DoDdlCommand((command) =>
             {
                 command.CommandText =
-                    "IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='" + name.Replace("'", "''") +"') "
+                    "IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='" + SqlLiteral.EscapeLiteral(name) +"') "
                     + "CREATE TABLE "
                     + QuoteIdentifier(name)
                     + " ("
@@ -302,21 +302,21 @@ namespace Birko.Data.SQL.Connectors
             var columns = string.Join(", ", index.Columns.Select(c =>
                 QuoteIdentifier(c.ColumnName) + (c.IsDescending ? " DESC" : "")));
 
-            var indexName = index.Name.Replace("'", "''");
+            var indexName = SqlLiteral.EscapeLiteral(index.Name);
             var unique = index.Unique ? "UNIQUE " : "";
             var create = $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
             if (!conditional)
             {
                 return create;
             }
-            return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{tableName.Replace("'", "''")}')) "
+            return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{SqlLiteral.EscapeLiteral(tableName)}')) "
                  + create;
         }
 
         public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
         {
-            var indexName = index.Name.Replace("'", "''");
-            return $"IF EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{tableName.Replace("'", "''")}')) "
+            var indexName = SqlLiteral.EscapeLiteral(index.Name);
+            return $"IF EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{SqlLiteral.EscapeLiteral(tableName)}')) "
                  + $"DROP INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)}";
         }
 
