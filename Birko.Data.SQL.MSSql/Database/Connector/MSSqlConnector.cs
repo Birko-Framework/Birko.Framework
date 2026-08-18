@@ -309,22 +309,42 @@ namespace Birko.Data.SQL.Connectors
             var fields = table.Fields.Select(f => f.Value).Where(f => !f.IsAutoincrement).ToList();
             var dataTable = BuildDataTable(table.Name, fields, models);
 
-            using var connection = (SqlConnection)CreateConnection(_settings);
-            try
+            // A bulk write must JOIN an open boundary on this database rather than open a second connection.
+            // On MSSql two connections are perfectly legal, so before this the copy committed independently
+            // and SURVIVED the owner's rollback with no error anywhere — the quiet half of the defect.
+            //
+            // SqlBulkCopy enlists in an external transaction ONLY through the
+            // SqlBulkCopy(SqlConnection, SqlBulkCopyOptions, SqlTransaction) overload. That third argument
+            // was null, which is exactly why the copy escaped; handing it the boundary's transaction is the
+            // whole fix, and the boundary's commit is then what makes the rows durable.
+            //
+            // TableLock is KEPT when this owns the connection and DROPPED when participating. A bulk-update
+            // (BU) table lock taken by a standalone copy is released as soon as that copy ends; taken inside
+            // somebody else's boundary it is held until THEIR commit, serialising every other writer against
+            // the table for the whole life of a transaction that never asked for it. The standalone fast
+            // path is unchanged.
+            //
+            // RunBulkOnConnection rather than RunBulk: SqlBulkCopy carries its own atomicity and ran with no
+            // enclosing transaction here, so the owned path is left exactly as it was.
+            RunBulkOnConnection("BulkInsert into " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                connection.Open();
-                using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.TableLock, null);
-                bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
-                foreach (DataColumn col in dataTable.Columns)
+                var connection = (SqlConnection)dbConnection;
+                try
                 {
-                    bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    var options = owned ? SqlBulkCopyOptions.TableLock : SqlBulkCopyOptions.Default;
+                    using var bulkCopy = new SqlBulkCopy(connection, options, (SqlTransaction?)dbTransaction);
+                    bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
+                    foreach (DataColumn col in dataTable.Columns)
+                    {
+                        bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    }
+                    bulkCopy.WriteToServer(dataTable);
                 }
-                bulkCopy.WriteToServer(dataTable);
-            }
-            catch (Exception ex)
-            {
-                InitException(ex, "BulkInsert into " + table.Name);
-            }
+                catch (Exception ex)
+                {
+                    InitException(ex, "BulkInsert into " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkInsertAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -339,22 +359,27 @@ namespace Birko.Data.SQL.Connectors
             var fields = table.Fields.Select(f => f.Value).Where(f => !f.IsAutoincrement).ToList();
             var dataTable = BuildDataTable(table.Name, fields, models);
 
-            using var connection = (SqlConnection)CreateConnection(_settings);
-            try
+            // Joins an open boundary instead of opening a second connection, and enlists the copy in it via
+            // the SqlTransaction overload — see BulkInsert above for why TableLock is owned-path only.
+            await RunBulkOnConnectionAsync("BulkInsertAsync into " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                await connection.OpenAsync(ct).ConfigureAwait(false);
-                using var bulkCopy = new SqlBulkCopy(connection, SqlBulkCopyOptions.TableLock, null);
-                bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
-                foreach (DataColumn col in dataTable.Columns)
+                var connection = (SqlConnection)dbConnection;
+                try
                 {
-                    bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    var options = owned ? SqlBulkCopyOptions.TableLock : SqlBulkCopyOptions.Default;
+                    using var bulkCopy = new SqlBulkCopy(connection, options, (SqlTransaction?)dbTransaction);
+                    bulkCopy.DestinationTableName = QuoteIdentifier(table.Name);
+                    foreach (DataColumn col in dataTable.Columns)
+                    {
+                        bulkCopy.ColumnMappings.Add(col.ColumnName, col.ColumnName);
+                    }
+                    await bulkCopy.WriteToServerAsync(dataTable, ct).ConfigureAwait(false);
                 }
-                await bulkCopy.WriteToServerAsync(dataTable, ct).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                InitException(ex, "BulkInsertAsync into " + table.Name);
-            }
+                catch (Exception ex)
+                {
+                    InitException(ex, "BulkInsertAsync into " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         public void BulkUpdate(Type type, IEnumerable<object> models)
@@ -375,60 +400,76 @@ namespace Birko.Data.SQL.Connectors
             if (!updateFields.Any())
                 return;
 
-            using var connection = (SqlConnection)CreateConnection(_settings);
-            // Open() and BeginTransaction() are inside the try so an open/transient failure routes
-            // through InitException like the rest of the method (CR-L179). The transaction is declared
-            // outside so the catch can roll back and the finally can dispose it.
-            SqlTransaction? transaction = null;
-            string? commandText = null;
-            try
+            // A bulk write must JOIN an open boundary on this database rather than open a second connection.
+            // On MSSql two connections are perfectly legal, so before this the statements committed on their
+            // own transaction and SURVIVED the owner's rollback with no error anywhere. retryWhenOwned: false
+            // keeps the own-connection path exactly as it shipped; it never retried.
+            //
+            // CR-L179 kept Open()/BeginTransaction() inside the try so an open failure routed through
+            // InitException. Acquiring the connection is now the shared helper's job — which is what gives
+            // "am I inside a boundary" a single producer — so an open failure propagates raw instead of
+            // wrapped in Exception(commandText, ex). Nothing is swallowed either way: MSSqlConnector_OnException
+            // rethrows for anything but "Invalid object name", which an open failure is not. It also puts the
+            // bulk path in step with the framework's single-command path, whose RunCommandTransaction has
+            // always opened outside its try.
+            RunBulk("BulkUpdate " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                connection.Open();
-                transaction = connection.BeginTransaction();
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
+                var connection = (SqlConnection)dbConnection;
+                var transaction = (SqlTransaction)dbTransaction;
+                string? commandText = null;
+                    try
+                    {
+                        using var command = connection.CreateCommand();
+                        command.Transaction = transaction;
 
-                var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
-                    + " SET " + string.Join(", ", setClauses)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
+                    var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                        + " SET " + string.Join(", ", setClauses)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
 
-                foreach (var field in updateFields)
-                {
-                    command.Parameters.Add(new SqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
-
-                foreach (var model in models)
-                {
                     foreach (var field in updateFields)
                     {
-                        command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        command.Parameters.Add(new SqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    command.ExecuteNonQuery();
-                }
+                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
+                    // type before it will prepare, and these are created as `new SqlParameter(name,
+                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
+                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
+                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
+                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
+                    // in either half. Found by this task's regression suite, which could not otherwise
+                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
+                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
+                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
+                    // MySqlConnector infer the missing types, which is why only this provider broke.)
 
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction?.Rollback();
-                InitException(ex, commandText ?? "BulkUpdate " + table.Name);
-            }
-            finally
-            {
-                transaction?.Dispose();
-            }
+                    foreach (var model in models)
+                    {
+                        foreach (var field in updateFields)
+                        {
+                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        }
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        command.ExecuteNonQuery();
+                    }
+
+                    if (owned) transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkUpdate " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkUpdateAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -449,65 +490,72 @@ namespace Birko.Data.SQL.Connectors
             if (!updateFields.Any())
                 return;
 
-            using var connection = (SqlConnection)CreateConnection(_settings);
-            // OpenAsync/BeginTransactionAsync inside the try so an open/transient failure routes through
-            // InitException (CR-L179); the transaction is declared outside for rollback/dispose.
-            SqlTransaction? transaction = null;
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkUpdate above, including
+            // why CR-L179's in-try acquisition does not survive the move to the shared helper.
+            await RunBulkAsync("BulkUpdateAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                await connection.OpenAsync(ct).ConfigureAwait(false);
-                transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
+                var connection = (SqlConnection)dbConnection;
+                var transaction = (SqlTransaction)dbTransaction;
+                string? commandText = null;
+                    try
+                    {
+                        using var command = connection.CreateCommand();
+                        command.Transaction = transaction;
 
-                var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
-                    + " SET " + string.Join(", ", setClauses)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
+                    var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                        + " SET " + string.Join(", ", setClauses)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
 
-                foreach (var field in updateFields)
-                {
-                    command.Parameters.Add(new SqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
-
-                foreach (var model in models)
-                {
-                    ct.ThrowIfCancellationRequested();
                     foreach (var field in updateFields)
                     {
-                        command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        command.Parameters.Add(new SqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }
+                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
+                    // type before it will prepare, and these are created as `new SqlParameter(name,
+                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
+                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
+                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
+                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
+                    // in either half. Found by this task's regression suite, which could not otherwise
+                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
+                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
+                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
+                    // MySqlConnector infer the missing types, which is why only this provider broke.)
 
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
-            }
-            finally
-            {
-                if (transaction != null) await transaction.DisposeAsync().ConfigureAwait(false);
-            }
+                    foreach (var model in models)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        foreach (var field in updateFields)
+                        {
+                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        }
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    }
+
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         public void BulkDelete(Type type, IEnumerable<object> models)
@@ -523,49 +571,56 @@ namespace Birko.Data.SQL.Connectors
             if (!primaryFields.Any())
                 return;
 
-            using var connection = (SqlConnection)CreateConnection(_settings);
-            // Open()/BeginTransaction() inside the try so an open/transient failure routes through
-            // InitException (CR-L179); the transaction is declared outside for rollback/dispose.
-            SqlTransaction? transaction = null;
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkUpdate above, including
+            // why CR-L179's in-try acquisition does not survive the move to the shared helper.
+            RunBulk("BulkDelete " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                connection.Open();
-                transaction = connection.BeginTransaction();
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
+                var connection = (SqlConnection)dbConnection;
+                var transaction = (SqlTransaction)dbTransaction;
+                string? commandText = null;
+                    try
+                    {
+                        using var command = connection.CreateCommand();
+                        command.Transaction = transaction;
 
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
 
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
-
-                foreach (var model in models)
-                {
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    command.ExecuteNonQuery();
-                }
+                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
+                    // type before it will prepare, and these are created as `new SqlParameter(name,
+                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
+                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
+                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
+                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
+                    // in either half. Found by this task's regression suite, which could not otherwise
+                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
+                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
+                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
+                    // MySqlConnector infer the missing types, which is why only this provider broke.)
 
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction?.Rollback();
-                InitException(ex, commandText ?? "BulkDelete " + table.Name);
-            }
-            finally
-            {
-                transaction?.Dispose();
-            }
+                    foreach (var model in models)
+                    {
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        command.ExecuteNonQuery();
+                    }
+
+                    if (owned) transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkDelete " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkDeleteAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -581,55 +636,62 @@ namespace Birko.Data.SQL.Connectors
             if (!primaryFields.Any())
                 return;
 
-            using var connection = (SqlConnection)CreateConnection(_settings);
-            // OpenAsync/BeginTransactionAsync inside the try so an open/transient failure routes through
-            // InitException (CR-L179); the transaction is declared outside for rollback/dispose.
-            SqlTransaction? transaction = null;
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkUpdate above, including
+            // why CR-L179's in-try acquisition does not survive the move to the shared helper.
+            await RunBulkAsync("BulkDeleteAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                await connection.OpenAsync(ct).ConfigureAwait(false);
-                transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
+                var connection = (SqlConnection)dbConnection;
+                var transaction = (SqlTransaction)dbTransaction;
+                string? commandText = null;
+                    try
+                    {
+                        using var command = connection.CreateCommand();
+                        command.Transaction = transaction;
 
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
 
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
-
-                foreach (var model in models)
-                {
-                    ct.ThrowIfCancellationRequested();
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new SqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }
+                    // NOT command.Prepare(): SqlCommand requires every parameter to have an explicitly set
+                    // type before it will prepare, and these are created as `new SqlParameter(name,
+                    // DBNull.Value)` placeholders whose type is only implied by the value assigned per
+                    // row. It therefore threw "SqlCommand.Prepare method requires all parameters to have
+                    // an explicitly set type" on the very first row — measured against SQL Server 2022,
+                    // which means BulkUpdate and BulkDelete have never worked on this provider at all,
+                    // in either half. Found by this task's regression suite, which could not otherwise
+                    // reach the boundary behaviour it exists to prove. Dropping the call is the whole
+                    // repair: SQL Server caches the plan for a repeated parameterised statement on its
+                    // own, so Prepare bought nothing here even where it did not throw. (Npgsql and
+                    // MySqlConnector infer the missing types, which is why only this provider broke.)
 
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                if (transaction != null) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
-            }
-            finally
-            {
-                if (transaction != null) await transaction.DisposeAsync().ConfigureAwait(false);
-            }
+                    foreach (var model in models)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    }
+
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         private DataTable BuildDataTable(string tableName, IList<AbstractField> fields, IEnumerable<object> models)
