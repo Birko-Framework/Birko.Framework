@@ -57,7 +57,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.BackgroundJobs.SQL: 0b71709
   ../Birko.BackgroundJobs.XML: ccd3960
   ../Birko.Contracts: dc3575c
-shaped-by: []
+shaped-by: [FEATURE-014]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Job queue, retry policy, processing and scheduling

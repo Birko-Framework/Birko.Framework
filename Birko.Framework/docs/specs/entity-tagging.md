@@ -12,10 +12,11 @@ sources:
 source-commits:   # sibling HEADs when this spec was last written (2026-08-07 16:16:09,
                   # commit 4dbef72). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.Tagging: 75c9500
-shaped-by: [FEATURE-014]
+shaped-by: []
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here.
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Polymorphic, tenant-scoped entity tagging

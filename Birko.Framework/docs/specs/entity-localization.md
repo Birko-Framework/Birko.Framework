@@ -19,6 +19,8 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
                   # commit acbbe9d). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.Data.Localization: e2e01bb
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Entity-level localization via store decoration

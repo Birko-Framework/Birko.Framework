@@ -22,8 +22,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16
   ../Birko.Contracts: dc3575c
   ../Birko.Data.Core: 1ee0793
   ../Birko.Data.MongoDB: 4f5e095
-shaped-by: []
-shaped-by-derived: false
+shaped-by: [FEATURE-014]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Zero-dependency model contracts (loadable, copyable, default, timestamped)

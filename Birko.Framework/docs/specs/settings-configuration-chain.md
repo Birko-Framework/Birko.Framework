@@ -30,7 +30,9 @@ source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Data.SQL.SqLite: ef71921
   ../Birko.Data.TimescaleDB: 4978d7a
   ../Birko.Redis: 5902d08
-shaped-by: []
+shaped-by: [FEATURE-014]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Settings inheritance chain and connection-string contract

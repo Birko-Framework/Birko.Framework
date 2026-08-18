@@ -48,11 +48,12 @@ source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Data.SQL.MySQL: 72cac6d
   ../Birko.Data.SQL.PostgreSQL: 6f7a12f
   ../Birko.Data.SQL.SqLite: ef71921
-shaped-by: []
+shaped-by: [FEATURE-014]
 # false, not an empty answer: every source glob in this area points into a sibling repo, so no
 # task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run
 # here at all. Treat shaped-by as unknown rather than as "no feature shaped this area".
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Schema descriptors, index management and attribute-driven DDL

@@ -55,11 +55,12 @@ source-commits:   # sibling HEADs when this spec was last written (2026-08-16 16
   ../Birko.Data.SQL.Views: 6095b16
   ../Birko.Data.Stores: c828ef1
   ../Birko.Data.Views: cd516af
-shaped-by: []
+shaped-by: [FEATURE-014]
 # false, not an empty answer: every source glob in this area points into a sibling repo, so no
 # task's pr: sha resolves under `git show` in this aggregator and the evidence pass cannot run
 # here at all. Treat shaped-by as unknown rather than as "no feature shaped this area".
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Fluent view definitions and aggregation queries

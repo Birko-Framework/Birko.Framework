@@ -44,7 +44,8 @@ shaped-by: [FEATURE-014]
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
 # from the regenerating task's own `feature:` field, not from evidence.
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Fluent validation, rule engine and validating store wrappers

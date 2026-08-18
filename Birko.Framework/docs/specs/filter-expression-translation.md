@@ -56,7 +56,9 @@ shaped-by:
   # other clause emits resolve on a case-folding provider; and the missing-relation seam was narrowed so a
   # rejected statement stops reading as an empty result.
   - TASK-211
-shaped-by-derived: false   # see the note above: no source glob resolves in this repo, so no evidence pass
+shaped-by-derived: true
+shaped-by: [FEATURE-014]
+shaped-by-unresolved: 80
 ---
 
 # LINQ filter expression translation to backend queries

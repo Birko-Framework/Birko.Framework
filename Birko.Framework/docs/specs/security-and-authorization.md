@@ -55,6 +55,8 @@ source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Security.Vault: 02a7f07
   ../Birko.Security.Vault.Configuration: 9e39e40
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Hashing, encryption, tokens, secrets and permission enforcement

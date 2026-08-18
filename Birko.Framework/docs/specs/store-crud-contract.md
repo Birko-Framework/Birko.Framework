@@ -19,11 +19,12 @@ source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Data.Core: 0308617
   ../Birko.Data.InMemory: 89e3ed5
   ../Birko.Data.Stores: c828ef1
-shaped-by: [FEATURE-014]
+shaped-by: []
 # false, and NOT because nobody tried — see the identical note in bulk-filter-operations.md: every
 # source glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` in this
 # aggregator. FEATURE-014 comes from the regenerating task's `feature:` field, not from evidence.
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Store CRUD contract and template-method hierarchy

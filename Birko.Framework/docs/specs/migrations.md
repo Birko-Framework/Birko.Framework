@@ -64,7 +64,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.Data.Migrations.RavenDB: 99d8d33
   ../Birko.Data.Migrations.SQL: f72bf7d
   ../Birko.Data.Migrations.TimescaleDB: 531d816
-shaped-by: []
+shaped-by: [FEATURE-014]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Schema/data migration runner and backend contexts

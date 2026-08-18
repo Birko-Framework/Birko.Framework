@@ -9,7 +9,9 @@ sources:
   - ../Birko.Data.Stores/AbstractStore.cs
 source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Data.Stores: c828ef1
-shaped-by: []
+shaped-by: [FEATURE-014]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Lazy store initialization (EnsureInitialized double-checked locking)

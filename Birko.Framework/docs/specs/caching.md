@@ -28,8 +28,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-08-12 14
   ../Birko.Caching.Hybrid: 74deeb8
   ../Birko.Caching.Redis: 333ba76
   ../Birko.Data.SQL.Caching: f9bbc81
-shaped-by: [FEATURE-014]
-shaped-by-derived: false
+shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Cache abstraction, tiering and query-cache decoration

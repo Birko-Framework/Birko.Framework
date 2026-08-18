@@ -94,6 +94,8 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.MessageQueue.MQTT: 23a9f74
   ../Birko.MessageQueue.Redis: fef0353
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Event publication, handlers, outbox and message-queue transport

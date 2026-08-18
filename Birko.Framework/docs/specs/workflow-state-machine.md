@@ -55,6 +55,8 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.Workflow.SQL: c279867
   ../Birko.Workflow.XML: d357d38
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Workflow state machine, guards, actions and persistence

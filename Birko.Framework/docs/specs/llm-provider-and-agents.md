@@ -29,7 +29,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10
                   # commit 3728969). Reconstructed 2026-08-16 -- see .map.yml § BASELINE AMNESTY.
   ../Birko.AI: ed540db
   ../Birko.AI.Contracts: 52e43f8
-shaped-by: []
+shaped-by: [FEATURE-006]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # LLM provider contract, agent run loop and tool execution

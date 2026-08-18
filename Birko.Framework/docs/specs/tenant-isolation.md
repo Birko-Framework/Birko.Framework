@@ -41,8 +41,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-08-03 12
   ../Birko.Data.Tenant: c4dd307
   ../Birko.EventBus.Tenant: 6967992
   ../Birko.Security.AspNetCore: 0c4a494
-shaped-by: [FEATURE-014]
-shaped-by-derived: false
+shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Multi-tenant isolation across stores, HTTP and events

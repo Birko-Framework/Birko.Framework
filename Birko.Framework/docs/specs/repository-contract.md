@@ -36,11 +36,12 @@ source-commits:   # sibling HEADs when this spec was last written (2026-08-07 14
   ../Birko.Data.Repositories: 8a2c6c7
   ../Birko.Data.SQL.ViewModel: 6017a4d
   ../Birko.Data.ViewModel: 093c15b
-shaped-by: [FEATURE-014]
+shaped-by: []
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
 # from the regenerating task's own `feature:` field, not from evidence.
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Repository and ViewModel-repository abstractions

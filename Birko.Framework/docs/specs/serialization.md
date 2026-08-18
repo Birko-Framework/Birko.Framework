@@ -19,6 +19,8 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10
   ../Birko.Serialization.Protobuf: 158da6c
   ../Birko.Serialization.Yaml: ee94017
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Serializer abstraction and format round-trip guarantees

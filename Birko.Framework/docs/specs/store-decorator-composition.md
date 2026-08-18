@@ -41,6 +41,8 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.Data.Patterns: 4663f80
   ../Birko.Time.Abstractions: 47fa6a9
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Store decorator wrappers and runtime composition

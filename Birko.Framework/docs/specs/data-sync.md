@@ -66,6 +66,8 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.Data.Sync.Sql: 60d30a6
   ../Birko.Data.Sync.Xml: a56a3ff
 shaped-by: []
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Bidirectional data sync, conflict resolution and aggregate mapping

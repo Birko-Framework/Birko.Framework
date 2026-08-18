@@ -33,7 +33,8 @@ shaped-by: [FEATURE-014]
 # here (verified: TASK-109's d8c2f40 is "unknown revision" in this checkout). FEATURE-014 above comes
 # from the regenerating task's own `feature:` field — the --story/--feature input to the union — not
 # from evidence. True of every area in this repo's spec tree, not just this one.
-shaped-by-derived: false
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Bulk filter-based Update/Delete and Read semantics

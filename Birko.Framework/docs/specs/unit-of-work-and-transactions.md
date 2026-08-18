@@ -15,7 +15,9 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 10
   ../Birko.Data.Patterns: 4663f80
   ../Birko.Data.SQL: a8f06a9
   ../Birko.Data.Stores: c164f94
-shaped-by: []
+shaped-by: [FEATURE-014]
+shaped-by-derived: true
+shaped-by-unresolved: 80
 ---
 
 # Unit of work and transactional store boundaries
