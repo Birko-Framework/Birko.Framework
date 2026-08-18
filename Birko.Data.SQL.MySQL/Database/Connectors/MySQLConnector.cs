@@ -395,6 +395,28 @@ namespace Birko.Data.SQL.Connectors
             return false;
         }
 
+        /// <summary>
+        /// MySQL error <b>1091</b> — <c>Can't DROP '...'; check that column/key exists</c> — is "the index you
+        /// asked to drop is already gone", which every other provider reports as success because its
+        /// <c>DROP INDEX</c> carries <c>IF EXISTS</c> and MySQL's cannot.
+        /// </summary>
+        /// <remarks>
+        /// TASK-249, and it is consumed only by <c>SqlIndexManager.DropAsync</c> — not by the connector's
+        /// <c>DropIndexes</c>, which must keep failing loudly for a caller that named a specific index.
+        /// Matched on the code, chain-walked, for the same reasons as the 1061 twin above.
+        /// </remarks>
+        public override bool IsIndexMissingException(Exception ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is MySqlException mysqlEx)
+                {
+                    return (int)mysqlEx.ErrorCode == 1091;  // ER_CANT_DROP_FIELD_OR_KEY
+                }
+            }
+            return false;
+        }
+
         #endregion
 
         #region Native Bulk Operations
