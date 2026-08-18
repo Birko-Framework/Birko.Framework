@@ -165,6 +165,32 @@ cmd.CommandText = "SELECT * FROM customers WHERE id = $1";
 cmd.CommandText = "SELECT * FROM customers WHERE id = @id";
 ```
 
+## Index DDL and identifier case (TASK-245)
+
+PostgreSQL is the one supported provider that **case-folds an unquoted identifier**, and
+`AbstractConnector.CreateTable` emits column definitions **bare** — so every column of a PascalCase entity
+is stored folded (`status`, `tenantguid`) while the table keeps its case (it is quoted).
+
+`CreateIndexSql` used to wrap each index column in `QuoteIdentifier`, and a quoted `"Status"` cannot resolve
+a column stored as `status`: measured on PostgreSQL 16 as `ERROR 42703: column "Status" does not exist`.
+**No declared PascalCase index could be created on this provider at all** — silently, because TASK-204 makes
+schema-ensure record rather than throw, and every index end-to-end test in the tree ran on case-insensitive
+SQLite. Seventh instance of the identifier family (see § Conventions in the aggregator CLAUDE.md).
+
+Fixed by emitting **columns bare, table quoted** in the base emitter. Two consequences to keep in mind:
+
+- **Do not quote an index column identifier here.** It is not a style choice — quoting it is what broke it,
+  and the base-table DDL is what settles the convention.
+- `PostgreSqlIndexManager.CreateUniqueIndexSql` was **deleted** for the same reason: it carried its own
+  quoted-column copy of the statement, so `IIndexManager.CreateAsync` could never build a unique index on a
+  PascalCase entity either. Unique index DDL now comes from the connector emitter, which is the single
+  producer for every dialect. Reverting the `Unique` flag hand-off in `SqlIndexManager.ToSqlIndexDefinition`
+  fails 1 of the PostgreSQL live index suite's 6 tests.
+
+PostgreSQL supports `CREATE INDEX IF NOT EXISTS` natively, so `IsIndexAlreadyExistsException` stays `false`
+here — the "already exists" condition never reaches the client. `CreateIndexes(..., throwIfExists: true)`
+drops the conditional clause so the flag means the same thing as on MySQL rather than being a silent no-op.
+
 ## Limitations
 - Requires PostgreSQL 9.5 or later
 - Some features may require specific versions

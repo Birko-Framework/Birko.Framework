@@ -1,4 +1,4 @@
-using Birko.Data.SQL.Connectors;
+﻿using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.IndexManagement;
 using System.Linq;
 
@@ -39,12 +39,10 @@ WHERE t.relname = '{safeTable}'
 ORDER BY i.relname, array_position(pg_index.indkey, a.attnum)";
         }
 
-        protected override string CreateUniqueIndexSql(string tableName, Tables.IndexDefinition index)
-        {
-            var columns = string.Join(", ", index.Columns.Select(c =>
-                Connector.QuoteIdentifier(c.ColumnName) + (c.IsDescending ? " DESC" : "")));
-
-            return $"CREATE UNIQUE INDEX IF NOT EXISTS {Connector.QuoteIdentifier(index.Name)} ON {Connector.QuoteIdentifier(tableName)} ({columns})";
-        }
+        // TASK-245 removed CreateUniqueIndexSql. It quoted its column identifiers, which on PostgreSQL
+        // cannot resolve the case-folded columns that bare-column CREATE TABLE actually creates — measured
+        // as ERROR 42703 — so this emitter could never build a unique index on a PascalCase entity. Deleting
+        // it routes through AbstractConnectorBase.CreateIndexSql, which emits columns bare, and makes the
+        // connector the single producer of index DDL.
     }
 }
