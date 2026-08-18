@@ -12,13 +12,44 @@ namespace Birko.Data.Migrations.SQL.Context
     {
         private readonly DbConnection _connection;
         private readonly DbTransaction? _transaction;
-        private readonly AbstractConnector? _connector;
+        private readonly AbstractConnector _connector;
 
-        public SqlSchemaBuilder(DbConnection connection, DbTransaction? transaction, AbstractConnector? connector = null)
+        /// <summary>
+        /// Creates the schema builder. <paramref name="connector"/> is <b>required</b> (TASK-247).
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// It used to be optional, and every method carried a hand-written raw-SQL fallback for the null case.
+        /// Those fallbacks were deleted: they re-derived statements the provider connectors already emit, and
+        /// two of them had drifted into being <b>wrong on two providers</b> —
+        /// <c>CREATE INDEX IF NOT EXISTS "Col"</c> (rejected by MySQL, and PostgreSQL cannot resolve a quoted
+        /// column against the folded one bare-column DDL creates) and <c>DROP INDEX IF EXISTS x ON t</c>
+        /// (rejected by MySQL for the <c>IF EXISTS</c>, invalid on PostgreSQL for the <c>ON</c>). So the
+        /// "connector-free" capability was never real; it emitted broken DDL.
+        /// </para>
+        /// <para>
+        /// It was also actively harmful: <c>connector == null</c> is how every test in this project used to
+        /// build it, so six tests exercised only the dead branch — which is exactly why TASK-246's missing
+        /// <c>Unique</c> flag on the <i>live</i> branch stayed green. Requiring the connector makes that class
+        /// of mistake impossible rather than documented.
+        /// </para>
+        /// <para>
+        /// Verified reachable-by-nobody before removing: the only production construction is
+        /// <c>SqlMigrationRunner</c> → <c>SqlMigrationContext</c>, which requires a non-null connector, and a
+        /// sweep of all 16 consumer repos found 0 hand-built contexts and 0 uses of <c>ISchemaBuilder</c>.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="connection"/> or <paramref name="connector"/> is null.
+        /// </exception>
+        public SqlSchemaBuilder(DbConnection connection, DbTransaction? transaction, AbstractConnector connector)
         {
-            _connection = connection;
+            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
             _transaction = transaction;
-            _connector = connector;
+            _connector = connector ?? throw new ArgumentNullException(nameof(connector),
+                "SqlSchemaBuilder requires a connector: the provider emits its own DDL, and the raw-SQL "
+              + "fallback this used to fall back to was wrong on MySQL and PostgreSQL. Pass the "
+              + "AbstractConnector you built the migration runner with (SqlMigrationRunner already holds one).");
         }
 
         public ICollectionBuilder CreateCollection(string name)
@@ -28,14 +59,8 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public void DropCollection(string name)
         {
-            if (_connector != null)
-            {
-                EnsureExternalTransaction();
-                _connector.DropTable(new[] { name });
-                return;
-            }
-
-            Execute($"DROP TABLE IF EXISTS {QuoteIdentifier(name)}");
+            EnsureExternalTransaction();
+            _connector.DropTable(new[] { name });
         }
 
         public bool CollectionExists(string name)
@@ -66,55 +91,46 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public void DropIndex(string collectionName, string indexName)
         {
-            if (_connector != null)
-            {
-                EnsureExternalTransaction();
-                var indexDef = new Birko.Data.SQL.Tables.IndexDefinition { Name = indexName };
-                _connector.DropIndexes(collectionName, new[] { indexDef });
-                return;
-            }
-
-            Execute($"DROP INDEX IF EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(collectionName)}");
+            // The deleted fallback emitted `DROP INDEX IF EXISTS x ON t`, which is wrong on both providers in
+            // opposite directions: MySQL rejects the IF EXISTS but requires the ON, PostgreSQL accepts the
+            // IF EXISTS but permits no ON. The connector's DropIndexSql is per-dialect and correct.
+            EnsureExternalTransaction();
+            var indexDef = new Birko.Data.SQL.Tables.IndexDefinition { Name = indexName };
+            _connector.DropIndexes(collectionName, new[] { indexDef });
         }
 
         public void AddField(string collectionName, FieldDescriptor field)
         {
-            if (_connector != null)
-            {
-                EnsureExternalTransaction();
-                _connector.AlterTableAdd(collectionName, new[] { new SchemaField(field) });
-                return;
-            }
-
-            var sqlType = FieldTypeToSql(field);
-            var nullable = field.IsRequired ? " NOT NULL" : "";
-            var defaultVal = field.DefaultValue != null ? $" DEFAULT {FormatValue(field.DefaultValue)}" : "";
-            Execute($"ALTER TABLE {QuoteIdentifier(collectionName)} ADD COLUMN {QuoteIdentifier(field.Name)} {sqlType}{nullable}{defaultVal}");
+            EnsureExternalTransaction();
+            _connector.AlterTableAdd(collectionName, new[] { new SchemaField(field) });
         }
 
         public void DropField(string collectionName, string fieldName)
         {
-            if (_connector != null)
-            {
-                EnsureExternalTransaction();
-                var field = new SchemaField(new FieldDescriptor { Name = fieldName, Type = FieldType.String });
-                _connector.AlterTableDrop(collectionName, new[] { field });
-                return;
-            }
-
-            Execute($"ALTER TABLE {QuoteIdentifier(collectionName)} DROP COLUMN {QuoteIdentifier(fieldName)}");
+            EnsureExternalTransaction();
+            var field = new SchemaField(new FieldDescriptor { Name = fieldName, Type = FieldType.String });
+            _connector.AlterTableDrop(collectionName, new[] { field });
         }
 
+        /// <summary>
+        /// The one schema operation with <b>no</b> connector equivalent, so it stays hand-written.
+        /// </summary>
+        /// <remarks>
+        /// TASK-247 deleted every other raw-SQL branch in this class; this one has nothing to delegate to —
+        /// <c>AbstractConnector</c> exposes no rename. It at least quotes through the connector's dialect now
+        /// rather than a hardcoded <c>"</c>. Note <c>RENAME COLUMN</c> is not universal (MySQL only supports
+        /// it from 8.0; older versions need <c>CHANGE</c>), so this is a latent per-provider gap of the same
+        /// family as the ones that task closed — recorded rather than fixed, because nothing in the tree or in
+        /// any consumer calls it.
+        /// </remarks>
         public void RenameField(string collectionName, string oldName, string newName)
         {
+            EnsureExternalTransaction();
             Execute($"ALTER TABLE {QuoteIdentifier(collectionName)} RENAME COLUMN {QuoteIdentifier(oldName)} TO {QuoteIdentifier(newName)}");
         }
 
         private void EnsureExternalTransaction()
-        {
-            if (_connector != null)
-                _connector.SetExternalTransaction(_connection, _transaction);
-        }
+            => _connector.SetExternalTransaction(_connection, _transaction);
 
         private void Execute(string sql)
         {
@@ -124,55 +140,23 @@ namespace Birko.Data.Migrations.SQL.Context
             command.ExecuteNonQuery();
         }
 
-        private string QuoteIdentifier(string name)
-        {
-            if (_connector != null)
-                return _connector.QuoteIdentifier(name);
-            return $"\"{name}\"";
-        }
+        private string QuoteIdentifier(string name) => _connector.QuoteIdentifier(name);
 
-        internal static string FieldTypeToSql(FieldDescriptor field)
-        {
-            return field.Type switch
-            {
-                FieldType.String => field.MaxLength.HasValue
-                    ? $"VARCHAR({field.MaxLength.Value})"
-                    : "TEXT",
-                FieldType.Integer => "INTEGER",
-                FieldType.Long => "BIGINT",
-                FieldType.Decimal => field.Precision.HasValue && field.Scale.HasValue
-                    ? $"DECIMAL({field.Precision.Value},{field.Scale.Value})"
-                    : "DECIMAL",
-                FieldType.Double => "DOUBLE",
-                FieldType.Boolean => "BOOLEAN",
-                FieldType.DateTime => "TIMESTAMP",
-                FieldType.Guid => "UUID",
-                FieldType.Binary => "BLOB",
-                FieldType.Json => "TEXT",
-                _ => "TEXT"
-            };
-        }
-
-        private static string FormatValue(object value)
-        {
-            if (value is string s) return $"'{s.Replace("'", "''")}'";
-            if (value is bool b) return b ? "TRUE" : "FALSE";
-            if (value is DateTime dt) return $"'{dt:yyyy-MM-dd HH:mm:ss}'";
-            if (value is Guid g) return $"'{g}'";
-            return value.ToString() ?? "NULL";
-        }
+        // TASK-247 removed FieldTypeToSql and FormatValue with the raw-SQL fallbacks that were their
+        // only callers. Column types now come from the provider's own FieldDefinition/ConvertType,
+        // which is what makes them correct per dialect instead of approximately portable.
 
         private class SqlCollectionBuilder : ICollectionBuilder
         {
             private readonly string _name;
             private readonly DbConnection _connection;
             private readonly DbTransaction? _transaction;
-            private readonly AbstractConnector? _connector;
+            private readonly AbstractConnector _connector;
             private readonly List<FieldDescriptor> _fields = new();
             private readonly List<string> _primaryKeyFields = new();
             private bool _built;
 
-            public SqlCollectionBuilder(string name, DbConnection connection, DbTransaction? transaction, AbstractConnector? connector)
+            public SqlCollectionBuilder(string name, DbConnection connection, DbTransaction? transaction, AbstractConnector connector)
             {
                 _name = name;
                 _connection = connection;
@@ -220,51 +204,24 @@ namespace Birko.Data.Migrations.SQL.Context
                 if (_built) return;
                 _built = true;
 
-                if (_connector != null)
+                // TASK-247: the raw-SQL fallback here (and its FormatColumn helper) is gone with the
+                // connector-optional constructor. It hardcoded ANSI double quotes and a provider-agnostic type
+                // table, where the connector's FieldDefinition emits the dialect's own column DDL.
+                //
+                // NOTE the primary-key difference, so it reads as known rather than lost: the deleted fallback
+                // emitted a composite `PRIMARY KEY (a, b)` clause from _primaryKeyFields, which
+                // AbstractConnector.CreateTable does not — it renders PRIMARY KEY per column from the field's
+                // IsPrimary flag. Nothing in the tree or in any consumer declares a composite primary key
+                // through this builder (0 uses of ISchemaBuilder anywhere), so no behaviour in use is lost;
+                // a composite primary key via migrations would need connector support, which is a task of its
+                // own rather than a fallback nobody could reach correctly.
+                _connector.SetExternalTransaction(_connection, _transaction);
+                var fieldDefinitions = _fields.Select(f =>
                 {
-                    _connector.SetExternalTransaction(_connection, _transaction);
-                    var fieldDefinitions = _fields.Select(f =>
-                    {
-                        var schemaField = new SchemaField(f);
-                        return _connector.FieldDefinition(schemaField);
-                    });
-                    _connector.CreateTable(_name, fieldDefinitions);
-                    return;
-                }
-
-                // Fallback: raw SQL
-                var sb = new System.Text.StringBuilder();
-                sb.Append($"CREATE TABLE IF NOT EXISTS \"{_name}\" (");
-
-                for (int i = 0; i < _fields.Count; i++)
-                {
-                    if (i > 0) sb.Append(", ");
-                    sb.Append(FormatColumn(_fields[i]));
-                }
-
-                if (_primaryKeyFields.Count > 0)
-                {
-                    sb.Append($", PRIMARY KEY ({string.Join(", ", _primaryKeyFields.ConvertAll(f => $"\"{f}\""))})");
-                }
-
-                sb.Append(")");
-
-                using var command = _connection.CreateCommand();
-                command.Transaction = _transaction;
-                command.CommandText = sb.ToString();
-                command.ExecuteNonQuery();
-            }
-
-            private static string FormatColumn(FieldDescriptor field)
-            {
-                var sb = new System.Text.StringBuilder();
-                sb.Append($"\"{field.Name}\" {FieldTypeToSql(field)}");
-                if (field.IsAutoIncrement) sb.Append(" AUTOINCREMENT");
-                if (field.IsRequired) sb.Append(" NOT NULL");
-                if (field.IsUnique && !field.IsPrimary) sb.Append(" UNIQUE");
-                if (field.DefaultValue != null)
-                    sb.Append($" DEFAULT {FormatValue(field.DefaultValue)}");
-                return sb.ToString();
+                    var schemaField = new SchemaField(f);
+                    return _connector.FieldDefinition(schemaField);
+                });
+                _connector.CreateTable(_name, fieldDefinitions);
             }
         }
 
@@ -274,12 +231,12 @@ namespace Birko.Data.Migrations.SQL.Context
             private readonly string _indexName;
             private readonly DbConnection _connection;
             private readonly DbTransaction? _transaction;
-            private readonly AbstractConnector? _connector;
+            private readonly AbstractConnector _connector;
             private readonly List<(string Name, bool Descending)> _fields = new();
             private bool _unique;
             private bool _built;
 
-            public SqlIndexBuilder(string collectionName, string indexName, DbConnection connection, DbTransaction? transaction, AbstractConnector? connector)
+            public SqlIndexBuilder(string collectionName, string indexName, DbConnection connection, DbTransaction? transaction, AbstractConnector connector)
             {
                 _collectionName = collectionName;
                 _indexName = indexName;
@@ -325,7 +282,6 @@ namespace Birko.Data.Migrations.SQL.Context
                 if (_fields.Count == 0)
                     throw new InvalidOperationException("Index must have at least one field.");
 
-                if (_connector != null)
                 {
                     _connector.SetExternalTransaction(_connection, _transaction);
                     // TASK-246: `Unique = _unique` was missing, so a migration's .Unique() built a
@@ -351,18 +307,14 @@ namespace Birko.Data.Migrations.SQL.Context
                         IsDescending = f.Descending
                     }));
                     _connector.CreateIndexes(_collectionName, new[] { indexDef });
-                    return;
                 }
 
-                // Fallback: raw SQL
-                var columns = _fields.Select(f => f.Descending ? $"\"{f.Name}\" DESC" : $"\"{f.Name}\" ASC");
-                var uniqueStr = _unique ? "UNIQUE " : "";
-                var sql = $"CREATE {uniqueStr}INDEX IF NOT EXISTS \"{_indexName}\" ON \"{_collectionName}\" ({string.Join(", ", columns)})";
-
-                using var command = _connection.CreateCommand();
-                command.Transaction = _transaction;
-                command.CommandText = sql;
-                command.ExecuteNonQuery();
+                // TASK-247: the raw-SQL fallback that used to follow emitted
+                //   CREATE {UNIQUE }INDEX IF NOT EXISTS "ix" ON "T" ("Col" ASC)
+                // which was wrong twice over — MySQL rejects IF NOT EXISTS on CREATE INDEX (1064), and
+                // PostgreSQL cannot resolve a quoted column against the folded one bare-column CREATE TABLE
+                // actually stores (42703). It was the third copy of a statement the connector already emits
+                // correctly per dialect, so it is gone rather than repaired.
             }
         }
     }

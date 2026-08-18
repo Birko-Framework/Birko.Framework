@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Text;
@@ -12,9 +12,14 @@ namespace Birko.Data.Migrations.SQL.Context
     {
         private readonly DbConnection _connection;
         private readonly DbTransaction? _transaction;
-        private readonly AbstractConnector? _connector;
+        private readonly AbstractConnector _connector;
 
-        public SqlDataMigrator(DbConnection connection, DbTransaction? transaction, AbstractConnector? connector = null)
+        /// <summary>
+        /// <paramref name="connector"/> is <b>required</b> (TASK-247) — same reasoning as
+        /// <see cref="SqlSchemaBuilder"/>: identifier quoting is a dialect decision and the null fallback
+        /// hardcoded ANSI double quotes, which is wrong on MySQL and case-wrong on PostgreSQL.
+        /// </summary>
+        public SqlDataMigrator(DbConnection connection, DbTransaction? transaction, AbstractConnector connector)
         {
             _connection = connection;
             _transaction = transaction;
@@ -24,7 +29,7 @@ namespace Birko.Data.Migrations.SQL.Context
         // CR-L150: route identifier quoting through the connector dialect (e.g. [brackets] on SQL Server)
         // instead of hardcoding ANSI double quotes, matching SqlSchemaBuilder.
         private string QuoteIdentifier(string name)
-            => _connector != null ? _connector.QuoteIdentifier(name) : $"\"{name}\"";
+            => _connector.QuoteIdentifier(name);
 
         public void UpdateDocuments(string collection, string filterJson, IDictionary<string, object> updates)
         {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data.Common;
 using Birko.Data.Migrations.Context;
 using Birko.Data.Patterns.Schema;
@@ -25,7 +25,18 @@ namespace Birko.Data.Migrations.SQL.Context
         /// </summary>
         public DbTransaction? Transaction => _transaction;
 
-        public SqlMigrationContext(DbConnection connection, DbTransaction? transaction, string providerName, AbstractConnector? connector = null)
+        /// <summary>
+        /// Creates the migration context. <paramref name="connector"/> is <b>required</b> (TASK-247).
+        /// </summary>
+        /// <remarks>
+        /// It was optional, and that optional argument was the only door to <c>SqlSchemaBuilder</c>'s
+        /// hand-written raw-SQL fallbacks — which emitted index DDL that MySQL and PostgreSQL both reject. So
+        /// the connector-free path offered a capability it could not deliver. Verified reachable-by-nobody
+        /// before requiring it: the only production caller is <c>SqlMigrationRunner</c>, which already holds a
+        /// non-null connector, and a sweep of all 16 consumer repos found no hand-built context and no use of
+        /// <c>ISchemaBuilder</c> at all.
+        /// </remarks>
+        public SqlMigrationContext(DbConnection connection, DbTransaction? transaction, string providerName, AbstractConnector connector)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
             _transaction = transaction;

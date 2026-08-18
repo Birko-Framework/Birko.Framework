@@ -49,34 +49,44 @@ public sealed class CreateUsers : SqlScriptMigration
 }
 ```
 
-## `SqlSchemaBuilder` has two paths, and they are not equivalent (TASK-246)
+## `SqlSchemaBuilder` requires a connector — it used to have two paths (TASK-246, TASK-247)
 
-`CreateCollection(...)` / `CreateIndex(...)` return fluent builders whose `Build()` branches on whether a
-**connector** was supplied:
+**The connector is required.** `SqlSchemaBuilder`, `SqlMigrationContext` and `SqlDataMigrator` all take a
+non-null `AbstractConnector`; passing null throws, and the message names where to get one. Every schema
+operation delegates to the provider's own emitter (`CreateTable`, `AlterTableAdd`/`Drop`, `CreateIndexes`,
+`DropIndexes`, `FieldDefinition`, `QuoteIdentifier`), so index and column DDL has **one producer per dialect**
+— the same rule the connector layer follows.
 
-| branch | taken when | notes |
-|---|---|---|
-| connector path | `connector != null` — **every production migration** | builds a `Tables.IndexDefinition` and calls `connector.CreateIndexes(...)`, so it inherits the provider's emitter |
-| raw-SQL fallback | `connector == null` | hand-written statement on the supplied connection |
+It was not always so, and the history is the useful part.
 
-**Test the connector path.** The two branches drifted for exactly as long as nobody did: `Build()` never
-copied `_unique` onto the `IndexDefinition`, so a migration's `.Unique()` produced a **plain**
-`CREATE INDEX` on all four providers — a missing *constraint*, silently accepting the duplicate rows the
-migration was written to forbid. The fallback three lines below *did* honour `_unique`, and every test in
-`Birko.Data.Migrations.SQL.Tests` built with `new SqlSchemaBuilder(conn, null, null)` — so the feature was
-demonstrably working in the branch nobody uses and broken in the branch everybody uses, and the suite could
-not tell. A test that supplies `null` for the connector is testing the fallback, whatever it looks like it is
-testing.
+`Build()` used to branch on whether a connector was supplied, with a hand-written raw-SQL fallback for the null
+case. **The two branches drifted for exactly as long as nobody tested the live one.** `Build()` never copied
+`_unique` onto the `IndexDefinition` it handed the connector, so a migration's `.Unique()` produced a **plain**
+`CREATE INDEX` on all four providers — a missing *constraint* (TASK-246). Latent rather than firing: a sweep of
+all 16 consumer repos found none declares an index through a migration. The fallback three lines below *did*
+honour `_unique`, and **every** test in `Birko.Data.Migrations.SQL.Tests` built with
+`new SqlSchemaBuilder(conn, null, null)` — so the feature worked in the branch nobody uses and failed in the
+branch everybody uses, and a green suite said nothing. **A test that supplies `null` for a dependency may be
+testing a different implementation.**
 
-Two consequences worth keeping:
+TASK-247 then deleted all eight fallbacks rather than repairing them, because two had drifted into being
+**wrong on two providers**: `CREATE … INDEX IF NOT EXISTS "Col"` (MySQL rejects the clause; PostgreSQL cannot
+resolve a quoted column against the folded one bare-column DDL creates) and `DROP INDEX IF EXISTS … ON …`
+(MySQL rejects the `IF EXISTS` but requires the `ON`; PostgreSQL accepts the `IF EXISTS` but permits no `ON`).
+A connector-free path that emits DDL two of four providers reject is not a capability. Verified
+reachable-by-nobody first: the only production construction is `SqlMigrationRunner` → `SqlMigrationContext`,
+which holds a non-null connector, and no consumer hand-builds a context or uses `ISchemaBuilder` at all.
 
-- **`Unique` is not the only thing set in that object initialiser** — column order and `IsDescending` are
-  populated in the same expression and had no test either, so they are pinned now alongside it.
-- **The fallback is still known-broken on two providers** and is out of scope of that fix: it emits
-  `CREATE … INDEX IF NOT EXISTS` with quoted columns (rejected by MySQL, unresolvable against PostgreSQL's
-  folded columns) and `DROP INDEX IF EXISTS … ON …`, which is wrong on MySQL and PostgreSQL in opposite
-  directions. Tracked as TASK-247, whose first question is whether the fallback should exist at all now that
-  the connector emitters are correct on every provider.
+Three things carried forward:
+
+- **Those six tests now pass a real connector**, which is what makes them assertions about the shipped path.
+- **`RenameField` is the one operation with no connector equivalent**, so it stays hand-written — and
+  `RENAME COLUMN` is not universal (MySQL needs 8.0+, older versions need `CHANGE`), a latent per-provider gap
+  of the same family, recorded because nothing calls it.
+- **Composite primary keys are not supported through this builder.** The deleted fallback emitted a
+  `PRIMARY KEY (a, b)` clause from `_primaryKeyFields` that `AbstractConnector.CreateTable` does not — it
+  renders `PRIMARY KEY` per column from each field's flag. Nothing in the tree or any consumer declares one
+  this way, so nothing in use was lost; supporting it means connector support, not a fallback.
 
 `SqlIndexBuilder.WithField` validates its column name through `DataBase.ValidateIndexFieldIdentifier`
 (TASK-249): index columns are interpolated **bare** into the statement, so caller text cannot be allowed
