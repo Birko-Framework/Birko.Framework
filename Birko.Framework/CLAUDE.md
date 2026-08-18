@@ -747,6 +747,32 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     absorbed. Note the survey itself had to be corrected twice — the consumer entities declare their
     attributes fully qualified (`[Birko.Data.SQL.Attributes.CompositeIndex(...)]`), which an unqualified grep
     misses entirely. **Verify a blast-radius count against one known instance before trusting it.**
+- **A fallback branch nobody can reach is not a safety net — it is a second implementation that drifts, and
+  it can invalidate the tests of the first.** TASK-247, closing the index-DDL family. `SqlSchemaBuilder` took
+  an *optional* connector and carried a hand-written raw-SQL fallback in all eight of its methods for the null
+  case. Two had drifted into being wrong on two providers, so the "connector-free" capability emitted DDL that
+  MySQL and PostgreSQL reject — it was never portability, only the appearance of it. Deleted rather than
+  repaired, and the connector made required. Four parts generalise:
+  - **The fallback's real cost was to the test suite.** `connector == null` is how **every** test in that
+    project constructed the builder, so six tests exercised only the dead branch — which is precisely how
+    TASK-246's missing `Unique` flag on the *live* branch stayed green. A dependency that can be `null`
+    silently selects a different implementation, and a test that passes `null` may be asserting about code
+    nothing ships. Requiring it converted those six into real tests.
+  - **Prove unreachability before deleting, and say how.** The only production construction is
+    `SqlMigrationRunner` → `SqlMigrationContext`, which requires a non-null connector; the optional 4th
+    argument was the sole door. A sweep of **all 16 consumer repos** found 0 hand-built contexts and 0 uses of
+    `ISchemaBuilder` at all. "Nothing calls it" is a measurement, not an assumption — and the same sweep
+    corrected TASK-246's blast radius from *shipping* to *latent*, which is a claim that had already been
+    written into a commit message.
+  - **The refusal names where to get the thing it is refusing.** § SH-H037 again: the `ArgumentNullException`
+    says the removed fallback was wrong on MySQL and PostgreSQL *and* that `SqlMigrationRunner` already holds a
+    connector, and both halves are asserted by the test. A guard whose message only says "no" gets reached
+    around.
+  - **Say what the deletion does not carry over.** The removed fallback emitted a composite
+    `PRIMARY KEY (a, b)` that `AbstractConnector.CreateTable` does not, and `RenameField` had no connector
+    equivalent at all so it stays hand-written. Neither is reachable by anything in the tree, but a deletion
+    that quietly drops a capability is indistinguishable later from one that never had it — write down the
+    difference.
 - **State a host reads must be current state, keyed — not an append-only log.** Connectors are cached
   process-wide per (type, settings id) in `DataBase.GetConnector` while `_initialized` lives on the *store*,
   so a scoped store per HTTP request re-runs schema-ensure per request against one shared connector. A
@@ -851,13 +877,42 @@ things worth carrying:
   by hand. Verify such a count against a known case before trusting it — a survey that under-reports reads
   exactly like a clean bill of health.
 
+### The migration schema builder's connector-free fallbacks were deleted, not fixed (2026-08-18)
+
+TASK-247, closing the index-DDL family TASK-245 opened. `SqlSchemaBuilder` took an **optional** connector and
+carried a hand-written raw-SQL fallback in all eight methods for the null case; two had drifted into emitting
+DDL that MySQL and PostgreSQL reject (`CREATE INDEX IF NOT EXISTS "Col"`, and a `DROP INDEX IF EXISTS … ON …`
+that is wrong on both in opposite directions). So the connector-free path was never portability — only the
+appearance of it. Deleted, connector required, 48 lines lighter. Build clean; **1,199 tests green across 17
+suites**; the revert fails 2 of 47. Four things worth carrying:
+
+- **The fallback's real damage was to the tests.** `connector == null` was how **every** test in that project
+  built the schema builder, so six of them exercised only the dead branch — exactly how TASK-246's missing
+  `Unique` flag on the live branch stayed green. Requiring the connector turned those six into real tests.
+- **Unreachability was measured, not assumed** — and the same sweep corrected a claim I had already committed.
+  All 16 consumer repos: 0 hand-built contexts, 0 uses of `ISchemaBuilder`, 0 migration-declared indexes. That
+  last one means **TASK-246 was latent, not firing**; its entry below and its commit message said "silently
+  accepting duplicates", which overstated the live impact. Corrected in place rather than left to read as data
+  corruption.
+- **The test that pinned the fallback became the test that pins its refusal.** TASK-246 had added one
+  asserting the fallback honoured `_unique` correctly; rather than delete it, it now asserts the null connector
+  is refused *and* that the message names both why the fallback was not a usable alternative and where to get a
+  connector.
+- **Two capabilities genuinely disappear with it**, written down so a later reader can tell a deliberate drop
+  from an oversight: composite `PRIMARY KEY (a, b)` (the connector renders per-column primary keys only), and
+  `RenameField` keeps its hand-written SQL because there is no connector equivalent — with `RENAME COLUMN` not
+  being universal, a latent gap of the same family.
+
 ### A migration's `.Unique()` built a non-unique index on every provider (2026-08-18)
 
 TASK-246, spawned by TASK-245's planning grill. `SqlIndexBuilder.Build()`'s connector path — the one every
 production migration takes — constructed its `Tables.IndexDefinition` without copying `_unique`, so
 `.Unique()` emitted a plain `CREATE INDEX` on SQLite, PostgreSQL, MySQL and MSSql alike. A missing
-**constraint**, not a missing optimisation: duplicate rows the migration was written to forbid were accepted
-from that point on. One-line fix; the work was the test surface. 7 new tests, 46 green in
+**constraint**, not a missing optimisation — any duplicate the migration was written to forbid would be
+accepted. **Latent, not firing** (corrected 2026-08-18 by a sweep of all 16 consumer repos): no consumer
+declares an index through a migration, and Symbio's unique docnumber indexes come from `[CompositeIndex]`
+attributes via schema-ensure, which was never affected. The fix still matters — it is public surface, and
+Symbio's own `UniqueIndexDataCheck` exists because they expect to add migrations — but no data was corrupted. One-line fix; the work was the test surface. 7 new tests, 46 green in
 `Birko.Data.Migrations.SQL.Tests` with live PostgreSQL 16; the revert fails **3 of 46**, including the live
 one. Three things worth carrying:
 

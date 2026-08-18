@@ -274,3 +274,26 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   nothing is a missing test. And the blast-radius survey was **wrong twice** before it was right: the consumer
   entities declare their attributes fully qualified, which an unqualified grep misses, and a hand-rolled parser
   then mis-classified them as bounded. A survey that under-reports reads exactly like a clean bill of health.
+- 2026-08-18 — **Correction to the [[TASK-246]] entry above: latent, not firing.** While scoping [[TASK-247]]
+  a sweep of all 16 consumer repos found **0** calls to `context.Schema.CreateIndex(...)` / `.Unique()` and
+  **0** uses of `ISchemaBuilder` anywhere — Symbio's unique docnumber and e-mail indexes come from
+  `[CompositeIndex]` attributes via schema-ensure, which that defect never touched. So the missing `Unique`
+  flag was a real hole in a **public API** that nothing yet drove, not an actively-corrupting one; the original
+  entry's "silently accepting duplicates" framing overstated the live impact. Recorded here rather than
+  softened in place, because a reader would otherwise conclude duplicate documents had been accepted in
+  production. The fix stands on the API being public — and on Symbio's own `UniqueIndexDataCheck` existing
+  precisely because they expect to add migrations.
+- 2026-08-18 — **[[TASK-247]] closed `done`**, and with it the whole index-DDL thread [[TASK-245]] opened
+  (245 → 246 → 247 → 248 → 249, all closed the same day). Inside D11's scope, no new decision row — but it
+  carries a decision: the connector-free raw-SQL fallbacks in `SqlSchemaBuilder` were **deleted** rather than
+  repaired, and the connector made required across `SqlSchemaBuilder`, `SqlMigrationContext` and
+  `SqlDataMigrator`. Two of the eight fallbacks emitted DDL that MySQL and PostgreSQL reject, so the
+  connector-free path was the appearance of portability rather than portability. Reachability was measured
+  first: the runner already requires a connector, so the context's optional argument was the sole door, and a
+  sweep of all 16 consumer repos found 0 hand-built contexts and 0 uses of `ISchemaBuilder`.
+  **The fallback's real cost was test integrity, not runtime behaviour** — `connector == null` was how every
+  test in that project built the builder, so six exercised only the dead branch, which is exactly how
+  TASK-246's defect stayed green. Requiring the connector converted those six into real tests. Whole-solution
+  build clean, 1,199 tests across 17 suites, revert fails 2 of 47. Two capabilities are recorded as
+  deliberately dropped (composite `PRIMARY KEY (a, b)`, and `RenameField` keeping hand-written SQL), because a
+  deletion that quietly loses a capability is indistinguishable later from one that never had it.

@@ -56,6 +56,16 @@ emits a **plain `CREATE INDEX`** on SQLite, PostgreSQL, MySQL and MSSql alike. T
 is silently absent — this is a missing **constraint**, not a missing optimisation, so duplicate rows
 that the migration was written to forbid are accepted from that point on.
 
+> **Correction, 2026-08-18 — latent, not firing.** A sweep of all 16 consumer repos while scoping
+> [[TASK-247]] found that **no consumer declares an index through a migration**: 0 calls to
+> `context.Schema.CreateIndex(...)` or `.Unique()`, and 0 uses of `ISchemaBuilder` anywhere. Symbio's unique
+> docnumber and e-mail indexes are `[CompositeIndex]` attributes applied by schema-ensure, a path this defect
+> never touched. So the defect was a real hole in a **public API** that nothing yet drove — not an
+> actively-corrupting one, and the earlier framing of it as "shipping" (including in the commit message)
+> overstated the live impact. Recorded rather than quietly softened, because a future reader would otherwise
+> conclude that duplicate documents had been accepted in production. The fix stands on the API being public,
+> and on Symbio's own `UniqueIndexDataCheck` existing precisely because they expect to add migrations.
+
 **What hides it:** the raw-SQL fallback immediately below (`:333-337`, taken only when
 `_connector == null`) *does* honour `_unique` — `var uniqueStr = _unique ? "UNIQUE " : "";`. So the
 feature demonstrably works in the path nobody uses in production and fails in the path everybody uses.

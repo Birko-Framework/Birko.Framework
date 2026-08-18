@@ -34,14 +34,14 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 116   |
+| todo         | —     | —       | 115   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 90    |
+| done         | 1     | 22      | 91    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 25 · P2 81 · P3 10**
+Todo by priority: **P0 0 · P1 25 · P2 80 · P3 10**
 
 > Regenerated 2026-08-18 by a full walk of every frontmatter in `tasks/` — 18 epics, 56 stories,
 > **220 task files**, now with one id each and no non-`.md` files in the tree, so a `TASK-*` path count and
@@ -276,7 +276,7 @@ Todo by priority: **P0 0 · P1 25 · P2 81 · P3 10**
     - [x] [TASK-237](EPIC-014-code-review-remediation/TASK-237-leader-election-for-the-recurring-scheduler.md) `RecurringJobScheduler` duplicates every job per worker — wire leader election · FEATURE-014
     - [x] [TASK-243](EPIC-014-code-review-remediation/TASK-243-mysql-ddl-implicitly-commits-an-open-boundary.md) On MySQL, a store's first operation inside a boundary silently commits that boundary · FEATURE-014
     - [x] [TASK-245](EPIC-014-code-review-remediation/TASK-245-mysql-cannot-create-any-declared-index.md) Index DDL every provider accepts — MySQL rejected the clause, PostgreSQL could not resolve the columns · FEATURE-014
-    - [ ] [TASK-247](EPIC-014-code-review-remediation/TASK-247-schema-builder-fallback-emits-broken-index-ddl.md) `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject · FEATURE-014
+    - [x] [TASK-247](EPIC-014-code-review-remediation/TASK-247-schema-builder-fallback-emits-broken-index-ddl.md) `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject · FEATURE-014
     - [x] [TASK-250](EPIC-014-code-review-remediation/TASK-250-spec-source-globs-are-not-git-pathspecs.md) A spec source glob is not a git pathspec, so the staleness check never saw 124 files · FEATURE-014
     - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
     - [ ] [TASK-146](EPIC-014-code-review-remediation/TASK-146-async-ordered-readone-parity.md) Nothing pins that the async repository has no connector-bypassing read · FEATURE-014
