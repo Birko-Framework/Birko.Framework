@@ -1,9 +1,14 @@
 # Tasks — Birko.Framework
 
 > ⚠ **Feature drift (2):** DV5 ×17 (every task in `_loose/` carries no epic **and** no feature, so none
-> appears in a feature row) · specs DV11 ×25 (`shaped-by` has never been derived on **any** of the 25 specs, so
-> DV8 is suppressed everywhere and "a feature never shipped its spec" cannot be distinguished from "nobody
-> computed it") — run `/roadmap --check`.
+> appears in a feature row) · specs DV7 ×3 (`filter-expression-translation`, `bulk-filter-operations`,
+> `unit-of-work-and-transactions` — wide-surface areas, tracked as [[TASK-251]]) — run `/roadmap --check`.
+>
+> ℹ **DV11 and DV9 are cleared.** `shaped-by` is now derived on all 25 specs (`shaped-by-unresolved: 80`
+> of 203 feature-linked tasks, stamped honestly rather than implied), so DV8 can fire again — it currently
+> does not, because the one coarse-`done` feature carries the documented `no spec surface` carve-out. DV7
+> went 9 → 3: two areas closed by measurement (no commits touching their sources since the spec was written)
+> and four by harvest.
 >
 > ℹ **Backlog integrity: clear.** No duplicate ids, no non-`.md` files in the tree, so a `TASK-*` path count and
 > the task count agree. The four findings raised by the 2026-08-18 regeneration are resolved — duplicate id
@@ -32,17 +37,17 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 115   |
+| todo         | —     | —       | 116   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
 | done         | 1     | 22      | 91    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 25 · P2 80 · P3 10**
+Todo by priority: **P0 0 · P1 25 · P2 81 · P3 10**
 
 > Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
-> **220 tasks** (115 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
+> **221 tasks** (116 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
 > the previous run corrected the totals but left the body from the 2026-08-09 walk.
 >
 > The five-task index-DDL thread closed today — [[TASK-245]] → [[TASK-246]] → [[TASK-247]] → [[TASK-248]] →
