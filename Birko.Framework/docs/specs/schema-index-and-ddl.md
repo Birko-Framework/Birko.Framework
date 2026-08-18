@@ -1,6 +1,6 @@
 ---
 area: schema-index-and-ddl
-generated-at: 2e3e4dc
+generated-at: 5e214e7
 generated-on: 2026-08-18
 sources:
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
@@ -43,10 +43,10 @@ sources:
 source-commits:   # recorded at this regen, not reconstructed
   ../Birko.Data.ElasticSearch: 9b523e2
   ../Birko.Data.Patterns: 87c0ed3
-  ../Birko.Data.SQL: 7b60044
-  ../Birko.Data.SQL.MSSql: 64a4932
-  ../Birko.Data.SQL.MySQL: 72cac6d
-  ../Birko.Data.SQL.PostgreSQL: 6f7a12f
+  ../Birko.Data.SQL: 022c67c8c48386b9e6e746adb5926d78371e7352
+  ../Birko.Data.SQL.MSSql: c5a3a8a760468f723c43e9826a2ed12b814df162
+  ../Birko.Data.SQL.MySQL: 73e1cfd0feb8b5daf745474f89f69e6d6e56c19a
+  ../Birko.Data.SQL.PostgreSQL: d0959f31e139d56d6d2708eae95b219ad0adb3d1
   ../Birko.Data.SQL.SqLite: ef71921
   # Baselines below added 2026-08-18 without a re-harvest, and that is a measurement rather
   # than an assumption: each of these repos has NO commit touching this area's sources since
@@ -881,8 +881,31 @@ always-initialised `Columns` list of `IndexColumn` (column name, `Order`, `IsDes
 
 The system SHALL, on `SqlIndexManager.CreateAsync`, validate that a scope, a non-empty definition name and
 at least one field are present, translate the portable definition to a `Tables.IndexDefinition` preserving
-field order and descending flags, emit `CreateUniqueIndexSql` when `definition.Unique` is set and otherwise
-delegate to the connector's `CreateIndexSql`, and wrap any execution failure in `IndexManagementException`.
+field order, descending flags **and the `Unique` flag**, validate each field name as a plain unqualified
+identifier, delegate unconditionally to the connector's `CreateIndexSql`, tolerate a provider report that the
+index is already present, and wrap any other execution failure in `IndexManagementException`.
+
+#### Scenario: Index field names are validated before interpolation
+
+- **Given** `Fields = [{ Name = "Rank); CREATE TABLE Pwned (x INTEGER); --" }]`
+- **When** `ToSqlIndexDefinition` translates the definition
+- **Then** `ArgumentException` is thrown by `DataBase.ValidateIndexFieldIdentifier`, because index columns
+  are interpolated **bare** into `CREATE INDEX` and these names come from the caller rather than from table
+  metadata
+- **And** a `Table.Column` qualifier is rejected as well: the check uses an unqualified-only pattern, since a
+  qualifier is invalid in an index column list on every supported provider
+
+#### Scenario: An already-present index is not an error, on any provider
+
+- **Given** an index that already exists
+- **When** `CreateAsync` runs
+- **Then** it completes without throwing on every provider — SQLite and PostgreSQL because their statement
+  carries `IF NOT EXISTS`, MSSql because its statement is wrapped in a `sys.indexes` guard, and MySQL because
+  `Connector.IsIndexAlreadyExistsException` recognises error 1061 and the manager tolerates it
+- **And** `DropAsync` mirrors this for an already-absent index via `IsIndexMissingException` (MySQL 1091), so
+  the manager is uniform across the whole verb family rather than for create alone
+- **And** the connector's own `DropIndexes` deliberately does **not** tolerate a missing index: a caller that
+  named a specific index is expected to fail loudly
 
 #### Scenario: Empty field list is rejected
 
@@ -1066,9 +1089,34 @@ SQLite reads `sqlite_master` plus `PRAGMA index_info` excluding `sqlite_autoinde
   `DROP INDEX <name> ON <table>` (MySQL accepts no `IF EXISTS` and requires the `ON` clause)
 - **And** `CreateAsync` therefore succeeds against MySQL, where before it emitted statements the server
   rejected and failed wrapped in `IndexManagementException`
-- **And** an index over an unbounded `string` column still fails on MySQL — such a column is `LONGTEXT`, which
-  MySQL cannot index without a key length — so the failure is wrapped in `IndexManagementException` for that
-  reason instead
+- **And** an index over an unbounded `string` column now succeeds on MySQL: `MySQLConnector.ConvertType`
+  emits `VARCHAR(255)` — see `IndexedStringColumnLength` — for a string whose field carries
+  `AbstractField.IsIndexed`, because MySQL cannot index a `LONGTEXT` column without a key length (error
+  1170). Unindexed strings remain `LONGTEXT` and an explicit `[MaxLengthField(n)]` still wins
+- **And** that bound is applied on MySQL **only**. SQLite, PostgreSQL and MSSql index a TEXT column natively
+  and ignore `IsIndexed`, so a declaration that works on them today is not narrowed to 255 characters to suit
+  a different provider
+- **And** `byte[]` (`LONGBLOB`) is still unindexable on MySQL for the same 1170 reason; no bound is applied
+  there because nothing declares such an index
+
+### Requirement: A declared index marks its columns, so a provider can type them accordingly
+
+The system SHALL set `AbstractField.IsIndexed` on every field a declared index names, at **both** points
+where `DataBase.LoadIndexes` resolves an index column back to a field — the per-property `[IndexedField]`
+branch and the class-level `[CompositeIndex]` branch — before any DDL is emitted.
+
+#### Scenario: Both attribute forms mark the field
+
+- **Given** one entity declaring its index with `[IndexedField]` and another with `[CompositeIndex]`
+- **When** the table is loaded
+- **Then** the named columns carry `IsIndexed = true` in both cases; marking only one branch would leave
+  half the declarations looking unindexed to a provider whose column type depends on the flag
+
+#### Scenario: Only indexed columns are affected
+
+- **Given** an entity with one indexed and one unindexed unbounded `string`
+- **When** the table is created on MySQL
+- **Then** the indexed column is `VARCHAR(255)` and the unindexed one remains `LONGTEXT`
 
 ### Requirement: Index-management SQL is composed by string interpolation
 

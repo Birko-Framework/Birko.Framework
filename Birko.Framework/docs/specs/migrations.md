@@ -1,7 +1,7 @@
 ---
 area: migrations
-generated-at: f3ac6755e788bc3e4693d27d37c583d67532a816
-generated-on: 2026-07-30
+generated-at: 5e214e7
+generated-on: 2026-08-18
 sources:
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBDataMigrator.cs
   - ../Birko.Data.Migrations.CosmosDB/Context/CosmosDBMigrationContext.cs
@@ -62,7 +62,7 @@ source-commits:   # sibling HEADs when this spec was last written (2026-07-30 16
   ../Birko.Data.Migrations.InfluxDB: 23b63c3
   ../Birko.Data.Migrations.MongoDB: 8a7acf5
   ../Birko.Data.Migrations.RavenDB: 99d8d33
-  ../Birko.Data.Migrations.SQL: f72bf7d
+  ../Birko.Data.Migrations.SQL: 14896a0ef3b2b0c8bbd0b809846338bd3c59bd09
   ../Birko.Data.Migrations.TimescaleDB: 531d816
 shaped-by: [FEATURE-014]
 shaped-by-derived: true
@@ -861,15 +861,43 @@ do **not** override `Build()`.
 - **Then** a `CreateIndexModel` with `Name = "byName"` and `Unique = true` is created (using the
   session when one is active); with zero fields, `Build()` returns without creating anything
 
-### Requirement: The SQL schema builder prefers the connector dialect and falls back to raw ANSI SQL
+### Requirement: The SQL schema builder requires a connector and has no raw-SQL fallback
 
-The system SHALL, when an `AbstractConnector` was supplied, route `DropCollection`, `DropIndex`,
-`AddField`, `DropField`, `CreateCollection(...).Build()` and `CreateIndex(...).Build()` through the
-connector after calling `SetExternalTransaction(connection, transaction)`, and SHALL quote
-identifiers via `connector.QuoteIdentifier`. Without a connector it SHALL emit hand-built ANSI SQL
-with `"` quoting. `RenameField` SHALL always use raw `ALTER TABLE … RENAME COLUMN … TO …` regardless
-of the connector. `CollectionExists` SHALL query `sqlite_master` when the connection type name
+The system SHALL require a non-null `AbstractConnector` in `SqlSchemaBuilder`, `SqlMigrationContext` and
+`SqlDataMigrator`, throwing `ArgumentNullException` otherwise, and SHALL route `DropCollection`,
+`DropIndex`, `AddField`, `DropField`, `CreateCollection(...).Build()` and `CreateIndex(...).Build()`
+through that connector after calling `SetExternalTransaction(connection, transaction)`. Identifiers
+SHALL be quoted via `connector.QuoteIdentifier`. `RenameField` SHALL use raw
+`ALTER TABLE … RENAME COLUMN … TO …` because no connector equivalent exists, but SHALL quote through
+the connector's dialect. `CollectionExists` SHALL query `sqlite_master` when the connection type name
 contains `"Sqlite"` and `INFORMATION_SCHEMA.TABLES` otherwise.
+
+#### Scenario: A null connector is refused, and the message names the alternative
+
+- **Given** `new SqlSchemaBuilder(connection, transaction, null)`
+- **When** the constructor runs
+- **Then** `ArgumentNullException` is thrown, and its message states that the removed raw-SQL fallback
+  was wrong on MySQL and PostgreSQL and that `SqlMigrationRunner` already holds a connector
+- **And** `SqlMigrationContext`'s `connector` parameter is required at compile time, so the optional
+  argument that was the only door to the fallbacks no longer exists
+
+#### Scenario: Every schema operation delegates to the provider's own emitter
+
+- **Given** a connector-backed builder
+- **When** `DropCollection` / `AddField` / `DropField` / `CreateCollection(...).Build()` /
+  `CreateIndex(...).Build()` / `DropIndex` run
+- **Then** each calls `connector.DropTable` / `AlterTableAdd` / `AlterTableDrop` /
+  `FieldDefinition`+`CreateTable` / `CreateIndexes` / `DropIndexes` respectively — there is no
+  branch on whether a connector was supplied, so index and column DDL has one producer per dialect
+
+#### Scenario: A composite primary key is not expressible through this builder
+
+- **Given** `CreateCollection(...)` with two fields marked primary
+- **When** `Build()` runs
+- **Then** `AbstractConnector.CreateTable` renders `PRIMARY KEY` per column from each field's flag; no
+  composite `PRIMARY KEY (a, b)` clause is emitted. The deleted fallback did emit one from
+  `_primaryKeyFields`, so this is a capability the removal dropped deliberately — nothing in the
+  repository or any consumer declares one this way
 
 #### Scenario: SQLite existence check
 
@@ -878,21 +906,15 @@ contains `"Sqlite"` and `INFORMATION_SCHEMA.TABLES` otherwise.
 - **Then** `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = @tableName` is run,
   not the `INFORMATION_SCHEMA` variant which does not exist in SQLite
 
-#### Scenario: Fallback field-type mapping
+#### Scenario: Column types come from the provider, not a portable table
 
-- **Given** no connector and a `FieldDescriptor`
-- **When** `AddField` builds its DDL
-- **Then** `FieldType.String` with a `MaxLength` becomes `VARCHAR(n)` and without one `TEXT`;
-  `Integer`→`INTEGER`, `Long`→`BIGINT`, `Decimal` with precision+scale→`DECIMAL(p,s)` else `DECIMAL`,
-  `Double`→`DOUBLE`, `Boolean`→`BOOLEAN`, `DateTime`→`TIMESTAMP`, `Guid`→`UUID`, `Binary`→`BLOB`,
-  `Json`→`TEXT`, and any unrecognised type→`TEXT`
-
-#### Scenario: Default values are inlined as literals
-
-- **Given** a `FieldDescriptor` with `DefaultValue = "O'Brien"`
-- **When** the fallback `AddField` runs
-- **Then** the literal is emitted as `'O''Brien'`; booleans render as `TRUE`/`FALSE`, `DateTime` as
-  `'yyyy-MM-dd HH:mm:ss'`, `Guid` as its quoted string form, and anything else via `ToString()`
+- **Given** a connector-backed `AddField` or `CreateCollection(...).Build()`
+- **When** the DDL is emitted
+- **Then** the column type comes from the connector's `FieldDefinition` / `ConvertType` for that
+  dialect. The builder carries no type table of its own: `FieldTypeToSql`, `FormatValue` and
+  `FormatColumn` were deleted with the fallback that was their only caller, so a provider-specific
+  mapping (for example MySQL bounding an indexed string to `VARCHAR(255)`) applies here too rather
+  than being approximated
 
 #### Scenario: DropField discards the real field type
 
@@ -901,12 +923,33 @@ contains `"Sqlite"` and `INFORMATION_SCHEMA.TABLES` otherwise.
 - **Then** it is built from `new FieldDescriptor { Name = fieldName, Type = FieldType.String }`
   regardless of the column's actual type
 
-#### Scenario: Fallback DropIndex uses non-portable syntax
+#### Scenario: DropIndex is per-dialect, and the non-portable fallback is gone
 
-- **Given** no connector
-- **When** `DropIndex("Foo", "IX_Foo")` runs
-- **Then** the emitted statement is `DROP INDEX IF EXISTS "IX_Foo" ON "Foo"`, which is not valid on
-  SQLite or PostgreSQL
+- **Given** a connector-backed `DropIndex("Foo", "IX_Foo")`
+- **When** it runs
+- **Then** the statement comes from that connector's `DropIndexSql` — `DROP INDEX "IX_Foo"` with an
+  `IF EXISTS` where the dialect supports it, and ``DROP INDEX `IX_Foo` ON `Foo` `` on MySQL, which
+  accepts no `IF EXISTS` but requires the `ON` clause
+- **And** the deleted fallback emitted `DROP INDEX IF EXISTS "IX_Foo" ON "Foo"`, a single form that is
+  invalid on MySQL (for the `IF EXISTS`) and on PostgreSQL (for the `ON`) — wrong on both in opposite
+  directions, which is why the connector-free path was removed rather than repaired
+
+#### Scenario: A migration's index column name is validated before it reaches the statement
+
+- **Given** `CreateIndex("Docs", "ix").WithField("Rank); CREATE TABLE Pwned (x INTEGER); --")`
+- **When** `WithField` runs
+- **Then** `ArgumentException` is thrown by `DataBase.ValidateIndexFieldIdentifier`, because index
+  columns are interpolated **bare** into `CREATE INDEX` and this name arrives from the caller. The
+  check is validated at the declaration site so it covers the whole builder, and it rejects a
+  `Table.Column` qualifier too, which is invalid in an index column list
+
+#### Scenario: A declared unique index is actually unique
+
+- **Given** `CreateIndex("Orders", "ux").WithField("TenantGuid").WithField("Number").Unique().Build()`
+- **When** the index is created
+- **Then** the emitted statement carries `UNIQUE` and the engine enforces it. `Build()` copies
+  `_unique` onto the `Tables.IndexDefinition` it hands the connector; before that copy existed the
+  declared constraint was silently absent on every provider
 
 ### Requirement: Document backends treat schema operations as no-ops or index-policy edits
 
