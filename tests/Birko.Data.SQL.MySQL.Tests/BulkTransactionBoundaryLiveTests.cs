@@ -33,6 +33,13 @@ namespace Birko.Data.SQL.MySQL.Tests;
 /// </para>
 ///
 /// <para>
+/// Every test here starts from a <b>cold</b> store. It could not until TASK-243: lazy schema-ensure
+/// issued <c>CREATE TABLE</c> on the boundary's connection, and MySQL implicitly commits on DDL, so these
+/// tests carried a warm-up read that hid it. That warm-up is gone, and its absence is now part of what
+/// they pin — see <see cref="LazyInitInsideBoundaryLiveTests"/>.
+/// </para>
+///
+/// <para>
 /// This is the first live MySQL suite in the tree. Gated on <c>BIRKO_MYSQL_HOST</c> (+ <c>_PORT</c> /
 /// <c>_USER</c> / <c>_PASSWORD</c> / <c>_DB</c>), and <b>a skipped run says so out loud</b> — see
 /// <see cref="RequireServer"/>: it writes a SKIPPED line to test output, and with
@@ -148,31 +155,12 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
 
     // ================================================================ async bulk
 
-    /// <summary>
-    /// Forces the store's lazy schema-ensure to happen <b>before</b> a boundary is opened.
-    /// </summary>
-    /// <remarks>
-    /// Not tidiness — on MySQL it is the difference between testing the boundary and testing nothing.
-    /// <c>EnsureInitializedAsync</c> runs in the public wrapper and issues <c>CREATE TABLE</c> through the
-    /// ambient connection, and <b>MySQL implicitly commits an open transaction on any DDL</b>. A store
-    /// whose first ever operation happens inside a boundary therefore commits that boundary before its own
-    /// write even runs, and the subsequent rollback undoes nothing. Measured: without this warm-up the
-    /// bulk-create test reported 3 surviving rows against the FIXED connector.
-    /// <para>
-    /// That is a real hazard for a consumer, not only for this suite — filed separately; it is orthogonal
-    /// to whether a bulk write joins a boundary, which is what these tests exist to pin.
-    /// </para>
-    /// </remarks>
-    private static async Task WarmUpAsync(AsyncMySQLStore<BulkRow> store)
-        => _ = (await store.ReadAsync(CancellationToken.None)).ToList();
-
     [Fact]
     public async Task Async_bulk_create_inside_a_rolled_back_boundary_leaves_nothing()
     {
         if (!RequireServer()) return;
         FreshTable();
         var store = AsyncStore();
-        await WarmUpAsync(store);
 
         await using (var uow = SqlUnitOfWork.FromStore(store))
         {
@@ -234,7 +222,6 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         if (!RequireServer()) return;
         FreshTable();
         var store = AsyncStore();
-        await WarmUpAsync(store);
 
         await using (var uow = SqlUnitOfWork.FromStore(store))
         {
@@ -262,7 +249,6 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         if (!RequireServer()) return;
         FreshTable();
         var store = AsyncStore();
-        await WarmUpAsync(store);
 
         await using (var uow = SqlUnitOfWork.FromStore(store))
         {
