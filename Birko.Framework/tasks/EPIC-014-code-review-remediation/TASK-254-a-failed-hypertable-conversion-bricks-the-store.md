@@ -9,7 +9,7 @@ assignee: ai
 created: 2026-08-18
 depends-on: []
 blocks: []
-related: [TASK-204, TASK-243, TASK-244, TASK-472]
+related: [TASK-204, TASK-243, TASK-244, TASK-252, TASK-472]
 findings: []
 pr: null
 github-issue: null
@@ -32,6 +32,12 @@ Before TASK-472, `create_hypertable` emitted a bare table literal, raised `42P01
 With the identifier fixed, the statement reaches the server and a genuinely impossible conversion now raises
 its real error. The reachable case: TimescaleDB refuses a unique index that omits the partitioning column, so a
 Guid-keyed entity raises `TS103` — measured on TimescaleDB 2 / PostgreSQL 16.
+
+**The root cause one layer down is [[TASK-252]] item 2**, which is why this task is about the *reporting* and
+not about making Guid-keyed hypertables work: a composite `(Guid, Ts)` primary key — the shape that would make
+such an entity legal — cannot be declared at all, because `AbstractConnector.CreateTable` emits `PRIMARY KEY`
+per column and two `HasPrimary` calls produce `42P16`. Fixing that is the separate, larger change; degrading
+gracefully when the declaration cannot be honoured is this one.
 
 That error propagates out of `TimescaleDBConnector.CreateTable`, hence out of `InitCore`, and stores set
 `_initialized` only **after** schema-ensure returns. So the entity's whole surface — **reads included** —
