@@ -30,6 +30,19 @@ public class CompositeUniqueIndexEndToEndTests : IDisposable
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
     }
 
+    /// <remarks>
+    /// <b>Portability note (TASK-248).</b> <c>Number</c> is a plain <c>string</c> with no declared length, and
+    /// this is the example consumers copy. On MySQL an unbounded string maps to <c>LONGTEXT</c>, which
+    /// <b>cannot be indexed without a key length</b> (ERROR 1170) — so for a while this shape produced no index
+    /// and, for a UNIQUE one, no constraint on that provider, recorded and invisible.
+    /// <para>
+    /// It works everywhere now: <c>MySQLConnector.ConvertType</c> bounds an <i>indexed</i> string to
+    /// <c>VARCHAR(255)</c>. Declaring <c>[MaxLengthField(n)]</c> explicitly is still preferable — it is
+    /// portable, visible at the model, and applies on every provider rather than relying on one connector's
+    /// default. This model deliberately stays unbounded so the automatic path keeps being exercised by the
+    /// example people actually copy.
+    /// </para>
+    /// </remarks>
     [Table("UxDocs")]
     public class UxDoc : AbstractLogModel
     {
