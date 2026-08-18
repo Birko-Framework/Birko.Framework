@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-209, TASK-211, TASK-245, TASK-249, TASK-255, TASK-259, TASK-260, TASK-261, TASK-472]
 findings: []
-pr: "Birko.Data.SQL 92f076f · Birko.Data.SQL.PostgreSQL 086602a · Birko.Data.SQL.Tests cf3c0a5 · Birko.Data.SQL.PostgreSQL.Tests 8c361bb · Birko.Data.TimescaleDB 48f572c · Birko.Data.TimescaleDB.Tests 4b14898 · Birko.Data.Migrations.SQL dc7806c · Birko.Data.Migrations.TimescaleDB c231ed2 · Birko.Data.Migrations.TimescaleDB.Tests 5a84948+17df5e8 · Birko.Data.TimescaleDB f88c796 · Birko.Data.TimescaleDB.Tests 0b3eb45"
+pr: "Birko.Data.SQL 92f076f · Birko.Data.SQL.PostgreSQL 086602a · Birko.Data.SQL.Tests cf3c0a5 · Birko.Data.SQL.PostgreSQL.Tests 8c361bb · Birko.Data.TimescaleDB 48f572c · Birko.Data.TimescaleDB.Tests 4b14898 · Birko.Data.Migrations.SQL dc7806c · Birko.Data.Migrations.TimescaleDB c231ed2 · Birko.Data.Migrations.TimescaleDB.Tests 5a84948+17df5e8 · Birko.Data.TimescaleDB f88c796 · Birko.Data.TimescaleDB.Tests 0b3eb45 · [step 7] Birko.Data.SQL 85f8576 · Birko.Data.SQL.MSSql 2bde57f · Birko.Data.SQL.PostgreSQL f4de483 · Birko.Data.SQL.SqLite fd067a2 · Birko.Data.SQL.View fb4ebb2 · Birko.Data.SQL.Tests ec1c514"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.Migrations.TimescaleDB, Birko.Data.TimescaleDB]
@@ -84,8 +84,13 @@ a verification task into a multi-repo refactor. Grouped here as one task rather 
 - [x] Proven able to fail: revert each substitution and watch the matching test go red. **Measured, per substitution:** bare regclass **15 of 34** offline + **11 of 11** live · unfolded column **5 of 34** · `FoldsUnquotedIdentifiers` forced false **1 of 555** · dropped PostgreSQL override **2 of 67** · async funnel un-routed **1 of 42** live · emitter delegation **0 of 39** and quote/escape order swap **0 of 555**, both zeros recorded rather than dressed up.
 - [x] An injection test per caller-derived sink, matching `IndexIdentifierInjectionTests` — these take free
       text from a migration author and currently interpolate it with no escaping whatsoever.
-- [ ] **⚠ NOT YET DONE — the ~20 hand-rolled `Replace("'", "''")` sites across 8 projects converge onto the
-      new `EscapeLiteral`.** Step 7; the only outstanding criterion. Added 2026-08-18 by an explicit scope decision at the plan grill, recorded rather
+- [x] **The hand-rolled `Replace("'", "''")` sites converge onto `EscapeLiteral`** — **18 call sites in 8
+      files across 6 repos**, done 2026-08-18. One copy deliberately left (`CosmosDBDataMigrator`, a project
+      that does not import `Birko.Data.SQL` and does not speak this dialect), recorded in the helper's doc so a
+      later audit can tell a decision from an oversight. Revert fails **0 of 555 / 0 of 223 / 0 of 59**, the
+      expected zero for a one-producer refactor. Verified with **all four providers live** — PostgreSQL 16,
+      MySQL 8.4, SQL Server 2022, on-disk SQLite — because four of the sites are the index managers
+      TASK-245/249 fixed days ago. Added 2026-08-18 by an explicit scope decision at the plan grill, recorded rather
       than absorbed silently. It is a behaviour-preserving refactor with no defect behind it, and my
       recommendation was to defer it — overridden, so it is a criterion rather than a plan aside. **Four of
       the sites are the `safeIndex`/`safeTable` pairs in the four index managers that TASK-245/TASK-249 fixed
@@ -276,7 +281,7 @@ and an unconverted hypertable is not.
 
 ### Step 7 — converge the `EscapeLiteral` duplicates
 
-Criterion 7, added by explicit scope decision at the grill (my recommendation was to defer; overridden).
+The sixth acceptance criterion, added by explicit scope decision at the grill (my recommendation was to defer; overridden). Called "criterion 7" in the step-7 commit messages, after the plan step rather than the list position — there are six criteria, not seven.
 ~20 hand-rolled `Replace("'", "''")` sites across 8 projects, including four `safeIndex`/`safeTable` pairs
 in `SqlIndexManager:182-193`, `MSSqlIndexManager:19-26`, `PostgreSqlIndexManager:19-26` and
 `SqLiteIndexManager:23-47`.
@@ -460,11 +465,35 @@ Order matters — production SHAs go into `pr:` before the aggregator commit:
   3. **TASK-255's hardcoded `time` is now demonstrated rather than described**: the aggregate cannot be built at
      all over a normally-named time column (`42703`), asserted alongside the working case over a table that does
      have a literal `time` column.
-- **Next: step 7** — the `EscapeLiteral` convergence (criterion 7), the one outstanding criterion. It needs the
-  four provider live suites **run**, not built, because four of the ~20 sites are index managers TASK-245/249
-  fixed days ago. Then step 6's swallow measurement, which is now partly answered: `ExecuteScript` has no
-  `try`/`catch` and the runner adds none, and the live suite confirms a bad statement **fails the migration
-  loudly** — so the migration half is loud where the store half was silent.
+- **2026-08-18 — step 7 done + committed: the convergence, and it changed my mind twice.**
+  18 call sites, 8 files, 6 repos. `Birko.Data.SQL` 85f8576 · `.MSSql` 2bde57f · `.PostgreSQL` f4de483 ·
+  `.SqLite` fd067a2 · `.View` fb4ebb2 · `.SQL.Tests` ec1c514.
+  1. **The plan said to leave the four VALUE sites alone; reading them inverted that.** Its reasoning was
+     "a value belongs in a parameter" — but three of the four *document that parameters are unavailable to
+     them* (`"CREATE VIEW cannot be parameterized"`, `"fallback when parameters can't be used"`, and
+     `InlineConstant` renders a constant into DDL). The shared rule is *embedding text in a single-quoted
+     literal*, identical for an identifier and a constant, so two producers for it was the very thing this
+     task exists to remove. They converged, and `SqlLiteral`'s doc now states both cases instead of framing
+     itself as identifier-only — which would have made these sites read as misuse.
+  2. **The convergence exposed a defect in what step 1 shipped.** `EscapeLiteral` returned
+     `string.Empty` for null, which looked accommodating; converged onto 18 sites it would have turned a null
+     identifier into an **empty** one, where the hand-written `Replace` threw — a silently malformed statement
+     replacing a loud failure, § SH-H037 arriving through a helper's null handling. **It is reachable:**
+     `Tables.IndexDefinition.Name` is declared `= null!`, so a null genuinely can arrive at MSSql's index
+     emitters; it merely used to fail on the neighbouring `QuoteIdentifier` one line later. Now throws
+     `ArgumentNullException` naming what the quiet alternative would have emitted, with its test asserting the
+     message. Nothing passes null legitimately — both value sinks answer `NULL` before reaching here.
+- **2026-08-18 — "run, not built" needed its own proof, and the pass count could not give it.**
+  These provider suites `return` early rather than skip, so the count is **identical with and without a
+  server** — exactly the shape that makes a green run meaningless. Pointed at a dead port:
+  **PostgreSQL fails 34 of 67 · MySQL 40 of 68 · MSSql 23 of 57**, which is the measurement that says those
+  tests reached a real server. Live totals with the convergence in: PostgreSQL 67 + View **22** (was 7
+  passed / 15 skipped offline) · MySQL 68 · MSSql 57 + View 19 · SQLite 223, plus SQL 555, Views 59,
+  ViewModel 18, Migrations.SQL 47, Migrations.TimescaleDB 45, TimescaleDB 42. All green, 0 warnings.
+- **All seven acceptance criteria are now met.** Remaining before close: step 6's swallow measurement is
+  answered (the live suite shows a bad statement **fails the migration loudly** — `ExecuteScript` has no
+  `try`/`catch` and the runner adds none, so the migration half is loud where the store half was silent), and
+  the `## Human test plan` is `N/A`, so this is ready for `/tasks close`.
 
 ## Human test plan
 
