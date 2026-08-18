@@ -37,6 +37,10 @@
   <Import Project="..\..\Framework\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
+  <!-- TASK-246: the live-provider half of the migration unique-index proof. A silently non-unique index is
+       a data-integrity defect, and a SQLite-only suite is what let it ship — so one real server is
+       exercised too. Gated on BIRKO_PG_HOST; the suite skips cleanly without it. -->
+  <Import Project="..\..\Framework\Birko.Data.SQL.PostgreSQL\Birko.Data.SQL.PostgreSQL.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.Migrations\Birko.Data.Migrations.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.Migrations.SQL\Birko.Data.Migrations.SQL.projitems" Label="Shared" />
 
