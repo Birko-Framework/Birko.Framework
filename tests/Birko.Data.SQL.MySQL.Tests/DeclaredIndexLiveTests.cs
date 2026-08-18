@@ -68,6 +68,7 @@ public class DeclaredIndexLiveTests : IDisposable
 {
     private const string TableName = "IdxRows";
     private const string TextTableName = "IdxTextRows";
+    private const string TextAttrTableName = "IdxTextAttrRows";
     private const string UniqueIndex = "ux_idxrows_docnum";
     private const string PlainIndex = "ix_idxrows_status";
 
@@ -139,11 +140,43 @@ public class DeclaredIndexLiveTests : IDisposable
         public string Status { get; set; } = null!;
     }
 
-    /// <summary>An indexed <c>string</c> with no length — <c>LONGTEXT</c> on MySQL. See the class remarks.</summary>
+    /// <summary>
+    /// An indexed <c>string</c> with no declared length, plus an unindexed one beside it. TASK-248 bounds the
+    /// first to <c>VARCHAR(255)</c> on MySQL and must leave the second as <c>LONGTEXT</c>.
+    /// </summary>
     [Table(TextTableName)]
     [CompositeIndex("ix_idxtext_note", nameof(Note))]
     public class IdxTextRow : AbstractLogModel
     {
+        public string Note { get; set; } = null!;
+
+        /// <summary>Named by no index — the control for "only indexed strings are bounded".</summary>
+        public string? Payload { get; set; }
+    }
+
+    /// <summary>The same shape with the index declared UNIQUE — what all 7 live consumer entities have.</summary>
+    [Table(TextTableName)]
+    [CompositeIndex("ux_idxtext_note", nameof(Note), IsUnique = true)]
+    public class IdxTextUniqueRow : AbstractLogModel
+    {
+        public string Note { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// The same unbounded indexed string declared with the <b>per-property</b> <c>[IndexedField]</c> attribute
+    /// instead of the class-level <c>[CompositeIndex]</c>.
+    /// </summary>
+    /// <remarks>
+    /// <c>DataBase.LoadIndexes</c> resolves index columns to fields in <b>two</b> places — one per attribute
+    /// form — and both must mark the field indexed or a provider whose column type depends on it sees only
+    /// half the declarations. This model exists because the first version of TASK-248's suite used only
+    /// <c>[CompositeIndex]</c>, and reverting the per-property marking then failed <b>0</b> tests: the fix's
+    /// other half was unproven. Same "guard the whole verb family" reflex, applied to attribute forms.
+    /// </remarks>
+    [Table(TextAttrTableName)]
+    public class IdxTextAttrRow : AbstractLogModel
+    {
+        [IndexedField("ix_idxtextattr_note", 0)]
         public string Note { get; set; } = null!;
     }
 
@@ -163,6 +196,7 @@ public class DeclaredIndexLiveTests : IDisposable
         if (string.IsNullOrWhiteSpace(Host)) return;
         try { Exec($"DROP TABLE IF EXISTS `{TableName}`"); } catch { }
         try { Exec($"DROP TABLE IF EXISTS `{TextTableName}`"); } catch { }
+        try { Exec($"DROP TABLE IF EXISTS `{TextAttrTableName}`"); } catch { }
     }
 
     /// <summary>
@@ -190,6 +224,32 @@ public class DeclaredIndexLiveTests : IDisposable
             result.Add((reader.GetString(0), reader.GetInt32(1) == 0));
         }
         return result;
+    }
+
+    /// <summary>The stored column type, from the catalogue — the cause behind the index now building.</summary>
+    private static string ColumnType(string table, string column)
+    {
+        using var conn = new MySqlConnection(Settings().GetConnectionString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT DATA_TYPE FROM information_schema.columns "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @t AND COLUMN_NAME = @c";
+        cmd.Parameters.AddWithValue("@t", table);
+        cmd.Parameters.AddWithValue("@c", column);
+        return (string?)cmd.ExecuteScalar() ?? "(absent)";
+    }
+
+    private static long ColumnLength(string table, string column)
+    {
+        using var conn = new MySqlConnection(Settings().GetConnectionString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(CHARACTER_MAXIMUM_LENGTH, -1) FROM information_schema.columns "
+                        + "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @t AND COLUMN_NAME = @c";
+        cmd.Parameters.AddWithValue("@t", table);
+        cmd.Parameters.AddWithValue("@c", column);
+        var v = cmd.ExecuteScalar();
+        return v == null || v == DBNull.Value ? -1 : Convert.ToInt64(v);
     }
 
     private static int IndexCount(string table)
@@ -707,34 +767,119 @@ public class DeclaredIndexLiveTests : IDisposable
     // ---------------------------------------------------------------- the boundary of this fix
 
     /// <summary>
-    /// <b>Not fixed here, and pinned so that is unmistakable.</b> A plain <c>string</c> maps to
-    /// <c>LONGTEXT</c> on MySQL (<c>MySQLConnector.ConvertType</c>), and MySQL cannot index a BLOB/TEXT
-    /// column without a key length — measured ERROR <b>1170</b>, for UNIQUE and non-unique alike. So an
-    /// index declared over an unbounded string is still unbuildable on MySQL after this task: a different
-    /// cause (column type, not statement syntax) needing a different fix (map indexed strings to a bounded
-    /// type, or emit a key length), tracked as its own task.
-    /// <para>
-    /// It is recorded rather than thrown, exactly like any other unbuildable index, so this is a
-    /// degradation and not an outage. The assertion is on the <b>error code</b> — if a future change makes
-    /// this build, this test fails and says so, which is what stops the boundary silently moving.
-    /// </para>
+    /// <b>The boundary this suite used to mark has moved — deliberately, and this test moved with it.</b>
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// TASK-245 left this failing with ERROR <b>1170</b> (<i>BLOB/TEXT column used in key specification
+    /// without a key length</i>): a plain <c>string</c> mapped to <c>LONGTEXT</c>, and MySQL cannot index a
+    /// BLOB/TEXT column at all without a prefix. TASK-248 closed it by bounding the <b>column</b> —
+    /// <c>ConvertType</c> emits <c>VARCHAR(255)</c> for a string the schema declares an index over, so the
+    /// index builds and the constraint is exactly as strong as declared.
+    /// </para>
+    /// <para>
+    /// <b>Scoped to MySQL on purpose.</b> Seven live consumer entities declare UNIQUE composites over
+    /// unbounded strings and work correctly on PostgreSQL today, so refusing the declaration framework-wide,
+    /// or bounding the column on every provider, would have broken working deployments to fix one provider.
+    /// A prefix index was rejected for the opposite reason: every real case is UNIQUE, and a prefix makes the
+    /// constraint <i>weaker than declared</i> — it refuses two genuinely different values sharing a prefix.
+    /// </para>
+    /// <para>
+    /// <b>Updated rather than deleted</b>, because it is the boundary marker. The column type is asserted
+    /// beside the index: the index building is a consequence of the column type, and asserting only the index
+    /// would not record why it now works.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void An_index_over_an_unbounded_string_is_still_unbuildable_on_mysql()
+    public void An_index_over_an_unbounded_string_is_now_buildable_on_mysql()
     {
         if (!RequireServer()) return;
         Exec($"DROP TABLE IF EXISTS `{TextTableName}`");
 
         var connector = NewConnector();
-        connector.Invoking(c => c.CreateTable(new[] { typeof(IdxTextRow) }))
-                 .Should().NotThrow("recorded, not thrown — the table and its read surface stay usable");
+        connector.Invoking(c => c.CreateTable(new[] { typeof(IdxTextRow) })).Should().NotThrow();
 
-        connector.IndexCreationFailures.Should().HaveCount(1);
-        var driverError = DriverErrorIn(connector.IndexCreationFailures[0].Error);
-        ((int)driverError!.ErrorCode).Should().Be(1170,
-            "BLOB/TEXT column used in key specification without a key length — a separate defect from the "
-          + "IF NOT EXISTS syntax this task fixes. If this ever becomes buildable, update the task that owns it");
+        connector.IndexCreationFailures.Should().BeEmpty(
+            "the indexed string is now VARCHAR(255), so 1170 no longer applies");
 
-        TableExists(TextTableName).Should().BeTrue("the table itself is created regardless");
+        IndexColumns(TextTableName, "ix_idxtext_note").Should().HaveCount(1,
+            "the declared index exists — against the unfixed code this was 0 with a recorded 1170");
+
+        ColumnType(TextTableName, "Note").Should().Be("varchar",
+            "the cause: an indexed string is bounded on MySQL rather than LONGTEXT");
+        ColumnLength(TextTableName, "Note").Should().Be(255);
+        TableExists(TextTableName).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The per-property attribute form must be bounded too. <c>LoadIndexes</c> resolves columns to fields in
+    /// two separate places, one per attribute form, and reverting only the per-property marking failed 0 tests
+    /// until this existed.
+    /// </summary>
+    [Fact]
+    public void An_indexed_field_attribute_over_an_unbounded_string_is_also_bounded()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TextAttrTableName}`");
+
+        var connector = NewConnector();
+        connector.CreateTable(new[] { typeof(IdxTextAttrRow) });
+
+        connector.IndexCreationFailures.Should().BeEmpty();
+        ColumnType(TextAttrTableName, "Note").Should().Be("varchar",
+            "[IndexedField] resolves through a different branch of LoadIndexes than [CompositeIndex], and both "
+          + "must mark the field indexed");
+        ColumnLength(TextAttrTableName, "Note").Should().Be(255);
+        IndexColumns(TextAttrTableName, "ix_idxtextattr_note").Should().HaveCount(1);
+    }
+
+    /// <summary>
+    /// The other half of the decision: a string that is <b>not</b> indexed stays <c>LONGTEXT</c>. The fix must
+    /// not quietly cap every string column in the framework at 255 characters.
+    /// </summary>
+    [Fact]
+    public void An_unindexed_string_is_still_longtext_on_mysql()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TextTableName}`");
+        NewConnector().CreateTable(new[] { typeof(IdxTextRow) });
+
+        ColumnType(TextTableName, "Payload").Should().Be("longtext",
+            "only the INDEXED string is bounded — an unindexed one keeps its unlimited type");
+    }
+
+    /// <summary>
+    /// An explicit <c>[MaxLengthField]</c> still wins, so a consumer that declares its own bound is neither
+    /// widened nor narrowed to 255.
+    /// </summary>
+    [Fact]
+    public void An_explicit_max_length_wins_over_the_indexed_default()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+        NewConnector().CreateTable(new[] { typeof(IdxRow) });
+
+        ColumnLength(TableName, "Number").Should().Be(64, "[MaxLengthField(64)] is declared on the property");
+        ColumnLength(TableName, "Status").Should().Be(32);
+    }
+
+    /// <summary>
+    /// And the constraint is real — which is the point of bounding the column instead of emitting a prefix.
+    /// This is the shape all seven live consumer entities have.
+    /// </summary>
+    [Fact]
+    public async Task A_unique_index_over_a_declared_unbounded_string_is_enforced()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TextTableName}`");
+        NewConnector().CreateTable(new[] { typeof(IdxTextUniqueRow) });
+
+        var store = new AsyncMySQLStore<IdxTextUniqueRow>();
+        store.SetSettings(Settings());
+
+        await store.CreateAsync(new IdxTextUniqueRow { Guid = Guid.NewGuid(), Note = "DOC-1" });
+        await store.Invoking(s => s.CreateAsync(new IdxTextUniqueRow { Guid = Guid.NewGuid(), Note = "DOC-1" }))
+                   .Should().ThrowAsync<Exception>("the UNIQUE index over the bounded column is enforced");
+        await store.CreateAsync(new IdxTextUniqueRow { Guid = Guid.NewGuid(), Note = "DOC-2" });
     }
 }
