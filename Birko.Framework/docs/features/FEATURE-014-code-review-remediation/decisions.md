@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]], [[TASK-255]], [[TASK-259]], [[TASK-260]], [[TASK-261]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -329,3 +329,53 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   them cheap together. Each requires a **measurement before a fix**, explicitly — the same thread produced
   TASK-248, whose honest-looking fix was measured and rejected for breaking seven live consumer entities, and
   the task records the traps already visible for four of the six.
+- 2026-08-18 — **D11 gains [[TASK-255]]**, spawned from [[TASK-253]]'s planning pass and backfilled at
+  creation. Inside D11's scope, no new decision row. `BuildContinuousAggregateSql` hardcodes its bucketing
+  column as the literal `time` — **CR-H070 left unfixed in the method immediately below the one it was filed
+  against**, with the explanation sitting four lines above it in the sibling's doc comment. Spawned rather
+  than folded into TASK-253 because it is a *different defect class*: TASK-253 is identifier quoting and
+  folding, this is a missing parameter, and a reviewer would judge them separately. It also cannot be
+  measured from the plan — whether any consumer calls `CreateContinuousAggregate` at all is unknown, and
+  TASK-247's sweep found 0 consumer uses of the neighbouring migration surface, so the task requires the
+  firing-or-latent question answered as a number before the fix. **Sequence it after TASK-253**, which will
+  have edited the same method for its identifiers.
+- 2026-08-18 — **D11 gains [[TASK-259]] and [[TASK-260]]**, both spawned from [[TASK-253]]'s plan **grill**
+  and backfilled at creation. Inside D11's scope, no new decision row. Both came out of interrogating options
+  the plan had already rejected, which is the part worth recording: the grill's value here was not refining
+  the chosen approach but discovering that two rejected branches were rejected for the *wrong reasons*, and
+  that one of them concealed a separate defect.
+  **TASK-259 (P1)** — evaluating "delegate the migration emitters to `connector.CreateHypertable`" required
+  reading `SetExternalTransaction`, which turns out to publish one caller's connection onto a connector cached
+  process-wide per (type, settings id). Both stores carry comments saying they *deliberately stopped* calling
+  it (TASK-240 replaced it with `AmbientSqlTransaction`); `SqlSchemaBuilder` is its last caller and **never
+  clears it**, so a shared connector retains a disposed migration connection for the life of the process.
+  Ranked P1 on blast radius — every provider, not TimescaleDB — but **measurement-first**, because TASK-247's
+  sweep found 0 consumer uses of `ISchemaBuilder` and this may be entirely latent.
+  **TASK-260 (P2)** — classifying the nine emitters by *containment* rather than by treatment showed that
+  everything inside a `'…'` literal is completely contained by `''` doubling, leaving exactly two arguments
+  (`selectClause`, `groupByClause`) that cannot be contained at all because they are raw SQL by design. Not a
+  gap TASK-253 leaves open but a property of the parameters, so the answer is an API redesign rather than a
+  validator — and validating them was measured against real usage and rejected (`date_trunc('day', x)` is a
+  legitimate `GROUP BY`, so a validator would break working callers to contain a caller who controls the
+  neighbouring line anyway). Sequenced after [[TASK-255]], which may prove the method cannot presently
+  succeed on any Birko entity at all — in which case there is no working behaviour to preserve.
+  TASK-253 keeps the interim obligation (document the boundary, pin that it is deliberately unvalidated) so
+  the gap is not undocumented between now and the redesign.
+- 2026-08-18 — **TASK-253 widened by explicit decision**, not by drift: a seventh acceptance criterion now
+  requires the ~20 hand-rolled `Replace("'", "''")` sites across 8 projects to converge onto the new
+  `EscapeLiteral` producer. Recorded here because the recommendation was to **defer** it (a behaviour-preserving
+  refactor with no defect behind it, whose revert proves nothing) and it was overridden — so the widening is a
+  decision with an owner rather than scope creep. Its risk is written into the task: four of the sites are the
+  `safeIndex`/`safeTable` pairs in index managers TASK-245/TASK-249 fixed days ago, so the four provider live
+  suites must be **run**, not merely built, and the convergence lands in its own commit so it can be read — or
+  reverted — alone.
+- 2026-08-18 — **D11 gains [[TASK-261]]**, spawned from [[TASK-253]]'s live verification and backfilled at
+  creation. Inside D11's scope, no new decision row. `TimescaleDBMigration.GetChunkInterval` reads
+  `chunk_time_interval` from `timescaledb_information.hypertables` — a column TimescaleDB moved to
+  `.dimensions` and renamed `time_interval` in **2.0**, so the method raises `42703` on every 2.x server, which
+  is all of them. Measured on 2.29.2. Filed separately because it is **catalogue drift, not identifier
+  handling**: different cause, different fix, and bundling it would have widened TASK-253 past its criteria.
+  **Latent** — a sweep found no caller anywhere in the tree, and the project has one importer in the family.
+  Notable for how it surfaced: TASK-253's own first draft of a chunk-interval assertion used the same stale
+  column name and failed, which is what exposed the product code. Already pinned by a test asserting the
+  `42703` as current behaviour, so TASK-261 begins by inverting a failing test rather than writing one.
