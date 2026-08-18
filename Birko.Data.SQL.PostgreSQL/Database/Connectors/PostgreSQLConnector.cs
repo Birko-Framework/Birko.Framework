@@ -363,37 +363,62 @@ namespace Birko.Data.SQL.Connectors
             if (!fields.Any())
                 return;
 
-            var columnList = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
+            // Bare, not quoted — the sixth instance of the identifier family in § Conventions, and it means
+            // this COPY has NEVER worked for a PascalCase-named column. CreateTable quotes the table name and
+            // emits column definitions BARE, so on PostgreSQL every base column is stored case-folded
+            // ("Name" -> name) while the table keeps its case. A quoted "Name" in the COPY column list
+            // therefore cannot resolve: measured against 16, `COPY "T" ("Name") FROM STDIN` is
+            // 42703 column "Name" of relation "T" does not exist. Found by this task's own regression test,
+            // which could not otherwise reach the boundary behaviour it is here to prove.
+            //
+            // The reserved-word objection does not apply: a column needing quotes could not have had its
+            // table created in the first place (CREATE TABLE "T" (Order text) is already a syntax error), so
+            // there is no working case to break. MySQL's identical spelling is left alone deliberately —
+            // column names there are case-insensitive, so nothing is broken and changing it is risk for
+            // nothing.
+            var columnList = string.Join(", ", fields.Select(f => f.Name));
             var copyCommand = "COPY " + QuoteIdentifier(table.Name)
                 + " (" + columnList + ") FROM STDIN (FORMAT BINARY)";
 
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            connection.Open();
-            try
+            // A bulk write must JOIN an open boundary on this database rather than open a second connection.
+            // On PostgreSQL two connections are perfectly legal, so before this the COPY committed
+            // independently and SURVIVED the owner's rollback — no error anywhere, which is the dangerous
+            // half of the defect (SQLite at least blocked and failed loudly). Npgsql supports a binary
+            // import inside an already-open transaction, so participating needs nothing but the boundary's
+            // connection, and the boundary's commit is what makes the rows durable.
+            //
+            // RunBulkOnConnection rather than RunBulk: COPY carries its own atomicity and ran unwrapped
+            // here, so the owned path is left exactly as it was — a connection and no transaction.
+            // retryWhenOwned: false for the same reason — this path never retried.
+            RunBulkOnConnection(copyCommand, (dbConnection, _, owned) =>
             {
-                using var writer = connection.BeginBinaryImport(copyCommand);
-                foreach (var model in models)
+                var connection = (NpgsqlConnection)dbConnection;
+                try
                 {
-                    writer.StartRow();
-                    foreach (var field in fields)
+                    using var writer = connection.BeginBinaryImport(copyCommand);
+                    foreach (var model in models)
                     {
-                        var value = field.Write(model);
-                        if (value == null)
+                        writer.StartRow();
+                        foreach (var field in fields)
                         {
-                            writer.WriteNull();
-                        }
-                        else
-                        {
-                            writer.Write(value, DbTypeToNpgsqlDbType(field.Type));
+                            var value = field.Write(model);
+                            if (value == null)
+                            {
+                                writer.WriteNull();
+                            }
+                            else
+                            {
+                                writer.Write(value, DbTypeToNpgsqlDbType(field.Type));
+                            }
                         }
                     }
+                    writer.Complete();
                 }
-                writer.Complete();
-            }
-            catch (Exception ex)
-            {
-                InitException(ex, copyCommand);
-            }
+                catch (Exception ex)
+                {
+                    InitException(ex, copyCommand);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkInsertAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -409,42 +434,48 @@ namespace Birko.Data.SQL.Connectors
             if (!fields.Any())
                 return;
 
-            var columnList = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
+            // Bare, not quoted — see BulkInsert above: a quoted column cannot resolve against the
+            // case-folded identifier the bare DDL created.
+            var columnList = string.Join(", ", fields.Select(f => f.Name));
             var copyCommand = "COPY " + QuoteIdentifier(table.Name)
                 + " (" + columnList + ") FROM STDIN (FORMAT BINARY)";
 
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            try
+            // See BulkInsert above: the COPY joins an open boundary instead of opening a second connection,
+            // which on PostgreSQL is what let a bulk insert survive the owner's rollback silently.
+            await RunBulkOnConnectionAsync(copyCommand, async (dbConnection, _, owned) =>
             {
-                await using var writer = await connection.BeginBinaryImportAsync(copyCommand, ct).ConfigureAwait(false);
-                foreach (var model in models)
+                var connection = (NpgsqlConnection)dbConnection;
+                try
                 {
-                    ct.ThrowIfCancellationRequested();
-                    await writer.StartRowAsync(ct).ConfigureAwait(false);
-                    foreach (var field in fields)
+                    await using var writer = await connection.BeginBinaryImportAsync(copyCommand, ct).ConfigureAwait(false);
+                    foreach (var model in models)
                     {
-                        var value = field.Write(model);
-                        if (value == null)
+                        ct.ThrowIfCancellationRequested();
+                        await writer.StartRowAsync(ct).ConfigureAwait(false);
+                        foreach (var field in fields)
                         {
-                            await writer.WriteNullAsync(ct).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            await writer.WriteAsync(value, DbTypeToNpgsqlDbType(field.Type), ct).ConfigureAwait(false);
+                            var value = field.Write(model);
+                            if (value == null)
+                            {
+                                await writer.WriteNullAsync(ct).ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                await writer.WriteAsync(value, DbTypeToNpgsqlDbType(field.Type), ct).ConfigureAwait(false);
+                            }
                         }
                     }
+                    await writer.CompleteAsync(ct).ConfigureAwait(false);
                 }
-                await writer.CompleteAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                InitException(ex, copyCommand);
-            }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    InitException(ex, copyCommand);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         public void BulkUpdate(Type type, IEnumerable<object> models)
@@ -465,52 +496,59 @@ namespace Birko.Data.SQL.Connectors
             if (!updateFields.Any())
                 return;
 
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            string? commandText = null;
-            try
+            // A bulk write must JOIN an open boundary on this database rather than open a second connection.
+            // On PostgreSQL two connections are perfectly legal, so before this the statements committed on
+            // their own transaction and SURVIVED the owner's rollback with no error anywhere — the quiet
+            // half of the defect. retryWhenOwned: false keeps the own-connection path exactly as it shipped;
+            // this path never retried and the fix is not the place to start.
+            RunBulk("BulkUpdate " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-
-                var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
-                    + " SET " + string.Join(", ", setClauses)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in updateFields)
+                var connection = (NpgsqlConnection)dbConnection;
+                var transaction = (NpgsqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new NpgsqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
+                    var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                        + " SET " + string.Join(", ", setClauses)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in updateFields)
                     {
-                        command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        command.Parameters.Add(new NpgsqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    command.ExecuteNonQuery();
-                }
+                    command.Prepare();
 
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                InitException(ex, commandText ?? "BulkUpdate " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        foreach (var field in updateFields)
+                        {
+                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        }
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        command.ExecuteNonQuery();
+                    }
+
+                    if (owned) transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkUpdate " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkUpdateAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -531,58 +569,61 @@ namespace Birko.Data.SQL.Connectors
             if (!updateFields.Any())
                 return;
 
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkUpdate above.
+            await RunBulkAsync("BulkUpdateAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = (NpgsqlTransaction)transaction;
-
-                var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
-                    + " SET " + string.Join(", ", setClauses)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in updateFields)
+                var connection = (NpgsqlConnection)dbConnection;
+                var transaction = (NpgsqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new NpgsqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                await command.PrepareAsync(ct).ConfigureAwait(false);
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
-                    ct.ThrowIfCancellationRequested();
+                    var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                        + " SET " + string.Join(", ", setClauses)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in updateFields)
                     {
-                        command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        command.Parameters.Add(new NpgsqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }
+                    await command.PrepareAsync(ct).ConfigureAwait(false);
 
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        foreach (var field in updateFields)
+                        {
+                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        }
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    }
+
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         public void BulkDelete(Type type, IEnumerable<object> models)
@@ -598,42 +639,45 @@ namespace Birko.Data.SQL.Connectors
             if (!primaryFields.Any())
                 return;
 
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkUpdate above.
+            RunBulk("BulkDelete " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in primaryFields)
+                var connection = (NpgsqlConnection)dbConnection;
+                var transaction = (NpgsqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    command.ExecuteNonQuery();
-                }
+                    command.Prepare();
 
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                InitException(ex, commandText ?? "BulkDelete " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        command.ExecuteNonQuery();
+                    }
+
+                    if (owned) transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkDelete " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkDeleteAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -649,48 +693,51 @@ namespace Birko.Data.SQL.Connectors
             if (!primaryFields.Any())
                 return;
 
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkUpdate above.
+            await RunBulkAsync("BulkDeleteAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = (NpgsqlTransaction)transaction;
-
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in primaryFields)
+                var connection = (NpgsqlConnection)dbConnection;
+                var transaction = (NpgsqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                await command.PrepareAsync(ct).ConfigureAwait(false);
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
-                    ct.ThrowIfCancellationRequested();
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new NpgsqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }
+                    await command.PrepareAsync(ct).ConfigureAwait(false);
 
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    }
+
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         #endregion

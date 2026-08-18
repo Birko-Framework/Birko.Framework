@@ -66,6 +66,10 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
                 storeDelegate?.Invoke(item);
             }
 
+            // The store-level door has to publish the boundary too, or the connector fix is
+            // unreachable through it: these Core overrides bypass the base's per-item write, and the
+            // base is the only place that entered the scope. Costs nothing when no context is set.
+            using var _tx = EnterTransactionScope();
             Connector.BulkInsert(typeof(T), items.Cast<object>());
         }
 
@@ -84,6 +88,7 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
                 }
             }
 
+            using var _tx = EnterTransactionScope();
             Connector.BulkUpdate(typeof(T), items.Cast<object>());
         }
 
@@ -93,6 +98,7 @@ namespace Birko.Data.SQL.PostgreSQL.Stores
             if (Connector == null || data == null || !data.Any())
                 return;
 
+            using var _tx = EnterTransactionScope();
             Connector.BulkDelete(typeof(T), data.Cast<object>());
         }
 
