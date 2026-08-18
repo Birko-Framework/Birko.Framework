@@ -210,7 +210,7 @@ namespace Birko.Data.SQL.Connectors
                 bool b => b ? "TRUE" : "FALSE",
                 byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal
                     => System.Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!,
-                _ => "'" + value.ToString()!.Replace("'", "''") + "'",
+                _ => "'" + SqlLiteral.EscapeLiteral(value.ToString()!) + "'",
             };
         }
 
