@@ -19,6 +19,16 @@ public class TimescaleDBHypertableAndSettingsTests
         public double Value { get; set; }
     }
 
+    /// <summary>
+    /// TASK-253: <c>BuildCreateHypertableSql</c> became an <b>instance</b> method so it can reach
+    /// <c>RegclassLiteral</c> / <c>CatalogueNameLiteral</c> on the base, which consult provider state
+    /// (<c>QuoteIdentifier</c> and <c>FoldsUnquotedIdentifiers</c>). Constructing a connector costs nothing
+    /// offline — the constructor only stores settings and opens no connection — so the four assertions below
+    /// are unchanged from when they called it statically.
+    /// </summary>
+    private static TimescaleDBConnector Emitter()
+        => new(new TimescaleDBSettings("localhost", "db", "u", "p", 5432, "ts", "1 day"));
+
     // ── create_hypertable SQL composition ──
 
     /// <summary>
@@ -32,7 +42,7 @@ public class TimescaleDBHypertableAndSettingsTests
     [Fact]
     public void BuildCreateHypertableSql_ComposesQuotedArgsAndInterval()
     {
-        var sql = TimescaleDBConnector.BuildCreateHypertableSql("metrics", "ts", "7 days");
+        var sql = Emitter().BuildCreateHypertableSql("metrics", "ts", "7 days");
 
         sql.Should().Be("SELECT create_hypertable('\"metrics\"', 'ts', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE)");
     }
@@ -46,7 +56,7 @@ public class TimescaleDBHypertableAndSettingsTests
     [Fact]
     public void BuildCreateHypertableSql_QuotesThePascalCaseTableAndFoldsTheColumn()
     {
-        var sql = TimescaleDBConnector.BuildCreateHypertableSql("SensorReadings", "Ts", "1 day");
+        var sql = Emitter().BuildCreateHypertableSql("SensorReadings", "Ts", "1 day");
 
         sql.Should().Be("SELECT create_hypertable('\"SensorReadings\"', 'ts', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE)");
     }
@@ -54,7 +64,7 @@ public class TimescaleDBHypertableAndSettingsTests
     [Fact]
     public void BuildCreateHypertableSql_EscapesSingleQuotes()
     {
-        var sql = TimescaleDBConnector.BuildCreateHypertableSql("me'tric", "t'c", "1 day");
+        var sql = Emitter().BuildCreateHypertableSql("me'tric", "t'c", "1 day");
 
         sql.Should().Contain("'\"me''tric\"'");
         sql.Should().Contain("'t''c'");
@@ -67,7 +77,7 @@ public class TimescaleDBHypertableAndSettingsTests
     [Fact]
     public void BuildCreateHypertableSql_DoublesEmbeddedDoubleQuotesInTheTable()
     {
-        var sql = TimescaleDBConnector.BuildCreateHypertableSql("we\"ird", "ts", "1 day");
+        var sql = Emitter().BuildCreateHypertableSql("we\"ird", "ts", "1 day");
 
         sql.Should().Contain("'\"we\"\"ird\"'");
     }
