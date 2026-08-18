@@ -312,7 +312,10 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override void CreateTable(string name, IEnumerable<string> fields)
         {
-            DoCommand((command) =>
+            // DoDdlCommand, not DoCommand: on a provider whose DDL is not transactional this must not run
+            // on an ambient boundary's connection, because the statement would implicitly commit it
+            // (TASK-243). inOwnTransaction: false keeps this emitter autocommitted exactly as it was.
+            DoDdlCommand((command) =>
             {
                 command.CommandText =
                     "CREATE TABLE IF NOT EXISTS "
@@ -323,7 +326,7 @@ namespace Birko.Data.SQL.Connectors
             }, (command) =>
             {
                 command.ExecuteNonQuery();
-            }, true);
+            }, true, inOwnTransaction: false);
         }
 
         #region Native Bulk Operations
