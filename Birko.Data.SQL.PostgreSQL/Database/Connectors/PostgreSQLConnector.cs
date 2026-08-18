@@ -33,6 +33,17 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// PostgreSQL folds an unquoted identifier to lower case. See
+        /// <see cref="AbstractConnectorBase.FoldsUnquotedIdentifiers"/> for what depends on this — in short,
+        /// a name that reaches SQL as a string <i>value</i> rather than as an identifier is never folded by
+        /// the parser, so it must arrive pre-folded to match the catalogue.
+        /// </summary>
+        /// <remarks>
+        /// Inherited by <c>TimescaleDBConnector</c>, which is where TASK-472 measured the consequence.
+        /// </remarks>
+        public override bool FoldsUnquotedIdentifiers => true;
+
+        /// <summary>
         /// Detects PostgreSQL transient errors: deadlocks (40P01), serialization failures (40001),
         /// connection exceptions (08xxx), insufficient resources (53xxx), operator intervention (57xxx).
         /// </summary>
