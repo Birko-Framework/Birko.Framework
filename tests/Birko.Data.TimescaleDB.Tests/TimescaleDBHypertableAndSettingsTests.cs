@@ -21,12 +21,34 @@ public class TimescaleDBHypertableAndSettingsTests
 
     // ── create_hypertable SQL composition ──
 
+    /// <summary>
+    /// <b>This test used to pin the defect, and its choice of table name is why (TASK-472).</b> It asserted
+    /// <c>create_hypertable('metrics', …)</c> — an already-lowercase name, for which the missing identifier
+    /// quotes make no difference, because PostgreSQL's regclass folding lands on the same relation. Every
+    /// real Birko entity is PascalCase, where the bare literal resolved to a relation that does not exist,
+    /// raised <c>42P01</c> and was swallowed as "missing table". A fixture that cannot distinguish the fix
+    /// from the defect is not coverage; the PascalCase case below is now the load-bearing one.
+    /// </summary>
     [Fact]
     public void BuildCreateHypertableSql_ComposesQuotedArgsAndInterval()
     {
         var sql = TimescaleDBConnector.BuildCreateHypertableSql("metrics", "ts", "7 days");
 
-        sql.Should().Be("SELECT create_hypertable('metrics', 'ts', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE)");
+        sql.Should().Be("SELECT create_hypertable('\"metrics\"', 'ts', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE)");
+    }
+
+    /// <summary>
+    /// The table is a <c>regclass</c> and must carry its own quotes to survive folding; the time column is a
+    /// <c>name</c> compared against <c>pg_attribute.attname</c> and must be pre-folded, because the framework
+    /// emits column definitions bare. Opposite treatments, same root cause: neither travels as an identifier
+    /// the parser can fold.
+    /// </summary>
+    [Fact]
+    public void BuildCreateHypertableSql_QuotesThePascalCaseTableAndFoldsTheColumn()
+    {
+        var sql = TimescaleDBConnector.BuildCreateHypertableSql("SensorReadings", "Ts", "1 day");
+
+        sql.Should().Be("SELECT create_hypertable('\"SensorReadings\"', 'ts', chunk_time_interval => INTERVAL '1 day', if_not_exists => TRUE)");
     }
 
     [Fact]
@@ -34,8 +56,20 @@ public class TimescaleDBHypertableAndSettingsTests
     {
         var sql = TimescaleDBConnector.BuildCreateHypertableSql("me'tric", "t'c", "1 day");
 
-        sql.Should().Contain("'me''tric'");
+        sql.Should().Contain("'\"me''tric\"'");
         sql.Should().Contain("'t''c'");
+    }
+
+    /// <summary>
+    /// The identifier quotes added to the table argument are themselves doubled, so a name carrying a double
+    /// quote cannot break out of the quoted identifier and reshape the regclass literal.
+    /// </summary>
+    [Fact]
+    public void BuildCreateHypertableSql_DoublesEmbeddedDoubleQuotesInTheTable()
+    {
+        var sql = TimescaleDBConnector.BuildCreateHypertableSql("we\"ird", "ts", "1 day");
+
+        sql.Should().Contain("'\"we\"\"ird\"'");
     }
 
     // ── TimescaleDBSettings ──
