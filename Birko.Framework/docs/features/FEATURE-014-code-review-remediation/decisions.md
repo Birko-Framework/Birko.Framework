@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -189,3 +189,46 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   missing providers, and flags that this task's own first guess about `JSON`/`XML` may be **backwards**: an
   OS file lock is released by the kernel on process death, which is genuine session semantics — the one
   guarantee none of the document stores can offer.
+- 2026-08-18 — **D11 gains [[TASK-246]] and [[TASK-247]]**, both spawned from [[TASK-245]]'s planning
+  grill and backfilled at creation. Inside D11's scope, no new decision row. **Also backfills eight
+  entries of drift**: TASK-240 through TASK-245 were never added to D11 by their own closes, so the row
+  had ended at TASK-237 while six tasks (four of them `done`) sat outside the ledger. Recorded here as
+  drift found during TASK-245 rather than as this task's own work — the closes that should have added
+  them are 240/241/242/243.
+  The two spawns are both emitters of index DDL that the grill's audit reached while establishing that
+  [[TASK-245]]'s new funnel really was a funnel (§ Conventions, TASK-243's "a funnel with four overrides
+  is not a funnel"). Neither is MySQL-specific, so neither belonged in TASK-245:
+  **TASK-246** is the one that is shipping: `SqlIndexBuilder.Build()` never copies `_unique` onto the
+  `IndexDefinition` it hands the connector, so a migration's `.Unique()` emits a plain `CREATE INDEX` on
+  all four providers — a silently missing **constraint**. What hid it is that the raw-SQL fallback three
+  lines below *does* honour `_unique`, i.e. the feature works in the path nobody uses and fails in the
+  path everybody uses; and no test in the tree calls `CreateIndexes` directly at all, while the existing
+  unique-index suites all exercise the attribute path, which populates `Unique` correctly.
+  **TASK-247** is latent: those same fallbacks emit `CREATE … INDEX IF NOT EXISTS` with quoted columns
+  (1064 on MySQL, unresolvable folded column on PostgreSQL) and `DROP INDEX IF EXISTS … ON …`, which is
+  wrong on both providers in *opposite* directions — MySQL rejects `IF EXISTS` but requires the `ON`,
+  PostgreSQL accepts `IF EXISTS` but permits no `ON`. It depends on TASK-245 so it can reuse corrected
+  emitters instead of re-deriving a fifth copy, and its first acceptance criterion asks whether the
+  fallbacks should exist at all.
+  TASK-245 itself was **retitled and widened** during the same grill, from "MySQL cannot create any
+  declared index" to index DDL on every provider: measuring risk R4 confirmed PostgreSQL 16 cannot create
+  any declared PascalCase index either — the quoted column identifiers cannot resolve against the folded
+  columns bare base-table DDL creates — so `affects:` grew to four production repos. Kept as one task per
+  this repo's precedent (TASK-242, TASK-243) rather than promoted to a story; the widening is recorded in
+  its own `#### Resolved decisions` block with the added acceptance criteria stated explicitly rather than
+  absorbed into the original four.
+- 2026-08-18 — **D11 gains [[TASK-248]]**, spawned from [[TASK-245]] while choosing that task's test model
+  and backfilled at creation. Inside D11's scope, no new decision row. TASK-245 fixed the *syntax* half of
+  "MySQL builds no declared index" (`CREATE INDEX IF NOT EXISTS` → 1064); this is the remaining half and a
+  different cause: an unbounded `string` maps to `LONGTEXT`, and MySQL cannot index a BLOB/TEXT column
+  without a key length (**1170**), unique or not. It matters because that is the shape the *canonical*
+  documented example declares — `CompositeUniqueIndexEndToEndTests`' `UxDoc.Number` — which passes on SQLite
+  and silently yields no index and no constraint on MySQL. Filed with three candidate fixes and the explicit
+  instruction to decide per index kind rather than take the cheapest, since a prefix-truncated UNIQUE
+  constraint is worse than none. Its boundary is pinned by a TASK-245 test asserting 1170, so closing it
+  means updating that test rather than deleting it.
+  [[TASK-245]] itself closed `done` the same day: four production repos, four test repos, 61 new tests,
+  1,086 green across 14 suites against live MySQL 8.4 / PostgreSQL 16 / SQL Server 2022. Its close gate found
+  one thing worth recording here — making index columns bare (required, or PostgreSQL cannot resolve them)
+  removed an accidental containment on `IIndexManager.CreateAsync`, whose column names come from the caller,
+  so a payload reached the DDL exactly as SH-H023's rule field did. Guarded and tested in the same task.

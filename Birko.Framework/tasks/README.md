@@ -16,17 +16,19 @@ _Generated 2026-08-09. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics              | Stories            | Tasks               |
 |--------------|--------------------|--------------------|---------------------|
 | planned      | 10                 | 24                 | —                   |
-| todo         | —                  | —                  | 117                 |
+| todo         | —                  | —                  | 120                 |
 | in-progress  | 7                  | 10                 | 1                   |
 | review       | —                  | —                  | 10                  |
 | blocked      | —                  | —                  | 2                   |
-| done         | 1                  | 22                 | 76                  |
+| done         | 1                  | 22                 | 87                  |
 | cancelled    | 0                  | 0                  | 1                   |
 
-Todo by priority: **P0 0 · P1 26 · P2 83 · P3 9**
+Todo by priority: **P0 0 · P1 28 · P2 82 · P3 10**
 
 > Recounted 2026-08-16 from the tree (TASK-215 close) — a fresh walk of every frontmatter, not an
-> increment of the previous figures. Totals: 17 epics, 56 stories, 187 tasks.
+> increment of the previous figures. **Recounted again 2026-08-18 (TASK-245 pick)** — totals: 18 epics,
+> 56 stories, 221 tasks. Only the counts above were regenerated; the per-epic body below still reflects
+> the 2026-08-09 walk, so a full `/tasks triage` is still owed.
 >
 > Adjusted 2026-08-16 (TASK-214 close): todo 115 -> 116, done 60 -> 61, tasks 187 -> 189.
 > TASK-214 closed done and spawned **two** tasks, so the todo pool grew across a close —

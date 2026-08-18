@@ -628,6 +628,71 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   throw**, because an explicit call (migrations' `SqlSchemaBuilder`) is a caller asking for that index *now*.
   Degrade only what is a constraint or an optimisation — never correctness — and **report rather than
   swallow**. Keep the re-attempt on later runs: that is what lets the index appear once the data is repaired.
+- **A provider without a conditional form has to fake one, and the flag that turns it off has to be
+  honourable everywhere — otherwise it is a silent no-op wearing a parameter's name.** Third member of the
+  identifier/one-producer family to arrive through index DDL (TASK-245), and it shipped **two** defects at
+  once, on two different providers, for two unrelated reasons — both silent, because TASK-204 made
+  schema-ensure *record* an unbuildable index and nothing in a host subscribes to the report:
+  - **MySQL rejected the statement outright.** `CREATE INDEX IF NOT EXISTS` is `ERROR 1064` there — a syntax
+    error, so no `[IndexedField]` or `[CompositeIndex]` on a MySQL entity had **ever** produced an index,
+    and for a UNIQUE one, never a constraint. MSSql overrides the emitter with a `sys.indexes` guard and
+    SQLite/PostgreSQL support the clause, which left MySQL as the one provider that neither overrode nor
+    supported it. The fix is a plain `CREATE INDEX` plus tolerance of **1061** (`Duplicate key name`) at the
+    `CreateIndexes` funnel — the client answering the question the server cannot be asked.
+  - **PostgreSQL could not resolve the columns.** `CreateIndexSql` quoted each column while `CreateTable`
+    emits column definitions **bare**, so the stored column is folded (`status`) and a quoted `"Status"`
+    raises `42703`. Measured on 16: **no declared PascalCase index could be created there either.** Seventh
+    instance of the identifier family, and the second provider with this task's exact symptom by a
+    completely different mechanism. Fixed by emitting columns bare — the rule two entries above, applied to
+    a sink nobody had checked.
+  Five things generalise:
+  - **"Already there" is not "unbuildable", and a tolerance is only safe because they are different codes.**
+    1061 vs **1062** (`Duplicate entry` — a UNIQUE index over violating data) vs **1170** (BLOB/TEXT with no
+    key length). Tolerating 1061 cannot swallow the other two, so TASK-204's degrade-and-report survives
+    intact; widening the predicate to any `MySqlException` fails 4 of the MySQL live suite. Match on the
+    **code**, never the message, and walk `InnerException` — `InitException` re-wraps every command failure.
+  - **An opt-out that only one provider can honour is the silent-drop shape, so parameterise the emitter,
+    not just the funnel.** `CreateIndexes(..., throwIfExists: true)` would have been meaningful on MySQL
+    alone and a no-op on the three providers whose conditional DDL cannot raise. Adding
+    `CreateIndexSql(..., conditional)` — base drops `IF NOT EXISTS`, MSSql drops its guard, MySQL stops
+    tolerating 1061 — is what makes the flag mean one thing everywhere. § SH-H037's "the opt-out is part of
+    the fix and needs its own test", arriving as *the opt-out must be honourable on every backend it is
+    declared on*.
+  - **A duplicated emitter is load-bearing only because something upstream dropped a field.**
+    `SqlIndexManager.ToSqlIndexDefinition` never copied `Unique`, and *that* is the sole reason a parallel
+    `CreateUniqueIndexSql` existed on the base plus the PostgreSQL and MSSql managers — one of those copies
+    carrying the quoted-column defect independently. Copying one property collapsed four emitters into one
+    producer and fixed a second PostgreSQL path for free. **When you find the same statement written three
+    times, look for the field that gets lost on the way in** rather than adding a fourth override, which is
+    what this task's own filed plan proposed.
+  - **A public contract can be *narrowed to what it meant* rather than preserved literally.** "The public
+    `CreateIndexes` still throws" (TASK-204) is about an index that cannot be **built**; it was never about
+    "already present", which the other three providers report as success. Making MySQL idempotent there
+    makes it agree with them and lets a re-applied migration work — and both halves are now pinned by tests,
+    where previously *nothing in the tree called `CreateIndexes` directly at all*.
+  - **A silent divergence is allowed to stay if it is measured and named.** MSSql keeps bracket-quoted index
+    columns (case-insensitive collation, no defect, no live measurement to justify churn), and a same-name
+    index over *different* columns is silently accepted on **every** provider — measured, since PostgreSQL's
+    own `IF NOT EXISTS` reports "already exists, skipping" and keeps the old definition. Faithful emulation,
+    recorded rather than "fixed" into a divergence.
+  - **Unquoting an identifier removes an accidental containment, so the sink that takes CALLER text needs
+    the check.** The bare-column fix is required for correctness on PostgreSQL, and it landed on two sinks
+    with different provenance: schema-ensure resolves `[IndexedField]` / `[CompositeIndex]` columns against
+    mapped properties (safe), while `IIndexManager.CreateAsync` interpolates its field names straight from
+    the caller. `QuoteIdentifier` had been *incidentally* containing a payload there; bare, it breaks out —
+    measured, 9 of 14 tests, with `Rank); CREATE TABLE Pwned (x INTEGER); --` reaching the DDL exactly as
+    SH-H023's rule field did. `SqlIndexManager` has a table name and no entity type, so it takes the
+    sanctioned weaker fallback — `DataBase.ValidateIndexFieldIdentifier`, **sharing `_bareIdentifier` with
+    `ValidateRuleFieldIdentifier`** so the two sinks cannot drift about what an acceptable identifier is.
+    The general rule: **when you remove quoting from an interpolated identifier, enumerate that sink's
+    callers by provenance** — metadata-derived needs nothing, caller-derived needs the check — and do not
+    assume the quoting you deleted was decorative.
+  - **Check which twin the production path actually runs before believing a revert.**
+    `AsyncDataBaseStore.InitCoreAsync` calls the **sync** `Connector.CreateTable` inside a `Task.Run`, so an
+    async store's schema-ensure runs the sync index loop and `CreateIndexesAsync` has no store-level caller.
+    Reverting only the async site fails **0 of 14**; the sync site fails exactly the boundary test. Fourth
+    instance of TASK-243's "a funnel with four overrides is not a funnel", arriving as *the async path you
+    patched may not be the one anything calls*.
 - **State a host reads must be current state, keyed — not an append-only log.** Connectors are cached
   process-wide per (type, settings id) in `DataBase.GetConnector` while `_initialized` lives on the *store*,
   so a scoped store per HTTP request re-runs schema-ensure per request against one shared connector. A
@@ -703,6 +768,48 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### No declared index was ever created on MySQL or PostgreSQL (2026-08-18)
+
+TASK-245, spawned by TASK-243. Two independent defects with one user-visible symptom — a declared
+`[IndexedField]` / `[CompositeIndex]` producing **no index, and for a UNIQUE one no constraint** — on the two
+providers most likely to be in production, silent since TASK-204 made schema-ensure record rather than throw.
+MySQL rejected `CREATE INDEX IF NOT EXISTS` outright (`ERROR 1064`); PostgreSQL 16 could not resolve the
+quoted index columns against the folded ones its bare-column `CREATE TABLE` actually creates (`42703`) —
+seventh instance of the identifier family. `DROP INDEX` was wrong on MySQL twice over (`IF EXISTS` rejected,
+mandatory `ON` clause missing). The standing rule is in § Conventions above. Verified against live **MySQL
+8.4**, **PostgreSQL 16** and **SQL Server 2022** plus on-disk SQLite: **1,086 tests green across 14 suites**,
+61 of them new. Six things worth carrying:
+
+- **The gate found it, and the boundary of it, before the fix existed.** Written test-first, the new MySQL
+  suite failed **12 of 14** against the unfixed tree; the 2 that passed were "still throws" pins that passed
+  for the *wrong* reason (1064 rather than 1062/1091), so both were strengthened to assert the error code and
+  now discriminate. Choosing the test model is also what exposed a **third** defect: an index over an
+  unbounded `string` (→ `LONGTEXT`) fails with `1170` on MySQL and is still broken — TASK-248, pinned by a
+  test asserting 1170 so the boundary cannot move silently. That shape is exactly what the canonical SQLite
+  example declares.
+- **Revert splits, each isolating one claim:** MySQL statement **13 of 14** · base column unquote **6 of 6**
+  (PostgreSQL) · tolerance filters **3 of 14** · predicate narrowing **4 of 14** · `DropIndexSql` **2 of 14**
+  · `Unique` hand-off **1 of 6** · DDL funnel **1 of 14** — but only at the **sync** site.
+- **The async path you patch may not be the one anything calls.** `AsyncDataBaseStore.InitCoreAsync` invokes
+  the **sync** `Connector.CreateTable` inside a `Task.Run`, so `CreateIndexesAsync` has no store-level caller
+  and reverting it alone fails **0 of 14**. Fourth instance of TASK-243's "a funnel with four overrides is
+  not a funnel", and it was found by a revert measuring zero rather than by reading.
+- **Three duplicate emitters existed because one property was dropped upstream.**
+  `SqlIndexManager.ToSqlIndexDefinition` never copied `Unique`, which is the *only* reason
+  `CreateUniqueIndexSql` existed on the base plus the PostgreSQL and MSSql managers — and the PostgreSQL copy
+  carried the quoted-column defect independently, so `IIndexManager.CreateAsync` could never build a unique
+  index there either. Copying one field collapsed four emitters into one producer. The filed plan had proposed
+  adding a **fourth** override.
+- **An opt-out only one provider can honour is a silent no-op.** `CreateIndexes(..., throwIfExists: true)`
+  would have been meaningful on MySQL alone, so `CreateIndexSql` gained `conditional` too — base drops
+  `IF NOT EXISTS`, MSSql drops its `sys.indexes` guard, MySQL stops tolerating 1061. Pinned per provider.
+- **"Nothing in the tree called `CreateIndexes` directly"** — the TASK-204 contract it supposedly preserved
+  was documented and entirely unasserted. Narrowing it to what it *meant* (unbuildable = 1062 still throws;
+  "already present" = 1061 no longer does, matching the other three) is now pinned by tests in both
+  directions. Also spawned **TASK-246**: a migration's `.Unique()` silently builds a NON-unique index on all
+  four providers, because `SqlIndexBuilder.Build()` loses the flag the same way — and **TASK-247**, the same
+  builder's raw-SQL fallbacks carrying a third and fourth copy of the broken clause.
 
 ### A store's first operation inside a boundary silently committed it on MySQL (2026-08-18)
 

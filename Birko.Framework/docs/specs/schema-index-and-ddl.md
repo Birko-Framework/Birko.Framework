@@ -1,7 +1,7 @@
 ---
 area: schema-index-and-ddl
-generated-at: 96738ef
-generated-on: 2026-08-16
+generated-at: 2e3e4dc
+generated-on: 2026-08-18
 sources:
   - ../Birko.Data.ElasticSearch/IndexManagement/ElasticSearchIndexManagerAdapter.cs
   - ../Birko.Data.ElasticSearch/IndexManagement/IndexInfo.cs
@@ -890,22 +890,27 @@ delegate to the connector's `CreateIndexSql`, and wrap any execution failure in 
 - **Then** `ArgumentNullException` / `ArgumentException("Index name is required.")` is thrown after the scope
   check
 
-#### Scenario: Unique path bypasses the connector
+#### Scenario: The unique path goes through the connector like every other index
 
 - **Given** a definition with `Unique == true`
 - **When** `CreateAsync` runs on the base manager
-- **Then** `CreateUniqueIndexSql` emits
-  `CREATE UNIQUE INDEX IF NOT EXISTS "<index>" ON "<table>" ("<col>" [DESC], ...)` using the connector's
-  `QuoteIdentifier`, and the connector's `CreateIndexSql` is not called — the `IF NOT EXISTS` clause is
-  accepted by SQLite and PostgreSQL (which overrides the method with the same text) but not by MySQL, which
-  inherits this implementation
+- **Then** `_connector.CreateIndexSql(scope, sqlIndex)` is called with `sqlIndex.Unique == true` — there is no
+  `CreateUniqueIndexSql` on the manager, and no per-dialect override of one, so the connector's emitter is the
+  single producer of index DDL for every provider
+- **And** the emitted statement is
+  `CREATE UNIQUE INDEX IF NOT EXISTS "<index>" ON "<table>" (<col> [DESC], ...)` on the default and PostgreSQL
+  dialects — index **columns bare**, index and table names quoted
+- **And** MySQL's connector override emits the same statement without the `IF NOT EXISTS` clause, which that
+  provider rejects outright
 
-#### Scenario: Translation drops the Unique flag from the SQL definition
+#### Scenario: Translation carries the Unique flag onto the SQL definition
 
 - **Given** a portable definition with `Unique == true`
 - **When** `ToSqlIndexDefinition` builds the `Tables.IndexDefinition`
-- **Then** only `Name` and `Columns` are copied — `Unique` is left `false` on the translated object, which is
-  harmless only because the caller already branched on the portable flag
+- **Then** `Name`, `Columns` **and** `Unique` are copied, so the connector's emitter can render `UNIQUE`
+  without the caller branching on the portable flag
+- **And** the method is `protected static` rather than `private`, so the hand-off can be asserted without a
+  live server
 
 #### Scenario: Ordering and direction survive translation
 
@@ -1031,22 +1036,31 @@ SQLite reads `sqlite_master` plus `PRAGMA index_info` excluding `sqlite_autoinde
 - **Then** the SQLite `override` runs (a two-step `sqlite_master` + `PRAGMA index_info` walk), so the
   inherited `GetInfoAsync` also sees populated columns instead of the base query's empty column names
 
-#### Scenario: MSSQL guards CREATE UNIQUE INDEX with a catalog test
+#### Scenario: MSSQL guards CREATE INDEX with a catalog test, on its connector
 
 - **Given** MSSQL, which has no `CREATE INDEX IF NOT EXISTS`
-- **When** `MSSqlIndexManager.CreateUniqueIndexSql` builds the statement
-- **Then** it emits
-  `IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='<ix>' AND object_id=OBJECT_ID('<table>')) CREATE UNIQUE INDEX ...`
-  instead of the base `IF NOT EXISTS` clause used by the default and PostgreSQL implementations
+- **When** any index statement is built for that dialect
+- **Then** `MSSqlConnector.CreateIndexSql` emits
+  `IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='<ix>' AND object_id=OBJECT_ID('<table>')) CREATE [UNIQUE] INDEX ...`,
+  a synthesised conditional form standing in for the clause the dialect lacks
+- **And** `MSSqlIndexManager` declares no `CreateUniqueIndexSql` of its own — that override was deleted as
+  byte-equivalent to what the connector already emits once `Unique` survives translation
+- **And** MSSQL alone keeps its index **columns bracket-quoted**, deliberately unlike the base emitter, because
+  its identifiers are case-insensitive under the default collation
 
-#### Scenario: MySQL adds no behaviour
+#### Scenario: MySQL adds no manager behaviour because its connector carries the dialect
 
 - **Given** `MySqlIndexManager`
 - **When** any operation runs
 - **Then** the inherited `SqlIndexManager` implementation is used unchanged — the subclass declares only a
-  constructor — so `CreateAsync` emits `CREATE [UNIQUE] INDEX IF NOT EXISTS …` and `DropAsync` emits a
-  table-less `DROP INDEX IF EXISTS …`, neither of which MySQL accepts, and both therefore fail against MySQL
-  wrapped in `IndexManagementException`
+  constructor — and the MySQL-specific statement shapes come from `MySQLConnector` instead: `CreateIndexSql`
+  emits no `IF NOT EXISTS` (that clause is a syntax error on MySQL) and `DropIndexSql` emits
+  `DROP INDEX <name> ON <table>` (MySQL accepts no `IF EXISTS` and requires the `ON` clause)
+- **And** `CreateAsync` therefore succeeds against MySQL, where before it emitted statements the server
+  rejected and failed wrapped in `IndexManagementException`
+- **And** an index over an unbounded `string` column still fails on MySQL — such a column is `LONGTEXT`, which
+  MySQL cannot index without a key length — so the failure is wrapped in `IndexManagementException` for that
+  reason instead
 
 ### Requirement: Index-management SQL is composed by string interpolation
 
@@ -1060,12 +1074,15 @@ statement SHALL use a `DbParameter`.
 - **When** the existence SQL is built
 - **Then** the table name appears as the literal `'Inv''oice'`
 
-#### Scenario: Identifiers are quoted, not parameterised
+#### Scenario: Identifiers are interpolated, not parameterised — and columns are not quoted
 
-- **Given** `CreateUniqueIndexSql("Invoice", index)`
+- **Given** an index statement built for any dialect
 - **When** the statement is built
-- **Then** the index name, table name and every column name pass through `QuoteIdentifier` and are embedded
-  in the command text; the executed command carries no parameters
+- **Then** the index name and table name pass through `QuoteIdentifier` and are embedded in the command text;
+  the executed command carries no parameters
+- **And** index **column** names are embedded **bare** by the default emitter, not quoted: `CreateTable` emits
+  column definitions bare, so a quoted column identifier cannot resolve the case-folded column PostgreSQL
+  actually stores. MSSQL's override is the sole exception and quotes them
 
 ### Requirement: Index management opens its own connection
 
