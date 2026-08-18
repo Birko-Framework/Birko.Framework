@@ -49,6 +49,39 @@ public sealed class CreateUsers : SqlScriptMigration
 }
 ```
 
+## `SqlSchemaBuilder` has two paths, and they are not equivalent (TASK-246)
+
+`CreateCollection(...)` / `CreateIndex(...)` return fluent builders whose `Build()` branches on whether a
+**connector** was supplied:
+
+| branch | taken when | notes |
+|---|---|---|
+| connector path | `connector != null` — **every production migration** | builds a `Tables.IndexDefinition` and calls `connector.CreateIndexes(...)`, so it inherits the provider's emitter |
+| raw-SQL fallback | `connector == null` | hand-written statement on the supplied connection |
+
+**Test the connector path.** The two branches drifted for exactly as long as nobody did: `Build()` never
+copied `_unique` onto the `IndexDefinition`, so a migration's `.Unique()` produced a **plain**
+`CREATE INDEX` on all four providers — a missing *constraint*, silently accepting the duplicate rows the
+migration was written to forbid. The fallback three lines below *did* honour `_unique`, and every test in
+`Birko.Data.Migrations.SQL.Tests` built with `new SqlSchemaBuilder(conn, null, null)` — so the feature was
+demonstrably working in the branch nobody uses and broken in the branch everybody uses, and the suite could
+not tell. A test that supplies `null` for the connector is testing the fallback, whatever it looks like it is
+testing.
+
+Two consequences worth keeping:
+
+- **`Unique` is not the only thing set in that object initialiser** — column order and `IsDescending` are
+  populated in the same expression and had no test either, so they are pinned now alongside it.
+- **The fallback is still known-broken on two providers** and is out of scope of that fix: it emits
+  `CREATE … INDEX IF NOT EXISTS` with quoted columns (rejected by MySQL, unresolvable against PostgreSQL's
+  folded columns) and `DROP INDEX IF EXISTS … ON …`, which is wrong on MySQL and PostgreSQL in opposite
+  directions. Tracked as TASK-247, whose first question is whether the fallback should exist at all now that
+  the connector emitters are correct on every provider.
+
+`SqlIndexBuilder.WithField` validates its column name through `DataBase.ValidateIndexFieldIdentifier`
+(TASK-249): index columns are interpolated **bare** into the statement, so caller text cannot be allowed
+through unchecked.
+
 ## Dependencies
 - Birko.Data.Migrations
 - Birko.Data.Patterns

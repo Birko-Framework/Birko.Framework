@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -328,9 +328,21 @@ namespace Birko.Data.Migrations.SQL.Context
                 if (_connector != null)
                 {
                     _connector.SetExternalTransaction(_connection, _transaction);
+                    // TASK-246: `Unique = _unique` was missing, so a migration's .Unique() built a
+                    // NON-unique index on every provider. IndexDefinition.Unique defaults to false and
+                    // CreateIndexSql emits UNIQUE only when it is true, so the declared constraint was
+                    // simply absent — a missing CONSTRAINT, not a missing optimisation, silently
+                    // accepting the duplicate rows the migration was written to forbid.
+                    //
+                    // What hid it: the raw-SQL fallback below DOES honour _unique, and it is taken only
+                    // when connector == null — which is how every test in this project used to build
+                    // this. The feature worked in the path nobody uses and failed in the path everybody
+                    // uses. Same lost-flag shape as SqlIndexManager.ToSqlIndexDefinition (TASK-245),
+                    // which dropped the identical property one layer over.
                     var indexDef = new Birko.Data.SQL.Tables.IndexDefinition
                     {
-                        Name = _indexName
+                        Name = _indexName,
+                        Unique = _unique
                     };
                     indexDef.Columns.AddRange(_fields.Select((f, i) => new Birko.Data.SQL.Tables.IndexColumn
                     {
