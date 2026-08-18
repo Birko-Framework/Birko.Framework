@@ -34,14 +34,14 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 117   |
+| todo         | —     | —       | 116   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 89    |
+| done         | 1     | 22      | 90    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 26 · P2 81 · P3 10**
+Todo by priority: **P0 0 · P1 25 · P2 81 · P3 10**
 
 > Regenerated 2026-08-18 by a full walk of every frontmatter in `tasks/` — 18 epics, 56 stories,
 > **220 task files**, now with one id each and no non-`.md` files in the tree, so a `TASK-*` path count and
@@ -259,7 +259,7 @@ Todo by priority: **P0 0 · P1 26 · P2 81 · P3 10**
     - [x] [TASK-241](EPIC-014-code-review-remediation/TASK-241-ravendb-never-sets-the-document-id-from-the-entity-guid.md) RavenDB never sets the document id from the entity Guid — delete is a silent no-op and update duplicates · FEATURE-014
     - [x] [TASK-242](EPIC-014-code-review-remediation/TASK-242-bulk-writes-escape-the-transaction-boundary.md) Every bulk write escaped the transaction boundary, and on three providers it did so silently · FEATURE-014
     - [x] [TASK-246](EPIC-014-code-review-remediation/TASK-246-migration-unique-index-is-silently-not-unique.md) A migration's `.Unique()` silently builds a NON-unique index on every SQL provider · FEATURE-014
-    - [ ] [TASK-248](EPIC-014-code-review-remediation/TASK-248-mysql-cannot-index-an-unbounded-string-column.md) MySQL cannot index an unbounded `string` column — and that is the canonical documented pattern · FEATURE-014
+    - [x] [TASK-248](EPIC-014-code-review-remediation/TASK-248-mysql-cannot-index-an-unbounded-string-column.md) MySQL cannot index an unbounded `string` column — and that is the canonical documented pattern · FEATURE-014
     - [x] [TASK-249](EPIC-014-code-review-remediation/TASK-249-close-gate-findings-on-the-index-ddl-fix.md) Four close-gate findings on TASK-245 — including a second injection sink its own rule pointed at · FEATURE-014
     - [x] [TASK-058](EPIC-014-code-review-remediation/TASK-058-sqliteconnector-autoincrement-ddl-non-primary-key.md) SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models) · FEATURE-014
     - [x] [TASK-131](EPIC-014-code-review-remediation/TASK-131-per-sub-repo-spec-trees.md) Per-sub-repo `docs/specs/` trees — the aggregator's staleness guard cannot fire · FEATURE-014

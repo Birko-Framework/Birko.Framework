@@ -3,7 +3,7 @@ id: TASK-248
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: unassigned
 created: 2026-08-18
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-245, TASK-204]
 findings: []
-pr: ""
+pr: "Birko.Data.SQL 022c67c | Birko.Data.SQL.MySQL 73e1cfd"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.SQL, Birko.Data.SQL.MySQL]
@@ -87,22 +87,22 @@ plain one, is a defensible split. Decide explicitly rather than picking the chea
 
 ## Acceptance criteria
 
-- [ ] A decision recorded in the task body naming which option was taken, per index kind (unique vs plain),
+- [x] A decision recorded in the task body naming which option was taken, per index kind (unique vs plain),
       with the blast radius of option 1 measured against the `Birko.Models.*.SQL` domain suites and every
       in-tree model carrying `[IndexedField]`/`[CompositeIndex]` on an unbounded string — the same clearance
       § SH-H037 demanded before turning silence into a throw.
-- [ ] A gated MySQL test that the chosen behaviour holds end-to-end: either the declaration is refused at
+- [x] A gated MySQL test that the chosen behaviour holds end-to-end: either the declaration is refused at
       table load with a message naming the property and the fix, or the index is **present in
       `information_schema.statistics`** and (if a prefix was used) the prefix length is asserted.
-- [ ] If a prefix is emitted for a UNIQUE index, a test that documents the truncation semantics — two rows
+- [x] If a prefix is emitted for a UNIQUE index, a test that documents the truncation semantics — two rows
       differing only after the prefix are **rejected** — so the weaker-than-declared constraint is a recorded
       decision rather than a surprise.
-- [ ] `An_index_over_an_unbounded_string_is_still_unbuildable_on_mysql` updated, not deleted: it is the
+- [x] `An_index_over_an_unbounded_string_is_still_unbuildable_on_mysql` updated, not deleted: it is the
       boundary marker and must now assert the new behaviour.
-- [ ] The other three providers are unaffected, asserted rather than assumed — SQLite, PostgreSQL and MSSql
+- [x] The other three providers are unaffected, asserted rather than assumed — SQLite, PostgreSQL and MSSql
       all index a TEXT column without a key length today and must keep doing so.
-- [ ] Prove each test can fail, with counts.
-- [ ] `CompositeUniqueIndexEndToEndTests`' model reviewed: if the canonical example is unusable on MySQL it
+- [x] Prove each test can fail, with counts.
+- [x] `CompositeUniqueIndexEndToEndTests`' model reviewed: if the canonical example is unusable on MySQL it
       should say so or change, because it is what consumers copy.
 
 ## Out of scope
@@ -113,3 +113,84 @@ plain one, is a defensible split. Decide explicitly rather than picking the chea
   index over a `byte[]` today.
 - MySQL's 3072-byte index-key limit for *bounded* columns (a `VARCHAR(1000)` composite can exceed it) is a
   separate ceiling and a separate task if it is worth one.
+
+## Human test plan
+
+**N/A — covered by automated tests.** Every claim is a catalogue fact (column type, column length, index
+presence) or an engine behaviour (the UNIQUE write is refused). Verified against live MySQL 8.4.
+
+## Outcome — DECISION: bound the column, on MySQL only
+
+**The decision the first acceptance criterion demanded, and the measurement that produced it.**
+
+### Blast radius, measured before choosing
+
+| where | indexed unbounded strings | note |
+|---|---|---|
+| `Birko.Models.*.SQL` domain models | **0** | the framework declares no index attributes at all |
+| Consumer production entities | **7**, all UNIQUE | Symbio: `Order.OrderNumber`, `ProductionOrder.OrderNumber`, `JournalEntry.EntryNumber`, `ExportBatch.BatchNumber`, `ImportBatch.BatchNumber`, `InventoryCount.DocumentNumber`, `CustomerAccount.Email` |
+| Birko test models | 11 | |
+
+All seven consumer entities **work correctly on PostgreSQL today** — they are the same
+`(TenantGuid, <Number>)` composites CLAUDE.md cites from the TASK-204 incident.
+
+### The decision, per index kind
+
+**Both kinds: option 3, scoped to MySQL.** `MySQLConnector.ConvertType` emits `VARCHAR(255)` instead of
+`LONGTEXT` when `AbstractField.IsIndexed` is set. Same treatment for UNIQUE and plain — the distinction the
+task anticipated turned out not to matter once the column is bounded rather than the index prefixed.
+
+- **Option 1 (refuse at table load) was measured and rejected.** It would convert all seven live entities into
+  start-up failures on a provider where their indexes are correct. § SH-H037's fail-fast is right when a
+  declaration cannot work *anywhere*; this one works on three of four providers, so the unhonourable thing is
+  the provider's limit and that is where it is absorbed.
+- **Option 2 (prefix index) rejected on the semantics.** Every real case is UNIQUE, and `ux(Col(64))` makes
+  the constraint **weaker than declared** — silently refusing two genuinely different values sharing a prefix.
+  A bounded column refuses the over-long *write* instead: loud, and visible to the caller.
+- **Option 3 framework-wide rejected too.** Bounding on PostgreSQL/SQLite/MSSql would impose a 255-character
+  ceiling where none exists today, so a longer indexed value that writes fine now would start failing —
+  breaking three working providers to fix one.
+
+`byte[]` (`LONGBLOB`) is left recorded-not-thrown: same 1170 restriction, nothing in the tree declares an
+index over one, and inventing a bound for a case with no instances is speculation.
+
+### Verification
+
+**1,170 tests green across 19 suites**, live MySQL 8.4, including the five `Birko.Models.*.SQL` domain suites
+the criterion named for clearance. 6 new tests.
+
+| revert | result | proves |
+|---|---|---|
+| **M** drop the `ConvertType` VARCHAR arm | **2 of 68** fail | the emitter half |
+| **O** drop the composite-site `IsIndexed` marking | **2 of 68** fail | `[CompositeIndex]` resolution |
+| **N** drop the per-property `IsIndexed` marking | **1 of 68** fail | `[IndexedField]` resolution — **0 of 67 before a test for that attribute form existed** |
+
+**Revert N is the finding inside the fix.** `DataBase.LoadIndexes` resolves index columns to fields at two
+points, one per attribute form, and every model in the first version of the suite used `[CompositeIndex]` — so
+half the fix was unproven and a future edit could have silently broken it. Adding `IdxTextAttrRow` made the
+revert fail exactly 1. A revert that fails nothing is a missing test, not a redundant fix; second instance in
+three days after TASK-245's async-site revert.
+
+### Boundary marker and the canonical example
+
+`An_index_over_an_unbounded_string_is_still_unbuildable_on_mysql` was **renamed and rewritten**, not deleted,
+to `An_index_over_an_unbounded_string_is_now_buildable_on_mysql` — it asserts the column type *beside* the
+index, because the index building is a consequence of the column type and asserting only the index would not
+record why it works.
+
+`CompositeUniqueIndexEndToEndTests.UxDoc` — the example consumers copy — now carries a portability note and
+**deliberately stays unbounded**, so the automatic path keeps being exercised by the shape people actually
+copy. `[MaxLengthField(n)]` is still documented as preferable: portable, visible at the model, and applied on
+every provider rather than by one connector's default.
+
+### Notes
+
+- The other three providers are **asserted** unaffected, not assumed: each has an offline test that an indexed
+  unbounded string still maps to TEXT, and that an explicit length still produces its own type.
+- **The blast-radius survey was wrong twice before it was right.** The consumer entities declare their
+  attributes fully qualified (`[Birko.Data.SQL.Attributes.CompositeIndex(...)]`), so an unqualified
+  `[CompositeIndex(` grep found none of them; a hand-rolled property parser then mis-classified them as
+  bounded. Both corrections came from checking one known instance by hand. A survey that under-reports reads
+  exactly like a clean bill of health — verify the count against a known case before trusting it.
+- `IndexedStringColumnLength` is `protected virtual` so a consumer can raise it, with the note that InnoDB's
+  3072-byte index-key limit is the real ceiling rather than that number.

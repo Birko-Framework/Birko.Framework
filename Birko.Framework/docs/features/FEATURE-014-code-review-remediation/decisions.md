@@ -256,3 +256,21 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   lost-flag shape in two days after TASK-245's `ToSqlIndexDefinition`. 7 new tests, 46 green with live
   PostgreSQL 16 (chosen over MySQL so the test also proves the index binds to the folded columns it names);
   revert fails 3 of 46 including the live one.
+- 2026-08-18 — **[[TASK-248]] closed `done`**, the last of [[TASK-245]]'s three spawns. Inside D11's scope, no
+  new decision row — but it carries a **real design decision**, recorded in the task body as its first
+  acceptance criterion demanded. MySQL cannot index a BLOB/TEXT column without a key length (1170) and a plain
+  `string` maps to `LONGTEXT` there, so a declared index over one was unbuildable even after TASK-245.
+  **The measurement inverted the obvious fix.** Refusing the declaration at table load (§ SH-H037) would have
+  converted **7 live consumer entities** into start-up failures — Symbio's docnumber and e-mail UNIQUE
+  composites, the same `(TenantGuid, Number)` pairs the TASK-204 incident was about — all of which work
+  correctly on PostgreSQL today, while **0** framework domain models declare an index attribute at all. So the
+  provider's limit is absorbed at the provider: `VARCHAR(255)` for an indexed string on MySQL alone, with the
+  other three asserted unaffected. A prefix index was rejected on semantics (every real case is UNIQUE, and a
+  prefix makes the constraint *weaker than declared*), and bounding all four was rejected for the mirror reason
+  (a 255-char ceiling where none exists today). 1,170 tests green across 19 suites including the five
+  `Birko.Models.*.SQL` domain suites the criterion named for clearance.
+  Two process notes: a revert that dropped half the fix failed **0 of 67** tests, because every model in the
+  first suite used `[CompositeIndex]` while `LoadIndexes` resolves columns at two points — a revert that fails
+  nothing is a missing test. And the blast-radius survey was **wrong twice** before it was right: the consumer
+  entities declare their attributes fully qualified, which an unqualified grep misses, and a hand-rolled parser
+  then mis-classified them as bounded. A survey that under-reports reads exactly like a clean bill of health.

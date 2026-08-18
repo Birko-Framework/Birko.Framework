@@ -715,6 +715,38 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     Reverting only the async site fails **0 of 14**; the sync site fails exactly the boundary test. Fourth
     instance of TASK-243's "a funnel with four overrides is not a funnel", arriving as *the async path you
     patched may not be the one anything calls*.
+- **A provider-specific ceiling is fixed at the provider, and "the declaration is wrong" is a claim to
+  measure before acting on it.** Fourth member of the index-DDL family (TASK-248). MySQL maps an unbounded
+  `string` to `LONGTEXT` and **cannot index a BLOB/TEXT column without a key length** (measured on 8.4 as
+  ERROR 1170, UNIQUE and plain alike), so after TASK-245 fixed the statement syntax an index over a plain
+  `string` still could not be built there — it merely failed with a different code, recorded and invisible.
+  The honest-looking fix was to refuse the declaration at table load, per § SH-H037. **Measuring it inverted
+  the answer:** 7 live consumer entities (Symbio's docnumber and e-mail UNIQUE composites) declare exactly
+  that shape and work correctly on PostgreSQL *today*, and 0 framework domain models declare it at all — so
+  refusing framework-wide would have converted seven working entities into start-up failures to fix a
+  different provider. The fix is `AbstractField.IsIndexed` consulted by `MySQLConnector.ConvertType` alone,
+  emitting `VARCHAR(255)`. Four parts generalise:
+  - **Scope the change to the provider that is broken.** Bounding the column on all four would have imposed a
+    255-character ceiling on columns that have none on PostgreSQL/SQLite/MSSql, so a value that writes fine
+    today would start failing — breaking three working providers to fix one. The divergence being introduced
+    is MySQL's own index-key limit, not a framework choice, and it is asserted per provider rather than
+    assumed: each of the other three has a test that an indexed unbounded string is *still* TEXT.
+  - **Prefer the loud narrow failure to the quiet weak one.** A prefix index (`ux(Col(64))`) would have made
+    every one of those UNIQUE constraints **weaker than declared** — refusing two genuinely different values
+    that share a prefix. A bounded column refuses the over-long *write* instead. When both options degrade
+    something, degrade the thing the caller can see.
+  - **A flag consumed in one place is set in as many places as the metadata is resolved.**
+    `DataBase.LoadIndexes` resolves index columns to fields at **two** points, one per attribute form
+    (`[IndexedField]`, `[CompositeIndex]`), and marking only one leaves half the declarations looking
+    unindexed. The gap was invisible until a revert: dropping the per-property marking failed **0** tests,
+    because every model in the new suite used the class-level form. **A revert that fails nothing is a missing
+    test, not a redundant fix** — the same lesson as TASK-245's async-site revert, in a second shape.
+  - **§ SH-H037's fail-fast rule still needs its blast radius measured, and here the measurement said no.**
+    Refusing an unhonourable declaration is right when the declaration cannot work anywhere; this one works on
+    three of four providers, so the unhonourable thing was the *provider's* limit and that is where it was
+    absorbed. Note the survey itself had to be corrected twice — the consumer entities declare their
+    attributes fully qualified (`[Birko.Data.SQL.Attributes.CompositeIndex(...)]`), which an unqualified grep
+    misses entirely. **Verify a blast-radius count against one known instance before trusting it.**
 - **State a host reads must be current state, keyed — not an append-only log.** Connectors are cached
   process-wide per (type, settings id) in `DataBase.GetConnector` while `_initialized` lives on the *store*,
   so a scoped store per HTTP request re-runs schema-ensure per request against one shared connector. A
@@ -791,6 +823,34 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### MySQL could not index an unbounded string, and refusing the declaration was the wrong fix (2026-08-18)
+
+TASK-248, the last of TASK-245's three spawns. MySQL maps a plain `string` to `LONGTEXT` and cannot index a
+BLOB/TEXT column without a key length (**1170**), so after the statement-syntax fix an index over an unbounded
+string still could not be built there. The obvious remedy — refuse the declaration at table load, per
+§ SH-H037 — was **measured and rejected**: 7 live consumer entities declare exactly that shape and work
+correctly on PostgreSQL today, while 0 framework domain models declare it at all. Fixed instead by bounding the
+column on MySQL alone (`VARCHAR(255)` when `AbstractField.IsIndexed`). 1,170 tests green across 19 suites
+including the five `Birko.Models.*.SQL` domain suites; 6 new. The standing rule is in § Conventions. Four
+things worth carrying:
+
+- **The measurement inverted the decision.** "This declaration is unhonourable, so refuse it" was right in
+  the abstract and wrong here: it is unhonourable on one of four providers, so refusing framework-wide would
+  have turned seven working entities into start-up failures. § SH-H037's fail-fast still requires the blast
+  radius to be cleared first, and this is the case where clearing it says no.
+- **A revert that fails nothing is a missing test.** `DataBase.LoadIndexes` resolves index columns at two
+  points, one per attribute form; dropping the per-property marking failed **0 of 67** because every model in
+  the new suite used `[CompositeIndex]`. Adding an `[IndexedField]` model made it fail exactly 1. Second
+  instance of this shape in three days after TASK-245's async-site revert.
+- **Degrade what the caller can see.** A prefix index would have made all seven UNIQUE constraints weaker
+  than declared — silently refusing genuinely different values sharing a prefix. A bounded column refuses the
+  over-long write instead, loudly.
+- **The blast-radius survey was wrong twice before it was right.** The consumer entities declare their
+  attributes fully qualified, so an unqualified `[CompositeIndex(` grep found none of them, and a hand-rolled
+  property parser then mis-classified them as bounded. Both corrections came from checking one known instance
+  by hand. Verify such a count against a known case before trusting it — a survey that under-reports reads
+  exactly like a clean bill of health.
+
 ### A migration's `.Unique()` built a non-unique index on every provider (2026-08-18)
 
 TASK-246, spawned by TASK-245's planning grill. `SqlIndexBuilder.Build()`'s connector path — the one every
@@ -829,9 +889,9 @@ mandatory `ON` clause missing). The standing rule is in § Conventions above. Ve
   suite failed **12 of 14** against the unfixed tree; the 2 that passed were "still throws" pins that passed
   for the *wrong* reason (1064 rather than 1062/1091), so both were strengthened to assert the error code and
   now discriminate. Choosing the test model is also what exposed a **third** defect: an index over an
-  unbounded `string` (→ `LONGTEXT`) fails with `1170` on MySQL and is still broken — TASK-248, pinned by a
-  test asserting 1170 so the boundary cannot move silently. That shape is exactly what the canonical SQLite
-  example declares.
+  unbounded `string` (→ `LONGTEXT`) fails with `1170` on MySQL — closed the same day by TASK-248, which
+  bounds an *indexed* string to `VARCHAR(255)` on that provider only. That shape is exactly what the canonical
+  SQLite example declares.
 - **Revert splits, each isolating one claim:** MySQL statement **13 of 14** · base column unquote **6 of 6**
   (PostgreSQL) · tolerance filters **3 of 14** · predicate narrowing **4 of 14** · `DropIndexSql` **2 of 14**
   · `Unique` hand-off **1 of 6** · DDL funnel **1 of 14** — but only at the **sync** site.
