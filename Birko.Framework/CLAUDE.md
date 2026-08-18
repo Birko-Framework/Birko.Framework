@@ -813,6 +813,14 @@ Because this is a polyrepo, **one fix normally spans three independent repos and
 **Order matters:** commit the production fix first, so its SHA can go into the task's `pr:` field
 before the aggregator commit — otherwise the tracking file lands referencing nothing.
 
+- **An `## Out of scope` bullet that describes WORK gets an id before the task closes.** The generic
+  `/tasks close` step 5d sweeps for this, and it exists because of this repo: the index-DDL thread
+  (TASK-245 → 249) left **six** latent per-provider gaps as out-of-scope prose across five closed tasks,
+  which nothing ranks — the same evaporation the § *findings become tasks* rule is about, wearing a
+  different heading. They were eventually collected as [[TASK-252]]; the point is that they should each
+  have been offered as a spawn when they surfaced. A bullet naming an owner (`TASK-NNN owns it`) is a
+  boundary and belongs there; an unowned "Z is also broken" is a spawn that was skipped. Several small
+  ones from the same thread → **one grouped task**, not six.
 - **Stage explicitly. Never `git add -A`.**
 - **No `Co-Authored-By:` trailer.** Standing preference; overrides the harness default. Don't copy it
   from older commits that carry it.
