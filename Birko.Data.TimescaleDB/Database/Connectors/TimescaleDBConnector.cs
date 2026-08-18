@@ -107,13 +107,16 @@ namespace Birko.Data.SQL.Connectors
         /// <param name="chunkTimeInterval">The chunk time interval (e.g. "7 days").</param>
         public void CreateHypertable(string tableName, string timeColumn, string chunkTimeInterval = "7 days")
         {
-            DoCommand((command) =>
+            // DoDdlCommand, not DoCommand: on a provider whose DDL is not transactional this must not run
+            // on an ambient boundary's connection, because the statement would implicitly commit it
+            // (TASK-243). inOwnTransaction: false keeps this emitter autocommitted exactly as it was.
+            DoDdlCommand((command) =>
             {
                 command.CommandText = BuildCreateHypertableSql(tableName, timeColumn, chunkTimeInterval);
             }, (command) =>
             {
                 command.ExecuteNonQuery();
-            }, true);
+            }, true, inOwnTransaction: false);
         }
 
         /// <summary>
