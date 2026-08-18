@@ -15,10 +15,18 @@ namespace Birko.Data.SQL.Tests.IndexManagement
     ///
     /// <para>
     /// Identifiers cannot be parameterised, so § Conventions requires such a name to be resolved against
-    /// metadata or, where no entity type is available, to pass a **bare-identifier check** — the same
-    /// `\A…\z`-anchored test `ValidateRuleFieldIdentifier` applies to rule fields, anchored that way because
-    /// .NET's `$` also matches before a trailing newline. `SqlIndexManager` has only a table name, so it
-    /// takes the check.
+    /// metadata or, where no entity type is available, to pass a **bare-identifier check** — anchored
+    /// `\A…\z` because .NET's `$` also matches before a trailing newline. `SqlIndexManager` has only a table
+    /// name, so it takes the check.
+    /// </para>
+    ///
+    /// <para>
+    /// **There are two such sinks, and the first fix only covered one** (TASK-249).
+    /// `SqlIndexBuilder.WithField` in `Birko.Data.Migrations.SQL` also takes free text from its caller, and
+    /// `Build()`'s connector path hands it to `CreateIndexes` without ever passing through
+    /// `ToSqlIndexDefinition`. Both now route through `DataBase.ValidateIndexFieldIdentifier`, so they cannot
+    /// disagree about what an acceptable column name is. The check is deliberately **unqualified-only**: a
+    /// `CREATE INDEX` column list takes no `Table.` prefix on any supported provider.
     /// </para>
     /// </summary>
     public class IndexIdentifierInjectionTests
@@ -78,15 +86,14 @@ namespace Birko.Data.SQL.Tests.IndexManagement
         }
 
         /// <summary>
-        /// The guard must not break the legitimate case — a plain column name, and the qualified form the
-        /// shared identifier check already accepts.
+        /// The guard must not break the legitimate case — a plain, unqualified column name. (The
+        /// table-qualified form is refused; see below.)
         /// </summary>
         [Theory]
         [InlineData("Status")]
         [InlineData("TenantGuid")]
         [InlineData("_internal")]
         [InlineData("Col1")]
-        [InlineData("Docs.Status")]
         public void A_plain_identifier_is_accepted(string fieldName)
         {
             var probe = new Probe(new TestConnector());
@@ -115,5 +122,56 @@ namespace Birko.Data.SQL.Tests.IndexManagement
 
             act.Should().Throw<ArgumentException>();
         }
-    }
+    
+        /// <summary>
+        /// A <c>Table.Column</c> qualifier is refused — and this test previously asserted the opposite.
+        /// </summary>
+        /// <remarks>
+        /// TASK-249. The first version of this guard reused <c>_bareIdentifier</c>, whose pattern allows an
+        /// optional qualifier because it was written for the WHERE-clause sink. That is wrong here: a
+        /// <c>CREATE INDEX</c> column list takes no qualifier on any supported provider, so
+        /// <c>(Docs.Status)</c> is a syntax error rather than a resolvable column — the guard would have
+        /// passed the payload's harmless cousin straight through to break the statement, and the framework
+        /// invariant is that a qualifier is only ever emitted where a bare alias introduces it (TASK-211),
+        /// which index DDL has none of. Sharing one regex was the right instinct; this sink needed the
+        /// unqualified branch of it.
+        /// </remarks>
+        [Theory]
+        [InlineData("Docs.Status")]
+        [InlineData("dbo.Docs.Status")]
+        public void A_table_qualified_name_is_refused(string fieldName)
+        {
+            var probe = new Probe(new TestConnector());
+
+            probe.Invoking(p => p.Translate(Definition(fieldName)))
+                 .Should().Throw<ArgumentException>()
+                 .WithMessage("*unqualified*");
+        }
+
+        /// <summary>
+        /// The second caller-derived sink, missed when index columns became bare (TASK-249, finding 1).
+        /// <c>SqlIndexBuilder.WithField</c> takes free text from a migration and <c>Build()</c>'s connector
+        /// path hands it to <c>CreateIndexes</c> verbatim — a route that never touches
+        /// <c>ToSqlIndexDefinition</c>, so the guard above does not cover it.
+        /// </summary>
+        [Theory]
+        [InlineData("Rank); CREATE TABLE Pwned (x INTEGER); --")]
+        [InlineData("A, (SELECT 1)")]
+        [InlineData("Docs.Status")]
+        [InlineData("A B")]
+        public void A_migration_index_field_that_is_not_a_bare_identifier_is_refused(string fieldName)
+        {
+            Action act = () => Birko.Data.SQL.DataBase.ValidateIndexFieldIdentifier(fieldName);
+
+            act.Should().Throw<ArgumentException>(
+                "SqlIndexBuilder.WithField routes through this same check, so the migrations sink and the "
+              + "index-manager sink cannot disagree about what an acceptable column name is");
+        }
+
+        [Fact]
+        public void A_plain_migration_index_field_is_accepted()
+        {
+            Birko.Data.SQL.DataBase.ValidateIndexFieldIdentifier("Status").Should().Be("Status");
+        }
+}
 }
