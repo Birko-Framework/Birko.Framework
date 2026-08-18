@@ -94,7 +94,7 @@ namespace Birko.Data.SQL.Connectors
 
             var selectSql = BuildViewSelectSql(view);
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = BuildCreateMaterializedViewSql(name!, selectSql);
             }, (command) =>
@@ -113,7 +113,7 @@ namespace Birko.Data.SQL.Connectors
             if (string.IsNullOrWhiteSpace(viewName))
                 throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = BuildRefreshMaterializedViewSql(viewName, concurrently);
             }, (command) =>
@@ -130,7 +130,7 @@ namespace Birko.Data.SQL.Connectors
             if (string.IsNullOrWhiteSpace(viewName))
                 throw new System.ArgumentException("View name cannot be null or empty.", nameof(viewName));
 
-            DoCommandWithTransaction((command) =>
+            DoDdlCommand((command) =>
             {
                 command.CommandText = BuildDropMaterializedViewSql(viewName);
             }, (command) =>
@@ -164,7 +164,7 @@ namespace Birko.Data.SQL.Connectors
 
             return Task.Run(() =>
             {
-                DoCommandWithTransaction((command) =>
+                DoDdlCommand((command) =>
                 {
                     command.CommandText = BuildCreateMaterializedViewSql(name!, selectSql);
                 }, (command) =>
@@ -187,7 +187,7 @@ namespace Birko.Data.SQL.Connectors
 
             return Task.Run(() =>
             {
-                DoCommandWithTransaction((command) =>
+                DoDdlCommand((command) =>
                 {
                     command.CommandText = concurrently
                         ? "REFRESH MATERIALIZED VIEW CONCURRENTLY " + QuoteIdentifier(viewName)
@@ -211,7 +211,7 @@ namespace Birko.Data.SQL.Connectors
 
             return Task.Run(() =>
             {
-                DoCommandWithTransaction((command) =>
+                DoDdlCommand((command) =>
                 {
                     command.CommandText = BuildDropMaterializedViewSql(viewName);
                 }, (command) =>
