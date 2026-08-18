@@ -687,6 +687,18 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     The general rule: **when you remove quoting from an interpolated identifier, enumerate that sink's
     callers by provenance** — metadata-derived needs nothing, caller-derived needs the check — and do not
     assume the quoting you deleted was decorative.
+    **And the enumeration is only as good as the grep: TASK-245 wrote that rule and shipped a violation of
+    it in the same commit** (TASK-249). There were **two** caller-derived sinks;
+    `Birko.Data.Migrations.SQL`'s `SqlIndexBuilder.WithField` also takes free text, and `Build()`'s connector
+    path hands it to `CreateIndexes` verbatim without ever touching the translator the guard was placed in —
+    so a migration could append a second statement through a column name. Grep every **construction of the
+    object that carries the identifier** (here `Tables.IndexColumn`), not only the translator you happen to
+    be editing. Two further corollaries from the same review: the check must reject a **`Table.` qualifier**
+    (a `CREATE INDEX` column list takes none, so `_bareIdentifier`'s optional-qualifier branch let the
+    payload's harmless cousin through to break the statement — and the test written in that pass *pinned* the
+    qualifier as acceptable, which is how a guard's own suite enshrines the guard's bug); and a **uniformity
+    claim has to be checked one layer up**, because `IIndexManager.CreateAsync`/`DropAsync` bypass the
+    `CreateIndexes` funnel by design and so needed their own answer rather than inheriting one.
   - **Check which twin the production path actually runs before believing a revert.**
     `AsyncDataBaseStore.InitCoreAsync` calls the **sync** `Connector.CreateTable` inside a `Task.Run`, so an
     async store's schema-ensure runs the sync index loop and `CreateIndexesAsync` has no store-level caller.
@@ -804,6 +816,14 @@ mandatory `ON` clause missing). The standing rule is in § Conventions above. Ve
 - **An opt-out only one provider can honour is a silent no-op.** `CreateIndexes(..., throwIfExists: true)`
   would have been meaningful on MySQL alone, so `CreateIndexSql` gained `conditional` too — base drops
   `IF NOT EXISTS`, MSSql drops its `sys.indexes` guard, MySQL stops tolerating 1061. Pinned per provider.
+- **The close-gate review returned after the commits landed, and three of its four findings were defects in
+  them** — filed and fixed as **TASK-249**, +14 tests, **1,100 green** with all four providers live. The
+  serious one: this fix's own rule ("enumerate that sink's callers by provenance") applied to one of **two**
+  caller-derived sinks, so `SqlIndexBuilder.WithField` in `Birko.Data.Migrations.SQL` still let a migration
+  append a statement through a column name. Also: the new guard accepted a `Table.` qualifier *and its test
+  pinned that as correct*; `IIndexManager` was left more divergent on MySQL than it started (it bypasses the
+  funnel by design, so it needed its own tolerance on **both** verbs); and a comment asserted the very
+  invariant the same commit reversed. A late review is still a review.
 - **"Nothing in the tree called `CreateIndexes` directly"** — the TASK-204 contract it supposedly preserved
   was documented and entirely unasserted. Narrowing it to what it *meant* (unbuildable = 1062 still throws;
   "already present" = 1061 no longer does, matching the other three) is now pinned by tests in both

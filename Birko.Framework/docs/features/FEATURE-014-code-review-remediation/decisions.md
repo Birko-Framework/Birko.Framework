@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -232,3 +232,15 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   one thing worth recording here — making index columns bare (required, or PostgreSQL cannot resolve them)
   removed an accidental containment on `IIndexManager.CreateAsync`, whose column names come from the caller,
   so a payload reached the DDL exactly as SH-H023's rule field did. Guarded and tested in the same task.
+- 2026-08-18 — **D11 gains [[TASK-249]]**, backfilled at creation, and closed `done` the same day. Inside
+  D11's scope, no new decision row. It carries the four findings [[TASK-245]]'s own close-gate `code-review`
+  returned **after** that task's nine commits had landed — three of them defects in those commits. The
+  serious one is a second injection sink: TASK-245 made index columns be emitted bare (required for
+  PostgreSQL) and guarded the one caller-derived sink it found, while
+  `Birko.Data.Migrations.SQL`'s `SqlIndexBuilder.WithField` was the other, letting a migration append a
+  statement through a column name. Also fixed: the new guard accepted a `Table.` qualifier *and its own test
+  pinned that as correct*; `IIndexManager` was left **more** divergent on MySQL than before, on both index
+  verbs, because it bypasses the `CreateIndexes` funnel by design; and a comment asserted an invariant the
+  same commit had reversed. Filed as its own task rather than reopening TASK-245, whose acceptance was met
+  and whose list stays useful only if it is not retrofitted — but fixed immediately rather than scheduled,
+  because the first finding was a live injection. 1,100 tests green with all four providers live.
