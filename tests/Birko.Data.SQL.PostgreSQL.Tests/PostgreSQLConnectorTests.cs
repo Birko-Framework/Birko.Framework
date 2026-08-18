@@ -102,4 +102,36 @@ public class PostgreSQLConnectorTests
         parsed.Password.Should().Be("p;a=ss'w");
         parsed.Database.Should().Be("mydb");
     }
+
+    // ── TASK-253: the folding capability ──
+
+    /// <summary>
+    /// PostgreSQL is the one supported provider that case-folds an unquoted identifier, and
+    /// <see cref="AbstractConnectorBase.FoldsUnquotedIdentifiers"/> is where the framework states it.
+    /// <para>
+    /// This assertion is the whole reason the base's <c>CatalogueNameLiteral</c> folds at all. It is
+    /// inherited by <c>TimescaleDBConnector</c>, which is where TASK-472 measured the consequence: a time
+    /// column emitted unfolded inside a <c>create_hypertable</c> literal raised
+    /// <c>42703 column "Ts" does not exist</c>, because the parser never folds a string value and the
+    /// framework emits column definitions bare (TASK-209).
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void FoldsUnquotedIdentifiers_IsTrue()
+        => NewConnector().FoldsUnquotedIdentifiers.Should().BeTrue();
+
+    /// <summary>
+    /// The two halves of one <c>create_hypertable</c> call, asserted together because they are the pair that
+    /// needs OPPOSITE treatments and reasoning from either alone is what produced the defect: the table is a
+    /// <c>regclass</c> re-parsed as an identifier, so it carries quotes and is never folded; the column is a
+    /// <c>name</c> compared textually against the catalogue, so it is folded and never quoted.
+    /// </summary>
+    [Fact]
+    public void RegclassAndCatalogueName_TakeOppositeTreatments()
+    {
+        var connector = NewConnector();
+
+        connector.RegclassLiteral("SensorReadings").Should().Be("\"SensorReadings\"");
+        connector.CatalogueNameLiteral("Ts").Should().Be("ts");
+    }
 }
