@@ -16,14 +16,14 @@ namespace Birko.Data.SQL.PostgreSQL.IndexManagement
 
         protected override string IndexExistsSql(string tableName, string indexName)
         {
-            var safeIndex = indexName.Replace("'", "''");
-            var safeTable = tableName.Replace("'", "''");
+            var safeIndex = SqlLiteral.EscapeLiteral(indexName);
+            var safeTable = SqlLiteral.EscapeLiteral(tableName);
             return $"SELECT COUNT(*) FROM pg_indexes WHERE tablename = '{safeTable}' AND indexname = '{safeIndex}'";
         }
 
         protected override string ListIndexesSql(string tableName)
         {
-            var safeTable = tableName.Replace("'", "''");
+            var safeTable = SqlLiteral.EscapeLiteral(tableName);
             return $@"SELECT
     i.relname AS index_name,
     a.attname AS column_name,
