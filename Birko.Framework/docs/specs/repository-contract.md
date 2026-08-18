@@ -36,6 +36,15 @@ source-commits:   # sibling HEADs when this spec was last written (2026-08-07 14
   ../Birko.Data.Repositories: 8a2c6c7
   ../Birko.Data.SQL.ViewModel: 6017a4d
   ../Birko.Data.ViewModel: 093c15b
+  # Baselines below added 2026-08-18 without a re-harvest, and that is a measurement rather
+  # than an assumption: each of these repos has NO commit touching this area's sources since
+  # generated-on, so its current HEAD is an equivalent baseline. Repos that HAVE drifted were
+  # deliberately left unstamped, so DV7 keeps reporting them until the content is regenerated.
+  ../Birko.Data.CosmosDB: 3d383fb
+  ../Birko.Data.InfluxDB: 8a7d6c6
+  ../Birko.Data.MongoDB: 032ed3d
+  ../Birko.Data.RavenDB: fd51546
+  ../Birko.Data.SQL: 022c67c
 shaped-by: []
 # false, and NOT because nobody tried: the evidence pass cannot run from this aggregator — every source
 # glob points into a sibling repo, so no task's `pr:` sha resolves under `git show` here. FEATURE-014 comes
