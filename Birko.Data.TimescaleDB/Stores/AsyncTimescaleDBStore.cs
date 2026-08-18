@@ -126,6 +126,14 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
                 storeDelegate?.Invoke(item);
             }
 
+            // The store-level door has to publish the boundary too, or the connector fix is
+            // unreachable through it: these Core overrides bypass the base's per-item write, and the
+            // base is the only place that entered the scope. TASK-242 wired this into the eight
+            // provider stores and missed TimescaleDB entirely, which is exactly the "it inherits the
+            // PostgreSQL fix, so it is covered" claim TASK-472 existed to disprove: the connector half
+            // IS inherited (TimescaleDBConnector overrides no bulk method) and was unreachable from
+            // here. Costs nothing when no context is set.
+            using var _tx = EnterTransactionScope();
             await Connector.BulkInsertAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
         }
 
@@ -147,6 +155,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
                 }
             }
 
+            using var _tx = EnterTransactionScope();
             await Connector.BulkUpdateAsync(typeof(T), items.Cast<object>(), ct).ConfigureAwait(false);
         }
 
@@ -158,6 +167,7 @@ namespace Birko.Data.SQL.TimescaleDB.Stores
             if (Connector == null || data == null || !data.Any())
                 return;
 
+            using var _tx = EnterTransactionScope();
             await Connector.BulkDeleteAsync(typeof(T), data.Cast<object>(), ct).ConfigureAwait(false);
         }
 

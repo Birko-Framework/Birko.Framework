@@ -124,12 +124,61 @@ namespace Birko.Data.SQL.Connectors
         /// escaping and INTERVAL formatting are covered without a live database, and shared by the
         /// sync and async paths.
         /// </summary>
+        /// <remarks>
+        /// <b>Both identifiers travel as string VALUES here, not as identifiers, and that is what was
+        /// wrong with them (TASK-472).</b> Everywhere else this framework emits an identifier into
+        /// <c>CommandText</c> the PostgreSQL parser folds it; inside a quoted literal the parser never
+        /// sees an identifier at all, so the folding that makes the rest of the framework work does not
+        /// happen and each argument needs the opposite treatment:
+        /// <list type="bullet">
+        /// <item>
+        /// <description>
+        /// <b>The table is a <c>regclass</c>, so it must carry its own quotes.</b> Emitted bare, the
+        /// regclass lookup folds <c>'BulkTxRows'</c> to <c>bulktxrows</c> while
+        /// <see cref="AbstractConnector.CreateTable(string, IEnumerable{string})"/> created
+        /// <c>"BulkTxRows"</c> — so this raised <c>42P01 relation "bulktxrows" does not exist</c>, which
+        /// <see cref="PostgreSQLConnector.IsMissingTableException"/> classifies as a missing table and the
+        /// exception handler therefore <i>swallows</i>. Measured on TimescaleDB 2 / PostgreSQL 16:
+        /// <c>CreateTable</c> returned successfully and <b>no hypertable existed</b> — so no
+        /// PascalCase-named entity, which is every Birko entity by convention, has ever been a hypertable.
+        /// Chunk routing, compression and retention were all silently absent while a plain PostgreSQL table
+        /// served reads and writes and made the store look correct.
+        /// </description>
+        /// </item>
+        /// <item>
+        /// <description>
+        /// <b>The time column is a <c>name</c>, so it must be pre-FOLDED — the opposite of quoting.</b> It
+        /// is compared literally against <c>pg_attribute.attname</c>, and this framework emits column
+        /// definitions bare (§ Conventions, TASK-209), so PostgreSQL stored <c>ts</c> while
+        /// <c>TimeColumn = "Ts"</c> asked for <c>Ts</c>: <c>42703 column "Ts" does not exist</c>. That one
+        /// is <i>not</i> swallowed, so it was the loud half — and it stayed hidden because the shipped
+        /// default <c>TimeColumn</c> is the already-lowercase <c>"timestamp"</c>, which matches a folded
+        /// <c>Timestamp</c> property by luck.
+        /// </description>
+        /// </item>
+        /// </list>
+        /// <para>
+        /// Folding rather than quoting the column means a hand-made table whose time column was created
+        /// <i>quoted</i> and mixed-case is not addressable through here. That is deliberate: this framework
+        /// never quotes a column definition, so it cannot produce such a table, and the previous behaviour
+        /// worked only for an already-lowercase name — folding is a strict improvement on every table
+        /// Birko itself creates.
+        /// </para>
+        /// <para>
+        /// Injection was already contained by the single-quote doubling and still is; the identifier quotes
+        /// added to the table argument are doubled for the same reason.
+        /// </para>
+        /// </remarks>
         internal static string BuildCreateHypertableSql(string tableName, string timeColumn, string chunkTimeInterval)
         {
+            // Quote as an identifier first (doubling any embedded quote), then escape the whole thing for
+            // the surrounding string literal. Neither step can introduce the other's metacharacter.
+            var quotedTable = "\"" + tableName.Replace("\"", "\"\"") + "\"";
+
             return string.Format(
                 "SELECT create_hypertable({0}, {1}, chunk_time_interval => INTERVAL '{2}', if_not_exists => TRUE)",
-                "'" + tableName.Replace("'", "''") + "'",
-                "'" + timeColumn.Replace("'", "''") + "'",
+                "'" + quotedTable.Replace("'", "''") + "'",
+                "'" + timeColumn.ToLowerInvariant().Replace("'", "''") + "'",
                 chunkTimeInterval.Replace("'", "''"));
         }
 
