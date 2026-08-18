@@ -180,10 +180,14 @@ Error codes that matter here, all measured on MySQL 8.4:
   it is **not** tolerated: recorded by schema-ensure, thrown by the explicit path. TASK-204 intact.
 - **1091** `Can't DROP` — dropping an absent index now throws here, where the base's `IF EXISTS` tolerated
   it. Deliberate: a `DropIndexes` caller named a specific index.
-- **1170** `BLOB/TEXT column used in key specification without a key length` — **still broken**, tracked as
-  TASK-248. An unbounded `string` maps to `LONGTEXT` (see Data Types) and cannot be indexed at all; use
-  `[MaxLengthField(n)]` so the column is `VARCHAR(n)`. This is the shape the canonical SQLite example uses,
-  so it is easy to hit.
+- **1170** `BLOB/TEXT column used in key specification without a key length` — **fixed by bounding the
+  column** (TASK-248). An unbounded `string` maps to `LONGTEXT` (see Data Types) and MySQL cannot index a
+  BLOB/TEXT column at all, so `ConvertType` emits `VARCHAR(255)` — see `IndexedStringColumnLength` — whenever
+  `AbstractField.IsIndexed` is set. Unindexed strings stay `LONGTEXT`; an explicit `[MaxLengthField(n)]` still
+  wins. This bound exists **only on MySQL**: the other three providers index TEXT natively and seven live
+  consumer entities rely on that, so the divergence is this provider's index-key limit, not a framework
+  choice. A prefix index (`ux(Col(64))`) was rejected because every real case is UNIQUE and a prefix makes the
+  constraint weaker than declared.
 
 Match on the **code**, never the message, and walk `InnerException` — `AbstractConnector.InitException`
 re-wraps every command failure as `new Exception(commandText, ex)`.
@@ -192,8 +196,12 @@ re-wraps every command failure as `new Exception(commandText, ex)`.
 - Requires MySQL 5.7 or later
 - JSON type requires MySQL 5.7.8+
 - Some features may vary by MySQL edition
-- **An index over an unbounded `string` (`LONGTEXT`) cannot be created** — error 1170. Declare
-  `[MaxLengthField(n)]` on any indexed string column. TASK-248.
+- **An indexed `string` is silently capped at 255 characters** unless `[MaxLengthField(n)]` says otherwise
+  (TASK-248) — MySQL cannot index an unbounded `LONGTEXT` at all, so the column is emitted as `VARCHAR(255)`.
+  Declare the length explicitly when a longer indexed value is genuinely needed, and remember InnoDB's
+  3072-byte index-key limit is the real ceiling. Unindexed strings are unaffected.
+- **`byte[]` (`LONGBLOB`) still cannot be indexed** — same 1170 restriction, no equivalent bound applied,
+  because nothing in the tree declares an index over a `byte[]`. It is recorded, not thrown.
 
 ## Maintenance
 

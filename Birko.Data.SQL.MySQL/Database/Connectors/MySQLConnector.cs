@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -61,6 +61,22 @@ namespace Birko.Data.SQL.Connectors
         /// </para>
         /// </remarks>
         public override bool SupportsTransactionalDdl => false;
+
+        /// <summary>
+        /// Column length used for an <b>indexed</b> string that declares no explicit length (TASK-248).
+        /// </summary>
+        /// <remarks>
+        /// 255 characters. Under <c>utf8mb4</c> that is 1020 bytes, comfortably inside InnoDB's 3072-byte
+        /// index-key limit even in a composite with a <c>CHAR(36)</c> Guid (1164 bytes total), and it is the
+        /// conventional bound for the identifier-ish columns that actually get indexed — document numbers,
+        /// codes, e-mail addresses. Raise it in a derived connector if a consumer genuinely indexes longer
+        /// values, but note the index-key limit is the real ceiling, not this number.
+        /// <para>
+        /// Declaring <c>[MaxLengthField(n)]</c> on the property is always preferable: it is portable, it is
+        /// visible at the model, and it applies on every provider rather than only here.
+        /// </para>
+        /// </remarks>
+        protected virtual int IndexedStringColumnLength => 255;
 
         public override bool IsTransientException(Exception ex)
         {
@@ -230,6 +246,28 @@ namespace Birko.Data.SQL.Connectors
                     if (field is CharField charField)
                     {
                         return string.Format("VARCHAR({0})", charField.Lenght);
+                    }
+                    // TASK-248: an INDEXED unbounded string must be bounded on MySQL, because MySQL cannot
+                    // index a BLOB/TEXT column without a key length -- measured on 8.4 as
+                    // "ERROR 1170: BLOB/TEXT column 'x' used in key specification without a key length",
+                    // for UNIQUE and plain indexes alike. So after TASK-245 fixed the statement syntax, an
+                    // index over a plain `string` still could not be built here; it merely failed with 1170
+                    // instead of 1064, recorded and invisible.
+                    //
+                    // Scoped to MySQL on purpose. SQLite, PostgreSQL and MSSql index a TEXT column happily,
+                    // and 7 live consumer entities (Symbio's docnumber/email UNIQUE composites) declare
+                    // exactly this shape and work correctly there today -- so refusing the declaration
+                    // framework-wide, or bounding the column on every provider, would break working
+                    // deployments to fix one provider. MySQL's own 3072-byte index-key limit means SOME bound
+                    // is unavoidable here regardless: the divergence is the provider's, not the framework's.
+                    //
+                    // A prefix index (`ux(Col(64))`) was rejected: every real case is UNIQUE, and a prefix
+                    // makes the constraint WEAKER than declared -- it rejects two genuinely different values
+                    // whose first n characters match. A bounded column refuses the over-long write instead,
+                    // which is a loud, correct failure rather than a quiet, wrong constraint.
+                    else if (field.IsIndexed)
+                    {
+                        return string.Format("VARCHAR({0})", IndexedStringColumnLength);
                     }
                     else
                     {
