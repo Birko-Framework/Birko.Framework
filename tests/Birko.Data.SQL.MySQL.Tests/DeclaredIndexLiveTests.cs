@@ -623,6 +623,87 @@ public class DeclaredIndexLiveTests : IDisposable
         ((int)DriverErrorIn(thrown)!.ErrorCode).Should().Be(1091);
     }
 
+    // ---------------------------------------------------------------- IIndexManager uniformity (TASK-249)
+
+    /// <summary>
+    /// <c>IIndexManager.CreateAsync</c> must behave the same on MySQL as everywhere else for an index that is
+    /// already present.
+    /// </summary>
+    /// <remarks>
+    /// This path executes through <c>SqlIndexManager</c>'s own connection and deliberately bypasses
+    /// <c>AbstractConnector.CreateIndexes</c>, so it did <b>not</b> inherit that funnel's 1061 tolerance. The
+    /// result was a manager that was non-uniform in a way TASK-245 actually made worse: before, MySQL failed
+    /// for every index (1064); after, it succeeded for a new index and threw <c>IndexManagementException</c>
+    /// for an existing one, while SQLite/PostgreSQL (native <c>IF NOT EXISTS</c>) and MSSql (a synthesised
+    /// guard) reported success. Found by this task's own close-gate review.
+    /// </remarks>
+    [Fact]
+    public async Task The_index_manager_tolerates_an_already_present_index_on_mysql()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+        NewConnector().CreateTable(new[] { typeof(IdxRow) });
+
+        var manager = new Birko.Data.SQL.MySQL.IndexManagement.MySqlIndexManager(NewConnector());
+        var definition = new Birko.Data.Patterns.IndexManagement.IndexDefinition
+        {
+            Name = "ix_idxrows_mgr",
+            Fields = new[] { new Birko.Data.Patterns.IndexManagement.IndexField { Name = "Status" } }
+        };
+
+        await manager.CreateAsync(definition, TableName, CancellationToken.None);
+        IndexColumns(TableName, "ix_idxrows_mgr").Should().HaveCount(1);
+
+        await manager.Invoking(m => m.CreateAsync(definition, TableName, CancellationToken.None))
+                     .Should().NotThrowAsync("1061 means the index asked for is already there, which every "
+                                           + "other provider reports as success");
+
+        IndexColumns(TableName, "ix_idxrows_mgr").Should().HaveCount(1, "and nothing is duplicated");
+    }
+
+    /// <summary>
+    /// The other half of the same verb family — dropping an already-absent index. Fixing create and leaving
+    /// drop would ship a manager whose create tolerates "already there" beside a drop that throws for
+    /// "already gone", on one provider only.
+    /// </summary>
+    [Fact]
+    public async Task The_index_manager_tolerates_an_already_absent_index_on_mysql()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+        NewConnector().CreateTable(new[] { typeof(IdxRow) });
+
+        var manager = new Birko.Data.SQL.MySQL.IndexManagement.MySqlIndexManager(NewConnector());
+
+        await manager.Invoking(m => m.DropAsync("ix_never_existed", TableName, CancellationToken.None))
+                     .Should().NotThrowAsync("MySQL accepts no IF EXISTS on DROP INDEX, so 1091 is how it "
+                                           + "reports what the other providers no-op");
+
+        // …but a real index still drops, so the tolerance is not swallowing the work.
+        await manager.DropAsync(PlainIndex, TableName, CancellationToken.None);
+        IndexColumns(TableName, PlainIndex).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// The connector's own <c>DropIndexes</c> must NOT gain that tolerance: a caller naming a specific index
+    /// should fail loudly, and the migrations drop step depends on it. Asserted so the two doors cannot be
+    /// "unified" from symmetry.
+    /// </summary>
+    [Fact]
+    public void The_connector_drop_still_throws_for_an_absent_index()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+        var connector = NewConnector();
+        connector.CreateTable(new[] { typeof(IdxRow) });
+
+        var absent = new Birko.Data.SQL.Tables.IndexDefinition { Name = "ix_never_existed" };
+        var thrown = connector.Invoking(c => c.DropIndexes(TableName, new[] { absent }))
+                              .Should().Throw<Exception>().Which;
+
+        ((int)DriverErrorIn(thrown)!.ErrorCode).Should().Be(1091);
+    }
+
     // ---------------------------------------------------------------- the boundary of this fix
 
     /// <summary>
