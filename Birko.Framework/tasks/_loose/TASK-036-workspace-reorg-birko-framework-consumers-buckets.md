@@ -119,7 +119,7 @@ path becomes `C:\Source\Birko\Framework\Birko.Framework\Birko.Framework.slnx`.
 ## Progress (2026-06-18)
 
 **Done:**
-- Filesystem move executed via `C:\Source\TASK-036-move.ps1 -Execute` — 252/254 dirs moved + 4 deletes (`bin`, `obj`, `antigravity`, `Wedding`). `DraCode-Projects` + `leon` preserved into `aicode\` (they had real content, not hollow). `test`→`Latent`→`aicode\`.
+- Filesystem move executed via `C:\Source\TASK-036-move.ps1 -Execute` (the generated script lived at `tasks/_loose/TASK-036-move.ps1`; **deleted 2026-08-18** as a spent one-shot once this task closed — recoverable from git history, and it was the only non-`.md` file in the task tree, which made every `TASK-*` file count disagree with the task count) — 252/254 dirs moved + 4 deletes (`bin`, `obj`, `antigravity`, `Wedding`). `DraCode-Projects` + `leon` preserved into `aicode\` (they had real content, not hollow). `test`→`Latent`→`aicode\`.
 - All 60 test csprojs re-pointed (341 prod-projitems imports `..\Birko.X\` → `..\..\Framework\Birko.X\`; zero test-to-test refs existed).
 - 6 consumer `Directory.Build.props` re-pointed (incl. WorkoutTracker after its manual recovery; ClientApi at root → `..\Birko\Framework`); 5 web `build.js` de-hardcoded with an upward-search `resolveBirkoSrc()` (no committed absolute path — env var, else walk up to `Birko\Framework`, else throw).
 - `Birko.Framework.slnx` + `.code-workspace` — 60 test entries each re-pointed to `..\..\Framework.Tests\`.

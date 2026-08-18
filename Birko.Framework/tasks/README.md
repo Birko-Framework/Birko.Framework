@@ -5,20 +5,27 @@
 > been derived on **any** of the 25 specs, so DV8 is suppressed everywhere and "a feature never shipped its
 > spec" cannot be distinguished from "nobody computed it") — run `/roadmap --check`.
 >
-> ⚠ **Backlog integrity (2)** — neither is drift, both need a human decision:
-> - **Duplicate id `TASK-240`.** Two different files declare it:
->   [a-transaction-boundary-async-writes-honour](EPIC-014-code-review-remediation/TASK-240-a-transaction-boundary-async-writes-honour.md)
->   and [spec-source-globs-are-not-git-pathspecs](EPIC-014-code-review-remediation/TASK-240-spec-source-globs-are-not-git-pathspecs.md).
->   ID allocation takes `max + 1`, so a collision does not self-heal, and every `[[TASK-240]]` reference is
->   ambiguous. One needs renumbering — `/tasks audit --fix` is the door.
-> - **EPIC-018 reads `in-progress` with all 4 of its tasks `done`/`cancelled`.** Not auto-corrected: an epic
->   is an open-ended area of concern that may legitimately stay open while its current tasks are drained.
->   Reconcile or leave deliberately.
+> ℹ **Backlog integrity: clear.** The four findings the 2026-08-18 regeneration raised are resolved —
+> duplicate id `TASK-240` renumbered to [[TASK-250]] (the transaction task keeps the id; it is the one
+> CLAUDE.md § Conventions cites), the spent `TASK-036-move.ps1` deleted from the task tree, EPIC-018's
+> status documented as deliberate rather than flipped, and the task-less-story count folded into
+> [[TASK-149]] as evidence instead of a duplicate task.
 >
-> Two further observations, not actionable by this verb: **18 stories hold 0 task files** — STORY-024/025/026/027
-> among them — so their findings live as checklist bullets, which no scheduler can see (SKILL.md: *"a checklist
-> line is filed, not scheduled"*). And `_loose/TASK-036-move.ps1` is a PowerShell script sitting in the task
-> tree; it is not a `.md` so the collection pass ignores it, noted so it is not mistaken for a task.
+> **EPIC-018 will keep tripping the parent-contradiction check, and that is expected.** All four of its
+> tasks are `done` while it stays `in-progress`, because it is an area-of-concern epic created to give
+> `Birko.Web.Core` an owner — closing it would recreate the orphaning it exists to prevent. The reasoning
+> is recorded in its own `EPIC.md` (§ *Why this epic stays `in-progress` with no open tasks*); treat the
+> flag as a known false positive there, not as work.
+>
+> **18 of the 56 stories hold zero task files**, and that splits into two tracking models — only one is a
+> problem. **Four are deliberate findings pools working as designed:** EPIC-014's STORY-024/025/026/027 each
+> state *"Not pre-created — extract tasks from `CODE-REVIEW-AUDIT-2026-06-17.md` on demand"*, so the
+> schedulable pool is the audit document and tasks are spawned as they are picked. `(0/0)` there means
+> "nothing currently extracted", not "nothing tracked" — do **not** decompose them. **Thirteen are the real
+> instance:** `done` stories whose shipped work lives only in the story body (the Xaml build-out
+> STORY-029…038, STORY-043, and STORY-044/045). Tracked as [[TASK-149]], now carrying the split and the
+> measured list. STORY-042 is `planned` and probably a pool too; its wording differs so it was not matched
+> mechanically.
 
 _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
@@ -37,9 +44,10 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 Todo by priority: **P0 0 · P1 27 · P2 81 · P3 10**
 
 > Regenerated 2026-08-18 by a full walk of every frontmatter in `tasks/` — 18 epics, 56 stories,
-> **220 task files** (221 tracked paths match `TASK-*`; one of them is a `.ps1`). The previous figures had
-> been hand-patched incrementally while closing TASK-245 and TASK-249 and were wrong by two — this is the
-> correction, and the reason a dashboard is regenerated rather than incremented.
+> **220 task files**, now with one id each and no non-`.md` files in the tree, so a `TASK-*` path count and
+> the task count finally agree. The figures before this run had been hand-patched incrementally while
+> closing TASK-245 and TASK-249 and were wrong by two, which is the reason a dashboard is regenerated
+> rather than incremented.
 
 ## In progress now
 
@@ -266,10 +274,10 @@ Todo by priority: **P0 0 · P1 27 · P2 81 · P3 10**
     - [x] [TASK-232](EPIC-014-code-review-remediation/TASK-232-six-of-eight-job-backends-cannot-supply-a-lock.md) DECISION: the lock contract meant three different things — split the durations, keep session semantics · FEATURE-014
     - [x] [TASK-234](EPIC-014-code-review-remediation/TASK-234-thirty-eight-shared-projects-declare-no-dependency.md) 38 more shared projects use an external package they never declare · FEATURE-014
     - [x] [TASK-237](EPIC-014-code-review-remediation/TASK-237-leader-election-for-the-recurring-scheduler.md) `RecurringJobScheduler` duplicates every job per worker — wire leader election · FEATURE-014
-    - [x] [TASK-240](EPIC-014-code-review-remediation/TASK-240-spec-source-globs-are-not-git-pathspecs.md) A spec source glob is not a git pathspec, so the staleness check never saw 124 files · FEATURE-014
     - [x] [TASK-243](EPIC-014-code-review-remediation/TASK-243-mysql-ddl-implicitly-commits-an-open-boundary.md) On MySQL, a store's first operation inside a boundary silently commits that boundary · FEATURE-014
     - [x] [TASK-245](EPIC-014-code-review-remediation/TASK-245-mysql-cannot-create-any-declared-index.md) Index DDL every provider accepts — MySQL rejected the clause, PostgreSQL could not resolve the columns · FEATURE-014
     - [ ] [TASK-247](EPIC-014-code-review-remediation/TASK-247-schema-builder-fallback-emits-broken-index-ddl.md) `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject · FEATURE-014
+    - [x] [TASK-250](EPIC-014-code-review-remediation/TASK-250-spec-source-globs-are-not-git-pathspecs.md) A spec source glob is not a git pathspec, so the staleness check never saw 124 files · FEATURE-014
     - [ ] [TASK-144](EPIC-014-code-review-remediation/TASK-144-two-rule-translators-one-rule-model.md) `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
     - [ ] [TASK-146](EPIC-014-code-review-remediation/TASK-146-async-ordered-readone-parity.md) Nothing pins that the async repository has no connector-bypassing read · FEATURE-014
     - [ ] [TASK-226](EPIC-014-code-review-remediation/TASK-226-per-sub-repo-spec-trees-for-single-repo-areas.md) Per-sub-repo `docs/specs/` trees for the 4 single-repo areas (and the 64 unspecced projects) · FEATURE-014

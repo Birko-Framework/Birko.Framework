@@ -1,5 +1,5 @@
 ---
-id: TASK-240
+id: TASK-250
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
@@ -15,6 +15,15 @@ pr: "project-lifecycle-skills db652cd"
 github-issue: null
 jira-key: null
 ---
+
+> **Renumbered from TASK-240 to TASK-250 on 2026-08-18.** Two different tasks were filed as TASK-240 on
+> 2026-08-17 — this one and
+> [A transaction boundary that async writes actually honour](TASK-240-a-transaction-boundary-async-writes-honour.md).
+> ID allocation takes `max + 1`, so the collision could not self-heal and every `[[TASK-240]]` reference was
+> ambiguous. The transaction task keeps the original id because it is the one cited by CLAUDE.md § Conventions
+> (five times) and by [[TASK-241]], which was spawned from it; this one had a single referrer, [[TASK-227]],
+> now updated. Found by `/tasks triage` — an incremental dashboard patch cannot see a duplicate id, which is
+> also why the task counts had drifted by two.
 
 # A spec source glob is not a git pathspec, so the staleness check never saw 124 files
 

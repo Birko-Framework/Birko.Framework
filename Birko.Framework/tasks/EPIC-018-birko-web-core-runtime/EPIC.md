@@ -45,6 +45,23 @@ does not get made.
 |---|---|
 | The browser-side runtime is tracked, so a Web.Core fix has a home and gets its aggregator commit | [FEATURE-018](../../docs/features/FEATURE-018-birko-web-core-runtime/idea.md) |
 
+## Why this epic stays `in-progress` with no open tasks
+
+All four of the tasks this epic inherited are `done`, so `/tasks triage` flags it as a parent whose status
+contradicts its children. **The status is deliberate and the flag is a false positive here** — recorded so the
+next triage run, and the next reader, do not keep re-litigating it.
+
+This epic is not an initiative with a finish line; it exists because `Birko.Web.Core` **had no owner** and
+that absence was producing orphans and untracked commits (see *Area of concern* above — two of the four
+inherited tasks were tracking backfills for work that had already shipped with no aggregator commit). Its
+job is to be the place the next `Birko.Web.Core` defect gets filed. `done` would be wrong: closing it
+recreates the exact condition it was created to fix. `planned` would be wrong too: work has been completed
+under it.
+
+Per the tasks skill — *"Epics and stories are often open-ended areas of concern that gain new work over
+time; only TASKs are atomic completable units"* — an area-of-concern epic with a drained task list is
+correctly `in-progress`. Revisit only if `Birko.Web.Core` is retired or folded into another epic.
+
 ## Stories
 
 Currently none — the inherited work is tracked directly on the epic, the same shape as

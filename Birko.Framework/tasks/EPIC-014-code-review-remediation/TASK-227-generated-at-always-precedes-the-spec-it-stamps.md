@@ -101,7 +101,7 @@ new anchor (spec commit):  []                    -> fresh
   re-stamp, a rename — still moves its anchor. Observed here: `e6a16e0` touched all 25 specs while
   regenerating only 6. Under-reporting in that narrow case is the deliberate trade against structurally
   over-reporting on every spec.
-- **Spawned [[TASK-240]]**, found by running the example: the same check was passing `.map.yml` globs to git
+- **Spawned [[TASK-250]]** (filed as TASK-240, renumbered 2026-08-18 to clear a duplicate id), found by running the example: the same check was passing `.map.yml` globs to git
   as pathspecs, so `X/**/*.cs` silently missed every file sitting directly in `X/`. **47 of 74 globs in this
   repo's map, 124 files.** Fixed in the same commit.
 

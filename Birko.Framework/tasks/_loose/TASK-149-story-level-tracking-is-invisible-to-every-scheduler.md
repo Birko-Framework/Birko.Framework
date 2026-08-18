@@ -136,3 +136,34 @@ filed, and any other story tracking in-body would still render `0/0`.
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-149` — leave empty until then._
+
+## Measured 2026-08-18 — the scale, and the half that is NOT this defect
+
+A full regeneration of the dashboard (`/tasks triage`) found **18 of the 56 stories hold zero task files**,
+so each renders `(0/0)`. That number is *not* 18 instances of this task: the stories split cleanly into two
+tracking models, and only one of them is the defect described above.
+
+**Four are deliberate findings pools, and they are working as designed** — EPIC-014's severity stories
+STORY-024 / 025 / 026 / 027. Each carries an explicit `## Tasks` section reading *"**Not pre-created.**
+Extract tasks from `CODE-REVIEW-AUDIT-2026-06-17.md` on demand — one task per `CR-Cxx` entry"*. The
+schedulable pool is the audit document and tasks are spawned as they are picked, which is the same shape
+[[intake]]/`fix-next` formalise. A `(0/0)` render there means "nothing currently extracted", not "nothing
+tracked", and the audit doc flips each finding's `Status` as it lands. **Do not decompose these** — pre-creating
+~200 finding tasks is exactly the transcript-not-target outcome this task's own Context forbids. (STORY-042,
+the Docker-gated deferred pile, is `planned` and most likely the same model; its wording differs so it was not
+matched mechanically.)
+
+**Thirteen are the actual instance:** `done` stories whose shipped work exists only in the story body —
+the Xaml build-out STORY-029 … STORY-038, STORY-043, and STORY-044 / STORY-045, the pair this task was
+filed from. These are the ones that read as untouched while describing completed work, and backfilling
+tasks onto them now is forbidden for the reason already stated.
+
+**So the fix is narrower than the raw count suggests, and it is a rendering fix, not a decomposition one.**
+A container must not render as holding no work when it either (a) tracks completed work in its body or
+(b) points at an external pool. Both want a marker the dashboard can read — the same `kind:`/pool-marker
+idea [[TASK-208]]-style prose cannot supply, noted in the Context above as a [[roadmap]] change rather than
+an improvised one.
+
+**The distinction matters more than the count.** Reporting all 18 as untracked work would have recommended
+decomposing four stories whose no-decomposition policy is written into them — turning a correct design into
+~200 stub tasks.
