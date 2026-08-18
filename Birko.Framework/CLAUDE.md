@@ -665,6 +665,16 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     producer and fixed a second PostgreSQL path for free. **When you find the same statement written three
     times, look for the field that gets lost on the way in** rather than adding a fourth override, which is
     what this task's own filed plan proposed.
+    **Second instance, one day later (TASK-246): the same property, one layer over.**
+    `Birko.Data.Migrations.SQL`'s `SqlIndexBuilder.Build()` also dropped `Unique` on the way to the
+    connector, so a migration's `.Unique()` built a **plain** index on all four providers — a missing
+    *constraint*, silently accepting the duplicate rows the migration existed to forbid. **What hid it is the
+    generalisable part: the builder has two branches**, a connector path (every production migration) and a
+    raw-SQL fallback taken only when `connector == null` — and the fallback *did* honour the flag, while every
+    test in that project constructed the builder with `null`. So the feature worked in the branch nobody uses
+    and failed in the branch everybody uses, and a green suite said nothing. **Where a component has a
+    fallback branch, a test that takes the fallback is not a test of the component** — check which branch your
+    fixture selects before trusting it, and prefer a revert to a reading.
   - **A public contract can be *narrowed to what it meant* rather than preserved literally.** "The public
     `CreateIndexes` still throws" (TASK-204) is about an index that cannot be **built**; it was never about
     "already present", which the other three providers report as success. Making MySQL idempotent there
@@ -780,6 +790,28 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A migration's `.Unique()` built a non-unique index on every provider (2026-08-18)
+
+TASK-246, spawned by TASK-245's planning grill. `SqlIndexBuilder.Build()`'s connector path — the one every
+production migration takes — constructed its `Tables.IndexDefinition` without copying `_unique`, so
+`.Unique()` emitted a plain `CREATE INDEX` on SQLite, PostgreSQL, MySQL and MSSql alike. A missing
+**constraint**, not a missing optimisation: duplicate rows the migration was written to forbid were accepted
+from that point on. One-line fix; the work was the test surface. 7 new tests, 46 green in
+`Birko.Data.Migrations.SQL.Tests` with live PostgreSQL 16; the revert fails **3 of 46**, including the live
+one. Three things worth carrying:
+
+- **A fallback branch can make a green suite meaningless.** The raw-SQL fallback three lines below the defect
+  *did* honour `_unique`, and it is taken exactly when `connector == null` — which is how **every**
+  pre-existing test in that project built the schema builder. The feature was demonstrably working in the
+  branch nobody uses and broken in the branch everybody uses. Check which branch your fixture selects.
+- **Second instance of the lost-flag shape in two days**, after `SqlIndexManager.ToSqlIndexDefinition`
+  dropped the identical property one layer over (TASK-245). Both were invisible for the same reason: the
+  omission is in an object initialiser, where a missing line looks like nothing at all.
+- **The enforcement assertion is the test; the DDL text is the companion.** Asserting `UNIQUE` appears in
+  `sqlite_master` would also pass for an index the engine never applied, so every test here inserts the
+  duplicate and requires the write to fail — and the without-`.Unique()` case is pinned too, so the fix
+  cannot be "make everything unique".
 
 ### No declared index was ever created on MySQL or PostgreSQL (2026-08-18)
 

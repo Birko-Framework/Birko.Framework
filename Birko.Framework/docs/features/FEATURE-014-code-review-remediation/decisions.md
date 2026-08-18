@@ -244,3 +244,15 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   same commit had reversed. Filed as its own task rather than reopening TASK-245, whose acceptance was met
   and whose list stays useful only if it is not retrofitted — but fixed immediately rather than scheduled,
   because the first finding was a live injection. 1,100 tests green with all four providers live.
+- 2026-08-18 — **[[TASK-246]] closed `done`.** Inside D11's scope, no new decision row. A migration's
+  `.Unique()` had built a **plain** index on all four providers, because `SqlIndexBuilder.Build()`'s connector
+  path never copied `_unique` onto the `IndexDefinition` it handed the connector — a missing *constraint*,
+  silently accepting duplicates the migration existed to forbid. One line; the value is in why it survived.
+  `SqlSchemaBuilder`'s builders have **two branches**, and the raw-SQL fallback (taken only when
+  `connector == null`) honoured the flag correctly — which is exactly how every pre-existing test in that
+  project constructed the builder. The feature worked in the branch nobody uses and failed in the branch
+  everybody uses, and the suite was green throughout. Now a standing § Conventions rule: where a component has
+  a fallback branch, a test that takes the fallback is not a test of the component. Second instance of the
+  lost-flag shape in two days after TASK-245's `ToSqlIndexDefinition`. 7 new tests, 46 green with live
+  PostgreSQL 16 (chosen over MySQL so the test also proves the index binds to the folded columns it names);
+  revert fails 3 of 46 including the live one.
