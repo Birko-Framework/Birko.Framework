@@ -55,7 +55,13 @@ public class ViewMigrationExtensionsTests
     {
         var conn = new RecordingDbConnection();
         var tx = new RecordingDbTransaction(conn);
-        var ctx = new SqlMigrationContext(conn, tx, "sqlite");
+        // TASK-247 made the connector required: it is the only door to the schema builder, whose raw-SQL
+        // fallbacks emitted DDL that MySQL and PostgreSQL reject. These tests only record the SQL that reaches
+        // the connection, so any connector satisfies the contract — but one has to be supplied.
+        var connector = Birko.Data.SQL.DataBase.GetConnector<Birko.Data.SQL.Connectors.SqLiteConnector>(
+            new Birko.Data.SQL.SqLite.Stores.SqLiteSettings(
+                System.IO.Path.GetTempPath(), $"viewmig-{System.Guid.NewGuid():N}.db"));
+        var ctx = new SqlMigrationContext(conn, tx, "sqlite", connector);
         return (ctx, conn, tx);
     }
 
