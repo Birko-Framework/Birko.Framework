@@ -462,6 +462,27 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
       `SqlBuilderContext.GenerateParameterName` sanitizes with `[^a-zA-Z0-9_]`, so `@WHEREPersonName0_0`
       carries no `Person.` to strip — had it kept the dot, this approach would have broken every
       parameterized filter.
+- **An identifier that reaches SQL as a string VALUE rather than as an identifier must be PRE-FOLDED — the
+  parser's case-folding never runs on it, and that is the opposite of the quoting rule above.** Eighth and
+  ninth instances of the identifier family (TASK-472), and the pair that shows the family is about *where the
+  parser looks*, not about quoting. `create_hypertable('T', 'col', …)` takes a `regclass` and a `name`, both
+  inside quoted literals, so **one argument needs quotes added and the other needs case removed**:
+  - **The table is a `regclass`, so it carries its own quotes** — `'"Widgets"'`. Emitted bare the regclass
+    folded to `widgets` against the `"Widgets"` that `CreateTable` created, raising `42P01`, **which
+    `IsMissingTableException` classifies as a missing table so `OnException` swallowed it**. Measured on
+    TimescaleDB 2: `CreateTable` reported success and **no hypertable existed for any PascalCase entity** —
+    chunk routing, compression and retention silently absent, with a plain table serving reads and writes.
+    Note the compounding: the § *reader that answers an ERROR with an empty result* entry below narrowed that
+    swallow and it is **still** wide enough to hide a genuinely different statement's `42P01`.
+  - **The column is a `name` compared against `pg_attribute.attname`, so it is folded** — `'ts'`, never
+    `'Ts'`. This is the only `ToLowerInvariant` in the SQL connectors, and correctly so: everywhere else an
+    identifier is emitted *as* an identifier and PostgreSQL folds it, so there is nothing to pre-fold. Grep
+    for that asymmetry before assuming a new sink belongs to the quoting rule.
+  - **The tell that a sink belongs here is a quoted literal, not a name.** Ask whether the parser will ever
+    see the text as an identifier; if it will not, neither half of the bare/quoted convention applies and the
+    sink needs its own answer. And **a default value can hide the folding half indefinitely** — this one was
+    masked because the shipped `TimeColumn` was already lowercase and matched a folded property by luck, so
+    the only configuration anyone ran was the one that worked.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
@@ -856,6 +877,48 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### No hypertable was ever created, and TimescaleDB never published the boundary (2026-08-18)
+
+Consumer Symbio TASK-472 asked for the bulk-write boundary to be verified on TimescaleDB "separately, over a real
+hypertable", because `TimescaleDBConnector : PostgreSQLConnector` overrides no bulk method and therefore
+*inherits* TASK-242's fix — and *"it inherits, so it is covered"* was named in the task as the claim most worth
+disproving. It disproved, twice, and both defects were silent. Verified against live **TimescaleDB 2 /
+PostgreSQL 16**: **39 tests green in `Birko.Data.TimescaleDB.Tests`, up from 19**; 20 new. The standing rules are
+in § Conventions. Five things worth carrying:
+
+- **Establishing the premise is what found the bigger defect.** `create_hypertable` emitted its table **bare**
+  inside a string literal, so the regclass folded to `tsschemarows` against the `"TsSchemaRows"` that
+  `CreateTable` had created → `42P01` → which `IsMissingTableException` classifies as a missing table, so
+  `OnException` ran `DoInit()` and **returned**. `CreateTable` reported success and **no hypertable existed** —
+  for every PascalCase entity, which is all of them. Chunk routing, compression and retention silently absent
+  while a plain PostgreSQL table served reads and writes and made the store look correct. **A suite written
+  without checking the premise would have "verified the boundary over a hypertable" against a plain table.**
+- **The two identifiers in one call needed opposite treatments**, which is the generalisable half: the table is
+  a `regclass` and must carry its **own quotes**; the time column is a `name` compared literally against
+  `pg_attribute.attname` and must be **pre-folded**, because column definitions are emitted bare (TASK-209).
+  Neither travels as an identifier, so the parser's folding never runs — see § Conventions. The column half was
+  hidden by the shipped default `TimeColumn = "timestamp"` matching a folded `Timestamp` property **by luck**.
+- **TASK-242's own lesson had a ninth store nobody wired.** It taught that joining a boundary is only half of
+  it — something must **publish** it — and put `EnterTransactionScope()` into the eight provider stores' bulk
+  `*Core` overrides. TimescaleDB got none, so the inherited connector fix was **unreachable from this store**
+  and `SetTransactionContext` was inert for every bulk write, which is the *only* door a sync store has.
+  Fifth instance of "a funnel with four overrides is not a funnel". **And the broken door was the quiet one:**
+  `SqlUnitOfWork` publishes the ambient itself, so it worked all along — a test written against the unit of
+  work alone reports success either way.
+- **Two traps that both read as product defects.** `timescaledb_information.hypertables` holds the name with its
+  **case intact**, so a lowercased lookup returned 0 and briefly made a working fix look broken (*check whether
+  a reproduction failed for the reason you think*). And `ModelMapRegistry` applies into process-wide state and
+  **accumulates** — one model type mapped two ways merged both mappings into `42P16 multiple primary keys`.
+- **A test that pinned the defect did so through its fixture's choice of name.**
+  `BuildCreateHypertableSql_ComposesQuotedArgsAndInterval` asserted `create_hypertable('metrics', …)`, and for an
+  already-lowercase name the missing quotes make no difference at all. Same family as TASK-246's fallback branch:
+  **a fixture that cannot distinguish the fix from the defect is not coverage.** Reverts: bare table **5 of 5**,
+  dropped fold **4 of 5** (survivor = the lowercase case, the correct discrimination), removed publications
+  **4 of 13** (exactly the per-store-door tests). Spawned **TASK-253** (the migrations project duplicates the
+  broken statement in three emitters with *no* escaping, and `CreateHypertableAsync` bypasses the DDL funnel) and
+  **TASK-254** (the fix turns a silent no-op into a throw out of lazy schema-ensure, against TASK-204 — shipped
+  only because the blast radius measured **0** entities today).
 
 ### MySQL could not index an unbounded string, and refusing the declaration was the wrong fix (2026-08-18)
 
