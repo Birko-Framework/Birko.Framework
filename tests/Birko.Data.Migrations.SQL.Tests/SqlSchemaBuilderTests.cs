@@ -99,4 +99,60 @@ public class SqlSchemaBuilderTests
 
         CountMaster(conn, "index", "IX_Users_Name").Should().Be(1);
     }
+
+    /// <summary>
+    /// TASK-249 — a migration's index column name is <b>caller text</b> that reaches interpolated DDL, so it
+    /// is refused unless it is a plain unqualified identifier.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// TASK-245 made index columns be emitted <b>bare</b> in <c>AbstractConnectorBase.CreateIndexSql</c> —
+    /// required, because a quoted column identifier cannot resolve the case-folded column that bare-column
+    /// <c>CREATE TABLE</c> actually creates on PostgreSQL. That removed an <i>accidental</i> containment:
+    /// <c>QuoteIdentifier</c> had been neutralising a hostile name here, and this builder's connector path
+    /// (<c>Build()</c> → <c>Tables.IndexColumn.ColumnName</c> → <c>_connector.CreateIndexes</c>) puts the
+    /// caller's text into the statement verbatim. It never passes through
+    /// <c>SqlIndexManager.ToSqlIndexDefinition</c>, so the guard added there for the sibling sink did not
+    /// cover this one — the fix's own rule ("enumerate that sink's callers by provenance") applied to only
+    /// one of two callers.
+    /// </para>
+    /// <para>
+    /// Validated in <c>WithField</c> rather than <c>Build()</c> so it fails at the declaration site and
+    /// covers both of <c>Build()</c>'s routes, and through the same
+    /// <c>DataBase.ValidateIndexFieldIdentifier</c> the index manager uses, so the two sinks cannot drift.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("Rank); CREATE TABLE Pwned (x INTEGER); --")]
+    [InlineData("Name, (SELECT 1)")]
+    [InlineData("Users.Name")]
+    [InlineData("Name Rank")]
+    public void CreateIndex_WithField_RefusesANameThatIsNotAPlainIdentifier(string fieldName)
+    {
+        using var conn = OpenConnection();
+        var schema = new SqlSchemaBuilder(conn, null, null);
+
+        var act = () => schema.CreateIndex("Users", "IX_Users_Bad").WithField(fieldName);
+
+        act.Should().Throw<System.ArgumentException>(
+            "index columns are interpolated bare into CREATE INDEX, so a migration must not be able to "
+          + "append a second statement through a column name");
+    }
+
+    /// <summary>The guard must not refuse the legitimate case — and the test above would pass if it did.</summary>
+    [Fact]
+    public void CreateIndex_WithField_AcceptsAPlainColumnName()
+    {
+        using var conn = OpenConnection();
+        var schema = new SqlSchemaBuilder(conn, null, null);
+
+        schema.CreateCollection("Users")
+            .WithField("Id", FieldType.Guid, isPrimary: true)
+            .WithField("Name", FieldType.String, maxLength: 100)
+            .Build();
+
+        schema.CreateIndex("Users", "IX_Users_Ok").WithField("Name").Build();
+
+        CountMaster(conn, "index", "IX_Users_Ok").Should().Be(1);
+    }
 }
