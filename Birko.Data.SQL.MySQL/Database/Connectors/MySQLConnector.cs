@@ -38,6 +38,30 @@ namespace Birko.Data.SQL.Connectors
         /// deadlock (1213), query interrupted (1317), can't-connect (2002/2003), server gone (2006),
         /// lost connection (2013).
         /// </summary>
+        /// <summary>
+        /// <b>False.</b> MySQL implicitly commits an open transaction before and after every DDL
+        /// statement, so DDL issued on a caller's connection destroys their transaction rather than
+        /// joining it.
+        /// </summary>
+        /// <remarks>
+        /// Measured on MySQL 8.4 (TASK-243). Stores initialise lazily, so a store's <i>first</i> data
+        /// access issues <c>CREATE TABLE IF NOT EXISTS</c> — and after TASK-240 that ran on the ambient
+        /// boundary's connection. The boundary was therefore committed before the caller's own write even
+        /// ran, and the later rollback undid nothing: three rows survived a rolled-back boundary with no
+        /// error anywhere. Silent on the way in (the DDL succeeds) and silent on the way out (the rollback
+        /// reports success).
+        /// <para>
+        /// Returning false makes <c>AbstractConnector.DoDdlCommand</c> issue schema DDL with the boundary
+        /// suppressed, on a connection of its own. That is safe here for the same reason the defect exists
+        /// here: MySQL permits the second connection. Measured, rather than assumed — an open transaction
+        /// holding a row lock on a table does not block a concurrent
+        /// <c>CREATE TABLE IF NOT EXISTS</c> on that same table (17 ms), so this is not a metadata-lock
+        /// hazard. The created table is not rolled back with the caller's transaction, which is the
+        /// intended outcome: schema is not part of the caller's unit of work.
+        /// </para>
+        /// </remarks>
+        public override bool SupportsTransactionalDdl => false;
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;
@@ -265,7 +289,10 @@ namespace Birko.Data.SQL.Connectors
         /// <inheritdoc />
         public override void CreateTable(string name, IEnumerable<string> fields)
         {
-            DoCommand((command) =>
+            // DoDdlCommand, not DoCommand: on a provider whose DDL is not transactional this must not run
+            // on an ambient boundary's connection, because the statement would implicitly commit it
+            // (TASK-243). inOwnTransaction: false keeps this emitter autocommitted exactly as it was.
+            DoDdlCommand((command) =>
             {
                 command.CommandText =
                     "CREATE TABLE IF NOT EXISTS "
@@ -276,7 +303,7 @@ namespace Birko.Data.SQL.Connectors
             }, (command) =>
             {
                 command.ExecuteNonQuery();
-            }, true);
+            }, true, inOwnTransaction: false);
         }
 
         #region Native Bulk Operations
