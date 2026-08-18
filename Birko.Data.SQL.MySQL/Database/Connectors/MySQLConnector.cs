@@ -310,59 +310,67 @@ namespace Birko.Data.SQL.Connectors
             var columnNames = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
             var modelList = models as IList<object> ?? models.ToList();
 
-            using var connection = (MySqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            string? commandText = null;
-            try
+            // A bulk write must JOIN an open boundary on this database rather than open a second connection.
+            // On MySQL two connections are perfectly legal, so before this the statements committed on their
+            // own transaction and SURVIVED the owner's rollback with no error anywhere — the quiet half of
+            // the defect, and the one most likely to be in production. retryWhenOwned: false keeps the
+            // own-connection path exactly as it shipped; it never retried and this fix is not the place to
+            // start (see AbstractConnector.RunBulk).
+            RunBulk("BulkInsert into " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                for (var batchStart = 0; batchStart < modelList.Count; batchStart += maxBatchSize)
+                var connection = (MySqlConnection)dbConnection;
+                var transaction = (MySqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    var batchEnd = Math.Min(batchStart + maxBatchSize, modelList.Count);
-                    var batchCount = batchEnd - batchStart;
-
-                    using var command = connection.CreateCommand();
-                    command.Transaction = transaction;
-
-                    var sb = new StringBuilder();
-                    sb.Append("INSERT INTO ");
-                    sb.Append(QuoteIdentifier(table.Name));
-                    sb.Append(" (");
-                    sb.Append(columnNames);
-                    sb.Append(") VALUES ");
-
-                    for (var rowIdx = 0; rowIdx < batchCount; rowIdx++)
+                    for (var batchStart = 0; batchStart < modelList.Count; batchStart += maxBatchSize)
                     {
-                        if (rowIdx > 0)
-                            sb.Append(", ");
+                        var batchEnd = Math.Min(batchStart + maxBatchSize, modelList.Count);
+                        var batchCount = batchEnd - batchStart;
 
-                        sb.Append('(');
-                        for (var fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
+                        using var command = connection.CreateCommand();
+                        command.Transaction = transaction;
+
+                        var sb = new StringBuilder();
+                        sb.Append("INSERT INTO ");
+                        sb.Append(QuoteIdentifier(table.Name));
+                        sb.Append(" (");
+                        sb.Append(columnNames);
+                        sb.Append(") VALUES ");
+
+                        for (var rowIdx = 0; rowIdx < batchCount; rowIdx++)
                         {
-                            if (fieldIdx > 0)
+                            if (rowIdx > 0)
                                 sb.Append(", ");
 
-                            var paramName = "@P" + rowIdx + "_" + fieldIdx;
-                            sb.Append(paramName);
+                            sb.Append('(');
+                            for (var fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
+                            {
+                                if (fieldIdx > 0)
+                                    sb.Append(", ");
 
-                            var model = modelList[batchStart + rowIdx];
-                            command.Parameters.Add(new MySqlParameter(paramName, fields[fieldIdx].Write(model) ?? DBNull.Value));
+                                var paramName = "@P" + rowIdx + "_" + fieldIdx;
+                                sb.Append(paramName);
+
+                                var model = modelList[batchStart + rowIdx];
+                                command.Parameters.Add(new MySqlParameter(paramName, fields[fieldIdx].Write(model) ?? DBNull.Value));
+                            }
+                            sb.Append(')');
                         }
-                        sb.Append(')');
+
+                        command.CommandText = sb.ToString();
+                        commandText = command.CommandText;
+                        command.ExecuteNonQuery();
                     }
 
-                    command.CommandText = sb.ToString();
-                    commandText = command.CommandText;
-                    command.ExecuteNonQuery();
+                    if (owned) transaction.Commit();
                 }
-
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                InitException(ex, commandText ?? "BulkInsert into " + table.Name);
-            }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkInsert into " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkInsertAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -387,66 +395,69 @@ namespace Birko.Data.SQL.Connectors
             var columnNames = string.Join(", ", fields.Select(f => QuoteIdentifier(f.Name)));
             var modelList = models as IList<object> ?? models.ToList();
 
-            using var connection = (MySqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkInsert above.
+            await RunBulkAsync("BulkInsertAsync into " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                for (var batchStart = 0; batchStart < modelList.Count; batchStart += maxBatchSize)
+                var connection = (MySqlConnection)dbConnection;
+                var transaction = (MySqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    ct.ThrowIfCancellationRequested();
-
-                    var batchEnd = Math.Min(batchStart + maxBatchSize, modelList.Count);
-                    var batchCount = batchEnd - batchStart;
-
-                    using var command = connection.CreateCommand();
-                    command.Transaction = (MySqlTransaction)transaction;
-
-                    var sb = new StringBuilder();
-                    sb.Append("INSERT INTO ");
-                    sb.Append(QuoteIdentifier(table.Name));
-                    sb.Append(" (");
-                    sb.Append(columnNames);
-                    sb.Append(") VALUES ");
-
-                    for (var rowIdx = 0; rowIdx < batchCount; rowIdx++)
+                    for (var batchStart = 0; batchStart < modelList.Count; batchStart += maxBatchSize)
                     {
-                        if (rowIdx > 0)
-                            sb.Append(", ");
+                        ct.ThrowIfCancellationRequested();
 
-                        sb.Append('(');
-                        for (var fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
+                        var batchEnd = Math.Min(batchStart + maxBatchSize, modelList.Count);
+                        var batchCount = batchEnd - batchStart;
+
+                        using var command = connection.CreateCommand();
+                        command.Transaction = transaction;
+
+                        var sb = new StringBuilder();
+                        sb.Append("INSERT INTO ");
+                        sb.Append(QuoteIdentifier(table.Name));
+                        sb.Append(" (");
+                        sb.Append(columnNames);
+                        sb.Append(") VALUES ");
+
+                        for (var rowIdx = 0; rowIdx < batchCount; rowIdx++)
                         {
-                            if (fieldIdx > 0)
+                            if (rowIdx > 0)
                                 sb.Append(", ");
 
-                            var paramName = "@P" + rowIdx + "_" + fieldIdx;
-                            sb.Append(paramName);
+                            sb.Append('(');
+                            for (var fieldIdx = 0; fieldIdx < fieldCount; fieldIdx++)
+                            {
+                                if (fieldIdx > 0)
+                                    sb.Append(", ");
 
-                            var model = modelList[batchStart + rowIdx];
-                            command.Parameters.Add(new MySqlParameter(paramName, fields[fieldIdx].Write(model) ?? DBNull.Value));
+                                var paramName = "@P" + rowIdx + "_" + fieldIdx;
+                                sb.Append(paramName);
+
+                                var model = modelList[batchStart + rowIdx];
+                                command.Parameters.Add(new MySqlParameter(paramName, fields[fieldIdx].Write(model) ?? DBNull.Value));
+                            }
+                            sb.Append(')');
                         }
-                        sb.Append(')');
+
+                        command.CommandText = sb.ToString();
+                        commandText = command.CommandText;
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
                     }
 
-                    command.CommandText = sb.ToString();
-                    commandText = command.CommandText;
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
                 }
-
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkInsertAsync into " + table.Name);
-            }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkInsertAsync into " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         public void BulkUpdate(Type type, IEnumerable<object> models)
@@ -467,52 +478,55 @@ namespace Birko.Data.SQL.Connectors
             if (!updateFields.Any())
                 return;
 
-            using var connection = (MySqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkInsert above.
+            RunBulk("BulkUpdate " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-
-                var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
-                    + " SET " + string.Join(", ", setClauses)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in updateFields)
+                var connection = (MySqlConnection)dbConnection;
+                var transaction = (MySqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new MySqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
+                    var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                        + " SET " + string.Join(", ", setClauses)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in updateFields)
                     {
-                        command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        command.Parameters.Add(new MySqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    command.ExecuteNonQuery();
-                }
+                    command.Prepare();
 
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                InitException(ex, commandText ?? "BulkUpdate " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        foreach (var field in updateFields)
+                        {
+                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        }
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        command.ExecuteNonQuery();
+                    }
+
+                    if (owned) transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkUpdate " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkUpdateAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -533,58 +547,61 @@ namespace Birko.Data.SQL.Connectors
             if (!updateFields.Any())
                 return;
 
-            using var connection = (MySqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkInsert above.
+            await RunBulkAsync("BulkUpdateAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = (MySqlTransaction)transaction;
-
-                var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
-                    + " SET " + string.Join(", ", setClauses)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in updateFields)
+                var connection = (MySqlConnection)dbConnection;
+                var transaction = (MySqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new MySqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                foreach (var field in primaryFields)
-                {
-                    command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                await command.PrepareAsync(ct).ConfigureAwait(false);
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
-                    ct.ThrowIfCancellationRequested();
+                    var setClauses = updateFields.Select(f => f.Name + " = @SET_" + f.Name.Replace(".", ""));
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "UPDATE " + QuoteIdentifier(table.Name)
+                        + " SET " + string.Join(", ", setClauses)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in updateFields)
                     {
-                        command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        command.Parameters.Add(new MySqlParameter("@SET_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }
+                    await command.PrepareAsync(ct).ConfigureAwait(false);
 
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        foreach (var field in updateFields)
+                        {
+                            command.Parameters["@SET_" + field.Name.Replace(".", "")].Value = field.Write(model) ?? DBNull.Value;
+                        }
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    }
+
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkUpdateAsync " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         public void BulkDelete(Type type, IEnumerable<object> models)
@@ -600,42 +617,45 @@ namespace Birko.Data.SQL.Connectors
             if (!primaryFields.Any())
                 return;
 
-            using var connection = (MySqlConnection)CreateConnection(_settings);
-            connection.Open();
-            using var transaction = connection.BeginTransaction();
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkInsert above.
+            RunBulk("BulkDelete " + table.Name, (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = transaction;
-
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in primaryFields)
+                var connection = (MySqlConnection)dbConnection;
+                var transaction = (MySqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                command.Prepare();
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    command.ExecuteNonQuery();
-                }
+                    command.Prepare();
 
-                transaction.Commit();
-            }
-            catch (Exception ex)
-            {
-                transaction.Rollback();
-                InitException(ex, commandText ?? "BulkDelete " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        command.ExecuteNonQuery();
+                    }
+
+                    if (owned) transaction.Commit();
+                }
+                catch (Exception ex)
+                {
+                    if (owned) transaction.Rollback();
+                    InitException(ex, commandText ?? "BulkDelete " + table.Name);
+                }
+            }, retryWhenOwned: false);
         }
 
         public async Task BulkDeleteAsync(Type type, IEnumerable<object> models, CancellationToken ct = default)
@@ -651,48 +671,51 @@ namespace Birko.Data.SQL.Connectors
             if (!primaryFields.Any())
                 return;
 
-            using var connection = (MySqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
-            try
+            // Joins an open boundary instead of opening a second connection — see BulkInsert above.
+            await RunBulkAsync("BulkDeleteAsync " + table.Name, async (dbConnection, dbTransaction, owned) =>
             {
-                using var command = connection.CreateCommand();
-                command.Transaction = (MySqlTransaction)transaction;
-
-                var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
-                command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
-                    + " WHERE " + string.Join(" AND ", whereClauses);
-                commandText = command.CommandText;
-
-                foreach (var field in primaryFields)
+                var connection = (MySqlConnection)dbConnection;
+                var transaction = (MySqlTransaction)dbTransaction;
+                string? commandText = null;
+                try
                 {
-                    command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
-                }
-                await command.PrepareAsync(ct).ConfigureAwait(false);
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
 
-                foreach (var model in models)
-                {
-                    ct.ThrowIfCancellationRequested();
+                    var whereClauses = primaryFields.Select(f => f.Name + " = @PK_" + f.Name.Replace(".", ""));
+                    command.CommandText = "DELETE FROM " + QuoteIdentifier(table.Name)
+                        + " WHERE " + string.Join(" AND ", whereClauses);
+                    commandText = command.CommandText;
+
                     foreach (var field in primaryFields)
                     {
-                        command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        command.Parameters.Add(new MySqlParameter("@PK_" + field.Name.Replace(".", ""), DBNull.Value));
                     }
-                    await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-                }
+                    await command.PrepareAsync(ct).ConfigureAwait(false);
 
-                await transaction.CommitAsync(ct).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-                InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
-            }
+                    foreach (var model in models)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        foreach (var field in primaryFields)
+                        {
+                            command.Parameters["@PK_" + field.Name.Replace(".", "")].Value = field.Property.GetValue(model) ?? DBNull.Value;
+                        }
+                        await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                    }
+
+                    if (owned) await transaction.CommitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    if (owned) await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+                    InitException(ex, commandText ?? "BulkDeleteAsync " + table.Name);
+                }
+            }, ct, retryWhenOwned: false);
         }
 
         #endregion
