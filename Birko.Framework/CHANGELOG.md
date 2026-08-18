@@ -4,6 +4,70 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-08-16 — The unbounded-filter guard was never wired into the base it lives on
+
+TASK-215 set out to wire `RequireBoundedFilter` into two more backends and found the hole one layer up:
+`AbstractBulkStore` / `AbstractAsyncBulkStore`'s **own six** filter-based destructive wrappers never called
+it. Measured on `JsonStore`, which overrides none of them, `Delete(x => !empty.Contains(x.Value))` left
+**0 of 3** rows with no exception — so the defect was live on JSON, XML, RavenDB, CosmosDB and InfluxDB,
+none of which the finding named. Now called by all twelve paths: six base wrappers, InMemory's two
+overrides, ElasticSearch's four. The standing rule is in § Conventions above. Split: **18 of 34** on the
+whole revert (InMemory 10/16, JSON 2/5, ES 6/13), plus **2 of 69** on an isolating revert of the door-name
+fix alone; 35 suites / ~2,100 tests green. Four things worth carrying:
+
+- **A "wire it per backend" rule got read as "wire it only in backends".** The guard's helper and its
+  unguarded callers were in the *same class*, and three tasks walked past them. When a rule says measure
+  before wiring, that is about not guessing which shapes reach destruction — not a licence to skip the
+  implementation every unlisted backend inherits.
+- **The probe for the filed half found the real half.** The InMemory measurement was only supposed to
+  confirm two overrides; including the four non-overridden `Update` paths in the same probe table is what
+  exposed the base. Probe the whole verb family, not the methods the finding lists.
+- **ElasticSearch is the third backend where the defect shape renders as ordinary output.**
+  `!empty.Contains(x)` → `bool { must_not: [match_none] }` (selects everything) versus the legitimate
+  `bool { must_not: [terms] }` — same structure, different inner type, so CR-H047's null-check guard never
+  fired. After SQL's `1 = 1` and MongoDB's `$nin: []`, this is settled: guard the expression.
+- **`.map.yml` under-coverage, fourth instance, this time caught before it mattered.** The ES stores were
+  reachable by no glob in `bulk-filter-operations`, so the regen for this very fix would have been blind to
+  them. Added. The older `AbstractConnectorBase.cs` gap the file already documents twice is still open
+  (TASK-208).
+
+---
+
+## 2026-08-15 — The write half: a filtered DELETE/UPDATE drops the qualifier the read path aliases
+
+TASK-216, spawned by TASK-211 rather than absorbed into it, because the mechanism is shared but the fix is
+not. `ResolveColumnName(…, withTableName: true)` qualifies every condition name while a write quotes its
+target table, so on PostgreSQL every filtered `Delete`/`Update` on a PascalCase entity failed:
+
+```sql
+DELETE FROM "FwPeople" WHERE FwPeople.Name = $1
+-- ERROR: missing FROM-clause entry for table "fwpeople"
+```
+
+Fixed by **stripping** the target table's qualifier in `AddRequiredWhere` — not by quoting it and not by
+aliasing (MSSql rejects `DELETE FROM t AS a`). The standing rule is in § Conventions above. Split: **4 of 22**
+live PostgreSQL, **3 of 500** offline; 23 SQL suites green. Four things worth carrying:
+
+- **Unlike the read half this was loud, and that is the whole reason it was a separate task.** The
+  missing-FROM wording is not the missing-relation wording, so it threw rather than being swallowed. Same
+  root cause, opposite failure mode — worth separating, because severity follows the failure mode, not the
+  cause.
+- **The reproduction found all four shapes at once, including both function-wrapped ones.** `LOWER(T.Col)`
+  and the `.Date` rewrite's `(T.Seen >= @a AND T.Seen < @b)` are the shapes a per-condition-name rewrite
+  misses, and they were in the first run because the probes were written to include them *before* choosing
+  the mechanism. Design the reproduction against the fix you might get wrong, not the one you expect.
+- **Two of the six probes passed immediately, and both were worth writing.** `SelectCount` goes through
+  `CreateSelectCommand`, so TASK-211's alias already covered it — the task's acceptance asked whether a
+  fourth sink existed, and measuring answered *no* instead of leaving it to be rediscovered. The other pins
+  the whole-table write guard, which the rewrite runs after.
+- **The regression test found a second, unrelated defect and it was filed, not asserted.** The obvious
+  `Update(Table, values, conditions)` overload builds its SET list from **every** column while binding only
+  the caller's subset, so a partial update emits unbound placeholders. Measured on both providers before
+  filing (loud on each; SQLite leaves the row unchanged) — the initial guess, that unbound would bind NULL
+  and silently blank the other columns, was wrong and would have justified a much larger fix. TASK-217.
+
+---
+
 ## 2026-08-15 — Every read on PostgreSQL returned zero rows, and the swallow hid the bug that caused it
 
 TASK-211, filed by TASK-209 as "on-the-fly views are broken". They were — and the measurement that confirmed

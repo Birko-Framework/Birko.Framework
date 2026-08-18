@@ -241,6 +241,42 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
       again, so a side-effecting operand is now evaluated three times instead of once, on every portable
       backend. Both guards are kept deliberately — each covers a distinct partial-override case, and the
       placement mirrors `RequireFilter` — but put captured collections, not method calls, in a filter.
+- **A write that opens its own connection cannot be inside anybody's transaction — and a boundary is only
+  as wide as its NARROWEST participant.** `AmbientSqlTransaction` (TASK-240) taught the single-command paths
+  to join an open boundary; the bulk paths kept opening their own connection and their own transaction, so
+  every collection-shaped write — create-many, update-many, delete-many, delete-where, delete-all — happened
+  outside it (TASK-242, measured in consumer Symbio: **20 of 158** boundary-wrapped operations broke). Five
+  parts generalise:
+  - **Rank the SILENT provider above the loud one.** SQLite blocks on a lock it cannot take and fails after
+    the command timeout; PostgreSQL, MySQL and MSSql allow two connections, so the escaped write **commits
+    and survives the owner's rollback with no error at all**. A test that asserts "no exception was thrown"
+    passes against the broken code on every one of them, so **the assertion is committed rows counted after
+    a rollback, on a connection of its own**. Same family as § TASK-218's "a driver that silently drops what
+    it cannot translate is the worst case".
+  - **One producer for "am I inside a boundary", and the OWNED path is where providers differ.**
+    `AbstractConnector.RunBulk` / `AbstractAsyncConnector.RunBulkAsync` own the decision and hand the body
+    `(connection, transaction, owned)`; the body commits and rolls back only `if (owned)`.
+    `RunBulkOnConnection[Async]` is the same decision for a write that carries its own atomicity and wants
+    no transaction of its own — PostgreSQL's binary `COPY`, `SqlBulkCopy` — so those two keep running
+    unwrapped when they own. Where the shipped providers already disagreed (SQLite's bulk path retries per
+    CR-M144, the three servers' never did), the difference became an explicit `retryWhenOwned` parameter:
+    **a shared helper is exactly where a per-provider policy gets flattened by accident.**
+  - **The participating path never retries.** A retry re-runs statements inside a transaction whose earlier
+    statements already succeeded, and on most providers the first failure has already aborted it, so it can
+    only fail differently. Retrying is the boundary owner's decision — the same reasoning `RunCommandOn`
+    already applies to single commands. Do not "improve" this by adding retry back.
+  - **Joining is only half of it: something has to PUBLISH the boundary, and the layer that publishes is
+    not the layer that joins.** The eight provider stores override the bulk `*Core` methods and call
+    `Connector.Bulk*` directly, bypassing the base's per-item write — and the base was the only caller of
+    `EnterTransactionScope`. So `SetTransactionContext` was inert for every bulk write on every provider,
+    which is the **only** door a sync store has (`SqlUnitOfWork.FromStore` takes an `AsyncDataBaseStore`).
+    Measured: reverting just those lines fails 4 of 10 (SQLite) and 3 of 11 (each server). When a rule is
+    wired into a connector, ask which layer feeds it.
+  - **`SqlBulkCopy` enlists only through its `SqlTransaction` overload, and `TableLock` is owned-path only.**
+    The third constructor argument was `null`, which is precisely how the copy escaped. A bulk-update table
+    lock taken by a standalone copy dies with that copy; taken inside somebody else's boundary it is held
+    until *their* commit, serialising every other writer against the table for the life of a transaction
+    that never asked for it.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -252,7 +288,10 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   accepted — and it is `internal`, not `private`, precisely so the third sink can *call* it. **Do not quote
   the resolved column identifier**: this codebase emits column identifiers bare everywhere (DDL, SELECT
   list, every condition strategy) and quotes only table names, so quoting one sink breaks it on PostgreSQL,
-  where the unquoted DDL identifier folds to lower case. Quoting was never what closed either injection.
+  where the unquoted DDL identifier folds to lower case. (**Sixth instance, TASK-242**: PostgreSQL's binary
+  `COPY … FROM STDIN` built its column list with `QuoteIdentifier`, so `BulkInsert` had *never* worked for a
+  PascalCase column on that provider — `42703: column "Name" of relation "T" does not exist`. Found only by
+  running a bulk write against a live server, which nothing in the tree had done.) Quoting was never what closed either injection.
   (**That argument covers the column, not the table qualifier.** An emitted `Table.Column` leaves the table
   part unquoted while the `FROM` clause quotes it, which on PostgreSQL breaks any table whose name is not
   already lower case. That is pre-existing and framework-wide — `GetSelectFields(true)` does the same — so
@@ -630,6 +669,45 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### Bulk writes escaped every transaction boundary — silently on three providers (2026-08-18)
+
+TASK-242, completing [TASK-240] which wired `AmbientSqlTransaction` into the single-command paths and left
+the bulk ones behind. `BulkInsert` / `BulkUpdate` / `BulkDelete` + async twins opened their own connection
+and their own transaction unconditionally, and every collection-shaped repository write routes through them
+— so create-many, update-many, delete-many, delete-where and delete-all all happened *outside* the caller's
+boundary. Measured in consumer Symbio (TASK-442): **20 of 158** boundary-wrapped service operations broke.
+Verified here against live **PostgreSQL 16**, **MySQL 8** and **SQL Server 2022**, plus on-disk SQLite; the
+standing rule is in § Conventions above. 21 connector methods + 24 store-level scope publications; 43 new
+tests across four suites; 19 SQL suites / ~1,105 tests green. Five things worth carrying:
+
+- **The loud provider is not the dangerous one.** On SQLite the escaping write cannot take the boundary's
+  write lock, so it blocks for the command timeout and fails — survivable. On PostgreSQL / MySQL / MSSql two
+  connections are perfectly legal, so it **committed and survived the owner's rollback with no error
+  anywhere**: on the three providers most likely to be in production, the boundary read as working and was
+  not. Every assertion counts committed rows after a rollback, because "no exception was thrown" passes
+  against the broken code on all four.
+- **A rule wired into one layer is not wired.** TASK-240 taught the connectors; the eight provider stores
+  override the bulk `*Core` methods and call `Connector.Bulk*` directly, and the base was the only place
+  that entered the scope — so `SetTransactionContext` was inert for every bulk write on every provider.
+  Reverting just those 24 lines fails 4 of 10 (SQLite) and 3 of 11 (each server). Same shape as TASK-215's
+  "wire it per backend does not mean wire it only in backends".
+- **Two provider paths were dead on arrival, and only a live server said so.** PostgreSQL's binary COPY
+  quoted its column list, so `BulkInsert` had **never** worked for a PascalCase column (sixth instance of
+  the identifier family: bare DDL columns case-fold, a quoted `"Name"` cannot resolve). MSSql's
+  `command.Prepare()` throws on placeholder parameters with no explicit type, so **`BulkUpdate` and
+  `BulkDelete` have never worked on MSSql at all**. Both had to be fixed inline — a regression test that
+  cannot reach the behaviour cannot distinguish a fix from a no-op.
+- **A shared helper is where per-provider policy gets flattened by accident.** SQLite's bulk path retries
+  (CR-M144) and the three servers' never did. `retryWhenOwned` makes that an explicit parameter rather than
+  a silent change to three production write paths. Likewise `RunBulkOnConnection`, so COPY and
+  `SqlBulkCopy` keep running without a transaction of their own on the owned path — the boundary is the fix,
+  not their standalone atomicity.
+- **Proving it found a third defect that is nobody's fault here.** On MySQL a store whose *first* operation
+  happens inside a boundary silently commits it: lazy `CREATE TABLE` goes through the ambient connection and
+  **MySQL implicitly commits on any DDL** (TASK-243, with TASK-244 for the ordering underneath it). The
+  MySQL suite warms up and names the reason; PostgreSQL and SQL Server have transactional DDL and are
+  unaffected.
+
 ### Every worker enqueued its own copy of every recurring job (2026-08-17)
 
 TASK-237. `RecurringJobScheduler` kept `NextRunAt` in process memory, so N workers each concluded
@@ -826,63 +904,3 @@ is in § Conventions above. Split: **Revert A 7 of 78** (6 fix-dependent), **Rev
   `core-model-contracts`; `ChangeStreams/*.cs` + `MongoDBLogModel.cs` remain unmapped (TASK-208).
   Also spawned **TASK-218**: with writes working, the matrix suite reported 26/27, and the 27th is real
   — an array's `.Contains` binds to `MemoryExtensions.Contains` on .NET 9+ and the driver rejects it.
-
-### The unbounded-filter guard was never wired into the base it lives on (2026-08-16)
-
-TASK-215 set out to wire `RequireBoundedFilter` into two more backends and found the hole one layer up:
-`AbstractBulkStore` / `AbstractAsyncBulkStore`'s **own six** filter-based destructive wrappers never called
-it. Measured on `JsonStore`, which overrides none of them, `Delete(x => !empty.Contains(x.Value))` left
-**0 of 3** rows with no exception — so the defect was live on JSON, XML, RavenDB, CosmosDB and InfluxDB,
-none of which the finding named. Now called by all twelve paths: six base wrappers, InMemory's two
-overrides, ElasticSearch's four. The standing rule is in § Conventions above. Split: **18 of 34** on the
-whole revert (InMemory 10/16, JSON 2/5, ES 6/13), plus **2 of 69** on an isolating revert of the door-name
-fix alone; 35 suites / ~2,100 tests green. Four things worth carrying:
-
-- **A "wire it per backend" rule got read as "wire it only in backends".** The guard's helper and its
-  unguarded callers were in the *same class*, and three tasks walked past them. When a rule says measure
-  before wiring, that is about not guessing which shapes reach destruction — not a licence to skip the
-  implementation every unlisted backend inherits.
-- **The probe for the filed half found the real half.** The InMemory measurement was only supposed to
-  confirm two overrides; including the four non-overridden `Update` paths in the same probe table is what
-  exposed the base. Probe the whole verb family, not the methods the finding lists.
-- **ElasticSearch is the third backend where the defect shape renders as ordinary output.**
-  `!empty.Contains(x)` → `bool { must_not: [match_none] }` (selects everything) versus the legitimate
-  `bool { must_not: [terms] }` — same structure, different inner type, so CR-H047's null-check guard never
-  fired. After SQL's `1 = 1` and MongoDB's `$nin: []`, this is settled: guard the expression.
-- **`.map.yml` under-coverage, fourth instance, this time caught before it mattered.** The ES stores were
-  reachable by no glob in `bulk-filter-operations`, so the regen for this very fix would have been blind to
-  them. Added. The older `AbstractConnectorBase.cs` gap the file already documents twice is still open
-  (TASK-208).
-
-### The write half: a filtered DELETE/UPDATE drops the qualifier the read path aliases (2026-08-15)
-
-TASK-216, spawned by TASK-211 rather than absorbed into it, because the mechanism is shared but the fix is
-not. `ResolveColumnName(…, withTableName: true)` qualifies every condition name while a write quotes its
-target table, so on PostgreSQL every filtered `Delete`/`Update` on a PascalCase entity failed:
-
-```sql
-DELETE FROM "FwPeople" WHERE FwPeople.Name = $1
--- ERROR: missing FROM-clause entry for table "fwpeople"
-```
-
-Fixed by **stripping** the target table's qualifier in `AddRequiredWhere` — not by quoting it and not by
-aliasing (MSSql rejects `DELETE FROM t AS a`). The standing rule is in § Conventions above. Split: **4 of 22**
-live PostgreSQL, **3 of 500** offline; 23 SQL suites green. Four things worth carrying:
-
-- **Unlike the read half this was loud, and that is the whole reason it was a separate task.** The
-  missing-FROM wording is not the missing-relation wording, so it threw rather than being swallowed. Same
-  root cause, opposite failure mode — worth separating, because severity follows the failure mode, not the
-  cause.
-- **The reproduction found all four shapes at once, including both function-wrapped ones.** `LOWER(T.Col)`
-  and the `.Date` rewrite's `(T.Seen >= @a AND T.Seen < @b)` are the shapes a per-condition-name rewrite
-  misses, and they were in the first run because the probes were written to include them *before* choosing
-  the mechanism. Design the reproduction against the fix you might get wrong, not the one you expect.
-- **Two of the six probes passed immediately, and both were worth writing.** `SelectCount` goes through
-  `CreateSelectCommand`, so TASK-211's alias already covered it — the task's acceptance asked whether a
-  fourth sink existed, and measuring answered *no* instead of leaving it to be rediscovered. The other pins
-  the whole-table write guard, which the rewrite runs after.
-- **The regression test found a second, unrelated defect and it was filed, not asserted.** The obvious
-  `Update(Table, values, conditions)` overload builds its SET list from **every** column while binding only
-  the caller's subset, so a partial update emits unbound placeholders. Measured on both providers before
-  filing (loud on each; SQLite leaves the row unchanged) — the initial guess, that unbound would bind NULL
-  and silently blank the other columns, was wrong and would have justified a much larger fix. TASK-217.
