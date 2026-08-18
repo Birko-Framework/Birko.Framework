@@ -192,25 +192,45 @@ namespace Birko.Data.SQL.Connectors
         /// <param name="timeColumn">The time column to partition by.</param>
         /// <param name="chunkTimeInterval">The chunk time interval (e.g. "7 days").</param>
         /// <param name="ct">Cancellation token.</param>
+        /// <remarks>
+        /// <b>Goes through <c>DoDdlCommandAsync</c>, which the sync twin has done since TASK-243 and this did
+        /// not.</b> It opened its own <c>CreateConnection</c> + <c>OpenAsync</c>, so it neither joined an
+        /// ambient boundary nor was suppressed off one — it simply ran a second connection alongside, which on
+        /// PostgreSQL is perfectly legal and therefore silent. A caller who wrapped this in a transaction got a
+        /// hypertable conversion that survived their rollback, with no error either way. That is TASK-242's
+        /// defect in a method the sweep did not reach, because it is not a bulk path.
+        /// <para>
+        /// <c>inOwnTransaction: false</c> mirrors the sync twin exactly, keeping the emitter autocommitted when
+        /// it owns the connection. <see cref="PostgreSQLConnector.SupportsTransactionalDdl"/> is true, so
+        /// nothing is suppressed and the statement joins the boundary rather than escaping it.
+        /// </para>
+        /// <para>
+        /// <b>Why the cancellation guard survives the move.</b> The funnel routes every failure through
+        /// <c>InitException</c>, and <c>PostgreSQLConnector</c> registers an <c>OnException</c> handler that
+        /// re-throws as <c>new Exception(commandText, ex)</c> — so a cancellation would reach the caller as a
+        /// bare <see cref="Exception"/> and <c>catch (OperationCanceledException)</c> would stop working. Every
+        /// other async DDL path on this provider already behaves that way, so this method was the outlier;
+        /// keeping its contract is deliberate rather than inconsistent, because its three public callers
+        /// (<c>AsyncTimescaleDBStore</c>, <c>AsyncTimescaleDBModelRepository</c>,
+        /// <c>AsyncTimescaleDBRepository</c>) take a token and a token that cannot be observed is worse than an
+        /// inconsistency. <see cref="System.Runtime.ExceptionServices.ExceptionDispatchInfo"/> preserves the
+        /// original stack rather than re-throwing a fresh one.
+        /// </para>
+        /// </remarks>
         public async System.Threading.Tasks.Task CreateHypertableAsync(string tableName, string timeColumn, string chunkTimeInterval = "7 days", System.Threading.CancellationToken ct = default)
         {
-            using var connection = (NpgsqlConnection)CreateConnection(_settings);
-            await connection.OpenAsync(ct).ConfigureAwait(false);
-            string? commandText = null;
             try
             {
-                using var command = connection.CreateCommand();
-                command.CommandText = BuildCreateHypertableSql(tableName, timeColumn, chunkTimeInterval);
-                commandText = command.CommandText;
-                await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                await DoDdlCommandAsync((command) =>
+                {
+                    command.CommandText = BuildCreateHypertableSql(tableName, timeColumn, chunkTimeInterval);
+                    return System.Threading.Tasks.Task.CompletedTask;
+                }, (command) => command.ExecuteNonQueryAsync(ct), true, ct, inOwnTransaction: false).ConfigureAwait(false);
             }
-            catch (System.OperationCanceledException)
+            catch (Exception ex) when (ex is not System.OperationCanceledException
+                                       && ex.InnerException is System.OperationCanceledException)
             {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                InitException(ex, commandText ?? "CreateHypertableAsync " + tableName);
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
             }
         }
 
