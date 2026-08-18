@@ -1,5 +1,11 @@
+using System;
+using System.IO;
 using Birko.Data.Migrations.SQL.Context;
 using Birko.Data.Patterns.Schema;
+using Birko.Data.SQL;
+using Birko.Data.SQL.Connectors;
+using Birko.Data.SQL.SqLite;
+using Birko.Data.SQL.SqLite.Stores;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using System.Data.Common;
@@ -12,14 +18,44 @@ namespace Birko.Data.Migrations.SQL.Tests;
 /// builders whose Build() (which emits the CREATE TABLE / CREATE INDEX) was internal and never
 /// invoked — the ICollectionBuilder / IIndexBuilder interfaces exposed no terminal, so table/index
 /// creation via the fluent API was a silent no-op. Build() is now a terminal on the interfaces (a
-/// no-op default for eager providers) that SQL overrides. Exercised against a real in-memory SQLite
-/// connection via the raw-SQL fallback (no Birko connector required).
+/// no-op default for eager providers) that SQL overrides.
+///
+/// <para>
+/// <b>These tests used to pass <c>connector: null</c>, and that was the problem</b> (TASK-247). A null
+/// connector selected a hand-written raw-SQL fallback in every method, so this whole file exercised a branch
+/// no production migration ever takes — which is exactly how TASK-246's missing <c>Unique</c> flag on the
+/// <i>live</i> branch stayed green while six tests passed. The fallbacks are now deleted and the connector is
+/// required, so these assertions are about the real path.
+/// </para>
+/// <para>
+/// The database is file-backed rather than <c>:memory:</c> so the connector and the externally supplied
+/// connection address the same store.
+/// </para>
 /// </summary>
-public class SqlSchemaBuilderTests
+public class SqlSchemaBuilderTests : IDisposable
 {
-    private static SqliteConnection OpenConnection()
+    private readonly string _dir;
+    private readonly string _dbPath;
+
+    public SqlSchemaBuilderTests()
     {
-        var conn = new SqliteConnection("Data Source=:memory:");
+        _dir = Path.Combine(Path.GetTempPath(), $"birko-schemabuilder-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(_dir);
+        _dbPath = Path.Combine(_dir, "schema.db");
+    }
+
+    public void Dispose()
+    {
+        SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true); } catch { }
+    }
+
+    private AbstractConnector Connector()
+        => DataBase.GetConnector<SqLiteConnector>(new SqLiteSettings(_dir, Path.GetFileName(_dbPath)));
+
+    private SqliteConnection OpenConnection()
+    {
+        var conn = new SqliteConnection($"Data Source={_dbPath}");
         conn.Open();
         return conn;
     }
@@ -39,7 +75,7 @@ public class SqlSchemaBuilderTests
     public void CreateCollection_Build_CreatesTheTable()
     {
         using var conn = OpenConnection();
-        var schema = new SqlSchemaBuilder(conn, null, null);
+        var schema = new SqlSchemaBuilder(conn, null, Connector());
 
         schema.CreateCollection("Users")
             .WithField("Id", FieldType.Guid, isPrimary: true)
@@ -53,7 +89,7 @@ public class SqlSchemaBuilderTests
     public void CreateCollection_WithoutBuild_DoesNothing()
     {
         using var conn = OpenConnection();
-        var schema = new SqlSchemaBuilder(conn, null, null);
+        var schema = new SqlSchemaBuilder(conn, null, Connector());
 
         // Chain without the terminal — nothing should be created (documents why Build() is required).
         schema.CreateCollection("Ghost")
@@ -69,7 +105,7 @@ public class SqlSchemaBuilderTests
         // not provide (it uses sqlite_master) — so this threw on SQLite. It now picks the catalog query
         // from the connection's provider.
         using var conn = OpenConnection();
-        var schema = new SqlSchemaBuilder(conn, null, null);
+        var schema = new SqlSchemaBuilder(conn, null, Connector());
 
         schema.CollectionExists("Users").Should().BeFalse("no table yet");
 
@@ -85,7 +121,7 @@ public class SqlSchemaBuilderTests
     public void CreateIndex_Build_CreatesTheIndex()
     {
         using var conn = OpenConnection();
-        var schema = new SqlSchemaBuilder(conn, null, null);
+        var schema = new SqlSchemaBuilder(conn, null, Connector());
 
         schema.CreateCollection("Users")
             .WithField("Id", FieldType.Guid, isPrimary: true)
@@ -130,7 +166,7 @@ public class SqlSchemaBuilderTests
     public void CreateIndex_WithField_RefusesANameThatIsNotAPlainIdentifier(string fieldName)
     {
         using var conn = OpenConnection();
-        var schema = new SqlSchemaBuilder(conn, null, null);
+        var schema = new SqlSchemaBuilder(conn, null, Connector());
 
         var act = () => schema.CreateIndex("Users", "IX_Users_Bad").WithField(fieldName);
 
@@ -144,7 +180,7 @@ public class SqlSchemaBuilderTests
     public void CreateIndex_WithField_AcceptsAPlainColumnName()
     {
         using var conn = OpenConnection();
-        var schema = new SqlSchemaBuilder(conn, null, null);
+        var schema = new SqlSchemaBuilder(conn, null, Connector());
 
         schema.CreateCollection("Users")
             .WithField("Id", FieldType.Guid, isPrimary: true)

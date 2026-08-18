@@ -29,7 +29,7 @@ namespace Birko.Data.Migrations.SQL.Tests;
 /// <b>What hid it — and why this file exists rather than an addition to <c>SqlSchemaBuilderTests</c>.</b>
 /// The raw-SQL fallback three lines below the defect <i>does</i> honour <c>_unique</c>, and that fallback is
 /// taken exactly when <c>connector == null</c> — which is how every pre-existing test in this project
-/// constructs the builder (<c>new SqlSchemaBuilder(conn, null, null)</c>). So the feature was demonstrably
+/// constructed the builder (<c>new SqlSchemaBuilder(conn, null, null)</c>). So the feature was demonstrably
 /// working in the path nobody uses in production and broken in the path everybody uses, and the suite could
 /// not tell. Every test here therefore supplies a <b>real connector</b>.
 /// </para>
@@ -192,27 +192,47 @@ public class MigrationUniqueIndexTests : IDisposable
     }
 
     /// <summary>
-    /// The fallback path is out of scope for the fix (it always honoured <c>_unique</c>) but is pinned here,
-    /// because it is the reason the defect was invisible: every pre-existing test in this project builds with
-    /// <c>connector: null</c> and therefore exercised only this branch.
+    /// <b>Superseded by TASK-247, and rewritten rather than deleted.</b>
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This test used to pin the raw-SQL fallback's correctness — it always honoured <c>_unique</c>, and it was
+    /// the reason TASK-246's defect was invisible: every pre-existing test in this project built with
+    /// <c>connector: null</c> and so exercised only that branch, never the one production takes.
+    /// </para>
+    /// <para>
+    /// TASK-247 deleted the fallback and made the connector <b>required</b>, because it re-derived statements
+    /// the provider connectors already emit and two of its copies had drifted into being wrong on MySQL and
+    /// PostgreSQL — the "connector-free" capability emitted broken DDL rather than portable DDL. So the thing
+    /// to pin is now the refusal, and that it names what to pass: § SH-H037 requires a guard's door to exist
+    /// and be checked, not merely asserted in a message nobody executes.
+    /// </para>
+    /// </remarks>
     [Fact]
-    public void The_no_connector_fallback_was_already_correct_and_stays_correct()
+    public void A_null_connector_is_refused_and_the_message_names_what_to_pass()
     {
         using var conn = OpenConnection();
-        CreateOrdersTable(conn);
 
-        new SqlSchemaBuilder(conn, null, null)
-            .CreateIndex("Orders", "ux_fallback")
-            .WithField("TenantGuid").WithField("Number")
-            .Unique()
-            .Build();
+        Action act = () => new SqlSchemaBuilder(conn, null, null!);
 
-        IndexSql(conn, "ux_fallback").Should().Contain("UNIQUE");
+        act.Should().Throw<ArgumentNullException>()
+           .WithMessage("*connector*")
+           .WithMessage("*wrong on MySQL and PostgreSQL*",
+               "the refusal has to say why the removed fallback was not a usable alternative")
+           .WithMessage("*SqlMigrationRunner*",
+               "and where the caller can get a connector — a guard that only says no gets reached around");
+    }
 
-        var tenant = Guid.NewGuid().ToString();
-        Insert(conn, tenant, "FV1");
-        Action duplicate = () => Insert(conn, tenant, "FV1");
-        duplicate.Should().Throw<SqliteException>();
+    /// <summary>The same requirement one layer up, on the only door into the schema builder.</summary>
+    [Fact]
+    public void A_migration_context_also_requires_a_connector()
+    {
+        using var conn = OpenConnection();
+
+        Action act = () => new Birko.Data.Migrations.SQL.Context.SqlMigrationContext(conn, null, "sqlite", null!);
+
+        act.Should().Throw<ArgumentNullException>(
+            "SqlMigrationContext's optional connector argument was the only way to reach the deleted "
+          + "fallbacks, so requiring it there is what closes the door rather than moving it");
     }
 }
