@@ -81,6 +81,15 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
     {
         public string? Name { get; set; }
         public int Amount { get; set; }
+
+        /// <summary>
+        /// UTC-kinded, deliberately (TASK-256). This model previously carried <b>no DateTime property at
+        /// all</b>, so this suite passed by avoiding the shape every real consumer has — the framework's own
+        /// <c>AbstractLogModel</c> initialises <c>CreatedAt</c>/<c>UpdatedAt</c> from
+        /// <see cref="DateTime.UtcNow"/>. Against the unfixed connector the binary COPY refuses a
+        /// <c>Kind=Utc</c> value outright, so every bulk test below now fails without the fix.
+        /// </summary>
+        public DateTime Ts { get; set; }
     }
 
     private sealed class BulkRowMapping : IModelMapping<BulkRow>
@@ -90,6 +99,7 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
             map.ToTable(TableName).HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
             map.Property(x => x.Name).HasPrecision(100);
             map.Property(x => x.Amount);
+            map.Property(x => x.Ts);
         }
     }
 
@@ -133,8 +143,17 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         return store;
     }
 
+    /// <summary>
+    /// <c>Ts</c> is <see cref="DateTimeKind.Utc"/> — see <see cref="BulkRow.Ts"/> for why that matters.
+    /// </summary>
     private static List<BulkRow> Rows(params string[] names)
-        => names.Select((n, i) => new BulkRow { Guid = Guid.NewGuid(), Name = n, Amount = i + 1 }).ToList();
+        => names.Select((n, i) => new BulkRow
+        {
+            Guid = Guid.NewGuid(),
+            Name = n,
+            Amount = i + 1,
+            Ts = new DateTime(2026, 3, 15, 10, 30, 0, DateTimeKind.Utc),
+        }).ToList();
 
     /// <summary>
     /// Counts on a connection of its own, so the answer is what is <b>committed</b> — never what some
