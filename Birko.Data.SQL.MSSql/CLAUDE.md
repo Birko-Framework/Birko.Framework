@@ -92,6 +92,15 @@ Common SQL Server to .NET type mappings:
 - `DATETIME2` → `DateTime`
 - `BIT` → `bool`
 
+
+**`[UtcField]` and the two meanings of a `DateTime` column (TASK-256 / TASK-263).** A plain Birko `DateTime`
+column is a **wall clock** — the value's components as supplied, `Kind` not persisted, reads back
+`Unspecified`. Marking the property `[UtcField]` makes it an **instant**: `DbType.DateTimeOffset`, and it reads
+back `Kind=Utc` on every provider. Both coexist per property on one entity.
+Here that renders as `DATETIMEOFFSET`, which stores the offset — so the instant is exact in the column
+itself. **The read must not use `GetDateTime`:** SqlClient throws `InvalidCastException` for it on a
+`datetimeoffset` column, which is why `UtcDateTimeField.Read` uses `GetFieldValue<DateTimeOffset>`.
+
 ## Dependencies
 - Birko.Data.Core
 - Birko.Data.Stores
