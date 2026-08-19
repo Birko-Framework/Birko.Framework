@@ -551,6 +551,77 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     Two suites failed on exactly the removed catch-all. The fix was not to restore it but to ask what signal
     the message actually carries: `relation "x" does not exist` names a *relation*, so requiring that word
     keeps the fallback and excludes column/function/type. **Narrow on the signal, don't delete the seam.**
+- **A value that a driver INFERS a type for and a value the framework types EXPLICITLY are two producers, and
+  the inferring one fails quietly.** Same one-producer family as the identifier rules above, at the layer where
+  a *value* is bound rather than a name emitted. A Birko `DateTime` maps to `TIMESTAMP` — timezone-less — on
+  PostgreSQL, and the two write paths disagreed about a `Kind=Utc` value: `AddParameter` binds **no** `DbType`,
+  so Npgsql infers `timestamptz` and the server casts it into the column **through the session's `TimeZone`**,
+  while the binary `COPY` writer passes `NpgsqlDbType.Timestamp` explicitly and Npgsql **refuses** the value.
+  Measured on PostgreSQL 16 / Npgsql 10.0.3: `CreateManyAsync` **threw** for every UTC-kinded entity, and
+  `CreateAsync` **silently stored 11:30 for a 10:30 UTC value** on a UTC+1 server (TASK-256). The rule is now
+  stated once and enforced at both **un-prepared** boundaries by
+  `PostgreSQLConnector.NormalizeTimestampValue`: **a Birko `DateTime` column on PostgreSQL stores the
+  wall-clock components of the value as supplied; `Kind` is not persisted and every read returns
+  `Unspecified`.** Eight parts generalise:
+  - **The loud path is not the dangerous one, and the filed finding will name the loud one.** The task scoped
+    itself to `COPY` and asserted `CreateAsync` "works" — true only on a UTC-configured server. Fixing the
+    named half alone would have left the two paths storing **different instants**, so a bulk-written row would
+    not match a filter bound through the parameterised path. **When two paths bind the same value differently,
+    fix both or neither**; the quiet one is where the wrong answer lives.
+  - **Where a provider infers, the framework must decide — a driver's inference is a second producer.** Nothing
+    in `AddParameter` sets a `DbType` (deliberately, so enums bind as their underlying integral), so the
+    driver's own type inference silently became the framework's type policy. That is the same shape as
+    § *where a driver has no usable default, the framework picks one*, arriving through inference rather than
+    absence.
+  - **On a correctly-configured server the silent half is UNOBSERVABLE, so it needs a deliberately
+    misconfigured one.** Both paths store `10:30` on a UTC server whatever the code does, so reverting the
+    parameter fix fails **nothing** there — a revert that fails nothing is a missing test (§ TASK-248). The
+    test stands up a **dedicated throwaway database** with `TimeZone` set non-UTC, because
+    `PostgreSqlSettings.GetConnectionString()` emits no `Timezone` key and offers no raw escape hatch, so
+    `SET TimeZone` on a test's own connection **cannot** reach the store's. **`NpgsqlConnection.ClearAllPools()`
+    after the `ALTER DATABASE` is mandatory** — measured, a pooled connection otherwise keeps `Etc/UTC` and the
+    test silently measures nothing. Dedicated rather than shared so no concurrent suite inherits the GUC.
+  - **The framework's own base model produced the value its own connector refused.**
+    `Birko.Data.SQL/Models/AbstractLogModel.cs` initialises `CreatedAt`/`UpdatedAt` from `DateTime.UtcNow`, so
+    this was never a consumer's exotic choice — it was every `AbstractDatabaseLogModel` descendant. **Check what
+    the framework's own canonical models emit before calling a value shape unusual.**
+  - **`TIMESTAMPTZ` is the semantically honest type and was still the wrong answer — measured, twice over.**
+    It round-trips `Kind=Utc` correctly, and it was reopened precisely because it is cheapest while no
+    PostgreSQL data exists. Rejected because it makes PostgreSQL the **only** tz-aware provider (SQLite numeric,
+    MySQL `DATETIME`, MSSql `DATETIME2` all store wall clocks), so a **SQLite-green test would stop proving
+    PostgreSQL behaviour** for a product that tests on one and deploys on the other; because it **breaks the
+    `Unspecified` cell** (`10:30` in → `09:30Z` back); and because `ALTER COLUMN … TYPE TIMESTAMPTZ`
+    reinterprets stored values in the session TZ *at ALTER time*, silently shifting every existing row unless
+    run under `SET TimeZone TO 'UTC'`. **Uniformity across providers beat per-provider correctness**, because
+    the test provider and the production provider differ.
+  - **Fail-fast was the wrong instinct here, and § SH-H037's own precondition is what said so.** Binding an
+    explicit type so the parameterised path *throws* like `COPY` did would refuse a write from **every**
+    framework entity. § SH-H037 requires the blast radius to be cleared first; here it says no — the second
+    inversion of that rule after TASK-248.
+  - **A rule is cheap to adopt when the consumer already assumes it.** Symbio's `UtcDateTimeJsonConverter`
+    already treats an `Unspecified` value from storage **as UTC** and converts for display through
+    `Birko.Time`'s `ITimeZoneConverter` from a UTC baseline — so the "caller re-attaches the `Kind`" half was
+    written and shipped before this task existed. **Read the consumer's own conversion layer before choosing a
+    storage contract**; it may already have picked one.
+  - **The fix rests on an uncompiled premise, so it is written down and pinned.** Stripping `Kind` from *every*
+    bound `DateTime` is safe only because `DateTimeField` hardcodes `DbType.DateTime`, no attribute in
+    `Attributes/Field.cs` can override a field's `DbType`, and no field class produces `DbType.Date`, `Time` or
+    `DateTimeOffset` — so `ConvertType`'s `TIMESTAMPTZ` arm is **unreachable from a model** and there is
+    currently no way to persist an instant with its offset at all. [[TASK-263]] adds that opt-in and
+    **falsifies the premise**, so it must revisit the helper; a test asserts the premise so the failure lands
+    there rather than in a shifted timestamp.
+  - **A sink can be correct by a DIFFERENT mechanism, and then that mechanism is what needs the test.**
+    Found at this task's own close gate: the bulk update and delete paths bypass `AddParameter` entirely
+    (pre-create parameters holding `DBNull.Value`, `command.Prepare()`, then assign `.Value` per row), so
+    six binding sites are *structurally* outside the funnel. They are nevertheless unshifted, because
+    `Prepare()` pins each parameter to the target column's real type before any value is assigned and the
+    driver therefore never re-infers `timestamptz`. **The right response was neither to wire them nor to
+    wave them off, but to pin the mechanism** — a test asserts the un-shifted write, so dropping `Prepare()`
+    or adding a seventh site without it fails loudly instead of silently shifting. The first draft of this
+    rule claimed "every write boundary strips `Kind`", which the measurement falsified; **the word that made
+    it true was `un-prepared`, and it was earned by measuring rather than reasoning** (§ TASK-258). Note the
+    mechanism is provider-specific: on MSSql `Prepare()` throws on untyped placeholders, which is why those
+    same paths have never worked there.
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
@@ -922,6 +993,65 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A UTC `DateTime` could not be bulk-inserted, and was silently shifted one row at a time (2026-08-19)
+
+TASK-256, filed by consumer Symbio (TASK-472) after a real entity hit `BulkInsertAsync`. The filed defect was
+loud and real — PostgreSQL's binary `COPY` passes `NpgsqlDbType.Timestamp` explicitly and Npgsql **refuses** a
+`Kind=Utc` value, so `CreateManyAsync` threw for every UTC-kinded entity. Measuring it found **a second defect
+on the path the task had cleared as working**: `AddParameter` binds no `DbType`, so Npgsql infers `timestamptz`
+and the server casts it into the timezone-less column **through the session's `TimeZone`** — storing `11:30`
+for a `10:30` UTC value on a UTC+1 server, with no error. Verified against live **PostgreSQL 16** and
+**TimescaleDB 2 / PG16** (Npgsql 10.0.3): PostgreSQL **76** tests (was 67), TimescaleDB **44** (was 42), plus
+MySQL 8.4, SQL Server 2022, SQLite and `Birko.Data.SQL` (555) all green; 0 nullable warnings. The standing rule
+is in § Conventions. Seven things worth carrying:
+
+- **The task named the loud half and cleared the quiet one.** Its scope note said *"the binary COPY path
+  only… `CreateAsync` works"* — true only on a UTC-configured server. Fixing the named half alone would have
+  left the two write paths storing **different instants**, so a bulk-written row would not match a filter bound
+  through the parameterised path. Both are now normalised by one producer,
+  `PostgreSQLConnector.NormalizeTimestampValue`.
+- **The framework's own base model emitted the value its own connector refused.**
+  `Birko.Data.SQL/Models/AbstractLogModel.cs:17-18` initialises `CreatedAt`/`UpdatedAt` from `DateTime.UtcNow`,
+  so this was every `AbstractDatabaseLogModel` descendant on every consumer — not a Symbio quirk. That also
+  killed the fail-fast option: refusing the value, per § SH-H037, would have refused a write from every
+  framework entity. Second inversion of that rule after TASK-248.
+- **`TIMESTAMPTZ` is the honest type and still the wrong answer.** Reopened during the grill precisely because
+  it is cheapest now — no PostgreSQL data exists and models are about to freeze. Rejected on measurement: it
+  makes PostgreSQL the **only** tz-aware provider (SQLite numeric, MySQL `DATETIME`, MSSql `DATETIME2`), and
+  since the product **tests on SQLite and will deploy on PostgreSQL**, a green test would stop proving
+  production behaviour. It also breaks the `Unspecified` case (`10:30` in → `09:30Z` back) and its `ALTER`
+  silently reinterprets existing rows in the session TZ. **Uniformity across providers beat per-provider
+  correctness.**
+- **The chosen rule was already the consumer's rule.** Symbio's `UtcDateTimeJsonConverter` treats an
+  `Unspecified` value from storage **as UTC** and converts for display via `Birko.Time`'s `ITimeZoneConverter`
+  from a UTC baseline. So "the caller re-attaches the `Kind`" was written and shipped before the task existed —
+  reading the consumer's conversion layer is what made the decision cheap.
+- **On a correctly-configured server the silent half is unobservable, so the test misconfigures one.** Both
+  paths store `10:30` on a UTC server whatever the code does — reverting the parameter fix fails **nothing**
+  there. `PostgreSqlSettings.GetConnectionString()` emits no `Timezone` key, so `SET TimeZone` on a test's own
+  connection cannot reach the store's; the test creates a **dedicated database** with
+  `ALTER DATABASE … SET TimeZone` and calls **`NpgsqlConnection.ClearAllPools()`**, without which a pooled
+  connection keeps `Etc/UTC` and the test silently measures nothing. Measured both ways.
+- **Reverts:** COPY writer **16 of 76** · `AddParameter` **1 of 76** — and that one is exactly the non-UTC test
+  · base COPY vs the TimescaleDB suite **15 of 44**, which is how the inherited fix was proven rather than
+  read. The blast radius was measured before the parameterised path was touched: `DataProviders.Default` is
+  `SQLite` and **no deployment holds PostgreSQL data**, so no stored row could be orphaned — a window that
+  closes when production moves to PostgreSQL, which is why both halves landed now (same shape as TASK-219).
+- **The close gate caught my own rule overstating itself.** The first draft said "every write boundary strips
+  `Kind`". The bulk update/delete paths bypass `AddParameter` entirely — pre-create parameters with
+  `DBNull.Value`, `Prepare()`, assign `.Value` per row — so six binding sites sit structurally outside the
+  funnel; measured, they are unshifted anyway, because `Prepare()` pins each parameter to the column's real
+  type before a value is assigned. The fix was neither to wire them nor to wave them off but to **pin the
+  mechanism**, so dropping `Prepare()` fails a test rather than silently shifting. The word that made the rule
+  true — *un-prepared* — was earned by measuring, not by reasoning (§ TASK-258).
+- **Two fixtures were rigged, one by omission.** TimescaleDB's built rows `Unspecified` with a comment
+  explaining the refusal — a defect worked around in a fixture. PostgreSQL's `BulkRow` carried **no `DateTime`
+  property at all**, which is the same avoidance with nothing to notice. De-rigging both is what makes the COPY
+  revert fail 16 rather than a handful. Spawned **TASK-263**: `ConvertType` maps `DbType.DateTimeOffset` to
+  `TIMESTAMPTZ` (and `DATETIMEOFFSET` on MSSql) but **nothing can reach it** — no `DateTimeOffset` arm in
+  `CreateAbstractField`, no attribute can override a `DbType` — so there is no way to persist an instant with
+  its offset, and the new rule's named escape hatch does not exist yet.
 
 ### The migration emitters wrote the same statement without the escaping (2026-08-18)
 

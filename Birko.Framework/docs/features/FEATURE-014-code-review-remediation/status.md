@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-18
+generated: 2026-08-19
 ---
 
 # Code review — audit remediation — Status
@@ -141,8 +141,9 @@ generated: 2026-08-18
 - [x] TASK-253 The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel
 - [ ] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
 - [ ] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
-- [ ] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it
+- [x] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it
 - [ ] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
+- [ ] TASK-263 There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable
 - [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
 - [ ] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
 - [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained

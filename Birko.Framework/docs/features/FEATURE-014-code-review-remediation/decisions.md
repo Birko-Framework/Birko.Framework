@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]], [[TASK-255]], [[TASK-259]], [[TASK-260]], [[TASK-261]], [[TASK-262]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]], [[TASK-255]], [[TASK-259]], [[TASK-260]], [[TASK-261]], [[TASK-262]], [[TASK-256]], [[TASK-257]], [[TASK-258]], [[TASK-263]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -393,3 +393,34 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   attacked an argument whose payload made the batch's first statement fail, PostgreSQL aborted the batch, and it
   reported green against code with the escaping removed. Moved to an argument where the leading statement stays
   valid, it proves the emitters were demonstrably injectable — `Pwned` is created — rather than theoretically so.
+- 2026-08-19 — **D11 gains [[TASK-263]]**, spawned from [[TASK-256]]'s planning grill. Inside D11's scope, no
+  new decision row. TASK-256 settled that a Birko `DateTime` column on PostgreSQL stores a timezone-less
+  wall clock and needs an escape hatch for a value whose **offset must survive** — and writing that rule
+  exposed the hatch as mapped but unreachable. Every connector already answers `DbType.DateTimeOffset`, two
+  of them with a genuinely tz-aware type (PostgreSQL `TIMESTAMPTZ`, MSSql `DATETIMEOFFSET`), and
+  `DbTypeToNpgsqlDbType` maps it for the binary COPY path too — but `CreateAbstractField` has **no
+  `DateTimeOffset` arm**, so such a property throws `FieldAttributeException` at table load (SH-H037), and
+  **no attribute can override a field's `DbType`**. `DbType.Date` and `DbType.Time` are unreachable the same
+  way. Spawned rather than folded in: TASK-256's six criteria are all about the `Kind=Utc` binding defect,
+  while this is a new capability with a four-provider fallback matrix of its own. It is also **load-bearing
+  for TASK-256** — that fix normalises every bound `DateTime` on the premise that none can target a
+  `timestamptz` column, which a tz-aware arm falsifies, so TASK-263 must revisit
+  `PostgreSQLConnector.NormalizeTimestampValue`. Recorded as § SH-H037's quietest violation: a refusal whose
+  named opt-out does not exist yet.
+- 2026-08-19 — **D11 backfilled with [[TASK-256]], [[TASK-257]], [[TASK-258]]**, which were created on
+  2026-08-18 as epic-direct tasks but never added to the row. A data correction, not a scope change — noticed
+  while appending TASK-263 to the same row.
+- 2026-08-19 — **[[TASK-256]] closed `done`** (production `4314c42`). Inside D11's scope, no new decision row.
+  Recorded the rule the absence of which was the root cause: **a Birko `DateTime` column on PostgreSQL stores
+  the wall-clock components of the value as supplied; `Kind` is not persisted and every read returns
+  `Unspecified`.** The filed defect was the loud half — the binary `COPY` refusing a `Kind=Utc` value — and
+  measuring it found the path the task had *cleared as working* was silently shifting: `AddParameter` binds no
+  `DbType`, so Npgsql infers `timestamptz` and the server casts through the session `TimeZone`, storing 11:30
+  for a 10:30 UTC value. Both halves fixed, because fixing one leaves the two paths storing different instants.
+  `TIMESTAMPTZ` was reopened (cheapest now — no PostgreSQL data exists, models are freezing) and re-rejected on
+  measurement: it makes PostgreSQL the only tz-aware provider, and the product tests on SQLite while deploying
+  on PostgreSQL. Two things worth carrying past this task: the UTC-kinded value is the **framework's own**
+  `AbstractLogModel` default rather than a consumer quirk, which is also what ruled out fail-fast; and the
+  close gate caught the rule **overstating itself** — "every write boundary" was falsified by the bulk
+  update/delete paths, which bypass the funnel and are correct anyway because `Prepare()` pins the parameter
+  type, so the word *un-prepared* was earned by measurement and the `Prepare()` mechanism now has its own test.

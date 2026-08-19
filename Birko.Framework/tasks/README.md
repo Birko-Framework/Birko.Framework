@@ -30,7 +30,7 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-256]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -41,10 +41,10 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 92    |
+| done         | 1     | 22      | 93    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 28 · P2 88 · P3 10**
+Todo by priority: **P0 0 · P1 27 · P2 89 · P3 10**
 
 > Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
 > **222 tasks** (117 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
@@ -300,10 +300,14 @@ Todo by priority: **P0 0 · P1 28 · P2 88 · P3 10**
     - [ ] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014
     - [x] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel · FEATURE-014
     - [ ] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door · FEATURE-014
+    - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
+    - [ ] [TASK-257](EPIC-014-code-review-remediation/TASK-257-mssql-maps-unlengthed-strings-to-text.md) On MSSql an unlengthed `string` column becomes `TEXT`, so no predicate on it works · FEATURE-014
+    - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned`'s "preserves each provider's policy" is an argument, not a measurement · FEATURE-014
     - [ ] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
     - [ ] [TASK-261](EPIC-014-code-review-remediation/TASK-261-getchunkinterval-reads-a-column-timescaledb-2-removed.md) `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0 · FEATURE-014
     - [ ] [TASK-262](EPIC-014-code-review-remediation/TASK-262-migration-emitters-assume-framework-created-objects.md) The migration emitters' identifier rules assume this framework created the object · FEATURE-014
+    - [ ] [TASK-263](EPIC-014-code-review-remediation/TASK-263-no-way-to-persist-an-instant-with-its-offset.md) There is no way to persist an instant with its offset — the tz-aware column type is mapped but unreachable · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (10/22 tasks done)
   - **STORY-029** Tier 0 — single-source design tokens + multi-target generator — done (0/0) (done)
   - **STORY-030** Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0) (done)
