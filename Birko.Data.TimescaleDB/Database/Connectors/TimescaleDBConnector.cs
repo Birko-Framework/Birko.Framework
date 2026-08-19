@@ -228,10 +228,46 @@ namespace Birko.Data.SQL.Connectors
                 }, (command) => command.ExecuteNonQueryAsync(ct), true, ct, inOwnTransaction: false).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not System.OperationCanceledException
-                                       && ex.InnerException is System.OperationCanceledException)
+                                       && ct.IsCancellationRequested
+                                       && FindCancellation(ex) != null)
             {
-                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(FindCancellation(ex)!).Throw();
             }
+        }
+
+        /// <summary>
+        /// Walks <see cref="Exception.InnerException"/> to the first <see cref="System.OperationCanceledException"/>,
+        /// or null if there is none.
+        /// </summary>
+        /// <remarks>
+        /// <b>Walks the chain rather than checking one level, and the caller pairs it with
+        /// <c>ct.IsCancellationRequested</c>.</b> Both halves close a hole found at TASK-253's close-gate review:
+        /// <list type="bullet">
+        /// <item><description>
+        /// <c>OnException</c> is a <b>public event</b> and consumers subscribe to it. A handler that wraps the
+        /// connector's own wrapper puts the cancellation at depth 2 or deeper, so a one-level check silently
+        /// stops matching and the caller's <c>catch (OperationCanceledException)</c> breaks — the exact failure
+        /// this guard exists to prevent, reappearing only under a consumer's configuration.
+        /// </description></item>
+        /// <item><description>
+        /// Without the token check, an <see cref="System.OperationCanceledException"/> raised inside the try by
+        /// something <i>else</i> — an <c>OnExecute</c> subscriber's own timeout, say — would be re-thrown as
+        /// this call's cancellation. That is a wrong answer, not a lost one: a caller writing
+        /// <c>catch (OperationCanceledException) when (ct.IsCancellationRequested)</c> would see a cancellation
+        /// that never happened.
+        /// </description></item>
+        /// </list>
+        /// </remarks>
+        private static System.OperationCanceledException? FindCancellation(Exception? ex)
+        {
+            for (var current = ex; current != null; current = current.InnerException)
+            {
+                if (current is System.OperationCanceledException oce)
+                {
+                    return oce;
+                }
+            }
+            return null;
         }
 
         /// <summary>
