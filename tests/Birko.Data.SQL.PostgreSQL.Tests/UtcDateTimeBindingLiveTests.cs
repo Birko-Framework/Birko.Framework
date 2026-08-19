@@ -383,10 +383,23 @@ public class UtcDateTimeBindingLiveTests : IDisposable
     // ============================================================ the premise the fix rests on
 
     /// <summary>
-    /// Pins the premise <c>NormalizeTimestampValue</c> depends on: a <c>DateTime</c> property has exactly one
-    /// mapping, so no bound <c>DateTime</c> can be targeting a <c>timestamptz</c> column and stripping Kind
-    /// unconditionally is safe. TASK-263 adds a timezone-aware opt-in and will falsify this — at which point
-    /// this test should fail and send the reader to that helper.
+    /// Pins the premise <c>NormalizeTimestampValue</c> depends on — <b>as narrowed by TASK-263</b>.
+    ///
+    /// <para>
+    /// TASK-256 wrote this to assert that a <c>DateTime</c> property has exactly <i>one</i> mapping, so no bound
+    /// <c>DateTime</c> could target a <c>timestamptz</c> column and stripping <c>Kind</c> unconditionally was
+    /// safe. TASK-263 falsified that by adding <c>[UtcField]</c>, which maps a <c>DateTime</c> property to
+    /// <c>DbType.DateTimeOffset</c> and therefore to <c>TIMESTAMPTZ</c>. The assertion below still holds, and
+    /// still matters, but it now means something narrower: an <b>unmarked</b> <c>DateTime</c> maps to
+    /// <c>DbType.DateTime</c>.
+    /// </para>
+    /// <para>
+    /// What keeps <c>NormalizeTimestampValue</c> correct after TASK-263 is not this mapping but the CLR type of
+    /// the bound value: <c>UtcDateTimeField.Write</c> returns a <c>DateTimeOffset</c>, which the helper's
+    /// <c>is DateTime</c> test does not match. The two-way rule is asserted in
+    /// <c>Birko.Data.SQL.Tests.DataBase.UtcFieldMappingTests</c>, and the instant that would be wrong if this
+    /// composition broke is asserted in <c>UtcFieldInstantLiveTests</c>.
+    /// </para>
     /// </summary>
     [Fact]
     public void A_datetime_property_maps_only_to_DbType_DateTime()
@@ -396,7 +409,8 @@ public class UtcDateTimeBindingLiveTests : IDisposable
 
         field.Should().NotBeNull();
         field!.Type.Should().Be(DbType.DateTime,
-            "if a DateTime property can reach DbType.DateTimeOffset (TIMESTAMPTZ), then stripping Kind from "
-          + "every bound DateTime would discard the offset that opt-in exists to preserve — see TASK-263");
+            "an UNMARKED DateTime property is a wall clock. A [UtcField] one reaches DbType.DateTimeOffset "
+          + "(TASK-263) and is safe from the Kind-stripper only because its Write binds a DateTimeOffset — so "
+          + "if this ever changes for an unmarked property, that stripper is discarding a real offset");
     }
 }
