@@ -175,9 +175,19 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
     }
 
     /// <summary>
-    /// Rows a month apart, so with a one-day chunk interval each lands in a chunk of its own. Kind is
-    /// Unspecified: the mapped column is <c>timestamp without time zone</c> and Npgsql refuses to write a
-    /// UTC-kinded DateTime to it.
+    /// Rows a month apart, so with a one-day chunk interval each lands in a chunk of its own.
+    ///
+    /// <para>
+    /// <b>Kind is Utc, and that is the point (TASK-256).</b> This previously built its rows
+    /// <c>Unspecified</c> with a comment explaining that "the mapped column is <c>timestamp without time
+    /// zone</c> and Npgsql refuses to write a UTC-kinded DateTime to it" — a defect worked around in the
+    /// fixture rather than fixed, so this suite passed by avoiding the shape every real consumer has. The
+    /// framework's own <c>AbstractLogModel</c> initialises <c>CreatedAt</c>/<c>UpdatedAt</c> from
+    /// <see cref="DateTime.UtcNow"/>, so UTC-kinded is the normal case, not the exotic one.
+    /// <c>TimescaleDBConnector</c> inherits the fix from <c>PostgreSQLConnector</c> — it overrides neither
+    /// <c>AddParameter</c> nor the bulk methods — and this fixture is what proves the inheritance rather
+    /// than assuming it.
+    /// </para>
     /// </summary>
     private static List<BulkRow> Rows(params string[] names)
         => names.Select((n, i) => new BulkRow
@@ -185,7 +195,7 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
             Guid = Guid.NewGuid(),
             Name = n,
             Amount = i + 1,
-            Ts = new DateTime(2026, 1 + i, 1, 0, 0, 0, DateTimeKind.Unspecified),
+            Ts = new DateTime(2026, 1 + i, 1, 0, 0, 0, DateTimeKind.Utc),
         }).ToList();
 
     private static int Committed(string? predicate = null)
@@ -604,6 +614,61 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         IsHypertableNow().Should().BeTrue(
             "'Ts' must be folded to 'ts' to match pg_attribute.attname, and the table must carry its own "
           + "identifier quotes to resolve as a regclass");
+    }
+
+    // ================================================ TASK-256: the inherited UTC DateTime binding
+
+    /// <summary>
+    /// A UTC-kinded value bulk-inserted over a real hypertable stores its <b>UTC wall clock</b>, unshifted.
+    ///
+    /// <para>
+    /// <c>TimescaleDBConnector</c> overrides neither <c>AddParameter</c> nor <c>BulkInsert*</c>, and
+    /// <c>DbTypeToNpgsqlDbType</c> is <c>private static</c> on the base — so it inherits the whole of
+    /// TASK-256's fix. <i>"It inherits, so it is covered"</i> is exactly the claim TASK-472 was written to
+    /// disprove, so this asserts the stored value rather than trusting the class hierarchy, and it does so on
+    /// a hypertable because the time column here is also the partitioning column: a shifted timestamp would
+    /// route the row into a different chunk.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task Async_bulk_create_of_a_utc_kinded_row_stores_its_utc_wall_clock()
+    {
+        if (!RequireServer()) return;
+        FreshHypertable();
+
+        await AsyncStore().CreateAsync(Rows("utc"), null, CancellationToken.None);
+
+        using var conn = new NpgsqlConnection(Settings().GetConnectionString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        // Column bare — the base-table DDL emits column definitions unquoted, so PostgreSQL folds them.
+        cmd.CommandText = $"SELECT ts::text FROM \"{TableName}\" ORDER BY ts LIMIT 1";
+        var stored = cmd.ExecuteScalar()?.ToString();
+
+        stored.Should().Be("2026-01-01 00:00:00",
+            "Rows() supplies DateTimeKind.Utc; the inherited fix must store that wall clock verbatim. Before "
+          + "TASK-256 the binary COPY threw ArgumentException on a UTC-kinded value, which is why this "
+          + "fixture used to build its rows Unspecified");
+    }
+
+    /// <summary>
+    /// The value survives the round trip through the store, with <c>Kind</c> documented as not surviving —
+    /// the same contract the PostgreSQL suite pins, asserted here because this store is a different type.
+    /// </summary>
+    [Fact]
+    public async Task Async_bulk_create_of_a_utc_kinded_row_round_trips_as_unspecified()
+    {
+        if (!RequireServer()) return;
+        FreshHypertable();
+        var store = AsyncStore();
+
+        await store.CreateAsync(Rows("utc"), null, CancellationToken.None);
+        var read = (await store.ReadAsync(CancellationToken.None)).OrderBy(x => x.Ts).First();
+
+        read.Ts.Should().Be(new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Unspecified));
+        read.Ts.Kind.Should().Be(DateTimeKind.Unspecified,
+            "a TIMESTAMP column carries no offset, so Kind cannot round-trip — pinning it is what stops a "
+          + "later switch to TIMESTAMPTZ landing silently here");
     }
 
     private static bool IsHypertableNow()
