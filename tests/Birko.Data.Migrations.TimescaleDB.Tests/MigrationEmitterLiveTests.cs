@@ -102,6 +102,9 @@ public class MigrationEmitterLiveTests : IDisposable
     private static int PolicyCount(string proc, string table) => int.Parse(Scalar(
         $"SELECT COUNT(*) FROM timescaledb_information.jobs WHERE proc_name = '{proc}' AND hypertable_name = '{table}'"));
 
+    private static int ChunkCount(string table) => int.Parse(Scalar(
+        $"SELECT COUNT(*) FROM timescaledb_information.chunks WHERE hypertable_name = '{table}'"));
+
     /// <summary>
     /// A real migration context over a real connection, exactly as <c>TimescaleDBMigrationRunner</c> builds
     /// one — that is what carries the connector the emitters resolve their identifiers through.
@@ -427,5 +430,151 @@ public class MigrationEmitterLiveTests : IDisposable
             .Which.SqlState.Should().Be("42703",
                 "column \"time\" does not exist — no framework-created table has one, because column "
               + "definitions are emitted bare and every Birko entity is PascalCase (TASK-255)");
+    }
+
+    // ================================================================ chunk routing
+
+    /// <summary>
+    /// <b>The proof that the hypertable is doing a hypertable's job, not merely appearing in a catalogue
+    /// view.</b> TASK-253's human test plan is <c>N/A</c> on the grounds that the evidence is "a row in
+    /// <c>timescaledb_information.hypertables</c> and a chunk count &gt; 1" — the row was asserted by the
+    /// tests above, and this is the second half, added at the close gate rather than left as a claim.
+    /// <para>
+    /// It matters because the two failures this task fixed were both <i>silent</i>: a bare regclass produced no
+    /// hypertable while a plain PostgreSQL table served reads and writes perfectly well. A plain table accepts
+    /// these three inserts and reports one "chunk" count of zero — so partitioning actually happening is the
+    /// thing a plain table cannot fake.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void CreateHypertable_routesRowsIntoSeparateChunks()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            new Probe().Hypertable(context, Table, "Ts", "1 day");
+        }
+
+        IsHypertable(Table).Should().BeTrue("the premise — everything below is vacuous over a plain table");
+        ChunkCount(Table).Should().Be(0, "no rows yet, so no chunks");
+
+        // Three rows a month apart, against a one-day chunk interval: one chunk each.
+        Exec($"INSERT INTO \"{Table}\" (Ts, DeviceId, Value) VALUES "
+           + "('2026-01-15T00:00:00Z', 1, 1.0), "
+           + "('2026-02-15T00:00:00Z', 2, 2.0), "
+           + "('2026-03-15T00:00:00Z', 3, 3.0)");
+
+        ChunkCount(Table).Should().Be(3,
+            "chunk routing is what a hypertable adds over a plain table, and it is exactly what was silently "
+          + "absent for every PascalCase entity before this fix");
+        Scalar($"SELECT COUNT(*) FROM \"{Table}\"").Should().Be("3", "and the rows are still readable");
+    }
+
+    // ================================================================ containment, against the server
+
+    /// <summary>
+    /// <b>The escaping proved by the parser rather than by a string assertion.</b> The offline suite asserts a
+    /// payload comes back in its escaped form; only the server says whether PostgreSQL then reads the statement
+    /// as <i>one</i> statement. Added at TASK-253's close gate during the security pass.
+    /// <para>
+    /// <b>The payload has to leave a VALID leading statement, and getting that wrong is how this test nearly
+    /// shipped useless.</b> Its first draft attacked the <i>table</i> argument of <c>create_hypertable</c>, so
+    /// the injected batch read
+    /// <c>create_hypertable('Rank"'); CREATE TABLE "Pwned" …</c> — whose first statement fails on an absurd
+    /// relation name. Npgsql sends a batch as one command and PostgreSQL aborts the whole batch on the first
+    /// error, so the appended statement never ran and the test <b>passed over unescaped code</b>. Measured, not
+    /// theorised: with escaping removed it reported green.
+    /// </para>
+    /// <para>
+    /// So the payload goes into the <c>INTERVAL</c> argument of <c>add_retention_policy</c> against the real
+    /// hypertable, leaving <c>add_retention_policy('"MigMetrics"', INTERVAL '30 days')</c> — valid — before the
+    /// <c>;</c>. That is the shape a real attacker would pick, and it is the shape that discriminates.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void AnEmitterContainsAPayloadThatLeavesAValidLeadingStatement()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        Exec("DROP TABLE IF EXISTS \"Pwned\" CASCADE");
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            var probe = new Probe();
+            probe.Hypertable(context, Table, "Ts", "1 day");
+            IsHypertable(Table).Should().BeTrue("the premise: the leading statement must be able to succeed");
+
+            // Completes a valid INTERVAL, closes the literal, appends a statement, comments out the tail.
+            const string payload = "30 days'); CREATE TABLE \"Pwned\" (x INTEGER); --";
+
+            Attempt(() => probe.Retention(context, Table, payload));
+        }
+
+        Scalar("SELECT to_regclass('\"Pwned\"') IS NULL").Should().Be("True",
+            "the payload is data inside a literal. If Pwned exists, the interval argument let a caller append a "
+          + "statement after a statement that succeeded — which is what this emitter did before TASK-253, with "
+          + "no escaping whatsoever");
+    }
+
+    /// <summary>
+    /// Breadth over every emitter and every caller-supplied argument. Each payload here makes its own leading
+    /// statement invalid, so PostgreSQL aborts the batch regardless of escaping — which is precisely why this
+    /// test <b>cannot stand alone</b> and why the one above exists. Kept because it exercises all nine emitters
+    /// against a real parser and would catch a malformed statement, a wrong argument position, or an escape
+    /// that corrupts a name; it is breadth, not the containment proof.
+    /// </summary>
+    [Fact]
+    public void EveryEmitter_survivesAPayloadInEveryArgument()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        Exec("DROP TABLE IF EXISTS \"Pwned\" CASCADE");
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            var probe = new Probe();
+            probe.Hypertable(context, Table, "Ts", "1 day");
+
+            const string payload = "Rank\"'); CREATE TABLE \"Pwned\" (x INTEGER); --";
+
+            Attempt(() => probe.Hypertable(context, payload, "Ts"));
+            Attempt(() => probe.Hypertable(context, Table, payload));
+            Attempt(() => probe.Hypertable(context, Table, "Ts", payload));
+            Attempt(() => probe.HypertableWithSpace(context, payload, "Ts", "DeviceId", 4));
+            Attempt(() => probe.HypertableWithSpace(context, Table, "Ts", payload, 4));
+            Attempt(() => probe.Compression(context, payload, "7 days", "ts"));
+            Attempt(() => probe.Compression(context, Table, "7 days", payload));
+            Attempt(() => probe.Compression(context, Table, payload, "ts"));
+            Attempt(() => probe.Retention(context, payload, "30 days"));
+            Attempt(() => probe.DropCompression(context, payload));
+            Attempt(() => probe.DropRetention(context, payload));
+        }
+
+        Scalar("SELECT to_regclass('\"Pwned\"') IS NULL").Should().Be("True");
+    }
+
+    /// <summary>
+    /// Runs an emitter that is <b>expected</b> to fail and swallows only the database's complaint — a payload
+    /// naming no real relation must produce an error. Which error does not matter here; what matters is that no
+    /// <c>Pwned</c> table exists afterwards. A non-database exception still escapes.
+    /// </summary>
+    private static void Attempt(Action emit)
+    {
+        try
+        {
+            emit();
+        }
+        catch (PostgresException)
+        {
+            // Expected: the payload is a table, column or interval that does not parse or does not exist.
+        }
     }
 }
