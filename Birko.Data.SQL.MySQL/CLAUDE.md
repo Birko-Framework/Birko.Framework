@@ -90,6 +90,16 @@ Common MySQL to .NET type mappings:
 - `TINYINT(1)` → `bool`
 - `JSON` → `string` (or mapped object)
 
+
+**`[UtcField]` and the two meanings of a `DateTime` column (TASK-256 / TASK-263).** A plain Birko `DateTime`
+column is a **wall clock** — the value's components as supplied, `Kind` not persisted, reads back
+`Unspecified`. Marking the property `[UtcField]` makes it an **instant**: `DbType.DateTimeOffset`, and it reads
+back `Kind=Utc` on every provider. Both coexist per property on one entity.
+MySQL has no timezone-aware type this framework maps to, so it **falls back** to plain `DATETIME`: the
+offset is dropped and the UTC wall clock stored. The instant is still exact, recoverable because both
+sides agree the column holds UTC — which is what the attribute declares. Measured: a non-UTC session does
+not shift it, unlike PostgreSQL's `timestamptz`.
+
 ## MySQL Specific Features
 
 ### AUTO_INCREMENT
