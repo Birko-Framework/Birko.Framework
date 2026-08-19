@@ -58,6 +58,17 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// migration that fails rolls its hypertable conversion back with it.
     /// </para>
     /// <para>
+    /// <b>PRECONDITION, not a general truth: these rules assume the object was created by this framework's
+    /// DDL.</b> The fold is correct because <c>AbstractConnector.CreateTable</c> and
+    /// <c>SqlSchemaBuilder</c> provably emit column definitions bare and quote table names — for an object a
+    /// migration created with hand-written SQL, neither holds, and two things follow that [[TASK-262]] owns:
+    /// a <b>schema-qualified</b> name becomes one identifier containing a dot and raises <c>42P01</c>
+    /// (measured: <c>create_hypertable(''reporting.evts'',…)</c> works, <c>''"reporting.evts"''</c> does
+    /// not), and a column created <i>quoted</i> and mixed-case cannot be addressed through here at all. Both
+    /// worked before TASK-253 and neither has a caller today — the trade was taken with that measured, not
+    /// assumed.
+    /// </para>
+    /// <para>
     /// <b>Two arguments are raw SQL and cannot be contained</b> — see
     /// <see cref="BuildContinuousAggregateSql"/>'s <c>selectClause</c> and <c>groupByClause</c>. TASK-260
     /// owns replacing them with a structured surface.
