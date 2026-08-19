@@ -327,18 +327,30 @@ namespace Birko.Data.SQL.Connectors
         /// <para>
         /// <b>Premise — every bound <c>DateTime</c> targets a <c>TIMESTAMP</c> column, so this is safe to apply
         /// unconditionally.</b> The parameterised path sees only a value and cannot know its target column, so
-        /// that has to hold rather than be checked: <c>DateTimeField</c> hardcodes <c>DbType.DateTime</c>, no
-        /// attribute in <c>Attributes/Field.cs</c> can override a field's <c>DbType</c>, and no field class
-        /// produces <c>DbType.Date</c>, <c>DbType.Time</c> or <c>DbType.DateTimeOffset</c> at all — so
-        /// <c>ConvertType</c>'s <c>TIMESTAMPTZ</c> arm is unreachable from a model. <b>TASK-263 will falsify
-        /// this</b> by adding a timezone-aware opt-in; it must revisit this method and its two call sites,
-        /// because stripping <c>Kind</c> from a value bound for a <c>timestamptz</c> column would discard
-        /// exactly the offset that opt-in exists to preserve.
+        /// that has to hold rather than be checked: an unmarked <c>DateTimeField</c> hardcodes
+        /// <c>DbType.DateTime</c> and no attribute in <c>Attributes/Field.cs</c> can override a field's
+        /// <c>DbType</c>.
         /// </para>
         /// <para>
-        /// Not on <c>AbstractConnectorBase</c>: whether the other three providers share this asymmetry is
-        /// unmeasured (TASK-263 surveys it), and wiring a normalisation blind is how it starts firing on a
-        /// case it was never about.
+        /// <b>TASK-263 falsified the original form of that premise, and the resolution is the bound value's CLR
+        /// type rather than anything in this method.</b> As first written this said no field class produced
+        /// <c>DbType.DateTimeOffset</c> at all, so <c>ConvertType</c>'s <c>TIMESTAMPTZ</c> arm was unreachable
+        /// from a model. <c>[UtcField]</c> now reaches it: it maps a <c>DateTime</c> property to
+        /// <c>DbType.DateTimeOffset</c>, and a bound <c>DateTime</c> arriving at such a column would be exactly
+        /// the disaster the premise ruled out — stripped to <c>Unspecified</c>, inferred as <c>timestamp</c>,
+        /// then re-read by the server in the session's time zone, an hour or more out with no error. It cannot
+        /// happen, because <c>UtcDateTimeField.Write</c> returns a <b><c>DateTimeOffset</c></b>, which the
+        /// <c>is DateTime</c> test below does not match. So this method needs no field context and no change;
+        /// what it needs is for that <c>Write</c> to keep returning a <c>DateTimeOffset</c> — asserted directly
+        /// by <c>UtcFieldMappingTests</c> and, through the stored instant on a non-UTC server, by
+        /// <c>UtcFieldInstantLiveTests</c>.
+        /// </para>
+        /// <para>
+        /// Not on <c>AbstractConnectorBase</c>, and TASK-263 measured why that was right rather than merely
+        /// cautious: binding a <c>Kind=Utc</c> <c>DateTime</c> to each provider's plain <c>DateTime</c> column,
+        /// under a non-UTC session where one exists, shifts the value on <b>PostgreSQL only</b> — MySQL 8.4,
+        /// SQL Server 2022 and SQLite all store the wall clock unchanged. The asymmetry is this provider's, so
+        /// the normalisation stays here.
         /// </para>
         /// <para>
         /// <b>Two callers, not every binding site — and the difference is <c>Prepare()</c>.</b> The bulk

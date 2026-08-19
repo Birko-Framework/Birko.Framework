@@ -96,9 +96,9 @@ Common PostgreSQL to .NET type mappings:
 - `BIGINT` → `long`
 - `NUMERIC(p,s)` → `decimal`
 - `TIMESTAMP` → `DateTime`
-- `TIMESTAMPTZ` → `DateTime` — **`ConvertType` maps `DbType.DateTimeOffset` here, but nothing can reach
-  it**: `CreateAbstractField` has no `DateTimeOffset` arm and no attribute overrides a field's `DbType`,
-  so no model produces a `TIMESTAMPTZ` column today ([[TASK-263]] adds the opt-in)
+- `TIMESTAMPTZ` → `DateTime` marked **`[UtcField]`** (TASK-263). `ConvertType` maps `DbType.DateTimeOffset`
+  here, and `[UtcField]` is the only way to reach it — there is no `DateTimeOffset` CLR arm, deliberately.
+  Stores an **instant**; reads back `Kind=Utc`. A caller's original offset is normalised away
 - `BOOLEAN` → `bool`
 - `JSONB` → `string` (or mapped object)
 - `ARRAY` → `T[]`
