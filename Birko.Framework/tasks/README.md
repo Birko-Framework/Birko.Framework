@@ -30,21 +30,21 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-19 (partial refresh at [[TASK-256]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 126   |
+| todo         | —     | —       | 125   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 93    |
+| done         | 1     | 22      | 94    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 27 · P2 89 · P3 10**
+Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
 
 > Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
 > **222 tasks** (117 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
@@ -307,7 +307,7 @@ Todo by priority: **P0 0 · P1 27 · P2 89 · P3 10**
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
     - [ ] [TASK-261](EPIC-014-code-review-remediation/TASK-261-getchunkinterval-reads-a-column-timescaledb-2-removed.md) `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0 · FEATURE-014
     - [ ] [TASK-262](EPIC-014-code-review-remediation/TASK-262-migration-emitters-assume-framework-created-objects.md) The migration emitters' identifier rules assume this framework created the object · FEATURE-014
-    - [ ] [TASK-263](EPIC-014-code-review-remediation/TASK-263-no-way-to-persist-an-instant-with-its-offset.md) There is no way to persist an instant with its offset — the tz-aware column type is mapped but unreachable · FEATURE-014
+    - [x] [TASK-263](EPIC-014-code-review-remediation/TASK-263-no-way-to-persist-an-instant-with-its-offset.md) There is no way to persist an instant with its offset — the tz-aware column type is mapped but unreachable · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (10/22 tasks done)
   - **STORY-029** Tier 0 — single-source design tokens + multi-target generator — done (0/0) (done)
   - **STORY-030** Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0) (done)

@@ -424,3 +424,20 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   close gate caught the rule **overstating itself** — "every write boundary" was falsified by the bulk
   update/delete paths, which bypass the funnel and are correct anyway because `Prepare()` pins the parameter
   type, so the word *un-prepared* was earned by measurement and the `Prepare()` mechanism now has its own test.
+- 2026-08-19 — **[[TASK-263]] closed `done`** (production `f2fda25`). Inside D11's scope, no new decision row.
+  Opens the door [[TASK-256]]'s rule had named and could not open: `[UtcField]` on a `DateTime` property makes
+  the column an **instant** — `DbType.DateTimeOffset`, so `TIMESTAMPTZ` on PostgreSQL and `DATETIMEOFFSET` on
+  MSSql — read back as `Kind=Utc` on every provider, coexisting per property with the plain wall-clock rule.
+  Both spelling and semantics were chosen against measurement rather than from symmetry. **An attribute rather
+  than a `DateTimeOffset` CLR property**, because that type would advertise an offset MySQL's `DATETIME` and
+  SQLite's numeric affinity cannot carry, and a field cannot behave differently per provider (`Tables.Table`
+  holds no connector; `AbstractField.Read` goes through the provider-blind `DataBase.Read`). **The offset is
+  therefore normalised away everywhere, including where it could have been kept** — uniformity again beating
+  per-provider fidelity, for TASK-256's reason: the product tests on SQLite and deploys on PostgreSQL. Three
+  things worth carrying: the two features compose only because `Write` returns a **`DateTimeOffset`**, which
+  TASK-256's `Kind`-stripper does not match — reverting to a bare `DateTime` stores an instant an hour out,
+  silently, visible on a non-UTC server alone; the read had to be `GetFieldValue<DateTimeOffset>` because
+  `GetDateTime` **throws** on MSSql's `datetimeoffset` and misreads on SQLite and MySQL, so the obvious
+  implementation would have passed on PostgreSQL and failed outright elsewhere; and the delegated survey it
+  inherited is **answered** — the `Kind=Utc` inference asymmetry is PostgreSQL's alone, so TASK-256's
+  normalisation stays there on evidence rather than being spread on symmetry.

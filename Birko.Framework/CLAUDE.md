@@ -622,6 +622,58 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     it true was `un-prepared`, and it was earned by measuring rather than reasoning** (§ TASK-258). Note the
     mechanism is provider-specific: on MSSql `Prepare()` throws on untyped placeholders, which is why those
     same paths have never worked there.
+- **A column has ONE meaning, so a type that can mean two things needs an opt-in — and the opt-in promises only
+  what the weakest provider can keep.** The pair to the rule above, and only comprehensible with it. A plain
+  Birko `DateTime` column is a **wall clock**; a `[UtcField]` one is an **instant**, stored in the provider's
+  timezone-aware type where one exists and read back as `Kind=Utc` on every provider (TASK-263). Both meanings
+  coexist per property on one entity. `ConvertType` had mapped `DbType.DateTimeOffset` to `TIMESTAMPTZ`
+  (PostgreSQL) and `DATETIMEOFFSET` (MSSql) since long before, but **nothing could reach it** —
+  `CreateAbstractField` had no arm and no attribute can override a `DbType` — so TASK-256's rule named an escape
+  hatch that did not open. Seven parts generalise:
+  - **State the promise the weakest provider can keep, not the one the best column type suggests.** MySQL's
+    `DATETIME` and SQLite's numeric affinity cannot carry an offset, and **a field cannot behave differently per
+    provider** — `Tables.Table` holds no connector and `AbstractField.Read` is reached through the
+    provider-blind `DataBase.Read`. So the promise is *the instant is exact and reads back as UTC*, and a
+    caller's original offset is normalised away **uniformly, everywhere, including on the two providers that
+    could have kept it**. Deliberate: the product tests on SQLite and deploys on PostgreSQL, so a behaviour that
+    differed between them would make a green test meaningless — the same trade TASK-256 recorded when it
+    rejected mapping every `DateTime` to `TIMESTAMPTZ`. **Uniformity beat per-provider fidelity twice in a row,
+    for the same reason.**
+  - **That is also why the opt-in is an attribute on a `DateTime` and not a `DateTimeOffset` property.** The CLR
+    type would *advertise* an offset that half the supported providers cannot honour, and an API that
+    over-promises is worse than one that states its limit. It is cheaper for consumers too — an existing
+    `DateTime` model opts in per property with no type change. **When a type would lie about the contract, put
+    the contract in an attribute and leave the type honest.**
+  - **Two features composed only because of a bound value's CLR TYPE, and that is now load-bearing.**
+    TASK-256's `NormalizeTimestampValue` strips `Kind` from *every* bound `DateTime` on PostgreSQL, on the
+    premise that none could target a `timestamptz` column — which this task falsified. `AddParameter` takes
+    `(command, name, value)` and cannot know the target column, so the resolution is that
+    `UtcDateTimeField.Write` returns a **`DateTimeOffset`**, which that helper's `is DateTime` test does not
+    match. No signature change, no field context, no per-provider plumbing. Measured cost of getting it wrong:
+    reverting to a bare `DateTime` stores an instant **an hour out, silently**, and only a non-UTC server can
+    see it. **Where a fix rests on a value's type rather than on a check, assert the type in a test** — an
+    invariant nothing enforces is a comment.
+  - **A read path is where providers diverge, so pick the spelling that works on all of them and say why.**
+    `GetDateTime` is wrong or fatal on three of four: it **throws** `InvalidCastException` on MSSql's
+    `datetimeoffset`, returns `Kind=Local` on SQLite and `Unspecified` on MySQL. Only
+    `GetFieldValue<DateTimeOffset>(i).UtcDateTime` is exact everywhere. The obvious implementation would have
+    passed on PostgreSQL and failed outright on MSSql — **measure the read, not just the write.**
+  - **An attribute that cannot be honoured must refuse, not be ignored.** `[UtcField]` on a non-`DateTime`
+    property throws `FieldAttributeException` naming the property and its CLR type. Silently dropping it leaves
+    the model declaring an instant while the column stores a wall clock, with nothing to notice — § SH-H037 in
+    its quietest form.
+  - **Record which arms of a public mapping are deliberately unreachable.** `DbType.Date` (a `DateTime` is a full
+    timestamp; truncating it is the CR-H086 bug), `DbType.Time` (`TimeOnly` maps to `DbType.String` — see
+    `TimeOnlyField`) and `DbType.DateTimeOffset` from a CLR `DateTimeOffset` property are all unreachable **by
+    design**, written down at `CreateAbstractField` because that dispatch is the only producer of fields.
+    `ConvertType` keeps answering them because it is public surface a consumer may call directly. **A gap that
+    is a decision reads exactly like an oversight unless you say so.**
+  - **A declared column type that disagrees with what is stored is recorded, not quietly fixed.** SQLite declares
+    `INTEGER` for this and Microsoft.Data.Sqlite stores ISO-8601 *text*. Misleading, and left alone: plain
+    `DbType.DateTime` declares `INTEGER` and stores text too, so changing only the new one would make it diverge
+    from its neighbour. Pinned by a test asserting both the declaration and `typeof()`, so a later change in
+    either surfaces there rather than as a wrong instant downstream. Same discipline as the accepted-divergence
+    ledgers in § TASK-222 and § TASK-245.
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
@@ -993,6 +1045,46 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### `[UtcField]` opened the door TASK-256's rule had named (2026-08-19)
+
+TASK-263, spawned by TASK-256's planning grill. That task settled what a plain `DateTime` column means on
+PostgreSQL — a wall clock — and named an opt-in for the case it deliberately does not serve, a value whose
+**instant** must be unambiguous. The opt-in did not exist: `ConvertType` had always mapped
+`DbType.DateTimeOffset` to `TIMESTAMPTZ` (PostgreSQL) and `DATETIMEOFFSET` (MSSql), but `CreateAbstractField`
+had no arm and no attribute can override a `DbType`, so the rule pointed at a mapped, walled-off door.
+`[UtcField]` on a `DateTime` property is that door. Verified against live **PostgreSQL 16**, **SQL Server
+2022**, **MySQL 8.4** and on-disk SQLite: **1,011 tests green across five suites** (565 · 82 · 61 · 74 · 229),
+31 new. The standing rules are in § Conventions. Six things worth carrying:
+
+- **The promise is the weakest provider's, not the best column type's.** MySQL's `DATETIME` and SQLite's
+  numeric affinity cannot carry an offset, and a field cannot behave differently per provider — `Tables.Table`
+  holds no connector and `AbstractField.Read` goes through the provider-blind `DataBase.Read`. So the contract
+  is *the instant is exact and reads back as UTC*, and a caller's original offset is normalised away
+  **everywhere, including on the two providers that could have kept it**. Uniformity beat per-provider fidelity
+  for the second time in two tasks, for TASK-256's reason: the product tests on SQLite and deploys on
+  PostgreSQL.
+- **An attribute, not a `DateTimeOffset` CLR property** — that type would advertise an offset half the providers
+  cannot honour, and an API that over-promises is worse than one stating its limit. It is also cheaper: an
+  existing `DateTime` model opts in per property with no type change.
+- **The two features compose because of a bound value's CLR TYPE, and that is now load-bearing.** TASK-256
+  strips `Kind` from every bound `DateTime` on PostgreSQL, on a premise this task falsified; `AddParameter`
+  cannot know the target column, so `UtcDateTimeField.Write` returns a **`DateTimeOffset`**, which the
+  stripper's `is DateTime` test misses. Reverting to a bare `DateTime` stores the instant **an hour out,
+  silently** — 1 of 82, and only the non-UTC database sees it.
+- **Measure the read, not just the write.** `GetDateTime` is wrong or fatal on three of four providers: it
+  **throws** `InvalidCastException` on MSSql's `datetimeoffset`, returns `Kind=Local` on SQLite and
+  `Unspecified` on MySQL. Only `GetFieldValue<DateTimeOffset>(i).UtcDateTime` is exact everywhere — the obvious
+  implementation would have passed on PostgreSQL and failed outright on MSSql.
+- **The delegated survey is answered, and the answer is "change nothing".** A plain `Kind=Utc` `DateTime` is
+  stored unshifted on MySQL, MSSql and SQLite, and shifted on PostgreSQL — which reproduces the pre-TASK-256
+  defect and so validates the probe. TASK-256's normalisation stays PostgreSQL-only on evidence rather than
+  being spread on symmetry.
+- **Two gaps are now recorded as decisions rather than left looking like oversights.** `DbType.Date`,
+  `DbType.Time` and a CLR `DateTimeOffset` property are unreachable from a model **by design**, written down at
+  `CreateAbstractField` since that dispatch is the only producer of fields; and SQLite's declared-`INTEGER` /
+  stored-ISO-text mismatch is pinned by a test rather than "fixed" into a divergence from plain
+  `DbType.DateTime`, which declares `INTEGER` and stores text too.
 
 ### A UTC `DateTime` could not be bulk-inserted, and was silently shifted one row at a time (2026-08-19)
 
