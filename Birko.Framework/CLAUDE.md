@@ -475,14 +475,59 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     Note the compounding: the § *reader that answers an ERROR with an empty result* entry below narrowed that
     swallow and it is **still** wide enough to hide a genuinely different statement's `42P01`.
   - **The column is a `name` compared against `pg_attribute.attname`, so it is folded** — `'ts'`, never
-    `'Ts'`. This is the only `ToLowerInvariant` in the SQL connectors, and correctly so: everywhere else an
+    `'Ts'`. It is the only case-folding in the SQL connectors, and correctly so: everywhere else an
     identifier is emitted *as* an identifier and PostgreSQL folds it, so there is nothing to pre-fold. Grep
-    for that asymmetry before assuming a new sink belongs to the quoting rule.
+    for that asymmetry before assuming a new sink belongs to the quoting rule. **The fold now lives in
+    `AbstractConnectorBase.CatalogueNameLiteral`, gated on `FoldsUnquotedIdentifiers`, not inline in
+    `TimescaleDBConnector`** — see the entry below.
   - **The tell that a sink belongs here is a quoted literal, not a name.** Ask whether the parser will ever
     see the text as an identifier; if it will not, neither half of the bare/quoted convention applies and the
     sink needs its own answer. And **a default value can hide the folding half indefinitely** — this one was
     masked because the shipped `TimeColumn` was already lowercase and matched a folded property by luck, so
     the only configuration anyone ran was the one that worked.
+- **Those two treatments have ONE producer each, on the connector — and the escaping underneath them has one
+  producer for the whole framework.** The rule above was correct and stated in exactly one method; TASK-253
+  found `Birko.Data.Migrations.TimescaleDB` had independently written the same `create_hypertable` call with
+  **no escaping at all**, plus eight sibling emitters nobody had looked at. A rule with one statement and two
+  implementations is a rule that will be got wrong again, so:
+  - **`AbstractConnectorBase.RegclassLiteral(name)`** — quote as an identifier, then escape for the literal.
+    For any argument the parser re-reads as an identifier *after* unwrapping the literal: `create_hypertable`,
+    TimescaleDB's four policy functions, `refresh_continuous_aggregate`.
+  - **`AbstractConnectorBase.CatalogueNameLiteral(name)`** — pre-fold, and **never** quote. For a `name`
+    compared textually against a catalogue column. Quoting here is not merely redundant but wrong: the
+    comparison is textual, so `'"Ts"'` is looked up *with* its quotes and matches nothing.
+  - **`FoldsUnquotedIdentifiers`** is the provider capability the fold consults — `true` for PostgreSQL alone,
+    in the same family as `SupportsTransactionalDdl` and `IsMissingTableException`: stated once, consulted by
+    one producer, never re-derived per call site. It reads `true` at every sink that exists today, so **assert
+    the `false` side on a non-folding provider** or the capability is indistinguishable from an unconditional
+    fold and can be deleted with no test noticing.
+  - **`Birko.Data.SQL.SqlLiteral.EscapeLiteral`** is the `''`-doubling rule, once, for the framework. It was
+    hand-written in 21 places (four index managers, `MSSqlConnector`, `DataBase.InlineConstant`,
+    `SqlBuilderContext.EscapeValue`, `ViewSelectSqlBuilder`); 18 were converged and the one left in
+    `Birko.Data.Migrations.CosmosDB` is named in the helper's doc, so a later audit can tell a decision from
+    an oversight.
+  - **It covers TWO kinds of text, and conflating them is what nearly kept them apart.** A name the grammar
+    only accepts as a literal, *and* a constant in a statement that takes no parameters at all — `CREATE VIEW`
+    is the one that matters, so `InlineConstant` and `FormatJoinConditionValue` have nothing to bind to. The
+    escaping rule is identical for both, which is why one producer serves them; the plan for TASK-253 said to
+    keep the value sites separate and **reading them inverted that**, because three of the four *document*
+    that parameters are unavailable to them. It is still not a licence to interpolate a value that could be
+    parameterised.
+  - **The escaper refuses null rather than escaping it to empty.** Returning `string.Empty` looks
+    accommodating and is the silent half of § SH-H037: converged onto 18 sinks it would turn a null identifier
+    into an *empty* one — a malformed statement where the hand-written `Replace` threw. It is reachable
+    (`Tables.IndexDefinition.Name` is declared `= null!`), and nothing passes null legitimately.
+  - **A fourth position exists and is not an identifier at all.** `compress_orderby`, a time bucket, an
+    INTERVAL — these are expression fragments, so they get escaping **only**: not folded (the parser folds
+    them itself) and not identifier-validated, because `ts DESC` and `date_trunc('day', x)` are legitimate
+    values. Sitting inside a literal, escaping contains them completely. Two arguments in
+    `BuildContinuousAggregateSql` are **raw SQL in statement position** and cannot be contained at all — that
+    is a property of the parameters, not a gap, and [[TASK-260]] owns changing the API's shape rather than
+    bolting a validator onto it.
+  - **Complete containment rests on `standard_conforming_strings = on`** (PostgreSQL's default since 9.1, and
+    the ANSI behaviour elsewhere). With it off, backslash escapes revive and `\'` breaks out. Every
+    literal-interpolating sink has always depended on this; it is written down on `SqlLiteral` rather than
+    assumed.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
@@ -877,6 +922,51 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The migration emitters wrote the same statement without the escaping (2026-08-18)
+
+TASK-253, spawned by TASK-472. That task fixed `create_hypertable` in `TimescaleDBConnector` after measuring
+that **no hypertable had ever existed for a PascalCase entity**; this is the copy it deliberately left behind.
+`Birko.Data.Migrations.TimescaleDB` had built the same call by raw interpolation with **no escaping at all** —
+not even the single-quote doubling the connector had — and the audit found **nine** interpolating emitters, not
+the three the finding named, needing **four** treatments, not the two it described. Verified against live
+**TimescaleDB 2.29.2 / PostgreSQL 16**, **PostgreSQL 16**, **MySQL 8.4** and **SQL Server 2022**:
+Migrations.TimescaleDB **46** tests (was 4), TimescaleDB **42** (was 39), SQL **555**, plus 10 further SQL
+suites — all green, 0 nullable warnings. The standing rules are in § Conventions. Six things worth carrying:
+
+- **A rule stated in one method and implemented in two places will be got wrong in the second.** The
+  quoting/folding rule was written down correctly and only in `BuildCreateHypertableSql`; a different repo
+  re-derived the statement and got the escaping, the quoting and the folding all wrong. It now has one producer
+  each on `AbstractConnectorBase`, plus `SqlLiteral.EscapeLiteral` for the `''` doubling that was hand-written
+  **21 times**.
+- **`BuildCompressionPolicySql` needs the same table BOTH ways in one statement** — `ALTER TABLE "T"` takes a
+  real identifier, `add_compression_policy('"T"')` takes a regclass in a literal. TASK-472's "two identifiers,
+  opposite treatments" arriving inside a single method, and reasoning from either position alone leaves the
+  statement broken at the other.
+- **A containment classification, not a quoting one, is what separated the fixable from the unfixable.**
+  Everything inside a `'…'` literal is completely contained by escaping; exactly two arguments
+  (`selectClause`, `groupByClause`) are raw SQL in statement position and cannot be contained at all. That is a
+  property of the parameters, so the answer is an API change ([[TASK-260]]) rather than a validator — and
+  validating them was measured and rejected, since `date_trunc('day', x)` is a legitimate `GROUP BY`.
+- **The plan was wrong three times and the doing corrected it.** Its commit order was unbuildable (tests before
+  the production signature change); its instruction to leave the four *value* escaping sites alone inverted
+  once they were read (three document that parameters are unavailable to them); and its claim that a lowercase
+  fixture is "a discrimination control that must survive every revert" was too strong — measured, it survives
+  the folding revert (5 of 34) and dies with the quoting revert (15 of 34).
+- **A containment test that demands the payload's characters vanish is testing deletion.** The first injection
+  helper asserted `NotContain(";")` / `NotContain("--")` and failed **16 of 16 against correct code** — a
+  contained `--` is still a `--`, sitting inertly inside a literal. Assert the payload appears in exactly the
+  escaped form its position prescribes, plus a structural invariant (after collapsing doubled quotes, the
+  remaining delimiters must be even).
+- **"Run the live suites, don't just build them" needs its own proof, because the pass count cannot give it.**
+  These suites `return` early rather than skip, so the total is identical with and without a server. Pointed at
+  a dead port: PostgreSQL fails **34 of 67**, MySQL **40 of 68**, MSSql **23 of 57** — that is the measurement
+  which says those tests reached a server. Spawned **TASK-255** (the aggregate's hardcoded `time` column,
+  CR-H070 unfixed in the method next door — now demonstrated live), **TASK-259** (P1: `SqlSchemaBuilder` never
+  clears `SetExternalTransaction`, publishing a migration's connection onto a process-wide cached connector —
+  found by evaluating a *rejected* option), **TASK-260** and **TASK-261** (`GetChunkInterval` reads a catalogue
+  column TimescaleDB moved in 2.0, so `42703` on every 2.x server — found because my own first assertion used
+  the same stale name).
 
 ### No hypertable was ever created, and TimescaleDB never published the boundary (2026-08-18)
 

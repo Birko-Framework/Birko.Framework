@@ -1,6 +1,6 @@
 ---
 id: FEATURE-014
-generated: 2026-08-17
+generated: 2026-08-18
 ---
 
 # Code review — audit remediation — Status
@@ -21,7 +21,7 @@ generated: 2026-08-17
 
 ## Build progress
 
-42 / 98 tasks done (1 awaiting sign-off).
+58 / 125 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -34,7 +34,7 @@ generated: 2026-08-17
 - [x] TASK-115 A nested `WithTenant` does not narrow reads inside an all-tenants scope
 - [x] TASK-116 `RuleSpecification` leaves degrade to match-all — on the destructive paths
 - [x] TASK-117 `RedisCache.ClearAsync` issues `FLUSHDB` when no `KeyPrefix` is set
-- [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id` — awaiting sign-off
+- [ ] TASK-118 The tenant header/claim guard covers only the hard-coded `X-Tenant-Id`  _(review)_
 - [x] TASK-125 `ReadOne` queries the connector directly, bypassing every store decorator
 - [x] TASK-126 `TagServiceBase` states its tenant contract in a comment and enforces nothing
 - [x] TASK-128 The view path's ORDER BY still interpolates caller text — the twin TASK-110 did not cover
@@ -93,7 +93,7 @@ generated: 2026-08-17
 - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day
 - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down
 - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently
-- [x] TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart
+- [ ] TASK-205 A qualified `Table.Column` is emitted unquoted while `FROM "Table"` is quoted — PostgreSQL folds them apart  _(cancelled)_
 - [x] TASK-207 `View.AddField` still drops a duplicate field key silently — the general case behind TASK-129's second defect
 - [ ] TASK-208 DECISION: which of `Birko.Data.SQL.View` the spec map should cover — two fixes have now landed in the excluded part
 - [x] TASK-209 A persistent view's non-aggregate columns are created unquoted and read back quoted — every such view is unqueryable on PostgreSQL
@@ -114,13 +114,40 @@ generated: 2026-08-17
 - [x] TASK-224 `DateTime.Date` in a CosmosDB filter renders as a JSON sub-property and silently matches nothing
 - [x] TASK-225 MongoDB's connection string is composed with no escape hatch — no driver option can be set
 - [ ] TASK-226 Per-sub-repo `docs/specs/` trees for the 4 single-repo areas (and the 64 unspecced projects)
-- [ ] TASK-227 `generated-at` always names the commit *before* the spec it stamps, so staleness is measured from too early
+- [x] TASK-227 `generated-at` always names the commit *before* the spec it stamps, so staleness is measured from too early
 - [x] TASK-229 Two shared projects `using` a driver they do not declare — and three sources disagree about whose job it is
 - [x] TASK-230 The remaining vulnerable transitives — 7 advisories across 37 of 246 projects
 - [x] TASK-231 `Birko.EventBus.Outbox.SQL` shipped complete but registered nowhere — unbuilt, untested, invisible
-- [ ] TASK-232 DECISION: six of eight job backends cannot supply a lock, and nothing consumes the new interface yet
+- [x] TASK-232 DECISION: the lock contract meant three different things — split the durations, keep session semantics
 - [ ] TASK-233 DECISION: the CosmosDB span-`Contains` rewrite may now be redundant — the SDK fixed it upstream
-- [ ] TASK-234 38 more shared projects use an external package they never declare
+- [x] TASK-234 38 more shared projects use an external package they never declare
+- [x] TASK-236 A per-backend verdict on locking for the six job backends without a provider
+- [x] TASK-237 `RecurringJobScheduler` duplicates every job per worker — wire leader election
+- [x] TASK-238 Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems`
+- [ ] TASK-239 Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234
+- [x] TASK-240 A transaction boundary that async writes actually honour, stated per provider
+- [x] TASK-241 RavenDB never sets the document id from the entity Guid — delete is a silent no-op and update duplicates
+- [x] TASK-242 Every bulk write escaped the transaction boundary, and on three providers it did so silently
+- [x] TASK-243 On MySQL, a store's first operation inside a boundary silently commits that boundary
+- [ ] TASK-244 Lazy schema-ensure runs before the store publishes its transaction boundary
+- [x] TASK-245 Index DDL every provider accepts — MySQL rejected the clause, PostgreSQL could not resolve the columns
+- [x] TASK-246 A migration's `.Unique()` silently builds a NON-unique index on every SQL provider
+- [x] TASK-247 `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject
+- [x] TASK-248 MySQL cannot index an unbounded `string` column — and that is the canonical documented pattern
+- [x] TASK-249 Four close-gate findings on TASK-245 — including a second injection sink its own rule pointed at
+- [x] TASK-250 A spec source glob is not a git pathspec, so the staleness check never saw 124 files
+- [ ] TASK-251 Regen the three wide-surface spec areas DV7 still reports
+- [ ] TASK-252 Six latent per-provider gaps found while closing the index-DDL thread
+- [x] TASK-253 The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel
+- [ ] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
+- [ ] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
+- [ ] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it
+- [ ] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
+- [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
+- [ ] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
+- [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
+- [ ] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
+- [ ] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
 
 ## What can be tested now
 

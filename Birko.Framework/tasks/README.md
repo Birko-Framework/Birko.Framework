@@ -37,14 +37,14 @@ _Generated 2026-08-18. Run `/tasks triage` to refresh. **Do not hand-edit** — 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 125   |
-| in-progress  | 7     | 10      | 2     |
+| todo         | —     | —       | 126   |
+| in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 91    |
+| done         | 1     | 22      | 92    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 28 · P2 87 · P3 10**
+Todo by priority: **P0 0 · P1 28 · P2 88 · P3 10**
 
 > Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
 > **222 tasks** (117 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
@@ -64,7 +64,6 @@ Todo by priority: **P0 0 · P1 28 · P2 87 · P3 10**
 ## In progress now
 
 - [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) — Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai) · FEATURE-013
-- [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) — The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel (P2, ai) · FEATURE-014
 
 ## In review (awaiting sign-off)
 
@@ -174,7 +173,7 @@ Todo by priority: **P0 0 · P1 28 · P2 87 · P3 10**
     - [ ] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
     - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
     - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (57/124 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (58/125 tasks done)
   - **STORY-024** Critical findings — done (0/0) (done)
   - **STORY-025** High findings — done (0/0) (done)
   - **STORY-026** Medium findings — in-progress (0/0)
@@ -299,11 +298,12 @@ Todo by priority: **P0 0 · P1 28 · P2 87 · P3 10**
     - [x] [TASK-238](EPIC-014-code-review-remediation/TASK-238-sync-projitems-reference-a-projitems.md) Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems` · FEATURE-014
     - [ ] [TASK-239](EPIC-014-code-review-remediation/TASK-239-over-declared-packages-net10-provides.md) Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234 · FEATURE-014
     - [ ] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014
-    - [ ] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel ← in-progress · FEATURE-014
+    - [x] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel · FEATURE-014
     - [ ] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door · FEATURE-014
     - [ ] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
     - [ ] [TASK-261](EPIC-014-code-review-remediation/TASK-261-getchunkinterval-reads-a-column-timescaledb-2-removed.md) `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0 · FEATURE-014
+    - [ ] [TASK-262](EPIC-014-code-review-remediation/TASK-262-migration-emitters-assume-framework-created-objects.md) The migration emitters' identifier rules assume this framework created the object · FEATURE-014
 - **EPIC-015** Birko.Xaml — Avalonia-first XAML UI framework mirroring Birko.Web — in-progress (10/22 tasks done)
   - **STORY-029** Tier 0 — single-source design tokens + multi-target generator — done (0/0) (done)
   - **STORY-030** Tier 0 — Avalonia theme system + runtime ThemeVariant swap — done (0/0) (done)

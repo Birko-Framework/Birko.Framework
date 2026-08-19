@@ -21,7 +21,7 @@ created: 2026-06-18
 | D8 | Spec-harvest — medium findings ([[STORY-053]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area, replacing the on-demand policy that had produced nothing. | 2026-07-30 | ai | [[TASK-151]], [[TASK-152]], [[TASK-153]], [[TASK-154]], [[TASK-155]], [[TASK-156]], [[TASK-157]], [[TASK-158]], [[TASK-159]], [[TASK-160]], [[TASK-161]], [[TASK-162]], [[TASK-163]], [[TASK-164]], [[TASK-165]], [[TASK-166]], [[TASK-167]], [[TASK-168]], [[TASK-169]], [[TASK-170]], [[TASK-171]], [[TASK-172]] |
 | D9 | Spec-harvest — low findings ([[STORY-054]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Decomposed for real on 2026-08-09 — one task per spec area. | 2026-07-30 | ai | [[TASK-173]], [[TASK-174]], [[TASK-175]], [[TASK-176]], [[TASK-177]], [[TASK-178]], [[TASK-179]], [[TASK-180]], [[TASK-181]], [[TASK-182]], [[TASK-183]], [[TASK-184]], [[TASK-185]], [[TASK-186]], [[TASK-187]], [[TASK-188]], [[TASK-189]], [[TASK-190]], [[TASK-191]], [[TASK-192]], [[TASK-193]], [[TASK-194]] |
 | D10 | Spec-harvest — the three unrated areas ([[STORY-055]]) | approved | Backfilled: decomposed into tracked work, so the scope decision was taken. Story is `in-progress`; its remaining work became one task on 2026-08-09. | 2026-07-30 | ai | [[TASK-195]] |
-| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]], [[TASK-255]], [[TASK-259]], [[TASK-260]], [[TASK-261]] |
+| D11 | Work tracked directly on the epic, outside any story | approved | Backfilled: these tasks exist and are tracked, so the scope decision was taken. | 2026-06-18 | ai | [[TASK-131]], [[TASK-208]], [[TASK-226]], [[TASK-227]], [[TASK-229]], [[TASK-230]], [[TASK-231]], [[TASK-232]], [[TASK-233]], [[TASK-234]], [[TASK-058]], [[TASK-144]], [[TASK-146]], [[TASK-150]], [[TASK-196]], [[TASK-197]], [[TASK-204]], [[TASK-205]], [[TASK-210]], [[TASK-211]], [[TASK-216]], [[TASK-217]], [[TASK-236]], [[TASK-237]], [[TASK-240]], [[TASK-241]], [[TASK-242]], [[TASK-243]], [[TASK-244]], [[TASK-245]], [[TASK-246]], [[TASK-247]], [[TASK-248]], [[TASK-249]], [[TASK-250]], [[TASK-238]], [[TASK-239]], [[TASK-251]], [[TASK-252]], [[TASK-255]], [[TASK-259]], [[TASK-260]], [[TASK-261]], [[TASK-262]] |
 
 **States:** `proposed` (fresh from grill, awaiting decision) · `approved` (build it) · `deferred` (not now — note unblock condition) · `changed` (approved but altered — record the delta) · `removed` (rejected / out of scope).
 
@@ -379,3 +379,17 @@ Only `approved` and `changed` rows generate tasks at `/feature decompose`. No ro
   Notable for how it surfaced: TASK-253's own first draft of a chunk-interval assertion used the same stale
   column name and failed, which is what exposed the product code. Already pinned by a test asserting the
   `42703` as current behaviour, so TASK-261 begins by inverting a failing test rather than writing one.
+- 2026-08-18 — **[[TASK-253]] closed `done`; D11 gains [[TASK-262]]**, spawned from its close-gate
+  `code-review` and backfilled at creation. Inside D11's scope, no new decision row. TASK-262 is the one spawn of
+  the five that is a **regression TASK-253 itself introduced**: the quoting and folding rules were derived from
+  what `AbstractConnector.CreateTable` provably emits, and the migrations layer accepts names for objects a
+  migration may have created by hand — so a schema-qualified name became one identifier containing a dot
+  (measured: `create_hypertable('reporting.evts','ts')` works, `'"reporting.evts2"'` raises `42P01`) and a
+  hand-created quoted mixed-case column became unaddressable. Closed on the measurement rather than held:
+  neither has a caller, and the premise is now documented at the call site as a precondition. Its two halves
+  were **grouped**, being one premise failing in two directions.
+  The close gate also produced the most transferable lesson of the whole task, and it was about a test rather
+  than the product: **a SQL-injection containment test must leave a valid leading statement.** The first one
+  attacked an argument whose payload made the batch's first statement fail, PostgreSQL aborted the batch, and it
+  reported green against code with the escaping removed. Moved to an argument where the leading statement stays
+  valid, it proves the emitters were demonstrably injectable — `Pwned` is created — rather than theoretically so.

@@ -3,15 +3,15 @@ id: TASK-253
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-18
 depends-on: []
 blocks: []
-related: [TASK-209, TASK-211, TASK-245, TASK-249, TASK-255, TASK-259, TASK-260, TASK-261, TASK-472]
+related: [TASK-209, TASK-211, TASK-245, TASK-249, TASK-255, TASK-259, TASK-260, TASK-261, TASK-262, TASK-472]
 findings: []
-pr: "Birko.Data.SQL 92f076f · Birko.Data.SQL.PostgreSQL 086602a · Birko.Data.SQL.Tests cf3c0a5 · Birko.Data.SQL.PostgreSQL.Tests 8c361bb · Birko.Data.TimescaleDB 48f572c · Birko.Data.TimescaleDB.Tests 4b14898 · Birko.Data.Migrations.SQL dc7806c · Birko.Data.Migrations.TimescaleDB c231ed2 · Birko.Data.Migrations.TimescaleDB.Tests 5a84948+17df5e8 · Birko.Data.TimescaleDB f88c796 · Birko.Data.TimescaleDB.Tests 0b3eb45 · [step 7] Birko.Data.SQL 85f8576 · Birko.Data.SQL.MSSql 2bde57f · Birko.Data.SQL.PostgreSQL f4de483 · Birko.Data.SQL.SqLite fd067a2 · Birko.Data.SQL.View fb4ebb2 · Birko.Data.SQL.Tests ec1c514"
+pr: "Birko.Data.SQL 92f076f · Birko.Data.SQL.PostgreSQL 086602a · Birko.Data.SQL.Tests cf3c0a5 · Birko.Data.SQL.PostgreSQL.Tests 8c361bb · Birko.Data.TimescaleDB 48f572c · Birko.Data.TimescaleDB.Tests 4b14898 · Birko.Data.Migrations.SQL dc7806c · Birko.Data.Migrations.TimescaleDB c231ed2 · Birko.Data.Migrations.TimescaleDB.Tests 5a84948+17df5e8 · Birko.Data.TimescaleDB f88c796 · Birko.Data.TimescaleDB.Tests 0b3eb45 · [step 7] Birko.Data.SQL 85f8576 · Birko.Data.SQL.MSSql 2bde57f · Birko.Data.SQL.PostgreSQL f4de483 · Birko.Data.SQL.SqLite fd067a2 · Birko.Data.SQL.View fb4ebb2 · Birko.Data.SQL.Tests ec1c514 · [close gate] Birko.Data.Migrations.TimescaleDB.Tests f04eb11 · Birko.Data.TimescaleDB 4fececc · Birko.Data.Migrations.TimescaleDB be03e4e"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.Migrations.TimescaleDB, Birko.Data.TimescaleDB]
@@ -124,8 +124,14 @@ a verification task into a multi-repo refactor. Grouped here as one task rather 
   `timescaledb_information.hypertables.hypertable_name` keeps its case, so the raw PascalCase name is
   the right thing to pass. This task adds live tests pinning it in both directions — the exact name is found,
   the folded one is not — so nobody folds it for symmetry with the emitters; it changes no code there.
-- The other three providers' migration projects. This defect is PostgreSQL identifier folding, which
-  only TimescaleDB/PostgreSQL has.
+- **Other providers' migration paths — and the original wording of this bullet was wrong, corrected at the
+  close gate.** It said "the other three providers' migration projects", which do not exist: SQLite, MySQL and
+  MSSql all share `Birko.Data.Migrations.SQL`, and only CosmosDB / ElasticSearch / InfluxDB / MongoDB / RavenDB
+  / TimescaleDB have their own. What is genuinely out of scope is narrower and worth stating accurately: the
+  shared `Birko.Data.Migrations.SQL` emits its DDL *through the connector* rather than by interpolating
+  function arguments, so it has no sink of this shape — and the folding half of the defect is PostgreSQL-only
+  regardless. Its one related defect is [[TASK-259]]. A boundary that misdescribes the codebase is worse than
+  no boundary, because the next reader trusts it.
 ## Implementation plan
 
 Drafted 2026-08-18, then grilled. The grill changed three decisions and produced two spawns
@@ -493,8 +499,60 @@ Order matters — production SHAs go into `pr:` before the aggregator commit:
 - **All seven acceptance criteria are now met.** Remaining before close: step 6's swallow measurement is
   answered (the live suite shows a bad statement **fails the migration loudly** — `ExecuteScript` has no
   `try`/`catch` and the runner adds none, so the migration half is loud where the store half was silent), and
-  the `## Human test plan` is `N/A`, so this is ready for `/tasks close`.
+  the `## Close gate (2026-08-18)
+
+- **`verify-conventions`** (the project-local shadow, all 10 checks + step 0): **0 nullable warnings** across
+  the `.slnx`; checks 2–8 and 10 pass or are N/A. The 20 `NU1510` errors under
+  `-p:TreatWarningsAsErrors=true` are pre-existing, in files this task never touched, and owned by open
+  [[TASK-239]]. **Two findings, both fixed before the flip:**
+  - *Check 9* — no `## Recent Updates` entry for a ~15-file, 9-repo change. Added.
+  - *Step 0b, register-on-introduce* — `SqlLiteral` / `FoldsUnquotedIdentifiers` / `RegclassLiteral` /
+    `CatalogueNameLiteral` appeared **0 times** in `CLAUDE.md`. Added to § Conventions inside the existing
+    identifier family, and the neighbouring bullet's claim that the fold is *"the only `ToLowerInvariant` in
+    the SQL connectors"* was corrected — this task relocated it to the base, gated on the capability.
+- **`security-review`** — the skill needs an `origin/HEAD` these repos do not have, so the pass was done
+  inline per close.md's fallback rule. No exploitable findings; one accepted risk
+  (`selectClause`/`groupByClause`, owned by [[TASK-260]]). The null refusal is **unreachable from every
+  converged site** (`scope!` sits after a throw, `name` comes from a reader, both value sinks answer `NULL`
+  first) and nothing in the tree catches `NullReferenceException`, so it carries no availability risk.
+  - **The finding that mattered came from testing my own test.** The first containment test attacked
+    `create_hypertable`'s *table* argument, so the injected batch's **first** statement failed on an absurd
+    relation name — Npgsql sends a batch as one command and PostgreSQL aborts on the first error, so the
+    appended statement never ran and it **reported green against code with the escaping stripped out**. Moved
+    to `add_retention_policy`'s `INTERVAL` argument, which leaves a valid leading statement: with escaping
+    removed, **`Pwned` is actually created**. So these emitters were *demonstrably* injectable, not
+    theoretically. Generalises: **a SQL-injection containment test must leave a valid leading statement, or the
+    database's own batch-abort hides the hole for you.**
+- **`code-review`** (high) — confirmed the cancellation filter's reachable paths, the four extracted builders
+  as byte-identical (independently re-checked by hand), and that requiring the context's connector breaks no
+  caller. **Three findings; one fixed, two grouped and spawned:**
+  - *F3, fixed* — the cancellation guard checked one level and never correlated with `ct`. `OnException` is a
+    public event, so a consumer's wrapping handler puts the OCE at depth ≥2 and the guard silently stops
+    working; and any unrelated token's OCE was re-thrown as *this* call's cancellation, which is a wrong
+    answer rather than a lost one. Now walks the chain and requires `ct.IsCancellationRequested`
+    (`Birko.Data.TimescaleDB` 4fececc).
+  - *F1 + F2 → [[TASK-262]]* — one premise failing in two directions: the rules assume the object was created
+    by this framework's DDL. A **schema-qualified** name is now one identifier containing a dot
+    (**measured**: `create_hypertable('reporting.evts','ts')` works, `'"reporting.evts2"'` raises `42P01`), and
+    a hand-created quoted mixed-case column is unaddressable. Both are regressions **this task introduced**,
+    both worked before, and **neither has a caller** — one importer in the family, 0 migration usage across
+    16 consumer repos. Grouped rather than split because they are one premise, documented as a **precondition**
+    at the call site (`be03e4e`) so the next author reads it in the class rather than the backlog, and closed
+    on the measurement rather than on optimism.
+- **Out-of-scope sweep (step 5d): 6 boundaries, 0 unowned work, 1 corrected.** Four name owners
+  ([[TASK-255]], [[TASK-259]], [[TASK-260]], [[TASK-261]]), two state deliberate limits. The sixth said *"the
+  other three providers' migration projects"* — **which do not exist**: SQLite, MySQL and MSSql all share
+  `Birko.Data.Migrations.SQL`. Rewritten to say what is actually out of scope, because a boundary that
+  misdescribes the codebase is worse than no boundary.
+- **Merge:** `.config.yml` sets `integration: single-branch`, so 5c and step 8 do not apply — `done` here means
+  *committed to the default branch*, which all 13 repos are.
+
+## Human test plan` is `N/A`, so this is ready for `/tasks close`.
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is a row in `timescaledb_information.hypertables` and a chunk count > 1.
+- [x] **N/A — mechanical, and both halves of the stated proof are now asserted.** The catalogue row was covered
+      by the live suite; the **chunk count > 1** half was missing and was added at the close gate
+      (`CreateHypertable_routesRowsIntoSeparateChunks` — three rows a month apart against a one-day interval
+      land in 3 chunks). Nothing here needs a human: a plain PostgreSQL table accepts the same inserts and
+      serves the same reads, so partitioning actually happening is the one thing it cannot fake.
