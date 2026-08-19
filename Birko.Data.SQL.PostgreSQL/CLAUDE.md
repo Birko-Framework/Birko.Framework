@@ -96,10 +96,61 @@ Common PostgreSQL to .NET type mappings:
 - `BIGINT` → `long`
 - `NUMERIC(p,s)` → `decimal`
 - `TIMESTAMP` → `DateTime`
-- `TIMESTAMPTZ` → `DateTime` (with timezone)
+- `TIMESTAMPTZ` → `DateTime` — **`ConvertType` maps `DbType.DateTimeOffset` here, but nothing can reach
+  it**: `CreateAbstractField` has no `DateTimeOffset` arm and no attribute overrides a field's `DbType`,
+  so no model produces a `TIMESTAMPTZ` column today ([[TASK-263]] adds the opt-in)
 - `BOOLEAN` → `bool`
 - `JSONB` → `string` (or mapped object)
 - `ARRAY` → `T[]`
+
+## What a `DateTime` column means here (TASK-256)
+
+> A Birko `DateTime` column on PostgreSQL is `timestamp without time zone` and stores the **wall-clock
+> components of the value as supplied**. `DateTimeKind` is **not persisted**; every read returns
+> `Kind=Unspecified`. Re-attaching the intended `Kind` is the caller's job.
+
+`PostgreSQLConnector.NormalizeTimestampValue` enforces it at both **un-prepared** write boundaries —
+`AddParameter` and the binary `COPY` writer (sync + async) — which is what makes the stored value independent
+of the server's `TimeZone` setting.
+
+**The bulk update/delete paths are correct without it, by a different mechanism — don't "fix" them, and
+don't copy them.** They bypass `AddParameter`: pre-create parameters holding `DBNull.Value`, call
+`command.Prepare()`, then assign `.Value` per row. `Prepare()` pins each parameter to the target column's
+real type before any value is assigned, so the value is never re-inferred as `timestamptz`. Measured on a
+non-UTC server: unshifted. It is pinned by `Bulk_update_does_not_shift_a_utc_value_on_a_non_utc_server`,
+because that `Prepare()` is the only thing holding those six binding sites correct. **A new binding site
+that does not prepare must call the helper.** (Provider note: on MSSql `Prepare()` throws on untyped
+placeholders, which is why those paths have never worked there at all.)
+
+**Both boundaries, because they failed differently and only one said so.** `AddParameter` binds no `DbType`,
+so Npgsql infers `timestamptz` for a `Kind=Utc` value and the server casts it into the timezone-less column
+through the session's `TimeZone`; the COPY writer passes `NpgsqlDbType.Timestamp` explicitly and Npgsql
+refuses the value outright. Measured on PostgreSQL 16 / Npgsql 10.0.3 with a 10:30 UTC value:
+
+| `Kind` | `AddParameter` before the fix | binary `COPY` before the fix |
+|---|---|---|
+| `Utc` | stored `11:30` on a UTC+1 server — **silently shifted** | **threw** `ArgumentException` |
+| `Local` / `Unspecified` | `10:30`, TZ-independent | `10:30` |
+
+So the fix is narrow: only the `Kind=Utc` cell changes. Fixing COPY alone would have left the two paths
+storing different instants, and a bulk-written row would not match a filter bound through the parameterised
+path.
+
+**Do not "simplify" this to `TIMESTAMPTZ`.** It was measured and rejected: it makes PostgreSQL the only
+tz-aware provider (SQLite, MySQL and MSSql all store wall clocks) so a SQLite-green test stops proving
+PostgreSQL behaviour; it breaks the `Unspecified` case (`10:30` in → `09:30Z` back); and
+`ALTER COLUMN … TYPE TIMESTAMPTZ` reinterprets existing rows in the session TZ at ALTER time. The column type
+is pinned by a test for this reason.
+
+**The premise the helper rests on is not compiler-enforced.** Stripping `Kind` from *every* bound `DateTime`
+is safe only while no `DateTime` can target a `timestamptz` column — see the `TIMESTAMPTZ` note under
+§ Data Types. [[TASK-263]] falsifies that and must revisit the helper.
+
+**Testing the parameterised half needs a non-UTC server.** On a UTC server both paths store `10:30` either
+way, so that revert fails nothing. `Settings.GetConnectionString()` emits no `Timezone` key, so
+`SET TimeZone` on a test's own connection cannot reach the store's — `UtcDateTimeBindingLiveTests` creates a
+dedicated database with `ALTER DATABASE … SET TimeZone`, and calls `NpgsqlConnection.ClearAllPools()`
+afterwards, without which a pooled connection keeps `Etc/UTC` and the test measures nothing.
 
 ## PostgreSQL Specific Features
 

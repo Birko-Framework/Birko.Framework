@@ -300,12 +300,82 @@ namespace Birko.Data.SQL.Connectors
             return result.ToString();
         }
 
+        /// <summary>
+        /// Strips <see cref="DateTimeKind"/> from a <see cref="DateTime"/> before it is bound, so the value
+        /// written is the wall clock the caller supplied and nothing else.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <b>What a Birko <c>DateTime</c> column means on PostgreSQL (TASK-256).</b> <see cref="ConvertType"/>
+        /// maps <c>DbType.DateTime</c>/<c>DateTime2</c> to <c>TIMESTAMP</c> — <i>without</i> time zone — so the
+        /// column stores wall-clock components and no offset. <c>Kind</c> is therefore not persisted, and every
+        /// read returns <c>DateTimeKind.Unspecified</c>. Re-attaching the intended <c>Kind</c> is the caller's
+        /// job; a consumer working in UTC gets its UTC wall clock back verbatim.
+        /// </para>
+        /// <para>
+        /// <b>Why this has to exist.</b> The two write paths disagreed about a UTC-kinded value, and only one
+        /// of them said so. <c>AddParameter</c> binds no <c>DbType</c>, so Npgsql infers from the value and
+        /// picks <c>timestamptz</c> for <c>Kind=Utc</c>; the server then casts that into the timezone-less
+        /// column <b>using the session's TimeZone</b>, silently storing 11:30 for a 10:30 UTC value on a
+        /// UTC+1 server. The binary COPY writer passes <c>NpgsqlDbType.Timestamp</c> explicitly, and Npgsql
+        /// refuses a <c>Kind=Utc</c> value outright. Loud on one path, silently shifted on the other, and the
+        /// silent one is the dangerous half. Normalising here makes both paths store the same wall clock and
+        /// makes the stored value independent of the server's TimeZone. It is deliberately narrow: for
+        /// <c>Local</c> and <c>Unspecified</c> values this is already a no-op in effect, so only the
+        /// <c>Kind=Utc</c> case changes.
+        /// </para>
+        /// <para>
+        /// <b>Premise — every bound <c>DateTime</c> targets a <c>TIMESTAMP</c> column, so this is safe to apply
+        /// unconditionally.</b> The parameterised path sees only a value and cannot know its target column, so
+        /// that has to hold rather than be checked: <c>DateTimeField</c> hardcodes <c>DbType.DateTime</c>, no
+        /// attribute in <c>Attributes/Field.cs</c> can override a field's <c>DbType</c>, and no field class
+        /// produces <c>DbType.Date</c>, <c>DbType.Time</c> or <c>DbType.DateTimeOffset</c> at all — so
+        /// <c>ConvertType</c>'s <c>TIMESTAMPTZ</c> arm is unreachable from a model. <b>TASK-263 will falsify
+        /// this</b> by adding a timezone-aware opt-in; it must revisit this method and its two call sites,
+        /// because stripping <c>Kind</c> from a value bound for a <c>timestamptz</c> column would discard
+        /// exactly the offset that opt-in exists to preserve.
+        /// </para>
+        /// <para>
+        /// Not on <c>AbstractConnectorBase</c>: whether the other three providers share this asymmetry is
+        /// unmeasured (TASK-263 surveys it), and wiring a normalisation blind is how it starts firing on a
+        /// case it was never about.
+        /// </para>
+        /// <para>
+        /// <b>Two callers, not every binding site — and the difference is <c>Prepare()</c>.</b> The bulk
+        /// update and delete paths bind their values <i>without</i> coming through <c>AddParameter</c>: they
+        /// pre-create parameters holding <c>DBNull.Value</c>, call <c>command.Prepare()</c>, then assign
+        /// <c>.Value</c> per row. They are correct anyway, and by a different mechanism — <c>Prepare()</c>
+        /// pins each parameter to the target column's real type before any value is assigned, so a
+        /// <c>Kind=Utc</c> value is sent as a <c>timestamp</c> and never re-inferred as <c>timestamptz</c>.
+        /// Measured on a non-UTC server: unshifted, and pinned by
+        /// <c>Bulk_update_does_not_shift_a_utc_value_on_a_non_utc_server</c> precisely because it is the only
+        /// thing holding those sites correct. **A new binding site that does not prepare must call this
+        /// helper.** Note the mechanism is provider-specific: on MSSql <c>Prepare()</c> throws on untyped
+        /// placeholders, which is why the bulk update/delete paths have never worked there at all.
+        /// </para>
+        /// </remarks>
+        private static object? NormalizeTimestampValue(object? value)
+        {
+            if (value is DateTime dateTime && dateTime.Kind != DateTimeKind.Unspecified)
+            {
+                return DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
+            }
+            return value;
+        }
+
         /// <inheritdoc />
         public override DbCommand AddParameter(DbCommand command, string name, object? value)
         {
             // Enums persist as INTEGER (IntegerField) — bind the underlying integral value, never the
             // boxed enum, or the provider maps it to its own type and the comparison never matches.
             value = NormalizeParameterValue(value);
+            // TASK-256: and strip DateTimeKind, for both branches below. No DbType is bound here, so Npgsql
+            // infers from the value: a Kind=Utc DateTime infers timestamptz, which the server then casts into
+            // the timezone-less TIMESTAMP column using the SESSION's TimeZone — storing a shifted instant with
+            // no error on any non-UTC server. This is the silent twin of the COPY writer's loud refusal, and
+            // both must be normalised or the two paths store different instants for one value (and a
+            // bulk-written row stops matching a filter bound here).
+            value = NormalizeTimestampValue(value);
             if (command.Parameters.Contains(name))
             {
                 ((NpgsqlParameter)command.Parameters[name]).Value = value ?? DBNull.Value;
@@ -422,7 +492,10 @@ namespace Birko.Data.SQL.Connectors
                             }
                             else
                             {
-                                writer.Write(value, DbTypeToNpgsqlDbType(field.Type));
+                                // TASK-256: strip Kind first. Npgsql refuses a Kind=Utc DateTime for the
+                                // explicit NpgsqlDbType.Timestamp below, so before this every UTC-kinded
+                                // entity threw here — which is every AbstractLogModel descendant.
+                                writer.Write(NormalizeTimestampValue(value), DbTypeToNpgsqlDbType(field.Type));
                             }
                         }
                     }
@@ -475,7 +548,8 @@ namespace Birko.Data.SQL.Connectors
                             }
                             else
                             {
-                                await writer.WriteAsync(value, DbTypeToNpgsqlDbType(field.Type), ct).ConfigureAwait(false);
+                                // TASK-256: see the sync twin above.
+                                await writer.WriteAsync(NormalizeTimestampValue(value), DbTypeToNpgsqlDbType(field.Type), ct).ConfigureAwait(false);
                             }
                         }
                     }
