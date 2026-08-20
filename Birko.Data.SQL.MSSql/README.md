@@ -42,6 +42,23 @@ public class CustomerStore : MSSqlStore<Customer>
 }
 ```
 
+## Timestamps — two kinds of `DateTime` column
+
+```csharp
+[UtcField]                                  // an INSTANT
+public DateTime ObservedAt { get; set; }     // reads back DateTimeKind.Utc
+
+public DateTime NoticeDate { get; set; }     // a WALL CLOCK
+                                             // reads back DateTimeKind.Unspecified
+```
+
+A plain `DateTime` column stores the value's components exactly as supplied; `DateTimeKind` is not persisted.
+A `[UtcField]` one stores an **instant** — normalised to UTC on write, read back as `Kind=Utc`. Neither
+preserves a caller's original offset; if you need the offset itself, store it in its own column.
+
+**On SQL Server `[UtcField]` maps to `DATETIMEOFFSET`**, which stores the offset in the column itself, so
+the instant is exact there natively. A plain `DateTime` maps to `DATETIME2`.
+
 ## API Reference
 
 ### Stores
