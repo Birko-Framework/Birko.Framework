@@ -27,8 +27,20 @@ four backend clusters. This story tracks that effort so the 9 findings are plann
 lingering as audit entries. It is a **theme** story (spans a few projects), not a severity partition
 like STORY-024/025/026/027.
 
-> **Cannot be executed in the current environment** — no Docker. This story is the plan; execution
-> requires a host with Docker (or a CI runner with the service containers).
+> ~~**Cannot be executed in the current environment** — no Docker. This story is the plan; execution
+> requires a host with Docker (or a CI runner with the service containers).~~
+>
+> ⚠ **CORRECTED 2026-08-20 — that premise is stale, and had been for weeks.** The dev host has
+> **Docker 29.7.2**, and containerised services have since been used routinely to close work in this
+> epic. Proven runnable here, each having actually served a live suite: **PostgreSQL 16**, **MySQL 8.4**,
+> **SQL Server 2022**, **TimescaleDB 2**, **MongoDB 7** (TASK-214/219), the **CosmosDB emulator**
+> (TASK-223/224) and **RavenDB** (TASK-221/222). Of the five clusters below, four have had their backend
+> exercised live already; only **InfluxDB 2.x** (cluster 2) and **Elasticsearch** (cluster 5) have not
+> been started in this environment, and nothing suggests they cannot be.
+>
+> So this story is **no longer environment-blocked**. What it is blocked on is that nobody has picked it
+> up — a different and more honest status. See the two notes below before planning the harness, because
+> both change its shape.
 
 ## Prerequisite — TASK-042-00: integration-test harness (blocks everything)
 
@@ -42,6 +54,27 @@ Before any cluster, add the shared plumbing:
 
 **Acceptance:** one reference integration project (suggest MSSql, see cluster 1) runs green with Docker
 up and **skips cleanly** with Docker down; CI has an opt-in integration job.
+
+> ⚠ **CORRECTED 2026-08-20 — this prerequisite is PARTLY SUPERSEDED, and re-read it before building it.**
+> While this story sat, the repo evolved its own answer to the same problem and it is now the de facto
+> standard across the SQL family, MongoDB, CosmosDB and RavenDB: a suite reads `BIRKO_{PROV}_HOST` (+
+> `_PORT` / `_USER` / `_PASSWORD` / `_DB`), returns early with a printed `SKIPPED:` line when it is unset,
+> and turns that absence into a failure when `BIRKO_REQUIRE_LIVE` is set. That already satisfies the first
+> half of the acceptance above — *green with Docker up, clean skip with Docker down* — without
+> Testcontainers, and it is what the TASK-242/243/245/253/256/263 live suites use.
+>
+> Two things it does **not** do, and they are the real remaining work:
+> - **No CI job.** No `azure-pipelines.yml` in the SQL family sets any `BIRKO_*_HOST`, so these suites run
+>   only when a human starts containers and exports the variables by hand. The gated suites therefore pass
+>   because someone chose to run them — which is precisely the failure mode this epic keeps rediscovering
+>   (TASK-214: the finding was inside a suite that had **never** run). **This is now the highest-value part
+>   of TASK-042-00**, and it is worth more than the fixture pattern.
+> - **The boundary decision went the other way.** This story specifies separate `*.IntegrationTests`
+>   projects, "do **not** fold live tests into the offline projects". In practice live tests were added
+>   *inside* the existing `*.Tests` projects (`BulkTransactionBoundaryLiveTests`,
+>   `UtcFieldInstantLiveTests`, `DeclaredIndexLiveTests`, …). That is a real divergence from the plan and
+>   it has a cost — the "fast suite" now contains gated live tests — so either the plan or the practice
+>   should change deliberately rather than by drift. **Decide it, don't inherit it.**
 
 > **External consumer:** [[TASK-042]] (EPIC-016, cross-provider SQL store-factory + DI) is `review`-blocked
 > solely on this harness — its live CRUD round-trip is currently env-gated (`BIRKO_{PROV}_TEST`) and should
@@ -73,6 +106,25 @@ up and **skips cleanly** with Docker down; CI has an opt-in integration job.
 
 **Acceptance:** SQL sync-store CRUD round-trips green against a real backend; a forced mid-bulk failure
 leaves **zero** rows (rollback proven). One MSSql (or Postgres) fixture serves both.
+
+> ⚠ **CORRECTED 2026-08-20 — CR-M138 needs RE-VERIFYING, not implementing.** The mechanism it names has
+> changed since the finding was written, so picking this up as described would re-fix something already
+> largely fixed. [[TASK-242]] rewired the bulk paths for the transaction boundary and, as a side effect,
+> most of CR-M138's concern:
+> - `BulkUpdate` / `BulkDelete` and their async twins now run through `RunBulk`, which owns a transaction
+>   and calls `transaction.Rollback()` on failure when it owns it. **Four of the six paths now roll back.**
+> - `BulkInsert` (sync + async) deliberately still runs with no enclosing transaction on the *standalone*
+>   path, via `RunBulkOnConnection` — but it is atomic anyway: `SqlBulkCopy.BatchSize` is never set, so it
+>   defaults to `0`, sending the whole copy as a **single batch**. Inside a caller's boundary it now enlists
+>   through the `SqlBulkCopy(SqlConnection, SqlBulkCopyOptions, SqlTransaction)` overload, whose third
+>   argument used to be `null` — which is what let the copy escape the boundary entirely.
+>
+> **Residual, and it is conditional rather than open:** if anyone ever sets `BatchSize > 0` — plausible for
+> a large copy, and the idea exists in the family already (`MySqlSettings.BulkInsertBatchSize`) — the
+> standalone `BulkInsert` regains exactly the partial-rows behaviour CR-M138 describes. So the honest task
+> here is: force a mid-bulk failure against a live SQL Server, confirm zero rows for each of the six paths,
+> and decide whether `BatchSize` should be settable at all given that it would reintroduce the defect.
+> Verified by reading, not by running — the forced-failure test this story asks for still does not exist.
 
 ## Cluster 2 — InfluxDB migrations · InfluxDB 2.x container
 **Findings:** CR-M108, CR-M109
