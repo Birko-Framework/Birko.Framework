@@ -66,6 +66,24 @@ public class CustomerBulkStore : AsyncMySQLBulkStore<Customer>
 }
 ```
 
+## Timestamps — two kinds of `DateTime` column
+
+```csharp
+[UtcField]                                  // an INSTANT
+public DateTime ObservedAt { get; set; }     // reads back DateTimeKind.Utc
+
+public DateTime NoticeDate { get; set; }     // a WALL CLOCK
+                                             // reads back DateTimeKind.Unspecified
+```
+
+A plain `DateTime` column stores the value's components exactly as supplied; `DateTimeKind` is not persisted.
+A `[UtcField]` one stores an **instant** — normalised to UTC on write, read back as `Kind=Utc`. Neither
+preserves a caller's original offset; if you need the offset itself, store it in its own column.
+
+**On MySQL `[UtcField]` falls back to a plain `DATETIME`** — MySQL has no timezone-aware type this
+framework maps to, so the offset is dropped and the UTC wall clock stored. The instant is still exact,
+because both sides agree the column holds UTC. Measured: a non-UTC session does not shift it.
+
 ## API Reference
 
 ### Stores
