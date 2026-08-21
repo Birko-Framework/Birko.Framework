@@ -674,6 +674,73 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     from its neighbour. Pinned by a test asserting both the declaration and `typeof()`, so a later change in
     either surfaces there rather than as a wrong instant downstream. Same discipline as the accepted-divergence
     ledgers in § TASK-222 and § TASK-245.
+- **A column type is only correct for the operations the provider allows ON it — and where a key restricts the
+  type, "is this column an index key" is resolved ONCE, never OR'd at a connector.** Same one-producer family
+  as the identifier rules above, arriving at the layer where a *column* is declared rather than where a name is
+  emitted. `MSSqlConnector.ConvertType` mapped every `DbType.String` field that is not a `CharField` to the
+  deprecated `TEXT`, and a `TEXT` column on SQL Server **cannot take a parameter comparison at all**. Measured
+  on 2022 (16.0.4265.3): `=` / `<>` / `IN` raise **402**, `LOWER(col)` **8116**, `ORDER BY` and `GROUP BY`
+  **306**, `DISTINCT` **421**; only `LIKE` and `IS NULL` were legal. So a plain
+  `public string Name { get; set; }` — the common consumer shape, present on essentially every consumer
+  entity — broke **every** `Find`/`Count`/`DeleteWhere` predicate and every `SortBy` over that column, on
+  the one provider nobody ran string predicates against (TASK-257, filed by consumer Symbio TASK-472). The rule
+  is now: **an unlengthed `string` on MSSql declares `NVARCHAR(MAX)`; where an index key names the column it
+  declares `NVARCHAR(255)`; nothing alters an existing column.** Eight parts generalise:
+  - **`NVARCHAR(MAX)` over any bounded default, because the broken direction was READS.** `TEXT` accepts 2 GB
+    writes today, so a bounded default would start refusing values the same code stored yesterday — trading a
+    fixed read defect for a new write defect. It also keeps MSSql in step with SQLite `TEXT`, PostgreSQL `TEXT`
+    and MySQL `LONGTEXT`, all unbounded, so no provider gains a silent write ceiling. Third consecutive task
+    where **uniformity across providers beat per-provider fidelity** (TASK-256, TASK-263), for the same reason:
+    the product tests on SQLite and deploys elsewhere. The precedent is two arms up in the same `switch` —
+    `DbType.Binary` → `VARBINARY(MAX)` (CR-M137), chosen because a bare `BINARY` defaults to `BINARY(1)`.
+  - **Fixing the predicate class does NOT fix the index, and measuring is what says so.** An index over
+    `NVARCHAR(MAX)` raises the **same 1919** as one over `TEXT` — `MAX` is not permitted in a key at all — so
+    the obvious one-line fix would have left every `[IndexedField]`/`[CompositeIndex]`/`[UniqueField]`
+    unlengthed string exactly as broken, and *reported success*. Both halves were measured against the live
+    server **before** the code was written, which is what makes the two reverts below meaningful rather than
+    decorative.
+  - **`AbstractField.IsInIndexKey`, not three flags OR'd at the connector.** `IsIndexed` (TASK-248) answers only
+    *"does a declared index name this column"* — `LoadIndexes` marks nothing else — while `FieldDefinition`
+    emits `UNIQUE` and `PRIMARY KEY` as **inline column constraints on all four providers**. So a
+    `[UniqueField] public string Code` is an index key that `IsIndexed` reports as `false`, and on SQL Server
+    that killed **the whole `CREATE TABLE`**, not merely an index. Two providers need this answer and MySQL
+    currently gives a too-narrow one, so a computed property is one producer rather than speculative generality
+    — a third spelling is how a rule gets got wrong again.
+  - **The asymmetry with MySQL is deliberate, recorded, and TESTED.** MySQL has the identical hole
+    (`LONGTEXT UNIQUE` → ERROR 1170) and deliberately still reads the narrow `IsIndexed`, because switching it
+    changes DDL on a provider this task did not measure. **A test asserts MySQL still reads the narrow flag** —
+    otherwise the asymmetry is indistinguishable from an oversight and the next reader unifies it from
+    symmetry, exactly as § TASK-263 had to pin its own deliberate gaps.
+  - **255 because MySQL already picked 255, not because SQL Server's limit is 255.** The real ceiling here is
+    1700 bytes nonclustered / 900 clustered = 850 / 450 characters, so there was room for more. A value that
+    indexes on one server must index on the other, since the same model runs on both; per-provider headroom
+    would buy nothing real (document numbers, codes, e-mail addresses) and cost a divergence. Overridable via
+    `protected virtual int IndexedStringColumnLength`, and **the override has its own test** — "the real ceiling
+    is the key limit, not this number" is otherwise a comment nothing enforces.
+  - **Bounding a UNIQUE column is only safe because the over-long write is REFUSED, and that rests on
+    `ANSI_WARNINGS`.** Measured on 2022: with it **ON** — Microsoft.Data.SqlClient's default, and the framework
+    never changes it — a 300-character insert into `NVARCHAR(255)` raises **Msg 2628** and stores nothing. With
+    it **OFF** the value is silently **truncated to 255**, and a second, genuinely different value sharing that
+    prefix is then rejected as **Msg 2627, a duplicate key** — i.e. the constraint becomes *weaker than
+    declared*, which is precisely the outcome TASK-248 rejected prefix indexes for, arriving through a session
+    setting instead. Not a defect here (nothing in the framework sets it, and the identical property has always
+    held for `[MaxLengthField(n)]` on MSSql, MySQL and PostgreSQL), but it is the load-bearing reason the
+    bounded branch is acceptable at all, so it is written down rather than left as luck. A consumer that turns
+    `ANSI_WARNINGS` off trades a loud refusal for a silent collision on every bounded unique column it owns.
+  - **Nothing repairs an existing database, and that is stated rather than left to be discovered.**
+    `CreateTable` is guarded by `IF NOT EXISTS` and schema-ensure never reconciles the columns of an existing
+    table, so a pre-fix database keeps its `TEXT` columns and keeps failing every predicate. The remedy is a
+    hand-run `ALTER TABLE [T] ALTER COLUMN [C] NVARCHAR(MAX) NULL` (supported, preserves data, no index to drop
+    since `TEXT` could never have one). Auto-`ALTER` on schema-ensure was rejected: store init rewriting
+    existing production columns is the quiet destructive write these rules exist to forbid. Blast radius
+    measured as **zero** — no deployment selects MSSql — and, as in TASK-219/256, that window closes the moment
+    one does.
+  - **A "green" test list can be the wrong list, and only the measurement tells you which.** The task's own
+    acceptance criteria named `Contains`/`StartsWith`/`EndsWith` among the things to prove — but `LIKE` is
+    **legal** on `text`, so those three passed *before* the fix and are contract pins, not provers. Confirmed by
+    revert (a): 25 of 85 fail and the LIKE test is **not** among them. Had they been treated as provers, a
+    revert taking them down would have been read as success. **Establish which half of a criterion carries the
+    proof before writing the assertions.**
 - **An operation that can take its tenant from more than one source resolves it ONCE, and refuses rather
   than picking a winner.** Two live answers in one run is the defect, not a precedence question:
   `TenantSyncProvider` keyed its knowledge from `options.TenantGuid` and its write filter from the ambient
@@ -1045,6 +1112,70 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### On MSSql no predicate on an unlengthed `string` worked, and the obvious fix would not have fixed the index (2026-08-21)
+
+TASK-257, filed by consumer Symbio (TASK-472) after `DeleteWhereAsync(x => x.Label == "a")` failed on MSSql
+16.00.4265 with *"The data types text and nvarchar are incompatible in the equal to operator"*. The cause was
+column typing, not the boundary being verified: `ConvertType` mapped every string that is not a `CharField` to
+the deprecated `TEXT`. Verified against live **SQL Server 2022 (16.0.4265.3)** — the reported build — plus live
+**PostgreSQL 16**, live **MySQL 8.4** and on-disk SQLite — the three this change must not disturb — with
+`BIRKO_REQUIRE_LIVE` set throughout so no gated suite silently skipped: **1,117 tests green, 0 failed** across
+seven suites — MSSql 87 (was 61), `Birko.Data.SQL` 575 (was 565), SQLite 229, MySQL 78 (was 74),
+PostgreSQL 82, MSSql.View 19, Migrations.SQL 47 — **40 new**. No new nullable warning in any touched project (the 64
+standing ones in `Birko.Data.SQL.Tests` are in its own test files and are unchanged by this work — measured
+by stashing the change, not assumed). The standing rule is in § Conventions. Eight things worth carrying:
+
+- **The blast radius was the whole provider, not an exotic shape.** A plain `public string Name { get; set; }`
+  with no length attribute is what consumers write, and it is on essentially every consumer entity —
+  so every `Find`/`FindAll`/`Count`/`DeleteWhere` predicate and every `SortBy` over a string column threw on
+  MSSql. Never noticed because consumers test on SQLite and the MSSql live suites added by TASK-242/243 assert
+  on bulk writes and lazy init, never on a string predicate.
+- **Step 0 measured what the plan intended to cite, and two of the four premises were wrong.** Against a `TEXT`
+  column: `=`/`<>`/`IN` → **402** (the draft said 8116); `LOWER` → **8116**; `ORDER BY` *and* `GROUP BY` → **306**;
+  `DISTINCT` → **421**, a fourth code the draft did not predict; `LIKE` and `IS NULL` → **legal**. Skipping that
+  step would have shipped a test asserting the wrong error number and a comment stating it.
+- **`NVARCHAR(MAX)` alone would have fixed the predicates and reported success on the indexes.** Measured: an
+  index over `NVARCHAR(MAX)` raises the **same Msg 1919** as one over `TEXT`. Worse for `UNIQUE`/`PRIMARY KEY`,
+  which `FieldDefinition` emits as **inline column constraints** — those took down the entire `CREATE TABLE`.
+  And since TASK-204 schema-ensure *records* an unbuildable index rather than throwing, with nothing subscribing,
+  the half-fix would have been silent.
+- **`IsIndexed` could not see the constraint case, so the predicate was resolved once.**
+  `AbstractField.IsInIndexKey => IsIndexed || IsUnique || IsPrimary` — `LoadIndexes` marks only
+  `[IndexedField]`/`[CompositeIndex]`, so a `[UniqueField]` string is an index key the old flag called `false`.
+  MSSql reads the new property; **MySQL deliberately still reads the narrow one** (it has the identical
+  `LONGTEXT UNIQUE` → 1170 hole, but changing its DDL needs a live 8.4 run), and a test pins that asymmetry so
+  nobody unifies it from symmetry.
+- **255 matches MySQL on purpose, and SQL Server had room for more.** Its key limit is 1700 bytes nonclustered /
+  900 clustered — 850 / 450 characters — so 450 was available and was rejected: the same model runs on both
+  servers, and a value that indexes on one must index on the other. Overridable, and the override has its own
+  test, since "the real ceiling is the key limit, not this number" is otherwise unenforced prose.
+- **Reverts — four, each isolating one claim.** (a) restore `return "TEXT"` → **25 of 85**, and the LIKE test is
+  **not** among them, which is what confirms those three assertions were pins rather than provers. (b) always
+  `NVARCHAR(MAX)`, bounded branch unreachable → **11 of 85**, with **all 9 predicate tests still green** — the
+  two halves proven independent rather than argued. (c) drop each `IsIndexed` marking site in turn → **4** and
+  **2**, in disjoint sets; TASK-248's equivalent revert failed **0**, which is why this suite declares one entity
+  per attribute form. (d) narrow `IsInIndexKey` back to `IsIndexed` → **4**, exactly the UNIQUE/PRIMARY cases.
+- **Two fixtures were rigged and a third file's doc was stale.** `BulkTransactionBoundaryLiveTests` carried
+  `map.Property(x => x.Name).HasPrecision(100)`, which *looks* like a length and is not one —
+  `ModelMapRegistry` keeps fluent length as mapping metadata and never applies it to the SQL field, so that
+  column had always been `TEXT`. Removed rather than corrected, since unlengthed is the honest shape. The old
+  `IndexedStringColumnTypeTests` asserted `TEXT` for indexed *and* unindexed and called the consequence a known
+  out-of-scope divergence; its premise is gone, so it was rewritten. Also corrected: `AbstractField.IsIndexed`
+  and `MySQLConnector` both claimed "the other three providers index a TEXT column happily" — **MSSql cannot**,
+  and it was the only one of the three that couldn't.
+
+- **The close gate found something the implementation had not asked about, and it was a security property.**
+  Bounding a UNIQUE column is only acceptable because the over-long write is *refused*, and that rests entirely
+  on `ANSI_WARNINGS`. Measured: **ON** (SqlClient's default; the framework never sets it) → Msg 2628, nothing
+  stored. **OFF** → the value is silently truncated to 255 and a second, genuinely different value sharing that
+  prefix comes back as **Msg 2627, duplicate key** — the constraint quietly weaker than declared, which is the
+  exact failure TASK-248 rejected prefix indexes to avoid, arriving through a session setting instead. No defect
+  (and `[MaxLengthField(n)]` has always had the identical property on three providers), but it is the reason the
+  bounded branch is safe, so it is recorded rather than relied on by luck. The gate also caught a convention
+  miss of its own: `IsInIndexKey` is declared in `Birko.Data.SQL` and was tested only from the two provider
+  suites, so § Testing's *"tests in `Birko.{Project}.Tests`"* wanted a suite in its own project — now
+  `IsInIndexKeyTests` (10).
 
 ### `[UtcField]` opened the door TASK-256's rule had named (2026-08-19)
 

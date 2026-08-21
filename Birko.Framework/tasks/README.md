@@ -30,18 +30,18 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-19 (partial refresh at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-257]]’s close: counts, in-progress, EPIC-014 rows, 6 spawned tasks; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 125   |
+| todo         | —     | —       | 130   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 94    |
+| done         | 1     | 22      | 95    |
 | cancelled    | 0     | 0       | 1     |
 
 Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
@@ -62,6 +62,7 @@ Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
 > lists above.
 
 ## In progress now
+
 
 - [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) — Birko.Web playground: component gallery + live token editor + theme-CSS export (P2, ai) · FEATURE-013
 
@@ -301,7 +302,13 @@ Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
     - [x] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel · FEATURE-014
     - [ ] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door · FEATURE-014
     - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
-    - [ ] [TASK-257](EPIC-014-code-review-remediation/TASK-257-mssql-maps-unlengthed-strings-to-text.md) On MSSql an unlengthed `string` column becomes `TEXT`, so no predicate on it works · FEATURE-014
+    - [x] [TASK-257](EPIC-014-code-review-remediation/TASK-257-mssql-maps-unlengthed-strings-to-text.md) On MSSql an unlengthed `string` column becomes `TEXT`, so no predicate on it works · FEATURE-014
+    - [ ] [TASK-264](EPIC-014-code-review-remediation/TASK-264-migrations-lose-declared-column-metadata.md) A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
+    - [ ] [TASK-265](EPIC-014-code-review-remediation/TASK-265-mysql-unique-primary-unlengthed-string.md) On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string still emits `LONGTEXT` · FEATURE-014
+    - [ ] [TASK-266](EPIC-014-code-review-remediation/TASK-266-binary-and-wide-composite-index-keys.md) Index keys still wrong after TASK-257: a `byte[]` column, and a too-wide composite · FEATURE-014
+    - [ ] [TASK-267](EPIC-014-code-review-remediation/TASK-267-verify-conventions-shadow-does-not-shadow.md) The project-local `verify-conventions` did not run at the close gate, again · FEATURE-014
+    - [ ] [TASK-268](EPIC-014-code-review-remediation/TASK-268-field-type-mapping-polish.md) Two small SQL field-mapping gaps (`TimeOnly` width, `CharField.Lenght` null) · FEATURE-014
+    - [ ] [TASK-269](EPIC-014-code-review-remediation/TASK-269-nothing-reports-a-stale-declared-column-type.md) Nothing reports a column whose stored type no longer matches the model · FEATURE-014
     - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned`'s "preserves each provider's policy" is an argument, not a measurement · FEATURE-014
     - [ ] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
