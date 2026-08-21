@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-60 / 133 tasks done (1 awaiting sign-off).
+61 / 134 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -152,11 +152,12 @@ generated: 2026-08-19
 - [ ] TASK-269 Nothing reports a column whose stored type no longer matches what the model declares
 - [ ] TASK-270 `DataBase.GetConnector` shares one connector process-wide, and three features have put per-caller state on it
 - [ ] TASK-271 The TimescaleDB migration emitters bypass the connector for a reason that no longer exists
+- [ ] TASK-272 An entity cannot say which schema it lives in
 - [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
 - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
 - [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
 - [ ] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
-- [ ] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
+- [x] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
 
 ## What can be tested now
 

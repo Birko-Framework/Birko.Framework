@@ -681,6 +681,56 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     from its neighbour. Pinned by a test asserting both the declaration and `typeof()`, so a later change in
     either surfaces there rather than as a wrong instant downstream. Same discipline as the accepted-divergence
     ledgers in § TASK-222 and § TASK-245.
+- **A name a CALLER supplies may be qualified; a name the framework resolved never is — and quoting the whole
+  string conflates them.** Tenth instance of the identifier family (TASK-262), and the one that arrives from
+  reuse rather than from a new sink. `QuoteIdentifier` quotes its argument as **one** identifier, which is
+  right for a column and for a table name taken from `Table.Name` — that is never qualified. TASK-253 routed
+  the TimescaleDB migration emitters through it, and a migration author's `reporting.evts` became
+  `'"reporting.evts"'`: a request for a single table whose name literally contains a period. Measured on
+  TimescaleDB 2.29.2 / PostgreSQL 16.15 — `42P01`, which `IsMissingTableException` classifies as a missing
+  table, so the handler can **swallow it and report success**. Six parts generalise:
+  - **The tell is provenance, not position.** Both callers of these producers emit the same statements; what
+    differs is where the name came from. The store passes `Table.Name` (framework-resolved, never qualified);
+    a migration passes author text (qualification is idiomatic there and nowhere else in the changed surface).
+    **When a helper gains a second caller, ask what its argument now means** — TASK-253 carried a premise one
+    layer up without noticing it stopped holding.
+  - **`AbstractConnectorBase.QualifiedIdentifier` is the one producer, and it splits on UNQUOTED dots only.**
+    Per-part quoting is *strictly more capable* than the bare name that preceded TASK-253: measured,
+    `'"reporting"."Evts4"'` and `'"Rep Ort"."Ev ts"'` each created a hypertable, and a bare qualified name
+    reaches neither mixed case nor spaces. `RegclassLiteral` composes on top of it; the three bare-SQL
+    positions (`ALTER TABLE`, `CREATE MATERIALIZED VIEW`, `FROM`) were retargeted to it. **`QuoteIdentifier`
+    itself is unchanged** — it is the single-identifier producer framework-wide, and splitting there would
+    alter column and table quoting everywhere.
+  - **State the trade and measure it.** Splitting gives up a table whose name literally contains a dot —
+    *unless the caller quotes it*, which the unquoted-dot rule preserves, so `"a.b"` stays addressable as one
+    part. That escape hatch is the reason to split on unquoted dots rather than on every dot. Cost measured
+    rather than assumed: **0 of 317** `[Table("…")]` declarations across the framework, its tests and all 16
+    consumer repos contain a dot.
+  - **A scanner over quoted text must know the provider's delimiters, and asymmetric ones are the case it
+    gets wrong.** `IdentifierQuoteOpen`/`Close` are exposed once and overridden beside `QuoteIdentifier` —
+    ANSI `"` by default, backticks on MySQL, `[`/`]` on MSSql, where open and close **differ** so a
+    same-character scanner mis-detects the quoted part. All three shapes are covered offline even though only
+    the PostgreSQL family has callers today, because a helper on the shared base gets used by the layer you
+    did not think about. A test fake that overrode `QuoteIdentifier` without the delimiters was corrected in
+    the same change: an unfaithful fake is how such an override goes untested.
+  - **A shared producer can make an opt-in impossible, and that is the honest reason to document a limit
+    rather than build one.** `CatalogueNameLiteral` pre-folds a column name because framework DDL emits
+    columns bare — so a hand-created *quoted mixed-case* column is unreachable through these emitters
+    (`42703`, measured). The fix cannot be "fold only when the caller wrote it unquoted", because the same
+    producer serves the store, where an unquoted name means *the quoted identifier this framework created*
+    (TASK-472). Teaching unquoted to mean "fold me" would re-break that defect — which was invisible
+    precisely because its failure is swallowed. With **0** emitter call sites across 16 consumer repos, an
+    explicit opt-out on seven methods is speculative API; the remarks name it as the shape to add when a real
+    caller appears. **Record the limit and why it is a limit, so the next author meets a decision.**
+  - **Supporting a qualified string is not the same as having a schema, and conflating them would have turned
+    a P2 regression fix into a feature.** The framework has no schema concept at all — measured:
+    `Attributes.Table` takes only `Name`, `Tables.Table` holds none, no `Settings` class has one. Where that
+    goes is settled but separate ([[TASK-272]]): **identity on the table, rendering and capability on the
+    connector**, because a connector is cached per (type, settings id) and can hold only *one* schema (a
+    search path, not qualification), while `Tables.Table` holds no connector and so cannot quote per provider
+    — the seam `Table.GetSelectFields(…, Func<string,string>? quoteTable)` already demonstrates. And
+    `SupportsSchemas` would be genuinely two-sided: true on PostgreSQL and MSSql, false on SQLite and on
+    MySQL, where `CREATE SCHEMA` creates a **database** (measured: it produced a sibling of `birkoview`).
 - **Per-caller, per-operation state never goes on a process-wide cached object — and when the last user of
   such a mechanism moves off it, the mechanism goes too.** Connectors are cached process-wide per
   (type, settings id) by `DataBase.GetConnector`, and three separate features have written one caller's state
@@ -1169,6 +1219,42 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A migration could not name a table in another schema, because one helper served two kinds of name (2026-08-21)
+
+TASK-262, both halves filed by TASK-253's own close-gate review as regressions that task introduced. Routing
+the TimescaleDB migration emitters through `QuoteIdentifier` — correct for a name from `Table.Name` — turned an
+author's `reporting.evts` into `'"reporting.evts"'`, one identifier containing a period. Verified against live
+**TimescaleDB 2.29.2 / PostgreSQL 16.15**, the exact version the task's original measurements used, plus SQL
+Server 2022, PostgreSQL 16, MySQL 8.4 and on-disk SQLite: **1,225 tests green, 0 failed** across nine suites,
+16 new. The standing rule is in § Conventions. Six things worth carrying:
+
+- **Measure the fix's shape, not just the defect.** Reverting to a bare name would have restored the qualified
+  case; per-part quoting is *strictly better*, and only measuring showed it — `'"reporting"."Evts4"'` and
+  `'"Rep Ort"."Ev ts"'` each created a hypertable, and neither is reachable bare. The fix ends up more capable
+  than the code TASK-253 replaced.
+- **The trade is real, lopsided, and measured.** Splitting on unquoted dots gives up a table literally named
+  `a.b` — kept reachable as `"a.b"`, since caller-quoting suppresses the split. Cost: **0 of 317**
+  `[Table("…")]` declarations anywhere contain a dot.
+- **A quoted-text scanner needs the provider's delimiters, and MSSql's are asymmetric.** `[`/`]` differ, so a
+  same-character scanner mis-detects the quoted part. Exposed once as `IdentifierQuoteOpen`/`Close` beside
+  `QuoteIdentifier`, covered offline for all three shapes despite only PostgreSQL having callers — and a test
+  fake that overrode the quoting without the delimiters was corrected in the same change, because an
+  unfaithful fake is how an override goes untested.
+- **The second half was documented rather than fixed, and the reason is structural.** The column-name fold
+  cannot become conditional on the caller's spelling, because the same producer serves the *store*, where an
+  unquoted name means the quoted identifier the framework created (TASK-472). Making unquoted mean "fold me"
+  would re-break that defect — the one whose failure is swallowed. With 0 emitter call sites, an opt-out on
+  seven methods is speculative API; the limit and the shape of the eventual fix are written on the class.
+- **Answering "should this support schemas?" surfaced that the framework has no schema concept at all** —
+  nothing on `Attributes.Table`, `Tables.Table` or any `Settings`. Kept out of this task deliberately: it is a
+  feature touching ~10 emitters, not a P2 regression fix. Filed as [[TASK-272]] with the design settled —
+  identity on the table, rendering and capability on the connector, because a connector holds one schema at
+  most while `Tables.Table` holds no connector.
+- **Reverts:** whole-name quoting fails **4 of 52** — all four new live tests — while the 48 pre-existing tests
+  stay green, which is what proves the fix additive and the new tests the thing that witnesses it. Also
+  measured for the spawn: on MySQL 8.4 `CREATE SCHEMA reporting` created a *sibling database*, so
+  `SupportsSchemas` will be genuinely two-sided rather than an unconditional flag.
 
 ### A migration left its disposed connection on the shared connector, and the next store died of it (2026-08-21)
 
