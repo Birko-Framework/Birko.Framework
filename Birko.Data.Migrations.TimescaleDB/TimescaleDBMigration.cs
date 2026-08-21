@@ -339,17 +339,53 @@ namespace Birko.Data.Migrations.TimescaleDB
         }
 
         /// <summary>
-        /// Gets the chunk interval for a hypertable.
+        /// Gets the chunk interval of a hypertable's <b>primary (time) dimension</b>, as text, or null when
+        /// <paramref name="tableName"/> is not a hypertable.
         /// </summary>
-        /// <remarks>Parameterised and case-preserving, for the reason given on <see cref="IsHypertable"/>.</remarks>
+        /// <remarks>
+        /// <b>Targets TimescaleDB 2.x</b> (measured on 2.29.2 / PostgreSQL 16.15). It previously read
+        /// <c>chunk_time_interval</c> from <c>timescaledb_information.hypertables</c>, which 2.0 removed: the
+        /// interval moved to <c>timescaledb_information.dimensions</c> and was renamed <c>time_interval</c>.
+        /// That query therefore raised <c>42703</c> on every 2.x server — i.e. every supported version — and it
+        /// is not swallowed, so a migration calling it failed outright. The old spelling was presumably right
+        /// on 1.x and nothing recorded that it had an expiry, which is why this remark now names the version
+        /// the query targets (TASK-261).
+        /// <para>
+        /// <b><c>dimension_number = 1</c> is defensive, and the honest measurement says so.</b> The view holds
+        /// one row per dimension: on a space-partitioned hypertable, dimension 1 is the time column carrying
+        /// <c>time_interval</c> and dimension 2 is the space column with <b>both</b> interval columns NULL — so
+        /// the unrestricted query returns 2 rows of which only 1 has a value, and <c>ExecuteScalar</c> takes
+        /// the first. It currently takes the <i>right</i> one: <c>timescaledb_information.dimensions</c> carries
+        /// its own <c>ORDER BY</c>, so removing this clause breaks nothing on 2.29.2 (measured — the revert
+        /// fails no test). The clause stays because that correctness rests on an ordering the query does not
+        /// state and the catalogue does not promise, and <b>this task exists precisely because a detail of this
+        /// catalogue changed between versions</b>. Relying on the view's internal sort would be the same bet
+        /// that produced the defect being fixed.
+        /// </para>
+        /// <para>
+        /// <b>An integer-partitioned hypertable returns its integer interval, not null</b> — the coalesce is
+        /// deliberate. Such a hypertable has a NULL <c>time_interval</c> and its width in
+        /// <c>integer_interval</c> (measured: <c>100000</c>), so returning null would claim no interval is
+        /// configured when one is. Note the discriminator is which column is populated, <b>not</b>
+        /// <c>dimension_type</c>: an integer-partitioned dimension still reports <c>dimension_type = 'Time'</c>
+        /// on 2.29.2, so branching on that would be wrong. The cost of coalescing is that a caller cannot tell
+        /// <c>"3 days"</c> from <c>"100000"</c> without knowing the partitioning column's type — accepted,
+        /// because the alternative is losing the value entirely, and a <c>string?</c> return can express
+        /// neither shape better.
+        /// </para>
+        /// <para>Parameterised and case-preserving, for the reason given on <see cref="IsHypertable"/>.</para>
+        /// </remarks>
         protected virtual string? GetChunkInterval(IMigrationContext context, string tableName)
         {
             var (connection, _, _) = GetSqlConnection(context);
             using var command = connection.CreateCommand();
-            command.CommandText = "SELECT chunk_time_interval::text FROM timescaledb_information.hypertables WHERE hypertable_name = @table";
+            command.CommandText =
+                "SELECT COALESCE(time_interval::text, integer_interval::text) "
+              + "FROM timescaledb_information.dimensions "
+              + "WHERE hypertable_name = @table AND dimension_number = 1";
             AddParameter(command, "@table", tableName);
             var result = command.ExecuteScalar();
-            return result?.ToString();
+            return result == DBNull.Value ? null : result?.ToString();
         }
 
         private static (DbConnection connection, DbTransaction? transaction, AbstractConnector connector) GetSqlConnection(IMigrationContext context)
