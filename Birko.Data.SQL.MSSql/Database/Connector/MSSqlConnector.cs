@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -93,6 +93,13 @@ namespace Birko.Data.SQL.Connectors
         {
             return "[" + identifier.Replace("]", "]]") + "]";
         }
+
+        /// <inheritdoc />
+        /// <remarks>Bracket-quoted, so the delimiters differ from each other (TASK-262).</remarks>
+        protected override char IdentifierQuoteOpen => '[';
+
+        /// <inheritdoc />
+        protected override char IdentifierQuoteClose => ']';
 
         public override DbConnection CreateConnection(PasswordSettings settings)
         {
