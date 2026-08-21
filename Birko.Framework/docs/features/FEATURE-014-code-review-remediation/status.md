@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-61 / 134 tasks done (1 awaiting sign-off).
+62 / 134 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -156,7 +156,7 @@ generated: 2026-08-19
 - [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
 - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
 - [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
-- [ ] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
+- [x] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
 - [x] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
 
 ## What can be tested now

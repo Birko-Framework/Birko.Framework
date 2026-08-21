@@ -3,7 +3,7 @@ id: TASK-261
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-18
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-253, TASK-472]
 findings: []
-pr: null
+pr: "Birko.Data.Migrations.TimescaleDB b9566d9 · tests: Birko.Data.Migrations.TimescaleDB.Tests 447fe35"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.Migrations.TimescaleDB]
@@ -68,21 +68,70 @@ this task starts with a failing-in-the-right-direction test: invert it rather th
 
 ## Acceptance criteria
 
-- [ ] `GetChunkInterval` reads `time_interval` from `timescaledb_information.dimensions`, restricted to the
-      **primary time dimension** (`dimension_number = 1`) — the view has one row per dimension, so an
-      unrestricted query returns two rows for a space-partitioned hypertable and `ExecuteScalar` would silently
-      take whichever came first.
-- [ ] The **integer-partitioned** case answered explicitly, not by accident: `time_interval` is NULL for a
-      hypertable partitioned on an integer column, where the value lives in `integer_interval`. Decide whether
-      to return the integer interval, return null, or coalesce — and write down which, because a silent null
-      here reads as "no chunk interval configured".
-- [ ] The existing TASK-261 pin inverted: it must assert the interval is returned, and the `42703` assertion
-      must be gone rather than left alongside as a contradiction.
-- [ ] Verified against **live TimescaleDB**, asserting a known interval round-trips (`"3 days"` in), including
-      the space-partitioned case. Not "the call did not throw".
-- [ ] Proven able to fail: restore the old column name and watch the new test go red.
-- [ ] A version note in the doc comment saying which TimescaleDB versions the query targets. The old query was
-      presumably correct on 1.x, and nothing recorded that it had an expiry.
+- [x] Reads `time_interval` from `timescaledb_information.dimensions`, restricted to `dimension_number = 1`.
+      ⚠ **But the stated rationale was wrong, and the honest version is recorded instead.** The view carries
+      its **own `ORDER BY`** (measured), so dimension 1 comes back first and an unrestricted query takes the
+      *right* row on 2.29.2 — removing the clause fails **no test**. The clause is kept as **defensive**, not
+      as a fix for an observed failure: 2 rows come back and only 1 carries a value, so correctness without it
+      rests on an ordering the query does not state and the catalogue does not promise — which is the same bet
+      that produced the defect this task fixes.
+- [x] The integer-partitioned case answered explicitly. → **Coalesce**:
+      `COALESCE(time_interval::text, integer_interval::text)`. Returning null would claim no interval is
+      configured when one is — measured, an integer-partitioned hypertable has `time_interval` NULL and
+      `integer_interval = 100000`. **The discriminator is which column is populated, NOT `dimension_type`**:
+      measured on 2.29.2, an integer-partitioned dimension still reports `dimension_type = 'Time'`, so
+      branching on the type would have been wrong. Accepted cost, written on the method: a caller cannot tell
+      `"3 days"` from `"100000"` without knowing the partitioning column's type — but a `string?` return can
+      express neither shape better, and losing the value is worse.
+- [x] The pin inverted. → `GetChunkInterval_readsAColumnTimescaleDB2Removed_TASK261` is **gone**, replaced by
+      `GetChunkInterval_returnsThePrimaryDimensionsInterval`. The `42703` assertion is removed rather than kept
+      beside the new one, since two tests asserting opposite things about one method is a contradiction for the
+      next reader to resolve, not extra coverage.
+- [x] Verified against live TimescaleDB 2.29.2 / PostgreSQL 16.15. → Five tests, all on returned values:
+      `"3 days"` round-trips; the space-partitioned hypertable yields its **time** dimension's `"7 days"`; an
+      integer-partitioned one yields `"100000"`; a table that was never converted yields **null** rather than
+      throwing; and a separate test pins the catalogue shape that justifies the `dimension_number` clause
+      (2 dimension rows, 1 with an interval) — asserted against the server, because the reader itself cannot
+      witness it.
+- [x] Proven able to fail — three reverts, one per clause, and **one of them fails nothing**, which is
+      reported rather than hidden:
+      - **(a)** restore `chunk_time_interval` from `…hypertables` → **4 of 56** fail (every `GetChunkInterval`
+        test).
+      - **(b)** drop only `AND dimension_number = 1` → **0 of 56**. The view's own `ORDER BY` makes the
+        unrestricted query take the right row today. Recorded on the method and in the space-partitioned
+        test's remarks, so the clause does not read as witnessed when it is not, and the hazard is pinned by a
+        catalogue assertion instead.
+      - **(c)** drop only the `COALESCE` → **1 of 56**, exactly the integer-partitioned case.
+- [x] A version note added. → The remark now states it targets **TimescaleDB 2.x**, names the measured server
+      (2.29.2 / PostgreSQL 16.15), and records that the previous spelling was presumably right on 1.x with
+      nothing marking its expiry — which is why the version is now written down.
+
+## Verification
+
+Live **TimescaleDB 2.29.2 / PostgreSQL 16.15**, plus SQL Server 2022, PostgreSQL 16, MySQL 8.4 and on-disk
+SQLite, with `BIRKO_REQUIRE_LIVE` set throughout. **1,229 passed, 0 failed** across nine suites; **4 net new**
+(five added, the inverted pin replacing one).
+
+| Suite | Result |
+|---|---|
+| `Birko.Data.Migrations.TimescaleDB.Tests` | 56 (was 52) |
+| `Birko.Data.TimescaleDB.Tests` | 44 |
+| `Birko.Data.SQL.Tests` | 587 |
+| `Birko.Data.SQL.MSSql.Tests` | 87 |
+| `Birko.Data.SQL.MySQL.Tests` | 78 |
+| `Birko.Data.SQL.PostgreSQL.Tests` | 82 |
+| `Birko.Data.SQL.SqLite.Tests` | 229 |
+| `Birko.Data.Migrations.SQL.Tests` | 49 |
+| `Birko.Data.Migrations.Tests` | 17 |
+
+### The out-of-scope survey was run, and it is clean
+
+`## Out of scope` asked for other stale `timescaledb_information` queries to be spawned if any turned up.
+Swept: the framework contains exactly **two** catalogue queries — `IsHypertable`'s
+`timescaledb_information.hypertables WHERE hypertable_name` (valid; the column exists on 2.29.2 and has live
+coverage) and this one. The remaining `chunk_time_interval` occurrences are the **named argument** to
+`create_hypertable`, which is current and unrelated to the removed view column. No `_timescaledb_catalog`
+(internal) use anywhere. **Nothing to spawn.**
 
 ## Out of scope
 
@@ -94,5 +143,5 @@ this task starts with a failing-in-the-right-direction test: invert it rather th
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is a known chunk interval read back from a live hypertable, including the
-      space-partitioned and integer-partitioned shapes.
+- [x] N/A — mechanical; the proof is a known chunk interval read back from a live hypertable, including the
+      space-partitioned and integer-partitioned shapes. All three are asserted on returned values.

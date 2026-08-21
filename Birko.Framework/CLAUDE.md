@@ -681,6 +681,36 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     from its neighbour. Pinned by a test asserting both the declaration and `typeof()`, so a later change in
     either surfaces there rather than as a wrong instant downstream. Same discipline as the accepted-divergence
     ledgers in § TASK-222 and § TASK-245.
+- **A query against another product's catalogue has an expiry date, and nothing in the type system says so —
+  write the version down.** `GetChunkInterval` read `chunk_time_interval` from
+  `timescaledb_information.hypertables`, which was presumably right on TimescaleDB 1.x. **2.0 moved the value
+  to `timescaledb_information.dimensions` and renamed it `time_interval`**, so the method raised `42703` on
+  every 2.x server — i.e. every supported version — and it is not swallowed, so a migration calling it failed
+  outright (TASK-261, measured on 2.29.2 / PostgreSQL 16.15). Distinct from the identifier family: not quoting
+  or folding, but **catalogue drift**, which is why it was filed as its own task rather than absorbed into
+  TASK-253. Four parts generalise:
+  - **The version the query targets belongs in the remark.** Nothing marked the old spelling as having an
+    expiry, and a catalogue column is exactly the kind of dependency that changes under you between minor
+    releases of somebody else's product. Naming the measured server turns a silent future break into a
+    readable one.
+  - **A view with one row per sub-object needs its row pinned, and `ExecuteScalar` will not tell you.**
+    `dimensions` holds one row per dimension: for a space-partitioned hypertable, dimension 1 is the time
+    column with the interval and dimension 2 is the space column with **both** interval columns NULL. So the
+    unrestricted query returns 2 rows of which 1 has a value, and `ExecuteScalar` silently takes the first.
+  - **⚠ And the restriction is DEFENSIVE, not witnessed — say which, because a revert that fails nothing is a
+    missing test.** Removing `AND dimension_number = 1` fails **0** tests: measured, the view carries its own
+    `ORDER BY`, so the right row comes back first today. The clause is kept because correctness without it
+    rests on an ordering the query does not state and the catalogue does not promise — the same bet that
+    produced this defect. The hazard is pinned by asserting the **catalogue shape** (2 rows, 1 interval)
+    rather than by pretending the reader witnesses it. Compare § TASK-248, where a revert failing 0 meant a
+    genuinely absent test; here it means the clause guards a future, and the distinction has to be written
+    down or the next reader deletes it as dead weight.
+  - **A NULL from a catalogue means "not this shape", not "not configured" — and the discriminator may not be
+    the column that names the shape.** An integer-partitioned hypertable has `time_interval` NULL and its
+    width in `integer_interval`, so returning null would claim no chunk interval is configured when one is;
+    the reader coalesces. But it must not branch on `dimension_type`: measured, an integer-partitioned
+    dimension still reports `dimension_type = 'Time'` on 2.29.2. **Check that the column which appears to
+    describe the shape actually discriminates it.**
 - **A name a CALLER supplies may be qualified; a name the framework resolved never is — and quoting the whole
   string conflates them.** Tenth instance of the identifier family (TASK-262), and the one that arrives from
   reuse rather than from a new sink. `QuoteIdentifier` quotes its argument as **one** identifier, which is
@@ -1219,6 +1249,38 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A chunk-interval reader had been broken for the whole TimescaleDB 2.x line (2026-08-21)
+
+TASK-261, found while writing TASK-253's live suite — the first draft of a chunk-interval assertion failed for
+the same reason the product code did. `GetChunkInterval` read `chunk_time_interval` from
+`timescaledb_information.hypertables`; 2.0 moved that value to `timescaledb_information.dimensions` and renamed
+it `time_interval`, so the method raised `42703` on every supported server, unswallowed. Latent — the only
+references in the tree were its own declaration and that test, and no consumer calls it. Verified on live
+**TimescaleDB 2.29.2 / PostgreSQL 16.15** plus the four SQL providers: **1,229 tests green, 0 failed** across
+nine suites, 4 net new. The standing rule is in § Conventions. Five things worth carrying:
+
+- **The task began with a test asserting the defect, so the work was to invert it, not to write it.** The
+  `42703` assertion is deleted rather than kept beside the new one — two tests asserting opposite things about
+  one method is a contradiction for the next reader, not extra coverage.
+- **One of the three reverts fails nothing, and that is reported rather than hidden.** Restoring the old column
+  fails 4 of 56; dropping the `COALESCE` fails exactly the integer-partitioned case; dropping
+  `AND dimension_number = 1` fails **0**, because the view carries its own `ORDER BY` and the right row comes
+  back first. So that clause is **defensive, not witnessed** — kept because correctness without it rests on an
+  ordering the catalogue does not promise, and the hazard is pinned by asserting the catalogue's shape
+  (2 dimension rows, 1 carrying an interval) instead of pretending the reader can see it. My own doc comment
+  initially claimed the failure did occur; the revert is what caught that.
+- **The column that names the shape does not discriminate it.** An integer-partitioned hypertable reports
+  `dimension_type = 'Time'` on 2.29.2, with `time_interval` NULL and the width in `integer_interval` — so
+  branching on the type would have been wrong, and the discriminator is which interval column is populated.
+  The reader coalesces, because returning null would claim no interval is configured when one is.
+- **Another product's catalogue is a dependency with an expiry, and nothing typed says so.** The old spelling
+  was presumably correct on 1.x and nothing recorded that it could lapse. The remark now names the version the
+  query targets, so the next break is readable rather than silent.
+- **The out-of-scope survey was actually run, and it is clean.** The framework holds exactly two
+  `timescaledb_information` queries — this one and `IsHypertable`, whose column still exists and has live
+  coverage. The remaining `chunk_time_interval` occurrences are `create_hypertable`'s named argument, which is
+  current. No internal `_timescaledb_catalog` use anywhere. Nothing spawned.
 
 ### A migration could not name a table in another schema, because one helper served two kinds of name (2026-08-21)
 
