@@ -50,12 +50,22 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// <para>
     /// <b>These statements run on the migration's own connection and transaction, deliberately.</b> They do
     /// not go through <c>AbstractConnector.DoDdlCommand</c>, so they neither join nor are suppressed off an
-    /// ambient boundary — a migration owns its transaction, which is the same reason TASK-243 leaves the
-    /// legacy <c>ExternalConnection</c> pair unsuppressed. Routing them through the connector would require
-    /// <c>SetExternalTransaction</c>, which publishes one caller's connection onto a connector cached
-    /// process-wide per (type, settings id) — the mechanism both stores deliberately abandoned in TASK-240,
-    /// and a live defect in its last caller (TASK-259). PostgreSQL's DDL <i>is</i> transactional, so a
+    /// ambient boundary — a migration owns its transaction. PostgreSQL's DDL <i>is</i> transactional, so a
     /// migration that fails rolls its hypertable conversion back with it.
+    /// </para>
+    /// <para>
+    /// <b>⚠ TASK-259 removed the reason this was the only option, so the choice is now open rather than
+    /// forced.</b> TASK-253 rejected routing these through the connector because doing so required
+    /// <c>SetExternalTransaction</c>, which published one caller's connection onto a connector cached
+    /// process-wide per (type, settings id) — the mechanism both stores abandoned in TASK-240, and a live
+    /// defect in its last caller. That mechanism is <b>gone</b>: <c>SqlSchemaBuilder</c> moved onto
+    /// <see cref="Birko.Data.SQL.Connectors.AmbientSqlTransaction"/>, which is flow-scoped and restores on
+    /// dispose, and the legacy pair was deleted outright. A migration can now publish its connection and
+    /// transaction as an ambient boundary safely, so routing these emitters through the connector is a real
+    /// option — it would let them reuse <c>DoDdlCommand</c> and the provider capabilities instead of
+    /// hand-rolling their own execution. Left as-is here because it is a behaviour change on a live
+    /// TimescaleDB path that wants its own measurement, not a comment edit: it is recorded so the next reader
+    /// finds a decision that has been reopened rather than a constraint that no longer exists.
     /// </para>
     /// <para>
     /// <b>PRECONDITION, not a general truth: these rules assume the object was created by this framework's
