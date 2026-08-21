@@ -42,6 +42,7 @@ public class MigrationEmitterLiveTests : IDisposable
 {
     private const string Table = "MigMetrics";
     private const string Aggregate = "MigDailyStats";
+    private const string IntTable = "MigIntSeq";
 
     private static string? Host => Environment.GetEnvironmentVariable("BIRKO_TS_HOST");
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_TS_PORT"), out var p) ? p : 5432;
@@ -144,6 +145,7 @@ public class MigrationEmitterLiveTests : IDisposable
     {
         Exec($"DROP MATERIALIZED VIEW IF EXISTS \"{Aggregate}\" CASCADE");
         Exec($"DROP TABLE IF EXISTS \"{Table}\" CASCADE");
+        Exec($"DROP TABLE IF EXISTS \"{IntTable}\" CASCADE");
     }
 
     public void Dispose()
@@ -338,21 +340,20 @@ public class MigrationEmitterLiveTests : IDisposable
     }
 
     /// <summary>
-    /// <b>A defect this suite found rather than fixed, pinned as current behaviour: TASK-261.</b>
-    /// <c>GetChunkInterval</c> asks for <c>chunk_time_interval</c> from
-    /// <c>timescaledb_information.hypertables</c> — a column TimescaleDB removed from that view in <b>2.0</b>,
-    /// moving the value to <c>timescaledb_information.dimensions</c> and renaming it <c>time_interval</c>. So
-    /// the method raises <c>42703</c> on every TimescaleDB 2.x server, which is all of them; measured here on
-    /// 2.29.2.
+    /// TASK-261 — the chunk interval is read back. This assertion is the <b>inversion</b> of the pin this
+    /// suite carried while the defect stood: <c>GetChunkInterval</c> asked for <c>chunk_time_interval</c> from
+    /// <c>timescaledb_information.hypertables</c>, a column TimescaleDB removed from that view in <b>2.0</b>
+    /// when it moved the value to <c>timescaledb_information.dimensions</c> and renamed it
+    /// <c>time_interval</c>. It therefore raised <c>42703</c> on every 2.x server — all of them — and was not
+    /// swallowed, so a migration calling it failed outright.
     /// <para>
-    /// Out of scope for TASK-253, which is about identifier quoting and folding — this is catalogue drift, a
-    /// different defect with a different fix. It is latent: a sweep found no consumer calling it. Pinned so the
-    /// fix has a failing test to turn green, and so nobody reads the surrounding green suite as evidence that
-    /// this method works.
+    /// The <c>42703</c> assertion is <b>gone</b> rather than kept alongside this one: two tests asserting
+    /// opposite things about one method is not extra coverage, it is a contradiction the next reader has to
+    /// resolve.
     /// </para>
     /// </summary>
     [Fact]
-    public void GetChunkInterval_readsAColumnTimescaleDB2Removed_TASK261()
+    public void GetChunkInterval_returnsThePrimaryDimensionsInterval()
     {
         if (!RequireServer()) return;
         Reset();
@@ -364,12 +365,113 @@ public class MigrationEmitterLiveTests : IDisposable
             var probe = new Probe();
             probe.Hypertable(context, Table, "Ts", "3 days");
 
-            var act = () => probe.Chunk(context, Table);
+            probe.Chunk(context, Table).Should().Be("3 days",
+                "the value declared at create_hypertable must round-trip, not merely be readable");
+        }
+    }
 
-            act.Should().Throw<PostgresException>()
-                .Which.SqlState.Should().Be("42703",
-                    "chunk_time_interval was moved to timescaledb_information.dimensions and renamed "
-                  + "time_interval in TimescaleDB 2.0, so this reader has been broken for the whole 2.x line");
+    /// <summary>
+    /// A space-partitioned hypertable must still yield its <i>time</i> dimension's interval.
+    /// <para>
+    /// <b>What this does and does not witness.</b> Removing <c>dimension_number = 1</c> from the reader fails
+    /// <b>no</b> test, including this one — measured. <c>timescaledb_information.dimensions</c> carries its own
+    /// <c>ORDER BY</c>, so dimension 1 comes back first and an unrestricted <c>ExecuteScalar</c> happens to
+    /// take the right row on 2.29.2. Said plainly rather than left implied, because a revert that fails
+    /// nothing is otherwise indistinguishable from a redundant clause. The hazard the clause guards is pinned
+    /// separately by <see cref="TheDimensionsViewReturnsANullIntervalRowForASpaceDimension"/>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void GetChunkInterval_readsTheTimeDimensionOfASpacePartitionedHypertable()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            var probe = new Probe();
+            probe.HypertableWithSpace(context, Table, "Ts", "DeviceId", 4, "7 days");
+
+            probe.Chunk(context, Table).Should().Be("7 days",
+                "the time dimension's interval, not the space dimension's NULL");
+        }
+    }
+
+    /// <summary>
+    /// The catalogue fact that makes <c>dimension_number = 1</c> worth keeping: a space-partitioned
+    /// hypertable has <b>2</b> dimension rows and only <b>1</b> of them carries an interval. So the reader's
+    /// correctness without that clause rests entirely on the view's row order — which the query does not state
+    /// and the catalogue does not promise.
+    /// <para>
+    /// Asserted against the server rather than through <c>GetChunkInterval</c>, because the reader cannot
+    /// witness it: the order currently favours the right row. This is the test that fails if TimescaleDB ever
+    /// changes that shape, which is exactly the kind of drift TASK-261 is fixing — the chunk interval moved
+    /// view and changed name in 2.0.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void TheDimensionsViewReturnsANullIntervalRowForASpaceDimension()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            new Probe().HypertableWithSpace(context, Table, "Ts", "DeviceId", 4, "7 days");
+        }
+
+        var rows = int.Parse(Scalar(
+            "SELECT COUNT(*) FROM timescaledb_information.dimensions "
+          + $"WHERE hypertable_name = '{Table}'"));
+        var withInterval = int.Parse(Scalar(
+            "SELECT COUNT(COALESCE(time_interval::text, integer_interval::text)) "
+          + "FROM timescaledb_information.dimensions "
+          + $"WHERE hypertable_name = '{Table}'"));
+
+        rows.Should().Be(2, "one row per dimension");
+        withInterval.Should().Be(1,
+            "only the time dimension has an interval -- so an unrestricted ExecuteScalar is order-dependent");
+    }
+
+    /// <summary>
+    /// An integer-partitioned hypertable keeps its width in <c>integer_interval</c> with <c>time_interval</c>
+    /// NULL, so the reader coalesces rather than returning null — null would claim no interval is configured
+    /// when one is. Note the discriminator is which column is populated: measured on 2.29.2 such a dimension
+    /// still reports <c>dimension_type = 'Time'</c>, so branching on the type would be wrong.
+    /// </summary>
+    [Fact]
+    public void GetChunkInterval_returnsTheIntegerIntervalWhenPartitionedOnAnInteger()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS \"{IntTable}\" CASCADE");
+        Exec($"CREATE TABLE \"{IntTable}\" (Seq bigint NOT NULL, Value int)");
+        Exec($"SELECT create_hypertable('\"{IntTable}\"', 'seq', chunk_time_interval => 100000)");
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            new Probe().Chunk(context, IntTable).Should().Be("100000",
+                "the integer width is the chunk interval; returning null would say none is configured");
+        }
+    }
+
+    /// <summary>A name that is not a hypertable has no interval, and that is a null rather than a throw.</summary>
+    [Fact]
+    public void GetChunkInterval_returnsNullForSomethingThatIsNotAHypertable()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            new Probe().Chunk(context, Table).Should().BeNull(
+                "the table exists but was never converted, so the dimensions view has no row for it");
         }
     }
 
