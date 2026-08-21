@@ -126,6 +126,47 @@ namespace Birko.Data.SQL.Connectors
             throw new Exception("No path provided");
         }
 
+        /// <summary>
+        /// Column length used for a string that declares no explicit length but sits in an <b>index key</b>
+        /// (TASK-257).
+        /// </summary>
+        /// <remarks>
+        /// 255 characters = 510 bytes under NVARCHAR. That fits SQL Server's index-key limits (1700 bytes
+        /// nonclustered, 900 clustered) for a single-column key and for a composite of up to <b>three</b> such
+        /// columns (1530 bytes) — measured on 2022.
+        /// <para>
+        /// <b>It does NOT cap the per-index total, and four of them overflow.</b> A <c>[CompositeIndex]</c> over
+        /// four unlengthed strings is 4 × 510 = 2040 bytes: SQL Server <i>creates</i> that index (with warning
+        /// 1708) and then fails the <b>INSERT</b> with Msg 1946, <i>"The index entry of length 2040 bytes …
+        /// exceeds the maximum length of 1700 bytes"</i> — measured. So a wide composite trades this task's
+        /// loud DDL failure for a deferred, data-dependent write failure. Nothing here prevents that; declare
+        /// <c>[MaxLengthField(n)]</c> on the participating columns when a composite has four or more string
+        /// members. Recorded rather than fixed because capping a per-index budget is a different design
+        /// question from typing a column, and it needs its own task.
+        /// </para>
+        /// <para>
+        /// The number matches <c>MySQLConnector.IndexedStringColumnLength</c> on purpose: a value that indexes
+        /// on one server must index on the other, because the same model runs on both. Per-provider headroom
+        /// would buy nothing real — the columns that actually get indexed are document numbers, codes and
+        /// e-mail addresses — and would cost a divergence someone later has to explain.
+        /// </para>
+        /// <para>
+        /// <b>Raising it in a derived connector is not a one-line escape hatch.</b> <c>MSSqlStore&lt;T&gt;</c> /
+        /// <c>AsyncMSSqlStore&lt;T&gt;</c> bind <c>MSSqlConnector</c> as their concrete type argument and
+        /// <c>DataBase.GetConnector&lt;DB&gt;</c> instantiates exactly that type, so a subclass overriding this
+        /// property never reaches DDL through any shipped store — a consumer must also declare its own store
+        /// bound to the derived connector. Stated because a guard whose opt-out does not actually open is a
+        /// wall wearing a door's label (§ SH-H037).
+        /// </para>
+        /// <para>
+        /// Declaring <c>[MaxLengthField(n)]</c> on the property is preferable and needs none of that: it is
+        /// visible at the model and honoured on MSSql, MySQL and PostgreSQL. It is <i>not</i> honoured on
+        /// SQLite, which returns <c>TEXT</c> for every string and never reads the declared length — harmless
+        /// there, since type affinity indexes it anyway, but "portable to every provider" would overstate it.
+        /// </para>
+        /// </remarks>
+        protected virtual int IndexedStringColumnLength => 255;
+
         public override string ConvertType(DbType type, AbstractField field)
         {
             switch (type)
@@ -193,9 +234,55 @@ namespace Birko.Data.SQL.Connectors
                     {
                         return string.Format("NVARCHAR({0})", charField.Lenght);
                     }
+                    // TASK-257: an unlengthed string used to become TEXT here, and TEXT is unusable in a
+                    // predicate on SQL Server -- parameters bind as nvarchar, so every comparison is a type
+                    // clash. Measured on 2022 (16.0.4265.3) against a TEXT column:
+                    //
+                    //   `= @p` / `<> @p` / `IN (@p)`  -> Msg 402  "The data types text and nvarchar are
+                    //                                             incompatible in the equal to operator"
+                    //   LOWER(col)                    -> Msg 8116
+                    //   ORDER BY col / GROUP BY col   -> Msg 306
+                    //   SELECT DISTINCT col           -> Msg 421
+                    //   CREATE INDEX / inline UNIQUE  -> Msg 1919
+                    //   LIKE @p / IS NULL             -> legal, the only two that worked
+                    //
+                    // So a plain `public string Name { get; set; }` -- the common consumer shape, present on
+                    // essentially every consumer entity -- made every Find/Count/DeleteWhere predicate and
+                    // every SortBy over that column throw. NVARCHAR(MAX) fixes all of it (measured: all six
+                    // refused operations above succeed) and is not deprecated, which TEXT is.
+                    //
+                    // MAX rather than a bounded default: TEXT accepts 2GB writes today and only READS failed,
+                    // so any bounded default would start refusing values the same code stored yesterday. It
+                    // also keeps MSSql in step with SQLite TEXT / PostgreSQL TEXT / MySQL LONGTEXT, all
+                    // unbounded -- the CR-M137 VARBINARY(MAX) arm above was chosen for the same reason.
+                    // `field == null` first so this stays null-tolerant: every other arm here uses an `is`
+                    // pattern that is simply false for null, and the pre-TASK-257 code returned a type for a
+                    // null field rather than throwing. SqLite and PostgreSQL are still null-tolerant, so a
+                    // bare `!field.IsInIndexKey` would make this the only provider that NREs on public
+                    // surface the tests exercise deliberately.
+                    else if (field == null || !field.IsInIndexKey)
+                    {
+                        return "NVARCHAR(MAX)";
+                    }
+                    // An index KEY cannot be a MAX type on SQL Server at all -- measured, an index over
+                    // NVARCHAR(MAX) raises the *same* Msg 1919 as TEXT does, so the MAX change alone would
+                    // have left every declared index over an unlengthed string exactly as broken. Worse for
+                    // UNIQUE/PRIMARY KEY, which FieldDefinition emits as inline column constraints: those
+                    // took down the whole CREATE TABLE, not just an index.
+                    //
+                    // IsInIndexKey, not IsIndexed, precisely because of that: LoadIndexes marks only
+                    // [IndexedField]/[CompositeIndex] columns, never a [UniqueField] or [PrimaryField] one.
+                    //
+                    // 255 matches MySQL's IndexedStringColumnLength deliberately -- a value that indexes on
+                    // one server must index on the other, since the same model runs on both. The real ceiling
+                    // is SQL Server's key limit (1700 bytes nonclustered / 900 clustered = 850 / 450 chars at
+                    // 2 bytes each), not this number; raise it in a derived connector if a consumer genuinely
+                    // indexes longer values. Prefix indexes are not available here, so a bounded column is
+                    // the only option -- and it refuses an over-long write loudly rather than silently
+                    // weakening a UNIQUE constraint, which is the TASK-248 trade.
                     else
                     {
-                        return "TEXT";
+                        return string.Format("NVARCHAR({0})", IndexedStringColumnLength);
                     }
             }
         }
