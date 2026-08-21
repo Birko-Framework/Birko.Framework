@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-58 / 125 tasks done (1 awaiting sign-off).
+59 / 131 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -142,8 +142,14 @@ generated: 2026-08-19
 - [ ] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
 - [ ] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
 - [x] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it
-- [ ] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
+- [x] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
 - [x] TASK-263 There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable
+- [ ] TASK-264 A migration's declared column metadata is dropped on the way to the connector
+- [ ] TASK-265 On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string still emits `LONGTEXT`
+- [ ] TASK-266 Index keys still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit
+- [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again
+- [ ] TASK-268 Two small SQL field-mapping gaps found while typing MSSql's string columns
+- [ ] TASK-269 Nothing reports a column whose stored type no longer matches what the model declares
 - [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
 - [ ] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
 - [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
