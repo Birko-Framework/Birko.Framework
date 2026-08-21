@@ -154,6 +154,13 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <inheritdoc />
+        /// <remarks>Backtick-quoted (TASK-262).</remarks>
+        protected override char IdentifierQuoteOpen => '`';
+
+        /// <inheritdoc />
+        protected override char IdentifierQuoteClose => '`';
+
+        /// <inheritdoc />
         public override DbConnection CreateConnection(PasswordSettings settings)
         {
             if (settings == null || string.IsNullOrEmpty(settings.Location) || string.IsNullOrEmpty(settings.Name))
