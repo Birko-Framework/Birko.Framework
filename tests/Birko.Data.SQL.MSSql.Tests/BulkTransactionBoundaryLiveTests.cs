@@ -95,12 +95,20 @@ public class BulkTransactionBoundaryLiveTests : IDisposable
         public int Amount { get; set; }
     }
 
+    /// <remarks>
+    /// TASK-257 de-rigged this fixture. It used to carry <c>map.Property(x =&gt; x.Name).HasPrecision(100)</c>,
+    /// which <b>looks</b> like a length declaration and is not one: <c>ModelMapRegistry</c> keeps
+    /// <c>HasMaxLength</c>/<c>HasPrecision</c> as mapping metadata and deliberately never applies it to the
+    /// SQL field. So <c>Name</c> was always an unlengthed string — a <c>TEXT</c> column before TASK-257 — and
+    /// the fixture merely appeared bounded. The line is gone rather than corrected, because the honest shape
+    /// here is the unlengthed one: it is what a consumer writes, and it is what this suite should exercise.
+    /// </remarks>
     private sealed class BulkRowMapping : IModelMapping<BulkRow>
     {
         public void Configure(ModelMap<BulkRow> map)
         {
             map.ToTable(TableName).HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
-            map.Property(x => x.Name).HasPrecision(100);
+            map.Property(x => x.Name);
             map.Property(x => x.Amount);
         }
     }

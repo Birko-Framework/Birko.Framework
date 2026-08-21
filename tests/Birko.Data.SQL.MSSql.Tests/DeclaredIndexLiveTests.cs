@@ -30,6 +30,16 @@ namespace Birko.Data.SQL.MSSql.Tests;
 /// <para>
 /// The offline half lives in <c>MSSqlIndexDdlTests</c>. This suite is gated on <c>BIRKO_MSSQL_HOST</c>.
 /// </para>
+///
+/// <para>
+/// <b>Its probe entity declares <c>[MaxLengthField]</c> on both indexed columns deliberately, and that is
+/// no longer the only shape covered.</b> This suite is about index DDL mechanics, so a bounded column keeps
+/// the variable under test to one thing. TASK-257 later found that an <i>unlengthed</i> indexed string could
+/// never be indexed here at all — the column was <c>TEXT</c>, which SQL Server refuses as an index key
+/// (Msg 1919) — and that case has its own suite,
+/// <see cref="IndexOverUnlengthedStringLiveTests"/>. Do not "fix" the lengths here to cover it; the two
+/// suites test different things.
+/// </para>
 /// </summary>
 public class DeclaredIndexLiveTests : IDisposable
 {
