@@ -254,9 +254,21 @@ namespace Birko.Data.SQL.Connectors
                     // index over a plain `string` still could not be built here; it merely failed with 1170
                     // instead of 1064, recorded and invisible.
                     //
-                    // Scoped to MySQL on purpose. SQLite, PostgreSQL and MSSql index a TEXT column happily,
-                    // and 7 live consumer entities (Symbio's docnumber/email UNIQUE composites) declare
-                    // exactly this shape and work correctly there today -- so refusing the declaration
+                    // Scoped to MySQL on purpose -- but note the reason narrowed in TASK-257. SQLite (type
+                    // affinity) and PostgreSQL (btree over TEXT) index an unbounded string happily and
+                    // genuinely ignore this flag. **MSSql does not**, and the comment that once stood here
+                    // said it did: it emitted TEXT, which SQL Server refuses as an index key (Msg 1919), so
+                    // no declared index over an unlengthed string had ever been built there either. MSSql now
+                    // bounds such a column too, reading the wider AbstractField.IsInIndexKey.
+                    //
+                    // This branch deliberately still reads the narrower IsIndexed, so MySQL has the same hole
+                    // MSSql just closed: [UniqueField]/[PrimaryField] on an unlengthed string emits
+                    // `LONGTEXT UNIQUE`, which is ERROR 1170 at CREATE TABLE. Switching to IsInIndexKey is a
+                    // one-word change, but it alters DDL on this provider and needs a live 8.4 measurement
+                    // first -- it is filed rather than guessed. Do not "unify" it from symmetry.
+                    //
+                    // 7 live consumer entities (Symbio's docnumber/email UNIQUE composites) declare exactly
+                    // this shape and work correctly on PostgreSQL today -- so refusing the declaration
                     // framework-wide, or bounding the column on every provider, would break working
                     // deployments to fix one provider. MySQL's own 3072-byte index-key limit means SOME bound
                     // is unavoidable here regardless: the divergence is the provider's, not the framework's.
