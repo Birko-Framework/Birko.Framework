@@ -68,15 +68,37 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// finds a decision that has been reopened rather than a constraint that no longer exists.
     /// </para>
     /// <para>
-    /// <b>PRECONDITION, not a general truth: these rules assume the object was created by this framework's
-    /// DDL.</b> The fold is correct because <c>AbstractConnector.CreateTable</c> and
-    /// <c>SqlSchemaBuilder</c> provably emit column definitions bare and quote table names — for an object a
-    /// migration created with hand-written SQL, neither holds, and two things follow that [[TASK-262]] owns:
-    /// a <b>schema-qualified</b> name becomes one identifier containing a dot and raises <c>42P01</c>
-    /// (measured: <c>create_hypertable(''reporting.evts'',…)</c> works, <c>''"reporting.evts"''</c> does
-    /// not), and a column created <i>quoted</i> and mixed-case cannot be addressed through here at all. Both
-    /// worked before TASK-253 and neither has a caller today — the trade was taken with that measured, not
-    /// assumed.
+    /// <b>Schema-qualified names ARE supported</b> (TASK-262). Every object-name argument goes through
+    /// <see cref="Birko.Data.SQL.Connectors.AbstractConnectorBase.QualifiedIdentifier"/>, which splits on
+    /// <b>unquoted</b> dots and quotes each part — so <c>reporting.evts</c> emits
+    /// <c>"reporting"."evts"</c> and reaches the real object. TASK-253 briefly broke this by quoting the whole
+    /// name as one identifier, which asks for a single table whose name contains a period (measured on
+    /// TimescaleDB 2.29.2 / PostgreSQL 16.15: <c>42P01</c>, and
+    /// <c>PostgreSQLConnector.IsMissingTableException</c> classifies that as a missing table, so the handler
+    /// could swallow it and report success). A table genuinely <i>named</i> <c>a.b</c> stays reachable as
+    /// <c>"a.b"</c>, since only unquoted dots separate.
+    /// </para>
+    /// <para>
+    /// <b>PRECONDITION, and this one is a real limit rather than a bug: these rules assume the object's
+    /// COLUMNS were created by this framework's DDL.</b> The pre-fold in
+    /// <see cref="Birko.Data.SQL.Connectors.AbstractConnectorBase.CatalogueNameLiteral"/> is correct because
+    /// <c>AbstractConnector.CreateTable</c> and <c>SqlSchemaBuilder</c> provably emit column definitions
+    /// <i>bare</i>, so PostgreSQL stores them folded. For an object whose columns a migration created with
+    /// hand-written SQL that does not hold, and the consequence is measured and one-directional: a column
+    /// created <b>quoted and mixed-case</b> — <c>CREATE TABLE metrics ("Timestamp" timestamptz)</c> — cannot
+    /// be addressed through these emitters at all, because the fold turns <c>Timestamp</c> into
+    /// <c>'timestamp'</c> and raises <c>42703</c>, and there is no spelling of the argument that reaches it.
+    /// </para>
+    /// <para>
+    /// <b>Why that is documented rather than fixed, and what would have to change.</b> The fold cannot be
+    /// made conditional on the caller's spelling, because these producers are shared with the <i>store</i>
+    /// path (<c>TimescaleDBConnector.CreateHypertableSql</c>), where an unquoted name means "the quoted
+    /// identifier this framework created" — the premise TASK-472 established. Teaching an unquoted name to
+    /// mean "fold me" would re-break that defect, which was invisible precisely because the failure is
+    /// swallowed. So supporting hand-created columns needs an explicit opt-out on these methods, and with
+    /// <b>0</b> call sites of any emitter across all 16 consumer repos that is speculative API rather than a
+    /// missing capability. Recorded as a limit so the next author meets a decision instead of a trap; if a
+    /// real caller appears, the opt-out is the shape to add.
     /// </para>
     /// <para>
     /// <b>Two arguments are raw SQL and cannot be contained</b> — see
@@ -185,7 +207,7 @@ namespace Birko.Data.Migrations.TimescaleDB
                 ? ""
                 : $",\n                    timescaledb.compress_segmentby = '{SqlLiteral.EscapeLiteral(segmentByColumn)}'";
             return $@"
-                ALTER TABLE {connector.QuoteIdentifier(tableName)} SET (
+                ALTER TABLE {connector.QualifiedIdentifier(tableName)} SET (
                     timescaledb.compress,
                     timescaledb.compress_orderby = '{SqlLiteral.EscapeLiteral(orderByColumn)}'{segmentBySql}
                 );
@@ -268,12 +290,12 @@ namespace Birko.Data.Migrations.TimescaleDB
         {
             var groupBySql = string.IsNullOrEmpty(groupByClause) ? "" : $", {groupByClause}";
             return $@"
-                CREATE MATERIALIZED VIEW {connector.QuoteIdentifier(viewName)}
+                CREATE MATERIALIZED VIEW {connector.QualifiedIdentifier(viewName)}
                 WITH (timescaledb.continuous) AS
                 SELECT
                     time_bucket('{SqlLiteral.EscapeLiteral(timeBucket)}', time) AS bucket{groupBySql},
                     {selectClause}
-                FROM {connector.QuoteIdentifier(sourceTable)}
+                FROM {connector.QualifiedIdentifier(sourceTable)}
                 GROUP BY bucket{groupBySql};
             ";
         }
