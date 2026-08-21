@@ -30,18 +30,18 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-19 (partial refresh at [[TASK-257]]’s close: counts, in-progress, EPIC-014 rows, 6 spawned tasks; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-259]]’s close: counts, EPIC-014 rows, 2 spawned tasks; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 130   |
+| todo         | —     | —       | 131   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 95    |
+| done         | 1     | 22      | 96    |
 | cancelled    | 0     | 0       | 1     |
 
 Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
@@ -309,6 +309,8 @@ Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
     - [ ] [TASK-267](EPIC-014-code-review-remediation/TASK-267-verify-conventions-shadow-does-not-shadow.md) The project-local `verify-conventions` did not run at the close gate, again · FEATURE-014
     - [ ] [TASK-268](EPIC-014-code-review-remediation/TASK-268-field-type-mapping-polish.md) Two small SQL field-mapping gaps (`TimeOnly` width, `CharField.Lenght` null) · FEATURE-014
     - [ ] [TASK-269](EPIC-014-code-review-remediation/TASK-269-nothing-reports-a-stale-declared-column-type.md) Nothing reports a column whose stored type no longer matches the model · FEATURE-014
+    - [ ] [TASK-270](EPIC-014-code-review-remediation/TASK-270-connector-cache-invites-per-caller-state.md) `DataBase.GetConnector` shares one connector process-wide, and three features have put per-caller state on it · FEATURE-014
+    - [ ] [TASK-271](EPIC-014-code-review-remediation/TASK-271-timescaledb-emitters-can-now-use-the-connector.md) The TimescaleDB migration emitters bypass the connector for a reason that no longer exists · FEATURE-014
     - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned`'s "preserves each provider's policy" is an argument, not a measurement · FEATURE-014
     - [ ] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014

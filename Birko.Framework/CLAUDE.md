@@ -304,8 +304,15 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     - **Suppression is for DDL and nothing else.** `AmbientSqlTransaction.Suppress()` installs a fresh cell
       with no head, so it hides the whole chain and restores exactly what was there. Anything else that
       suppresses a boundary is *escaping* it, which is the defect TASK-240 and TASK-242 exist to remove.
-      The legacy `ExternalConnection`/`ExternalTransaction` pair is deliberately **not** suppressed: its
-      only user is the migrations `SqlSchemaBuilder`, which exists to run DDL in a transaction it owns.
+      **⚠ Superseded by TASK-259: there is no longer a second thing to suppress.** This used to carve the
+      legacy `ExternalConnection`/`ExternalTransaction` pair out of suppression, on the grounds that its only
+      user was the migrations `SqlSchemaBuilder`, which owns its transaction. That was a blessing of the
+      status quo, and the status quo was a defect — the builder published its connection and transaction onto
+      a **process-wide cached** connector at three sites and never cleared them, so the runner's `using`
+      disposed both and the next store's lazy schema-ensure ran on a dead connection and threw, leaving that
+      store permanently uninitialised. `SqlSchemaBuilder` now enters an ambient boundary like everything else
+      and the legacy pair is **deleted**, so a migration's DDL is suppressed here on exactly the same terms as
+      any other boundary. **One mechanism, one rule.**
     - **The two providers now give opposite answers about whether a created table survives a rollback, and
       both are pinned.** On MySQL it survives (the DDL is no longer in the boundary); on PostgreSQL, MSSql
       and SQLite it is rolled back with it. Asserting both is what stops the next reader "unifying" them
@@ -674,6 +681,56 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     from its neighbour. Pinned by a test asserting both the declaration and `typeof()`, so a later change in
     either surfaces there rather than as a wrong instant downstream. Same discipline as the accepted-divergence
     ledgers in § TASK-222 and § TASK-245.
+- **Per-caller, per-operation state never goes on a process-wide cached object — and when the last user of
+  such a mechanism moves off it, the mechanism goes too.** Connectors are cached process-wide per
+  (type, settings id) by `DataBase.GetConnector`, and three separate features have written one caller's state
+  onto that shared object: the stores' unit-of-work transaction (fixed by TASK-240's `AmbientSqlTransaction`),
+  the index-failure list that grew one entry per HTTP request forever (fixed by keying it), and
+  `SqlSchemaBuilder`'s connection **and** transaction (TASK-259). The third is the one that shows why the rule
+  needs stating rather than assuming: the builder called `SetExternalTransaction` at three sites and **never
+  called it again with nulls**, so the migration runner's `using` disposed both objects and left them on the
+  shared connector, where `DoCommand` preferred them over opening its own. Measured on SQLite with the default
+  `UseTransaction = true`: the next store's **lazy schema-ensure** ran on the dead connection and threw — and
+  per the rule above, a store whose schema-ensure throws is left permanently uninitialised, so every later read
+  and write on that entity threw too. Six parts generalise:
+  - **The replacement is flow-scoped and self-restoring, which is what makes the leak impossible rather than
+    merely fixed.** `AmbientSqlTransaction` lives in an `AsyncLocal` cell, is keyed by settings id, nests as a
+    stack and restores exactly what was there on dispose. Both stores moved to it in TASK-240 and left comments
+    explaining why; the schema builder was simply not migrated with them. **When a mechanism is abandoned for a
+    stated reason, grep for its remaining callers in the same change** — a rule enforced in two of three places
+    is a rule that will be got wrong in the third.
+  - **Deleting the superseded mechanism is part of the fix, not a follow-up.** TASK-247's rule — *a fallback
+    nobody can reach is not a safety net, it is a second implementation that drifts* — applies to boundary
+    mechanisms as much as to raw-SQL fallbacks. With `SqlSchemaBuilder` migrated, `SetExternalTransaction` had
+    **zero** production callers (measured across all 16 consumer repos), so it and its four read branches in
+    `DoCommand` / `DoCommandWithTransaction` / `RunBulk` / `RunReaderCommand` were removed. Leaving a public,
+    reachable, process-wide setter in place would have preserved the exact trap just closed. **Do not
+    reintroduce it: putting per-operation state on a cached connector is the defect, not the spelling.**
+  - **Behaviour-preserving in both configurations, and the null case is the one to check.** The legacy branch
+    required `ExternalConnection` **and** `ExternalTransaction` to be non-null, so a migration run with
+    `UseTransaction = false` never routed connector commands onto the migration's connection — it used the
+    connector's own. `AmbientSqlTransaction.Enter` refuses a null transaction, so **declining to enter
+    reproduces that exactly**; the shared producer returns `null` and `using var` accepts it. Both shipped
+    consumers run with transactions disabled for unrelated reasons (Symbio's DDL goes through the connector's
+    own connection, so an outer runner transaction deadlocks single-writer SQLite), which is the only reason
+    this was never seen in production — **the default was the dangerous value.**
+  - **One producer, or the revert proves nothing.** The first draft wrote the same three-line helper in
+    `SqlSchemaBuilder`, `SqlCollectionBuilder` and `SqlIndexBuilder`. Reverting one left the regression test
+    **green**, because the migration path runs through the nested collection builder — the copy under test was
+    not the copy that mattered. Fourth instance of § TASK-243's *"a funnel with four overrides is not a
+    funnel"*, and the first where the duplication defeated the **proof** rather than the fix. Collapsed to one
+    `internal static` producer; the revert then failed 2 of 49.
+  - **A guard's own test can be measuring the wrong thing in two ways at once.** The first version of the
+    regression test failed *after* the fix, for a fixture reason — the migration declared `Guid`+`Name` while
+    the probe entity derived from `AbstractLogModel` and therefore also had `CreatedAt`/`UpdatedAt`, which
+    `CREATE TABLE IF NOT EXISTS` will not add. A missing-column error from a mismatched fixture looks exactly
+    like the defect under test. **Match the probe entity to the migration, and read the failure rather than
+    the pass/fail bit.**
+  - **A count worth re-measuring: TASK-247's "0 uses of `ISchemaBuilder` across 16 consumer repos" was
+    stale.** Re-running it found `Symbio.Tests.Unit/MigrationRuntimeTests` genuinely using
+    `context.Schema.CreateCollection(…).Build()`. The conclusion it supported still holds (no *production*
+    consumer code uses it), but the claim as written was too strong — and this task existed partly because that
+    file itself said to re-run the sweep rather than cite it.
 - **A column type is only correct for the operations the provider allows ON it — and where a key restricts the
   type, "is this column an index key" is resolved ONCE, never OR'd at a connector.** Same one-producer family
   as the identifier rules above, arriving at the layer where a *column* is declared rather than where a name is
@@ -1112,6 +1169,53 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A migration left its disposed connection on the shared connector, and the next store died of it (2026-08-21)
+
+TASK-259, found while grilling TASK-253's plan. `SqlSchemaBuilder` called
+`_connector.SetExternalTransaction(_connection, _transaction)` at three sites and **never called it again with
+nulls** — and it was the framework's last user of that mechanism, which both stores had abandoned in TASK-240
+with comments explaining why. Connectors are cached process-wide per (type, settings id), so a migration's
+connection and transaction stayed on the shared object; the runner's `using` then disposed both. Verified
+against live **SQL Server 2022**, **PostgreSQL 16**, **MySQL 8.4**, **TimescaleDB 2/PG16** and on-disk SQLite
+with `BIRKO_REQUIRE_LIVE` set throughout: **1,165 tests green, 0 failed** across eight suites, 2 new. The
+standing rule is in § Conventions. Seven things worth carrying:
+
+- **"Measure before fixing" inverted the task's own hypothesis — twice.** Its title said the defect *may be
+  entirely latent*. Measured: **firing on the default configuration**, and worse than described. Not just "a
+  subsequent command takes the wrong branch" — the first thing a store does is its lazy schema-ensure, so the
+  `CREATE TABLE IF NOT EXISTS` ran on the dead connection and threw, which leaves the store permanently
+  uninitialised. One migration kills every store sharing that (type, settings id) for the process lifetime.
+- **Latent in production for a reason unrelated to the defect.** The legacy branch needed `ExternalConnection`
+  **and** `ExternalTransaction` non-null, and both shipped consumers set `UseTransaction = false` deliberately
+  (Symbio: its DDL goes through the connector's own connection, so an outer runner transaction deadlocks
+  single-writer SQLite). So the guard never fired — but the **connection was leaked on every configuration**;
+  only the consequence was gated on the transaction. The dangerous value was the default.
+- **The last caller moving off a mechanism is when the mechanism goes.** With `SqlSchemaBuilder` on
+  `AmbientSqlTransaction`, `SetExternalTransaction` had **0** production callers (measured across 16 consumer
+  repos), so it, its two properties and its four read branches were deleted — TASK-247's rule applied to a
+  boundary mechanism instead of a raw-SQL fallback. Leaving a public process-wide setter in place would have
+  preserved the trap just closed.
+- **My own duplication defeated my own proof.** The first draft wrote the helper three times; reverting one
+  copy left the regression test **green**, because the migration runs through the nested collection builder.
+  Fourth instance of *"a funnel with four overrides is not a funnel"* — and the first where the duplication
+  broke the *revert* rather than the fix. One `internal static` producer; the revert then failed 2 of 49.
+- **A fixture mismatch is indistinguishable from the bug.** The regression test failed *after* the fix because
+  the migration declared `Guid`+`Name` while the probe derived from `AbstractLogModel` and so also had
+  `CreatedAt`/`UpdatedAt` — which `CREATE TABLE IF NOT EXISTS` will not add. Read the failure, not the bit.
+- **I fell into the skip-as-failure trap I had documented one task earlier.** Running with
+  `BIRKO_REQUIRE_LIVE=1` reported 14 failures in `Birko.Data.Migrations.TimescaleDB.Tests` — no TimescaleDB was
+  running. 48/48 without the flag. Started the container rather than narrowing the flag, which is what makes
+  the 1,165 figure mean something. Also recorded: one **unreproducible** SQLite failure (228/229) seen once and
+  green on four subsequent runs; noted rather than dismissed.
+- **Two decisions elsewhere rested on this defect and are now reopened.** TASK-253 rejected routing the
+  TimescaleDB migration emitters through the connector *because* doing so required `SetExternalTransaction`;
+  that constraint is gone, so the choice is open again (recorded at `TimescaleDBMigration`, not acted on —
+  it is a live-path behaviour change wanting its own measurement). And § Conventions' *"the legacy pair is
+  deliberately **not** suppressed"* was a blessing of the status quo, where the status quo was this bug; it now
+  reads one-mechanism-one-rule. Spawned **[[TASK-270]]**: three separate features have now put per-caller state
+  on the process-wide cached connector, so the pattern — not the instances — needs an answer, and the cheapest
+  valuable piece is a test that fails when someone adds the fourth.
 
 ### On MSSql no predicate on an unlengthed `string` worked, and the obvious fix would not have fixed the index (2026-08-21)
 
