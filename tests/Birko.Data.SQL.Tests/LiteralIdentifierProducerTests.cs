@@ -68,6 +68,34 @@ public class LiteralIdentifierProducerTests
         public override string QuoteIdentifier(string identifier)
             => "`" + identifier.Replace("`", "``") + "`";
 
+        // TASK-262: MySQLConnector overrides these alongside QuoteIdentifier, and so must this fake --
+        // a delimiter override without them gives QualifiedIdentifier a scanner that cannot see the
+        // provider's own quotes. Keeping the fake faithful is what lets the test below mean something.
+        protected override char IdentifierQuoteOpen => '`';
+        protected override char IdentifierQuoteClose => '`';
+
+        public override DbConnection CreateConnection(Birko.Configuration.PasswordSettings settings)
+            => throw new NotSupportedException();
+        public override string ConvertType(System.Data.DbType type, Birko.Data.SQL.Fields.AbstractField field)
+            => throw new NotSupportedException();
+        public override string FieldDefinition(Birko.Data.SQL.Fields.AbstractField field)
+            => throw new NotSupportedException();
+    }
+
+    /// <summary>
+    /// Bracket-quoted with <b>different</b> open and close delimiters, as <c>MSSqlConnector</c> does. Present
+    /// because that is the case a same-character scanner gets wrong (TASK-262).
+    /// </summary>
+    private sealed class BracketConnector : AbstractConnectorBase
+    {
+        public BracketConnector() : base(new Birko.Configuration.PasswordSettings()) { }
+
+        public override string QuoteIdentifier(string identifier)
+            => "[" + identifier.Replace("]", "]]") + "]";
+
+        protected override char IdentifierQuoteOpen => '[';
+        protected override char IdentifierQuoteClose => ']';
+
         public override DbConnection CreateConnection(Birko.Configuration.PasswordSettings settings)
             => throw new NotSupportedException();
         public override string ConvertType(System.Data.DbType type, Birko.Data.SQL.Fields.AbstractField field)
@@ -198,4 +226,118 @@ public class LiteralIdentifierProducerTests
     [Fact]
     public void FoldsUnquotedIdentifiers_DefaultsToFalse()
         => new NonFoldingConnector().FoldsUnquotedIdentifiers.Should().BeFalse();
+    // ── QualifiedIdentifier — TASK-262 ──
+
+    /// <summary>
+    /// The case that keeps TASK-472 intact. The store passes <c>Table.Name</c>, which is never qualified, so
+    /// an unqualified name must come out exactly as <c>QuoteIdentifier</c> would have produced it.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_LeavesAnUnqualifiedNameUnchanged()
+    {
+        var connector = new NonFoldingConnector();
+
+        connector.QualifiedIdentifier("Widgets").Should().Be(connector.QuoteIdentifier("Widgets"));
+        connector.QualifiedIdentifier("Widgets").Should().Be("\"Widgets\"");
+    }
+
+    /// <summary>
+    /// The regression TASK-253 introduced: quoting the whole string asks for one object whose name contains a
+    /// period. Measured on TimescaleDB 2.29.2 / PostgreSQL 16.15 as <c>42P01</c>.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_QuotesEachPartOfAQualifiedName()
+        => new NonFoldingConnector().QualifiedIdentifier("reporting.evts")
+            .Should().Be("\"reporting\".\"evts\"");
+
+    /// <summary>
+    /// Strictly more capable than the bare form that preceded TASK-253, which could reach a qualified name but
+    /// not a mixed-case or spaced part of one.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_KeepsEachPartsOwnCase()
+        => new NonFoldingConnector().QualifiedIdentifier("Reporting.Evts")
+            .Should().Be("\"Reporting\".\"Evts\"");
+
+    /// <summary>
+    /// The escape hatch for the one case splitting gives up: a table genuinely named <c>a.b</c>. Only
+    /// <b>unquoted</b> dots separate, so a caller who delimits the name keeps it whole.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_TreatsACallerQuotedPartAsOneName()
+        => new NonFoldingConnector().QualifiedIdentifier("\"a.b\"").Should().Be("\"a.b\"");
+
+    [Fact]
+    public void QualifiedIdentifier_UnwrapsAndRequotesRatherThanDoubleQuoting()
+        => new NonFoldingConnector().QualifiedIdentifier("\"Rep Ort\".\"Ev ts\"")
+            .Should().Be("\"Rep Ort\".\"Ev ts\"");
+
+    [Fact]
+    public void QualifiedIdentifier_AcceptsAMixOfQuotedAndBareParts()
+        => new NonFoldingConnector().QualifiedIdentifier("reporting.\"Ev ts\"")
+            .Should().Be("\"reporting\".\"Ev ts\"");
+
+    [Fact]
+    public void QualifiedIdentifier_DoesNotSplitOnADotInsideAQuotedPart()
+        => new NonFoldingConnector().QualifiedIdentifier("reporting.\"a.b\"")
+            .Should().Be("\"reporting\".\"a.b\"");
+
+    /// <summary>
+    /// Splitting must not become a way out of the quoting. An embedded delimiter is still doubled, and a
+    /// doubled one inside a quoted part round-trips instead of gaining a second layer.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_KeepsIdentifierEscapingIntact()
+    {
+        var connector = new NonFoldingConnector();
+
+        connector.QualifiedIdentifier("we\"ird").Should().Be("\"we\"\"ird\"");
+        connector.QualifiedIdentifier("\"we\"\"ird\"").Should().Be("\"we\"\"ird\"");
+        connector.QualifiedIdentifier("t\"; DROP TABLE x; --")
+            .Should().Be("\"t\"\"; DROP TABLE x; --\"",
+                "the payload's quote is doubled, so it cannot close the identifier");
+    }
+
+    /// <summary>
+    /// Delegates to the provider's own <c>QuoteIdentifier</c> rather than hardcoding ANSI quotes — the same
+    /// claim <c>RegclassLiteral_UsesTheProvidersOwnQuoteCharacter</c> makes, extended to the qualified form.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_UsesTheProvidersOwnQuoteCharacters()
+    {
+        new BacktickConnector().QualifiedIdentifier("reporting.evts").Should().Be("`reporting`.`evts`");
+        new BracketConnector().QualifiedIdentifier("reporting.evts").Should().Be("[reporting].[evts]");
+    }
+
+    /// <summary>
+    /// Open and close delimiters that <b>differ</b> are the case a same-character scanner gets wrong: it would
+    /// treat <c>[</c> as both opening and closing and so mis-detect the quoted part.
+    /// </summary>
+    [Fact]
+    public void QualifiedIdentifier_HandlesAsymmetricDelimiters()
+    {
+        var connector = new BracketConnector();
+
+        connector.QualifiedIdentifier("[a.b]").Should().Be("[a.b]", "the dot is inside the delimiters");
+        connector.QualifiedIdentifier("[Rep Ort].[Ev ts]").Should().Be("[Rep Ort].[Ev ts]");
+        connector.QualifiedIdentifier("we]ird").Should().Be("[we]]ird]", "MSSql doubles only the closer");
+    }
+
+    /// <summary>
+    /// <see cref="AbstractConnectorBase.RegclassLiteral"/> now composes on top of the qualified form, so the
+    /// literal escaping still wraps the whole reference rather than each part.
+    /// </summary>
+    [Fact]
+    public void RegclassLiteral_CarriesTheQualifiedForm()
+        => new FoldingConnector().RegclassLiteral("reporting.evts")
+            .Should().Be("\"reporting\".\"evts\"",
+                "no single quotes to escape here, and the caller supplies the surrounding ones");
+
+    [Fact]
+    public void QualifiedIdentifier_EmptyNameBehavesAsQuoteIdentifierDoes()
+    {
+        var connector = new NonFoldingConnector();
+
+        connector.QualifiedIdentifier(string.Empty).Should().Be(connector.QuoteIdentifier(string.Empty));
+    }
 }
