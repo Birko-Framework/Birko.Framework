@@ -36,7 +36,12 @@ namespace Birko.Data.Migrations.SQL.Context
         /// <para>
         /// Verified reachable-by-nobody before removing: the only production construction is
         /// <c>SqlMigrationRunner</c> → <c>SqlMigrationContext</c>, which requires a non-null connector, and a
-        /// sweep of all 16 consumer repos found 0 hand-built contexts and 0 uses of <c>ISchemaBuilder</c>.
+        /// sweep of all 16 consumer repos found 0 hand-built contexts.
+        /// <b>TASK-259 corrected the other half of that claim:</b> the same sweep, re-run, finds
+        /// <c>ISchemaBuilder</c> genuinely used by <c>Symbio.Tests.Unit/MigrationRuntimeTests</c>
+        /// (<c>context.Schema.CreateCollection(…).Build()</c>). No <i>production</i> consumer code uses it, so
+        /// the conclusion above stands — but "0 uses" was too strong, and it is the kind of count this file's
+        /// own history says to re-measure rather than cite.
         /// </para>
         /// </remarks>
         /// <exception cref="ArgumentNullException">
@@ -59,7 +64,7 @@ namespace Birko.Data.Migrations.SQL.Context
 
         public void DropCollection(string name)
         {
-            EnsureExternalTransaction();
+            using var boundary = EnterAmbientBoundary();
             _connector.DropTable(new[] { name });
         }
 
@@ -94,20 +99,20 @@ namespace Birko.Data.Migrations.SQL.Context
             // The deleted fallback emitted `DROP INDEX IF EXISTS x ON t`, which is wrong on both providers in
             // opposite directions: MySQL rejects the IF EXISTS but requires the ON, PostgreSQL accepts the
             // IF EXISTS but permits no ON. The connector's DropIndexSql is per-dialect and correct.
-            EnsureExternalTransaction();
+            using var boundary = EnterAmbientBoundary();
             var indexDef = new Birko.Data.SQL.Tables.IndexDefinition { Name = indexName };
             _connector.DropIndexes(collectionName, new[] { indexDef });
         }
 
         public void AddField(string collectionName, FieldDescriptor field)
         {
-            EnsureExternalTransaction();
+            using var boundary = EnterAmbientBoundary();
             _connector.AlterTableAdd(collectionName, new[] { new SchemaField(field) });
         }
 
         public void DropField(string collectionName, string fieldName)
         {
-            EnsureExternalTransaction();
+            using var boundary = EnterAmbientBoundary();
             var field = new SchemaField(new FieldDescriptor { Name = fieldName, Type = FieldType.String });
             _connector.AlterTableDrop(collectionName, new[] { field });
         }
@@ -125,12 +130,63 @@ namespace Birko.Data.Migrations.SQL.Context
         /// </remarks>
         public void RenameField(string collectionName, string oldName, string newName)
         {
-            EnsureExternalTransaction();
+            // Execute() runs on _connection directly, so it needs no boundary; the scope is here because
+            // QuoteIdentifier goes through the connector and a future connector-delegating rename would.
+            using var boundary = EnterAmbientBoundary();
             Execute($"ALTER TABLE {QuoteIdentifier(collectionName)} RENAME COLUMN {QuoteIdentifier(oldName)} TO {QuoteIdentifier(newName)}");
         }
 
-        private void EnsureExternalTransaction()
-            => _connector.SetExternalTransaction(_connection, _transaction);
+        /// <summary>
+        /// Publishes this migration's connection and transaction as an <b>ambient</b> boundary for the
+        /// duration of one operation, so the connector's own DDL emitters run on them. Dispose to leave.
+        /// </summary>
+        /// <remarks>
+        /// TASK-259. This replaced <c>_connector.SetExternalTransaction(_connection, _transaction)</c>, which
+        /// was called at three sites here and <b>never called again with nulls</b> — and this class was the
+        /// legacy pair's last caller in the framework. Connectors are cached process-wide per
+        /// (type, settings id) by <c>DataBase.GetConnector</c>, so that call left one migration's connection
+        /// and transaction on the shared connector for the life of the process, and the runner disposes both
+        /// on the way out. Measured on SQLite with the default <c>UseTransaction = true</c>: the next store
+        /// against the same database took the stale branch for its <i>lazy schema-ensure</i>, which threw —
+        /// and a store whose schema-ensure throws is left permanently uninitialised, so every later read and
+        /// write on that entity threw too.
+        /// <para>
+        /// Both stores had already abandoned the same call for the same reason (see the remarks on
+        /// <c>DataBaseStore.EnterTransactionScope</c> / <c>AsyncDataBaseStore</c>); TASK-240 replaced it with
+        /// <c>AmbientSqlTransaction</c>, which is scoped to the async flow and restores exactly what was
+        /// there. The schema builder was simply not migrated with them.
+        /// </para>
+        /// <para>
+        /// <b>Returns null when there is no transaction, and that is the behaviour-preserving case, not a
+        /// gap.</b> <c>AbstractConnector</c>'s legacy branch required <i>both</i>
+        /// <c>ExternalConnection</c> and <c>ExternalTransaction</c> to be non-null, so a migration run with
+        /// <c>UseTransaction = false</c> never routed connector commands onto the migration's connection — it
+        /// used the connector's own. `AmbientSqlTransaction.Enter` refuses a null transaction, so declining to
+        /// enter reproduces that exactly. Both shipped consumers run with transactions disabled deliberately
+        /// (Symbio because its DDL goes through the connector's own connection, so an outer runner transaction
+        /// deadlocks single-writer SQLite), which is why this defect was invisible in production.
+        /// </para>
+        /// </remarks>
+        private IDisposable? EnterAmbientBoundary()
+            => EnterAmbientBoundary(_connector, _connection, _transaction);
+
+        /// <summary>
+        /// The single producer of this boundary, shared with the two nested builders (TASK-259).
+        /// </summary>
+        /// <remarks>
+        /// One method rather than one per class, deliberately. The first draft of this fix wrote the same
+        /// three lines in <c>SqlSchemaBuilder</c>, <c>SqlCollectionBuilder</c> and <c>SqlIndexBuilder</c>, and
+        /// reverting one of the three left the regression test <b>green</b> — the migration path runs through
+        /// the nested collection builder, so the copy that mattered was not the one under test. That is the
+        /// same shape § Conventions records as "a funnel with four overrides is not a funnel", and it makes
+        /// the revert meaningless, which is worse than the duplication.
+        /// </remarks>
+        internal static IDisposable? EnterAmbientBoundary(
+            AbstractConnector connector, DbConnection connection, DbTransaction? transaction)
+            => transaction == null
+                ? null
+                : Birko.Data.SQL.Connectors.AmbientSqlTransaction.Enter(
+                    connector.Settings.GetId(), connection, transaction);
 
         private void Execute(string sql)
         {
@@ -212,10 +268,11 @@ namespace Birko.Data.Migrations.SQL.Context
                 // emitted a composite `PRIMARY KEY (a, b)` clause from _primaryKeyFields, which
                 // AbstractConnector.CreateTable does not — it renders PRIMARY KEY per column from the field's
                 // IsPrimary flag. Nothing in the tree or in any consumer declares a composite primary key
-                // through this builder (0 uses of ISchemaBuilder anywhere), so no behaviour in use is lost;
+                // through this builder (TASK-259 re-measured: one consumer TEST uses ISchemaBuilder, and it
+                // declares a single-column primary key), so no behaviour in use is lost;
                 // a composite primary key via migrations would need connector support, which is a task of its
                 // own rather than a fallback nobody could reach correctly.
-                _connector.SetExternalTransaction(_connection, _transaction);
+                using var boundary = EnterAmbientBoundary();
                 var fieldDefinitions = _fields.Select(f =>
                 {
                     var schemaField = new SchemaField(f);
@@ -223,6 +280,11 @@ namespace Birko.Data.Migrations.SQL.Context
                 });
                 _connector.CreateTable(_name, fieldDefinitions);
             }
+
+            /// <summary>Delegates to the one producer on the outer class (TASK-259).</summary>
+            private IDisposable? EnterAmbientBoundary()
+                => SqlSchemaBuilder.EnterAmbientBoundary(_connector, _connection, _transaction);
+
         }
 
         private class SqlIndexBuilder : IIndexBuilder
@@ -283,7 +345,7 @@ namespace Birko.Data.Migrations.SQL.Context
                     throw new InvalidOperationException("Index must have at least one field.");
 
                 {
-                    _connector.SetExternalTransaction(_connection, _transaction);
+                    using var boundary = EnterAmbientBoundary();
                     // TASK-246: `Unique = _unique` was missing, so a migration's .Unique() built a
                     // NON-unique index on every provider. IndexDefinition.Unique defaults to false and
                     // CreateIndexSql emits UNIQUE only when it is true, so the declared constraint was
@@ -316,6 +378,10 @@ namespace Birko.Data.Migrations.SQL.Context
                 // actually stores (42703). It was the third copy of a statement the connector already emits
                 // correctly per dialect, so it is gone rather than repaired.
             }
+            /// <summary>Delegates to the one producer on the outer class (TASK-259).</summary>
+            private IDisposable? EnterAmbientBoundary()
+                => SqlSchemaBuilder.EnterAmbientBoundary(_connector, _connection, _transaction);
+
         }
     }
 }
