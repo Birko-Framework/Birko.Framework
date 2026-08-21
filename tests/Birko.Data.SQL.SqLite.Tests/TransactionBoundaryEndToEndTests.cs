@@ -399,12 +399,14 @@ public class TransactionBoundaryEndToEndTests : IDisposable
             store.SetTransactionContext(uow.Context);
             try
             {
-                // The connector is shared. If SetTransactionContext still called SetExternalTransaction,
-                // this would be non-null and every other caller against this database — on any thread —
-                // would silently be enlisted.
-                store.Connector!.ExternalTransaction.Should().BeNull(
-                    "one caller's transaction must never be published onto a process-wide connector");
-                store.Connector!.ExternalConnection.Should().BeNull();
+                // This used to assert that SetTransactionContext had not published the transaction onto the
+                // shared connector, by reading Connector.ExternalTransaction / .ExternalConnection.
+                // TASK-259 DELETED that pair outright once its last caller (the migrations
+                // SqlSchemaBuilder) moved onto AmbientSqlTransaction, so there is no longer a second place
+                // a transaction could be published to — the property this guarded is now structural rather
+                // than asserted. The claim itself is still tested, and more strongly, by the
+                // AmbientSqlTransaction.Current assertion after this Task.Run: what must never happen is
+                // the boundary reaching a different flow, and that is what is checked there.
 
                 await store.CreateAsync(new Row { Guid = Guid.NewGuid(), Name = "in-boundary", Amount = 1 });
             }
