@@ -1166,6 +1166,76 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     equivalent at all so it stays hand-written. Neither is reachable by anything in the tree, but a deletion
     that quietly drops a capability is indistinguishable later from one that never had it — write down the
     difference.
+- **A constraint whose scope is "some rows" has to be DECLARED, and where a provider cannot express it each
+  polarity is answered separately, on measurement.** Fifth member of the index-DDL family, and the first that
+  arrives from a *missing* capability rather than a broken emitter. A unique index over a nullable column was
+  undeclarable, and the obvious full index is not merely weaker — it is wrong on one provider: SQL Server
+  treats NULLs as **equal** for uniqueness, so `UNIQUE (TenantGuid, ExternalId)` admits one NULL row per
+  tenant and **rejects the second ordinary row** (measured on 2022/16.0.4265.3 as `Msg 2601`), while
+  PostgreSQL 16.15, MySQL 8.4.11 and SQLite 3.53.3 treat NULLs as distinct and admit any number. Invisible on
+  the three providers consumers test on, fatal on the one they do not — and TASK-257 is what made it reachable
+  at all, since before it an unlengthed indexed string was `TEXT`, which SQL Server refuses as an index key
+  (`Msg 1919`). `[CompositeIndex]` and `[IndexedField]` now take `WhereNotNull` / `WhereNull`: lists of
+  **property names**, rendered as ` WHERE <col> IS [NOT] NULL` (TASK-273). Nine parts generalise:
+  - **Two column lists, not a predicate string, because the alternative is an uncontainable sink.** A general
+    `WHERE IsActive = 1` reaches `CREATE INDEX` by interpolation, cannot be parameterised, and
+    `DataBase.ValidateIndexFieldIdentifier` validates *one bare identifier* — so it needs an expression
+    validator this framework does not have, i.e. it is SH-H023 with a fresh coat. Names here resolve against
+    the same `fields` map as `CompositeIndex.Properties`, so `[NamedField]` / `ModelMap` remaps are honoured
+    and **no caller text reaches the DDL**. The wider feature is deferred rather than forgotten, and the two
+    lists do not block it.
+  - **Both polarities were needed, and the second is not symmetry — it is the framework's own soft-delete
+    contract.** `ISoftDeletable` is `DateTime? DeletedAt` with *null means active*, so "unique among rows that
+    are not deleted" is `WHERE DeletedAt IS NULL`: **opposite polarity, over a column that is not part of the
+    key.** Measured legal on all three providers with partial indexes — which is also why `Predicates` sits on
+    `IndexDefinition` rather than on `IndexColumn`, a shape that structurally cannot express it. **Read the
+    framework's own base models and decorators before scoping a constraint feature**; the second caller was
+    already in the tree.
+  - **Where a provider cannot express the predicate, ask what DROPPING it would mean — the answer differs per
+    polarity and only one is safe.** MySQL supports no partial index (`ERROR 1064`), so an `IS NOT NULL` term
+    is **dropped**: MySQL treats NULLs as distinct, so the unfiltered index enforces exactly the declared
+    rule. An `IS NULL` term is **refused**, because dropping it leaves a constraint *stricter* than declared —
+    measured on all four providers, a full unique index rejects a row whose duplicate is soft-deleted, so the
+    silent version would refuse a document number legitimately reused after a delete. **Over-enforcing is the
+    failure mode this family had not yet seen**, and it inverts the usual instinct: the quiet option is
+    normally the safe one, and here it is the harmful one.
+  - **The capability is stated once and its `false` side is asserted.** `SupportsPartialIndexes` joins
+    `SupportsTransactionalDdl` / `FoldsUnquotedIdentifiers` / `IsMissingTableException`: one producer,
+    consulted by the funnel and by the emitter, never an inline `is MySQLConnector`. A test pins `false` on
+    MySQL and `true` on the other three — unasserted, the flag is indistinguishable from an unconditional
+    emit. Forcing it `true` fails **5 of 6** MySQL tests, including the droppable polarity, which is the
+    server rejecting the `WHERE` it was wrongly told it supports.
+  - **Refuse BEFORE the command wrapper, or the exception type is destroyed.** The guard runs in
+    `CreateIndexes` / `CreateIndexesAsync` *ahead of* `DoDdlCommand`, because `InitException` re-wraps a
+    callback exception as a bare `Exception` no `catch (InvalidOperationException)` can select — the same
+    reasoning SH-H002 records for `AddRequiredWhere`. Schema-ensure's per-index catch still records it
+    (TASK-204 degrade-and-report, untouched) and an explicit call still throws; the emitter keeps its own
+    throw as the backstop for a direct caller (§ TASK-137). **Both funnels need the guard and only the sync
+    one has a store-level caller** (TASK-245: an async store's schema-ensure calls the *sync* `CreateTable`),
+    so the async one needs a test of its own or the rule is enforced in one of two places.
+  - **Merge, then validate — the contradiction is invisible before the merge.** `[IndexedField]` aggregates
+    by index name across properties, so predicates are unioned and de-duplicated exactly as `IsUnique` is,
+    and *two properties can each name the same column in the opposite list*. Validation therefore runs after
+    the merge, and the order is deterministic (`WhereNotNull` terms, then `WhereNull`, each in declaration
+    order) because the emitted statement is compared byte-for-byte.
+  - **The nullability test is `IsNotNull || IsPrimary`, and the second arm is not decoration.**
+    `AbstractField.IsNotNull` is derived from the CLR type for value types, but for **`string`** and
+    **`byte[]`** it is set *only* by `[RequiredField]` / `[Required]` — so a `string` primary key reads
+    `false`, and a `WhereNull` on it would be accepted and index zero rows. State the other half where a
+    consumer meets it, too: C# nullable-reference annotations are **not** read, so `string` and `string?` are
+    the same thing here and a vacuous `WhereNotNull` over an always-populated string is accepted rather than
+    refused. **A metadata flag's provenance decides what it can be trusted for.**
+  - **A predicate column is not an index key, so do not bound it.** TASK-257 bounds an indexed unlengthed
+    string to `NVARCHAR(255)` via `IsInIndexKey`, and the obvious inference is that a predicate column needs
+    the same. Measured: a filtered predicate over `NVARCHAR(MAX)` is **legal**, and only a *key* column
+    raises `Msg 1919`. Marking predicate columns would change MSSql column DDL for a case the server accepts
+    as it stands.
+  - **⚠ Limit, documented and pinned rather than fixed: a CHANGED predicate is not applied to an existing
+    index.** Schema-ensure matches by index **name** and never alters one, so editing these lists on an entity
+    whose index already exists is silently ignored on every provider (measured on SQL Server: the guard skips
+    and `sys.indexes.filter_definition` keeps its original value). Drop the index by hand. Same position as
+    TASK-257's columns and TASK-245's same-name-different-columns case; reporting such drift is TASK-269's
+    family.
 - **State a host reads must be current state, keyed — not an append-only log.** Connectors are cached
   process-wide per (type, settings id) in `DataBase.GetConnector` while `_initialized` lives on the *store*,
   so a scoped store per HTTP request re-runs schema-ensure per request against one shared connector. A
@@ -1249,6 +1319,67 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A unique index over a nullable column was undeclarable, and broke ordinary inserts on MSSql (2026-08-22)
+
+TASK-273, raised by consumer Symbio while ruling its v1 frozen schema. `CompositeIndex` carried `Name`,
+`Properties` and `IsUnique` and nothing else, so "unique **where** the column is not null" could not be said —
+and the obvious full index is not merely weaker there, it is wrong: SQL Server treats NULLs as equal, so
+`UNIQUE (TenantGuid, ExternalId)` admits one NULL row per tenant and rejects the second ordinary account.
+`[CompositeIndex]` and `[IndexedField]` now take `WhereNotNull` / `WhereNull`. Verified against live
+**SQL Server 2022 (16.0.4265.3)**, **PostgreSQL 16.15**, **MySQL 8.4.11**, **TimescaleDB 2/PG16** and on-disk
+**SQLite 3.53.3** with `BIRKO_REQUIRE_LIVE` set throughout: **1,164 tests, 0 skipped** across six suites —
+`Birko.Data.SQL` 619 (+22), MSSql 93 (+6), MySQL 85 (+7), PostgreSQL 85 (+3), SQLite 233 (+4),
+Migrations.SQL 49 (unchanged) — 42 new, no new nullable warning. **Not a clean sweep: one unidentified
+single-test failure in the offline suite, seen twice in ~19 runs and never reproduced** — see the last bullet.
+The standing rule is in § Conventions. Nine things worth carrying:
+
+- **Step 0 measured before a line was written, and it corrected the plan twice.** The code is **`Msg 2601`**,
+  not the `2627` its TASK-257 neighbours cite; and the `Msg 1934` risk — SQL Server requires a specific
+  SET-option state for *any* DML against a table carrying a filtered index, which this framework never sets —
+  is **absent** on `Microsoft.Data.SqlClient` defaults (`ARITHABORT` reads 0 and it works anyway, because
+  `ANSI_WARNINGS ON` implies it). That was the one finding that could have made the approach unusable here.
+- **The task named one polarity; the framework's own code demanded two.** `ISoftDeletable` is
+  `DateTime? DeletedAt` with null meaning active, and Symbio's `BaseEntity` carries it on every entity — so
+  "unique among live rows" (`WHERE DeletedAt IS NULL`, over a **non-key** column) was the next caller before
+  this task existed. Reading the consumer's own decorators is what turned a bool into two column lists.
+- **Dropping an unexpressible term is safe in one direction and harmful in the other.** MySQL has no partial
+  index, so `IS NOT NULL` is dropped (NULLs are already distinct there — same meaning) while `IS NULL` is
+  refused: measured on all four providers, a full unique index **rejects** a row whose duplicate is
+  soft-deleted, so the quiet option would make the constraint *stricter* than declared. Over-enforcing is a
+  failure mode this family had not seen, and it inverts the usual instinct.
+- **MySQL could have honoured it and deliberately does not.** A functional key part —
+  `UNIQUE (TenantGuid, (CASE WHEN DeletedAt IS NULL THEN Number END))` — was measured enforcing exactly the
+  right rule on 8.4.11. Declined for four stated reasons and recorded on the property, so the next author
+  meets a decision rather than a gap.
+- **The plan review caught a wrong claim no later test would have caught.** It said "reject a predicate column
+  whose field `IsNotNull`" — but that flag is set from the CLR type only for value types, so a `string`
+  primary key reads `false` and a `WhereNull` on it would have indexed zero rows silently. Now
+  `IsNotNull || IsPrimary`, and the mutation narrowing it back fails **exactly one** test.
+- **Six mutations, each isolating one claim, all disjoint** — MSSql tail 3 of 6; base tail 2 of 3 (PG) and
+  2 of 4 (SQLite); MySQL capability forced true 5 of 6; the two `LoadIndexes` resolution points 3 and 7 of 22;
+  the async funnel guard exactly 1, failing on the exception **type**, which is why the refusal happens before
+  `DoDdlCommand`.
+- **Three fixture faults, each indistinguishable from the feature failing** — MySQL `1364` (an INSERT omitting
+  `AbstractLogModel`'s NOT NULL timestamps), a PostgreSQL catalogue query lower-casing a table name
+  `CreateTable` quotes, and a full-run 46-of-84 MySQL failure that was purely a missing `BIRKO_MYSQL_PASSWORD`
+  in my environment. Read, not dismissed; that suite's password default now matches its siblings.
+- **The close gate found two things the implementation had not asked about, and produced two spawns.** The
+  async funnel guard had no coverage at all (TASK-245: an async store's schema-ensure runs the *sync*
+  `CreateTable`, so nothing reaches `CreateIndexesAsync`) — now tested. And `SqlIndexManager.CreateAsync`
+  calls `CreateIndexSql` **directly**, bypassing the guard: harmless today because that lane carries no
+  predicates, which is exactly why it is recorded on [[TASK-274]]. Spawned [[TASK-274]] (the second index lane
+  drops `Sparse` — `IIndexBuilder.Sparse()` is `=> this` in all six schema builders) and [[TASK-275]]
+  (`[UniqueField]` on a nullable column is an inline constraint with the identical defect and no predicate can
+  attach to it — `Msg 2627` / `Msg 156`, measured). Also confirmed live: this repo's project-local
+  `verify-conventions` still does not shadow the generic one at the gate ([[TASK-267]]).
+- **⚠ And it did not end clean, which is recorded rather than rounded off.** `Birko.Data.SQL.Tests` failed
+  **1 of 619 twice in ~19 full-suite runs** and the identity was never captured: 8 further runs with a trx
+  logger were clean, the new class alone is clean 6 of 6, and the suite *without* it is clean 5 of 5 — so the
+  evidence points at a cross-class interaction through `DataBase`'s static table cache under xUnit's parallel
+  collections (this task adds four deliberately-invalid entity types, whose `LoadTable` throws), and no
+  further. Precedent for writing it down is TASK-259's own unreproducible SQLite failure; the difference is
+  that this one is plausibly caused by the change, so it is [[TASK-276]] rather than a footnote.
 
 ### A chunk-interval reader had been broken for the whole TimescaleDB 2.x line (2026-08-21)
 

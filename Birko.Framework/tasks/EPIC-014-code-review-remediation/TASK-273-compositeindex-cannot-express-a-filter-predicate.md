@@ -183,8 +183,27 @@ concern for every nullable indexed column a consumer declares from now on.
   it lower-cased a table name that `CreateTable` quotes (TASK-209). Each looked exactly like the feature
   failing. Also aligned this suite's `BIRKO_MYSQL_PASSWORD` default to its siblings' (`root`) after a full-run
   46-of-84 failure that was purely my missing env var.
-- **Remaining:** step 7 — § Conventions entry, Recent Updates entry, and the close gate
-  (`/verify-conventions` + `/code-review`).
+- **2026-08-22** — close gate. The project-local `verify-conventions` **did not load** (the `Skill` tool
+  resolved the user-level generic one) — [[TASK-267]] reproducing at the gate it is about; its checks were run
+  by reading the file directly. Two findings acted on rather than filed: the **async funnel guard had no
+  coverage at all** (TASK-245: an async store's schema-ensure runs the *sync* `CreateTable`, so nothing
+  reaches `CreateIndexesAsync`) — now tested, and removing that line fails exactly it, **on the exception
+  type**, which is why the refusal precedes `DoDdlCommand`; and `SqlIndexManager.CreateAsync` calls
+  `CreateIndexSql` **directly**, bypassing the guard — unreachable today, recorded on [[TASK-274]].
+- **Final tally, six suites, `BIRKO_REQUIRE_LIVE` set: 1,164 tests, 42 new, 0 skipped.**
+  `Birko.Data.SQL` 619 (+22) · MSSql 93 (+6) · MySQL 85 (+7) · PostgreSQL 85 (+3) · SQLite 233 (+4) ·
+  Migrations.SQL 49 (unchanged). Step 7 done: § Conventions entry (nine sub-rules) and a Recent Updates entry.
+- **⚠ Not a clean sweep, and this is the loose end.** `Birko.Data.SQL.Tests` failed **1 of 619 on two of ~19
+  full-suite runs**, identity never captured — 8 runs with a trx logger clean, the new class alone clean 6/6,
+  the suite without it clean 5/5. That pattern points at a cross-class interaction through `DataBase`'s static
+  table cache under xUnit's parallel collections (this task adds four deliberately-invalid entity types whose
+  `LoadTable` throws) and no further. Chasing stopped there and filed as [[TASK-276]] rather than rounded off:
+  the feature's own tests are green and mutation-proven, but a flake plausibly caused by this change is not a
+  footnote.
+- **Documented, not fixed** (each with a pinning test or a written limit): a changed predicate is not applied
+  to an existing index; MySQL gets no constraint at all for a `WhereNull` declaration; the cross-assembly
+  reflective attribute path is untested for the two new properties, as it already was for
+  `Name`/`Properties`/`IsUnique` (it needs a second assembly compiling the shared project).
 
 ## Out of scope
 
