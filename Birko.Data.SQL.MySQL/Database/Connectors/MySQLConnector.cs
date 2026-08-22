@@ -391,8 +391,28 @@ namespace Birko.Data.SQL.Connectors
                 c.ColumnName + (c.IsDescending ? " DESC" : "")));
 
             var unique = index.Unique ? "UNIQUE " : "";
-            return $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+            // TASK-273 — IndexPredicateClause returns "" here for an IS NOT NULL predicate (dropped: MySQL
+            // treats NULLs as distinct, so the unfiltered index means the same thing) and THROWS for an
+            // IS NULL one (dropping it would over-enforce). CreateIndexes refuses that case before reaching
+            // this emitter; the call is kept so a direct caller cannot get a quietly different statement.
+            return $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
+                 + IndexPredicateClause(index);
         }
+
+        /// <summary>
+        /// MySQL supports no partial/filtered index — <c>CREATE INDEX … WHERE …</c> is <c>ERROR 1064</c>,
+        /// measured on 8.4.11. It is the only provider of the four that answers false here (TASK-273).
+        /// </summary>
+        /// <remarks>
+        /// MySQL 8.0.13+ <i>can</i> emulate the filtered unique index with a functional key part —
+        /// <c>UNIQUE (TenantGuid, (CASE WHEN DeletedAt IS NULL THEN Number END))</c>, measured enforcing
+        /// exactly the right rule on 8.4.11. That is deliberately not done: it is a statement shape nothing
+        /// else in this framework emits, the index stops serving plain <c>Number = 'A'</c> lookups, it matches
+        /// PostgreSQL/SQLite NULL semantics but not MSSql's when a key column is NULL, and
+        /// <c>DropIndexSql</c> / <c>ListIndexesSql</c> would then meet an expression column. Recorded in
+        /// TASK-273 § Out of scope with the measurement, so this is a decision rather than a gap.
+        /// </remarks>
+        public override bool SupportsPartialIndexes => false;
 
         /// <summary>
         /// MySQL's <c>DROP INDEX</c> takes no <c>IF EXISTS</c> and <b>requires</b> <c>ON &lt;table&gt;</c>.
