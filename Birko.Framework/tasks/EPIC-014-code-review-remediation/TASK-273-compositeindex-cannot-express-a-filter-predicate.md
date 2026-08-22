@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-245, TASK-246, TASK-257]
 findings: []
-pr: null
+pr: e1f50cc (Birko.Data.SQL) · fd7b70d (.MSSql) · d270f55 (.MySQL)
 github-issue: null
 jira-key: null
 ---
@@ -134,22 +134,57 @@ concern for every nullable indexed column a consumer declares from now on.
       (b) cannot be honoured on MySQL and needs an explicit policy for it. → **Refined (a): two
       resolved-column lists**, `WhereNotNull` / `WhereNull`. See § Resolved decisions in the plan; (b) is
       deferred with its injection problem named.
-- [ ] The chosen shape threaded through all four sites: the attribute
+- [x] The chosen shape threaded through all four sites: the attribute
       (`Attributes/Field.cs`), `IndexDefinition`, whatever populates it from the attribute
       (`DataBase_Table.LoadIndexes`), and `CreateIndexSql` — plus any provider override that reimplements
       the statement (`MSSqlConnector`, `MySQLConnector`), and **both** attribute forms
-      (`CompositeIndex`, `IndexedField`).
-- [ ] ⚠ **A provider that cannot honour the predicate must not silently emit the index without it.** That
+      (`CompositeIndex`, `IndexedField`). → done; `IndexDefinition.Predicates` + `IndexPredicate`,
+      `LoadIndexes` resolving both lists at both attribute-resolution points, `IndexPredicateClause` +
+      `PredicateColumn` on the base emitter, and both provider overrides.
+- [x] ⚠ **A provider that cannot honour the predicate must not silently emit the index without it.** That
       converts a declared constraint into a *different, stricter* constraint that rejects legitimate rows —
       worse than not creating it. Whatever the MySQL policy is, it is loud: either refuse at schema-ensure
       or record the failure the way TASK-354's `IndexCreationFailures` does. → **Per polarity**, on M1a/M4
       evidence: `WhereNotNull` is omitted (behaviour-preserving), `WhereNull` is refused.
-- [ ] Live behavioural tests per provider, asserting **both** directions: two NULL rows are accepted, and
+- [x] Live behavioural tests per provider, asserting **both** directions: two NULL rows are accepted, and
       two rows sharing a non-NULL value are rejected. A one-directional test passes against an index that
-      was never created.
-- [ ] Mutation-proven: drop the predicate from the emitted SQL and the MSSql test must go red.
-- [ ] Existing declarations unaffected — the six entities carrying `CompositeIndex` today declare no
-      predicate and their emitted DDL must be byte-identical.
+      was never created. → all four, plus the catalogue (`sys.indexes.filter_definition`,
+      `pg_indexes.indexdef`, `information_schema.statistics`, `sqlite_master`) rather than
+      "CreateTable did not throw", which proves nothing where schema-ensure records instead of raising.
+- [x] Mutation-proven: drop the predicate from the emitted SQL and the MSSql test must go red. → five
+      mutations, each isolating one claim, all disjoint: see § Progress log.
+- [x] Existing declarations unaffected — the six entities carrying `CompositeIndex` today declare no
+      predicate and their emitted DDL must be byte-identical. → exact-string assertions on the base and both
+      overrides, plus every pre-existing index test still green. (The "six entities" figure in this criterion
+      is stale: measured 34 `[CompositeIndex]` declarations, 25 of them unique, across 8 production files —
+      all Symbio's — and 0 framework domain models.)
+
+## Progress log
+
+- **2026-08-22** — picked; step 0 measured live on five engines before any code (§ Context). Plan grilled:
+  six decisions recorded. Plan then reviewed against the server, which corrected one wrong claim
+  (`IsNotNull` alone → `IsNotNull || IsPrimary`), defined the undefined merge case, dismissed the
+  `NVARCHAR(MAX)`-predicate worry, and spawned [[TASK-274]] and [[TASK-275]].
+- **2026-08-22** — implemented steps 1–6. Three production commits (`e1f50cc` `Birko.Data.SQL`,
+  `fd7b70d` `.MSSql`, `d270f55` `.MySQL`) and five test commits (`5e86f4c` `.SQL.Tests`,
+  `2e44d98` `.MSSql.Tests`, `1156fca` `.MySQL.Tests`, `f874d0b` `.PostgreSQL.Tests`,
+  `bac528f` `.SqLite.Tests`). **41 new tests, 6 suites green with `BIRKO_REQUIRE_LIVE` set throughout:**
+  `Birko.Data.SQL` 619 (+22), MSSql 93 (+6), MySQL 84 (+6), PostgreSQL 85 (+3), SQLite 233 (+4),
+  Migrations.SQL 49 (unchanged) — 0 failed, 0 skipped, no new nullable warning in any touched project.
+- **Mutations, each isolating one claim** — MSSql emitter tail removed: **3 of 6** red (the fix, the
+  documented-limit pin and the offline bracket pin). Base emitter tail removed: **2 of 3** PostgreSQL and
+  **2 of 4** SQLite red. MySQL `SupportsPartialIndexes` forced true: **5 of 6** red, including the
+  `IS NOT NULL` case — MySQL rejecting the `WHERE` it was wrongly told it supports. `LoadIndexes`
+  per-property resolution removed: **3 of 22**. Class-level resolution removed: **7 of 22** — disjoint, which
+  is what TASK-248's revert-fails-0 lesson demands. `IsPrimary` arm removed: **exactly 1**, the string
+  primary key, so the review's correction is pinned by the test that would have caught it.
+- **Two fixture faults, both read rather than dismissed.** MySQL `1364` was my hand-written INSERT omitting
+  `AbstractLogModel`'s NOT NULL `CreatedAt`/`UpdatedAt`; the PostgreSQL catalogue query returned null because
+  it lower-cased a table name that `CreateTable` quotes (TASK-209). Each looked exactly like the feature
+  failing. Also aligned this suite's `BIRKO_MYSQL_PASSWORD` default to its siblings' (`root`) after a full-run
+  46-of-84 failure that was purely my missing env var.
+- **Remaining:** step 7 — § Conventions entry, Recent Updates entry, and the close gate
+  (`/verify-conventions` + `/code-review`).
 
 ## Out of scope
 
