@@ -91,6 +91,31 @@ Five things the measurement settled, two of them against what this task assumed:
 - **MySQL can honour the unsupported polarity after all** (M6), via an 8.0.13+ functional key part. That
   option did not exist when the task was filed; it is deliberately **not** taken here — see § Out of scope.
 
+### Measured again at the plan review, 2026-08-22 — live MSSql 2022 (16.0.4265.3)
+
+Three things the plan asserted or assumed without evidence. One of them it had wrong.
+
+| Probe | Result |
+|---|---|
+| **R1** filtered predicate over an `NVARCHAR(MAX)` column, both polarities | **legal** — while that column as an index **key** is `Msg 1919` |
+| **R2** inline `UNIQUE` column constraint (what `[UniqueField]` emits) on a nullable column, two NULL rows | **REJECTED `Msg 2627`** — and `UNIQUE … WHERE` in a column definition is `Msg 156`, a syntax error |
+| **R3** the MSSql override's exact shape: filtered create inside the `sys.indexes` guard | creates, then skips; catalogue reads `has_filter=True filter=([DeletedAt] IS NULL)` |
+| **R3b** re-run with the same index name and a **different** filter | **silently skipped** — `filter_definition` still the original |
+
+- **R1 dismisses a worry rather than confirming one, and that matters for what NOT to build.** TASK-257
+  bounds an indexed unlengthed string to `NVARCHAR(255)` via `IsInIndexKey`, which marks **key** columns
+  only — so a predicate-only string column stays `NVARCHAR(MAX)`. The obvious inference is that Msg 1919
+  applies and predicate columns need marking too; measured, it does not. Marking them would change MSSql
+  column DDL for no reason.
+- **R2 is a gap this task does not close, on a third surface.** `[UniqueField]` / `[PrimaryField]` emit
+  `UNIQUE` as an **inline column constraint** (`FieldDefinition`), which has the identical NULLs-are-equal
+  defect *and* cannot carry a predicate at all. Note the code differs from the index case — **2627** for the
+  constraint, **2601** for a unique index — so a test must assert the right one. → **[[TASK-275]]**.
+- **R3b is the feature's honest limit.** Changing a declared predicate on an existing entity does **nothing**:
+  the guard matches on index **name**, so the old index survives with its old filter. Same on every provider
+  (PostgreSQL's own `IF NOT EXISTS` reports "already exists, skipping"; MySQL's 1061 tolerance does the
+  same), and the same family as TASK-245's recorded "same name over different columns is silently accepted".
+
 ⚠ **TASK-257 raised the stakes rather than lowering them.** Before it, an unlengthed `string` declared
 `TEXT` on MSSql and `TEXT` is not a legal index key (Msg 1919) — so a unique index over such a column could
 not be built there **at all**, and this gap was moot. Since TASK-257 an indexed column declares
@@ -146,6 +171,15 @@ concern for every nullable indexed column a consumer declares from now on.
   NULL semantics but not MSSql's when a key column is NULL, and `DropIndexSql` / `ListIndexesSql` would
   then meet an expression column. Recorded here with the measurement so the next author meets a decision
   rather than a gap.
+- **`[UniqueField]` / `[PrimaryField]` on a nullable column** — measured broken on MSSql the same way
+  (R2: `Msg 2627` on the second NULL row) and **not fixable by this task**, because those emit an inline
+  column constraint that takes no predicate (`Msg 156`). The fix is a different DDL shape on the
+  `CREATE TABLE` path, so it is its own task. → owned by **[[TASK-275]]**.
+- **Reconciling a CHANGED predicate on an existing database** — R3b measured that it is silently ignored on
+  every provider, because schema-ensure matches an index by name and never alters one. That is the
+  framework-wide position already recorded by TASK-257 ("nothing repairs an existing database") and TASK-245
+  ("a same-name index over different columns is silently accepted"); reporting declared-vs-stored drift is
+  TASK-269's family. This task **documents and pins** the limit rather than closing it.
 - **The second index lane** — `Birko.Data.Patterns.IndexManagement.IndexDefinition` → `SqlIndexManager` /
   `IIndexBuilder` — carries no predicate in either direction, and its existing `Sparse` flag is already a
   silent no-op: `IIndexBuilder.Sparse()` is `=> this` in **all six** schema builders and
@@ -176,9 +210,32 @@ concern for every nullable indexed column a consumer declares from now on.
 - **MySQL policy** → per polarity, on evidence: `WhereNotNull` is **omitted** (M1a — NULLs are already
   distinct there, so the emitted index means the same thing); `WhereNull` is **refused** (M4 — omitting it
   would over-enforce). Gated on one capability, not an inline type test.
-- **Bad predicate column** → **throws at table load** in all three cases: unmapped name, `IsNotNull` column,
-  or the same column in both lists. Fail-fast is free here (new API, zero declarations), unlike TASK-248
-  and TASK-256 where the measured blast radius vetoed it.
+- **Bad predicate column** → **throws at table load** in all three cases: unmapped name, non-nullable
+  column, or the same column in both lists. Fail-fast is free here (new API, zero declarations), unlike
+  TASK-248 and TASK-256 where the measured blast radius vetoed it.
+  - ⚠ **The non-nullable test is `field.IsNotNull || field.IsPrimary`, not `IsNotNull` alone** — the plan
+    had this wrong. `AbstractField.IsNotNull` is set from the CLR type for value types, but for **`string`**
+    and **`byte[]`** it is only ever set by `[RequiredField]` / `[Required]`
+    (`Fields/AbstractField.cs:359-393`), so a `string` primary key reads `IsNotNull == false`. Without
+    `IsPrimary` a `WhereNull` on it would be accepted and index zero rows — exactly the silent-nothing this
+    check exists to refuse.
+  - ⚠ **`string` and `string?` are indistinguishable here** — C# nullable-reference annotations are not
+    read (`IsNullable(Type)` answers `true` for every reference type), so `WhereNotNull` on a
+    non-nullable-in-C# string is **accepted and vacuous**, not rejected. Say so in the remarks: the rule is
+    "the column must be nullable **as this framework declares it**", which is weaker than a reader will
+    assume from the C# signature.
+- **Predicates from several `[IndexedField]` attributes on one index** → **union, de-duplicated, validated
+  after the merge**, in a deterministic order (declaration order per list, `WhereNotNull` terms before
+  `WhereNull` ones). `[IndexedField]` aggregates by index name across properties and already merges
+  `IsUnique` this way ("any contributing attribute marking it unique makes the whole index unique"), so the
+  lists follow the same rule. Validation runs **after** merging or the contradiction case is unreachable:
+  two properties can each name the same column in the opposite list, which is only visible once merged.
+  Determinism is not cosmetic — criterion 7's byte-identical assertions need it.
+- **Predicate columns are NOT marked `IsIndexed`** → R1 measured that a filtered predicate over an
+  `NVARCHAR(MAX)` column is legal (only a *key* column raises Msg 1919), so TASK-257's bounding does not
+  apply here. Marking them would change MSSql column DDL for a case the server accepts as-is.
+- **A changed predicate on an existing index is ignored, and that is documented rather than fixed** → R3b.
+  Pinned by a test so it reads as a known limit rather than a surprise.
 - **Refusal mechanism** → no new machinery. `CreateIndexes` consults the capability and throws **before**
   `DoDdlCommand`, so the exception is not re-wrapped by `InitException`; schema-ensure's per-index
   `catch → RecordIndexCreationFailure` records it (TASK-204 degrade-and-report, untouched) while an
