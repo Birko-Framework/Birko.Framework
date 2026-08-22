@@ -181,8 +181,8 @@ namespace Birko.Data.SQL.Tests.IndexManagement
 
             connector.Guard(Index("ux_a", true, new[] { "A" }))
                 .Should().BeNull("an ordinary index is untouched");
-            connector.Guard(Index("ux_b", true, new[] { "A" }, ("B", false)))
-                .Should().BeNull("an IS NOT NULL term is droppable, so it is not refused");
+            connector.Guard(Index("ux_b", true, new[] { "A" }, ("A", false)))
+                .Should().BeNull("an IS NOT NULL term over one of the index's own KEY columns is droppable");
 
             var refusal = connector.Guard(Index("ux_c", true, new[] { "A" }, ("DeletedAt", true)));
             refusal.Should().NotBeNull();
@@ -201,6 +201,86 @@ namespace Birko.Data.SQL.Tests.IndexManagement
 
             connector.Guard(Index("ux_c", true, new[] { "A" }, ("DeletedAt", true))).Should().BeNull();
             connector.Guard(Index("ux_d", true, new[] { "A" }, ("B", false))).Should().BeNull();
+        }
+
+        /// <summary>
+        /// <b>The correction from this task's own close-gate review, and the case that was silently wrong.</b>
+        /// Dropping an <c>IS NOT NULL</c> term is meaning-preserving only when the column is one of the
+        /// index's own key columns — that is where the NULLs-are-distinct argument applies. Over a NON-key
+        /// column the dropped statement applies the UNIQUE constraint to rows the declaration excludes:
+        /// <c>UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL</c> becomes
+        /// <c>UNIQUE (TenantGuid, Number)</c>, which rejects two unapproved drafts sharing a number. Stricter
+        /// than declared — the exact harm the <c>WhereNull</c> refusal exists to prevent.
+        /// </summary>
+        [Fact]
+        public void A_provider_without_partial_indexes_refuses_an_is_not_null_term_over_a_non_key_column()
+        {
+            var index = Index("ux_approved", true, new[] { "TenantGuid", "Number" }, ("ApprovedAt", false));
+
+            Action act = () => new NoPartialIndexConnector().CreateIndexSql("Orders", index);
+
+            act.Should().Throw<InvalidOperationException>()
+                .Which.Message.Should().Contain("not one of this index's key columns");
+        }
+
+        /// <summary>
+        /// …and the funnel refuses it too, from the same producer, so the pre-check and the emitter cannot
+        /// disagree about which declarations are honourable.
+        /// </summary>
+        [Fact]
+        public void The_funnel_guard_refuses_an_is_not_null_term_over_a_non_key_column()
+        {
+            var refusal = new NoPartialIndexConnector()
+                .Guard(Index("ux_approved", true, new[] { "TenantGuid", "Number" }, ("ApprovedAt", false)));
+
+            refusal.Should().NotBeNull();
+            refusal!.Message.Should().Contain("ApprovedAt");
+            refusal.Message.Should().Contain("reject values it permits");
+        }
+
+        /// <summary>
+        /// A <b>non-unique</b> partial index enforces nothing, so dropping its predicate only widens the rows
+        /// it covers — a bigger index with identical semantics. Refusing it (as the first version of this
+        /// feature did) left a declared optimisation absent on MySQL for no correctness benefit, with a
+        /// recorded schema-ensure failure to match. The second finding of the close-gate review.
+        /// </summary>
+        [Fact]
+        public void A_provider_without_partial_indexes_drops_a_predicate_from_a_non_unique_index()
+        {
+            var index = Index("ix_live_created", false, new[] { "TenantGuid", "CreatedAt" }, ("DeletedAt", true));
+
+            new NoPartialIndexConnector().CreateIndexSql("Orders", index)
+                .Should().Be("CREATE INDEX IF NOT EXISTS \"ix_live_created\" ON \"Orders\" (TenantGuid, CreatedAt)",
+                    "a non-unique index constrains nothing, so a wider one is semantically identical");
+            new NoPartialIndexConnector()
+                .Guard(index).Should().BeNull("and the funnel must not refuse what the emitter can drop");
+        }
+
+        /// <summary>
+        /// The droppable case, stated positively so the boundary is pinned from both sides: unique, and the
+        /// predicate column IS a key column.
+        /// </summary>
+        [Fact]
+        public void A_provider_without_partial_indexes_drops_an_is_not_null_term_over_a_key_column()
+        {
+            var index = Index("ux_extid", true, new[] { "TenantGuid", "ExternalId" }, ("ExternalId", false));
+
+            new NoPartialIndexConnector().Guard(index).Should().BeNull();
+            new NoPartialIndexConnector().CreateIndexSql("Accounts", index)
+                .Should().NotContain("WHERE");
+        }
+
+        /// <summary>
+        /// Key-column matching is case-insensitive. Both names come from one metadata producer today, but the
+        /// second index lane is caller-fed (TASK-274) and a case difference there must not silently turn a
+        /// droppable term into a refused one.
+        /// </summary>
+        [Fact]
+        public void Key_column_matching_for_a_droppable_term_ignores_case()
+        {
+            var index = Index("ux_extid", true, new[] { "TenantGuid", "ExternalId" }, ("externalid", false));
+
+            new NoPartialIndexConnector().Guard(index).Should().BeNull();
         }
 
         private class NoPartialIndexConnector : TestConnector
@@ -369,6 +449,9 @@ namespace Birko.Data.SQL.Tests.IndexManagement
         {
             var index = Birko.Data.SQL.DataBase.LoadTable(typeof(IpMerged)).Indexes!["ux_ipmerged"];
 
+            // WhereNotNull terms first, then WhereNull, each sorted ordinally by column name — sorted rather
+            // than in declaration order because accumulation follows Type.GetProperties(), whose order the
+            // CLR leaves unspecified, and these statements are compared byte-for-byte (close-gate finding).
             index.Predicates.Select(p => (p.ColumnName, p.RequireNull))
                 .Should().Equal(("Number", false), ("DeletedAt", true));
         }
