@@ -391,10 +391,12 @@ namespace Birko.Data.SQL.Connectors
                 c.ColumnName + (c.IsDescending ? " DESC" : "")));
 
             var unique = index.Unique ? "UNIQUE " : "";
-            // TASK-273 — IndexPredicateClause returns "" here for an IS NOT NULL predicate (dropped: MySQL
-            // treats NULLs as distinct, so the unfiltered index means the same thing) and THROWS for an
-            // IS NULL one (dropping it would over-enforce). CreateIndexes refuses that case before reaching
-            // this emitter; the call is kept so a direct caller cannot get a quietly different statement.
+            // TASK-273 — IndexPredicateClause drops a term only where dropping it preserves the meaning
+            // (a non-unique index, or an IS NOT NULL term over one of the index's own key columns) and
+            // THROWS otherwise, because the unfiltered index would then be STRICTER than declared.
+            // CreateIndexes refuses those cases before reaching this emitter, via the same
+            // CanDropIndexPredicate producer; the call is kept so a direct caller cannot get a quietly
+            // different statement.
             return $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
                  + IndexPredicateClause(index);
         }
