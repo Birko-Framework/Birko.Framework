@@ -3,7 +3,7 @@ id: TASK-273
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: in-progress
 priority: P1
 assignee: ai
 created: 2026-08-22
@@ -49,10 +49,47 @@ no external id. SQL Server treats NULLs as **equal** for uniqueness purposes, so
 account. PostgreSQL, SQLite and MySQL treat NULLs as **distinct** and admit any number. So adding the index
 without a predicate does not merely under-enforce — on MSSql it **breaks ordinary inserts**, and only there.
 
-⚠ **Verify that per-provider NULL behaviour on the live servers before building anything.** It is stated
-above from standard SQL semantics, not measured, and this repository's rule is that a provider claim is
-worth what its live test says. All four suites gate on `BIRKO_*_HOST` and skip silently, so set
-`BIRKO_REQUIRE_LIVE`.
+### Measured, 2026-08-22 — live, all five engines (acceptance criterion 1)
+
+Probe table `(TenantGuid, Number NULL, DeletedAt NULL)`; `A`/`B` are two inserts, second one's outcome shown.
+Codes are the driver's, never the message.
+
+| Probe | MSSql 2022<br>16.0.4265.3 | PostgreSQL<br>16.15 | TimescaleDB 2<br>/PG 16.15 | MySQL<br>8.4.11 | SQLite<br>3.53.3 |
+|---|---|---|---|---|---|
+| **M1a** plain `UNIQUE (T, Number)`, two NULL Numbers | **REJECTED `Msg 2601`** | ACCEPTED | ACCEPTED | ACCEPTED | ACCEPTED |
+| **M1b** plain, two `'A'` | REJECTED `2601` | REJECTED `23505` | REJECTED `23505` | REJECTED `1062` | REJECTED `19/2067` |
+| **M2** partial `WHERE Number IS NOT NULL` (**key** column) | works | works | works | **DDL `ERROR 1064`** | works |
+| **M3** partial `WHERE DeletedAt IS NULL` (**non-key** column) | works | works | works | **DDL `ERROR 1064`** | works |
+| **M4** plain index, live row + soft-deleted row sharing `'A'` | REJECTED | REJECTED | REJECTED | REJECTED | REJECTED |
+| **M5** DML (INSERT/UPDATE/DELETE) with a filtered index present, driver defaults | **all OK** | — | — | — | — |
+| **M6** functional key part `(CASE WHEN DeletedAt IS NULL THEN Number END)` | — | — | — | **emulates it**: live+deleted ACCEPTED, two live REJECTED `1062` | — |
+
+"works" = the partial index admits many excluded-by-predicate rows **and** still rejects a duplicate among
+the included ones — both directions, since a one-directional result cannot tell a working index from an
+absent one.
+
+Five things the measurement settled, two of them against what this task assumed:
+
+- **The hypothesis holds, and the error code is `2601`** (duplicate key row in an object with a unique
+  index), **not** the `2627` its TASK-257 neighbours cite for a constraint violation. A test asserting 2627
+  would have been wrong.
+- **The `Msg 1934` risk is dead.** SQL Server requires a specific SET-option state for *any* DML against a
+  table carrying a filtered index, and this framework never sets SET options. Measured on
+  `Microsoft.Data.SqlClient` defaults: `ANSI_NULLS=1 QUOTED_IDENTIFIER=1 ANSI_PADDING=1 ANSI_WARNINGS=1
+  CONCAT_NULL_YIELDS_NULL=1 NUMERIC_ROUNDABORT=0`, `ARITHABORT=0` — and insert, update and delete all
+  succeed anyway, because `ANSI_WARNINGS ON` implies the arithabort behaviour. This was the one finding that
+  could have made filtered indexes unusable through this framework.
+- **A predicate over a NON-key column builds on all three providers that have partial indexes** — so
+  "unique among live rows" (`WHERE DeletedAt IS NULL`) is buildable, not theoretical. `ISoftDeletable` is
+  `DateTime? DeletedAt` with *null means active*, and Symbio's `BaseEntity` gives it to **every** entity, so
+  this is the near-term second caller, not a hypothetical one.
+- **M4 fires on every provider, MySQL included, and it inverts the failure mode.** Omitting a
+  `DeletedAt IS NULL` tail does not under-enforce — it **over**-enforces, refusing a document number
+  legitimately reused after a soft delete. That is the outcome criterion 4 forbids, so "omit where
+  unsupported" is not a blanket policy; it is safe for the `IS NOT NULL` polarity only (M1a), and there only
+  because MySQL already treats NULLs as distinct.
+- **MySQL can honour the unsupported polarity after all** (M6), via an 8.0.13+ functional key part. That
+  option did not exist when the task was filed; it is deliberately **not** taken here — see § Out of scope.
 
 ⚠ **TASK-257 raised the stakes rather than lowering them.** Before it, an unlengthed `string` declared
 `TEXT` on MSSql and `TEXT` is not a legal index key (Msg 1919) — so a unique index over such a column could
@@ -60,30 +97,28 @@ not be built there **at all**, and this gap was moot. Since TASK-257 an indexed 
 `NVARCHAR(255)` and those indexes build, which is what turns "MSSQL treats NULLs as equal" into a live
 concern for every nullable indexed column a consumer declares from now on.
 
-⚠ **The portability objection is smaller than it looks — check it before scoping the feature wide.**
-MySQL is the one provider of the four with **no partial/filtered index support**, which reads at first like
-a blocker. But MySQL is also one of the three that already treat NULLs as distinct, so for *this* use it
-does not need the predicate: an unfiltered unique index there already admits many NULLs. The predicate is
-needed only where filtered indexes exist (MSSql, PostgreSQL, SQLite). A **general-purpose** predicate
-(`WHERE IsActive = 1`) is a different, wider feature and is genuinely unimplementable on MySQL — decide
-which of the two is being built and say so, rather than discovering it at the fourth provider.
-
 ## Acceptance criteria
 
-- [ ] Per-provider NULL-in-unique-index behaviour **measured live** on all four (MSSql 2022, PostgreSQL 16,
+- [x] Per-provider NULL-in-unique-index behaviour **measured live** on all four (MSSql 2022, PostgreSQL 16,
       MySQL 8.4, SQLite), with `BIRKO_REQUIRE_LIVE` set so a missing server fails instead of skipping. The
-      claim above is the hypothesis, not the result.
-- [ ] A decision, recorded on this task: **(a)** a narrow "exclude NULLs" flag, or **(b)** a general
+      claim above is the hypothesis, not the result. → § *Measured, 2026-08-22*; TimescaleDB 2 measured too
+      (it inherits the PostgreSQL connector). The step-0 harness was a scratchpad `.csx`, so the durable
+      form of this criterion is the live suites in the criteria below.
+- [x] A decision, recorded on this task: **(a)** a narrow "exclude NULLs" flag, or **(b)** a general
       predicate string. (a) is portable across the three providers that need it and is a no-op on MySQL;
-      (b) cannot be honoured on MySQL and needs an explicit policy for it.
+      (b) cannot be honoured on MySQL and needs an explicit policy for it. → **Refined (a): two
+      resolved-column lists**, `WhereNotNull` / `WhereNull`. See § Resolved decisions in the plan; (b) is
+      deferred with its injection problem named.
 - [ ] The chosen shape threaded through all four sites: the attribute
       (`Attributes/Field.cs`), `IndexDefinition`, whatever populates it from the attribute
       (`DataBase_Table.LoadIndexes`), and `CreateIndexSql` — plus any provider override that reimplements
-      the statement.
+      the statement (`MSSqlConnector`, `MySQLConnector`), and **both** attribute forms
+      (`CompositeIndex`, `IndexedField`).
 - [ ] ⚠ **A provider that cannot honour the predicate must not silently emit the index without it.** That
       converts a declared constraint into a *different, stricter* constraint that rejects legitimate rows —
       worse than not creating it. Whatever the MySQL policy is, it is loud: either refuse at schema-ensure
-      or record the failure the way TASK-354's `IndexCreationFailures` does.
+      or record the failure the way TASK-354's `IndexCreationFailures` does. → **Per polarity**, on M1a/M4
+      evidence: `WhereNotNull` is omitted (behaviour-preserving), `WhereNull` is refused.
 - [ ] Live behavioural tests per provider, asserting **both** directions: two NULL rows are accepted, and
       two rows sharing a non-NULL value are rejected. A one-directional test passes against an index that
       was never created.
@@ -100,6 +135,23 @@ which of the two is being built and say so, rather than discovering it at the fo
   raised by the same Symbio freeze pass, but it is a much larger feature and is tracked separately by the
   consumer as Symbio TASK-540 pending its decision.
 - Retrofitting predicates onto any existing declaration.
+- **A general predicate string** (`WHERE IsActive = 1`) — deferred, not forgotten. It is the natural next
+  ask and it is blocked on a real problem: caller text reaches `CREATE INDEX` by interpolation, cannot be
+  parameterised, and `DataBase.ValidateIndexFieldIdentifier` validates *one bare identifier*, so an
+  expression needs a validator this framework does not have (the SH-H023 sink family). The two lists chosen
+  here do not block it — a `Where` string can arrive beside the `Where*` lists later.
+- **Emulating the unsupported polarity on MySQL via a functional key part** — measured working (M6) and
+  deliberately declined: it is a statement shape nothing else in the framework emits, the index stops
+  serving plain `Number = 'A'` lookups (constraint kept, optimisation lost), it matches PostgreSQL/SQLite
+  NULL semantics but not MSSql's when a key column is NULL, and `DropIndexSql` / `ListIndexesSql` would
+  then meet an expression column. Recorded here with the measurement so the next author meets a decision
+  rather than a gap.
+- **The second index lane** — `Birko.Data.Patterns.IndexManagement.IndexDefinition` → `SqlIndexManager` /
+  `IIndexBuilder` — carries no predicate in either direction, and its existing `Sparse` flag is already a
+  silent no-op: `IIndexBuilder.Sparse()` is `=> this` in **all six** schema builders and
+  `ToSqlIndexDefinition` never copies `Sparse`, the same lost-flag shape as TASK-245 (`Unique`, same
+  method) and TASK-246 (`.Unique()`, `SqlIndexBuilder.Build()`). `WithProperty` is a second `=> this` on
+  the same interface. → owned by **[[TASK-274]]**.
 
 ## Human test plan
 
@@ -108,156 +160,128 @@ which of the two is being built and say so, rather than discovering it at the fo
 
 ## Implementation plan
 
-⚠ **Acceptance criteria question — criterion 3 names one lane, and the framework has two.** The four sites
-listed (`Attributes/Field.cs`, `Tables.IndexDefinition`, `LoadIndexes`, `CreateIndexSql`) are the
-**attribute → schema-ensure** lane. There is a second, parallel index lane — `Birko.Data.Patterns`'
-`IndexManagement.IndexDefinition` → `SqlIndexManager` / `IIndexBuilder` — and it **already has a word for
-this**: `IndexDefinition.Sparse` ("skips documents without the indexed field"). Measured: every
-implementation of `IIndexBuilder.Sparse()` is `=> this` — all six backends, `SqlSchemaBuilder.cs:333`
-included — and `SqlIndexManager.ToSqlIndexDefinition` copies `Name`/`Unique`/columns and **drops `Sparse`**,
-the identical lost-flag shape as TASK-245 (`Unique` dropped in that same method) and TASK-246 (`.Unique()`
-dropped in `SqlIndexBuilder.Build()`). Recommendation: keep that lane **out** of this task and spawn it — but
-the decision is the human's, because it changes what "threaded through all four sites" means.
+### Resolved decisions (grilled 2026-08-22, after the live measurement above)
 
-⚠ **Acceptance criteria question — criterion 3 says `CompositeIndex`; `IndexedField` has the same hole.**
-`IndexedField` also carries `IsUnique` (`Attributes/Field.cs:100-113`), so a single nullable column marked
-`[IndexedField("ux", IsUnique = true)]` is broken on MSSql for exactly the same reason. § TASK-215's *guard
-the whole verb family or none of it* says both attribute forms take the flag; both are resolved in
-`LoadIndexes`, at the two marking points TASK-248 had to fix in tandem. The plan below assumes **both**.
+- **Scope** → both `[CompositeIndex]` and `[IndexedField]` (§ TASK-215: guard the whole verb family). Note
+  `[IndexedField(…, IsUnique: true)]` has **zero** production declarations — tests only — so this costs one
+  property, one marking site and one probe entity, and buys the absence of a store where one attribute form
+  can exclude NULLs beside another that silently cannot.
+- **Shape** → **two resolved-column lists**, not a bool and not a predicate string: `WhereNotNull` covers
+  Symbio's nullable `ExternalId`, `WhereNull` covers unique-among-live-rows on every `ISoftDeletable`
+  entity, and M3 proves a non-key predicate column builds. Column names resolve through the same `fields`
+  map as `CompositeIndex.Properties`, so **no caller text reaches the DDL**.
+- **Naming** → `WhereNotNull` / `WhereNull` — reads as the SQL it emits, one-to-one with the statement, and
+  `Where` is the term PostgreSQL and SQLite use for a partial index. (`RequireNulls` was rejected as
+  ambiguous: it can be read as a constraint on the data rather than a filter on the index.)
+- **MySQL policy** → per polarity, on evidence: `WhereNotNull` is **omitted** (M1a — NULLs are already
+  distinct there, so the emitted index means the same thing); `WhereNull` is **refused** (M4 — omitting it
+  would over-enforce). Gated on one capability, not an inline type test.
+- **Bad predicate column** → **throws at table load** in all three cases: unmapped name, `IsNotNull` column,
+  or the same column in both lists. Fail-fast is free here (new API, zero declarations), unlike TASK-248
+  and TASK-256 where the measured blast radius vetoed it.
+- **Refusal mechanism** → no new machinery. `CreateIndexes` consults the capability and throws **before**
+  `DoDdlCommand`, so the exception is not re-wrapped by `InitException`; schema-ensure's per-index
+  `catch → RecordIndexCreationFailure` records it (TASK-204 degrade-and-report, untouched) while an
+  explicit `CreateIndexes` call propagates. The emitter also throws if handed an unrenderable definition
+  directly — § TASK-137's "a strategy asked to render the unrenderable throws".
+- **Predicate lives on the index, not the column** → `IndexDefinition.Predicates`, a list of
+  (column, `RequireNull`) resolved in `LoadIndexes`. **Not** a flag on `IndexColumn`: M3 proves a predicate
+  column need not be a key column at all, so per-column would be structurally unable to express the
+  soft-delete case.
+- **Non-unique indexes accept the lists too** — a partial non-unique index is a legitimate optimisation and
+  costs nothing to allow.
 
-### Step 0 — measure, before touching a line (criterion 1)
+### Step 1 — attributes (`Birko.Data.SQL/Attributes/Field.cs`)
 
-The Context's per-provider NULL claim is standard-SQL reasoning. Measure it first: two of the branches below
-are chosen by the result, and TASK-257's step 0 falsified two of the four premises it was about to cite.
+`string[] WhereNotNull` and `string[] WhereNull` on both `CompositeIndex` and `IndexedField`, defaulting to
+empty (never null — `Properties` already normalises that way). Settable properties, so no existing positional
+call site moves.
 
-Per provider (MSSql 2022, PostgreSQL 16, MySQL 8.4, on-disk SQLite), on a scratch table
-`(TenantGuid, ExternalId NULL)`:
+Correct the XML remarks on both: they currently state *as a decision* that "only a full (non-partial) unique
+index is emitted — partial/filtered unique indexes are not supported (not portable across providers)". That
+sentence is the record of the choice this task reverses; leaving it is worse than never having written it. The
+replacement states the measured per-provider truth and the MySQL policy.
 
-1. Plain `CREATE UNIQUE INDEX ux ON T (TenantGuid, ExternalId)` → insert two rows with `ExternalId NULL`,
-   same tenant. **Record accepted vs the error code**, never the message.
-2. Insert two rows sharing a non-NULL `ExternalId` → confirm rejection everywhere. A one-directional result
-   cannot tell a working index from an absent one.
-3. Filtered/partial spelling `… (TenantGuid, ExternalId) WHERE ExternalId IS NOT NULL` → does it parse, and
-   does it then admit many NULLs while still rejecting a duplicate non-NULL? Expect yes on MSSql,
-   PostgreSQL, SQLite; expect a syntax error on MySQL — **record MySQL's code**, since the emitter's MySQL
-   branch is justified by it.
-4. ⚠ **MSSql only, and this is the risk that can sink the approach.** SQL Server requires a specific
-   SET-option state for **any DML against a table carrying a filtered index** (`Msg 1934` otherwise), and
-   this framework never sets SET options — the TASK-257 `ANSI_WARNINGS` lesson one layer over. Insert,
-   update and delete **through the real store** against a table with the filtered index in place, on
-   `Microsoft.Data.SqlClient` defaults. If that fails, the filtered index is unusable through this framework
-   and the task's shape changes; find out now, not at criterion 5.
-5. SQLite: confirm the bundled engine takes a partial index (needs ≥ 3.8.0 — almost certainly fine, but it
-   is one query and it is the provider every consumer test actually runs on).
+### Step 2 — `SQL/Tables/IndexDefinition.cs`
 
-Write the measured table into the task's `## Context` in place of the hypothesis, with server versions.
+```csharp
+public class IndexPredicate { public string ColumnName { get; set; } = null!; public bool RequireNull { get; set; } }
+// on IndexDefinition:
+public List<IndexPredicate> Predicates { get; } = new();
+```
 
-### Step 1 — settle the shape and record it (criterion 2)
+### Step 3 — `DataBase_Table.LoadIndexes`
 
-**Recommendation: (a), a narrow generated "exclude NULLs" flag. Not (b), a caller-supplied predicate.**
-Three reasons, in the order that decides it here:
+Resolve both lists at **both** attribute resolution points — the per-property `IndexedField` loop and the
+class-level `CompositeIndex` loop. TASK-248 had to fix exactly this pair, and reverting one of its two
+markings failed 0 tests until TASK-257's suite declared one entity per attribute form; the mutation below
+exists for that reason.
 
-- **(b) is a new uncontainable DDL injection sink.** A predicate string reaches `CREATE INDEX` by
-  interpolation and cannot be parameterised. `DataBase.ValidateIndexFieldIdentifier` (the shared
-  `_bareIdentifier` check, TASK-245/249) accepts *one bare identifier* — it cannot validate `IsActive = 1`,
-  so (b) needs a whole expression validator or it is SH-H023 with a fresh coat. (a) generates the tail from
-  **resolved column metadata**, so no caller text reaches the statement at all.
-- **(a) is honourable on every provider; (b) is not.** For the exclude-NULLs case MySQL needs no predicate —
-  it already treats NULLs as distinct — so omitting the tail there is *behaviour-preserving*, which is what
-  lets criterion 4 be discharged by a documented, tested no-op instead of a refusal. Under (b) MySQL must
-  refuse, and every consumer declaring a predicate loses MySQL.
-- **(a) composes with existing metadata for free** — `[NamedField]` / `ModelMap` remaps are already resolved
-  in `LoadIndexes`, so the predicate names the mapped column without a second resolution.
+Per name: resolve to a field (unmapped → `TableAttributeException` naming type, index and property, matching
+the existing `CompositeIndex` typo throw), reject `field.IsNotNull`, reject a name present in both lists,
+then append an `IndexPredicate`. Also carry the cross-assembly shared-project fallback that both loops
+already have for `Name`/`Properties`/`IsUnique` — an attribute compiled into another assembly is read
+reflectively, so a new property that is only read through the direct cast works in the framework's own tests
+and silently does nothing for the consumers this feature exists for.
 
-Cost of (a), stated rather than discovered: `WHERE IsActive = 1` stays impossible. That is a genuinely wider
-feature, and (a) does not block it — the flag and a future predicate can coexist on the definition.
+### Step 4 — emitters
 
-**Naming — decide deliberately, do not reuse `Sparse` by reflex.** Mongo's `Sparse` on a *compound* index
-includes a document if **any** key is present; the tail proposed here requires **every** nullable key to be
-non-null. Same intent, different rule, so one word would name two behaviours. Proposed: `ExcludeNulls` on the
-attributes, rendered `WHERE <col> IS NOT NULL AND …`.
+- `AbstractConnectorBase`: `public virtual bool SupportsPartialIndexes => true;` — one producer, in the
+  family of `SupportsTransactionalDdl` / `FoldsUnquotedIdentifiers` / `IsMissingTableException`.
+  `MySQLConnector` overrides it `false`.
+- `AbstractConnectorBase.CreateIndexSql`: append ` WHERE <col> IS [NOT] NULL` joined by ` AND ` in
+  `Predicates` order, columns **bare** (TASK-245: `CreateTable` emits column definitions bare, so
+  PostgreSQL stores the folded name and a quoted one cannot resolve it).
+- `MSSqlConnector.CreateIndexSql`: same tail appended to `create` **before** the `sys.indexes` guard is
+  prefixed, so the conditional and unconditional forms both carry it; columns bracket-quoted, consistent
+  with that override's own column list rather than with the base.
+- `MySQLConnector.CreateIndexSql`: emits no tail. A `RequireNull` predicate never reaches it (step 5
+  refuses first); if it does, it throws.
 
-### Step 2 — thread it (criterion 3)
+### Step 5 — the funnel (`AbstractConnector.CreateIndexes` + the async twin)
 
-1. `Attributes/Field.cs` — `bool ExcludeNulls { get; set; }` on **both** `CompositeIndex` and `IndexedField`.
-   Settable property beside `IsUnique` on the former; on the latter an optional ctor arg **appended last**
-   plus a settable property, so no existing positional call site moves. Correct the XML remarks on both:
-   they currently *state as a decision* that "only a full (non-partial) unique index is emitted —
-   partial/filtered unique indexes are not supported (not portable across providers)". That sentence is the
-   record of the choice this task reverses; leaving it is worse than never having written it.
-2. `Tables/IndexDefinition.cs` — `bool RequireNotNull` on **`IndexColumn`**, not a bool on the index. The
-   connector must render `WHERE a IS NOT NULL AND b IS NOT NULL` in column order with no metadata of its own,
-   and *which* key columns are nullable is knowable only where the fields are (`LoadIndexes`). Per-column
-   keeps the one-producer split clean — resolution in `LoadIndexes`, rendering in the connector — and it is
-   what a later `IIndexManager` lane would populate too.
-3. `DataBase_Table.LoadIndexes` — at **both** resolution points (the per-property loop and the composite loop;
-   TASK-248 had to fix exactly this pair, and reverting one of them failed 0 tests until TASK-257's suite
-   declared one entity per attribute form). When the declaration sets `ExcludeNulls`, set `RequireNotNull` on
-   each key column whose resolved field is nullable. Two sub-decisions to make explicit in code and comment:
-   a **non**-nullable key column is never flagged (the tail would be dead weight and would change the DDL of
-   a perfectly good index), and `ExcludeNulls` on an index whose keys are all non-nullable emits **no tail**
-   rather than throwing — a vacuous declaration, not a contradiction.
-4. `AbstractConnectorBase.CreateIndexSql` — append ` WHERE <bare col> IS NOT NULL AND …` for the flagged
-   columns, **bare**, per § Conventions and for TASK-245's reason (PostgreSQL stores the folded name).
-5. `MSSqlConnector.CreateIndexSql` — append to the `create` string **before** the `sys.indexes` guard is
-   prefixed, so both the conditional and unconditional forms carry it. Columns stay bracket-quoted here (an
-   already-documented deliberate divergence), so the tail's columns are quoted here and bare in the base.
-   That asymmetry is *already* the rule for the column list; keep the tail consistent with its neighbours
-   rather than with the other provider.
-6. `MySQLConnector.CreateIndexSql` — **never** emits the tail. Gate it on a new
-   `AbstractConnectorBase.SupportsPartialIndexes` (`true` by default, `false` on MySQL alone) in the family of
-   `SupportsTransactionalDdl` / `FoldsUnquotedIdentifiers` / `IsMissingTableException`: one producer,
-   consulted, never re-derived at a call site. Not an inline `if (this is MySQLConnector)`.
+Before `DoDdlCommand`: if `!SupportsPartialIndexes` and any predicate has `RequireNull`, throw with a
+message naming the index, the provider limitation (`ERROR 1064`, measured) and the M6 emulation as the
+recorded alternative — § SH-H037's "a guard whose message only says no gets reached around". A
+`WhereNotNull`-only definition passes through and the tail is dropped by the emitter.
 
-### Step 3 — the loud-failure rule (criterion 4)
+⚠ Check `AsyncDataBaseStore.InitCoreAsync` before believing any revert here: it calls the **sync**
+`Connector.CreateTable`, so `CreateIndexesAsync` has no store-level caller and reverting only the async site
+failed 0 of 14 in TASK-245.
 
-Under shape (a), MySQL's omission is **behaviour-preserving for the only semantic the flag has** — which is
-what discharges this criterion, but that is an argument, and TASK-258 is this epic's standing reminder that an
-argument is not a measurement. So it is discharged by step 0 plus a **live MySQL test** (two NULL rows
-accepted through the store, duplicate non-NULL rejected), not by the reasoning above.
-`SupportsPartialIndexes` is the seam where a future general predicate must **refuse** rather than omit; say so
-in its remarks, because the next author arrives with (b).
+### Step 6 — tests
 
-### Step 4 — tests
+Offline, `Birko.Data.SQL.Tests` (the project that declares the emitter — TASK-257's close gate was pulled up
+for testing a `Birko.Data.SQL` member only from provider suites):
 
-Offline, in `Birko.Data.SQL.Tests` (the project that declares the emitter — TASK-257's close gate was pulled
-up for testing a `Birko.Data.SQL` member only from provider suites):
+- tail renders for one and two predicates, both polarities, in order, bare;
+- no predicate → **byte-identical** statement (criterion 7), asserted as a string, for base + both overrides;
+- `SupportsPartialIndexes` is `false` on MySQL and `true` on the other three — **assert the false side**, or
+  the capability is indistinguishable from an unconditional emit;
+- the three declaration errors throw, with the property name in the message;
+- the cross-assembly reflective path reads both new lists.
 
-- the tail renders for one and for two nullable key columns, in column order, bare;
-- no flag → **byte-identical** statement (criterion 7), asserted as a string, for the base and each override;
-- `ExcludeNulls` with no nullable key column → no tail;
-- `SupportsPartialIndexes` reads `false` on MySQL and `true` on the other three — **assert the false side**,
-  or the capability is indistinguishable from an unconditional emit and can be deleted with nothing noticing.
+Live, extending `DeclaredIndexLiveTests` (MSSql / MySQL / PostgreSQL) and
+`ClassLevelCompositeIndexEndToEndTests` (SQLite), all with `BIRKO_REQUIRE_LIVE` set:
 
-Live, per provider — extend `DeclaredIndexLiveTests` in the MSSql / MySQL / PostgreSQL suites and
-`ClassLevelCompositeIndexEndToEndTests` for SQLite; all gate on `BIRKO_*_HOST`, so run the set with
-`BIRKO_REQUIRE_LIVE` set (a silent skip is the failure mode this epic keeps re-learning):
+- **both directions** per provider: rows excluded by the predicate are accepted, duplicates among the
+  included ones are rejected — asserting the measured codes (`2601` / `23505` / `1062` / `19-2067`);
+- MSSql: DML through the store against the filtered-index table on driver defaults (pins M5, so a future
+  SET-option change fails here rather than in production);
+- MySQL: a `WhereNotNull` declaration builds and behaves; a `WhereNull` one is refused and **recorded**, and
+  the entity's reads still work (TASK-204's degrade contract);
+- existing `CompositeIndex` declarations keep their DDL.
 
-- both directions on every provider: two NULL rows accepted **and** two rows sharing a non-NULL rejected;
-- MSSql: DML through the store against the filtered-index table on SqlClient defaults (step 0.4's risk),
-  pinned so a future SET-option change fails here rather than in production;
-- the existing `CompositeIndex` declarations in the tree keep their DDL unchanged.
+Mutations, each isolating one claim:
 
-Mutations (criterion 6), each isolating one claim:
+- drop the tail from the base emitter → the MSSql excluded-rows test goes red;
+- force `SupportsPartialIndexes` true on MySQL → MySQL goes red on `1064`, proving the false side is
+  load-bearing;
+- drop the predicate resolution at **each** of `LoadIndexes`' two points in turn → disjoint failures, one
+  per attribute form. A mutation failing 0 tests means a missing probe entity, not a redundant fix.
 
-- drop the tail from the base emitter → the MSSql two-NULL-rows test must go red;
-- force `SupportsPartialIndexes` true on MySQL → the MySQL suite must go red on the measured syntax error,
-  which is what proves the capability's `false` side is load-bearing;
-- drop the `RequireNotNull` marking at **each** of `LoadIndexes`' two resolution points in turn → disjoint
-  failures, one per attribute form. A mutation that fails 0 tests means the suite is missing an entity, not
-  that the fix is redundant.
+### Step 7 — documentation, at close
 
-### Step 5 — documentation, at close
-
-Attribute remarks (see 2.1), a § Conventions entry in `CLAUDE.md` stating the rule and why (a) beat (b), and a
-Recent Updates entry. Three commits per § Task tracking: production (`Birko.Data.SQL` + the two provider
-repos), tests, then this aggregator.
-
-### Out-of-plan discoveries to spawn rather than absorb
-
-- **The Patterns/migrations index lane drops `Sparse` the way TASK-245 dropped `Unique`** —
-  `IIndexBuilder.Sparse()` is `=> this` in all six schema builders and `ToSqlIndexDefinition` never copies it,
-  so a migration asking for a sparse index silently gets a full one. Same family, different lane; its own task.
-- **`IIndexBuilder.WithProperty(key, value)` is `=> this` everywhere too** — a second silent no-op on the same
-  interface. Fold into the above.
-
+Attribute remarks (step 1), a § Conventions entry stating the rule, the polarity asymmetry and why the
+general predicate was deferred, and a Recent Updates entry. Three commits per § Task tracking: production
+(`Birko.Data.SQL`, `Birko.Data.SQL.MSSql`, `Birko.Data.SQL.MySQL`), then the test repos, then this aggregator.
