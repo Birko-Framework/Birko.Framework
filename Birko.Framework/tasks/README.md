@@ -38,13 +38,19 @@ _Generated 2026-08-19 (partial refresh at [[TASK-261]]’s close: counts, EPIC-0
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
 | todo         | —     | —       | 130   |
-| in-progress  | 7     | 10      | 1     |
+| in-progress  | 7     | 10      | 2     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
 | done         | 1     | 22      | 98    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
+Todo by priority: **P0 0 · P1 30 · P2 90 · P3 10**
+
+<!-- Count note (2026-08-22): re-measured in one pass over the frontmatter while filing TASK-273, not
+     derived by adding one to the previous figures. Two pre-existing errors were corrected rather than
+     carried: the mix read 27+88+10 = 125 against a stated todo of 130, and in-progress read 1 while two
+     tasks are in progress. Measure; do not add a delta to a figure you did not measure. -->
+
 
 > Full regeneration 2026-08-18 — a fresh walk of every frontmatter in `tasks/`: 18 epics, 56 stories,
 > **222 tasks** (117 + 1 + 10 + 2 + 91 + 1). The per-epic tree below is regenerated too, not just the counts;
@@ -312,6 +318,7 @@ Todo by priority: **P0 0 · P1 27 · P2 88 · P3 10**
     - [ ] [TASK-270](EPIC-014-code-review-remediation/TASK-270-connector-cache-invites-per-caller-state.md) `DataBase.GetConnector` shares one connector process-wide, and three features have put per-caller state on it · FEATURE-014
     - [ ] [TASK-271](EPIC-014-code-review-remediation/TASK-271-timescaledb-emitters-can-now-use-the-connector.md) The TimescaleDB migration emitters bypass the connector for a reason that no longer exists · FEATURE-014
     - [ ] [TASK-272](EPIC-014-code-review-remediation/TASK-272-first-class-schema-support.md) An entity cannot say which schema it lives in · FEATURE-014
+    - [ ] [TASK-273](EPIC-014-code-review-remediation/TASK-273-compositeindex-cannot-express-a-filter-predicate.md) `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql · FEATURE-014
     - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned`'s "preserves each provider's policy" is an argument, not a measurement · FEATURE-014
     - [ ] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
