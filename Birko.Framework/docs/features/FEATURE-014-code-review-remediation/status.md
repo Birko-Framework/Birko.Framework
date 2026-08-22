@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-62 / 134 tasks done (1 awaiting sign-off).
+62 / 135 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -158,6 +158,7 @@ generated: 2026-08-19
 - [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
 - [x] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
 - [x] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
+- [ ] TASK-273 `CompositeIndex` cannot say "unique only where the column is not null", so a nullable unique index breaks ordinary inserts on MSSql
 
 ## What can be tested now
 
