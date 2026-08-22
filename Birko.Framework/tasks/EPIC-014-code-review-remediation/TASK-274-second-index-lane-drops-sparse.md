@@ -79,6 +79,13 @@ it — mapping it onto TASK-273's machinery is the obvious move and it needs sta
       branch nobody ships (TASK-247 has since made the connector required — verify that holds).
 - [ ] Mutation-proven per backend: drop the flag hand-off and a test goes red. A revert failing 0 tests means
       the suite tests the wrong branch.
+- [ ] ⚠ **If this lane learns a predicate, it must reach the funnel guard — `SqlIndexManager.CreateAsync`
+      calls `_connector.CreateIndexSql(scope, sqlIndex)` DIRECTLY** (`SqlIndexManager.cs:65`), bypassing
+      `AbstractConnector.RequireExpressiblePredicates`. Harmless today because a Patterns `IndexDefinition`
+      carries no predicates, so nothing unexpressible can reach it — which is exactly why it will be missed.
+      Found in TASK-273's own review; the consequence of missing it is that on MySQL the emitter backstop
+      throws instead, and `InitException` re-wraps that into a bare `Exception` no
+      `catch (InvalidOperationException)` can select.
 
 ## Out of scope
 
