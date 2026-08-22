@@ -30,23 +30,29 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-19 (partial refresh at [[TASK-273]]’s close: counts, EPIC-014 rows, 3 spawned ([[TASK-274]], [[TASK-275]], [[TASK-276]]); earlier at [[TASK-261]]’s close: counts, EPIC-014 rows; earlier at [[TASK-262]]’s close: 1 spawned; earlier at [[TASK-259]]’s close: 2 spawned; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-273]]’s close: counts, EPIC-014 rows, TASK-273 done, 3 spawned ([[TASK-274]], [[TASK-275]], [[TASK-276]]); earlier at [[TASK-261]]’s close: counts, EPIC-014 rows; earlier at [[TASK-262]]’s close: 1 spawned; earlier at [[TASK-259]]’s close: 2 spawned; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 130   |
-| in-progress  | 7     | 10      | 3     |
+| todo         | —     | —       | 132   |
+| in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 98    |
+| done         | 1     | 22      | 99    |
 | cancelled    | 0     | 0       | 1     |
 
 Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
 
-<!-- Count note (2026-08-22): re-measured in one pass over the frontmatter while filing TASK-273, not
+<!-- Count note (2026-08-22, re-measured at TASK-273's close): 246 TASK files — todo 132, in-progress 1,
+     review 10, blocked 2, done 99, cancelled 1; EPIC-014 alone is 139 files with 65 done. The EPIC-014 row
+     had read 58/125 since before this session: three increments during TASK-273 were lost when a duplicate
+     row was reverted with `git checkout --`, and the later edits matched a string that no longer existed and
+     silently did nothing. Which is the reason for the rule below — a delta applied to a figure you did not
+     measure fails silently, in both directions. -->
+<!-- Earlier count note (2026-08-22): re-measured in one pass over the frontmatter while filing TASK-273, not
      derived by adding one to the previous figures. Two pre-existing errors were corrected rather than
      carried: the mix read 27+88+10 = 125 against a stated todo of 130, and in-progress read 1 while two
      tasks are in progress. Measure; do not add a delta to a figure you did not measure. -->
@@ -180,7 +186,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [ ] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
     - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
     - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (58/125 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (65/139 tasks done)
   - **STORY-024** Critical findings — done (0/0) (done)
   - **STORY-025** High findings — done (0/0) (done)
   - **STORY-026** Medium findings — in-progress (0/0)
@@ -318,7 +324,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [ ] [TASK-270](EPIC-014-code-review-remediation/TASK-270-connector-cache-invites-per-caller-state.md) `DataBase.GetConnector` shares one connector process-wide, and three features have put per-caller state on it · FEATURE-014
     - [ ] [TASK-271](EPIC-014-code-review-remediation/TASK-271-timescaledb-emitters-can-now-use-the-connector.md) The TimescaleDB migration emitters bypass the connector for a reason that no longer exists · FEATURE-014
     - [ ] [TASK-272](EPIC-014-code-review-remediation/TASK-272-first-class-schema-support.md) An entity cannot say which schema it lives in · FEATURE-014
-    - [ ] [TASK-273](EPIC-014-code-review-remediation/TASK-273-compositeindex-cannot-express-a-filter-predicate.md) `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql · FEATURE-014
+    - [x] [TASK-273](EPIC-014-code-review-remediation/TASK-273-compositeindex-cannot-express-a-filter-predicate.md) `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql · FEATURE-014
     - [ ] [TASK-274](EPIC-014-code-review-remediation/TASK-274-second-index-lane-drops-sparse.md) The second index lane silently drops `Sparse` — `IIndexBuilder.Sparse()` is `=> this` in all six schema builders · FEATURE-014
     - [ ] [TASK-275](EPIC-014-code-review-remediation/TASK-275-uniquefield-inline-constraint-nullable-column.md) `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row · FEATURE-014
     - [ ] [TASK-276](EPIC-014-code-review-remediation/TASK-276-unidentified-flake-in-the-sql-offline-suite.md) One test in `Birko.Data.SQL.Tests` fails about 10% of full-suite runs, identity never captured · FEATURE-014

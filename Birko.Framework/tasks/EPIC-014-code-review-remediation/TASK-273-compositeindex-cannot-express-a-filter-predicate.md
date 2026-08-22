@@ -3,7 +3,7 @@ id: TASK-273
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-22
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-245, TASK-246, TASK-257]
 findings: []
-pr: e1f50cc (Birko.Data.SQL) · fd7b70d (.MSSql) · d270f55 (.MySQL)
+pr: e1f50cc+26aaa55 (Birko.Data.SQL) · fd7b70d (.MSSql) · d270f55+26a3813 (.MySQL)
 github-issue: null
 jira-key: null
 ---
@@ -201,9 +201,37 @@ concern for every nullable indexed column a consumer declares from now on.
   the feature's own tests are green and mutation-proven, but a flake plausibly caused by this change is not a
   footnote.
 - **Documented, not fixed** (each with a pinning test or a written limit): a changed predicate is not applied
-  to an existing index; MySQL gets no constraint at all for a `WhereNull` declaration; the cross-assembly
+  to an existing index; MySQL gets no constraint at all for a refused declaration; the cross-assembly
   reflective attribute path is untested for the two new properties, as it already was for
   `Name`/`Properties`/`IsUnique` (it needs a second assembly compiling the shared project).
+- **2026-08-22 — `/code-review high` found a HIGH defect in the shipped rule, and it was the harm this task
+  exists to prevent.** "Drop an `IS NOT NULL` term where partial indexes are unsupported" generalises the
+  NULL-distinctness argument past its validity: it holds only when the predicate column is one of the index's
+  own **key** columns. Over a non-key column — a shape this feature explicitly supports —
+  `UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL` was dropped to `UNIQUE (TenantGuid, Number)`,
+  which **rejects two unapproved drafts sharing a number** (1062) although the declaration permits them.
+  Stricter than declared, silently. The mirror was wrong too: the refusal ignored `index.Unique`, so a
+  **non-unique** partial index — where dropping the term is harmless — was refused on MySQL and left absent
+  with a recorded failure for no benefit. Both now go through one producer,
+  `AbstractConnectorBase.CanDropIndexPredicate`: non-unique → drop; unique with the term over a key column →
+  drop; otherwise refuse. Fixed in `26aaa55` / `26a3813`, pinned in `37c7935` / `0a065ef`.
+  - **Two of my own tests had encoded the defect** — both asserted "droppable" using a predicate over a
+    non-key column, so they passed for the wrong reason and would have defended the bug against a later fix.
+    Corrected to the case they meant, with the reason in a comment. A test can enshrine a wrong rule as
+    easily as document a right one, and the tell here was that the rule's justification (NULLs are distinct
+    *in the key*) never appeared in the test's own setup.
+  - **Two further review findings, both taken:** predicate order across two `[IndexedField]` attributes
+    depended on `Type.GetProperties()` order, which the CLR leaves unspecified, so the byte-for-byte
+    guarantee the suite relies on was incidental — each list is now sorted ordinally; and
+    `IndexPredicate.ColumnName` is interpolated bare with no `ValidateIndexFieldIdentifier`, unlike its
+    `IndexColumn` sibling, so its remark now says the safety belongs to *the only producer today* and names
+    TASK-274 as the caller-fed lane that must apply the check at its construction site.
+  - **Mutations for the corrected rule** — reverting to "drop any `IS NOT NULL`": 2 of 27 offline + 1 of 9
+    MySQL red. Removing the non-unique allowance: 1 of 27 + 1 of 9. Both halves load-bearing.
+- **Closed 2026-08-22.** Final: **1,171 tests across six suites, 49 new, 0 failed, 0 skipped**, every live
+  suite run with `BIRKO_REQUIRE_LIVE` set — `Birko.Data.SQL` 624 (+27) · MSSql 93 (+6) · MySQL 87 (+9) ·
+  PostgreSQL 85 (+3) · SQLite 233 (+4) · Migrations.SQL 49 (unchanged). Eight mutations, all disjoint. Three
+  spawns: [[TASK-274]], [[TASK-275]], [[TASK-276]].
 
 ## Out of scope
 
@@ -261,9 +289,13 @@ concern for every nullable indexed column a consumer declares from now on.
 - **Naming** → `WhereNotNull` / `WhereNull` — reads as the SQL it emits, one-to-one with the statement, and
   `Where` is the term PostgreSQL and SQLite use for a partial index. (`RequireNulls` was rejected as
   ambiguous: it can be read as a constraint on the data rather than a filter on the index.)
-- **MySQL policy** → per polarity, on evidence: `WhereNotNull` is **omitted** (M1a — NULLs are already
-  distinct there, so the emitted index means the same thing); `WhereNull` is **refused** (M4 — omitting it
-  would over-enforce). Gated on one capability, not an inline type test.
+- **MySQL policy** → **corrected at the close gate to a three-way classification** (`CanDropIndexPredicate`,
+  one producer for the emitter and the funnel): a **non-unique** index drops its term (it constrains nothing);
+  a **unique** index drops an `IS NOT NULL` term only over **one of its own key columns** (M1a — NULLs are
+  distinct there, so such a row is already exempt); **everything else is refused** (M4). Shipped first as the
+  simpler "drop `IS NOT NULL`, refuse `IS NULL`", which is wrong whenever the predicate column is not part of
+  the key — `UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL` dropped to `UNIQUE (TenantGuid, Number)`
+  rejects two unapproved drafts sharing a number. Gated on one capability, not an inline type test.
 - **Bad predicate column** → **throws at table load** in all three cases: unmapped name, non-nullable
   column, or the same column in both lists. Fail-fast is free here (new API, zero declarations), unlike
   TASK-248 and TASK-256 where the measured blast radius vetoed it.

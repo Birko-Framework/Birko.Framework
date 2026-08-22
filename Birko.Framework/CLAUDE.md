@@ -1191,14 +1191,19 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     `IndexDefinition` rather than on `IndexColumn`, a shape that structurally cannot express it. **Read the
     framework's own base models and decorators before scoping a constraint feature**; the second caller was
     already in the tree.
-  - **Where a provider cannot express the predicate, ask what DROPPING it would mean — the answer differs per
-    polarity and only one is safe.** MySQL supports no partial index (`ERROR 1064`), so an `IS NOT NULL` term
-    is **dropped**: MySQL treats NULLs as distinct, so the unfiltered index enforces exactly the declared
-    rule. An `IS NULL` term is **refused**, because dropping it leaves a constraint *stricter* than declared —
-    measured on all four providers, a full unique index rejects a row whose duplicate is soft-deleted, so the
-    silent version would refuse a document number legitimately reused after a delete. **Over-enforcing is the
-    failure mode this family had not yet seen**, and it inverts the usual instinct: the quiet option is
-    normally the safe one, and here it is the harmful one.
+  - **Where a provider cannot express the predicate, the question is not "which polarity" but "does the
+    unfiltered index still enforce what was declared" — and the answer is a THREE-way classification.**
+    MySQL supports no partial index (`ERROR 1064`), so `CanDropIndexPredicate` decides: a **non-unique**
+    index is droppable (it constrains nothing, so a wider index is identical); a **unique** index is
+    droppable only for an `IS NOT NULL` term over **one of its own key columns** (NULLs are distinct there,
+    so such a row is already exempt); **everything else is refused**. Over-enforcing is the failure mode this
+    family had not yet seen — it inverts the usual instinct that the quiet option is the safe one — and this
+    rule shipped WRONG in its first form: "drop any `IS NOT NULL` term" is the natural generalisation of the
+    NULL-distinctness argument and it is invalid the moment the predicate column is not part of the key.
+    `UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL` dropped to `UNIQUE (TenantGuid, Number)`
+    rejects two *unapproved* drafts sharing a number, which the declaration permits. **A justification that
+    holds for one shape of declaration is not a rule — check it against every shape the feature accepts**;
+    this one was caught by the close-gate review, after two of its own tests had already encoded it.
   - **The capability is stated once and its `false` side is asserted.** `SupportsPartialIndexes` joins
     `SupportsTransactionalDdl` / `FoldsUnquotedIdentifiers` / `IsMissingTableException`: one producer,
     consulted by the funnel and by the emitter, never an inline `is MySQLConnector`. A test pins `false` on
@@ -1343,11 +1348,15 @@ The standing rule is in § Conventions. Nine things worth carrying:
   `DateTime? DeletedAt` with null meaning active, and Symbio's `BaseEntity` carries it on every entity — so
   "unique among live rows" (`WHERE DeletedAt IS NULL`, over a **non-key** column) was the next caller before
   this task existed. Reading the consumer's own decorators is what turned a bool into two column lists.
-- **Dropping an unexpressible term is safe in one direction and harmful in the other.** MySQL has no partial
-  index, so `IS NOT NULL` is dropped (NULLs are already distinct there — same meaning) while `IS NULL` is
-  refused: measured on all four providers, a full unique index **rejects** a row whose duplicate is
-  soft-deleted, so the quiet option would make the constraint *stricter* than declared. Over-enforcing is a
-  failure mode this family had not seen, and it inverts the usual instinct.
+- **Dropping an unexpressible term is safe only sometimes, and the first version of this rule got it wrong.**
+  It shipped as "drop `IS NOT NULL`, refuse `IS NULL`" — the natural generalisation of NULL-distinctness, and
+  invalid as soon as the predicate column is not one of the index's key columns:
+  `UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL` dropped to `UNIQUE (TenantGuid, Number)` rejects
+  two unapproved drafts sharing a number, which the declaration permits. The close-gate review caught it —
+  after two of my own tests had encoded it — and the rule is now a three-way classification: non-unique →
+  drop, unique with the term over a key column → drop, otherwise refuse. It also found the mirror: a
+  non-unique partial index was being refused on MySQL although dropping its term is harmless, so a declared
+  optimisation was simply absent there.
 - **MySQL could have honoured it and deliberately does not.** A functional key part —
   `UNIQUE (TenantGuid, (CASE WHEN DeletedAt IS NULL THEN Number END))` — was measured enforcing exactly the
   right rule on 8.4.11. Declined for four stated reasons and recorded on the property, so the next author
