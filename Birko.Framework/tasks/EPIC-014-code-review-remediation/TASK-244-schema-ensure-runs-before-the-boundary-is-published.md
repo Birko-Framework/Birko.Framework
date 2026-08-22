@@ -4,7 +4,7 @@ parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
 status: todo
-priority: P3
+priority: P1
 assignee: unassigned
 created: 2026-08-18
 depends-on: []
@@ -88,3 +88,38 @@ should differ at all.
 - If the answer is "schema-ensure does not participate", the four existing rollback pins change meaning —
   update them rather than deleting them, since the pair of opposite assertions is the record of why the
   providers were allowed to differ.
+
+---
+
+## Consumer evidence — a live instance that left a database unbuildable (Symbio TASK-527, 2026-08-22)
+
+This stopped being a design question with a hypothetical cost. Symbio hit an instance whose symptom is
+exactly what this ordering predicts, and it cost a working session and a test environment.
+
+**Reported symptom.** On a wiped SQLite database, `POST /api/auth/setup` returned **200** and logged
+success, while the `Users` table **was never created** — not in `sqlite_master`, no row. Every table the
+same operation wrote *after* the user (`Tenants`, `UserLogins`, `UserProfiles`, `UserTenants`, `Roles`,
+`RolePermissions`, `UserRoles`) existed and was populated. Login then failed forever as a bodyless 401, and
+a process restart did not recover it. Hand-creating **only** the `Users` table made the whole seed run.
+
+**Why it points here.** The operation runs inside one `ITransactionBoundary.RunAsync`. `_users.CountAsync()`
+is its first data access, so `Users` is the first store to schema-ensure. For SQLite to end up with the
+later writes committed and that one `CREATE TABLE` absent, the DDL and the DML cannot have been on the same
+connection — a single SQLite transaction cannot commit its DML and roll back its DDL. That is precisely the
+split this task describes: `EnsureInitialized()` runs before `*Core` publishes the boundary.
+
+⚠ **It does not reproduce on demand.** Re-measured the same day on the same commit: **four** from-scratch
+bring-ups all succeeded, including the exact documented path (stop API → delete the file → start → seed).
+So the trigger is conditional — ordering, process state, or which store happens to be touched first — and
+the evidence above is a single observation, recorded because it is the only one anybody has. Treat it as a
+lead, not as a specification.
+
+**What the consumer built instead of a workaround**, so a recurrence arrives with evidence rather than as an
+anecdote: `tools/verify-fresh-database.ps1` in the Symbio repo — delete → boot → setup → **log in** →
+assert the table exists. It exists because every cheaper signal passes in the failing state: unit tests
+never build a database from nothing through the host, integration checks run against an already-built one,
+`/health/ready` opens a connection but reads no row, and `setup` itself answers **200**.
+
+**Priority raised P3 → P1 on this evidence.** The original P3 reflected an ordering question with a
+theoretical cost. The measured cost is a database that cannot be created and an auth surface that fails
+closed with no diagnosable error.

@@ -44,7 +44,7 @@ _Generated 2026-08-19 (partial refresh at [[TASK-261]]’s close: counts, EPIC-0
 | done         | 1     | 22      | 98    |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 30 · P2 90 · P3 10**
+Todo by priority: **P0 0 · P1 31 · P2 90 · P3 9**
 
 <!-- Count note (2026-08-22): re-measured in one pass over the frontmatter while filing TASK-273, not
      derived by adding one to the previous figures. Two pre-existing errors were corrected rather than
@@ -304,7 +304,7 @@ Todo by priority: **P0 0 · P1 30 · P2 90 · P3 10**
     - [x] [TASK-236](EPIC-014-code-review-remediation/TASK-236-lock-providers-for-the-six-remaining-job-backends.md) A per-backend verdict on locking for the six job backends without a provider · FEATURE-014
     - [x] [TASK-238](EPIC-014-code-review-remediation/TASK-238-sync-projitems-reference-a-projitems.md) Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems` · FEATURE-014
     - [ ] [TASK-239](EPIC-014-code-review-remediation/TASK-239-over-declared-packages-net10-provides.md) Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234 · FEATURE-014
-    - [ ] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014
+    - [ ] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014 · ⚠ **P3 → P1 2026-08-22**: consumer Symbio hit a live instance (its TASK-527) — setup answered 200 while the `Users` table was never created, login failed forever, and the database could not be built at all
     - [x] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel · FEATURE-014
     - [ ] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door · FEATURE-014
     - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
