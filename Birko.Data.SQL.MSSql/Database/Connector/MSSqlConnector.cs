@@ -398,7 +398,12 @@ namespace Birko.Data.SQL.Connectors
 
             var indexName = SqlLiteral.EscapeLiteral(index.Name);
             var unique = index.Unique ? "UNIQUE " : "";
-            var create = $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})";
+            // TASK-273 — the filtered tail belongs to the CREATE, so it is appended before the guard is
+            // prefixed: both the conditional and the plain form must carry it. Measured on SQL Server 2022:
+            // the guarded filtered create runs, and sys.indexes then reports
+            // has_filter=True filter=([DeletedAt] IS NULL).
+            var create = $"CREATE {unique}INDEX {QuoteIdentifier(index.Name)} ON {QuoteIdentifier(tableName)} ({columns})"
+                       + IndexPredicateClause(index);
             if (!conditional)
             {
                 return create;
@@ -406,6 +411,19 @@ namespace Birko.Data.SQL.Connectors
             return $"IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='{indexName}' AND object_id=OBJECT_ID('{SqlLiteral.EscapeLiteral(tableName)}')) "
                  + create;
         }
+
+        /// <summary>
+        /// Predicate columns are bracket-quoted here, matching this override's key-column list rather than
+        /// the base's bare spelling (TASK-273).
+        /// </summary>
+        /// <remarks>
+        /// The base emits columns bare because PostgreSQL case-folds an unquoted identifier and
+        /// <c>CreateTable</c> creates them that way; MSSql resolves either spelling under its
+        /// case-insensitive default collation, and this class already quotes its key columns deliberately.
+        /// Splitting the two here — quoted keys, bare predicate — would be the one place in the framework
+        /// where an index's own column list disagrees with itself.
+        /// </remarks>
+        protected override string PredicateColumn(string columnName) => QuoteIdentifier(columnName);
 
         public override string DropIndexSql(string tableName, Tables.IndexDefinition index)
         {
