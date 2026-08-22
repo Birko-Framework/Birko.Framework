@@ -241,4 +241,32 @@ public class PartialIndexPolicyLiveTests : IDisposable
         refusal.Message.Should().Contain("ERROR 1064");
         refusal.Message.Should().Contain("remove the WhereNull declaration");
     }
+
+    /// <summary>
+    /// The async twin of the guard, which nothing else reaches.
+    /// </summary>
+    /// <remarks>
+    /// TASK-245 measured that <c>AsyncDataBaseStore.InitCoreAsync</c> calls the <b>sync</b>
+    /// <c>Connector.CreateTable</c> inside a <c>Task.Run</c>, so <c>CreateIndexesAsync</c> has no
+    /// store-level caller at all and reverting only the async site failed 0 of 14 tests. The guard is
+    /// duplicated into that funnel because a direct caller must not get a quietly different statement — and
+    /// a guard nothing exercises is how this repository has repeatedly shipped a rule enforced in one of two
+    /// places. This is that exercise.
+    /// </remarks>
+    [Fact]
+    public async System.Threading.Tasks.Task An_explicit_async_create_indexes_call_throws_for_a_where_null_declaration()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+        var connector = NewConnector();
+        connector.CreateTable(new[] { typeof(MyRefusedRow) });
+
+        var index = Birko.Data.SQL.DataBase.LoadTable(typeof(MyRefusedRow)).Indexes![LiveIndex];
+
+        var act = async () => await connector.CreateIndexesAsync(TableName, new[] { index });
+
+        var refusal = (await act.Should().ThrowAsync<InvalidOperationException>()).Which;
+        refusal.Message.Should().Contain("ERROR 1064");
+        refusal.Message.Should().Contain("remove the WhereNull declaration");
+    }
 }
