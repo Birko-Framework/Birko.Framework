@@ -32,6 +32,8 @@ public class PartialIndexPolicyLiveTests : IDisposable
     private const string TableName = "MyPartialRows";
     private const string UniqueIndex = "ux_mypartial_extid";
     private const string LiveIndex = "ux_mypartial_live";
+    private const string ApprovedIndex = "ux_mypartial_approved";
+    private const string PlainLiveIndex = "ix_mypartial_live";
 
     private static string? Host => Environment.GetEnvironmentVariable("BIRKO_MYSQL_HOST");
     private static int Port => int.TryParse(Environment.GetEnvironmentVariable("BIRKO_MYSQL_PORT"), out var p) ? p : 3306;
@@ -72,6 +74,37 @@ public class PartialIndexPolicyLiveTests : IDisposable
     [CompositeIndex(LiveIndex, nameof(TenantGuid), nameof(Number), IsUnique = true,
         WhereNull = new[] { nameof(DeletedAt) })]
     public class MyRefusedRow : AbstractLogModel
+    {
+        public Guid TenantGuid { get; set; }
+
+        [MaxLengthField(64)]
+        public string? Number { get; set; }
+
+        public DateTime? DeletedAt { get; set; }
+    }
+
+    /// <summary>
+    /// UNIQUE, with the predicate over a column that is NOT part of the key — the case the first version of
+    /// this feature dropped silently, producing a constraint stricter than declared.
+    /// </summary>
+    [Table(TableName)]
+    [CompositeIndex(ApprovedIndex, nameof(TenantGuid), nameof(Number), IsUnique = true,
+        WhereNotNull = new[] { nameof(ApprovedAt) })]
+    public class MyNonKeyPredicateRow : AbstractLogModel
+    {
+        public Guid TenantGuid { get; set; }
+
+        [MaxLengthField(64)]
+        public string? Number { get; set; }
+
+        public DateTime? ApprovedAt { get; set; }
+    }
+
+    /// <summary>NON-unique partial index: droppable, because it constrains nothing.</summary>
+    [Table(TableName)]
+    [CompositeIndex(PlainLiveIndex, nameof(TenantGuid), nameof(Number),
+        WhereNull = new[] { nameof(DeletedAt) })]
+    public class MyNonUniquePartialRow : AbstractLogModel
     {
         public Guid TenantGuid { get; set; }
 
@@ -148,13 +181,17 @@ public class PartialIndexPolicyLiveTests : IDisposable
     [Fact]
     public void The_mysql_emitter_drops_an_is_not_null_predicate()
     {
+        // ExternalId is a KEY column here, which is what makes the term droppable: a row with NULL there has
+        // a distinct key on MySQL and is already exempt. The first version of this test used a non-key
+        // column and asserted the same drop — i.e. it encoded the defect the close-gate review found.
         var index = new Birko.Data.SQL.Tables.IndexDefinition { Name = "ux_x", Unique = true };
         index.Columns.Add(new Birko.Data.SQL.Tables.IndexColumn { ColumnName = "TenantGuid", Order = 0 });
+        index.Columns.Add(new Birko.Data.SQL.Tables.IndexColumn { ColumnName = "ExternalId", Order = 1 });
         index.Predicates.Add(new Birko.Data.SQL.Tables.IndexPredicate { ColumnName = "ExternalId" });
 
         var sql = new MySQLConnector(new MySqlSettings("localhost", "db", "root", "p")).CreateIndexSql("T", index);
 
-        sql.Should().Be("CREATE UNIQUE INDEX `ux_x` ON `T` (TenantGuid)");
+        sql.Should().Be("CREATE UNIQUE INDEX `ux_x` ON `T` (TenantGuid, ExternalId)");
         sql.Should().NotContain("WHERE", "MySQL rejects the clause outright — ERROR 1064");
     }
 
@@ -240,6 +277,54 @@ public class PartialIndexPolicyLiveTests : IDisposable
         var refusal = act.Should().Throw<InvalidOperationException>().Which;
         refusal.Message.Should().Contain("ERROR 1064");
         refusal.Message.Should().Contain("remove the WhereNull declaration");
+    }
+
+    /// <summary>
+    /// <b>The close-gate correction, live.</b> A UNIQUE index whose <c>WhereNotNull</c> column is not one of
+    /// its key columns cannot be dropped either: the unfiltered index would reject two rows sharing
+    /// <c>Number</c> while unapproved, which the declaration permits. Refused and recorded, so the entity
+    /// keeps working without a constraint it never asked for.
+    /// </summary>
+    [Fact]
+    public void A_non_key_where_not_null_declaration_is_refused_on_mysql()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+
+        var connector = NewConnector();
+        connector.CreateTable(new[] { typeof(MyNonKeyPredicateRow) });
+
+        IndexExists(ApprovedIndex).Should().BeFalse("dropping the term would over-enforce");
+        connector.IndexCreationFailures.Should().ContainSingle()
+            .Which.IndexName.Should().Be(ApprovedIndex);
+
+        var tenant = Guid.NewGuid();
+        Insert(tenant, "DOC-1", "Number").Should().BeNull();
+        Insert(tenant, "DOC-1", "Number").Should().BeNull(
+            "two unapproved drafts sharing a number are legitimate — the very rows a dropped predicate "
+          + "would have rejected with 1062");
+    }
+
+    /// <summary>
+    /// A NON-unique partial index is droppable: it constrains nothing, so a wider index is semantically
+    /// identical. The first version of this feature refused it, leaving a declared optimisation absent here
+    /// for no correctness benefit.
+    /// </summary>
+    [Fact]
+    public void A_non_unique_partial_index_is_built_unfiltered_on_mysql()
+    {
+        if (!RequireServer()) return;
+        Exec($"DROP TABLE IF EXISTS `{TableName}`");
+
+        var connector = NewConnector();
+        connector.CreateTable(new[] { typeof(MyNonUniquePartialRow) });
+
+        IndexExists(PlainLiveIndex).Should().BeTrue("the predicate is dropped, and the index still exists");
+        connector.IndexCreationFailures.Should().BeEmpty();
+
+        var tenant = Guid.NewGuid();
+        Insert(tenant, "DOC-1", "Number").Should().BeNull();
+        Insert(tenant, "DOC-1", "Number").Should().BeNull("a non-unique index constrains nothing");
     }
 
     /// <summary>
