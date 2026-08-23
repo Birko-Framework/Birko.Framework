@@ -47,6 +47,26 @@ localises it to those types, only to "the new class plus the suite".
 so a handful of green runs is the expected outcome whether or not anything was fixed. Either capture it, or
 demonstrate the mechanism cannot occur.
 
+## Second instance — identified, in a different suite (2026-08-23, while closing TASK-244)
+
+`Birko.Data.Migrations.SQL.Tests` failed **1 of 49, once in 16 runs**, and this one was caught by name:
+
+```
+SchemaBuilderBoundaryLeakTests.Without_a_runner_transaction_nothing_is_published_either
+System.ObjectDisposedException : Cannot access a disposed object.
+Object name: 'SQLitePCL.sqlite3'.
+```
+
+Measured against the pre-TASK-244 code (**0 failures in 10 runs**) and after it (**0 in a further 10**), so
+it is not attributable to that change.
+
+**Why it strengthens this task's hypothesis rather than being a separate one.** That test acquires its
+connector through `DataBase.GetConnector<SqLiteConnector>(settings)` — the **process-wide cache**, keyed by
+(type, settings id) — and a disposed `sqlite3` handle reached from it is precisely the shape of a connector
+outliving the connection some other test gave it. Same mechanism family as the hypothesis above, now with a
+named test, a named exception, and a suite where the shared object is explicit rather than inferred.
+[[TASK-270]] owns the cache itself.
+
 ## Acceptance criteria
 
 - [ ] The failing test is **identified by name**, with its assertion message. Suggested route, since a trx

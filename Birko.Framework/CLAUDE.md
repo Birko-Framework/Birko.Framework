@@ -319,6 +319,61 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
       from symmetry. Whether schema-ensure should be in a caller's unit of work at all is TASK-244, still
       open — and the residue is that a store whose schema-ensure was rolled back still believes it is
       initialised.
+- **Schema-ensure PARTICIPATES in the caller's boundary, and a participating schema-ensure is not
+  remembered — because "initialised" must mean "the schema is durably there", not "I ran the DDL once".**
+  TASK-244, the question TASK-243 deliberately left open, closed on a measurement rather than on taste. Two
+  facts settle it and they point in the same direction. First, schema-ensure **cannot** be moved off the
+  boundary: TASK-243's revert R2 made that suppression unconditional and all three SQLite lazy-init tests
+  failed with `SQLite Error 5: 'database is locked'` — SQLite serialises at the file level, so the DDL has
+  to run on the boundary's own connection. Second, the alternative was already broken in the shipped code:
+  because `EnsureInitialized()` runs in the public CRUD wrapper and `EnterTransactionScope()` lived only in
+  `*Core`, the **`SetTransactionContext` door** never had the boundary published while its schema-ensure
+  ran — measured, the DDL took `RunCommandTransaction` (its *own* connection) and on SQLite could not even
+  begin: `SQLite Error 5` after the command timeout, from `InitCoreAsync` → `CreateTable` → `DoDdlCommand` →
+  `DoCommandWithTransaction`. So the two doors gave different answers and one of them could not work at all.
+  Both now enter the scope in `InitCore`/`InitCoreAsync`. Seven parts generalise:
+  - **The residue was the actual defect, and it is what a consumer sees.** `AbstractAsyncStore` set
+    `_initialized = true` the moment `InitCoreAsync` returned. Inside a boundary that later rolls back, the
+    table goes with it and the flag does not — so the same store instance never schema-ensures again and
+    writes against a table that is not there, **for the life of the process**. Now
+    `_initialized = CanRememberInitialization`, a `protected virtual` hook defaulting to `true` (a backend
+    with no caller-owned transaction has nothing that could undo an init) which the SQL stores answer from
+    `AbstractConnector.DdlSurvivesRollback`.
+  - **The durability question is the provider switch, asked from the other side.**
+    `DdlSurvivesRollback => AmbientTransaction == null || !SupportsTransactionalDdl` — no boundary, nothing
+    can undo it; a boundary on **MySQL**, where `DoDdlCommand` suppresses the ambient because MySQL
+    implicitly commits around every DDL statement (TASK-243), so it is durable *and the store legitimately
+    does remember there*; a boundary on PostgreSQL / SQL Server / SQLite, so it is not. Expressed from the
+    same two facts `DoDdlCommand` consults, so the two cannot disagree — the one-producer rule applied to a
+    *lifetime* rather than to a name.
+  - **The four rollback pins now have a fifth sibling per provider, and MySQL's asserts the opposite.**
+    That pair of opposite assertions is the record of why the providers are allowed to differ; a suite where
+    they all agreed would mean the switch had been "unified" by someone reasoning from symmetry.
+  - **Answering "don't remember" costs one idempotent re-run; answering it wrongly costs a database.** The
+    asymmetry is the whole design and it is written on the hook: a false negative re-issues
+    `CREATE TABLE IF NOT EXISTS` on the boundary's own connection, a false positive leaves a store
+    permanently broken. So it errs toward re-running. The invalidate-on-rollback alternative (register a
+    callback with the boundary and clear the flag) has no steady-state cost and was rejected here: it is
+    correct only if **every** path that ends a boundary without committing is caught, and a missed path
+    silently restores the defect — the shape § Conventions keeps recording as "a rule enforced in one of two
+    places". Reach for it only with a measured cost to justify it.
+  - **⚠ It composes with a swallow, and that is why the consumer saw 200 instead of an error.**
+    `SqLiteConnector.OnException` answers "no such table" by calling `DoInit()` and **not rethrowing**, and
+    `DoInit` only raises `OnInit`, which nothing in the framework subscribes to. So a write against the
+    missing table reports success, stores nothing, and does not create the table — measured. The residue
+    loses one operation; the swallow makes that operation answer *success*. Owned by [[TASK-277]], pinned
+    meanwhile by a test that asserts the defect so it cannot be believed fixed.
+  - **A consumer's one-off observation was reproduced from the ordering, not chased.** Symbio (its TASK-527)
+    reported a wiped SQLite database where `POST /api/auth/setup` returned 200 while the `Users` table was
+    never created, every table written *after* it existed and was populated, and a restart did not recover
+    it — and it did **not** reproduce on demand (four from-scratch bring-ups succeeded). Rather than hunt
+    the trigger, the ordering was traced in source and the symptom rebuilt deterministically in
+    `SchemaEnsureRollbackResidueTests`. **When an observation cannot be reproduced, reproduce the mechanism
+    it implies instead** — and note which half explains which symptom: the residue explains the lost row,
+    the swallow explains the 200, and neither explains it alone.
+  - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
+    `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
+    another connection, that's the bug") is measurably the wrong half.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -1324,6 +1379,48 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A rolled-back schema-ensure left a store believing it was initialised (2026-08-23)
+
+TASK-244, raised P3 → P1 the day before by consumer Symbio (its TASK-527) after a live instance left a
+database unbuildable. The task had been open since TASK-243 as a design question — *should schema-ensure
+participate in the caller's transaction?* — and it is now answered, in the direction the measurements forced:
+**it participates, and a participating schema-ensure is not remembered.** Verified against live PostgreSQL
+16.15, SQL Server 2022, MySQL 8.4.11 and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set throughout: **1,292
+tests, 0 failed, 0 skipped** across nine suites — SQL 624, SQLite 236 (+3), PostgreSQL 88 (+3), MySQL 90
+(+3), MSSql 96 (+3), Migrations.SQL 49, InMemory 69, JSON 23, XML 18 — 12 new. The standing rule is in
+§ Conventions. Seven things worth carrying:
+
+- **The consumer's symptom was not reproducible, so the mechanism was reproduced instead.** Four
+  from-scratch bring-ups had succeeded, so nothing was gained by chasing the trigger. Tracing the ordering
+  in source gave a chain that rebuilds the symptom deterministically in three assertions, and the first
+  test written was a *reproduction*, not a fix.
+- **It takes two framework behaviours, and each alone is survivable.** The residue — `_initialized = true`
+  after a schema-ensure the boundary then rolled back — loses one operation. The swallow —
+  `SqLiteConnector.OnException` answering "no such table" with `DoInit()` and no rethrow, where `DoInit`
+  raises an event nothing subscribes to — is what makes that operation report **200**. Fixed the first,
+  filed the second as [[TASK-277]] with a test that pins the defect so it cannot be believed fixed.
+- **The obvious reading of the evidence was the wrong half, and measuring said so.** "The DDL ran on a
+  connection other than the boundary's" is true — of the `SetTransactionContext` door, which was never
+  publishing the boundary before schema-ensure ran. But on SQLite that path throws `SQLite Error 5` after
+  the command timeout: a 500, not a silent 200. Real defect, fixed in the same change, *not* the consumer's
+  mechanism.
+- **Both doors now agree, which is what the acceptance asked for.** `InitCore`/`InitCoreAsync` enter the
+  transaction scope, so the per-store door lands the DDL exactly where the ambient door does.
+- **MySQL keeps the opposite answer and now has a test saying so.** `DdlSurvivesRollback` is true there
+  because `DoDdlCommand` suppresses the ambient (TASK-243), so the store legitimately remembers its
+  initialization — and the mutation that makes the capability ignore the provider switch fails **only** the
+  MySQL suite. Without that pin the flag would have been indistinguishable from "never remember".
+- **Three mutations, disjoint and provider-correct.** Remembering unconditionally: 1 red each on SQLite,
+  PostgreSQL and SQL Server, MySQL green. Dropping the scope from `InitCore`: the same three, with SQLite
+  taking 3s — the lock timeout, i.e. the deadlock hazard the task warned about, arriving as a test failure
+  instead of an outage. Capability ignoring the switch: MySQL alone.
+- **⚠ A flake was found and is not being reported as clean.** `Birko.Data.Migrations.SQL.Tests` failed
+  `SchemaBuilderBoundaryLeakTests.Without_a_runner_transaction_nothing_is_published_either` once in 16 runs
+  with `ObjectDisposedException: 'SQLitePCL.sqlite3'`. Measured against the pre-fix code (0 in 10) and after
+  (0 in a further 10), so not attributable to this change; the test takes a **process-wide cached connector**
+  via `DataBase.GetConnector`, which is [[TASK-270]]'s subject and [[TASK-276]]'s hypothesis. Recorded on
+  TASK-276 with the test name and the exception, which is more than that task had.
 
 ### A unique index over a nullable column was undeclarable, and broke ordinary inserts on MSSql (2026-08-22)
 

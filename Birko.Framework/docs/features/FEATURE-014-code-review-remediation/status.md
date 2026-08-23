@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-63 / 138 tasks done (1 awaiting sign-off).
+64 / 139 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -129,7 +129,7 @@ generated: 2026-08-19
 - [x] TASK-241 RavenDB never sets the document id from the entity Guid — delete is a silent no-op and update duplicates
 - [x] TASK-242 Every bulk write escaped the transaction boundary, and on three providers it did so silently
 - [x] TASK-243 On MySQL, a store's first operation inside a boundary silently commits that boundary
-- [ ] TASK-244 Lazy schema-ensure runs before the store publishes its transaction boundary
+- [x] TASK-244 Lazy schema-ensure runs before the store publishes its transaction boundary
 - [x] TASK-245 Index DDL every provider accepts — MySQL rejected the clause, PostgreSQL could not resolve the columns
 - [x] TASK-246 A migration's `.Unique()` silently builds a NON-unique index on every SQL provider
 - [x] TASK-247 `SqlSchemaBuilder`'s raw-SQL fallbacks emit index DDL that two providers reject
@@ -162,6 +162,7 @@ generated: 2026-08-19
 - [ ] TASK-274 A migration asking for a sparse index silently gets a full one — the flag is dropped in all six schema builders
 - [ ] TASK-275 A unique column that is allowed to be empty rejects the second empty row on SQL Server
 - [ ] TASK-276 One automated test fails about one run in ten and nobody has caught which one
+- [ ] TASK-277 On SQLite, saving a record into a table that is missing reports success and loses the data
 
 ## What can be tested now
 

@@ -30,7 +30,7 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-19 (partial refresh at [[TASK-273]]’s close: counts, EPIC-014 rows, TASK-273 done, 3 spawned ([[TASK-274]], [[TASK-275]], [[TASK-276]]); earlier at [[TASK-261]]’s close: counts, EPIC-014 rows; earlier at [[TASK-262]]’s close: 1 spawned; earlier at [[TASK-259]]’s close: 2 spawned; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-244]]’s close: counts, EPIC-014 rows, TASK-244 done, 1 spawned ([[TASK-277]]); earlier at [[TASK-273]]’s close: TASK-273 done, 3 spawned ([[TASK-274]], [[TASK-275]], [[TASK-276]]); earlier at [[TASK-261]]’s close: counts, EPIC-014 rows; earlier at [[TASK-262]]’s close: 1 spawned; earlier at [[TASK-259]]’s close: 2 spawned; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -41,7 +41,7 @@ _Generated 2026-08-19 (partial refresh at [[TASK-273]]’s close: counts, EPIC-0
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 99    |
+| done         | 1     | 22      | 100   |
 | cancelled    | 0     | 0       | 1     |
 
 Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
@@ -186,7 +186,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [ ] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
     - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
     - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (65/139 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (66/140 tasks done)
   - **STORY-024** Critical findings — done (0/0) (done)
   - **STORY-025** High findings — done (0/0) (done)
   - **STORY-026** Medium findings — in-progress (0/0)
@@ -310,7 +310,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [x] [TASK-236](EPIC-014-code-review-remediation/TASK-236-lock-providers-for-the-six-remaining-job-backends.md) A per-backend verdict on locking for the six job backends without a provider · FEATURE-014
     - [x] [TASK-238](EPIC-014-code-review-remediation/TASK-238-sync-projitems-reference-a-projitems.md) Seven `Birko.Data.Sync.*` projitems carry a `ProjectReference` to another `.projitems` · FEATURE-014
     - [ ] [TASK-239](EPIC-014-code-review-remediation/TASK-239-over-declared-packages-net10-provides.md) Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234 · FEATURE-014
-    - [ ] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014 · ⚠ **P3 → P1 2026-08-22**: consumer Symbio hit a live instance (its TASK-527) — setup answered 200 while the `Users` table was never created, login failed forever, and the database could not be built at all
+    - [x] [TASK-244](EPIC-014-code-review-remediation/TASK-244-schema-ensure-runs-before-the-boundary-is-published.md) Lazy schema-ensure runs before the store publishes its transaction boundary · FEATURE-014 · ⚠ **P3 → P1 2026-08-22**: consumer Symbio hit a live instance (its TASK-527) — setup answered 200 while the `Users` table was never created, login failed forever, and the database could not be built at all
     - [x] [TASK-253](EPIC-014-code-review-remediation/TASK-253-migration-hypertable-emitters-carry-the-same-folding-defect.md) The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel · FEATURE-014
     - [ ] [TASK-255](EPIC-014-code-review-remediation/TASK-255-continuous-aggregate-hardcodes-its-time-column.md) `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door · FEATURE-014
     - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
@@ -328,6 +328,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [ ] [TASK-274](EPIC-014-code-review-remediation/TASK-274-second-index-lane-drops-sparse.md) The second index lane silently drops `Sparse` — `IIndexBuilder.Sparse()` is `=> this` in all six schema builders · FEATURE-014
     - [ ] [TASK-275](EPIC-014-code-review-remediation/TASK-275-uniquefield-inline-constraint-nullable-column.md) `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row · FEATURE-014
     - [ ] [TASK-276](EPIC-014-code-review-remediation/TASK-276-unidentified-flake-in-the-sql-offline-suite.md) One test in `Birko.Data.SQL.Tests` fails about 10% of full-suite runs, identity never captured · FEATURE-014
+    - [ ] [TASK-277](EPIC-014-code-review-remediation/TASK-277-sqlite-swallows-a-write-to-a-missing-table.md) On SQLite a write to a missing table reports SUCCESS — `OnException` swallows it · FEATURE-014
     - [ ] [TASK-258](EPIC-014-code-review-remediation/TASK-258-retrywhenowned-preserves-nothing-that-is-asserted.md) `retryWhenOwned`'s "preserves each provider's policy" is an argument, not a measurement · FEATURE-014
     - [ ] [TASK-259](EPIC-014-code-review-remediation/TASK-259-schema-builder-publishes-its-connection-onto-a-cached-connector.md) `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
     - [ ] [TASK-260](EPIC-014-code-review-remediation/TASK-260-continuous-aggregate-takes-raw-sql-fragments.md) `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained · FEATURE-014
