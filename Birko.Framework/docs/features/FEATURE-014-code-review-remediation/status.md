@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-64 / 139 tasks done (1 awaiting sign-off).
+65 / 140 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -162,7 +162,8 @@ generated: 2026-08-19
 - [ ] TASK-274 A migration asking for a sparse index silently gets a full one — the flag is dropped in all six schema builders
 - [ ] TASK-275 A unique column that is allowed to be empty rejects the second empty row on SQL Server
 - [ ] TASK-276 One automated test fails about one run in ten and nobody has caught which one
-- [ ] TASK-277 On SQLite, saving a record into a table that is missing reports success and loses the data
+- [x] TASK-277 Saving a record into a table that is missing reported success and lost the data
+- [ ] TASK-278 On SQL Server, asking for "just the first row" or a page of results fails outright
 
 ## What can be tested now
 

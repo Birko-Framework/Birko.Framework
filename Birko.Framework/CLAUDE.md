@@ -590,6 +590,42 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     the ANSI behaviour elsewhere). With it off, backslash escapes revive and `\'` breaks out. Every
     literal-interpolating sink has always depended on this; it is written down on `SqlLiteral` rather than
     assumed.
+- **A WRITE that cannot be applied must never report success — and "recover and continue" is not a thing a
+  handler can do if it neither repairs nor retries.** TASK-277, the sibling of the rule below and the half
+  that turns a lost operation into a lie. All four providers' `OnException` handlers answered a missing
+  table with `DoInit()` and a **return**: the statement was discarded and the caller told it had worked.
+  Measured on SQLite as `CreateAsync` returning a non-empty `Guid` against a table that does not exist and
+  is not created; the same shape on PostgreSQL, MySQL and SQL Server. Now
+  `AbstractConnector.EnsureSchemaAndReport` — one producer, called by all four handlers — ensures the schema
+  and then **always throws**. Six parts generalise:
+  - **A recovery branch that neither repairs nor retries is only a swallow.** `DoInit()` raises the
+    `OnInit` event and **nothing in the framework subscribes to it** (only a consumer can, via
+    `IDataBaseRepository.AddOnInit`), and the failed statement was never re-executed either way. So the
+    branch could not fix anything even in principle. **Check what a recovery call actually does before
+    treating it as recovery** — the giveaway here was an event with no framework subscriber.
+  - **`DoInit()` is still called, and then it throws.** A consumer that registered a handler gets its schema
+    ensured, so the caller's *next* attempt can succeed, while this attempt is reported. Keeping the
+    extension point is free; keeping the silence was not.
+  - **The read side is a DIFFERENT decision and is untouched — because the read path never reaches this
+    handler.** `RunReaderCommandOn` catches `IsMissingTableException` itself and yields break, so an empty
+    result for a read is TASK-211's contract with its own stated callers (lazy create-on-first-use,
+    view-existence probing, CR-M149). The asymmetry — write throws, read answers empty — is pinned by a test
+    on each side, so unifying them means deleting an assertion that says why they differ.
+  - **The blast radius was measured before shipping, and it was zero.** Making writes throw broke **1** test
+    across twelve suites: the defect-pin written under TASK-244, which this task **inverted rather than
+    replaced** — the before/after pair on one test is the record. Compare TASK-211, whose narrowing broke
+    two suites that asserted the wide behaviour; a removal that breaks nothing is a swallow nothing relied on.
+  - **MSSql's handler was still classifying by raw message substring** (`"Invalid object name"`,
+    case-sensitively) — the shape TASK-211 removed from PostgreSQL and MySQL and never got to. Routing all
+    four through `IsMissingTableException` is narrower *and* case-correct, and it means the reader and the
+    handler cannot disagree about what a missing table is.
+  - **⚠ `Should().NotBeNull()` on a bulk-store read is a vacuous assertion, and it hid a live defect.** The
+    bulk `Read(filter)` overload hides the single-result one and returns the **collection** (§ Conventions),
+    so that assertion passes on an empty enumerable. Strengthening it to assert the row surfaced
+    [[TASK-278]] immediately: on SQL Server a limit with no offset is `Msg 153` and offset+limit without an
+    `ORDER BY` is `Msg 102`, so `ReadFirstAsync` — the call § Conventions recommends for a single row —
+    **cannot work there at all**. Grep for that assertion shape; where it appears on a collection-returning
+    read it is measuring nothing.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
@@ -1379,6 +1415,35 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A write to a missing table reported success on every provider (2026-08-23)
+
+TASK-277, spawned by TASK-244 an hour earlier and closed the same day. It is the half that turned that
+task's residue into consumer Symbio's report: the residue lost one operation, this made the operation answer
+**200**. All four `OnException` handlers answered a missing table with `DoInit()` and a *return*, so the
+statement was discarded and reported as successful. Verified against live PostgreSQL 16.15, SQL Server 2022,
+MySQL 8.4.11 and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set: **1,384 tests, 0 failed, 0 skipped** across
+twelve suites, 5 new. The standing rule is in § Conventions. Five things worth carrying:
+
+- **My own task file understated the scope, and reading the siblings corrected it.** It said SQLite's
+  handler was the one TASK-211 had not reached. True of the *narrowing* — but the **swallow itself was on all
+  four providers**, so this was framework-wide silent data loss, not a SQLite quirk.
+- **The recovery branch could never have worked.** `DoInit()` raises `OnInit`, which nothing in the framework
+  subscribes to, and the failed statement is never retried. A branch that neither repairs nor retries is
+  just a swallow with a reassuring name.
+- **The read path never reaches that handler**, which is what made the fix surgical: `RunReaderCommandOn`
+  catches `IsMissingTableException` itself. So TASK-211's "a read of a missing table answers empty" is
+  untouched, and both sides of the asymmetry now have a test.
+- **Blast radius measured before shipping: exactly one test**, the defect-pin from TASK-244, which was
+  inverted rather than replaced. A removal that breaks nothing is a swallow nothing relied on — the opposite
+  of TASK-211, whose narrowing broke two suites.
+- **⚠ A vacuous assertion was hiding a second defect, and strengthening it found it.**
+  `read.Should().NotBeNull()` after a write passes on an empty enumerable, because a bulk store's
+  `Read(filter)` returns the collection (§ Conventions). Asserting the row instead failed immediately on
+  MSSql: `Invalid usage of the option NEXT in the FETCH statement`. Measured — a limit with no offset is
+  Msg 153 and offset+limit without `ORDER BY` is Msg 102, while `TOP (n)` and an explicit sort both work —
+  so `ReadFirstAsync` cannot work on SQL Server at all. Filed as [[TASK-278]] (P1) with the measurement
+  table and the fix shape.
 
 ### A rolled-back schema-ensure left a store believing it was initialised (2026-08-23)
 
