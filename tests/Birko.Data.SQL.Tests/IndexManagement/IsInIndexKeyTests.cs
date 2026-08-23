@@ -53,14 +53,33 @@ namespace Birko.Data.SQL.Tests.IndexManagement
             public string Plain { get; set; } = null!;
         }
 
+        /// <remarks>
+        /// TASK-275 — <c>Sku</c> is <c>[RequiredField]</c> deliberately. A <b>nullable</b> unique column no
+        /// longer carries an inline constraint: it gets a synthesised partial unique index instead, so its
+        /// <c>IsIndexed</c> is legitimately true and it is no longer an example of the gap this suite is
+        /// about. The gap is unchanged for the shapes that still emit the constraint inline — a required
+        /// unique column and a primary key — which is what these two now are.
+        /// <see cref="NullableUniqueEntity"/> pins the other side.
+        /// </remarks>
         [Table("IdxKeyConstraints")]
         public class ConstraintEntity : AbstractLogModel
         {
             [UniqueField]
+            [RequiredField]
             public string Sku { get; set; } = null!;
 
             [PrimaryField]
             public string NaturalKey { get; set; } = null!;
+        }
+
+        /// <summary>
+        /// The shape TASK-275 moved: a nullable unique column, whose constraint is now a real index.
+        /// </summary>
+        [Table("IdxKeyNullableUnique")]
+        public class NullableUniqueEntity : AbstractLogModel
+        {
+            [UniqueField]
+            public string? Sku { get; set; }
         }
 
         private static AbstractField Field(Type entity, string property)
@@ -96,6 +115,23 @@ namespace Birko.Data.SQL.Tests.IndexManagement
                 IsPrimary = primary,
             };
 
+            field.IsInIndexKey.Should().BeTrue();
+        }
+
+        /// <summary>
+        /// The other side of the same rule after TASK-275: a <b>nullable</b> unique column IS visible to
+        /// <c>IsIndexed</c>, because its constraint is now carried by a synthesised partial unique index
+        /// rather than by an inline <c>UNIQUE</c> — and <c>IsInIndexKey</c> is true either way, which is what
+        /// keeps TASK-257's per-provider bounding correct for both shapes.
+        /// </summary>
+        [Fact]
+        public void A_nullable_unique_column_is_visible_to_IsIndexed_because_it_has_a_real_index()
+        {
+            var field = Field(typeof(NullableUniqueEntity), nameof(NullableUniqueEntity.Sku));
+
+            field.IsIndexed.Should().BeTrue("TASK-275 synthesises ux_IdxKeyNullableUnique_Sku for it");
+            field.IsUnique.Should().BeTrue("the declaration is still [UniqueField]");
+            field.UsesInlineUniqueConstraint.Should().BeFalse("which is why it needed an index");
             field.IsInIndexKey.Should().BeTrue();
         }
 
