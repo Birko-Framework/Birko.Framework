@@ -305,7 +305,10 @@ namespace Birko.Data.SQL.Connectors
                 {
                     result.AppendFormat(" PRIMARY KEY");
                 }
-                if (field.IsUnique && !field.IsPrimary)
+                // TASK-275 — a nullable unique column carries its constraint as a partial unique index
+                // instead, because an inline UNIQUE treats NULLs as equal here (Msg 2627) and cannot
+                // take a predicate (Msg 156).
+                if (field.UsesInlineUniqueConstraint && !field.IsPrimary)
                 {
                     result.AppendFormat(" UNIQUE");
                 }
