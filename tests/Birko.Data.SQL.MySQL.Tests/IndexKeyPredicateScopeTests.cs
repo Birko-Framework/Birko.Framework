@@ -62,13 +62,25 @@ public class IndexKeyPredicateScopeTests
     }
 
     /// <summary>
-    /// The pin. A UNIQUE or PRIMARY KEY column <i>is</i> an index key — <c>IsInIndexKey</c> says so — and
-    /// MySQL still emits the unindexable type for it. That is the known, filed gap, not a passing case.
+    /// <b>Inverted by TASK-265</b>, which is what this test was written to make happen. A UNIQUE or
+    /// PRIMARY KEY column <i>is</i> an index key, and MySQL now bounds it like MSSql does.
     /// </summary>
+    /// <remarks>
+    /// It used to assert <c>LONGTEXT</c> and to say, in its own failure message, not to "fix" it by
+    /// switching the connector from symmetry with MSSql — measure a live 8.4 first, then change the
+    /// connector and this file together. That is exactly what happened: measured on 8.4.11,
+    /// <c>LONGTEXT UNIQUE</c> and <c>LONGTEXT PRIMARY KEY</c> are both <c>ERROR 1170</c> at
+    /// <c>CREATE TABLE</c>, and <c>VARCHAR(255)</c> accepts both.
+    /// <para>
+    /// <c>IsIndexed</c> is still false for these shapes — they carry inline constraints, which
+    /// <c>LoadIndexes</c> does not resolve — so the assertion below is precisely the difference between the
+    /// narrow flag and the wide one.
+    /// </para>
+    /// </remarks>
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
-    public void A_unique_or_primary_unlengthed_string_is_NOT_yet_bounded_here(bool unique, bool primary)
+    public void A_unique_or_primary_unlengthed_string_is_bounded_here_too(bool unique, bool primary)
     {
         var field = Unlengthed();
         field.IsUnique = unique;
@@ -76,12 +88,10 @@ public class IndexKeyPredicateScopeTests
 
         field.IsIndexed.Should().BeFalse("LoadIndexes marks only [IndexedField]/[CompositeIndex]");
         field.IsInIndexKey.Should().BeTrue(
-            "a UNIQUE or PRIMARY KEY column is an index key — this is what MSSql now consults");
+            "a UNIQUE or PRIMARY KEY column is an index key — which is what both providers now consult");
 
-        Connector().ConvertType(DbType.String, field).Should().Be("LONGTEXT",
-            "MySQL deliberately still reads the narrow IsIndexed. This assertion documents a KNOWN GAP: "
-          + "`LONGTEXT UNIQUE` is ERROR 1170 at CREATE TABLE. Do not 'fix' this test by switching the "
-          + "connector to IsInIndexKey from symmetry with MSSql — measure it on a live 8.4 first, then "
-          + "change both the connector and this file together");
+        Connector().ConvertType(DbType.String, field).Should().Be("VARCHAR(255)",
+            "TASK-265: LONGTEXT UNIQUE and LONGTEXT PRIMARY KEY are both ERROR 1170 at CREATE TABLE on "
+          + "8.4.11, so such a table could not be created at all");
     }
 }
