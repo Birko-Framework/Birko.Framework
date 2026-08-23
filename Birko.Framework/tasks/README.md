@@ -44,7 +44,7 @@ _Generated 2026-08-19 (partial refresh at [[TASK-265]]’s close: counts, EPIC-0
 | done         | 1     | 22      | 104   |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 26 · P2 92 · P3 9**
+Todo by priority: **P0 0 · P1 28 · P2 92 · P3 9**
 
 <!-- Count note (2026-08-22, re-measured at TASK-273's close): 246 TASK files — todo 132, in-progress 1,
      review 10, blocked 2, done 99, cancelled 1; EPIC-014 alone is 139 files with 65 done. The EPIC-014 row
