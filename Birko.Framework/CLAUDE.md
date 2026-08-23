@@ -1287,6 +1287,42 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     equivalent at all so it stays hand-written. Neither is reachable by anything in the tree, but a deletion
     that quietly drops a capability is indistinguishable later from one that never had it — write down the
     difference.
+- **A constraint whose SHAPE cannot express the rule must change shape — and the change is scoped to the
+  declarations that are actually broken.** Sixth member of the index family (TASK-275), and the one that
+  completes it: `[UniqueField]` produces no index at all, so TASK-273's predicate could not reach it.
+  `FieldDefinition` emits `UNIQUE` as an **inline column constraint**, which on SQL Server admits **one**
+  NULL row and rejects every later row that leaves the column unset (measured: `Msg 2627`) — and a predicate
+  is syntactically impossible there (`Msg 156`). So a nullable `[UniqueField]` column now drops the inline
+  constraint and gains a synthesised `CREATE UNIQUE INDEX … WHERE col IS NOT NULL` instead. Six parts
+  generalise:
+  - **Scope the shape change by the property that makes it necessary, not by the attribute.** Only a
+    **nullable** unique column moves; `[RequiredField]` and `[PrimaryField]` keep the inline form, whose DDL
+    is byte-identical. `AbstractField.UsesInlineUniqueConstraint` states it once and all four
+    `FieldDefinition`s consult it — the alternative, four providers each deciding, is how this family has
+    repeatedly drifted.
+  - **The new shape must be behaviour-preserving where nothing was wrong, and that is measurable.** A partial
+    unique index admits many NULLs on MSSql, PostgreSQL and SQLite; MySQL's unfiltered one does too. So the
+    emitted DDL changes on all four providers while the observable rule changes on **only the broken one** —
+    which is what a per-provider suite has to assert, because "the DDL changed here" is otherwise
+    indistinguishable from "the behaviour changed here".
+  - **Reuse the machinery rather than the mechanism.** The synthesised index is routed through TASK-273's
+    `WhereNotNull` accumulator, so it inherits the rendering, the refusal, the per-provider policy (MySQL
+    drops the term because NULLs are already distinct there) and the tests — instead of a second code path
+    that renders `IS NOT NULL` its own way.
+  - **A synthesised name is database-global on two providers, so it carries the table — and a collision
+    throws.** `ux_{table}_{column}`; if a declared index already owns that name this refuses rather than
+    merging into it, because silently adding a column to somebody else's index changes *their* constraint.
+  - **Moving a constraint into an index changes which per-provider column rules apply, and that is the part
+    to re-measure.** The column becomes `IsIndexed`, so MySQL bounds an unlengthed string to
+    `VARCHAR(255)` — which is what makes the synthesised index buildable there at all (`LONGTEXT` cannot be
+    indexed, ERROR 1170). `IsInIndexKey` is unchanged (still true via `IsUnique`), so TASK-257's MSSql
+    bounding still applies — asserted, because an unbounded column would make the new index impossible
+    (`Msg 1919`) and the constraint would vanish into a recorded failure.
+  - **Two of TASK-257's own pins changed meaning, and were updated rather than deleted.** Its claim — *a
+    `UNIQUE` column is an index key that `IsIndexed` cannot see* — is now true only of the shapes that keep
+    the inline form. Both tests moved to `[RequiredField]` columns (preserving exactly what they were
+    about) and a new test asserts the other side: a nullable unique column **is** visible to `IsIndexed`,
+    because it now has a real index. The pair is the record of where the line moved.
 - **A constraint whose scope is "some rows" has to be DECLARED, and where a provider cannot express it each
   polarity is answered separately, on measurement.** Fifth member of the index-DDL family, and the first that
   arrives from a *missing* capability rather than a broken emitter. A unique index over a nullable column was
@@ -1445,6 +1481,41 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A unique column that was allowed to be empty rejected the second empty row (2026-08-23)
+
+TASK-275, the last member of the index/NULL family that TASK-273 opened. `[UniqueField]` produces no index
+definition at all — `FieldDefinition` emits `UNIQUE` inline — so TASK-273's predicate could not reach it, and
+on SQL Server an inline `UNIQUE` over a nullable column admits one NULL row and rejects every later row that
+leaves the column unset (`Msg 2627`). Nullable unique columns now carry a synthesised
+`CREATE UNIQUE INDEX … WHERE col IS NOT NULL` instead. Verified against live SQL Server 2022, PostgreSQL
+16.15, MySQL 8.4.11 and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set: **1,430 tests, 0 failed, 0 skipped**
+across eighteen suites, 11 new. The standing rule is in § Conventions. Six things worth carrying:
+
+- **The blast radius decided the shape, and it was measured first.** Exactly **2** production
+  `[UniqueField]` declarations sit on a nullable column across the framework, its tests and all consumer
+  repos (BardStudio `MusicTrack.FilePath`, Presenter `PresentationEntity.Slug`) — and note they are
+  *non-nullable in C#*, which the framework does not read, so they are nullable in the database. Every
+  `[PrimaryField]` hit is the framework's own `Guid?` key, where `PRIMARY KEY` implies NOT NULL and the
+  question cannot arise. Small enough to change the shape; the alternative was documenting a limit that
+  consumers plainly do not read.
+- **Scoped to nullable columns only**, so `[RequiredField]` and `[PrimaryField]` keep byte-identical DDL. One
+  producer (`AbstractField.UsesInlineUniqueConstraint`), consulted by all four `FieldDefinition`s.
+- **DDL changes on four providers; behaviour changes on one.** That is the claim a per-provider suite has to
+  make, and each one does: SQLite and PostgreSQL and MySQL assert the rule is *unchanged*, MSSql asserts it
+  is *fixed*, with the error code moving from 2627 (constraint) to 2601 (index) as the task predicted.
+- **It reuses TASK-273 rather than re-implementing it** — the synthesised index goes through the same
+  `WhereNotNull` accumulator, so MySQL's drop-the-term policy applies for free. Mutation: removing the
+  predicate leaves **MySQL green** while MSSql and SQLite go red, which is the provider-correct signature.
+- **⚠ It incidentally fixes part of TASK-265, and that is recorded rather than claimed.** An unlengthed
+  `[UniqueField]` string is `LONGTEXT` on MySQL and `LONGTEXT UNIQUE` is ERROR 1170, so such a table could
+  not be created at all; moving the constraint to an index makes the column an index key, which bounds it to
+  `VARCHAR(255)`. TASK-265 still owns the `[PrimaryField]` and non-nullable cases, which keep the inline
+  form.
+- **Two of TASK-257's pins changed meaning and were updated, not deleted.** Its point — a `UNIQUE` column is
+  an index key invisible to `IsIndexed` — now holds only for the inline shapes; both tests moved to
+  `[RequiredField]` columns and a new one asserts that a nullable unique column *is* visible, because it now
+  has a real index.
 
 ### Every limited read on SQL Server emitted invalid T-SQL (2026-08-23)
 
