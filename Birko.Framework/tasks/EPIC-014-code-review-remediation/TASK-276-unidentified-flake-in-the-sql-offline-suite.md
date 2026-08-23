@@ -99,3 +99,50 @@ named test, a named exception, and a suite where the shared object is explicit r
 ## Implementation plan
 
 _Populated by `/tasks plan TASK-276` — leave empty until then._
+
+---
+
+## A consumer-side sighting on the same path, with the stack captured (Symbio, 2026-08-23)
+
+Offered because this task's whole complaint is that the identity was never captured. This is **not** the
+same test — it is in a consumer's suite, not `Birko.Data.SQL.Tests` — but it is the same **shape**, on the
+path TASK-244 had just changed, at a comparable rate. Treat it as a second data point, not as a diagnosis.
+
+**Where:** `Symbio.Tests.Unit.TransactionBoundaryTests.InitializeAsync` (the fixture, not a test body).
+That fixture deliberately touches every table **outside** a boundary to warm the schema, so it is a
+concentrated dose of exactly the schema-ensure path.
+
+**Rate:** once in six consecutive full-suite runs (2096/2097). Passed **11/11 every time the class ran
+alone** — it only appears under the full suite, which is the same signature this task describes.
+
+**Stack, as printed:**
+
+```
+Symbio.DataAccess.RepositoryBase`1.CountAsync
+  -> Birko.Data.Tenant.Stores.AsyncTenantStoreWrapper`2.CountAsync            (AsyncTenantStoreWrapper.cs:58)
+  -> Birko.Data.Stores.AbstractAsyncStore`1.CountAsync                        (AbstractAsyncStore.cs:154)
+  -> Birko.Data.Stores.AbstractAsyncStore`1.EnsureInitializedAsync            (AbstractAsyncStore.cs:43)
+  -> Birko.Data.SQL.Stores.AsyncDataBaseStore`2.InitCoreAsync                 (AsyncDataBaseStore.cs:149)
+  -> AbstractConnector.CreateTable(Type[])                                    (AbstractConnector_Create.cs:13 -> :20 -> :80 -> :87)
+  -> AbstractConnector.DoDdlCommand                                           (AbstractConnector.cs:299)
+  -> AbstractConnector.RunDdl                                                 (AbstractConnector.cs:310)
+  -> AbstractConnector.DoCommandWithTransaction                               (AbstractConnector.cs:256)
+  -> AbstractConnector.RunCommandTransaction                                  (AbstractConnector.cs:475)
+  -> AbstractConnectorBase.ExecuteWithRetry                                   (AbstractConnectorBase.cs:119)
+  -> Microsoft.Data.Sqlite.SqliteConnection.BeginDbTransaction                ← threw
+```
+
+⚠ **The exception type and message were NOT captured** — it fired once and the run was filtered to the
+stack. Recorded as a gap rather than guessed at; the two candidates this tree has already seen on that line
+are `SQLite Error 5: 'database is locked'` (TASK-243 R2, TASK-244 measurement 1) and
+`ObjectDisposedException: 'SQLitePCL.sqlite3'` (TASK-244's own closing note). They imply different causes,
+so it is worth capturing next time rather than assuming.
+
+⚠ **Cannot be attributed to TASK-244.** Establishing whether it predates that change would mean reverting
+committed framework work, which the consumer declined to do. The consumer's suite was green (2097/2097) on
+one full run earlier the same day, before the change — that is n=1 and is not evidence either way.
+
+**Reproduction hint if it helps:** the consumer runs the whole suite with `pwsh tools/build-and-test.ps1`
+in `C:\Source\Birko\Consumers\Symbio`. It reproduced roughly one run in six there while never reproducing
+under a class filter — consistent with this task's own standing hypothesis of the process-wide cached
+connector (`DataBase.GetConnector`, TASK-270) being shared across parallel test classes.
