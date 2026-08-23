@@ -28,9 +28,29 @@ namespace Birko.Data.Stores
             {
                 if (_initialized) return;
                 InitCore();
-                _initialized = true;
+                _initialized = CanRememberInitialization;
             }
         }
+
+        /// <summary>
+        /// Whether the initialization that just completed may be <b>remembered</b> — i.e. whether it is
+        /// durable, or could still be undone by something outside this store.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-244. Default <c>true</c>: for a backend with no notion of a caller-owned transaction, an
+        /// initialization that returned has happened. The SQL stores override it, because there a store's
+        /// schema-ensure can run <i>inside</i> a caller's transaction boundary — so a rollback removes the
+        /// table while this flag would still say the store is initialised, and the store then skips
+        /// schema-ensure forever and writes against a table that is not there.
+        /// </para>
+        /// <para>
+        /// <b>Answering "no" costs one idempotent re-run, and that asymmetry is the whole design.</b> A
+        /// false negative re-issues <c>CREATE TABLE IF NOT EXISTS</c>; a false positive leaves a store
+        /// permanently broken for the life of the process. So this errs toward re-running.
+        /// </para>
+        /// </remarks>
+        protected virtual bool CanRememberInitialization => true;
 
         /// <inheritdoc />
         public void Init()
