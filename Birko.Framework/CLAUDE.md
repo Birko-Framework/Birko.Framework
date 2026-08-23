@@ -590,6 +590,36 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     the ANSI behaviour elsewhere). With it off, backslash escapes revive and `\'` breaks out. Every
     literal-interpolating sink has always depended on this; it is written down on `SqlLiteral` rather than
     assumed.
+- **A provider whose paging syntax has a precondition needs that precondition supplied where it is KNOWN,
+  not where the clause is rendered — and a feature nobody tested is a feature nobody has.** TASK-278.
+  `MSSqlConnector.LimitOffsetDefinition` emitted `FETCH NEXT n ROWS ONLY` and prepended `OFFSET` only when
+  the caller supplied one. Measured on SQL Server 2022: `FETCH` alone is **Msg 153**, and
+  `OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY` without a sort is **Msg 102** — while `TOP (n)` and any real
+  `ORDER BY` both work. So **every limited read on SQL Server emitted invalid T-SQL**, including
+  `ReadFirstAsync`, which `Birko.Data.SQL/CLAUDE.md` § Conventions actively tells consumers to use for a
+  single row. Five parts generalise:
+  - **The information lives one layer up, so the fix goes one layer up.** Whether the caller supplied a sort
+    is known to `CreateSelectCommand`, not to the tail emitter — so `RequiresOrderByForPaging` (false;
+    **true on MSSql alone**) makes the *composer* synthesise `ORDER BY (SELECT NULL)` when there is a limit
+    and no sort. Threading "was there an ORDER BY" into `LimitOffsetDefinition`'s signature was rejected for
+    a specific reason: it is `public virtual`, so adding a parameter would leave any existing override of
+    the old signature **silently no longer overriding anything** — the quiet half of § SH-H037, arriving
+    through a signature change.
+  - **`TOP (n)` was the tempting fix and it is a second code path.** It needs no sort and would have covered
+    the no-offset case, but it lives in the SELECT list rather than the tail, and an offset still forces the
+    `OFFSET`/`FETCH` form and therefore the sort. One mechanism that covers both beats two that split by
+    argument shape.
+  - **Synthesising a sort preserves cross-provider behaviour rather than inventing one.** A limited read with
+    no `ORDER BY` returns arbitrary rows on SQLite, PostgreSQL and MySQL too; SQL Server just refuses to
+    pretend otherwise. So the placeholder makes the four providers agree instead of making one of them
+    special — and a caller who cares which rows they get must pass a sort everywhere.
+  - **There was NO paging coverage in any suite, and that is why this survived.** Not thin coverage —
+    none. A defect that makes a documented API unusable on a whole provider had no test to fail. When a
+    provider-specific clause has no test anywhere, assume it is broken somewhere until measured.
+  - **The capability's false side is what catches an over-broad fix.** Making `RequiresOrderByForPaging`
+    unconditionally true leaves the MSSql suite **green** and fails SQLite's and the base's assertions —
+    which is the only signal that the flag became a blanket. Both sides are asserted per provider, in the
+    family of `SupportsTransactionalDdl` / `FoldsUnquotedIdentifiers` / `SupportsPartialIndexes`.
 - **A WRITE that cannot be applied must never report success — and "recover and continue" is not a thing a
   handler can do if it neither repairs nor retries.** TASK-277, the sibling of the rule below and the half
   that turns a lost operation into a lie. All four providers' `OnException` handlers answered a missing
@@ -1415,6 +1445,33 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Every limited read on SQL Server emitted invalid T-SQL (2026-08-23)
+
+TASK-278, spawned an hour earlier by TASK-277 and closed the same day. `LimitOffsetDefinition` emitted
+`FETCH NEXT n ROWS ONLY` with the `OFFSET` present only when the caller supplied one, and T-SQL accepts
+neither that nor `OFFSET`/`FETCH` without an `ORDER BY`. So `ReadFirstAsync` — the single-row read this
+framework's own guide recommends — could not work on that provider at all, and no unsorted page could be
+fetched. Verified against live SQL Server 2022, PostgreSQL 16.15, MySQL 8.4.11 and on-disk SQLite with
+`BIRKO_REQUIRE_LIVE` set: **1,389 tests, 0 failed, 0 skipped** across twelve suites, 16 new. The standing
+rule is in § Conventions. Five things worth carrying:
+
+- **It was found by strengthening a vacuous assertion, not by looking for it.** TASK-244's tests said
+  `read.Should().NotBeNull()` after a write, which passes on an empty enumerable because a bulk store's
+  `Read(filter)` returns the collection. Asserting the row instead failed instantly on MSSql. A test that
+  cannot fail is worse than no test, because it occupies the space where a real one would go.
+- **There was no paging coverage anywhere in the tree.** Not thin — none, on any provider. That is the whole
+  explanation for how a documented API stayed unusable on a whole provider. This task adds it on SQLite as
+  well as MSSql, so the shared base path is pinned by the provider everything else inherits.
+- **The precondition is supplied where it is known.** `RequiresOrderByForPaging` lets
+  `CreateSelectCommand` — which knows whether the caller passed a sort — synthesise
+  `ORDER BY (SELECT NULL)`. Threading that fact into the emitter's `public virtual` signature was rejected
+  because adding a parameter silently orphans existing overrides.
+- **`TOP (n)` was the tempting alternative and would have been two code paths**: it lives in the SELECT list,
+  not the tail, and an offset still forces the OFFSET/FETCH form and therefore the sort.
+- **Mutations, disjoint by provider:** omitting the offset again → 3 red on MSSql, others green; removing the
+  synthesised sort → the same 3; making the capability unconditionally true → MSSql **green** while SQLite
+  and the base pins go red, which is the only way that over-broad fix shows up.
 
 ### A write to a missing table reported success on every provider (2026-08-23)
 
