@@ -83,10 +83,19 @@ public class IndexedStringColumnTypeTests
     }
 
     /// <summary>UNIQUE and PRIMARY KEY are index keys that LoadIndexes never marks.</summary>
+    /// <remarks>
+    /// TASK-275 — <c>Sku</c> is <c>[RequiredField]</c> deliberately. A <b>nullable</b> unique column no
+    /// longer emits an inline <c>UNIQUE</c> at all: it carries a synthesised partial unique index instead,
+    /// because the inline form admits only one NULL row on SQL Server. This suite is about the inline path
+    /// being bounded, so it keeps a column that still takes it. The nullable shape's bounding is asserted in
+    /// <c>NullableUniqueColumnLiveTests</c>, where it matters more — an unbounded column there means the
+    /// synthesised index cannot be built at all.
+    /// </remarks>
     [Table("MsStrConstraints")]
     public class ConstraintEntity : AbstractLogModel
     {
         [UniqueField]
+        [RequiredField]
         public string Sku { get; set; } = null!;
 
         [PrimaryField]
