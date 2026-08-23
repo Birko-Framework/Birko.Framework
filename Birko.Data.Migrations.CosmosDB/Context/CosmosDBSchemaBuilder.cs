@@ -203,9 +203,29 @@ public class CosmosDBSchemaBuilder : ISchemaBuilder
             return this;
         }
 
-        public IIndexBuilder Sparse() => this;
+        /// <summary>
+        /// Refused, with everything else this builder accumulates (TASK-274). See <see cref="Build"/>.
+        /// </summary>
+        public IIndexBuilder Sparse()
+            => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                "CosmosDB", "a sparse index", "Cosmos DB has no individual index objects — indexing is a container-level policy", "Use Raw() to modify the container indexing policy.");
 
-        public IIndexBuilder WithProperty(string key, object value) => this;
+        /// <inheritdoc cref="Sparse"/>
+        public IIndexBuilder WithProperty(string key, object value)
+            => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                "CosmosDB", $"index property '{key}'", "Cosmos DB has no individual index objects — indexing is a container-level policy", "Use Raw() to modify the container indexing policy.");
+
+        /// <summary>
+        /// <b>Refuses the whole declaration (TASK-274).</b> This builder used to inherit
+        /// <c>IIndexBuilder.Build()</c>'s no-op default while accumulating fields and a <c>Unique()</c> flag
+        /// and holding a live client — so a migration read as though it had declared an index and the
+        /// database never got one. That is the lost-flag defect TASK-246 fixed in the SQL builder, total
+        /// rather than partial. Silence was the worst of the three options; refusing is honest and costs
+        /// nothing, because nothing called it (measured: 0 uses across all 16 consumer repos).
+        /// </summary>
+        public void Build()
+            => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.NotImplementedHere(
+                "CosmosDB", _indexName, "Use Raw() to modify the container indexing policy.");
 
         /// <summary>
         /// Exposes whether <see cref="Unique"/> was called. Cosmos DB expresses uniqueness via
