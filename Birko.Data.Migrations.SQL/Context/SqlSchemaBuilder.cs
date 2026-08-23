@@ -296,6 +296,7 @@ namespace Birko.Data.Migrations.SQL.Context
             private readonly AbstractConnector _connector;
             private readonly List<(string Name, bool Descending)> _fields = new();
             private bool _unique;
+            private bool _sparse;
             private bool _built;
 
             public SqlIndexBuilder(string collectionName, string indexName, DbConnection connection, DbTransaction? transaction, AbstractConnector connector)
@@ -330,9 +331,40 @@ namespace Birko.Data.Migrations.SQL.Context
                 return this;
             }
 
-            public IIndexBuilder Sparse() => this;
+            /// <summary>
+            /// Honoured as a partial unique index over the declared columns (TASK-274), using the
+            /// <c>WhereNotNull</c> machinery TASK-273 built.
+            /// </summary>
+            /// <remarks>
+            /// <para>
+            /// This used to be <c>=> this</c>, so a migration asking for a sparse index got a full one — and
+            /// for a UNIQUE index that is not a lost optimisation but a <b>stricter</b> constraint than
+            /// declared, which rejects rows the declaration permits.
+            /// </para>
+            /// <para>
+            /// <b>Single-column only, and the refusal for a compound index is the honest part.</b> Mongo's
+            /// sparse compound index includes a document when <i>any</i> key is present; a SQL partial index
+            /// over <c>a IS NOT NULL AND b IS NOT NULL</c> requires <i>all</i> of them. The two cannot both
+            /// be what <c>Sparse()</c> means, and <c>IIndexBuilder</c> does not say which — so a compound
+            /// declaration is refused rather than silently given one of the two readings.
+            /// </para>
+            /// </remarks>
+            public IIndexBuilder Sparse()
+            {
+                _sparse = true;
+                return this;
+            }
 
-            public IIndexBuilder WithProperty(string key, object value) => this;
+            /// <summary>
+            /// Refused (TASK-274): the SQL connector's index DDL models name, uniqueness, columns and the
+            /// null-predicates — there is nothing a free-form property could reach.
+            /// </summary>
+            public IIndexBuilder WithProperty(string key, object value)
+                => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                    "SQL",
+                    $"index property '{key}'",
+                    "the SQL index emitter models only the name, uniqueness, column list and null-predicates",
+                    "Use Raw() for provider-specific index syntax.");
 
             // Public so it satisfies IIndexBuilder.Build() — the terminal a migration calls to emit
             // the CREATE INDEX. Previously internal + never invoked (CR-C14).
@@ -362,6 +394,29 @@ namespace Birko.Data.Migrations.SQL.Context
                         Name = _indexName,
                         Unique = _unique
                     };
+
+                    // TASK-274 — Sparse becomes a WhereNotNull predicate over the single declared column,
+                    // which is exactly what "skips rows without the indexed field" means for one column.
+                    // Compound is refused rather than given one of two incompatible readings (see Sparse()).
+                    if (_sparse)
+                    {
+                        if (_fields.Count != 1)
+                        {
+                            throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                                "SQL",
+                                $"a sparse COMPOSITE index ('{_indexName}', {_fields.Count} columns)",
+                                "Mongo's sparse compound index includes a document when ANY key is present "
+                                + "while a SQL partial index requires ALL of them, and IIndexBuilder does not "
+                                + "say which Sparse() means",
+                                "Declare the intent explicitly with [CompositeIndex(..., WhereNotNull = ...)] "
+                                + "on the entity, or drop Sparse() for a full index.");
+                        }
+                        indexDef.Predicates.Add(new Birko.Data.SQL.Tables.IndexPredicate
+                        {
+                            ColumnName = _fields[0].Name,
+                            RequireNull = false,
+                        });
+                    }
                     indexDef.Columns.AddRange(_fields.Select((f, i) => new Birko.Data.SQL.Tables.IndexColumn
                     {
                         ColumnName = f.Name,
