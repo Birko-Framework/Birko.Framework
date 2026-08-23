@@ -107,6 +107,7 @@ namespace Birko.Data.Migrations.MongoDB.Context
             private readonly IClientSessionHandle? _session;
             private readonly List<IndexFieldDefinition> _fields = new();
             private bool _unique;
+            private bool _sparse;
 
             public MongoIndexBuilder(string collectionName, string indexName, IMongoDatabase database, IClientSessionHandle? session = null)
             {
@@ -128,9 +129,29 @@ namespace Birko.Data.Migrations.MongoDB.Context
                 return this;
             }
 
-            public IIndexBuilder Sparse() => this;
+            /// <summary>
+            /// Honoured natively (TASK-274). This used to be <c>=> this</c>, so a migration's
+            /// <c>.Sparse()</c> produced a full index — while <c>MongoDBIndexManager</c>, the other door onto
+            /// the same feature, sets <c>Sparse</c> from <c>IndexDefinition.Sparse</c>. The two doors now
+            /// agree.
+            /// </summary>
+            public IIndexBuilder Sparse()
+            {
+                _sparse = true;
+                return this;
+            }
 
-            public IIndexBuilder WithProperty(string key, object value) => this;
+            /// <summary>
+            /// Refused (TASK-274): nothing consumes it on this backend. <c>MongoDBIndexManager</c> reads
+            /// <c>Sparse</c> and <c>ExpireAfter</c> from an <c>IndexDefinition</c> and ignores
+            /// <c>Properties</c>, so accepting a property here would discard it silently.
+            /// </summary>
+            public IIndexBuilder WithProperty(string key, object value)
+                => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                    "MongoDB",
+                    $"index property '{key}'",
+                    "this backend's index creation reads only the name, uniqueness, sparseness and TTL",
+                    "Use Raw() for options this builder does not model.");
 
             // Public so it overrides the IIndexBuilder.Build() terminal (CR-C14): the internal version
             // was never reachable, so CreateIndex(...) created nothing (CR-H062). Uses the session when
@@ -144,7 +165,9 @@ namespace Birko.Data.Migrations.MongoDB.Context
                         ? Builders<BsonDocument>.IndexKeys.Descending(f.Name)
                         : Builders<BsonDocument>.IndexKeys.Ascending(f.Name)));
 
-                var options = new CreateIndexOptions { Name = _indexName, Unique = _unique };
+                // TASK-274 — Sparse was dropped here, so a migration's .Sparse() got a full index while
+                // the index-manager door honoured it. Both doors now set it.
+                var options = new CreateIndexOptions { Name = _indexName, Unique = _unique, Sparse = _sparse };
                 var model = new CreateIndexModel<BsonDocument>(keys, options);
                 var indexes = _database.GetCollection<BsonDocument>(_collectionName).Indexes;
                 if (_session != null) indexes.CreateOne(_session, model);
