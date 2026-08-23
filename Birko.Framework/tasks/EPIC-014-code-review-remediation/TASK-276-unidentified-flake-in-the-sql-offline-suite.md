@@ -67,9 +67,76 @@ outliving the connection some other test gave it. Same mechanism family as the h
 named test, a named exception, and a suite where the shared object is explicit rather than inferred.
 [[TASK-270]] owns the cache itself.
 
+## Worked 2026-08-23 — NOT closed, and here is what changed
+
+**Not reproduced in 95 runs, one hypothesis falsified, the mechanism still unestablished.** This section
+exists so the next attempt starts from evidence instead of repeating today's.
+
+### The rate has dropped, and the drop is statistically real
+
+| Measurement | Result |
+|---|---|
+| `Birko.Data.SQL.Tests`, before today's work | **2** failures in ~19 runs |
+| `Birko.Data.Migrations.SQL.Tests`, before today's work | **1** failure in 16 runs |
+| `Birko.Data.Migrations.SQL.Tests`, today | **0** in 65 runs (25 + 40, every run's console output retained) |
+| `Birko.Data.SQL.Tests`, today | **0** in 30 runs |
+
+At the previously observed rate (~1 in 16) the chance of 95 clean runs is about **0.3%**, so the trigger is
+very likely gone rather than merely quiet. What changed in between is the whole day's work: TASK-244, 265,
+274, 275, 277 and 278.
+
+⚠ **Do not read that as "fixed".** The mechanism was never captured, so nothing here explains *why* it
+stopped, and this task's own warning applies in both directions: a run of green proves as little now as it
+would have then.
+
+### Falsified: `SqliteConnection.ClearAllPools()` interference
+
+The leading hypothesis after the second sighting was that the **24 process-wide**
+`SqliteConnection.ClearAllPools()` calls in per-class teardowns could dispose a connection another test class
+was still using — which is the only obvious way to get `ObjectDisposedException: 'SQLitePCL.sqlite3'` rather
+than a SQLite error code. **Measured, and it is wrong:**
+
+- a live, open connection **survives** a foreign `ClearAllPools()`;
+- a connection returned to the pool and reopened after a foreign clear works;
+- 400 interleavings of `ClearAllPools()` against in-flight commands and pooled open/close cycles produced
+  **no** failure.
+
+So the pool clear is not the mechanism. Recorded so nobody spends the session on it again. (`ClearPool(connection)`
+does exist as a targeted alternative, if a *different* reason to prefer it ever appears.)
+
+### Also checked, and not the mechanism
+
+- **A store disposing the cached connector.** There is no `Connector.Dispose()` call anywhere in
+  `Birko.Data.SQL`, so a store's disposal does not kill the shared connector. (The project guide's example
+  snippet shows one — that example is stale, not the code.)
+- **Settings-id collision between parallel classes.** `GetId()` is `"{Location}:{Name}"` and every affected
+  suite builds a fresh Guid-named temp directory per test, so parallel classes genuinely get distinct
+  connectors.
+
+### What was pinned instead
+
+The criterion allows pinning whatever *is* deterministic when the interleaving cannot be forced. Every
+hypothesis in this family rests on what `DataBase.GetConnector` shares, and **nothing asserted it** — several
+suites reasoned about the keying in prose comments only. `Birko.Data.SQL.SqLite.Tests.ConnectorCacheTests`
+(4 tests) now pins: same settings id → same instance; different location or name → different instance; the
+sync and async caches hand out **two different instances of the same type** for one database; and the sharp
+edge — two settings objects differing in anything *other* than location and name share one connector, so the
+**first** caller's `CommandTimeout` wins for everyone and the second's is silently discarded. That last one is
+[[TASK-270]]'s subject, which now starts from a measurement rather than a reading.
+
+### Suggested next step
+
+Do not loop these two suites again — that is now 95 runs of evidence. Watch for the **next sighting** during
+ordinary work, and when it appears capture it immediately (`--logger "console;verbosity=detailed"` per run,
+keep the artefacts). If it has not recurred after a few weeks of ordinary sweeps, cancel this task and say
+which change is the likeliest cause rather than leaving it open indefinitely.
+
 ## Acceptance criteria
 
-- [ ] The failing test is **identified by name**, with its assertion message. Suggested route, since a trx
+- [x] The failing test is **identified by name**, with its assertion message — for the second instance
+      (`SchemaBuilderBoundaryLeakTests.Without_a_runner_transaction_nothing_is_published_either`,
+      `ObjectDisposedException: 'SQLitePCL.sqlite3'`). The first instance in `Birko.Data.SQL.Tests` is
+      still unidentified, and has not recurred in 30 runs. Suggested route, since a trx
       logger over 8 runs did not catch it: loop the suite until failure with the run's output retained
       (`dotnet test --logger "console;verbosity=detailed"` piped to a file per run, or
       `xunit.runner.json` → `"diagnosticMessages": true`), and keep the artefacts of the failing run.
@@ -82,8 +149,9 @@ named test, a named exception, and a suite where the shared object is explicit r
       production defect in its own right and gets its own task.
 - [ ] A regression test that fails on the unfixed code. If the interleaving cannot be forced deterministically,
       say so and pin whatever *is* deterministic (e.g. that a failed `LoadTable` leaves nothing cached).
-- [ ] ⚠ Re-measure the failure rate over **at least 30 full-suite runs** before and after, since ~10% cannot
-      be distinguished from fixed by a short run.
+- [x] ⚠ Re-measure the failure rate over **at least 30 full-suite runs** before and after — done: 0 in 95
+      runs today against 3 in ~35 before, which is inconsistent with the old rate at p≈0.3%. The
+      remaining criteria stay open because a rate change is not a mechanism.
 
 ## Out of scope
 

@@ -1287,6 +1287,26 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     equivalent at all so it stays hand-written. Neither is reachable by anything in the tree, but a deletion
     that quietly drops a capability is indistinguishable later from one that never had it — write down the
     difference.
+- **A hypothesis you cannot reproduce gets FALSIFIED or recorded — never quietly adopted, and never
+  "confirmed" by a run of green.** TASK-276, worked and deliberately **not closed**. Two rare cross-class
+  failures had been seen in SQLite-backed suites (~1 in 16 runs each), one of them named
+  (`ObjectDisposedException: 'SQLitePCL.sqlite3'`). Three things generalise from the attempt:
+  - **Kill the leading hypothesis with a measurement before building on it.** The obvious cause was the
+    **24** process-wide `SqliteConnection.ClearAllPools()` calls sitting in per-class teardowns — the only
+    obvious way to get a disposed *handle* rather than a SQLite error code. Measured: an open connection
+    survives a foreign clear, a pooled connection reopens fine after one, and 400 interleavings against
+    in-flight commands produced nothing. Wrong, and now recorded as wrong so the next attempt does not spend
+    its session there.
+  - **A rate change is not a mechanism, and both halves of that must be said.** 0 failures in 95 runs against
+    3 in ~35 before is inconsistent with the old rate at p≈0.3%, so the trigger is very likely gone — and
+    nothing captured *why*, so the task stays open rather than being closed on a statistic. The same
+    scepticism the task demanded of "it passed now" applies to "it passes a lot now".
+  - **When the interleaving cannot be forced, pin what IS deterministic — and prefer the shared thing every
+    hypothesis rested on.** Nothing asserted what `DataBase.GetConnector` shares, while several suites
+    reasoned about its keying in prose. It is now pinned, including the edge that matters: the id is
+    `Location:Name` and nothing else, so two settings objects differing in `CommandTimeout` share one
+    connector and the **first** caller's value wins for everyone. That is TASK-270's subject, which now
+    starts from a measurement rather than a reading.
 - **A builder whose every method returns `this` has a silent option at every step — so it must honour a
   declaration or refuse it, never accept one and do nothing.** TASK-274, closing the index family. Measured
   2026-08-23: `IIndexBuilder.Sparse()` was `=> this` in **all six** schema builders, `WithProperty()` in all
