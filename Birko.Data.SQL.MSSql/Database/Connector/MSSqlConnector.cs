@@ -322,19 +322,46 @@ namespace Birko.Data.SQL.Connectors
             return result.ToString();
         }
 
+        /// <summary>
+        /// <b>True.</b> SQL Server defines <c>OFFSET</c>/<c>FETCH</c> as part of the <c>ORDER BY</c> clause,
+        /// so a limited read with no sort is a syntax error (TASK-278).
+        /// </summary>
+        public override bool RequiresOrderByForPaging => true;
+
+        /// <summary>
+        /// T-SQL paging: <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c>, with the <c>OFFSET</c> always present.
+        /// </summary>
+        /// <remarks>
+        /// TASK-278. This used to emit <c>OFFSET</c> only when the caller supplied one, which made every
+        /// limited read with no offset invalid — measured on SQL Server 2022 as
+        /// <c>Msg 153: Invalid usage of the option NEXT in the FETCH statement</c>. That is the common case:
+        /// <c>ReadFirstAsync</c> goes through <c>ReadCoreAsync</c> with <c>limit: 1</c> and no offset, so the
+        /// single-row read this framework's own guide recommends could not work on this provider at all.
+        /// <para>
+        /// <c>FETCH</c> has no standalone form in T-SQL, so the fix is to default the offset to 0 rather
+        /// than to omit the clause. The required <c>ORDER BY</c> is handled by
+        /// <see cref="AbstractConnectorBase.RequiresOrderByForPaging"/> at the one place that knows whether
+        /// the caller supplied a sort.
+        /// </para>
+        /// <para>
+        /// <c>TOP (n)</c> was the alternative for the no-offset case — it needs no sort — and was not taken:
+        /// it lives in the SELECT list rather than in this tail, so it would mean a second insertion point
+        /// and two code paths for one feature, while still needing the OFFSET form (and therefore the sort)
+        /// whenever an offset is present.
+        /// </para>
+        /// </remarks>
         public override string LimitOffsetDefinition(DbCommand command, int? limit = null, int? offset = null)
         {
-            var result = new StringBuilder();
-            if (limit != null)
+            if (limit == null)
             {
-                if (offset != null)
-                {
-                    result.Append(" OFFSET @OFFSET ROWS");
-                    AddParameter(command, "@OFFSET", offset.Value);
-                }
-                result.Append(" FETCH NEXT @LIMIT ROWS ONLY");
-                AddParameter(command, "@LIMIT", limit.Value);
+                return string.Empty;
             }
+
+            var result = new StringBuilder();
+            result.Append(" OFFSET @OFFSET ROWS");
+            AddParameter(command, "@OFFSET", offset ?? 0);
+            result.Append(" FETCH NEXT @LIMIT ROWS ONLY");
+            AddParameter(command, "@LIMIT", limit.Value);
             return result.ToString();
         }
 
