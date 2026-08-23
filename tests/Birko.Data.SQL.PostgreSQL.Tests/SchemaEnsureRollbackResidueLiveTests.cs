@@ -125,8 +125,14 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
         await store.CreateAsync(new ResidueRow { Guid = Guid.NewGuid(), Name = "second attempt" });
 
         TableExists().Should().BeTrue("the store must have re-run schema-ensure");
-        var read = await store.ReadAsync(x => x.Name == "second attempt");
-        read.Should().NotBeNull("the write reported success, so the row must be readable");
+        // Assert the ROW, not merely a non-null result. On a bulk store the bulk Read(filter) overload
+        // hides the single-result one and returns the COLLECTION (§ Conventions), so `NotBeNull` passes on
+        // an empty enumerable and proves nothing — that weaker version is what hid a real MSSql failure
+        // here. ReadFirstAsync would be the idiomatic single-row call and cannot be used: it emits a
+        // LIMIT, and on SQL Server a limit with no offset is Msg 153 (TASK-278).
+        var rows = await store.ReadAsync(x => x.Name == "second attempt", null, null, null, default);
+        rows.Should().ContainSingle("the write reported success, so the row must be there")
+            .Which.Name.Should().Be("second attempt");
     }
 
     /// <summary>
@@ -179,5 +185,41 @@ public class SchemaEnsureRollbackResidueLiveTests : IDisposable
 
         connector.DdlSurvivesRollback.Should().BeTrue("the boundary is gone again");
         transaction.Rollback();
+    }
+
+    /// <summary>
+    /// TASK-277 — a write against a table that does not exist must FAIL rather than reporting success.
+    /// </summary>
+    /// <remarks>
+    /// Until TASK-277 every provider's <c>OnException</c> handler answered a missing table with
+    /// <c>DoInit()</c> and a <b>return</b>, so the statement was discarded and the caller told it had
+    /// worked — silent data loss for any write whose table is absent for any reason (dropped by hand, a
+    /// restore that missed it, a migration that never ran, the wrong database). The shared
+    /// <c>AbstractConnector.EnsureSchemaAndReport</c> now ensures the schema and then reports.
+    /// <para>
+    /// The read contract is deliberately untouched: a missing table on a read is handled in
+    /// <c>RunReaderCommandOn</c> and still yields an empty result (TASK-211's decision, with its own
+    /// callers).
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public async Task A_write_to_a_missing_table_fails_instead_of_reporting_success()
+    {
+        if (!RequireServer()) return;
+        DropTable();
+
+        var store = NewStore();
+        await store.InitAsync();
+        DropTable();          // the store now believes it is initialised and the table is gone
+
+        Func<Task> write = async () => await store.CreateAsync(
+            new ResidueRow { Guid = Guid.NewGuid(), Name = "lost" });
+
+        await write.Should().ThrowAsync<Exception>(
+            "the row cannot be stored, so the caller must not be told it was");
+
+        TableExists().Should().BeFalse(
+            "and DoInit() does not create it either — it raises OnInit, which nothing in the framework "
+          + "subscribes to; the fix is the report, not a repair that never existed");
     }
 }
