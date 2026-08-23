@@ -128,24 +128,14 @@ namespace Birko.Data.SQL.Connectors
                 && ex.Message.Contains("doesn't exist", StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <remarks>
+        /// CR-L183 removed a dead second operand here; TASK-211 replaced the remaining message substring
+        /// with the typed classifier the reader uses. TASK-277 finished the job: a missing table was still
+        /// answered with <c>DoInit()</c> and a <b>return</b>, so a write against a missing table reported
+        /// success. The shared <c>EnsureSchemaAndReport</c> now ensures the schema and reports the failure.
+        /// </remarks>
         private void MySQLConnector_OnException(Exception ex, string? commandText)
-        {
-            // The second operand — `Message.Contains("Table") && Message.Contains("doesn't exist")` — was
-            // dead: && binds tighter than ||, so it can only be true when the first operand is already
-            // true. Reduced to the single meaningful check (CR-L183).
-            //
-            // TASK-211: and that single check was still a message substring, so any "doesn't exist" error ran
-            // DoInit() and RETURNED — reporting success for a statement that never ran. Now the same typed
-            // test the reader uses, so the two cannot disagree about what "the table is missing" means.
-            if (!IsInitializing && IsMissingTableException(ex))
-            {
-                DoInit();
-            }
-            else
-            {
-                throw new Exception(commandText, ex);
-            }
-        }
+            => EnsureSchemaAndReport(ex, commandText);
 
         /// <inheritdoc />
         public override string QuoteIdentifier(string identifier)
