@@ -72,5 +72,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Schema\ISchemaBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Schema\ICollectionBuilder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Schema\IIndexBuilder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Schema\IndexBuilderSupport.cs" />
   </ItemGroup>
 </Project>
