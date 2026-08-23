@@ -1287,6 +1287,41 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     equivalent at all so it stays hand-written. Neither is reachable by anything in the tree, but a deletion
     that quietly drops a capability is indistinguishable later from one that never had it — write down the
     difference.
+- **A builder whose every method returns `this` has a silent option at every step — so it must honour a
+  declaration or refuse it, never accept one and do nothing.** TASK-274, closing the index family. Measured
+  2026-08-23: `IIndexBuilder.Sparse()` was `=> this` in **all six** schema builders, `WithProperty()` in all
+  six, and `SqlIndexManager.ToSqlIndexDefinition` dropped `Sparse`, `ExpireAfter` and `Properties` — the same
+  lost-flag defect TASK-245 fixed for `Unique` *in that very method*. Worst of all, the ElasticSearch,
+  RavenDB and CosmosDB builders had **no `Build()` override at all**: they accumulated fields and a
+  `Unique()` flag, held a live client, and inherited the interface's no-op default, so a migration read as
+  though it had declared an index and the database never got one. Six parts generalise:
+  - **A default no-op on an interface method is a silent-drop generator.** `IIndexBuilder.Build() { }` was
+    added so eagerly-creating providers need not implement it — and three providers that create *nothing*
+    inherited it and looked implemented. When a default implementation means "nothing to do here", check
+    every implementer for whom it means "not done".
+  - **Two doors onto one feature must give one answer.** `MongoDBIndexManager` honoured
+    `IndexDefinition.Sparse`; the migration builder discarded it, so the same declaration meant different
+    things depending on the door. Third instance after TASK-214 (Mongo's id) and TASK-244 (the transaction
+    doors) — and the tell is always that both doors look correct in isolation.
+  - **Where the semantics genuinely differ between backends, refuse rather than pick.** Mongo's sparse
+    *compound* index includes a document when **any** key is present; a SQL partial index over
+    `a IS NOT NULL AND b IS NOT NULL` requires **all** of them. `IIndexBuilder` does not say which
+    `Sparse()` means, so single-column is honoured (the two readings coincide) and compound is refused, with
+    the message naming `[CompositeIndex(..., WhereNotNull = ...)]` as the way to say it explicitly.
+  - **Reuse the machinery, and the guard comes with it.** SQL expresses `Sparse` through TASK-273's
+    `WhereNotNull` predicate, which means this lane can now carry predicates — and
+    `SqlIndexManager.CreateAsync` calls `CreateIndexSql` **directly**, bypassing the funnel that checks them.
+    `RequireExpressiblePredicates` therefore moved to `AbstractConnectorBase` and became public: one
+    producer, two callers, no second copy to drift. **When a lane gains a capability, re-check the guards
+    that capability implies** — TASK-273's own out-of-scope note had recorded this bypass a day earlier.
+  - **Refusing is affordable exactly when nothing calls it — so measure that first.** 0 uses of `.Sparse()`
+    and 0 of `.WithProperty(` across the framework, its tests and all 16 consumer repos. Contrast TASK-248
+    and TASK-256, where the same instinct was vetoed because the blast radius was real.
+  - **A live suite needs the right SERVER SHAPE, not merely a server.** Starting a standalone `mongod` to
+    cover the Mongo half made five untouched `MongoTransactionBoundaryLiveTests` fail — MongoDB transactions
+    require a replica set, which that suite's own first test says. The fix was `--replSet` plus
+    `rs.initiate()`, after which all 97 passed. A container that satisfies "is it up?" can still make a
+    green suite report a defect that is not there.
 - **A deliberately-unfixed gap is closed by the measurement it was waiting for — and the test that recorded
   it is inverted, not deleted.** TASK-265, filed by TASK-257 which had closed the identical hole on MSSql and
   explicitly refused to "unify" MySQL from symmetry. Measured on 8.4.11 before a line changed:
@@ -1510,6 +1545,38 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### Three migration index builders created nothing, and six dropped their flags (2026-08-23)
+
+TASK-274, the last of the index family. Filed as "the second lane drops `Sparse`", and the measurement found
+much more: `Sparse()` and `WithProperty()` were `=> this` in **all six** schema builders, and the
+ElasticSearch, RavenDB and CosmosDB builders had no `Build()` override at all — inheriting
+`IIndexBuilder.Build()`'s no-op default while accumulating fields, a `Unique()` flag and a live client. A
+migration declared an index there and nothing was ever created. Verified against live MongoDB 7 (as a
+single-node replica set), SQL Server 2022, PostgreSQL 16.15, MySQL 8.4.11 and on-disk SQLite with
+`BIRKO_REQUIRE_LIVE` set: **1,704 tests, 0 failed, 0 skipped** across eighteen suites, 24 new. The standing
+rule is in § Conventions. Six things worth carrying:
+
+- **The filed defect was the smallest part of it.** "Sparse is a no-op" was true; "three of six builders
+  create nothing at all" was the finding, and it only appeared because the task's first step was to read
+  every implementation rather than the one the title named.
+- **A default no-op on an interface method is a silent-drop generator.** `Build() { }` exists so
+  eagerly-creating providers need not implement it — and three providers that create nothing inherited it
+  and looked implemented.
+- **Two doors, one answer.** Mongo's index manager honoured `Sparse` while its migration builder discarded
+  it. Third instance after TASK-214 and TASK-244, and the tell is always that both doors look right alone.
+- **Where backends genuinely disagree, refuse rather than pick.** Mongo's sparse compound index includes a
+  document when ANY key is present; a SQL partial index requires ALL of them. Single-column is honoured
+  (the readings coincide), compound is refused, and the message names the explicit alternative.
+- **Gaining a capability means re-checking the guards it implies.** SQL expresses `Sparse` through
+  TASK-273's predicates, so this lane now carries predicates — and `SqlIndexManager.CreateAsync` bypasses
+  the funnel that validates them. `RequireExpressiblePredicates` moved to the base and became public: one
+  producer, two callers. TASK-273 had recorded that bypass as an out-of-scope note the day before, which is
+  why it was not re-discovered the hard way.
+- **⚠ A live suite needs the right server SHAPE.** Starting a standalone `mongod` made five untouched
+  transaction tests fail, because MongoDB transactions need a replica set — as that suite's own first test
+  states. `--replSet` + `rs.initiate()` fixed the fixture and all 97 passed. "Is it up?" is not "is it the
+  server these tests describe?".
 
 ### MySQL could not create a table with an unlengthed unique or primary string (2026-08-23)
 
