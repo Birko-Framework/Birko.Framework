@@ -24,17 +24,17 @@ namespace Birko.Data.SQL.Connectors
             OnException += MSSqlConnector_OnException;
         }
 
+        /// <remarks>
+        /// TASK-277. Two things were wrong here and both are now handled by the shared
+        /// <c>AbstractConnector.EnsureSchemaAndReport</c>. It answered a missing table with <c>DoInit()</c>
+        /// and a <b>return</b>, so a write against a missing table reported success and lost the row. And it
+        /// classified by raw message substring — <c>"Invalid object name"</c>, case-sensitively — which is
+        /// the very shape TASK-211 removed from the PostgreSQL and MySQL handlers and never got to here;
+        /// <see cref="IsMissingTableException"/> already tests SQL Server error <b>208</b> as well as that
+        /// wording, so routing through it is both narrower and case-correct.
+        /// </remarks>
         private void MSSqlConnector_OnException(Exception ex, string? commandText)
-        {
-            if (!IsInitializing && ex.Message.Contains("Invalid object name"))
-            {
-                DoInit();
-            }
-            else
-            {
-                throw new Exception(commandText, ex);
-            }
-        }
+            => EnsureSchemaAndReport(ex, commandText);
 
 
         /// <summary>
