@@ -137,22 +137,16 @@ namespace Birko.Data.SQL.Connectors
             return null;
         }
 
+        /// <remarks>
+        /// TASK-211 narrowed this from "any message containing 'does not exist'" to the typed classifier —
+        /// the wide version is what let <c>CreateView</c> report success while creating nothing (TASK-209,
+        /// whose first regression test passed against the unfixed code because of it). TASK-277 removed the
+        /// remaining half: even a genuinely missing relation was answered with <c>DoInit()</c> and a
+        /// <b>return</b>, so the statement was discarded and reported as successful. The shared
+        /// <c>EnsureSchemaAndReport</c> ensures the schema and then reports the failure.
+        /// </remarks>
         private void PostgreSQLConnector_OnException(Exception ex, string? commandText)
-        {
-            // TASK-211: the same narrowing, and for the same reason. This handler swallowed ANY message
-            // containing "does not exist" — it called DoInit() and RETURNED, so the caller was told the
-            // statement had succeeded. That is what let `CreateView` report success while creating nothing
-            // (measured by TASK-209, whose first regression test passed against the unfixed code because of
-            // it). Only a genuinely missing relation is a reason to run the lazy init and continue.
-            if (!IsInitializing && IsMissingTableException(ex))
-            {
-                DoInit();
-            }
-            else
-            {
-                throw new Exception(commandText, ex);
-            }
-        }
+            => EnsureSchemaAndReport(ex, commandText);
 
         /// <inheritdoc />
         public override DbConnection CreateConnection(PasswordSettings settings)
