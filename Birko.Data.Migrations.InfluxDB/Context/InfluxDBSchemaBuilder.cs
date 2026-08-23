@@ -133,6 +133,19 @@ namespace Birko.Data.Migrations.InfluxDB.Context
             public IIndexBuilder Sparse() => this;
 
             public IIndexBuilder WithProperty(string key, object value) => this;
+
+            /// <summary>
+            /// <b>Refuses (TASK-274).</b> InfluxDB has no custom indexes at all — the time-series structure
+            /// is implicit — so a declared index here can never be honoured. The chain's other methods stay
+            /// no-ops deliberately: refusing at the terminal reports the whole declaration once, rather than
+            /// failing on whichever knob the author happened to touch first.
+            /// </summary>
+            public void Build()
+                => throw Birko.Data.Patterns.Schema.IndexBuilderSupport.Unsupported(
+                    "InfluxDB",
+                    $"index '{_indexName}'",
+                    "InfluxDB has no custom indexes — the time-series structure is implicit",
+                    "Remove the declaration; tag and time semantics come from the measurement schema.");
         }
     }
 }
