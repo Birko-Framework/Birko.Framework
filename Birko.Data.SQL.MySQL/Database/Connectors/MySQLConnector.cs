@@ -297,7 +297,10 @@ namespace Birko.Data.SQL.Connectors
                 {
                     result.AppendFormat(" PRIMARY KEY");
                 }
-                if (field.IsUnique && !field.IsPrimary)
+                // TASK-275 — see AbstractField.UsesInlineUniqueConstraint. Behaviour-preserving here
+                // (MySQL treats NULLs as distinct either way); the shape changes so all four providers
+                // express a nullable unique column the same way.
+                if (field.UsesInlineUniqueConstraint && !field.IsPrimary)
                 {
                     result.AppendFormat(" UNIQUE");
                 }
