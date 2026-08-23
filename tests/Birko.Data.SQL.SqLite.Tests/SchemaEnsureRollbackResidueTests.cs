@@ -138,8 +138,14 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
             "the store must not skip schema-ensure after a schema-ensure that was rolled back — otherwise "
           + "the write below lands nowhere");
 
-        var read = await store.ReadAsync(x => x.Name == "second attempt");
-        read.Should().NotBeNull("the write reported success, so the row must be readable");
+        // Assert the ROW, not merely a non-null result. On a bulk store the bulk Read(filter) overload
+        // hides the single-result one and returns the COLLECTION (§ Conventions), so `NotBeNull` passes on
+        // an empty enumerable and proves nothing — that weaker version is what hid a real MSSql failure
+        // here. ReadFirstAsync would be the idiomatic single-row call and cannot be used: it emits a
+        // LIMIT, and on SQL Server a limit with no offset is Msg 153 (TASK-278).
+        var rows = await store.ReadAsync(x => x.Name == "second attempt", null, null, null, default);
+        rows.Should().ContainSingle("the write reported success, so the row must be there")
+            .Which.Name.Should().Be("second attempt");
     }
 
     /// <summary>
@@ -173,21 +179,25 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠ <b>Pins a DEFECT, not a contract — owned by TASK-277.</b> A write against a table that does not
-    /// exist reports SUCCESS on SQLite: <c>SqLiteConnector.OnException</c> answers "no such table" by
-    /// calling <c>DoInit()</c> and <b>not rethrowing</b>, and <c>DoInit</c> only raises the <c>OnInit</c>
-    /// event, which nothing in the framework subscribes to. So the statement is discarded, the table is not
-    /// created, and the caller is told it worked.
+    /// <b>TASK-277, inverted from the defect-pin it started as.</b> A write against a table that does not
+    /// exist must FAIL. It used to report success: <c>SqLiteConnector.OnException</c> answered "no such
+    /// table" by calling <c>DoInit()</c> and <b>not rethrowing</b>, so the statement was discarded, the
+    /// table was not created, and the caller was told it worked.
     /// </summary>
     /// <remarks>
-    /// This test asserts the measured behaviour so that the defect is recorded rather than believed, and so
-    /// TASK-277 has something to invert. It is deliberately NOT fixed here: TASK-244 owns the ordering, and
-    /// this is the swallow family (TASK-211 narrowed the same decision on PostgreSQL and MySQL and did not
-    /// touch SQLite). It matters because it is what turned this task's residue into Symbio's report — the
-    /// residue alone loses one operation, the swallow makes that operation answer 200.
+    /// This test was written under TASK-244 asserting the measured defect, so that it was recorded rather
+    /// than believed, and TASK-277 inverted it rather than writing a new one — the before/after pair on one
+    /// test is the record. All four providers now share
+    /// <c>AbstractConnector.EnsureSchemaAndReport</c>: the schema is still ensured (a consumer's
+    /// <c>OnInit</c> handler may create it, so the caller's next attempt can succeed) and the failure is
+    /// always reported. The equivalent live tests are in each provider suite.
+    /// <para>
+    /// It mattered because it is the half that turned TASK-244's residue into Symbio's report: the residue
+    /// alone loses one operation, this made that operation answer 200.
+    /// </para>
     /// </remarks>
     [Fact]
-    public async Task A_write_to_a_missing_table_reports_success_on_sqlite_TASK277()
+    public async Task A_write_to_a_missing_table_now_fails_instead_of_reporting_success()
     {
         var settings = NewDatabase();
         var store = AsyncStore(settings);
@@ -205,20 +215,51 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
         }
         SqliteConnection.ClearAllPools();
 
-        var guid = await store.CreateAsync(new Seed { Guid = Guid.NewGuid(), Name = "lost" });
+        Func<Task> write = async () => await store.CreateAsync(new Seed { Guid = Guid.NewGuid(), Name = "lost" });
 
-        guid.Should().NotBe(Guid.Empty, "the call reports success — this is the defect, not the contract");
+        (await write.Should().ThrowAsync<Exception>(
+            "a write that cannot be applied must fail loudly instead of being discarded"))
+            .Which.InnerException.Should().NotBeNull(
+                "InitException wraps as new Exception(commandText, ex), so the driver's exception is the inner one");
+
         TableExists(settings, "ResidueSeeds").Should().BeFalse(
-            "and DoInit() does not create the table either: it raises OnInit, which nothing in the framework "
-          + "subscribes to");
+            "and DoInit() still does not create the table — it raises OnInit, which nothing in the framework "
+          + "subscribes to. The point of the fix is the report, not a repair that never existed");
+    }
 
-        // The row is simply gone. Read through a connection of our own rather than through the store, whose
-        // read path would meet the same swallow and answer 'empty' either way.
-        using var check = new SqliteConnection(settings.GetConnectionString());
-        check.Open();
-        using var exists = check.CreateCommand();
-        exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'ResidueSeeds'";
-        Convert.ToInt32(exists.ExecuteScalar()).Should().Be(0,
-            "TASK-277: a write that cannot be applied must fail loudly instead of being discarded");
+    /// <summary>
+    /// The other half of TASK-277's decision, pinned so it is a choice rather than an oversight: a
+    /// <b>read</b> of a missing table still answers EMPTY, it does not throw.
+    /// </summary>
+    /// <remarks>
+    /// Reads never reach the <c>OnException</c> handler at all — <c>RunReaderCommandOn</c> catches
+    /// <c>IsMissingTableException</c> itself and yields break. TASK-211 owns whether that is the right
+    /// answer and kept it deliberately, with stated callers (lazy create-on-first-use, view-existence
+    /// probing, CR-M149). This test exists so that "the write throws, the read does not" reads as the
+    /// asymmetry it is, and so anyone tempted to unify the two has to delete an assertion that says why.
+    /// </remarks>
+    [Fact]
+    public async Task A_read_of_a_missing_table_still_answers_empty()
+    {
+        var settings = NewDatabase();
+        var store = AsyncStore(settings);
+
+        await store.InitAsync();
+        using (var connection = new SqliteConnection(settings.GetConnectionString()))
+        {
+            connection.Open();
+            using var drop = connection.CreateCommand();
+            drop.CommandText = "DROP TABLE \"ResidueSeeds\"";
+            drop.ExecuteNonQuery();
+        }
+        SqliteConnection.ClearAllPools();
+
+        Func<Task> read = async () => await store.ReadAsync(x => x.Name == "anything", null, null, null, default);
+
+        await read.Should().NotThrowAsync(
+            "a missing table reads as no rows rather than faulting — TASK-211's contract, unchanged by "
+          + "TASK-277, which only changed the WRITE side");
+        (await store.ReadAsync(x => x.Name == "anything", null, null, null, default))
+            .Should().BeEmpty("there is nothing to read");
     }
 }
