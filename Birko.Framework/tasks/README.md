@@ -30,7 +30,7 @@
 > STORY-044/045). Tracked as [[TASK-149]]. STORY-042 is `planned` and probably a pool too; its wording differs
 > so it was not matched mechanically.
 
-_Generated 2026-08-19 (partial refresh at [[TASK-275]]’s close: counts, EPIC-014 rows, TASK-275 done; earlier at [[TASK-278]]’s close: TASK-278 done; earlier at [[TASK-277]]’s close: TASK-277 done, 1 spawned ([[TASK-278]]); earlier at [[TASK-244]]’s close: TASK-244 done, 1 spawned ([[TASK-277]]); earlier at [[TASK-273]]’s close: TASK-273 done, 3 spawned ([[TASK-274]], [[TASK-275]], [[TASK-276]]); earlier at [[TASK-261]]’s close: counts, EPIC-014 rows; earlier at [[TASK-262]]’s close: 1 spawned; earlier at [[TASK-259]]’s close: 2 spawned; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-08-19 (partial refresh at [[TASK-265]]’s close: counts, EPIC-014 rows, TASK-265 done; earlier at [[TASK-275]]’s close: TASK-275 done; earlier at [[TASK-278]]’s close: TASK-278 done; earlier at [[TASK-277]]’s close: TASK-277 done, 1 spawned ([[TASK-278]]); earlier at [[TASK-244]]’s close: TASK-244 done, 1 spawned ([[TASK-277]]); earlier at [[TASK-273]]’s close: TASK-273 done, 3 spawned ([[TASK-274]], [[TASK-275]], [[TASK-276]]); earlier at [[TASK-261]]’s close: counts, EPIC-014 rows; earlier at [[TASK-262]]’s close: 1 spawned; earlier at [[TASK-259]]’s close: 2 spawned; earlier at [[TASK-257]]’s close: 6 spawned; earlier partial at [[TASK-263]]'s close: counts, in-progress, EPIC-014 rows; the drift preamble is from the 2026-08-18 `/roadmap --check` and was not re-run). Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
@@ -41,10 +41,10 @@ _Generated 2026-08-19 (partial refresh at [[TASK-275]]’s close: counts, EPIC-0
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
-| done         | 1     | 22      | 103   |
+| done         | 1     | 22      | 104   |
 | cancelled    | 0     | 0       | 1     |
 
-Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
+Todo by priority: **P0 0 · P1 26 · P2 92 · P3 9**
 
 <!-- Count note (2026-08-22, re-measured at TASK-273's close): 246 TASK files — todo 132, in-progress 1,
      review 10, blocked 2, done 99, cancelled 1; EPIC-014 alone is 139 files with 65 done. The EPIC-014 row
@@ -186,7 +186,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [ ] [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk 🔍 review · FEATURE-013
     - [x] [TASK-037](EPIC-013-reference-consumers/TASK-037-extract-backend-smoke-harness-consumer.md) Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
     - [ ] [TASK-038](EPIC-013-reference-consumers/TASK-038-birko-web-playground.md) Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
-- **EPIC-014** Code review — audit remediation — in-progress (69/141 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (70/141 tasks done)
   - **STORY-024** Critical findings — done (0/0) (done)
   - **STORY-025** High findings — done (0/0) (done)
   - **STORY-026** Medium findings — in-progress (0/0)
@@ -316,7 +316,7 @@ Todo by priority: **P0 0 · P1 31 · P2 92 · P3 9**
     - [x] [TASK-256](EPIC-014-code-review-remediation/TASK-256-postgres-copy-cannot-bind-a-utc-datetime.md) PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
     - [x] [TASK-257](EPIC-014-code-review-remediation/TASK-257-mssql-maps-unlengthed-strings-to-text.md) On MSSql an unlengthed `string` column becomes `TEXT`, so no predicate on it works · FEATURE-014
     - [ ] [TASK-264](EPIC-014-code-review-remediation/TASK-264-migrations-lose-declared-column-metadata.md) A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
-    - [ ] [TASK-265](EPIC-014-code-review-remediation/TASK-265-mysql-unique-primary-unlengthed-string.md) On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string still emits `LONGTEXT` · FEATURE-014
+    - [x] [TASK-265](EPIC-014-code-review-remediation/TASK-265-mysql-unique-primary-unlengthed-string.md) On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string still emits `LONGTEXT` · FEATURE-014
     - [ ] [TASK-266](EPIC-014-code-review-remediation/TASK-266-binary-and-wide-composite-index-keys.md) Index keys still wrong after TASK-257: a `byte[]` column, and a too-wide composite · FEATURE-014
     - [ ] [TASK-267](EPIC-014-code-review-remediation/TASK-267-verify-conventions-shadow-does-not-shadow.md) The project-local `verify-conventions` did not run at the close gate, again · FEATURE-014
     - [ ] [TASK-268](EPIC-014-code-review-remediation/TASK-268-field-type-mapping-polish.md) Two small SQL field-mapping gaps (`TimeOnly` width, `CharField.Lenght` null) · FEATURE-014

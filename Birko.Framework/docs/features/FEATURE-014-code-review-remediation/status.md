@@ -21,7 +21,7 @@ generated: 2026-08-19
 
 ## Build progress
 
-67 / 140 tasks done (1 awaiting sign-off).
+68 / 140 tasks done (1 awaiting sign-off).
 
 - [x] TASK-058 SqLiteConnector emits invalid AUTOINCREMENT DDL for non-primary-key increment fields (dual-key models)
 - [x] TASK-108 `Pbkdf2PasswordHasher.Verify` returns `true` for any password against an empty-segment hash
@@ -145,7 +145,7 @@ generated: 2026-08-19
 - [x] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
 - [x] TASK-263 There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable
 - [ ] TASK-264 A migration's declared column metadata is dropped on the way to the connector
-- [ ] TASK-265 On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string still emits `LONGTEXT`
+- [x] TASK-265 On MySQL a `[UniqueField]`/`[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created
 - [ ] TASK-266 Index keys still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit
 - [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again
 - [ ] TASK-268 Two small SQL field-mapping gaps found while typing MSSql's string columns

@@ -1287,6 +1287,35 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     equivalent at all so it stays hand-written. Neither is reachable by anything in the tree, but a deletion
     that quietly drops a capability is indistinguishable later from one that never had it — write down the
     difference.
+- **A deliberately-unfixed gap is closed by the measurement it was waiting for — and the test that recorded
+  it is inverted, not deleted.** TASK-265, filed by TASK-257 which had closed the identical hole on MSSql and
+  explicitly refused to "unify" MySQL from symmetry. Measured on 8.4.11 before a line changed:
+  `LONGTEXT UNIQUE` and `LONGTEXT PRIMARY KEY` are **both `ERROR 1170`** at `CREATE TABLE`, so an
+  `[UniqueField]`/`[PrimaryField]` unlengthed string meant the table could not be created **at all**;
+  `VARCHAR(255)` accepts both. `MySQLConnector.ConvertType` now reads `AbstractField.IsInIndexKey` instead of
+  the narrow `IsIndexed` — the one-word change the filing predicted, made only once the server had confirmed
+  it. Four parts generalise:
+  - **A filed gap should carry the measurement that would close it, and a test that fails when it does.**
+    TASK-257 left `IndexKeyPredicateScopeTests.A_unique_or_primary_unlengthed_string_is_NOT_yet_bounded_here`
+    asserting `LONGTEXT`, with "do not fix this test by switching the connector from symmetry — measure a live
+    8.4 first, then change both together" in its own failure message. That is what happened, and the test was
+    **inverted** in the same commit. A gap recorded as prose evaporates; a gap recorded as a passing test with
+    instructions is a task that closes itself when someone finally measures.
+  - **Re-scope a task before working it when a sibling has moved underneath it.** TASK-275 had already moved
+    every *nullable* `[UniqueField]` column onto a synthesised index, which set `IsIndexed` and bounded it
+    through the old branch. What remained was only the shapes that keep an **inline** constraint — a
+    `[RequiredField]` unique column and a `[PrimaryField]` one — so the task's own description of its scope
+    was stale by a day. Measuring the four shapes separately is what showed which two were still broken.
+  - **Bounding is only acceptable because the over-long write is REFUSED, and that rests on a session
+    setting.** Measured: 300 characters into `VARCHAR(255)` is `ERROR 1406` with **0 rows stored**, because
+    `sql_mode` carries `STRICT_TRANS_TABLES` (the 8.x default, which this framework never changes). Without
+    it MySQL truncates with a warning — and a truncated value makes a UNIQUE constraint quietly *weaker* than
+    declared, the exact outcome TASK-248 rejected prefix indexes to avoid. Same shape as TASK-257's
+    `ANSI_WARNINGS` note on SQL Server: the loud refusal is load-bearing, so it is pinned by its own test.
+  - **Assert the constraint from the catalogue, not from the absence of an exception.** `CreateTable`
+    swallows and records, so "it did not throw" would have passed against a table with no constraint at all;
+    these tests read `information_schema.statistics` for a non-unique-zero index and then prove enforcement
+    with a duplicate insert.
 - **A constraint whose SHAPE cannot express the rule must change shape — and the change is scoped to the
   declarations that are actually broken.** Sixth member of the index family (TASK-275), and the one that
   completes it: `[UniqueField]` produces no index at all, so TASK-273's predicate could not reach it.
@@ -1481,6 +1510,33 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### MySQL could not create a table with an unlengthed unique or primary string (2026-08-23)
+
+TASK-265, filed by TASK-257 in August and closed once the live measurement it was waiting for existed.
+`MySQLConnector.ConvertType` read the narrow `IsIndexed`, which `LoadIndexes` sets only for
+`[IndexedField]`/`[CompositeIndex]` — so an inline `UNIQUE` or `PRIMARY KEY` over an unlengthed string emitted
+`LONGTEXT`, and MySQL cannot use a BLOB/TEXT column in a key without a key length. Verified on live MySQL
+8.4.11 plus the other three providers with `BIRKO_REQUIRE_LIVE` set: **1,433 tests, 0 failed, 0 skipped**
+across eighteen suites, 3 new. The standing rule is in § Conventions. Five things worth carrying:
+
+- **The task was re-scoped before it was worked, and it had shrunk by a day.** TASK-275 (closed hours
+  earlier) moved every *nullable* `[UniqueField]` column onto a synthesised index, which bounded it through
+  the existing branch. Measuring the four shapes separately showed the two that were still broken: a
+  `[RequiredField]` unique column and a `[PrimaryField]` string. Both `ERROR 1170`.
+- **The one-word fix was predicted in the filing and still not made until measured.** TASK-257 wrote down
+  that `field.IsIndexed → field.IsInIndexKey` was "very likely" the answer and refused to do it, because
+  this epic's recurring defect is a change believed correct on a provider nobody ran. The prediction was
+  right; making it wait cost nothing and would have caught it had it been wrong.
+- **The test that recorded the gap was inverted, not deleted.** It asserted `LONGTEXT` and said in its own
+  failure message not to "fix" it by flipping the connector. A gap recorded as prose evaporates; a gap
+  recorded as a passing test with instructions closes itself when somebody finally measures.
+- **The over-long write is refused, not truncated — measured, and pinned.** `ERROR 1406`, 0 rows, because
+  `sql_mode` carries `STRICT_TRANS_TABLES`. Without it MySQL truncates with a warning, which would make the
+  UNIQUE constraint quietly weaker than declared. Same load-bearing session setting as TASK-257's
+  `ANSI_WARNINGS` on SQL Server.
+- **Mutation: reverting to the narrow flag fails 5 of 97** — the two inverted theory cases and all three new
+  live tests — while the other three providers stay green, since they never read this branch.
 
 ### A unique column that was allowed to be empty rejected the second empty row (2026-08-23)
 
