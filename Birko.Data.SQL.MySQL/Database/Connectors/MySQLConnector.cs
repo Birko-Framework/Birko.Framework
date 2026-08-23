@@ -258,11 +258,18 @@ namespace Birko.Data.SQL.Connectors
                     // no declared index over an unlengthed string had ever been built there either. MSSql now
                     // bounds such a column too, reading the wider AbstractField.IsInIndexKey.
                     //
-                    // This branch deliberately still reads the narrower IsIndexed, so MySQL has the same hole
-                    // MSSql just closed: [UniqueField]/[PrimaryField] on an unlengthed string emits
-                    // `LONGTEXT UNIQUE`, which is ERROR 1170 at CREATE TABLE. Switching to IsInIndexKey is a
-                    // one-word change, but it alters DDL on this provider and needs a live 8.4 measurement
-                    // first -- it is filed rather than guessed. Do not "unify" it from symmetry.
+                    // TASK-265 closed that gap here too, and only after the live measurement TASK-257
+                    // insisted on. Measured on 8.4.11: `LONGTEXT UNIQUE` and `LONGTEXT PRIMARY KEY` are both
+                    // ERROR 1170 at CREATE TABLE, while VARCHAR(255) accepts both; a 300-character write into
+                    // the bounded column is ERROR 1406 with 0 rows stored, so the constraint is not quietly
+                    // weakened (sql_mode carries STRICT_TRANS_TABLES, the 8.x default -- without it MySQL
+                    // truncates with a warning instead, which WOULD weaken it).
+                    //
+                    // So this now reads the wider IsInIndexKey, matching MSSql. The scope that remained when
+                    // it was made is worth recording: TASK-275 had already moved every NULLABLE [UniqueField]
+                    // column onto a synthesised index, which set IsIndexed and bounded it through the branch
+                    // below. What was still broken here was the shapes that keep an inline constraint -- a
+                    // [RequiredField] unique column and a [PrimaryField] one.
                     //
                     // 7 live consumer entities (Symbio's docnumber/email UNIQUE composites) declare exactly
                     // this shape and work correctly on PostgreSQL today -- so refusing the declaration
@@ -274,7 +281,7 @@ namespace Birko.Data.SQL.Connectors
                     // makes the constraint WEAKER than declared -- it rejects two genuinely different values
                     // whose first n characters match. A bounded column refuses the over-long write instead,
                     // which is a loud, correct failure rather than a quiet, wrong constraint.
-                    else if (field.IsIndexed)
+                    else if (field.IsInIndexKey)
                     {
                         return string.Format("VARCHAR({0})", IndexedStringColumnLength);
                     }
