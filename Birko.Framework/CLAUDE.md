@@ -931,6 +931,52 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **A guard declared in `Birko.Data.SQL` is tested in `Birko.Data.SQL.Tests`, not only from its
     consumer's suite.** TASK-257's close gate caught the identical omission for `AbstractField.IsInIndexKey`;
     a guard whose only coverage lives downstream is one a downstream cleanup can delete silently.
+- **A statement the server refuses inside a transaction is a provider limit the framework must ROUTE
+  AROUND, and the statements in one family will not all need the same treatment — one may be fixable in
+  place and its neighbour not at all.** TASK-281. `SqlMigrationSettings.UseTransaction` defaults to `true`,
+  and the runner therefore opens a transaction around every migration — so any statement PostgreSQL or
+  TimescaleDB refuses in a transaction block could only ever fail through the only path a real migration
+  takes. Measured on TimescaleDB 2.29.2 / PostgreSQL 16.15, both continuous-aggregate statements raise
+  **SQLSTATE `25001`**, and the two need opposite answers. Six parts generalise:
+  - **Measure the whole family before designing, because the members diverge.**
+    `CREATE MATERIALIZED VIEW … WITH (timescaledb.continuous)` refuses only because it performs an *initial
+    refresh*, so **`WITH NO DATA` fixes it in place**; `refresh_continuous_aggregate()` has no such escape
+    and **cannot be made transactional at all**, so it is refused with a message instead. Treating them
+    alike — either both refused, or both "fixed" — would have shipped a needless limitation or a statement
+    that still fails.
+  - **The idiomatic third mechanism is the one to look for, and its absence is what makes a limit look
+    fatal.** The plan concluded a transactional migration *could never populate an aggregate*, which was
+    false: `add_continuous_aggregate_policy` **is** transaction-safe (measured, job survives the commit),
+    and a refresh *policy* — not a manual refresh — is how TimescaleDB intends an aggregate to be kept
+    current. The framework simply had no emitter for it. **When a fix appears to cripple a feature, check
+    whether the provider offers a different mechanism before accepting the limit** — and if it does, the
+    emitter for it belongs in the same change, because documenting a remedy the framework cannot perform is
+    TASK-263's *"named an escape hatch that did not open"*.
+  - **Emit the safe form UNCONDITIONALLY, not "only when a transaction is present".** The conditional
+    version makes one migration yield a populated or an empty view depending on a settings flag, with
+    nothing at the call site saying which — § TASK-274's *two doors onto one feature must give one answer*.
+    Uniformity costs the non-transactional caller its populated view and buys a rule that can be held in
+    the head; the cost was affordable because it was **measured at 0 callers across 16 consumer repos**
+    before it was chosen.
+  - **A refusal here is justified by ROUTING, never by the server's message being poor.** PostgreSQL's
+    *"refresh_continuous_aggregate() cannot run inside a transaction block"* is excellent and needs no
+    improvement. What the server cannot know is `UseTransaction`, or that this framework has a policy
+    emitter — so the guard's whole value is naming **both** doors (§ SH-H037 / TASK-215). Do not write a
+    doc comment claiming the underlying error is unclear; that is an overclaim, and the guard does not need
+    it.
+  - **Stamp the measured version on any guard that encodes a provider restriction.** If TimescaleDB ever
+    relaxes this, the guard becomes a **false refusal** — which this codebase rates worse than the hole
+    (`PredicateScope`: *a false refusal breaks working code*). Recording *measured on 2.29.2 / PG 16.15*
+    makes that findable instead of mysterious, the catalogue-drift rule from TASK-261 applied to a
+    behaviour rather than to a column.
+  - **Cover the EXECUTION MODEL, not only the SQL — and check which table your fixture resets.** Every
+    prior test of these emitters ran the statement on a fresh connection in autocommit, so the suite tested
+    the SQL thoroughly and the execution model not at all; the defect lived entirely in the gap. Compare
+    TASK-246, where a feature worked in the branch nobody used. **And the runner-path fixture has its own
+    trap**: resetting the wrong version-table name (`__BirkoMigrations` for the real `__Migrations`) let a
+    recorded version survive, so `Migrate()` found nothing to do and **returned success having created
+    nothing** — a false green in one ordering and a false red in another. Run such a class in isolation
+    **twice** before believing it; once is indistinguishable from first-run luck.
 - **Per-caller, per-operation state never goes on a process-wide cached object — and when the last user of
   such a mechanism moves off it, the mechanism goes too.** Connectors are cached process-wide per
   (type, settings id) by `DataBase.GetConnector`, and three separate features have written one caller's state
@@ -1614,6 +1660,49 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A continuous aggregate could not be created through the migration runner at all (2026-08-24)
+
+TASK-281, spawned by `code-review` at TASK-255's close gate hours earlier and rated the most valuable thing
+that review produced. `SqlMigrationSettings.UseTransaction` defaults to `true`, and both continuous-aggregate
+statements raise **SQLSTATE `25001`** inside a transaction block — so through the only path a real migration
+takes, `CreateContinuousAggregate` and `RefreshContinuousAggregate` could only ever fail. Verified against
+live **TimescaleDB 2.29.2 / PostgreSQL 16.15** with `BIRKO_REQUIRE_LIVE` set: **71 passed, 0 failed,
+0 skipped** (61 → 71, +10). The standing rule is in § Conventions. Seven things worth carrying:
+
+- **The task was planned AFTER Step 0, not before it** — its own criterion 1 said the hypothesis might be
+  false, and the finding came from a reviewer that had already been wrong once in the same pass. Planning
+  first would have invited the plan to assume the defect. It was confirmed, and the same probes priced both
+  remedies.
+- **The two statements needed opposite answers.** `CREATE … WITH (timescaledb.continuous)` refuses only
+  because it performs an initial refresh, so `WITH NO DATA` fixes it in place; `refresh_continuous_aggregate`
+  has no such escape and is refused with a message instead. Treating the family alike would have shipped
+  either a needless limitation or a statement that still fails.
+- **The grill found the mechanism the plan had missed, and it changed the severity.** The plan concluded a
+  transactional migration could *never* populate an aggregate. False: `add_continuous_aggregate_policy` **is**
+  transaction-safe, and a refresh *policy* is how TimescaleDB intends an aggregate to be kept current — the
+  framework simply had no emitter. It was added in the same change, because documenting a remedy the
+  framework cannot perform is TASK-263's *"named an escape hatch that did not open"*.
+- **`WITH NO DATA` is emitted unconditionally**, not only inside a transaction — § TASK-274's *two doors, one
+  answer*. The cost (an empty view until populated) was measured at **0 callers across 16 consumer repos**
+  before it was chosen, and is asserted by a test so nobody "fixes" the emptiness and silently reintroduces
+  `25001`.
+- **The refusal is justified by routing, not by the server's message being poor.** PostgreSQL's own error is
+  excellent; what it cannot know is `UseTransaction` or this framework's policy emitter, so the guard names
+  **both** doors — and the opt-out has its own end-to-end test, per § SH-H037, because a guard whose escape
+  hatch does not open is a wall wearing a door's label.
+- **The prover was watched red before a line changed**, with the failure landing on the aggregate statement
+  rather than an earlier one — which is what probe F (`create_hypertable` is transaction-safe) was measured
+  for. Mutations: drop `WITH NO DATA` → 5 red; disable the refusal → 1; drop `RegclassLiteral` from the new
+  emitter → 3, including the **live** policy test, since a bare PascalCase view folds and the policy cannot
+  find its aggregate.
+- **⚠ A fixture fault, and a wrong prediction, both recorded.** `Reset()` dropped `__BirkoMigrations` when the
+  real version table is `__Migrations`, so a recorded version survived, `Migrate()` found nothing to do and
+  **returned success having created nothing** — false green in one ordering, false red in another (§ TASK-259).
+  Fixed, then proven by running the class green in isolation *twice*. And the plan's claim that CR-H071's two
+  tests would stay green as untouched controls was **false**: they assert the semicolon adjacent to
+  `GROUP BY bucket`, and `WITH NO DATA` now sits between. The assertions were re-expressed to preserve the
+  dangling-comma intent, not weakened.
 
 ### No continuous aggregate over a framework-created table could ever be built (2026-08-24)
 
