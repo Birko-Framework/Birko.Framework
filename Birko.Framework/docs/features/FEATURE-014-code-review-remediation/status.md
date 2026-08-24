@@ -140,7 +140,10 @@ generated: 2026-08-19
 - [ ] TASK-252 Six latent per-provider gaps found while closing the index-DDL thread
 - [x] TASK-253 The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel
 - [ ] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
-- [ ] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
+- [x] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
+- [ ] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact
+- [ ] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept
+- [ ] TASK-281 A continuous aggregate cannot be created or refreshed inside a transaction — so it may never have worked through the runner at all
 - [x] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it
 - [x] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works**
 - [x] TASK-263 There is no way to persist an instant with its offset — the timezone-aware column type is mapped but unreachable

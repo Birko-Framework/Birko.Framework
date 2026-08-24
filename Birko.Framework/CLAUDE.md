@@ -882,6 +882,55 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     — the seam `Table.GetSelectFields(…, Func<string,string>? quoteTable)` already demonstrates. And
     `SupportsSchemas` would be genuinely two-sided: true on PostgreSQL and MSSql, false on SQLite and on
     MySQL, where `CREATE SCHEMA` creates a **database** (measured: it produced a sibling of `birkoview`).
+- **A bare-emitted identifier has no enclosure, so its containment is REFUSAL — the third mechanism, and the
+  guard that provides it is separated from its sibling by the MESSAGE, not by the check.** Eleventh instance
+  of the identifier family (TASK-255), and the one that names the mechanism the previous ten kept implying.
+  `BuildContinuousAggregateSql` hardcoded its bucketing column as the literal `time` — CR-H070's defect,
+  fixed in `BuildCompressionPolicySql` four methods above and left in this one by the very commit that fixed
+  it (`531d816` edited the defect line while naming the finding). No framework-created table can have such a
+  column, since column definitions are emitted bare and every Birko entity is PascalCase, so **no continuous
+  aggregate over a framework-created table could ever be built** — measured latent: 0 of 16 consumer repos
+  call it, 1 compiles it. Six parts generalise:
+  - **Ask which of FOUR positions the argument occupies, never which sibling it resembles.** This file now
+    holds all four: a `regclass` inside a literal (`RegclassLiteral`), a `name` inside a literal compared
+    against a catalogue column (`CatalogueNameLiteral`, pre-folded), a real *table* identifier
+    (`QualifiedIdentifier`, quoted), an expression fragment (`EscapeLiteral` only) — and now a real *column*
+    identifier, which § *quote tables, never columns* requires to be **bare**. Bare means no quote character
+    encloses it, so escaping contains nothing and the only containment left is a whitelist that refuses.
+    **Measured, not reasoned**: rendering it with `QuoteIdentifier` fails the live tests, because
+    `CreateBaseTable` emits `(Ts timestamptz …)` bare inside a quoted table and PostgreSQL stores `ts`.
+  - **`DataBase.ValidateColumnIdentifier` shares `_unqualifiedIdentifier` with
+    `ValidateIndexFieldIdentifier` and differs only in what it says.** Reusing the index guard was the
+    obvious move and it ships a refusal telling a migration author about `CREATE INDEX` and an index column
+    list — § SH-H037/TASK-215's *"a refusal names the door THIS caller has"*, the rule about an async twin
+    naming `DeleteAll()`. So the **regex is the shared thing and the wording is the separate thing**, and
+    both halves are asserted: one test proves the two guards accept and reject identically, another proves
+    the message does not say "index". Pointing one at the other reds exactly the second.
+  - **The tier is honest about what it cannot do.** This is the *weaker* fallback, used where there is no
+    entity type to resolve against (`TimescaleDBMigration` holds a table name only), so it cannot fix a
+    `[NamedField]` remapping. What it guarantees is that a bare identifier reaches `CommandText` — every
+    payload carries a space, operator, parenthesis or separator — and that a bare identifier naming no
+    column is *a wrong answer that reports itself*. Do not oversell a whitelist as resolution.
+  - **A default the COMPILER can forbid beats a default a test forbids.** Placing the required parameter
+    *before* the existing optional one makes `timeColumn = "time"` a `CS1737` — not expressible at all. So
+    the reflection pin on `HasDefaultValue` is **defensive, not witnessed** (§ TASK-261), guarding a future
+    reordering; say which, or the next reader deletes it as dead weight. **The cost is the other half:**
+    every parameter here is `string`, so a pre-existing *5*-argument call fails loudly (`CS7036`) while a
+    *6*-argument one **silently rebinds**. Measured on this very change — 6 of 8 call sites failed loudly,
+    **2 rebound silently**. Affordable only because the blast radius was 0 non-test callers; it is not a
+    manoeuvre to copy where consumers exist.
+  - **Measure a precedent's MOTIVATION, not its shape.** Criterion-shaped reasoning said "follow the
+    sibling exactly", and the sibling defaults `orderByColumn` to `"time"`. `git show 531d816` shows the
+    parameter *did not exist* before that commit, so the default was a **source-compatibility artefact**,
+    not a judgement that the value is good — and there was nothing left to stay compatible with. The file's
+    convention for a *time-dimension column* is the opposite and older: `CreateHypertable` /
+    `CreateHypertableWithSpace` require theirs, in four signatures. **Two conventions in one file split by
+    what kind of argument it is**, so "imitate the neighbour" is only safe once you know which neighbour.
+    The sibling's own default is the same defect and is owned by [[TASK-279]] rather than fixed from
+    symmetry.
+  - **A guard declared in `Birko.Data.SQL` is tested in `Birko.Data.SQL.Tests`, not only from its
+    consumer's suite.** TASK-257's close gate caught the identical omission for `AbstractField.IsInIndexKey`;
+    a guard whose only coverage lives downstream is one a downstream cleanup can delete silently.
 - **Per-caller, per-operation state never goes on a process-wide cached object — and when the last user of
   such a mechanism moves off it, the mechanism goes too.** Connectors are cached process-wide per
   (type, settings id) by `DataBase.GetConnector`, and three separate features have written one caller's state
@@ -1565,6 +1614,45 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### No continuous aggregate over a framework-created table could ever be built (2026-08-24)
+
+TASK-255, filed by TASK-253's audit of the same file. `BuildContinuousAggregateSql` hardcoded its bucketing
+column as the literal `time` — CR-H070's defect, fixed in `BuildCompressionPolicySql` four methods above and
+left here by **the very commit that fixed it**: `531d816` edited the defect line while naming the finding.
+No framework-created table can have such a column, since column definitions are emitted bare and every Birko
+entity is PascalCase. Verified against live **TimescaleDB 2.29.2 / PostgreSQL 16.15** with
+`BIRKO_REQUIRE_LIVE` set: `Birko.Data.Migrations.TimescaleDB.Tests` **61 passed** (56 → 61) and
+`Birko.Data.SQL.Tests` **653 passed** (+20), 0 failed, 0 skipped, no new nullable warning. The standing rule
+is in § Conventions. Six things worth carrying:
+
+- **Latent, and said so up front.** 0 of 16 consumer repos call it; 1 (`Birko.Sandbox`) merely imports the
+  `.projitems`. The fix removes a trap rather than repairing damage — TASK-246 had to be corrected after the
+  fact for claiming live impact it did not have, so the number came first.
+- **The containment mechanism is REFUSAL, and that is new.** A column reference in real identifier position
+  must be emitted **bare**, so no quote character encloses it and escaping contains nothing. The only
+  containment left is a whitelist — `DataBase.ValidateColumnIdentifier`, sharing `_unqualifiedIdentifier`
+  with its index sibling and differing **only in the message**, because the index guard's wording would tell
+  a migration author about `CREATE INDEX` (§ SH-H037/TASK-215). Pointing one at the other reds exactly one
+  test; the other 19 stay green, which is the claim.
+- **Bare is witnessed, not argued.** Rendering with `QuoteIdentifier` fails both live tests: the fixture
+  creates `(Ts timestamptz …)` bare inside a quoted table, so PostgreSQL stores `ts`. TASK-129 got this
+  exact question backwards by reasoning from one sink, which is why it was measured.
+- **Two conventions live in one file, split by what kind of argument it is.** The sibling's
+  `orderByColumn = "time"` looked like the precedent to copy — until `git show 531d816` showed the parameter
+  did not exist before that commit, so the default was a **source-compatibility artefact**, not a judgement.
+  The older convention for a *time-dimension column* is the opposite: `CreateHypertable` requires it, in four
+  signatures. **Measure a precedent's motivation, not its shape.** The sibling's default is the same defect
+  and is spawned as [[TASK-279]] rather than fixed from symmetry.
+- **A default the compiler can forbid beats one a test forbids.** Placing the required parameter before the
+  existing optional one makes a default `CS1737` — not expressible. So the reflection pin is **defensive,
+  not witnessed**, and is labelled that way. The cost is the other half, measured on this change: 6 of 8
+  call sites failed loudly (`CS7036`) and **2 rebound silently**, because every parameter is `string`.
+  Affordable at 0 non-test callers; not a manoeuvre to copy where consumers exist.
+- **Five mutations, disjoint.** Restore the literal → 3 red (both live + the rendering pin) with the CR-H071
+  pair and the literal-`time` test **green**, which is the discrimination control the task demanded. Drop the
+  guard → 3. Quote instead of bare → 3. Give the parameter a default → **does not compile**. Delegate the new
+  guard to the index one → 1, the message test alone.
 
 ### Three migration index builders created nothing, and six dropped their flags (2026-08-23)
 
