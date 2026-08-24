@@ -105,6 +105,15 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// <see cref="BuildContinuousAggregateSql"/>'s <c>selectClause</c> and <c>groupByClause</c>. TASK-260
     /// owns replacing them with a structured surface.
     /// </para>
+    /// <para>
+    /// <b>A fourth position: a bare column reference, contained by REFUSAL rather than by escaping</b>
+    /// (TASK-255). <see cref="BuildContinuousAggregateSql"/>'s <c>timeColumn</c> sits in real identifier
+    /// position inside the view body, so it must be emitted bare to resolve the folded column that
+    /// bare-column <c>CREATE TABLE</c> creates — which means no quote character encloses it and escaping
+    /// would contain nothing. It is guarded by
+    /// <see cref="Birko.Data.SQL.DataBase.ValidateColumnIdentifier"/> instead. So this class now has three
+    /// containment mechanisms, not two: literal escaping, identifier quoting, and refusal.
+    /// </para>
     /// </remarks>
     public abstract class TimescaleDBMigration : Data.Migrations.IMigration
     {
@@ -188,6 +197,16 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// (CR-H070: 'time'/'device_id' fail on any table without a literal device_id column and are
         /// wrong for most schemas). orderby defaults to the conventional 'time'; segmentby is opt-in
         /// and omitted when not supplied.
+        /// <para>
+        /// <b>CR-H070 is now closed in both methods</b> — <see cref="BuildContinuousAggregateSql"/> kept the
+        /// hardcoded bucketing column until TASK-255, with this very comment sitting four lines above it.
+        /// <b>One half of the finding remains here:</b> the <c>orderByColumn = "time"</c> default was added
+        /// by commit <c>531d816</c> to keep then-existing callers compiling, and no framework-created table
+        /// can have a column of that name — so it is a default that cannot work, which TASK-279 owns.
+        /// Its value is an expression fragment (<c>ts DESC</c> is legitimate), so it is escaped for its
+        /// literal and deliberately <i>not</i> identifier-validated: do not "unify" it with
+        /// <see cref="BuildContinuousAggregateSql"/>'s column guard.
+        /// </para>
         /// </summary>
         /// <remarks>
         /// <b>The table appears twice, needing two different treatments</b>, which is why this method is the
@@ -257,10 +276,10 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// <summary>
         /// Creates a continuous aggregate.
         /// </summary>
-        protected virtual void CreateContinuousAggregate(IMigrationContext context, string viewName, string sourceTable, string timeBucket, string selectClause, string groupByClause = "")
+        protected virtual void CreateContinuousAggregate(IMigrationContext context, string viewName, string sourceTable, string timeBucket, string timeColumn, string selectClause, string groupByClause = "")
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildContinuousAggregateSql(connector, viewName, sourceTable, timeBucket, selectClause, groupByClause));
+            ExecuteScript(connection, transaction, BuildContinuousAggregateSql(connector, viewName, sourceTable, timeBucket, timeColumn, selectClause, groupByClause));
         }
 
         /// <summary>
@@ -280,20 +299,42 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// TASK-260 owns.
         /// </para>
         /// <para>
-        /// <b>The bucketing column is still the hardcoded literal <c>time</c></b> — CR-H070's defect, left
-        /// unfixed in this method when its sibling above was corrected. No framework-created table has such a
-        /// column, since column definitions are emitted bare and every Birko entity is PascalCase. TASK-255
-        /// owns it; this method's identifier handling is fixed here regardless.
+        /// <b><paramref name="timeColumn"/> is a fourth treatment again, and it is emitted BARE</b> (CR-H070,
+        /// TASK-255). It is a column reference in real identifier position inside the view body, so neither
+        /// of the literal treatments applies: <see cref="AbstractConnectorBase.CatalogueNameLiteral"/> is for
+        /// a <c>name</c> compared textually against a catalogue column, and escaping alone contains nothing
+        /// outside quotes. Bare is also what resolves — <c>CreateTable</c> emits column definitions bare, so
+        /// PostgreSQL stores them folded, and a quoted <c>"Ts"</c> would not match the stored <c>ts</c>.
+        /// </para>
+        /// <para>
+        /// Bare removes the accidental containment quoting was providing, so the argument is guarded by
+        /// <see cref="Birko.Data.SQL.DataBase.ValidateColumnIdentifier"/> — the sanctioned weaker tier, since
+        /// this class holds a table name and no entity type. It refuses every measured payload but cannot fix
+        /// a <c>[NamedField]</c> remapping, and it rejects a <c>Table.</c> qualifier (this statement
+        /// introduces no alias).
+        /// </para>
+        /// <para>
+        /// <b>Limit, recorded rather than fixed:</b> a hand-created <i>quoted mixed-case</i> column is
+        /// unreachable through this emitter, because bare folds. Same family as
+        /// <see cref="AbstractConnectorBase.CatalogueNameLiteral"/>'s documented limit; with no caller needing
+        /// it, an opt-out would be speculative API.
+        /// </para>
+        /// <para>
+        /// <b>It is required, with no default</b>, unlike <see cref="BuildCompressionPolicySql"/>'s
+        /// <c>orderByColumn</c>. That default was a source-compatibility artefact of commit
+        /// <c>531d816</c> — the parameter did not exist before it — not a judgement that <c>"time"</c> is a
+        /// good value; no framework-created table can have such a column. This method's convention instead
+        /// follows <see cref="BuildCreateHypertableSql"/>, where a time-dimension column is required.
         /// </para>
         /// </remarks>
-        internal static string BuildContinuousAggregateSql(AbstractConnector connector, string viewName, string sourceTable, string timeBucket, string selectClause, string groupByClause = "")
+        internal static string BuildContinuousAggregateSql(AbstractConnector connector, string viewName, string sourceTable, string timeBucket, string timeColumn, string selectClause, string groupByClause = "")
         {
             var groupBySql = string.IsNullOrEmpty(groupByClause) ? "" : $", {groupByClause}";
             return $@"
                 CREATE MATERIALIZED VIEW {connector.QualifiedIdentifier(viewName)}
                 WITH (timescaledb.continuous) AS
                 SELECT
-                    time_bucket('{SqlLiteral.EscapeLiteral(timeBucket)}', time) AS bucket{groupBySql},
+                    time_bucket('{SqlLiteral.EscapeLiteral(timeBucket)}', {Birko.Data.SQL.DataBase.ValidateColumnIdentifier(timeColumn, nameof(timeColumn))}) AS bucket{groupBySql},
                     {selectClause}
                 FROM {connector.QualifiedIdentifier(sourceTable)}
                 GROUP BY bucket{groupBySql};
