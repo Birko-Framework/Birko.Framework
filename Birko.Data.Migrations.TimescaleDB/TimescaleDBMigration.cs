@@ -35,9 +35,13 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// </description></item>
     /// <item><description>
     /// <b>A real identifier</b> — <c>ALTER TABLE {table}</c>, <c>CREATE MATERIALIZED VIEW {view}</c>,
-    /// <c>FROM {table}</c> — goes through <see cref="AbstractConnectorBase.QuoteIdentifier"/> only, with no
-    /// literal escaping and no folding. § Conventions: quote table identifiers, never quote column
-    /// identifiers.
+    /// <c>FROM {table}</c> — goes through <see cref="AbstractConnectorBase.QualifiedIdentifier"/> only, with
+    /// no literal escaping and no folding. § Conventions: quote table identifiers, never quote column
+    /// identifiers. <b>Not <see cref="AbstractConnectorBase.QuoteIdentifier"/></b>, which quotes its whole
+    /// argument as ONE identifier — this text said so until TASK-281's close gate, and an author following it
+    /// would reintroduce TASK-262's regression, where <c>reporting.evts</c> became a request for a single
+    /// table whose name contains a period (<c>42P01</c>, which
+    /// <c>PostgreSQLConnector.IsMissingTableException</c> can swallow).
     /// </description></item>
     /// <item><description>
     /// <b>An expression fragment</b> — <c>compress_orderby</c>, <c>compress_segmentby</c>, the time bucket,
@@ -51,7 +55,30 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// <b>These statements run on the migration's own connection and transaction, deliberately.</b> They do
     /// not go through <c>AbstractConnector.DoDdlCommand</c>, so they neither join nor are suppressed off an
     /// ambient boundary — a migration owns its transaction. PostgreSQL's DDL <i>is</i> transactional, so a
-    /// migration that fails rolls its hypertable conversion back with it.
+    /// migration that fails rolls its hypertable conversion back with it. <c>create_hypertable</c> and the
+    /// policy functions are all transaction-safe, measured.
+    /// </para>
+    /// <para>
+    /// <b>⚠ TWO statements are the exception, and the sentence above is not a blanket guarantee</b>
+    /// (TASK-281, measured on TimescaleDB 2.29.2 / PostgreSQL 16.15). Both raise SQLSTATE <c>25001</c> inside
+    /// a transaction block:
+    /// <list type="bullet">
+    /// <item><description>
+    /// <c>CREATE MATERIALIZED VIEW … WITH (timescaledb.continuous)</c> — because without <c>WITH NO DATA</c>
+    /// it performs an initial refresh. <see cref="BuildContinuousAggregateSql"/> therefore always emits
+    /// <c>WITH NO DATA</c>, and the view is empty until populated.
+    /// </description></item>
+    /// <item><description>
+    /// <c>refresh_continuous_aggregate()</c> — which has no such escape and cannot be made transactional at
+    /// all, so <see cref="RefreshContinuousAggregate"/> refuses inside a transaction and names the two ways
+    /// out.
+    /// </description></item>
+    /// </list>
+    /// The transaction-safe way to keep an aggregate current is therefore
+    /// <see cref="AddContinuousAggregatePolicy"/>, whose <c>add_continuous_aggregate_policy</c> IS legal in a
+    /// transaction and whose job survives the commit — but note it refreshes a <b>moving window</b>, so a
+    /// non-null <c>startOffset</c> never materialises older history. Backfilling existing history still
+    /// requires a refresh off a transaction. See that method's remarks.
     /// </para>
     /// <para>
     /// <b>⚠ TASK-259 removed the reason this was the only option, so the choice is now open rather than
@@ -211,7 +238,7 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// <remarks>
         /// <b>The table appears twice, needing two different treatments</b>, which is why this method is the
         /// clearest example of the class remarks: <c>ALTER TABLE</c> takes a real identifier and gets
-        /// <see cref="AbstractConnectorBase.QuoteIdentifier"/>, while <c>add_compression_policy</c> takes a
+        /// <see cref="AbstractConnectorBase.QualifiedIdentifier"/>, while <c>add_compression_policy</c> takes a
         /// <c>regclass</c> inside a literal and gets <see cref="AbstractConnectorBase.RegclassLiteral"/>.
         /// Reasoning from either one alone produces a statement that is broken at the other.
         /// <para>
@@ -286,6 +313,23 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// Builds the continuous-aggregate DDL. Reuses the guarded groupBySql for the GROUP BY too:
         /// an empty groupByClause previously emitted "GROUP BY bucket, " with a dangling comma
         /// (invalid SQL) (CR-H071).
+        /// <para>
+        /// <b>Always emits <c>WITH NO DATA</c>, so the view is EMPTY until something populates it</b>
+        /// (TASK-281). Without it the statement performs an initial refresh, which raises SQLSTATE
+        /// <c>25001</c> — <i>"CREATE MATERIALIZED VIEW ... WITH DATA cannot run inside a transaction
+        /// block"</i> — and <c>SqlMigrationSettings.UseTransaction</c> defaults to <see langword="true"/>,
+        /// so through the runner this could only ever fail. Measured on TimescaleDB 2.29.2 / PostgreSQL
+        /// 16.15.
+        /// </para>
+        /// <para>
+        /// <b>Unconditional rather than "only when a transaction is present", deliberately.</b> The
+        /// conditional version makes the identical migration yield a populated or an empty view depending on
+        /// a settings flag, with nothing at the call site saying which — two doors onto one feature giving
+        /// different answers (§ Conventions, TASK-274). Uniform emptiness is a rule a caller can hold in
+        /// their head. Keep it current with <see cref="AddContinuousAggregatePolicy"/> (transaction-safe,
+        /// but a moving window — see its remarks) or backfill history with
+        /// <see cref="RefreshContinuousAggregate"/>, off a transaction.
+        /// </para>
         /// </summary>
         /// <remarks>
         /// <b><paramref name="selectClause"/> and <paramref name="groupByClause"/> are interpolated as raw
@@ -337,17 +381,110 @@ namespace Birko.Data.Migrations.TimescaleDB
                     time_bucket('{SqlLiteral.EscapeLiteral(timeBucket)}', {Birko.Data.SQL.DataBase.ValidateColumnIdentifier(timeColumn, nameof(timeColumn))}) AS bucket{groupBySql},
                     {selectClause}
                 FROM {connector.QualifiedIdentifier(sourceTable)}
-                GROUP BY bucket{groupBySql};
+                GROUP BY bucket{groupBySql}
+                WITH NO DATA;
             ";
         }
 
         /// <summary>
-        /// Refreshes a continuous aggregate.
+        /// Refreshes a continuous aggregate. <b>Cannot run inside a transaction</b> — see the remarks.
         /// </summary>
+        /// <remarks>
+        /// <b><c>refresh_continuous_aggregate()</c> raises SQLSTATE <c>25001</c> inside a transaction block</b>
+        /// (measured on TimescaleDB 2.29.2 / PostgreSQL 16.15), and
+        /// <c>SqlMigrationSettings.UseTransaction</c> defaults to <see langword="true"/> — so through the
+        /// runner's default configuration this could only ever fail (TASK-281).
+        /// <para>
+        /// It therefore refuses up front. <b>The server's own message is perfectly clear and that is NOT the
+        /// reason this guard exists</b> — what the server cannot know is <c>UseTransaction</c>, or that this
+        /// framework has a policy emitter. Routing is the only thing the framework adds here, which is why
+        /// the message names <i>both</i> doors rather than merely saying no (§ SH-H037 / TASK-215: a refusal
+        /// names the door THIS caller has).
+        /// </para>
+        /// <para>
+        /// <b>The version stamp is load-bearing.</b> If TimescaleDB ever relaxes the restriction this guard
+        /// becomes a <i>false refusal</i>, which this codebase rates worse than the hole
+        /// (<c>PredicateScope</c>: a false refusal breaks working code). The measured version is recorded so
+        /// that becomes findable rather than mysterious — the catalogue-drift rule from TASK-261.
+        /// </para>
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">The migration is running inside a transaction.</exception>
         protected virtual void RefreshContinuousAggregate(IMigrationContext context, string viewName)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
+            if (transaction != null)
+            {
+                throw new InvalidOperationException(
+                    $"refresh_continuous_aggregate() cannot run inside a transaction block (SQLSTATE 25001), "
+                    + $"and this migration is running in one. Two ways out for '{viewName}', and they are "
+                    + "NOT equivalent: AddContinuousAggregatePolicy(...) is transaction-safe and keeps the "
+                    + "aggregate CURRENT, but a non-null startOffset means it only ever refreshes the window "
+                    + "[now() - startOffset, now() - endOffset], so older history is never materialised "
+                    + "(pass a null startOffset to include it). To BACKFILL existing history immediately, "
+                    + "run this migration with SqlMigrationSettings.UseTransaction = false.");
+            }
             ExecuteScript(connection, transaction, BuildRefreshContinuousAggregateSql(connector, viewName));
+        }
+
+        /// <summary>
+        /// Adds a refresh policy to a continuous aggregate — the transaction-safe way to keep one
+        /// <b>current</b>. Read the remarks before assuming it also backfills history: usually it does not.
+        /// </summary>
+        /// <remarks>
+        /// <b>Measured legal inside a transaction block, with the job surviving the commit</b> (TimescaleDB
+        /// 2.29.2 / PostgreSQL 16.15). That is what makes a transactional migration merely <i>limited</i>
+        /// rather than unable to populate an aggregate at all: <c>CREATE … WITH NO DATA</c> plus a policy is
+        /// the workflow, and the background job does the filling (TASK-281).
+        /// <para>
+        /// <b>⚠ The policy refreshes a MOVING WINDOW, so a non-null <paramref name="startOffset"/> never
+        /// materialises older history.</b> The job covers <c>[now() - startOffset, now() - endOffset]</c> and
+        /// nothing before it. Measured: a hypertable holding one row <b>400 days</b> old and one row 2 days
+        /// old, with <c>startOffset = "30 days"</c>, yields exactly <b>one</b> bucket once the job runs — the
+        /// recent one. The old bucket is absent permanently, with no error anywhere. Pass a
+        /// <see langword="null"/> <paramref name="startOffset"/> to cover all history, or backfill with
+        /// <see cref="RefreshContinuousAggregate"/> off a transaction.
+        /// </para>
+        /// <para>
+        /// Documented rather than guarded because the caller has no other signal — an under-filled aggregate
+        /// reads exactly like a correctly-filled one. Found at TASK-281's close gate, where the first version
+        /// of this API called a policy "the transaction-safe way to populate an aggregate" full stop, which
+        /// is true only for a null <paramref name="startOffset"/>.
+        /// </para>
+        /// <para>
+        /// The view is a <c>regclass</c> inside a literal, so it takes
+        /// <see cref="AbstractConnectorBase.RegclassLiteral"/>. The three offsets are <b>expression
+        /// fragments</b> inside literals — an INTERVAL is a legitimate expression exactly as
+        /// <c>compress_orderby</c>'s <c>ts DESC</c> is — so they get
+        /// <see cref="SqlLiteral.EscapeLiteral"/> and are deliberately not identifier-validated.
+        /// </para>
+        /// <para>
+        /// <paramref name="startOffset"/> is nullable because TimescaleDB accepts <c>NULL</c> there to mean
+        /// "from the beginning of time"; <c>NULL</c> is emitted unquoted, since a quoted <c>'NULL'</c> would
+        /// be the string rather than the keyword.
+        /// </para>
+        /// </remarks>
+        protected virtual void AddContinuousAggregatePolicy(IMigrationContext context, string viewName,
+            string? startOffset, string endOffset, string scheduleInterval)
+        {
+            var (connection, transaction, connector) = GetSqlConnection(context);
+            ExecuteScript(connection, transaction,
+                BuildContinuousAggregatePolicySql(connector, viewName, startOffset, endOffset, scheduleInterval));
+        }
+
+        /// <summary>
+        /// Builds the continuous-aggregate refresh-policy DDL. The view is a <c>regclass</c>; the three
+        /// offsets are expression fragments. See <see cref="AddContinuousAggregatePolicy"/>.
+        /// </summary>
+        internal static string BuildContinuousAggregatePolicySql(AbstractConnector connector, string viewName,
+            string? startOffset, string endOffset, string scheduleInterval)
+        {
+            var startOffsetSql = string.IsNullOrEmpty(startOffset)
+                ? "NULL"
+                : $"INTERVAL '{SqlLiteral.EscapeLiteral(startOffset)}'";
+            return $"SELECT add_continuous_aggregate_policy('{connector.RegclassLiteral(viewName)}', "
+                 + $"start_offset => {startOffsetSql}, "
+                 + $"end_offset => INTERVAL '{SqlLiteral.EscapeLiteral(endOffset)}', "
+                 + $"schedule_interval => INTERVAL '{SqlLiteral.EscapeLiteral(scheduleInterval)}');";
         }
 
         /// <summary>
