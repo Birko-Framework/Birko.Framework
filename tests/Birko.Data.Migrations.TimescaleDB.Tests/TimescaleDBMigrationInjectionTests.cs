@@ -191,6 +191,26 @@ public class TimescaleDBMigrationInjectionTests
     }
 
     /// <summary>
+    /// TASK-281's new policy emitter contains its view name the same way every other <c>regclass</c> sink
+    /// does. Added with the emitter rather than after it, because a new sink that skips this file is how the
+    /// containment rule gets a hole.
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregatePolicy_ContainsABreakoutInTheView()
+        => ContainedAsRegclass(
+            TimescaleDBMigration.BuildContinuousAggregatePolicySql(
+                Connector(), LiteralBreakout, "30 days", "1 hour", "1 hour"),
+            LiteralBreakout);
+
+    /// <summary>The offsets are expression fragments inside literals, so escaping contains them completely.</summary>
+    [Fact]
+    public void ContinuousAggregatePolicy_ContainsABreakoutInAnOffset()
+        => ContainedAsLiteral(
+            TimescaleDBMigration.BuildContinuousAggregatePolicySql(
+                Connector(), "DailyStats", LiteralBreakout, "1 hour", "1 hour"),
+            LiteralBreakout);
+
+    /// <summary>
     /// <b>The one argument contained by refusal rather than by escaping</b> (TASK-255) — so this asserts a
     /// throw, not an escaped payload. See the class remarks: <c>timeColumn</c> is emitted bare, because a
     /// quoted identifier cannot resolve the folded column that bare-column <c>CREATE TABLE</c> creates, and

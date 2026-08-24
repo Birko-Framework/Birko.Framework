@@ -170,8 +170,14 @@ public class TimescaleDBMigrationSqlTests
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
             Connector(), "daily_stats", "metrics", "1 day", "time", "avg(value) AS avg_value");
 
-        sql.Should().Contain("GROUP BY bucket;");
+        // CR-H071's intent is "no dangling comma", which is what these two assert. The statement no longer
+        // ends at the GROUP BY — TASK-281 appends WITH NO DATA — so the old `Contain("GROUP BY bucket;")`
+        // was matching the semicolon's position rather than the clause. Assert the clause and its terminator
+        // separately, so the guard still fails on a dangling comma but does not re-break when the tail
+        // changes again.
+        sql.Should().Contain("GROUP BY bucket");
         sql.Should().NotContain("GROUP BY bucket,");
+        sql.Should().Contain("WITH NO DATA;", "TASK-281 — the statement is terminated after the tail");
         // The SELECT list separates bucket from the aggregate with exactly one comma.
         sql.Should().Contain("AS bucket,");
         sql.Should().NotContain("AS bucket ,");
@@ -184,7 +190,8 @@ public class TimescaleDBMigrationSqlTests
             Connector(), "daily_by_device", "metrics", "1 day", "time", "avg(value) AS avg_value", "device_id");
 
         sql.Should().Contain("AS bucket, device_id,");
-        sql.Should().Contain("GROUP BY bucket, device_id;");
+        // Not "...device_id;" — TASK-281 appends WITH NO DATA, so the semicolon is no longer adjacent.
+        sql.Should().Contain("GROUP BY bucket, device_id");
     }
 
     /// <summary>
@@ -223,6 +230,36 @@ public class TimescaleDBMigrationSqlTests
         => TimescaleDBMigration.BuildContinuousAggregateSql(
                 Connector(), "Rollup", "Metrics", "1 day", "Ts", "sum(value) AS total")
             .Should().Contain("time_bucket('1 day', Ts)");
+
+    // ── continuous-aggregate refresh policy (TASK-281) ──
+
+    /// <summary>
+    /// The view is a <c>regclass</c> inside a literal, so it carries its own identifier quotes; the three
+    /// offsets are expression fragments and are escaped only. Same split as
+    /// <see cref="TimescaleDBMigration.BuildCompressionPolicySql"/>, which is the right neighbour to imitate
+    /// here — a policy emitter, not an identifier one.
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregatePolicy_TreatsTheViewAsARegclassAndTheOffsetsAsFragments()
+        => TimescaleDBMigration.BuildContinuousAggregatePolicySql(
+                Connector(), "DailyStats", "30 days", "1 hour", "1 hour")
+            .Should().Be("SELECT add_continuous_aggregate_policy('\"DailyStats\"', "
+                       + "start_offset => INTERVAL '30 days', "
+                       + "end_offset => INTERVAL '1 hour', "
+                       + "schedule_interval => INTERVAL '1 hour');");
+
+    /// <summary>
+    /// A null or empty <c>start_offset</c> means "from the beginning of time" in TimescaleDB, and must be
+    /// emitted as the bare keyword — a quoted <c>'NULL'</c> would be the string, not the keyword.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void ContinuousAggregatePolicy_EmitsABareNullStartOffset(string? startOffset)
+        => TimescaleDBMigration.BuildContinuousAggregatePolicySql(
+                Connector(), "DailyStats", startOffset, "1 hour", "1 hour")
+            .Should().Contain("start_offset => NULL,")
+            .And.NotContain("'NULL'");
 
     /// <summary>
     /// A <c>Table.Column</c> qualifier is refused. TASK-249's corollary: this statement introduces no alias,
