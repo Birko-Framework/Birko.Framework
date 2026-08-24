@@ -21,11 +21,21 @@ namespace Birko.Data.Migrations.TimescaleDB.Tests;
 /// </para>
 ///
 /// <para>
-/// <b>What containment means here, and why it is complete.</b> Every one of these arguments ends up inside a
-/// single-quoted literal or as a quoted identifier, and doubling the relevant quote character means the
-/// payload cannot leave its enclosure — so the statement stays one statement. The premise is
+/// <b>What containment means here, and why it is complete.</b> Almost every one of these arguments ends up
+/// inside a single-quoted literal or as a quoted identifier, and doubling the relevant quote character means
+/// the payload cannot leave its enclosure — so the statement stays one statement. The premise is
 /// <c>standard_conforming_strings = on</c> (PostgreSQL's default since 9.1), stated on
 /// <see cref="Birko.Data.SQL.SqlLiteral"/>.
+/// </para>
+///
+/// <para>
+/// <b>There is a THIRD containment mechanism as of TASK-255: refusal.</b>
+/// <c>BuildContinuousAggregateSql</c>'s <c>timeColumn</c> is a column reference in real identifier position
+/// inside the view body, so it must be emitted <b>bare</b> to resolve the folded column that bare-column
+/// <c>CREATE TABLE</c> creates — which means no quote character encloses it and escaping would contain
+/// nothing. It is guarded by <see cref="Birko.Data.SQL.DataBase.ValidateColumnIdentifier"/> instead, so its
+/// test asserts a <b>throw</b> rather than an escaped form, unlike every other test in this file. Do not
+/// "fix" that asymmetry by asserting an escaped payload: there is no enclosure to escape into.
 /// </para>
 ///
 /// <para>
@@ -166,7 +176,7 @@ public class TimescaleDBMigrationInjectionTests
     public void ContinuousAggregate_ContainsABreakoutInTheViewAndSourceTable()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), IdentifierBreakout, IdentifierBreakout, "1 day", "count(*) AS n");
+            Connector(), IdentifierBreakout, IdentifierBreakout, "1 day", "Ts", "count(*) AS n");
 
         ContainedAsIdentifier(sql, IdentifierBreakout);
     }
@@ -175,9 +185,33 @@ public class TimescaleDBMigrationInjectionTests
     public void ContinuousAggregate_ContainsABreakoutInTheTimeBucket()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "Rollup", "Metrics", LiteralBreakout, "count(*) AS n");
+            Connector(), "Rollup", "Metrics", LiteralBreakout, "Ts", "count(*) AS n");
 
         ContainedAsLiteral(sql, LiteralBreakout);
+    }
+
+    /// <summary>
+    /// <b>The one argument contained by refusal rather than by escaping</b> (TASK-255) — so this asserts a
+    /// throw, not an escaped payload. See the class remarks: <c>timeColumn</c> is emitted bare, because a
+    /// quoted identifier cannot resolve the folded column that bare-column <c>CREATE TABLE</c> creates, and
+    /// bare leaves no enclosure for escaping to contain.
+    /// <para>
+    /// Both payload shapes are tried, because the literal one is what the escaping-based sinks defend
+    /// against and the identifier one is the door quoting would leave — neither is available here, and the
+    /// guard must refuse both.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData(LiteralBreakout)]
+    [InlineData(IdentifierBreakout)]
+    public void ContinuousAggregate_RefusesABreakoutInTheTimeColumn(string payload)
+    {
+        var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
+            Connector(), "Rollup", "Metrics", "1 day", payload, "count(*) AS n");
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("*not a plain, unqualified column identifier*",
+                "the column is emitted bare, so refusal is the only containment available");
     }
 
     // ── the four extracted builders also need their happy path pinned ──
@@ -207,7 +241,7 @@ public class TimescaleDBMigrationInjectionTests
         TimescaleDBMigration.BuildRefreshContinuousAggregateSql(Connector(), "DailyStats")
             .Should().Be("CALL refresh_continuous_aggregate('\"DailyStats\"', NULL, NULL);");
 
-        TimescaleDBMigration.BuildContinuousAggregateSql(Connector(), "DailyStats", "Metrics", "1 day", "count(*) AS n")
+        TimescaleDBMigration.BuildContinuousAggregateSql(Connector(), "DailyStats", "Metrics", "1 day", "Ts", "count(*) AS n")
             .Should().Contain("CREATE MATERIALIZED VIEW \"DailyStats\"");
     }
 }

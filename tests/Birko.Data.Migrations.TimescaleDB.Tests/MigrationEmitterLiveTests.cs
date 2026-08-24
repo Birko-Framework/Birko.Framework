@@ -479,16 +479,21 @@ public class MigrationEmitterLiveTests : IDisposable
 
     /// <summary>
     /// The aggregate's view name and source table are real identifier positions, so they are quoted without
-    /// literal escaping. The bucketing column is still the hardcoded <c>time</c> (TASK-255), so the source
-    /// table needs a column of that name for this to work at all — which is precisely the defect TASK-255
-    /// records, demonstrated here rather than asserted in prose.
+    /// literal escaping.
+    /// <para>
+    /// <b>Kept as a pin after TASK-255, with the column now passed explicitly.</b> Before that task the
+    /// bucketing column was the hardcoded literal <c>time</c>, so a table with such a column was the only
+    /// shape that could work at all; now it is simply one legal argument among others. This test proves that
+    /// shape did not regress — a hand-made table whose column really is named <c>time</c> still works.
+    /// </para>
     /// </summary>
     [Fact]
-    public void ContinuousAggregate_isCreatedForPascalCaseNames_onlyWithATimeColumn()
+    public void ContinuousAggregate_isCreatedForPascalCaseNames()
     {
         if (!RequireServer()) return;
         Reset();
-        // Note the column literally named "time": TASK-255's hardcoding means nothing else can work.
+        // A column literally named "time": legal, conventional in TimescaleDB, and no longer the only
+        // shape that works (TASK-255).
         Exec($"CREATE TABLE \"{Table}\" (time timestamptz NOT NULL, Value double precision)");
 
         var (connection, context) = NewContext();
@@ -497,7 +502,7 @@ public class MigrationEmitterLiveTests : IDisposable
             var probe = new Probe();
             probe.Hypertable(context, Table, "time", "1 day");
             var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-                new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "avg(Value) AS avg_value");
+                new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "time", "avg(Value) AS avg_value");
             Exec(sql);
         }
 
@@ -506,12 +511,23 @@ public class MigrationEmitterLiveTests : IDisposable
     }
 
     /// <summary>
-    /// The TASK-255 defect, measured rather than described: with a normally-named time column the aggregate
-    /// cannot be built at all, because <c>time_bucket</c> is handed a column that does not exist. Pinned as
-    /// <i>current</i> behaviour so the day TASK-255 lands, this test is what changes.
+    /// <b>TASK-255, inverted.</b> This test previously asserted that the aggregate <i>could not be built</i>
+    /// for a normally-named time column — <c>PostgresException</c> / <c>42703</c>, because
+    /// <c>time_bucket</c> was handed a hardcoded <c>time</c> that no framework-created table has. It was the
+    /// defect pin, and it said in its own summary that the day TASK-255 landed it was what would change.
+    /// <para>
+    /// It asserts the <b>catalogue row</b>, not merely that the DDL did not throw: this layer swallows, and
+    /// TASK-209 records a case where a regression test passed against unfixed code for exactly that reason.
+    /// </para>
+    /// <para>
+    /// <b>This is also what witnesses BARE rather than quoted.</b> <c>CreateBaseTable</c> emits
+    /// <c>(Ts timestamptz …)</c> with a bare column inside a quoted table, so PostgreSQL stores <c>ts</c>;
+    /// a quoted <c>"Ts"</c> would raise <c>42703</c> here. The offline test pins the rendering, this pins
+    /// that the rendering resolves.
+    /// </para>
     /// </summary>
     [Fact]
-    public void ContinuousAggregate_cannotBeBuiltWhenTheTimeColumnIsNotNamedTime_TASK255()
+    public void ContinuousAggregate_isCreatedWhenTheTimeColumnIsNotNamedTime()
     {
         if (!RequireServer()) return;
         Reset();
@@ -524,14 +540,58 @@ public class MigrationEmitterLiveTests : IDisposable
         }
 
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "avg(Value) AS avg_value");
+            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value");
 
-        var act = () => Exec(sql);
+        Exec(sql);
 
-        act.Should().Throw<PostgresException>()
-            .Which.SqlState.Should().Be("42703",
-                "column \"time\" does not exist — no framework-created table has one, because column "
-              + "definitions are emitted bare and every Birko entity is PascalCase (TASK-255)");
+        Scalar($"SELECT COUNT(*) FROM timescaledb_information.continuous_aggregates "
+             + $"WHERE view_name = '{Aggregate}'").Should().Be("1",
+                "the bucketing column is now a parameter, so a PascalCase entity's time column reaches "
+              + "time_bucket bare and resolves against the folded column CREATE TABLE actually created "
+              + "(TASK-255)");
+    }
+
+    /// <summary>
+    /// <b>The second half of the proof: the aggregate must AGGREGATE, not merely appear in a catalogue.</b>
+    /// The sibling above asserts the row exists; a materialized view can exist and still bucket nothing.
+    /// This inserts rows spanning two days, refreshes, and reads the buckets back — so a fix that created a
+    /// view over the wrong column, or over no rows, fails here rather than passing quietly.
+    /// <para>
+    /// Modelled on <c>CreateHypertable_routesRowsIntoSeparateChunks</c>, which exists for the same reason:
+    /// the failures this family produces are silent, so the test has to demand something a broken
+    /// implementation cannot fake.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregate_bucketsRowsItCanBeReadBackFrom()
+    {
+        if (!RequireServer()) return;
+        Reset();
+        CreateBaseTable();
+
+        var (connection, context) = NewContext();
+        using (connection)
+        {
+            new Probe().Hypertable(context, Table, "Ts", "1 day");
+        }
+
+        Exec($"INSERT INTO \"{Table}\" (Ts, DeviceId, Value) VALUES "
+           + "('2026-01-01T01:00:00Z', 1, 10), "
+           + "('2026-01-01T02:00:00Z', 1, 20), "
+           + "('2026-01-02T01:00:00Z', 1, 90)");
+
+        Exec(TimescaleDBMigration.BuildContinuousAggregateSql(
+            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value"));
+
+        Exec(TimescaleDBMigration.BuildRefreshContinuousAggregateSql(
+            new TimescaleDBConnector(Settings()), Aggregate));
+
+        Scalar($"SELECT COUNT(*) FROM \"{Aggregate}\"").Should().Be("2",
+            "three rows spanning two days must bucket into two daily buckets");
+
+        Scalar($"SELECT avg_value FROM \"{Aggregate}\" ORDER BY bucket").Should().Be("15",
+            "the first day's two values (10, 20) average to 15 — proving the aggregate reads the column "
+          + "the caller named, not some other one");
     }
 
     // ================================================================ chunk routing

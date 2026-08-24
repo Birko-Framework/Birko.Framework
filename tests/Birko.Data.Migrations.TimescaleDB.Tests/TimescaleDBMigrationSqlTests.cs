@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Reflection;
 using Birko.Data.Migrations.TimescaleDB;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.TimescaleDB.Stores;
@@ -153,7 +156,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_QuotesTheViewAndTheSourceTable()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "DailyStats", "Metrics", "1 day", "avg(value) AS avg_value");
+            Connector(), "DailyStats", "Metrics", "1 day", "Ts", "avg(value) AS avg_value");
 
         sql.Should().Contain("CREATE MATERIALIZED VIEW \"DailyStats\"");
         sql.Should().Contain("FROM \"Metrics\"");
@@ -165,7 +168,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_EmptyGroupBy_HasNoDanglingComma()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "daily_stats", "metrics", "1 day", "avg(value) AS avg_value");
+            Connector(), "daily_stats", "metrics", "1 day", "time", "avg(value) AS avg_value");
 
         sql.Should().Contain("GROUP BY bucket;");
         sql.Should().NotContain("GROUP BY bucket,");
@@ -178,7 +181,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_WithGroupBy_IncludesColumnsInSelectAndGroupBy()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "daily_by_device", "metrics", "1 day", "avg(value) AS avg_value", "device_id");
+            Connector(), "daily_by_device", "metrics", "1 day", "time", "avg(value) AS avg_value", "device_id");
 
         sql.Should().Contain("AS bucket, device_id,");
         sql.Should().Contain("GROUP BY bucket, device_id;");
@@ -194,20 +197,67 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_LeavesExpressionClausesIntact()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "Rollup", "Metrics", "1 day", "sum(value) AS total", "date_trunc('day', x)");
+            Connector(), "Rollup", "Metrics", "1 day", "Ts", "sum(value) AS total", "date_trunc('day', x)");
 
         sql.Should().Contain("date_trunc('day', x)");
         sql.Should().Contain("sum(value) AS total");
     }
 
     /// <summary>
-    /// The bucketing column is still the literal <c>time</c> — CR-H070's defect surviving in this method,
-    /// owned by TASK-255. Pinned as <i>current</i> behaviour, not as correct behaviour, so the day it changes
-    /// the change is deliberate and visible.
+    /// The bucketing column is a caller-supplied parameter, emitted <b>bare</b> (TASK-255, closing CR-H070
+    /// in this method as it was closed in <c>BuildCompressionPolicySql</c>).
+    /// <para>
+    /// This test is the <i>inversion</i> of <c>ContinuousAggregate_StillHardcodesTheTimeColumn_TASK255</c>,
+    /// which asserted <c>time_bucket('1 day', time)</c> and said in its own summary that the day TASK-255
+    /// landed it was what would change. It was replaced rather than kept beside this one: two tests asserting
+    /// opposite things about one method is a contradiction for the next reader, not extra coverage.
+    /// </para>
+    /// <para>
+    /// <b>Bare, not quoted</b> — <c>CreateTable</c> emits column definitions bare, so PostgreSQL stores them
+    /// folded and a quoted <c>"Ts"</c> would not match the stored <c>ts</c>. The live suite is what witnesses
+    /// that; this pins the rendering.
+    /// </para>
     /// </summary>
     [Fact]
-    public void ContinuousAggregate_StillHardcodesTheTimeColumn_TASK255()
+    public void ContinuousAggregate_TakesTheTimeColumnAsAParameter()
         => TimescaleDBMigration.BuildContinuousAggregateSql(
-                Connector(), "Rollup", "Metrics", "1 day", "sum(value) AS total")
-            .Should().Contain("time_bucket('1 day', time)");
+                Connector(), "Rollup", "Metrics", "1 day", "Ts", "sum(value) AS total")
+            .Should().Contain("time_bucket('1 day', Ts)");
+
+    /// <summary>
+    /// A <c>Table.Column</c> qualifier is refused. TASK-249's corollary: this statement introduces no alias,
+    /// so a qualifier cannot resolve, and accepting one would turn a clear <see cref="ArgumentException"/>
+    /// into a provider syntax error — the guard passing the payload's harmless cousin through to break the
+    /// statement anyway.
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregate_RefusesAQualifiedTimeColumn()
+    {
+        var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
+            Connector(), "Rollup", "Metrics", "1 day", "Metrics.Ts", "sum(value) AS total");
+
+        act.Should().Throw<ArgumentException>().WithMessage("*not a plain, unqualified column identifier*");
+    }
+
+    /// <summary>
+    /// <b>The parameter carries no default, and that is asserted rather than merely constructed.</b>
+    /// § Conventions (TASK-117): "I didn't add it" is construction, not evidence, and the next person breaks
+    /// it silently. A <c>"time"</c> default would be unreachable for every Birko entity — column definitions
+    /// are emitted bare and every entity is PascalCase, so no framework-created table has such a column —
+    /// i.e. a default that cannot work is a silent no-op wearing a parameter's name (§ Conventions,
+    /// TASK-245).
+    /// <para>
+    /// Do not "fix" a failure here by giving the parameter a default: the sibling
+    /// <c>BuildCompressionPolicySql.orderByColumn = "time"</c> has exactly that defect and is owned by
+    /// TASK-279. Its default was a source-compatibility artefact of commit <c>531d816</c>, where the
+    /// parameter did not previously exist; this one had no such constraint.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregate_TimeColumnHasNoDefault()
+        => typeof(TimescaleDBMigration)
+            .GetMethod("BuildContinuousAggregateSql", BindingFlags.NonPublic | BindingFlags.Static)!
+            .GetParameters().Single(p => p.Name == "timeColumn")
+            .HasDefaultValue.Should().BeFalse(
+                "a 'time' default cannot work on any framework-created table (TASK-255)");
 }
