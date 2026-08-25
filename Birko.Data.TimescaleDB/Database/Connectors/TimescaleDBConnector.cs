@@ -9,6 +9,35 @@ using TimescaleDBSettings = Birko.Data.SQL.TimescaleDB.Stores.TimescaleDBSetting
 namespace Birko.Data.SQL.Connectors
 {
     /// <summary>
+    /// A table whose hypertable conversion schema-ensure could not perform. The table exists and is fully
+    /// usable as a plain PostgreSQL table; only the partitioning is absent (TASK-254).
+    /// </summary>
+    /// <remarks>
+    /// Deliberately its own type rather than an <see cref="IndexCreationFailure"/> carrying a sentinel index
+    /// name: that collection is public surface a consumer reads and documents, and injecting foreign entries
+    /// into it would change what their existing checks see.
+    /// </remarks>
+    public sealed class HypertableCreationFailure
+    {
+        public HypertableCreationFailure(string tableName, string timeColumn, Exception error)
+        {
+            TableName = tableName;
+            TimeColumn = timeColumn;
+            Error = error;
+        }
+
+        public string TableName { get; }
+
+        /// <summary>The time column the conversion was attempted with — from settings, not from the entity.</summary>
+        public string TimeColumn { get; }
+
+        public Exception Error { get; }
+
+        public override string ToString()
+            => $"hypertable conversion of '{TableName}' on time column '{TimeColumn}': {Error.Message}";
+    }
+
+    /// <summary>
     /// TimescaleDB database connector.
     /// Extends PostgreSQLConnector with hypertable creation support.
     /// </summary>
@@ -88,14 +117,139 @@ namespace Birko.Data.SQL.Connectors
             return base.CreateConnection(settings);
         }
 
+        // TASK-254. Same bookkeeping as the index channel and deliberately the same helper: keyed by table,
+        // current state rather than a log, event on the TRANSITION into failure, cleared when the conversion
+        // later succeeds. Connectors are cached process-wide while _initialized lives on the store, so a
+        // scoped store re-runs schema-ensure per request against this one object -- an append-only list here
+        // would grow forever, which is the regression TASK-204 shipped and then fixed for indexes.
+        private readonly SchemaEnsureFailureLog<HypertableCreationFailure> _hypertableFailures =
+            new(f => f.TableName);
+
+        /// <summary>
+        /// Tables whose hypertable conversion could not be performed on their most recent schema-ensure
+        /// attempt. Empty in the normal case.
+        /// </summary>
+        /// <remarks>
+        /// Current state, not history: a table that later converts successfully drops out, and a given table
+        /// appears at most once however many times schema-ensure has run. <b>An empty collection is NOT proof
+        /// that every table is a hypertable</b> — stores initialise lazily, so an entity that has not been
+        /// touched has not attempted its conversion. Same caveat the index channel carries.
+        /// </remarks>
+        public IReadOnlyList<HypertableCreationFailure> HypertableCreationFailures => _hypertableFailures.Snapshot;
+
+        /// <summary>
+        /// Raised when a table could not be converted into a hypertable during schema-ensure. Subscribe to
+        /// log or escalate; the store initialises regardless and the table remains usable as a plain
+        /// PostgreSQL table.
+        /// </summary>
+        /// <remarks>
+        /// Fires on the TRANSITION into failure, not on every attempt.
+        /// </remarks>
+        public event Action<HypertableCreationFailure>? OnHypertableCreationFailed;
+
         /// <inheritdoc />
+        /// <remarks>
+        /// <b>A conversion that cannot be performed DEGRADES here; it does not throw</b> (TASK-254). This is
+        /// the lazy schema-ensure path — stores set <c>_initialized</c> only after it returns, so an escaping
+        /// exception leaves the entity's whole surface, <i>reads included</i>, throwing on every subsequent
+        /// operation. That is exactly the failure mode TASK-204 removed for unbuildable indexes:
+        /// <i>"lazy schema-ensure degrades and reports; an explicit schema call throws"</i>. The explicit
+        /// door is <see cref="CreateHypertable(string, string, string)"/>, which still throws.
+        /// <para>
+        /// <b>Degrading is legitimate because nothing declares an entity to be a hypertable.</b> The
+        /// conversion is applied to every table this connector creates whenever
+        /// <c>TimescaleDBSettings.TimeColumn</c> is set, and there is no per-entity attribute — so a failure
+        /// is a connector-wide default that did not apply, not a broken per-entity contract. TASK-204's rule
+        /// is to degrade a constraint or an optimisation, never correctness, and partitioning is the former.
+        /// </para>
+        /// <para>
+        /// <b>It rests on a measured premise — and that premise holds on ONE path only, which is why the
+        /// catch is conditional.</b> On the own-connection path <c>base.CreateTable</c> has already committed
+        /// the table when the conversion fails, so what remains is a fully usable plain PostgreSQL table
+        /// (measured on TimescaleDB 2.29.2 / PostgreSQL 16.15 — written and read back after a <c>TS103</c>).
+        /// <b>Inside a caller's ambient boundary it does not hold</b>: the <c>CREATE TABLE</c> is not
+        /// committed, the failed statement aborts the transaction, and the table is gone — measured, 0 rows
+        /// in <c>pg_tables</c> after a failed <c>create_hypertable</c> in a <c>BEGIN</c> block. Degrading
+        /// there would leave the store initialised over a table that does not exist and cost the caller the
+        /// real error, so the boundary path <b>rethrows</b>.
+        /// <para>
+        /// The first version of this change degraded unconditionally, with this paragraph stating the premise
+        /// without its qualifier — the measurement had been taken on a bare connector with no boundary. That
+        /// is worth remembering: <b>a premise measured on one path is not a premise, it is a sample.</b>
+        /// TASK-244 made the boundary path reachable here by having <c>InitCore</c> enter the ambient scope.
+        /// </para>
+        /// </para>
+        /// </remarks>
         public override void CreateTable(string name, IEnumerable<string> fields)
         {
             base.CreateTable(name, fields);
 
-            if (_timescaleSettings != null && !string.IsNullOrEmpty(_timescaleSettings.TimeColumn))
+            if (_timescaleSettings == null || string.IsNullOrEmpty(_timescaleSettings.TimeColumn))
+            {
+                return;
+            }
+
+            try
             {
                 CreateHypertable(name, _timescaleSettings.TimeColumn, _timescaleSettings.ChunkTimeInterval);
+                // Cleared on success so the channel cannot report a condition that has been repaired -- e.g.
+                // the offending unique index was dropped and the next schema-ensure converted the table.
+                _hypertableFailures.Clear(name);
+            }
+            catch (Exception ex) when (AmbientTransaction == null)
+            {
+                // Degrade ONLY on the own-connection path, because that is the only path where the premise
+                // holds. Inside a caller's boundary the CREATE TABLE above is not committed, PostgreSQL puts
+                // the transaction into the aborted state, and swallowing would report success over a table
+                // that will not exist -- measured: after a failed create_hypertable inside a BEGIN block the
+                // table is gone (0 rows in pg_tables) and every later command in that transaction fails with
+                // 25P02, naming neither TS103 nor this table. The caller would lose the real error entirely.
+                //
+                // So the `when` clause is load-bearing, not defensive: without it this fix is a regression on
+                // exactly the path TASK-244 made reachable by having InitCore enter the ambient scope. Found
+                // by code-review at TASK-254's close gate, against a remark two paragraphs above that had
+                // already written down why it would be worse -- the premise was measured only on the
+                // own-connection path.
+                RecordHypertableCreationFailure(name, _timescaleSettings.TimeColumn, ex);
+            }
+        }
+
+        /// <summary>
+        /// Records a table schema-ensure could not convert, and notifies any subscriber the first time that
+        /// table enters the failed state.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately does NOT rethrow — see <see cref="CreateTable(string, IEnumerable{string})"/> for why
+        /// an unconvertible hypertable must not take the table's whole read surface with it.
+        /// </remarks>
+        private void RecordHypertableCreationFailure(string tableName, string timeColumn, Exception error)
+        {
+            var failure = new HypertableCreationFailure(tableName, timeColumn, error);
+            if (!_hypertableFailures.Record(tableName, failure))
+            {
+                return;
+            }
+
+            try
+            {
+                OnHypertableCreationFailed?.Invoke(failure);
+            }
+            catch
+            {
+                // A subscriber that throws must NOT defeat the degrade. This invoke runs inside
+                // CreateTable's catch, so an escaping handler exception would propagate out of schema-ensure
+                // and leave the store permanently uninitialised -- precisely the failure TASK-254 exists to
+                // remove, reintroduced through the reporting channel. The summary on the event invites a host
+                // to "log or escalate", and escalating by rethrowing is the realistic trigger.
+                //
+                // Swallowed rather than recorded anywhere: the caller asked to be told about a degraded
+                // conversion, and their own handler failing is their concern, not a second schema failure.
+                // Found by code-review at TASK-254's close gate.
+                //
+                // The index channel (AbstractConnector.RecordIndexCreationFailure) has the identical hole and
+                // is deliberately NOT changed here: it has real consumers, so altering whether a handler's
+                // exception propagates is a behaviour change on consumed surface and wants its own
+                // measurement. TASK-283 owns it.
             }
         }
 
@@ -163,11 +317,25 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         internal string BuildCreateHypertableSql(string tableName, string timeColumn, string chunkTimeInterval)
         {
+            // An absent interval OMITS the argument rather than emitting INTERVAL '' -- TimescaleDB then
+            // applies its own default, which is what a caller who supplied no interval means. Matches the
+            // sibling emitter TimescaleDBMigration.BuildCreateHypertableSql, which has always done this.
+            //
+            // It matters more since TASK-254 made schema-ensure degrade: EscapeLiteral refuses null and
+            // INTERVAL '' is 22007, so before that a blank ChunkTimeInterval failed loudly out of CreateTable,
+            // and afterwards it would be caught and recorded -- meaning NO table on the connector ever became
+            // a hypertable and nothing surfaced unless the consumer had subscribed to the event. The value is
+            // reachable: TimescaleDBSettings.ChunkTimeInterval is a public setter, also fed by the 7-arg
+            // constructor and by LoadFrom. Found by code-review at TASK-254's close gate.
+            var chunkIntervalSql = string.IsNullOrEmpty(chunkTimeInterval)
+                ? string.Empty
+                : $", chunk_time_interval => INTERVAL '{SqlLiteral.EscapeLiteral(chunkTimeInterval)}'";
+
             return string.Format(
-                "SELECT create_hypertable({0}, {1}, chunk_time_interval => INTERVAL '{2}', if_not_exists => TRUE)",
+                "SELECT create_hypertable({0}, {1}{2}, if_not_exists => TRUE)",
                 "'" + RegclassLiteral(tableName) + "'",
                 "'" + CatalogueNameLiteral(timeColumn) + "'",
-                SqlLiteral.EscapeLiteral(chunkTimeInterval));
+                chunkIntervalSql);
         }
 
         /// <summary>
