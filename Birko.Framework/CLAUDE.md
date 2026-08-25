@@ -1237,6 +1237,47 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   throw**, because an explicit call (migrations' `SqlSchemaBuilder`) is a caller asking for that index *now*.
   Degrade only what is a constraint or an optimisation — never correctness — and **report rather than
   swallow**. Keep the re-attempt on later runs: that is what lets the index appear once the data is repaired.
+- **TASK-204's degrade-and-report rule has a SECOND sink, and the test for "may I degrade this?" is
+  whether anything DECLARED it — not whether it sounds important.** TASK-254. After TASK-472 fixed the
+  identifier defect, a hypertable conversion that cannot succeed stopped being silently swallowed and
+  started throwing out of `TimescaleDBConnector.CreateTable` → `InitCore` — and stores set `_initialized`
+  only *after* schema-ensure returns, so one unconvertible entity took its **whole surface, reads
+  included**, down permanently. Exactly the failure TASK-204 removed for indexes, arriving at a second
+  place. Six parts generalise:
+  - **The licence to degrade came from provenance, not from importance.** The tempting argument —
+    "partitioning is only an optimisation" — is weak and arguable. The decisive fact is that **nothing
+    ever declares an entity to be a hypertable**: `CreateTable` converts *every* table it creates whenever
+    `TimescaleDBSettings.TimeColumn` is set, and there is **no per-entity attribute** anywhere. So a
+    failure is a connector-wide default that did not apply, not a broken per-entity contract. **Before
+    degrading anything, find out who asked for it** — if the answer is "a global setting", degrading is
+    safe; if an entity declared it, think again.
+  - **⚠ The premise degrading rests on is that the WRECKAGE IS USABLE, and it must be measured.** Here:
+    does `base.CreateTable` commit the table before the conversion fails? Measured on TimescaleDB 2.29.2 /
+    PostgreSQL 16.15 — **yes**: the plain table survives a `TS103` and is fully writable and readable. Had
+    it not, degrading would leave the store *initialised over a table that does not exist*, which is
+    **worse than the throw it replaces** and would have invalidated the whole task. A degrade whose
+    remains are unusable is not a degrade, it is a silent corruption; measure before assuming the ordering.
+  - **Extract the MECHANISM when the type is public surface a consumer names.** The bookkeeping —
+    keyed-not-list, transition-fired, clear-on-repair, locked, stably ordered — is subtle and TASK-204 got
+    it wrong first time (an append-only list growing one entry per HTTP request, because connectors are
+    cached process-wide while `_initialized` lives on the store). So it wants one implementation. But
+    *generalising `IndexCreationFailure` itself* was rejected on measurement: Symbio names it in production
+    code, two test files, its `CLAUDE.md` and its specs, including the "not an inventory" property.
+    `SchemaEnsureFailureLog<T>` is the resolution — one implementation underneath, **byte-identical public
+    surface above**. Third time measurement has vetoed the obvious reshape (TASK-248, TASK-256).
+  - **Say when a shared helper is NOT built for reuse.** It has exactly two callers and no more are
+    coming — compression and retention are migration-path only (see below) — so it is justified by *the
+    logic was got wrong once*, not by future callers. Written on the class: **if it acquires configuration
+    or a type hierarchy, that is the signal two copies would have been right.**
+  - **A sentinel value in somebody else's collection is not a cheap reuse, it is a contract change.**
+    Recording the hypertable failure as an `IndexCreationFailure` with `indexName = "(hypertable)"` was the
+    cheapest option and is wrong: it injects foreign entries into a collection a consumer reads in
+    production and documents. Reuse the *mechanism*, never the *published record*.
+  - **A criterion that says "decide whether X is owed the same treatment" can be answered NO, and that is
+    a result rather than a spawn.** Compression and retention live only in
+    `Birko.Data.Migrations.TimescaleDB`, are never called from schema-ensure, and are explicit calls that
+    *should* throw. Nothing is owed to them, so filing a task would file work that does not exist —
+    § *findings become tasks* is about work that exists, not about symmetry.
 - **A provider without a conditional form has to fake one, and the flag that turns it off has to be
   honourable everywhere — otherwise it is a silent no-op wearing a parameter's name.** Third member of the
   identifier/one-producer family to arrive through index DDL (TASK-245), and it shipped **two** defects at

@@ -139,7 +139,8 @@ generated: 2026-08-19
 - [ ] TASK-251 Regen the three wide-surface spec areas DV7 still reports
 - [ ] TASK-252 Six latent per-provider gaps found while closing the index-DDL thread
 - [x] TASK-253 The migration hypertable emitters carry the same identifier defect — and one bypasses the DDL funnel
-- [ ] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
+- [x] TASK-254 A hypertable conversion that cannot succeed now bricks the store instead of degrading
+- [ ] TASK-283 A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity
 - [x] TASK-255 `BuildContinuousAggregateSql` still hardcodes `time` — CR-H070 unfixed in the method next door
 - [ ] TASK-279 `BuildCompressionPolicySql` keeps CR-H070's `orderByColumn = "time"` — the half of the remedy that was a compatibility artefact
 - [ ] TASK-280 `IsHypertable` and `GetChunkInterval` ignore the schema half of the qualified name TASK-262 taught them to accept
