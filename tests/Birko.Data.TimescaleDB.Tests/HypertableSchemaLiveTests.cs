@@ -250,29 +250,255 @@ public class HypertableSchemaLiveTests : IDisposable
     // ================================================================ what a hypertable refuses
 
     /// <summary>
-    /// <b>Recorded, not endorsed.</b> A Guid-keyed entity cannot be a hypertable, and after the identifier
-    /// fix that arrives as a thrown <c>TS103</c> out of schema-ensure instead of the silent plain table it
-    /// used to produce. The throw is correct — the mapping genuinely cannot be honoured — but it leaves the
-    /// store permanently uninitialised, which is the failure mode TASK-204 removed for indexes
-    /// ("lazy schema-ensure degrades and reports"). Pinned here so the behaviour is deliberate rather than
-    /// accidental; making it degrade-and-report is filed separately.
+    /// <b>TASK-254: schema-ensure DEGRADES when the conversion cannot be honoured.</b> This test previously
+    /// pinned the opposite — a thrown <c>TS103</c> out of <c>CreateTable</c> — and said in its own summary
+    /// that the throw left the store permanently uninitialised, which is the failure mode TASK-204 removed
+    /// for indexes. It was recorded as deliberate rather than endorsed; this is the inversion it
+    /// anticipated.
+    /// <para>
+    /// <b>Why degrading is legitimate here, and it is not "partitioning is only an optimisation".</b>
+    /// Nothing ever declares an entity to be a hypertable: <c>TimescaleDBConnector.CreateTable</c> converts
+    /// <i>every</i> table it creates whenever <c>TimescaleDBSettings.TimeColumn</c> is set, and there is no
+    /// per-entity attribute anywhere. So a failed conversion is a connector-wide default that did not apply,
+    /// not a broken per-entity contract — squarely TASK-204's "degrade only what is a constraint or an
+    /// optimisation, never correctness".
+    /// </para>
+    /// <para>
+    /// <b>The premise this rests on was measured before the fix was written</b> (TimescaleDB 2.29.2 /
+    /// PostgreSQL 16.15): the plain table <i>survives</i> the failed <c>create_hypertable</c> and is fully
+    /// writable and readable. Had it not, degrading would leave the store initialised over a table that does
+    /// not exist — strictly worse than the throw it replaces. That is why this asserts a real write and read
+    /// rather than merely that no exception escaped.
+    /// </para>
     /// </summary>
     [Fact]
-    public void A_guid_keyed_entity_cannot_be_a_hypertable_and_now_says_so()
+    public void A_guid_keyed_entity_degrades_to_a_plain_table_and_is_reported()
     {
         if (!RequireServer()) return;
         DropBoth();
 
         var connector = new TimescaleDBConnector(Settings());
+
         var act = () => connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+        act.Should().NotThrow(
+            "an unconvertible hypertable must not take the entity's whole surface — reads included — with "
+          + "it, which is what TASK-204 established for indexes and TASK-254 extends to this conversion");
+
+        Scalar($"SELECT to_regclass('\"{GuidKeyedTable}\"') IS NOT NULL").Should().Be("True",
+            "the table itself must exist: degrading is only defensible because the plain table survives");
+        IsHypertable(GuidKeyedTable).Should().BeFalse("the conversion genuinely could not be honoured");
+
+        // Usable, not merely present — the whole point of degrading.
+        Exec($"INSERT INTO \"{GuidKeyedTable}\" (Guid, Name, Ts) VALUES "
+           + "('44444444-4444-4444-4444-444444444444', 'd', '2026-01-01 00:00:00')");
+        Scalar($"SELECT COUNT(*) FROM \"{GuidKeyedTable}\"").Should().Be("1");
+
+        connector.HypertableCreationFailures.Should().ContainSingle(
+            "the failure is reported, not swallowed — TASK-204's other half, and the reason this is not a "
+          + "regression to the silent plain table that preceded TASK-472")
+            .Which.TableName.Should().Be(GuidKeyedTable);
+    }
+
+    /// <summary>
+    /// <b>The other half of TASK-204's split, and the reason it is not superficial pattern-matching.</b> A
+    /// caller asking for the conversion <i>now</i> gets the error — exactly why <c>CreateIndexes</c> still
+    /// throws there while schema-ensure degrades. This door is public and therefore has real callers.
+    /// </summary>
+    [Fact]
+    public void An_explicit_conversion_still_throws()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });   // degrades, leaving a plain table
+
+        var act = () => connector.CreateHypertable(GuidKeyedTable, "ts");
 
         act.Should().Throw<Exception>()
             .Where(ex => Flatten(ex).Contains("TS103") || Flatten(ex).Contains("unique index"),
-                "TimescaleDB refuses a unique index that omits the partitioning column; before the "
-              + "identifier fix this never got far enough to be raised, because the statement failed on "
-              + "the relation name first and that failure was swallowed");
+                "lazy schema-ensure degrades and reports; an EXPLICIT schema call throws (TASK-204)");
+    }
 
-        IsHypertable(GuidKeyedTable).Should().BeFalse();
+    /// <summary>
+    /// <b>The async explicit door, asserted rather than assumed.</b> TASK-254's criterion names
+    /// <c>CreateHypertable</c> <i>and</i> <c>CreateHypertableAsync</c>, and the first version of this suite
+    /// covered only the sync one — caught by <c>verify-intent</c> at the close gate. The async path is
+    /// untouched by this task, so it throws by construction; "by construction" is precisely what this repo
+    /// has been burned by four times (TASK-245: the async twin you patched may not be the one anything
+    /// calls), and what criterion 3 forbids for the record.
+    /// </summary>
+    [Fact]
+    public async System.Threading.Tasks.Task An_explicit_async_conversion_still_throws()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });   // degrades, leaving a plain table
+
+        var act = async () => await connector.CreateHypertableAsync(GuidKeyedTable, "ts");
+
+        (await act.Should().ThrowAsync<Exception>())
+            .Where(ex => Flatten(ex).Contains("TS103") || Flatten(ex).Contains("unique index"),
+                "the async explicit door must agree with the sync one — degrading is a property of "
+              + "schema-ensure, not of the conversion call");
+    }
+
+    /// <summary>
+    /// <b>Keyed, not logged.</b> TASK-204's own regression was an append-only list: connectors are cached
+    /// process-wide while <c>_initialized</c> lives on the store, so a scoped store re-runs schema-ensure per
+    /// request and the list grew by one entry per HTTP request, forever. Asserted rather than asserted-by-
+    /// construction, because that is precisely what let the original ship.
+    /// </summary>
+    [Fact]
+    public void The_failure_is_recorded_once_however_many_attempts_run()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+        connector.HypertableCreationFailures.Should().ContainSingle(
+            "three schema-ensure runs against one shared connector must leave ONE entry, not three");
+    }
+
+    /// <summary>
+    /// <b>Transition-fired, not per-attempt.</b> An event on every attempt would fire on every HTTP request
+    /// for a per-request store over an unconvertible table — the notification equivalent of the growing list.
+    /// </summary>
+    [Fact]
+    public void The_event_fires_on_the_transition_into_failure_not_on_every_attempt()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        var raised = 0;
+        connector.OnHypertableCreationFailed += _ => raised++;
+
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+        raised.Should().Be(1, "the subscriber is told when the condition begins, not once per attempt");
+    }
+
+    /// <summary>
+    /// <b>Cleared when repaired.</b> A report that cannot un-report is a report an operator learns to ignore
+    /// (§ Conventions). The re-attempt is deliberately kept — that is what lets the conversion succeed on its
+    /// own once the blocking constraint is gone, with no restart — so the record must drop out when it does.
+    /// </summary>
+    [Fact]
+    public void The_record_clears_once_the_conversion_succeeds()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+        connector.HypertableCreationFailures.Should().ContainSingle("precondition: it failed first");
+
+        // Repair the blocking condition exactly as an operator would: the unique/primary key that omits the
+        // partitioning column is what TS103 objects to.
+        var pk = Scalar("SELECT conname FROM pg_constraint "
+                      + $"WHERE conrelid = '\"{GuidKeyedTable}\"'::regclass AND contype = 'p'");
+        Exec($"ALTER TABLE \"{GuidKeyedTable}\" DROP CONSTRAINT \"{pk}\"");
+
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+        IsHypertable(GuidKeyedTable).Should().BeTrue("the re-attempt is kept, so the repair takes effect");
+        connector.HypertableCreationFailures.Should().BeEmpty(
+            "current state, not history — the condition an operator repaired must stop being reported");
+    }
+
+    /// <summary>
+    /// <b>Degrading is conditional, and this is the condition.</b> Inside a caller's ambient boundary the
+    /// <c>CREATE TABLE</c> is not committed and the failed <c>create_hypertable</c> aborts the transaction,
+    /// so swallowing would report success over a table that will not exist — measured: 0 rows in
+    /// <c>pg_tables</c> afterwards, and every later command in that transaction fails with <c>25P02</c>,
+    /// naming neither <c>TS103</c> nor the table. The caller would lose the real error entirely.
+    /// <para>
+    /// Found by <c>code-review</c> at TASK-254's close gate, against a doc comment that had already written
+    /// down why it would be worse. The premise had been measured only on the own-connection path — <b>a
+    /// premise measured on one path is a sample, not a premise.</b> TASK-244 is what made this path
+    /// reachable, by having <c>InitCore</c> enter the ambient scope.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void Inside_an_ambient_boundary_the_failure_is_rethrown_rather_than_degraded()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var settings = Settings();
+        var connector = new TimescaleDBConnector(settings);
+
+        using var connection = new NpgsqlConnection(settings.GetConnectionString());
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+
+        using (AmbientSqlTransaction.Enter(settings.GetId(), connection, transaction))
+        {
+            var act = () => connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+            act.Should().Throw<Exception>(
+                "on the boundary path the table does not survive, so degrading would leave the store "
+              + "initialised over a table that does not exist — worse than the throw it replaces");
+        }
+
+        transaction.Rollback();
+    }
+
+    /// <summary>
+    /// An absent chunk interval omits the argument rather than emitting <c>INTERVAL ''</c> (which is
+    /// <c>22007</c>), matching the sibling emitter in <c>TimescaleDBMigration</c>.
+    /// <para>
+    /// This matters <i>because</i> schema-ensure now degrades: before TASK-254 a blank
+    /// <c>ChunkTimeInterval</c> failed loudly out of <c>CreateTable</c>; afterwards it would be caught and
+    /// recorded, so <b>no</b> table on that connector would ever become a hypertable and nothing would
+    /// surface unless the consumer had subscribed to the event. The value is reachable — the property has a
+    /// public setter and is also fed by the 7-arg constructor and <c>LoadFrom</c>.
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public void An_absent_chunk_interval_omits_the_argument(string? interval)
+    {
+        var sql = new TimescaleDBConnector(Settings()!)
+            .BuildCreateHypertableSql(GuidKeyedTable, "ts", interval!);
+
+        sql.Should().NotContain("chunk_time_interval",
+            "an omitted argument lets TimescaleDB apply its own default, which is what supplying no "
+          + "interval means");
+        sql.Should().NotContain("INTERVAL ''", "INTERVAL '' is 22007, and would now be silently recorded");
+        sql.Should().Contain("if_not_exists => TRUE", "the rest of the statement is unchanged");
+    }
+
+    /// <summary>
+    /// <b>A subscriber that throws must not defeat the degrade.</b> The event fires inside
+    /// <c>CreateTable</c>'s catch, so an escaping handler exception would propagate out of schema-ensure and
+    /// leave the store permanently uninitialised — the exact failure this task removes, reintroduced through
+    /// the reporting channel. A host that logs and escalates is the realistic trigger, and the event's own
+    /// summary invites exactly that.
+    /// </summary>
+    [Fact]
+    public void A_throwing_subscriber_does_not_defeat_the_degrade()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.OnHypertableCreationFailed += _ => throw new InvalidOperationException("handler blew up");
+
+        var act = () => connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+        act.Should().NotThrow("the caller's handler failing is not a second schema failure");
+        connector.HypertableCreationFailures.Should().ContainSingle(
+            "and the record still stands — the report is not lost with the handler");
     }
 
     private static string Flatten(Exception ex)
