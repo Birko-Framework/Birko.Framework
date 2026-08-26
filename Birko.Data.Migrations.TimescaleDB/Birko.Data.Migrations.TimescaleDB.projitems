@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)TimescaleDBMigration.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ContinuousAggregateParts.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)TimescaleDBMigrationRunner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Context\TimescaleDBMigrationContext.cs" />
   </ItemGroup>

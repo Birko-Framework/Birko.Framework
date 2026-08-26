@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Data.Common;
+using System.Linq;
 using Birko.Data.Migrations.Context;
 using Birko.Data.Migrations.SQL.Context;
 using Birko.Data.SQL;
@@ -95,7 +97,16 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// finds a decision that has been reopened rather than a constraint that no longer exists.
     /// </para>
     /// <para>
-    /// <b>Schema-qualified names ARE supported</b> (TASK-262). Every object-name argument goes through
+    /// <b>Schema-qualified names ARE supported by the EMITTERS</b> (TASK-262) — but <b>not by the two
+    /// catalogue READERS</b>, and this paragraph claimed otherwise until TASK-260's close gate.
+    /// <see cref="IsHypertable"/> and <see cref="GetChunkInterval"/> compare the caller's name against
+    /// <c>timescaledb_information.hypertables.hypertable_name</c>, which holds the <i>bare</i> name with the
+    /// schema in a separate column — so <c>IsHypertable(context, "reporting.evts")</c> answers <b>false</b>
+    /// for a hypertable that exists, and the common guard
+    /// <c>if (!IsHypertable(t)) CreateHypertable(t)</c> then re-issues the conversion. <b>[[TASK-280]] owns
+    /// that</b>; it is stated here because a remark asserting the opposite is worse than no remark.
+    /// <para>
+    /// Every object-name argument to an <i>emitter</i> goes through
     /// <see cref="Birko.Data.SQL.Connectors.AbstractConnectorBase.QualifiedIdentifier"/>, which splits on
     /// <b>unquoted</b> dots and quotes each part — so <c>reporting.evts</c> emits
     /// <c>"reporting"."evts"</c> and reaches the real object. TASK-253 briefly broke this by quoting the whole
@@ -104,6 +115,7 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// <c>PostgreSQLConnector.IsMissingTableException</c> classifies that as a missing table, so the handler
     /// could swallow it and report success). A table genuinely <i>named</i> <c>a.b</c> stays reachable as
     /// <c>"a.b"</c>, since only unquoted dots separate.
+    /// </para>
     /// </para>
     /// <para>
     /// <b>PRECONDITION, and this one is a real limit rather than a bug: these rules assume the object's
@@ -128,9 +140,23 @@ namespace Birko.Data.Migrations.TimescaleDB
     /// real caller appears, the opt-out is the shape to add.
     /// </para>
     /// <para>
-    /// <b>Two arguments are raw SQL and cannot be contained</b> — see
-    /// <see cref="BuildContinuousAggregateSql"/>'s <c>selectClause</c> and <c>groupByClause</c>. TASK-260
-    /// owns replacing them with a structured surface.
+    /// <b>Every caller-derived input in this class is now contained — the last two that were not are gone</b>
+    /// (TASK-260). <see cref="BuildContinuousAggregateSql"/> used to take <c>selectClause</c> and
+    /// <c>groupByClause</c> as raw SQL in statement position, which no escaping can contain: a string
+    /// documented as "SQL" has no containment story, and the only fix is to stop taking SQL. They are
+    /// replaced by <see cref="ContinuousAggregateProjection"/> and
+    /// <see cref="ContinuousAggregateGrouping"/>, whose identifiers are validated and whose one literal is
+    /// escaped.
+    /// <para>
+    /// <b>The aggregate function is a validated identifier, deliberately NOT a closed enum</b> — measured on
+    /// TimescaleDB 2.29.2, a continuous aggregate accepts essentially any aggregate, including
+    /// <c>array_agg</c>, <c>string_agg</c>, <c>bool_and</c>, the ordered-set <c>percentile_cont</c> and
+    /// user-defined ones, so an enum would refuse aggregates that work today. This is not a passthrough:
+    /// arbitrary text fails the guard, and a name that merely does not exist can only fail the statement at
+    /// DDL time (<c>42883</c>, naming the function and its argument types). Ordered-set aggregates remain
+    /// inexpressible — their syntax is not function-plus-arguments — and want their own structured shape if
+    /// a caller ever needs one, never a raw string.
+    /// </para>
     /// </para>
     /// <para>
     /// <b>A fourth position: a bare column reference, contained by REFUSAL rather than by escaping</b>
@@ -303,10 +329,14 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// <summary>
         /// Creates a continuous aggregate.
         /// </summary>
-        protected virtual void CreateContinuousAggregate(IMigrationContext context, string viewName, string sourceTable, string timeBucket, string timeColumn, string selectClause, string groupByClause = "")
+        protected virtual void CreateContinuousAggregate(IMigrationContext context, string viewName,
+            string sourceTable, string timeBucket, string timeColumn,
+            IEnumerable<ContinuousAggregateProjection> projections,
+            IEnumerable<ContinuousAggregateGrouping>? groupings = null)
         {
             var (connection, transaction, connector) = GetSqlConnection(context);
-            ExecuteScript(connection, transaction, BuildContinuousAggregateSql(connector, viewName, sourceTable, timeBucket, timeColumn, selectClause, groupByClause));
+            ExecuteScript(connection, transaction,
+                BuildContinuousAggregateSql(connector, viewName, sourceTable, timeBucket, timeColumn, projections, groupings));
         }
 
         /// <summary>
@@ -332,15 +362,12 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// </para>
         /// </summary>
         /// <remarks>
-        /// <b><paramref name="selectClause"/> and <paramref name="groupByClause"/> are interpolated as raw
-        /// SQL and CANNOT be contained.</b> They are not identifiers and not literals — they are expression
-        /// lists, so a caller controls the statement through them. Do not build either from untrusted input.
-        /// <para>
-        /// They are deliberately <i>not</i> identifier-validated, and a test pins that: a group-by may
-        /// legitimately be an expression such as <c>date_trunc('day', x)</c>, and a select clause is a list of
-        /// aggregates by definition, so validating them would refuse working migrations while leaving the
-        /// other argument open anyway. The containment can only come from changing the API's shape, which
-        /// TASK-260 owns.
+        /// <b><paramref name="projections"/> and <paramref name="groupings"/> are structured values, not SQL</b>
+        /// (TASK-260). They replaced a <c>selectClause</c> / <c>groupByClause</c> pair that was raw SQL in
+        /// statement position and therefore uncontainable by any escaping — a string documented as "SQL" has
+        /// no containment story, so the fix was the API's shape rather than a validator. Every identifier
+        /// they carry is refused unless it is a bare identifier; the one literal a grouping may carry is
+        /// escaped.
         /// </para>
         /// <para>
         /// <b><paramref name="timeColumn"/> is a fourth treatment again, and it is emitted BARE</b> (CR-H070,
@@ -371,15 +398,45 @@ namespace Birko.Data.Migrations.TimescaleDB
         /// follows <see cref="BuildCreateHypertableSql"/>, where a time-dimension column is required.
         /// </para>
         /// </remarks>
-        internal static string BuildContinuousAggregateSql(AbstractConnector connector, string viewName, string sourceTable, string timeBucket, string timeColumn, string selectClause, string groupByClause = "")
+        internal static string BuildContinuousAggregateSql(AbstractConnector connector, string viewName,
+            string sourceTable, string timeBucket, string timeColumn,
+            IEnumerable<ContinuousAggregateProjection> projections,
+            IEnumerable<ContinuousAggregateGrouping>? groupings = null)
         {
-            var groupBySql = string.IsNullOrEmpty(groupByClause) ? "" : $", {groupByClause}";
+            if (projections == null)
+            {
+                throw new ArgumentNullException(nameof(projections));
+            }
+
+            var projectionSql = string.Join(", ", projections.Select(p => p.Render()));
+            if (string.IsNullOrEmpty(projectionSql))
+            {
+                throw new ArgumentException(
+                    "A continuous aggregate must project at least one aggregate; an aggregate view over no "
+                    + "aggregates is not a view anyone wants and PostgreSQL would reject the statement.",
+                    nameof(projections));
+            }
+
+            // CR-H071 is about the DANGLING COMMA, and that is decided once, here, from whether the grouping
+            // set is empty -- not from the two clauses rendering identically. They deliberately differ: the
+            // SELECT list carries `AS alias` and the GROUP BY must not (PostgreSQL groups by the expression;
+            // an alias there is a syntax error). Without that split, two expression groupings using the same
+            // function both take the function's name as their output column and the statement fails with
+            // 42701 "column ... specified more than once" -- measured on 2.29.2, and found by code-review at
+            // TASK-260's close gate, where the redesign had claimed to preserve the expression-grouping
+            // capability while quietly dropping the ability to alias it.
+            var materialised = groupings?.ToArray() ?? System.Array.Empty<ContinuousAggregateGrouping>();
+            var selectGroupingSql = string.Join(", ", materialised.Select(g => g.RenderSelect()));
+            var byGroupingSql = string.Join(", ", materialised.Select(g => g.Render()));
+            var selectBySql = materialised.Length == 0 ? string.Empty : $", {selectGroupingSql}";
+            var groupBySql = materialised.Length == 0 ? string.Empty : $", {byGroupingSql}";
+
             return $@"
                 CREATE MATERIALIZED VIEW {connector.QualifiedIdentifier(viewName)}
                 WITH (timescaledb.continuous) AS
                 SELECT
-                    time_bucket('{SqlLiteral.EscapeLiteral(timeBucket)}', {Birko.Data.SQL.DataBase.ValidateColumnIdentifier(timeColumn, nameof(timeColumn))}) AS bucket{groupBySql},
-                    {selectClause}
+                    time_bucket('{SqlLiteral.EscapeLiteral(timeBucket)}', {Birko.Data.SQL.DataBase.ValidateColumnIdentifier(timeColumn, nameof(timeColumn))}) AS bucket{selectBySql},
+                    {projectionSql}
                 FROM {connector.QualifiedIdentifier(sourceTable)}
                 GROUP BY bucket{groupBySql}
                 WITH NO DATA;
