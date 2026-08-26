@@ -160,7 +160,8 @@ generated: 2026-08-19
 - [ ] TASK-272 An entity cannot say which schema it lives in
 - [ ] TASK-258 `retryWhenOwned` claims to preserve each provider's retry policy, and nothing asserts that it does
 - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it
-- [ ] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
+- [x] TASK-260 `CreateContinuousAggregate` takes two raw SQL fragments that cannot be contained
+- [ ] TASK-284 An empty `startOffset` silently widens a refresh policy to all of history
 - [x] TASK-261 `GetChunkInterval` reads a catalogue column TimescaleDB removed in 2.0
 - [x] TASK-262 The migration emitters' identifier rules assume this framework created the object — twice over
 - [x] TASK-273 `CompositeIndex` cannot say "unique only where the column is not null", so a nullable unique index breaks ordinary inserts on MSSql

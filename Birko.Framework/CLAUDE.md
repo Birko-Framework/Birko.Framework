@@ -931,6 +931,51 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **A guard declared in `Birko.Data.SQL` is tested in `Birko.Data.SQL.Tests`, not only from its
     consumer's suite.** TASK-257's close gate caught the identical omission for `AbstractField.IsInIndexKey`;
     a guard whose only coverage lives downstream is one a downstream cleanup can delete silently.
+- **A parameter documented as "SQL" has no containment story, so the fix is the API's SHAPE, never a
+  validator — and where the fix needs an open set, a validated IDENTIFIER contains it without closing it.**
+  TASK-260, the last member of the identifier family and the one that ends it for this class.
+  `BuildContinuousAggregateSql` took `selectClause` and `groupByClause` as raw SQL in *statement* position:
+  not inside a literal, not an identifier, so neither escaping nor quoting could reach them. Six parts
+  generalise:
+  - **Recognise the shape: uncontainable is a property of the PARAMETER, not a gap in the escaping.** Every
+    other caller-derived value in that class sits inside a literal or an identifier position and is
+    therefore containable. These two were expression *lists* — arbitrary SQL by definition — so a guard was
+    never available and TASK-253 correctly pinned the boundary rather than pretending to close it. **When a
+    parameter's documentation has to say "this is SQL, do not build it from untrusted input", that sentence
+    is the defect**, and the remedy is structured values the builder composes.
+  - **⚠ A closed set is the obvious containment and it can be the WRONG guard — measure what the server
+    actually accepts.** This task's own acceptance criterion demanded an enum, reasoning *"a passthrough is
+    the same hole with more ceremony"*. Measured on TimescaleDB 2.29.2, a continuous aggregate accepts
+    **essentially any aggregate** — `array_agg`, `string_agg`, `bool_and`, even the ordered-set
+    `percentile_cont`, plus user-defined ones. An enum would therefore have imposed a **brand-new**
+    restriction rather than mirroring the server's, refusing aggregates that work today. **The criterion was
+    amended openly, on the measurement, rather than quietly satisfied** — its *purpose* (containment) was
+    kept and its *letter* dropped, which is the honest way round when a requirement predates the evidence.
+  - **A validated identifier is not a passthrough, and the difference is measurable rather than rhetorical.**
+    A passthrough accepts arbitrary text; this accepts a single bare identifier through
+    `DataBase.ValidateColumnIdentifier` — TASK-255's producer, so the class has **one** rule for "a name
+    interpolated bare into a statement". A payload fails the guard; a name that merely does not exist can
+    only *fail* the statement, at DDL time, with `42883` naming the function and its argument types.
+    Nothing swallows it (`42883` is not `42P01`, `ExecuteScript` has no `catch`, and TASK-254's degrade is
+    on the store path). That is exactly the property the validator already claims: **a bare identifier that
+    names nothing is at worst a database error, which is a wrong answer that reports itself.**
+  - **Do not assume the structured replacement loses the capability — measure that too.** The plan was
+    written expecting to give up an expression group-by (`date_trunc('day', Ts)`), and prepared to record
+    the loss. Measured: it is **legal** in a continuous aggregate, so grouping got the *same* structured
+    shape as the projection (function + escaped literal + validated column) and the capability survives.
+    "Unusual, so probably fine to drop" was plausible and unmeasured; the measurement is what kept a real
+    capability.
+  - **Removing a parameter is safe in a way that inserting one is not: change the TYPE.** All 14 call sites
+    failed loudly with `CS1503` — contrast TASK-255, where inserting a same-typed `string` let two
+    6-argument calls **silently rebind**. Where a signature must change, prefer the change the compiler
+    cannot miss. (And count the call sites with the *right* grep: the first measurement here said "three"
+    because it covered only the `protected virtual` wrapper and missed the `internal static` the tests
+    actually call — caught at the close gate by judging the criterion against the diff instead of its tick.)
+  - **Replacing beats an obsolete overload when the parameter IS the defect.** Criterion 7 permitted keeping
+    a string overload; keeping one would have left the uncontainable surface callable and the defect
+    reachable, i.e. failed the task's own definition of done. Note the justification: **not** TASK-247's
+    dead-fallback rule, which is about drift and was the weaker argument an earlier draft reached for.
+    Affordable because 0 of 16 consumer repos call it.
 - **A statement the server refuses inside a transaction is a provider limit the framework must ROUTE
   AROUND, and the statements in one family will not all need the same treatment — one may be fixable in
   place and its neighbour not at all.** TASK-281. `SqlMigrationSettings.UseTransaction` defaults to `true`,
