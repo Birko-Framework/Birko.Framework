@@ -39,10 +39,18 @@ namespace Birko.Data.Migrations.TimescaleDB.Tests;
 /// </para>
 ///
 /// <para>
-/// <b>Two arguments are deliberately NOT covered</b> — <c>selectClause</c> and <c>groupByClause</c> are raw
-/// SQL by design and cannot be contained at all. That boundary is pinned as current behaviour in
-/// <see cref="TimescaleDBMigrationSqlTests.ContinuousAggregate_LeavesExpressionClausesIntact"/> and owned by
-/// TASK-260. Adding an injection test for them would assert a guarantee this API does not make.
+/// <b>TASK-260 closed the last uncontained pair.</b> This file used to say two arguments were deliberately
+/// NOT covered — <c>selectClause</c> and <c>groupByClause</c> were raw SQL in statement position, so no
+/// escaping could contain them and an injection test would have asserted a guarantee the API did not make.
+/// They are gone: the projection and grouping are structured values whose identifiers are validated and
+/// whose one literal is escaped, so every caller-derived input in this class is now contained by one of the
+/// three mechanisms. The tests below cover each new input.
+/// </para>
+/// <para>
+/// <b>Note the function name is contained by refusal too, and is NOT a passthrough.</b> A passthrough would
+/// accept arbitrary text; this accepts a single bare identifier. A name that merely does not exist is not an
+/// injection — it is a statement that fails at DDL time with <c>42883</c> naming the function and its
+/// argument types, which is the "wrong answer that reports itself" property the validator claims.
 /// </para>
 /// </summary>
 public class TimescaleDBMigrationInjectionTests
@@ -176,7 +184,7 @@ public class TimescaleDBMigrationInjectionTests
     public void ContinuousAggregate_ContainsABreakoutInTheViewAndSourceTable()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), IdentifierBreakout, IdentifierBreakout, "1 day", "Ts", "count(*) AS n");
+            Connector(), IdentifierBreakout, IdentifierBreakout, "1 day", "Ts", new[] { ContinuousAggregateProjection.OfAll("count", "n") });
 
         ContainedAsIdentifier(sql, IdentifierBreakout);
     }
@@ -185,7 +193,7 @@ public class TimescaleDBMigrationInjectionTests
     public void ContinuousAggregate_ContainsABreakoutInTheTimeBucket()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "Rollup", "Metrics", LiteralBreakout, "Ts", "count(*) AS n");
+            Connector(), "Rollup", "Metrics", LiteralBreakout, "Ts", new[] { ContinuousAggregateProjection.OfAll("count", "n") });
 
         ContainedAsLiteral(sql, LiteralBreakout);
     }
@@ -227,12 +235,83 @@ public class TimescaleDBMigrationInjectionTests
     public void ContinuousAggregate_RefusesABreakoutInTheTimeColumn(string payload)
     {
         var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "Rollup", "Metrics", "1 day", payload, "count(*) AS n");
+            Connector(), "Rollup", "Metrics", "1 day", payload,
+            new[] { ContinuousAggregateProjection.OfAll("count", "n") });
 
         act.Should().Throw<ArgumentException>()
             .WithMessage("*not a plain, unqualified column identifier*",
                 "the column is emitted bare, so refusal is the only containment available");
     }
+
+    // ── TASK-260: the structured projection and grouping, which replaced the two raw-SQL clauses ──
+
+    /// <summary>
+    /// Every identifier in a projection is refused when it is not a bare identifier — function, column and
+    /// alias alike. This is the payload that reached the DDL uncontained through the old
+    /// <c>selectClause</c>; it now has no path at all.
+    /// </summary>
+    [Theory]
+    [InlineData("fn")]
+    [InlineData("column")]
+    [InlineData("alias")]
+    public void ContinuousAggregateProjection_RefusesABreakoutInEveryIdentifier(string slot)
+    {
+        var projection = slot switch
+        {
+            "fn" => ContinuousAggregateProjection.Of(LiteralBreakout, "value", "total"),
+            "column" => ContinuousAggregateProjection.Of("sum", LiteralBreakout, "total"),
+            _ => ContinuousAggregateProjection.Of("sum", "value", LiteralBreakout),
+        };
+
+        var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
+            Connector(), "Rollup", "Metrics", "1 day", "Ts", new[] { projection });
+
+        act.Should().Throw<ArgumentException>()
+            .WithMessage("*not a plain, unqualified column identifier*",
+                "these are emitted bare into the SELECT list, so refusal is the only containment available");
+    }
+
+    /// <summary>The second column of a two-argument aggregate is validated on the same terms.</summary>
+    [Fact]
+    public void ContinuousAggregateProjection_RefusesABreakoutInTheSecondColumn()
+    {
+        var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
+            Connector(), "Rollup", "Metrics", "1 day", "Ts",
+            new[] { ContinuousAggregateProjection.OfPair("first", "value", LiteralBreakout, "f") });
+
+        act.Should().Throw<ArgumentException>().WithMessage("*not a plain, unqualified column identifier*");
+    }
+
+    /// <summary>A grouping's function and column are identifiers; both are refused when they are not.</summary>
+    [Theory]
+    [InlineData("fn")]
+    [InlineData("column")]
+    public void ContinuousAggregateGrouping_RefusesABreakoutInEveryIdentifier(string slot)
+    {
+        var grouping = slot == "fn"
+            ? ContinuousAggregateGrouping.Expression(LiteralBreakout, "day", "Ts")
+            : ContinuousAggregateGrouping.Of(LiteralBreakout);
+
+        var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
+            Connector(), "Rollup", "Metrics", "1 day", "Ts",
+            new[] { ContinuousAggregateProjection.OfAll("count", "n") }, new[] { grouping });
+
+        act.Should().Throw<ArgumentException>().WithMessage("*not a plain, unqualified column identifier*");
+    }
+
+    /// <summary>
+    /// The grouping's literal argument is a <i>value</i>, not an identifier — so it is contained by escaping
+    /// rather than refusal, exactly as the time bucket and the policy intervals are. Refusing it would break
+    /// legitimate values, which is the mistake TASK-253 warned against for expression fragments.
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregateGrouping_ContainsABreakoutInTheLiteralArgument()
+        => ContainedAsLiteral(
+            TimescaleDBMigration.BuildContinuousAggregateSql(
+                Connector(), "Rollup", "Metrics", "1 day", "Ts",
+                new[] { ContinuousAggregateProjection.OfAll("count", "n") },
+                new[] { ContinuousAggregateGrouping.Expression("date_trunc", LiteralBreakout, "Ts") }),
+            LiteralBreakout);
 
     // ── the four extracted builders also need their happy path pinned ──
 
@@ -261,7 +340,7 @@ public class TimescaleDBMigrationInjectionTests
         TimescaleDBMigration.BuildRefreshContinuousAggregateSql(Connector(), "DailyStats")
             .Should().Be("CALL refresh_continuous_aggregate('\"DailyStats\"', NULL, NULL);");
 
-        TimescaleDBMigration.BuildContinuousAggregateSql(Connector(), "DailyStats", "Metrics", "1 day", "Ts", "count(*) AS n")
+        TimescaleDBMigration.BuildContinuousAggregateSql(Connector(), "DailyStats", "Metrics", "1 day", "Ts", new[] { ContinuousAggregateProjection.OfAll("count", "n") })
             .Should().Contain("CREATE MATERIALIZED VIEW \"DailyStats\"");
     }
 }

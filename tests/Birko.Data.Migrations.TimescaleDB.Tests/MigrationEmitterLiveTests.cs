@@ -502,7 +502,7 @@ public class MigrationEmitterLiveTests : IDisposable
             var probe = new Probe();
             probe.Hypertable(context, Table, "time", "1 day");
             var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-                new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "time", "avg(Value) AS avg_value");
+                new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "time", new[] { ContinuousAggregateProjection.Of("avg", "Value", "avg_value") });
             Exec(sql);
         }
 
@@ -540,7 +540,7 @@ public class MigrationEmitterLiveTests : IDisposable
         }
 
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value");
+            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("avg", "Value", "avg_value") });
 
         Exec(sql);
 
@@ -581,7 +581,7 @@ public class MigrationEmitterLiveTests : IDisposable
            + "('2026-01-02T01:00:00Z', 1, 90)");
 
         Exec(TimescaleDBMigration.BuildContinuousAggregateSql(
-            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value"));
+            new TimescaleDBConnector(Settings()), Aggregate, Table, "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("avg", "Value", "avg_value") }));
 
         Exec(TimescaleDBMigration.BuildRefreshContinuousAggregateSql(
             new TimescaleDBConnector(Settings()), Aggregate));

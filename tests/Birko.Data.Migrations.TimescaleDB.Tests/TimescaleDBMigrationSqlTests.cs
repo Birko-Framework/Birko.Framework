@@ -156,7 +156,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_QuotesTheViewAndTheSourceTable()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "DailyStats", "Metrics", "1 day", "Ts", "avg(value) AS avg_value");
+            Connector(), "DailyStats", "Metrics", "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("avg", "value", "avg_value") });
 
         sql.Should().Contain("CREATE MATERIALIZED VIEW \"DailyStats\"");
         sql.Should().Contain("FROM \"Metrics\"");
@@ -168,7 +168,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_EmptyGroupBy_HasNoDanglingComma()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "daily_stats", "metrics", "1 day", "time", "avg(value) AS avg_value");
+            Connector(), "daily_stats", "metrics", "1 day", "time", new[] { ContinuousAggregateProjection.Of("avg", "value", "avg_value") });
 
         // CR-H071's intent is "no dangling comma", which is what these two assert. The statement no longer
         // ends at the GROUP BY — TASK-281 appends WITH NO DATA — so the old `Contain("GROUP BY bucket;")`
@@ -187,7 +187,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_WithGroupBy_IncludesColumnsInSelectAndGroupBy()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "daily_by_device", "metrics", "1 day", "time", "avg(value) AS avg_value", "device_id");
+            Connector(), "daily_by_device", "metrics", "1 day", "time", new[] { ContinuousAggregateProjection.Of("avg", "value", "avg_value") }, new[] { ContinuousAggregateGrouping.Of("device_id") });
 
         sql.Should().Contain("AS bucket, device_id,");
         // Not "...device_id;" — TASK-281 appends WITH NO DATA, so the semicolon is no longer adjacent.
@@ -195,19 +195,27 @@ public class TimescaleDBMigrationSqlTests
     }
 
     /// <summary>
-    /// <b>Pins the boundary TASK-260 will remove, so nobody closes it by accident.</b> The select and group-by
-    /// clauses are interpolated as raw SQL — an expression group-by such as <c>date_trunc('day', x)</c> is
-    /// legitimate and must survive. Identifier-validating them would refuse working migrations while leaving
-    /// the neighbouring argument open anyway, which is why the fix is an API change rather than a guard.
+    /// <b>TASK-260: the boundary is gone, and the capability is NOT.</b> This test previously pinned the
+    /// raw-SQL <c>selectClause</c> / <c>groupByClause</c> — the two arguments that could not be contained —
+    /// and said the fix had to be an API change rather than a guard. It is now the structured equivalent.
+    /// <para>
+    /// <b>The expression group-by survives, which the plan initially assumed it would not.</b> Measured on
+    /// TimescaleDB 2.29.2: <c>GROUP BY bucket, date_trunc('day', Ts)</c> creates a continuous aggregate
+    /// successfully, so refusing it would have given up something real. That is why grouping takes the same
+    /// structured shape as the projection rather than being columns-only — the literal argument is contained
+    /// by <see cref="SqlLiteral.EscapeLiteral"/>, exactly as the time bucket already is.
+    /// </para>
     /// </summary>
     [Fact]
-    public void ContinuousAggregate_LeavesExpressionClausesIntact()
+    public void ContinuousAggregate_ExpressesAnExpressionGroupingWithoutRawSql()
     {
         var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "Rollup", "Metrics", "1 day", "Ts", "sum(value) AS total", "date_trunc('day', x)");
+            Connector(), "Rollup", "Metrics", "1 day", "Ts",
+            new[] { ContinuousAggregateProjection.Of("sum", "value", "total") },
+            new[] { ContinuousAggregateGrouping.Expression("date_trunc", "day", "Ts") });
 
-        sql.Should().Contain("date_trunc('day', x)");
-        sql.Should().Contain("sum(value) AS total");
+        sql.Should().Contain("date_trunc('day', Ts)", "the expression grouping is still expressible");
+        sql.Should().Contain("sum(value) AS total", "and the projection composes to the same SQL");
     }
 
     /// <summary>
@@ -228,7 +236,7 @@ public class TimescaleDBMigrationSqlTests
     [Fact]
     public void ContinuousAggregate_TakesTheTimeColumnAsAParameter()
         => TimescaleDBMigration.BuildContinuousAggregateSql(
-                Connector(), "Rollup", "Metrics", "1 day", "Ts", "sum(value) AS total")
+                Connector(), "Rollup", "Metrics", "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("sum", "value", "total") })
             .Should().Contain("time_bucket('1 day', Ts)");
 
     // ── continuous-aggregate refresh policy (TASK-281) ──
@@ -262,6 +270,53 @@ public class TimescaleDBMigrationSqlTests
             .And.NotContain("'NULL'");
 
     /// <summary>
+    /// <b>Two expression groupings using the same function must not collide.</b> A grouping is spliced into
+    /// the SELECT list as well as the GROUP BY, and an unaliased <c>date_trunc(...)</c> takes the function's
+    /// name as its output column — so two of them emit two columns of the same name and the statement fails
+    /// with <c>42701 column "date_trunc" specified more than once</c> (measured on 2.29.2).
+    /// <para>
+    /// Found by <c>code-review</c> at TASK-260's close gate, against a redesign that had claimed to preserve
+    /// the expression-grouping capability. It did preserve the grouping and quietly dropped the ability to
+    /// <i>alias</i> it, which the raw string it replaced could express. The alias closes that.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregate_AliasesGroupingExpressionsSoTwoCannotCollide()
+    {
+        var sql = TimescaleDBMigration.BuildContinuousAggregateSql(
+            Connector(), "Rollup", "Metrics", "1 day", "Ts",
+            new[] { ContinuousAggregateProjection.OfAll("count", "n") },
+            new[]
+            {
+                ContinuousAggregateGrouping.Expression("date_trunc", "day", "Ts", "d"),
+                ContinuousAggregateGrouping.Expression("date_trunc", "hour", "Ts", "h"),
+            });
+
+        sql.Should().Contain("date_trunc('day', Ts) AS d", "the SELECT list carries the alias");
+        sql.Should().Contain("date_trunc('hour', Ts) AS h");
+        sql.Should().Contain("GROUP BY bucket, date_trunc('day', Ts), date_trunc('hour', Ts)",
+            "but the GROUP BY must NOT — PostgreSQL groups by the expression, and an alias there is a "
+          + "syntax error");
+        sql.Should().NotContain("date_trunc('day', Ts) AS d, date_trunc('hour', Ts) AS h\n                FROM");
+    }
+
+    /// <summary>
+    /// A null column is refused rather than silently becoming the <c>*</c> sentinel. <c>null</c> means
+    /// <c>count(*)</c> inside the projection and the render takes that branch <b>before</b> validating, so a
+    /// null arriving from a config object would count every row instead of the intended column's non-null
+    /// values — a wrong answer that does not report itself. <c>*</c> stays reachable only through
+    /// <c>OfAll</c>. Found by code-review at TASK-260's close gate.
+    /// </summary>
+    [Fact]
+    public void ContinuousAggregateProjection_RefusesANullColumnRatherThanCountingEverything()
+    {
+        var act = () => ContinuousAggregateProjection.Of("count", null!, "n");
+
+        act.Should().Throw<ArgumentNullException>().WithMessage("*OfAll*",
+            "the refusal names the door that legitimately produces count(*)");
+    }
+
+    /// <summary>
     /// A <c>Table.Column</c> qualifier is refused. TASK-249's corollary: this statement introduces no alias,
     /// so a qualifier cannot resolve, and accepting one would turn a clear <see cref="ArgumentException"/>
     /// into a provider syntax error — the guard passing the payload's harmless cousin through to break the
@@ -271,7 +326,7 @@ public class TimescaleDBMigrationSqlTests
     public void ContinuousAggregate_RefusesAQualifiedTimeColumn()
     {
         var act = () => TimescaleDBMigration.BuildContinuousAggregateSql(
-            Connector(), "Rollup", "Metrics", "1 day", "Metrics.Ts", "sum(value) AS total");
+            Connector(), "Rollup", "Metrics", "1 day", "Metrics.Ts", new[] { ContinuousAggregateProjection.Of("sum", "value", "total") });
 
         act.Should().Throw<ArgumentException>().WithMessage("*not a plain, unqualified column identifier*");
     }

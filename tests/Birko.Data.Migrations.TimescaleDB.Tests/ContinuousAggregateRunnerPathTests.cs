@@ -127,7 +127,7 @@ public class ContinuousAggregateRunnerPathTests : IDisposable
         {
             ExecuteRaw(context, $"CREATE TABLE IF NOT EXISTS \"{Table}\" (Ts timestamptz NOT NULL, Value double precision)");
             CreateHypertable(context, Table, "Ts", "1 day");
-            CreateContinuousAggregate(context, Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value");
+            CreateContinuousAggregate(context, Aggregate, Table, "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("avg", "Value", "avg_value") });
         }
 
         public override void Down(IMigrationContext context)
@@ -206,7 +206,7 @@ public class ContinuousAggregateRunnerPathTests : IDisposable
         {
             Raw(context, $"CREATE TABLE IF NOT EXISTS \"{Table}\" (Ts timestamptz NOT NULL, Value double precision)");
             CreateHypertable(context, Table, "Ts", "1 day");
-            CreateContinuousAggregate(context, Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value");
+            CreateContinuousAggregate(context, Aggregate, Table, "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("avg", "Value", "avg_value") });
             Raw(context, $"INSERT INTO \"{Table}\" (Ts, Value) VALUES "
                        + "('2026-01-01T01:00:00Z', 10), ('2026-01-01T02:00:00Z', 20), ('2026-01-02T01:00:00Z', 90)");
             RefreshContinuousAggregate(context, Aggregate);
@@ -288,7 +288,7 @@ public class ContinuousAggregateRunnerPathTests : IDisposable
         {
             Raw(context, $"CREATE TABLE IF NOT EXISTS \"{Table}\" (Ts timestamptz NOT NULL, Value double precision)");
             CreateHypertable(context, Table, "Ts", "1 day");
-            CreateContinuousAggregate(context, Aggregate, Table, "1 day", "Ts", "avg(Value) AS avg_value");
+            CreateContinuousAggregate(context, Aggregate, Table, "1 day", "Ts", new[] { ContinuousAggregateProjection.Of("avg", "Value", "avg_value") });
             AddContinuousAggregatePolicy(context, Aggregate, "30 days", "1 hour", "1 hour");
         }
 
