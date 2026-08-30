@@ -181,3 +181,120 @@ public class MissingTableCountEndToEndTests : IDisposable
             + "reopen it silently");
     }
 }
+
+/// <summary>
+/// TASK-286 — the schema-escape diagnostic. Instrumentation for consumer Symbio's TASK-602, where a table
+/// was created and then reported missing 19 log lines later, and eleven hypotheses failed to name why.
+///
+/// <para>⚠ <b>Tested because an unproven diagnostic is worse than none.</b> If it silently failed to
+/// annotate, its absence from a log would read as "the anomaly did not happen" — which is the exact
+/// mistake TASK-527 made when it recorded a non-reproduction as if it were a fix.</para>
+/// </summary>
+public class SchemaEscapeDiagnosticTests : IDisposable
+{
+    private readonly string _root;
+
+    public SchemaEscapeDiagnosticTests()
+        => _root = Path.Combine(Path.GetTempPath(), $"birko-escape-{Guid.NewGuid():N}");
+
+    public void Dispose()
+    {
+        try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
+    }
+
+    private SqLiteConnector Connector()
+    {
+        var registry = new ModelMapRegistry();
+        registry.Register(new EscapeMapping());
+        registry.ApplyToDatabase();
+        var factory = new SqLiteStoreFactory(new SqLiteStoreFactoryOptions { Location = _root, Name = "escape.db" });
+        return (SqLiteConnector)factory.GetConnector();
+    }
+
+    public class ERow : AbstractModel { public string? Name { get; set; } }
+
+    private sealed class EscapeMapping : IModelMapping<ERow>
+    {
+        public void Configure(ModelMap<ERow> map)
+        {
+            map.ToTable("EscapeRows").HasPrimary(x => x.Guid).HasUnique(x => x.Guid);
+            map.Property(x => x.Name).HasPrecision(50);
+        }
+    }
+
+    [Fact]
+    public void ACreateIsRecorded_WithATimestamp()
+    {
+        var connector = Connector();
+        connector.TablesCreated.Should().NotContainKey("EscapeRows", "nothing has been created yet");
+
+        connector.CreateTable(new[] { typeof(ERow) });
+
+        connector.TablesCreated.Should().ContainKey("EscapeRows");
+        connector.TablesCreated["EscapeRows"].Should().BeCloseTo(DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public void ACreateThatTHREW_IsNotRecorded()
+    {
+        var connector = Connector();
+
+        // A column list that SQLite refuses — the create must not be recorded as having completed.
+        var act = () => connector.CreateTable("BadEscapeRows", new[] { "this is not a column definition" });
+
+        act.Should().Throw<Exception>();
+        connector.TablesCreated.Should().NotContainKey("BadEscapeRows",
+            "recording a create that failed would date an event that never happened, which is worse than "
+            + "recording nothing");
+    }
+
+    [Fact]
+    public void TheEscapeMessage_NamesTheEarlierCreate_WhichIsTheWholeDIAGNOSIS()
+    {
+        var connector = Connector();
+        connector.CreateTable(new[] { typeof(ERow) });
+
+        // Now make the table vanish beneath the connector — the condition Symbio observed but could not
+        // reproduce. Dropping it is a stand-in for whatever really causes it; the diagnostic must not
+        // depend on knowing which.
+        connector.DropTable(new[] { typeof(ERow) });
+
+        var act = () => connector.Insert(new ERow { Guid = Guid.NewGuid(), Name = "x" });
+
+        var thrown = act.Should().Throw<Exception>().Which;
+        thrown.Message.Should().Contain("schema-ensure escape",
+            "the annotation is the instrument — without it this is just another 'no such table' in a log "
+            + "that already carries hundreds of them");
+        thrown.Message.Should().Contain("EscapeRows created",
+            "naming the earlier create, with its timestamp, is what separates 'created then missing' from "
+            + "'never created' — the distinction eleven hypotheses could not settle");
+    }
+
+    [Fact]
+    public void WithNoRecordedCreate_TheMessageSaysSO_RatherThanStayingSilent()
+    {
+        var connector = Connector();
+
+        var act = () => connector.Insert(new ERow { Guid = Guid.NewGuid(), Name = "x" });
+
+        var thrown = act.Should().Throw<Exception>().Which;
+        thrown.Message.Should().Contain("NO recorded CREATE TABLE",
+            "the two cases must be distinguishable in the log: a table never created is ordinary lazy "
+            + "schema-ensure, a table created and then missing is the anomaly");
+    }
+
+    [Fact]
+    public void AnUnrelatedFailure_IsNotAnnotated()
+    {
+        var connector = Connector();
+        connector.CreateTable(new[] { typeof(ERow) });
+
+        // A syntax error, not a missing table.
+        var act = () => connector.SelectCount(new[] { "EscapeRows" },
+            (IEnumerable<Birko.Data.SQL.Conditions.Condition>?)null);
+
+        act.Should().NotThrow("the table exists — this is the control, so a green result here is not "
+            + "evidence the annotation is narrow");
+        connector.TablesCreated.Should().ContainKey("EscapeRows");
+    }
+}
