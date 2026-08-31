@@ -733,6 +733,17 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     then became unreachable — the annotation they matched only exists because that handler ran — and were
     removed rather than left as a second implementation (§ TASK-247). One assertion in TASK-287's own suite
     was **inverted rather than deleted**, with the comment recording where the line moved.
+  - **⚠ Spawned [[TASK-289]] at this task's close, by running the gate rather than by reading the code.**
+    A subscriber to the new `OnSchemaEscapeDetected` that *throws* — which is an ordinary thing to write, and
+    which the Symbio-side task about to be opened invites — replaces the annotated exception, so the write
+    loses TASK-286's annotation and, worse, the count path's
+    `catch … when (IsMissingTableExceptionChain(ex))` **filter stops matching** and `SelectCount` throws
+    instead of returning `0`. That is TASK-285 reopened from outside the framework. TASK-288's heal survives
+    only because the record and the generation bump both happen *before* the `Invoke` — luck of ordering,
+    now written down as something to make explicit. Rated **P1** where its sibling [[TASK-283]] is P2, for a
+    reason that is about timing rather than severity: this channel has **zero** consumers today, so it can be
+    hardened for free exactly as TASK-254 hardened the hypertable channel, and that window shuts the moment
+    Symbio subscribes.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing

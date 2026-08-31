@@ -187,3 +187,15 @@ The framework half is done and the consumer half is not, in two places:
 ## Implementation plan
 
 _Not populated — the mechanism was measured first and the design followed from the measurement._
+
+## Spawned
+
+- **[[TASK-289]] (P1)** — a throwing `OnSchemaEscapeDetected` subscriber replaces the annotated exception,
+  which destroys TASK-286's diagnostic on the write path and, because the count path's exception filter
+  then stops matching, makes `SelectCount` **throw instead of returning 0** — TASK-285 reopened from
+  outside the framework. Measured at this task's close. TASK-288's heal survives (record and increment both
+  happen before the `Invoke`), which is ordering rather than design and is part of what TASK-289 must pin.
+  ⚠ Rated P1 because the "Notes for whoever picks up Symbio TASK-627" section above tells someone to write
+  the handler that triggers it, and because the channel has **zero** consumers today — so it can be
+  hardened for free right now, exactly as TASK-254 hardened the hypertable channel, and that window shuts
+  on the first subscriber.

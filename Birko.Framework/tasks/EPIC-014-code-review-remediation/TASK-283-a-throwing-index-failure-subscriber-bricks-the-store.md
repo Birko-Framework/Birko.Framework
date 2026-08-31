@@ -83,3 +83,18 @@ Swallowing silently could hide a handler defect a consumer currently relies on s
 
 - [ ] N/A — mechanical; the proof is a throwing subscriber leaving a usable store, with a mutation that reds
       the assertion.
+
+## Third instance, 2026-08-31 — [[TASK-289]]
+
+[[TASK-287]] added `OnSchemaEscapeDetected` and it has the identical hole, measured rather than reasoned:
+a throwing subscriber replaces the reported exception, so the write loses TASK-286's annotation and the
+count path's `catch … when (IsMissingTableExceptionChain(ex))` **filter stops matching**, making
+`SelectCount` throw instead of returning `0` — i.e. a host subscriber can reopen [[TASK-285]] without
+touching the framework. Filed as [[TASK-289]] and **P1**, not because it is worse in kind but because that
+channel has **zero** consumers, so it is in TASK-254's free-to-harden position rather than this one's.
+
+⚠ **That makes three channels and two policies, which is the thing to resolve here rather than per event.**
+Whatever this task measures for the consumed index channel should become the single answer for all of them;
+do not let TASK-289 and TASK-254 set a de-facto convention by being the cheap ones. But equally, do not
+"unify" `OnIndexCreationFailed` from symmetry before the consumer re-measurement this task's own first
+acceptance criterion requires.
