@@ -744,6 +744,47 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     reason that is about timing rather than severity: this channel has **zero** consumers today, so it can be
     hardened for free exactly as TASK-254 hardened the hypertable channel, and that window shuts the moment
     Symbio subscribes.
+- **A diagnostic channel must survive its own subscriber — and the damage a throwing handler does is not
+  where you look for it.** TASK-289, found by running [[TASK-288]]'s close gate rather than by reading the
+  code. `OnSchemaEscapeDetected` was raised from inside `EnsureSchemaAndReport`, between building
+  TASK-286's annotated exception and throwing it, so a handler that threw **replaced** that exception.
+  Measured: the write threw the handler's exception with the **annotation gone**, and — the consequence
+  worth remembering — `SelectCount`'s `catch … when (IsMissingTableExceptionChain(ex))` **stopped
+  matching**, so the catch never ran and the count **threw instead of returning 0**. A host reopened
+  TASK-285 without touching the framework, by doing nothing worse than escalating. Six parts generalise:
+  - **An exception filter is a silent coupling between a swallow and everything that can replace the
+    exception.** The count path's contract was defended by a `when` clause, which cannot fail loudly: an
+    exception of the wrong shape simply is not caught. Anything that can substitute the exception —
+    a handler, a wrapper, a retry policy — can therefore switch off a `catch` from a distance, with no
+    diagnostic. **Grep the filters before adding anything that can replace an exception in flight.**
+  - **Per subscriber, never one `try` around the multicast.** A plain `handler?.Invoke(x)` stops at the
+    first delegate that throws, so a host with a logger and a metric loses the metric to a bug in the
+    logger. `Delegate.GetInvocationList` isolates them. This was not in the filed criteria; it fell out of
+    writing the helper, which is the usual place a second silent drop is found.
+  - **Swallowed must mean RECORDED — and the sink cannot itself be an event.** `SubscriberFailures`, keyed
+    by (channel, exception type), same current-state contract as `IndexCreationFailures`. A broken handler
+    and an event that never fired look identical from outside, and this is what tells them apart;
+    announcing a subscriber failure *through a subscriber* is the same hole one level up, so the absence
+    of that event is **asserted by a test** rather than left as construction.
+  - **Harden a channel while it has no consumers, and check whether that window is about to shut.**
+    `OnSchemaEscapeDetected` had shipped hours earlier with zero subscribers — TASK-254's free-to-harden
+    position — while its sibling `OnIndexCreationFailed` has the identical hole and is consumed by Symbio's
+    production code, host, tests and specs, so [[TASK-283]] must measure before changing it. Rated **P1**
+    against that sibling's P2 on *timing*, not severity: the consumer task that would have created the
+    first subscriber was about to be written. **Do not read the cheap hardenings as having set the
+    convention** — they were cheap because nobody consumed them; but do write the fix as the general helper
+    (`AbstractConnector.RaiseDiagnostic`) so the expensive one adopts it instead of adding a third variant.
+  - **⚠ A fix can make its own acceptance criterion untestable, and the criterion will not say so.** The
+    filed criterion asked to pin the ordering that saved TASK-288's heal "with a test that fails if an edit
+    reverses it". That claim was true of the *unfixed* code and the fix made it vacuous — once the
+    exception cannot escape, the generation bump runs wherever it sits, so moving it failed **nothing**.
+    Caught by running the mutation, not by reading the test. Re-aimed at the ordering that remains
+    observable (what a handler sees of the connector when it is called) and the mutation reds it. **Judge a
+    criterion against the diff, not against its own wording**, and record the swap where the discarded
+    claim would otherwise be rewritten — it reads perfectly reasonable.
+  - **Closing a gate is not the same as reading the code you just wrote.** Both TASK-287 and TASK-288 were
+    committed, verified and reported before this was found, by asking the single question "did this spawn
+    anything?". The defect was in the eleven lines the previous task had added.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
@@ -1834,6 +1875,33 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A throwing diagnostic subscriber could reopen TASK-285 from outside the framework (2026-08-31)
+
+TASK-289, found by running TASK-288's close gate — "did this spawn anything?" — on eleven lines committed
+an hour earlier. `OnSchemaEscapeDetected` was raised inside `EnsureSchemaAndReport`, between building
+TASK-286's annotated exception and throwing it, so a handler that threw **replaced** it: the write lost the
+annotation, and `SelectCount`'s `catch … when (IsMissingTableExceptionChain(ex))` **stopped matching**, so
+the count threw instead of returning `0`. Fixed while the channel still had **zero** consumers. Verified
+with `BIRKO_REQUIRE_LIVE` set: `Birko.Data.SQL.SqLite.Tests` **287 passed** (277 → 287), 0 failed,
+0 skipped, plus seven adjacent suites. The standing rule is in § Conventions. Six things worth carrying:
+
+- **An exception filter is a silent coupling.** A `when` clause cannot fail loudly — an exception of the
+  wrong shape simply is not caught — so anything able to substitute an exception in flight can switch off a
+  `catch` from a distance, with no diagnostic at all.
+- **Per subscriber, never one `try` around the multicast**, or a bug in the host's logger silently costs it
+  the metric registered after it. Not in the filed criteria; it fell out of writing the helper.
+- **Swallowed means recorded, and the sink cannot be an event.** `SubscriberFailures` is keyed current
+  state like `IndexCreationFailures`; the absence of an event on it is asserted by a test, because
+  announcing a subscriber failure through a subscriber is the same hole again.
+- **Harden while there are no consumers, and check whether that window is closing.** P1 against its
+  sibling TASK-283's P2 on timing, not severity — the Symbio task that would create the first subscriber
+  was about to be written. `OnIndexCreationFailed` is deliberately untouched and its call site now says so.
+- **⚠ The fix made one of its own acceptance criteria untestable.** The ordering test written for it could
+  not fail — true of the unfixed code, vacuous once the exception cannot escape. Caught by running the
+  mutation, re-aimed at what a handler observes when called, and the swap recorded in the test itself.
+- **Mutations, disjoint:** bare `Invoke` → 6 red with exactly the 4 must-not-change controls green; one
+  `try` around the multicast → 1; swallow without recording → 1; bump after the raise → 1.
 
 ### A table that vanished under a store never came back, and every write 500-ed until restart (2026-08-31)
 

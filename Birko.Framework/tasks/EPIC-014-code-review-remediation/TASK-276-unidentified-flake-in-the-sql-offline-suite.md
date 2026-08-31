@@ -246,3 +246,31 @@ which is the question that had to be answered before either task could report a 
 stashed the framework change while leaving the new (untracked) test file in place, so the suite did not
 compile — and counting runs that contained no `[FAIL]` marker scored a build failure as a **pass**. Zero
 failures in sixteen runs, from a suite that never ran. **Count the greens, not the absence of reds.**
+
+### ⚠ Correction to the section above, same day (during [[TASK-289]])
+
+A **fourth** identity was captured, and it **falsifies the "end-to-end filter/delete family" reading**
+written a few hours earlier:
+
+| run | test |
+|---|---|
+| 5 | `LazyInitInsideBoundaryEndToEndTests.A_committed_boundary_around_a_stores_first_operation_still_persists` |
+
+That is a lazy-init-inside-a-transaction-boundary test, not a filter or a delete. The honest common factor
+across all four is narrower in one way and wider in another: **every one is an end-to-end test that opens a
+real SQLite database file**, and they span at least three unrelated feature areas. So the correct
+characterisation is the shared infrastructure, not the feature — which points harder at this task's own
+standing hypothesis (`DataBase.GetConnector`'s process-wide cache, [[TASK-270]]) than the earlier reading did.
+
+**Taken seriously rather than filed under the flake**, because this one landed in the area TASK-288 had just
+changed (the store's init gate) and a "known flake" is exactly what a real regression would hide behind:
+
+- **0 failures in 20 runs of that class in isolation** with the TASK-288/289 code in place.
+- Full-suite rate with the changes is indistinguishable from the **1 in 16** measured on unmodified code
+  (see the section above), and the failing identity moves from run to run, which a deterministic regression
+  in the init gate would not.
+
+⚠ **Residual uncertainty, stated rather than rounded off:** a full-suite pre-change control for *this
+specific class* was not run, because the new test files do not compile against the pre-TASK-288 API and the
+comparison would have needed three files removed and one reverted. The evidence above is strong but is not
+that experiment. If this identity recurs, run that control before assuming the flake again.
