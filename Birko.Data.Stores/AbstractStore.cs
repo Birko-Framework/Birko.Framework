@@ -23,10 +23,10 @@ namespace Birko.Data.Stores
         /// </summary>
         protected void EnsureInitialized()
         {
-            if (_initialized) return;
+            if (_initialized && CanTrustRememberedInitialization) return;
             lock (_initLock)
             {
-                if (_initialized) return;
+                if (_initialized && CanTrustRememberedInitialization) return;
                 InitCore();
                 _initialized = CanRememberInitialization;
             }
@@ -51,6 +51,41 @@ namespace Birko.Data.Stores
         /// </para>
         /// </remarks>
         protected virtual bool CanRememberInitialization => true;
+
+        /// <summary>
+        /// Whether an initialization that <i>was</i> remembered can still be trusted, asked on every
+        /// operation rather than once.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-288, and it is <see cref="CanRememberInitialization"/>'s other half.
+        /// <c>CanRememberInitialization</c> asks "may I remember what just happened?" at init time;
+        /// this asks "does what I remembered still hold?" at use time. Default <c>true</c> — a backend
+        /// where nothing can remove a store's schema underneath it has nothing to re-check.
+        /// </para>
+        /// <para>
+        /// <b>The measurement it exists for.</b> With a table dropped beneath an initialised SQL store,
+        /// five consecutive writes threw and the table was <b>never</b> recreated — <c>sqlite_master</c>
+        /// held 0 rows throughout — while only a new store instance recovered it (consumer Symbio's
+        /// TASK-627, reproduced in <c>VanishedTableHealingTests</c>). The database was fine; the store's
+        /// remembered flag was not, so it short-circuited here and never reached <c>InitCore</c> again.
+        /// Worse, a read of the same table answered <b>0 rows and no error</b> (TASK-211/TASK-285), so the
+        /// surface looked healthy while every write failed.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>A PULL, deliberately.</b> The obvious wiring is for the store to subscribe to something on
+        /// the connector — but connectors are cached process-wide per (type, settings id) while a web app
+        /// resolves a store per request, so a subscriber list on that object grows without bound and keeps
+        /// dead stores alive. That is TASK-204's defect. The SQL stores answer this by comparing a counter
+        /// they recorded at init, which costs one read per operation and cannot leak.
+        /// </para>
+        /// <para>
+        /// The asymmetry <see cref="CanRememberInitialization"/> records applies unchanged: answering "no"
+        /// costs one idempotent <c>CREATE TABLE IF NOT EXISTS</c>, answering it wrongly leaves a store
+        /// broken for the life of the process. So this too errs toward re-running.
+        /// </para>
+        /// </remarks>
+        protected virtual bool CanTrustRememberedInitialization => true;
 
         /// <inheritdoc />
         public void Init()
