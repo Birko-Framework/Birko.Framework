@@ -271,9 +271,23 @@ public class SchemaEscapeCountChannelTests : IDisposable
             + "the exception carries it all the way out").Which;
         thrown.Message.Should().Contain("but this connector already created it");
 
-        connector.SchemaEscapes.Should().BeEmpty(
-            "⚠ the write path deliberately does NOT feed this channel — it already reports, loudly. This "
-            + "assertion is the point of the whole task: a suite exercising only writes passes against the "
-            + "defect unchanged, so the mutation that proves the fix must be run against the COUNT tests");
+        // ⚠ TASK-288 CHANGED WHAT THIS TEST ASSERTS, and the change is the record of where the line moved.
+        //
+        // As landed at TASK-287 this said SchemaEscapes must be EMPTY here: the write path already reports,
+        // so feeding the channel from it was redundant. TASK-288 made the anomaly heal the store, and the
+        // detection that triggers a heal is the same detection that writes this record — so the record
+        // moved one layer earlier, into EnsureSchemaAndReport, and now covers every path including this
+        // one. Recording it is no longer a nicety: it is the licence to heal at all, because healing costs
+        // Symbio TASK-602 the "a real absence never heals" discriminator and has to hand back a better one.
+        connector.SchemaEscapes.Should().ContainSingle(
+            "every anomalous escape is recorded now, whether it is reported or answered")
+            .Which.TableNames.Should().Contain("EscapeCountRows");
+
+        // What the test was ORIGINALLY about survives unchanged, and it is still this file's point: a suite
+        // exercising only writes passes against TASK-287's defect, because the count path's answer -- 0,
+        // silently -- is indistinguishable from a healthy empty table. The mutation that proves the fix has
+        // to be run against the COUNT tests above.
+        thrown.Message.Should().Contain("EscapeCountRows created",
+            "the write path's report is the exception message, and it must keep naming the earlier create");
     }
 }
