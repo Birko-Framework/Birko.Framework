@@ -3,7 +3,7 @@ id: TASK-276
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: in-progress
 priority: P2
 assignee: ai
 created: 2026-08-22
@@ -274,3 +274,83 @@ changed (the store's init gate) and a "known flake" is exactly what a real regre
 specific class* was not run, because the new test files do not compile against the pre-TASK-288 API and the
 comparison would have needed three files removed and one reverted. The evidence above is strong but is not
 that experiment. If this identity recurs, run that control before assuming the flake again.
+
+## 2026-08-31, second pass — the message, a reproduction lever, and a hypothesis NOT confirmed
+
+Worked directly rather than as a side-effect of another task. Three results, one of them the thing this
+file has been asking for since it was opened, and one deliberately negative.
+
+### 1. ⚠ The exception and stack are CAPTURED — the gap this task named twice
+
+```
+System.ObjectDisposedException : Cannot access a disposed object.
+Object name: 'SQLitePCL.sqlite3'.
+   at SQLitePCL.SQLite3Provider_e_sqlite3...sqlite3_prepare_v2
+   at Microsoft.Data.Sqlite.SqliteCommand.ExecuteReaderAsync(...)
+   at Birko.Data.SQL.Connectors.AbstractAsyncConnector.ReadOnAsync(
+        DbConnection db, DbTransaction transaction, ...)   AbstractAsyncConnector.cs:376
+   at Birko.Data.SQL.Connectors.AbstractAsyncConnector.RunReaderCommandAsync(...)   :336
+```
+
+Line 376 is `reader = await command.ExecuteReaderAsync(ct);`. So the **pooled inner `sqlite3` handle** is
+disposed at the moment the reader is executed — not the `SqliteConnection` wrapper, which
+`SqLiteConnector.CreateConnection` creates fresh every time (checked). It is therefore a lifetime race on
+the *pool*, not on any object this framework holds.
+
+This settles the two-candidate ambiguity recorded earlier: it is `ObjectDisposedException`, **not**
+`SQLite Error 5: 'database is locked'`.
+
+### 2. ⚠ The on/off rate has a trigger: MACHINE LOAD. That is a reproduction lever.
+
+This file has twice concluded the flake "went quiet" and treated that as a mystery (0 in 95 after 3 in
+~35). It is not a mystery — it is idleness. Measured today, same binary, same suite:
+
+| condition | failures |
+|---|---|
+| idle machine, 40 runs | **0** |
+| idle machine, 40 runs (repeat) | **0** |
+| **8 CPU burners running**, 15 runs | **1** |
+| **8 CPU burners running**, 40 runs | **1** |
+
+0 in 80 idle is inconsistent with the ~1-in-15 rate seen while actively rebuilding, at p≈0.4%. Load widens
+the window. **Every future experiment on this task must run under load**, or the control silently measures
+nothing — which is exactly what happened in the first attempt below.
+
+### 3. ⚠ The `ClearAllPools` hypothesis is NOT confirmed, and the numbers are recorded so nobody re-runs it blind
+
+Seven test classes call `SqliteConnection.ClearAllPools()` in `Dispose()` while other classes run in
+parallel, and a disposed *pooled inner handle* is exactly what that could produce. It looked compelling.
+
+**First attempt, idle machine:** 0/40 without the calls — and then **0/40 with them**, i.e. the control
+produced zero too. Reporting the first number alone would have been a false confirmation.
+
+**Second attempt, under load:**
+
+| arm | failures |
+|---|---|
+| with `ClearAllPools` | **2 / 55** |
+| without `ClearAllPools` | **0 / 30** |
+
+Fisher exact **p ≈ 0.53**. That is no evidence at all. At this rate the experiment needs roughly 200 runs
+per arm to be worth anything. **Do not cite the 0/30 as support** — and do not remove those calls as a
+"fix" on this basis; that is the guess-instead-of-measure failure this epic keeps recording.
+
+### 4. Six identities now, and the earlier "family" readings were both too narrow
+
+`ComputedContainsOperandTests` (×2 distinct tests), `DestructiveFilterEndToEndTests`,
+`LazyInitInsideBoundaryEndToEndTests`, `SqLiteStoreCrudTests`, `RuleFieldResolutionEndToEndTests`,
+`PrimitiveTypeRoundTripTests`. Filter/delete, lazy-init, CRUD, DDL-payload, type round-trip — the only
+common factor is **an end-to-end test that opens a real SQLite file**, which is consistent with a pool
+race and inconsistent with any per-feature explanation.
+
+### ⚠ The question that matters more than the test flake, and is still open
+
+**Can this happen in production, or does it need `ClearAllPools`?** Nothing in the framework calls it —
+only these tests do. If the call is required, consumers are unaffected and this is test hygiene. If it is
+not, then a concurrent web app sharing a cached connector can have a pooled handle disposed under an
+in-flight async read, which is a real defect. The data above cannot separate those, and **that** is what
+the next session should be designed to answer — not "make the suite green".
+
+Suggested next experiment, since the lever now exists: under load, with `ClearAllPools` removed, ~200 runs
+per arm; and separately a targeted harness that drives concurrent `RunReaderCommandAsync` against one
+cached connector with **no** `ClearAllPools` anywhere, which answers the production question directly.
