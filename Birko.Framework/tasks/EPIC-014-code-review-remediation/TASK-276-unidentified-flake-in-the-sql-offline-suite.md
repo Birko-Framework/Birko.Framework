@@ -214,3 +214,35 @@ one full run earlier the same day, before the change — that is n=1 and is not 
 in `C:\Source\Birko\Consumers\Symbio`. It reproduced roughly one run in six there while never reproducing
 under a class filter — consistent with this task's own standing hypothesis of the process-wide cached
 connector (`DataBase.GetConnector`, TASK-270) being shared across parallel test classes.
+
+## Three identities captured, 2026-08-31 (during TASK-287 / TASK-288)
+
+The framework-side flake in `Birko.Data.SQL.SqLite.Tests` was hit four times while running that suite
+repeatedly for unrelated work, and the **failing test names were captured** — which this task previously
+had for the Migrations.SQL sighting only. Always exactly **one** test, never the same one twice:
+
+| run | test |
+|---|---|
+| 1 | *(name not captured — grep filter dropped it)* |
+| 2 | `ComputedContainsOperandTests.ABoundedComputedContains_StillDeletesExactlyItsOwnRows` |
+| 3 | `DestructiveFilterEndToEndTests.ATranslatingFilter_DeletesExactlyTheMatchingRows` |
+| 4 | `ComputedContainsOperandTests.AnUntranslatableOperand_ThrowsOnARead_RatherThanReturningTheWrongRows` |
+
+**All three are end-to-end filter/delete tests against on-disk SQLite** — the family that opens a real
+database per test and drives a destructive statement through it. That is a much narrower target than
+"somewhere in the suite", and it is consistent with this task's standing hypothesis (the process-wide
+cached connector from `DataBase.GetConnector`, TASK-270) being shared across xUnit's parallel collections.
+
+⚠ **The exception message is still NOT captured**, on any of the four. Same gap as the Migrations.SQL
+sighting; `-v q` prints the name and not the assertion. Next attempt should use a `trx` logger from the
+start rather than a grep.
+
+**Rate, and the reason it is worth writing down:** measured **1 failure in 16** full-suite runs against
+*unmodified* code (with the new TASK-287 file removed), and **2 in 23** with the TASK-287/288 changes in
+place. Statistically indistinguishable, so the flake is **pre-existing and not attributable to that work** —
+which is the question that had to be answered before either task could report a clean suite.
+
+⚠ **The first attempt at that control measured nothing**, and the way it failed is worth recording: it
+stashed the framework change while leaving the new (untracked) test file in place, so the suite did not
+compile — and counting runs that contained no `[FAIL]` marker scored a build failure as a **pass**. Zero
+failures in sixteen runs, from a suite that never ran. **Count the greens, not the absence of reds.**

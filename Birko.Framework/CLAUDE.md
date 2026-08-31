@@ -656,6 +656,83 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     `ORDER BY` is `Msg 102`, so `ReadFirstAsync` — the call § Conventions recommends for a single row —
     **cannot work there at all**. Grep for that assertion shape; where it appears on a collection-returning
     read it is measuring nothing.
+- **A diagnostic that rides on a THROWN exception is blind on every path that answers instead of throwing —
+  and the path that answers is where the wrong answer lives.** TASK-287, the hole between two individually
+  correct fixes. TASK-285 made a `COUNT` of a missing table return `0`; TASK-286 made
+  `EnsureSchemaAndReport` annotate its exception when the table reported missing is one this connector
+  already created. The annotation travels **on the exception**, and the count catch had just consumed it.
+  Measured against a live Symbio API 2026-08-31, both halves in the same forced condition minutes apart:
+  **COUNT → `200`, `totalCount: 0`, zero log lines; write → `500`, annotation logged.** Both occurrences
+  consumer Symbio's TASK-602 ever recorded were **counts**, so the instrument was blind over the only shape
+  ever seen in the wild — and nineteen bring-ups reporting `0` escapes was a blind instrument's `0`, not a
+  measurement. Five parts generalise:
+  - **A silence is only evidence where the instrument can see.** "Zero escapes in nineteen bring-ups" was
+    read as good news on both paths; it was real on one and vacuous on the other. Before citing an absence,
+    establish that the observed path can produce the signal — the same discipline § TASK-248 states as *a
+    revert that fails nothing is a missing test*, applied to production telemetry.
+  - **Discriminate on the ANOMALY, never on the condition that contains it.** The benign lazy first-touch
+    failure is also a missing table and is **~245× more common per bring-up**, so a channel keyed on "the
+    table was missing" is no signal at all. The discriminator is TASK-286's annotation text, and the mutation
+    that swaps one for the other reds exactly the benign-path tests — which is why those exist.
+  - **Where a marker is written by one method and matched by another, interpolate it.** `AnomalousEscapeMarker`
+    is a constant `DescribeSchemaEscape` composes into the message and the matcher reads back, so the
+    producer and the consumer cannot drift into two spellings. Same one-producer rule as the identifier
+    family, applied to a diagnostic string.
+  - **Walk the chain, and say whether the walk is witnessed.** `EnsureSchemaAndReport` rethrows as
+    `new Exception(annotatedText, ex)` and callers may wrap again, so a check on `ex.Message` compiles, runs
+    and never matches — the exact inert guard that already shipped once here. **Measured, though: on both
+    live SQLite count paths the annotation sits at depth 0**, so collapsing the loop reds only a synthetic
+    test. Kept as defensive-not-witnessed and labelled that way (§ TASK-261), because the depth is a property
+    of the call stack, not a promise.
+  - **⚠ Recording is not rethrowing, and the tempting upgrade was refused.** The table is not genuinely
+    missing in the anomalous case, so `0` is a wrong answer and a throw looks more correct — but it silently
+    reopens what TASK-285 closed, at roughly one bring-up in five. Adding an instrument must not smuggle in a
+    behaviour change; wanting the throw is a decision with a consequence, taken deliberately.
+- **A recovery branch is only as good as the state it can actually reach — and a promise made in one class
+  about a flag owned by another is a promise nobody keeps.** TASK-288, the sibling of the rule above and the
+  half that turns a lost operation into a permanently broken entity. `EnsureSchemaAndReport` documented
+  itself, and TASK-277 justified it, as *"rethrow so this attempt is reported, but call `DoInit()` so the
+  next attempt can succeed"*. Measured on SQLite with the table dropped beneath an initialised store:
+  **five consecutive writes threw and `sqlite_master` held 0 rows throughout**; only a new store instance
+  recovered it. Six parts generalise:
+  - **TASK-277 wrote the disproof of its own next paragraph.** It records that `DoInit()` raises `OnInit`,
+    which nothing in the framework subscribes to, and uses that to condemn the *swallow* — then leaves the
+    identical mechanism standing one paragraph later as the *promise*. **Read what a recovery call does, then
+    read what the sentence beside it claims**; a branch that neither repairs nor retries cannot become one by
+    being described differently.
+  - **The state that was wrong lived in a different class from the code that detected the failure.** The
+    connector saw the missing table; the flag that had to change was the store's `_initialized`, and the store
+    short-circuits *before* `InitCore` is reached. So the fix could not go where the defect was detected.
+    `AbstractStore.CanTrustRememberedInitialization` is `CanRememberInitialization`'s other half — that one
+    asks *may I remember this?* at init time, this asks *does what I remembered still hold?* at use time — and
+    it is consulted in **both** the outer fast path and the inner double-check, since guarding only the outer
+    one lets a thread that was waiting on the lock return without re-initialising.
+  - **A PULL across that gap, never a subscription.** Connectors are cached process-wide per (type, settings
+    id) while a web app resolves a store per request, so a subscriber list on the connector accumulates dead
+    stores on a process-lifetime object — TASK-204's defect arriving through a different door. A counter
+    (`AbstractConnector.SchemaGeneration`) that the store compares against a value it pinned at the end of
+    `InitCore` costs one read per operation and cannot leak. **Pin it AFTER the DDL**: an escape seen while
+    our own schema-ensure was running has already been addressed by it, and treating that as staleness
+    re-runs forever.
+  - **The framework's own recorded asymmetry decided it, and it is worth quoting rather than re-deriving.**
+    `CanRememberInitialization` already says: answering "no" costs one idempotent `CREATE TABLE IF NOT EXISTS`,
+    answering it wrongly leaves a store broken for the life of the process, *so this errs toward re-running*.
+    The measurement was that exact bad outcome, so the same rule answers the same way.
+  - **⚠ Healing withdrew a discriminator somebody was reasoning from, so it had to hand back a better one.**
+    Symbio TASK-602 argued *"a real absence never heals, and both observed occurrences healed, therefore the
+    anomaly is not an absent table"* — true only while this defect existed. The change is acceptable because
+    every invalidation is recorded on TASK-287's `SchemaEscapes` channel, so an absent table is now
+    **recorded** rather than inferred from a symptom. The recording is the *licence* for the healing, not a
+    nicety — and a mutation shows the two halves are independent (healing without recording passes every
+    observability test), so a later change that quietly drops the recording leaves a heal that costs the
+    investigation its discriminator and returns nothing. **When a fix removes a signal somebody is using, the
+    replacement signal is part of the fix.**
+  - **Record-and-invalidate are ONE event, which is why TASK-287's call sites moved a day later.** The same
+    detection has to write the record and bump the generation, so it belongs at the point the anomaly is
+    identified (`EnsureSchemaAndReport`), not at each path that answers it. TASK-287's two count-path calls
+    then became unreachable — the annotation they matched only exists because that handler ran — and were
+    removed rather than left as a second implementation (§ TASK-247). One assertion in TASK-287's own suite
+    was **inverted rather than deleted**, with the comment recording where the line moved.
 - **A reader that answers an ERROR with an empty result is giving a wrong answer, so what it swallows must
   be exactly one thing.** The second half of TASK-211, and the reason the first half was invisible for the
   whole life of the framework. `IsMissingTableException` decides whether `RunReaderCommand` yields nothing
@@ -1746,6 +1823,72 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A table that vanished under a store never came back, and every write 500-ed until restart (2026-08-31)
+
+TASK-288, the framework half of consumer Symbio's TASK-627. `EnsureSchemaAndReport` documented itself, and
+TASK-277 justified it, as *"rethrow so this attempt is reported, but call `DoInit()` so the next attempt can
+succeed"* — and the second half was never delivered. Measured before a line changed, on SQLite with the
+table dropped beneath an initialised store: **five consecutive writes threw and `sqlite_master` held 0 rows
+throughout**, while only a fresh store instance recovered it, which is what proved the broken state was in
+memory rather than on disk. Verified with `BIRKO_REQUIRE_LIVE` set: `Birko.Data.SQL.SqLite.Tests` **277
+passed** (271 → 277) plus twelve adjacent suites, **0 failed, 0 skipped**. The standing rule is in
+§ Conventions. Six things worth carrying:
+
+- **TASK-277 wrote the disproof of its own next paragraph.** It records that `DoInit()` raises `OnInit`,
+  which nothing in the framework subscribes to, and condemns the *swallow* on exactly that ground — then
+  leaves the identical mechanism standing one paragraph later as the *promise*. The store's `_initialized`
+  short-circuits before `InitCore` is reached anyway, so nothing could have re-created the table.
+- **The wrong state was in a different class from the code that detected the failure.** The connector saw
+  the missing table; the flag that had to change was the store's. `CanTrustRememberedInitialization` is
+  `CanRememberInitialization`'s other half — *may I remember this?* at init time versus *does what I
+  remembered still hold?* at use time — and it is consulted in both the outer fast path and the inner
+  double-check, because guarding only the outer one lets a waiting thread return without re-initialising.
+- **A pull across that gap, never a subscription.** Connectors are cached process-wide while stores are
+  per-request, so subscribing would accumulate dead stores on a process-lifetime object — TASK-204's defect
+  through a different door. A counter compared at the gate cannot leak.
+- **⚠ Healing withdrew a discriminator Symbio TASK-602 was reasoning from**, so the replacement signal was
+  part of the fix rather than a nicety: every invalidation is recorded on TASK-287's `SchemaEscapes` channel,
+  so an absent table is now recorded instead of inferred. A mutation shows the two halves are independent —
+  healing without recording passes every observability test — which is exactly why they shipped together.
+- **The framework's own recorded asymmetry decided it.** `CanRememberInitialization` already says answering
+  "no" costs one idempotent `CREATE TABLE IF NOT EXISTS` while answering it wrongly leaves a store broken for
+  the life of the process. The measurement was that bad outcome, so the rule answered itself.
+- **Mutations, disjoint:** never distrust → 2 red, both healing tests, every observability test green; heal
+  the async store only → 1 red, the sync one; bump for every missing table rather than the anomaly → 1 red,
+  the benign first-touch pin, which is what stops the fix re-running schema-ensure hundreds of times per
+  start-up. **Still open on Symbio's side:** nothing subscribes to `OnSchemaEscapeDetected`, so neither this
+  nor TASK-287 is visible in production yet.
+
+### The count path swallowed the escape annotation, so the instrument was blind where it mattered (2026-08-31)
+
+TASK-287, the hole between two individually correct fixes. TASK-285 made a `COUNT` of a missing table return
+`0`; TASK-286 made `EnsureSchemaAndReport` annotate its exception for the anomaly. The annotation travels on
+the exception, and the count catch had just consumed it. Measured against a live Symbio API, both halves in
+the same forced condition minutes apart: **COUNT → `200`, `totalCount: 0`, zero log lines; write → `500`,
+annotation logged** — and both occurrences TASK-602 ever recorded were counts, so nineteen bring-ups
+reporting `0` escapes was a blind instrument's `0`. Verified with `BIRKO_REQUIRE_LIVE` set:
+`Birko.Data.SQL.SqLite.Tests` **271 passed** (261 → 271), `Birko.Data.SQL.Tests` 655, 0 failed, 0 skipped.
+The standing rule is in § Conventions. Five things worth carrying:
+
+- **A silence is only evidence where the instrument can see.** The same "0 escapes" number was real on the
+  write path and vacuous on the count path, and nothing distinguished them.
+- **Discriminate on the anomaly, not on the condition containing it.** Benign lazy first-touch is also a
+  missing table and is ~245× more common per bring-up; the mutation that swaps the annotation for
+  "the table was missing" reds exactly the benign-path tests, which is why those exist.
+- **⚠ Recording is not rethrowing.** A throw looks more correct — `0` is a wrong answer when the table is not
+  genuinely missing — and it silently reopens what TASK-285 closed at roughly one bring-up in five. Adding an
+  instrument must not smuggle in a behaviour change.
+- **⚠ The chain walk is defensive, not witnessed, and says so.** Measured: on both live SQLite count paths
+  the annotation sits at depth 0, so collapsing the loop reds only a synthetic test. Kept because the depth
+  is a property of the call stack, and the failure mode of guessing wrong is a guard that never matches —
+  which has already happened once here.
+- **Mutations, disjoint:** remove both recordings → 3 red, all count-path, **write-path test green**, which
+  is the direction the task existed for; remove only the sync call → 2 red, async green; collapse the chain
+  walk → 1; discriminate on missing-table → 2. **Superseded in part one commit later by TASK-288**, which
+  needed the same detection to drive a heal and therefore moved it into `EnsureSchemaAndReport`; the two
+  count-path call sites went with it, and one assertion in this task's suite was inverted rather than
+  deleted.
 
 ### A continuous aggregate could not be created through the migration runner at all (2026-08-24)
 
