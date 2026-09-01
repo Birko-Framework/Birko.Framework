@@ -37,7 +37,7 @@ _Generated 2026-08-25 (partial refresh at [[TASK-260]]’s close: counts, TASK-2
 | Status       | Epics | Stories | Tasks |
 |--------------|-------|---------|-------|
 | planned      | 10    | 24      | —     |
-| todo         | —     | —       | 134   |
+| todo         | —     | —       | 135   |
 | in-progress  | 7     | 10      | 1     |
 | review       | —     | —       | 10    |
 | blocked      | —     | —       | 2     |
@@ -413,13 +413,14 @@ Todo by priority: **P0 0 · P1 28 · P2 92 · P3 10**
 
 ## Loose tasks
 
-> No parent epic. 17 task(s) — see the drift note above.
+> No parent epic. 18 task(s) — see the drift note above.
 
 - [x] [TASK-036](_loose/TASK-036-workspace-reorg-birko-framework-consumers-buckets.md) Reorganize C:\Source into Birko/{Framework,Framework.Tests,Consumers} + aicode bucket
 - [ ] [TASK-130](_loose/TASK-130-theme-contrast-scanner-gate.md) Scan every shipped theme for colour contrast, and gate it like the drift check
 - [ ] [TASK-140](_loose/TASK-140-resolve-module-from-hash-ignores-the-route-table.md) `resolveModuleFromHash` derives the module positionally and never consults the route table
 - [ ] [TASK-200](_loose/TASK-200-symbio-outbox-replay-duplicates-a-create.md) Symbio: an outbox replay duplicates a create, and TASK-151 scoped the cause out of itself
 - [ ] [TASK-127](_loose/TASK-127-all-tenants-scope-and-ambient-tenant-decision.md) Decide what `WithAllTenants` means when a tenant is also in scope
+- [ ] [TASK-290](_loose/TASK-290-vscode-configs-target-nonexistent-project.md) `.vscode/tasks.json` and `launch.json` target a project this repo does not contain
 - [ ] [TASK-138](_loose/TASK-138-readasync-zero-arg-overload-ambiguity.md) `ReadAsync()` with no arguments does not compile — CS0121 between the read-all and filtered overloads
 - [ ] [TASK-139](_loose/TASK-139-coarse-pointer-policy-vs-knob-in-the-component-catalogue.md) Decide whether a `pointer: coarse` rule inside a `b-*` component is policy or a knob
 - [ ] [TASK-142](_loose/TASK-142-spec-map-coverage-audit.md) The spec map silently under-covers, and nothing detects it
