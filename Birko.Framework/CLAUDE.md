@@ -374,6 +374,49 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **Bookkeeping a rule depends on goes in a NON-VIRTUAL wrapper around a `*Core` seam — putting it in the
+  virtual method means it runs on exactly the providers that did not override.** TASK-295, and the fifth
+  instance of § TASK-243's *"a funnel with four overrides is not a funnel"*. `RecordTableCreated` was called
+  from the **virtual** `AbstractConnector.CreateTable(string, IEnumerable<string>)`, which PostgreSQL,
+  MySQL, MSSql and TimescaleDB all override (TimescaleDB's `base.` call landing on PostgreSQL's), so
+  `TablesCreated` was permanently **empty on four of five connectors** — measured live. With it went
+  TASK-286's annotation (always the benign *"NO recorded CREATE TABLE"* branch), TASK-287's `SchemaEscapes`
+  channel and TASK-288's healing: **a table that vanished beneath an initialised store never healed and
+  every write threw until the process restarted**, i.e. the consumer-reported outage TASK-288 closed, still
+  open everywhere but SQLite. Seven parts generalise:
+  - **TASK-286's own comment stated the defect as a reassurance.** *"Every CreateTable overload funnels
+    here, which is why this is the one place it needs to go."* The **overloads** funnelled; the
+    **providers** did not. A funnel claim has to name what it is a funnel over — overloads and overrides
+    are different sets, and only one of them was checked.
+  - **Reach for the wrapper, not for a call in each override.** Adding the line to four overrides is a
+    fourth, fifth and sixth copy of the rule and re-arms the defect for the next provider. The wrapper
+    makes it unbypassable by construction: an override changes the statement and never sees the wrapper.
+    This is the framework's own documented `*Core` convention — stated for stores in § Architecture —
+    applied to a connector emitter, so it needed inventing nowhere.
+  - **The choice between placements is settled by the ODD CALLER, and the obvious placement loses it.**
+    Recording in the `IDictionary` dispatcher also covers every override — and silently drops
+    `SqlSchemaBuilder`, the one external caller that reaches the single-table overload directly. Measured:
+    that mutation reds the migration test and **leaves every provider suite green at full count**, so the
+    wrong choice would have looked correct exactly where anyone would have looked. **Enumerate a funnel's
+    direct callers, not just its overriders.**
+  - **A signature change is affordable or not, and that is a measurement.** 0 overrides of the method and 0
+    subclasses of any Birko connector across all 16 consumer repos, so making it non-virtual breaks
+    nothing. And note the direction: an override that no longer compiles (`CS0506`) is the loud half of
+    § TASK-278's hazard — the dangerous direction is *adding* a parameter, which orphans an override
+    silently.
+  - **Pin the structure, because the regression is invisible offline.** A reflection test asserts the
+    wrapper is non-virtual and the `*Core` seam is virtual. Making the wrapper virtual again reds **that
+    test and nothing else** — which is the whole reason it exists: without it, the next reader restores the
+    old shape and only a live per-provider run three suites away notices.
+  - **Demonstrate unbypassability with a connector that actually overrides.** A test connector overriding
+    the emitter — the exact shape all four shipped providers use, i.e. the shape that skipped the recording
+    — must still record. "I put it in a wrapper" is construction; a fake that tries to bypass it is
+    evidence.
+  - **A DEGRADED create is still a create, and that follows from TASK-254's own licence.** TimescaleDB
+    records a failed hypertable conversion rather than throwing, precisely because the plain table is
+    committed and usable. So the create is a fact and belongs on record — otherwise a table that later
+    vanished would read as a benign first touch on exactly the entities that already have a schema problem.
+    Asserted live on the Guid-keyed shape that cannot be converted.
 - **Ask the question of the ERROR, not of the statement — and when a justification says "a false positive
   is harmless here", check whether that is still true.** TASK-293. `AbstractConnector` decides whether a
   schema escape is *the anomaly* (a table this connector created, reported missing) and asked it of the
@@ -1965,6 +2008,43 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A vanished table healed on SQLite and nowhere else, because the recording sat in the virtual method (2026-09-02)
+
+TASK-295, found hours earlier while writing [[TASK-293]]'s per-provider tests and worked next because the
+window is closing: `RecordTableCreated` was called from the **virtual**
+`AbstractConnector.CreateTable(string, fields)`, which PostgreSQL, MySQL, MSSql and TimescaleDB all
+override. So `TablesCreated` was permanently **empty on four of five connectors**, and with it TASK-286's
+annotation, TASK-287's `SchemaEscapes` channel and TASK-288's healing — **a table that vanished beneath an
+initialised store never healed and every write threw until the process restarted**, the consumer-reported
+outage TASK-288 closed, still open everywhere but the one provider the consumer runs. Fixed with a
+non-virtual wrapper around a new `protected virtual CreateTableCore`. Verified with `BIRKO_REQUIRE_LIVE`
+set against live PostgreSQL 16, MySQL 8.4, SQL Server 2022, TimescaleDB 2/PG16 and on-disk SQLite:
+**1,579 tests, 0 failed, 0 skipped** across eleven suites. The standing rule is in § Conventions. Six
+things worth carrying:
+
+- **TASK-286's own comment stated the defect as a reassurance:** *"every CreateTable overload funnels here,
+  which is why this is the one place it needs to go."* The overloads did; the **providers** did not. A
+  funnel claim has to name which set it is a funnel over.
+- **Step 0 priced both placements before anything was written**, and the obvious one loses on the odd
+  caller: recording in the `IDictionary` dispatcher covers every override and silently drops
+  `SqlSchemaBuilder`, the single external caller that reaches the leaf directly. That mutation reds the
+  migration test and **leaves every provider suite green at full count** — the wrong choice would have
+  looked correct exactly where anyone would have looked.
+- **The signature change was measured, not assumed:** 0 overrides and 0 Birko-connector subclasses across
+  all 16 consumer repos. And the break direction is the loud one (`CS0506`) — § TASK-278's silent-orphan
+  hazard is about *adding* a parameter, not removing `virtual`.
+- **The structural pin earns its place because the regression is invisible offline.** Making the wrapper
+  virtual again reds one reflection test and nothing else; without it, restoring the old shape is noticed
+  only by a live per-provider run three suites away.
+- **Unbypassability is demonstrated, not claimed** — a test connector that overrides the emitter, which is
+  the exact shape that used to skip the recording, records anyway.
+- **⚠ A degraded create is still a create.** TimescaleDB records a failed hypertable conversion rather than
+  throwing precisely because the plain table is committed and usable (TASK-254's licence), so the create is
+  a fact and is recorded. Otherwise a table that later vanished would read as benign on exactly the entities
+  that already have a schema problem. Asserted live on the Guid-keyed shape that cannot be converted.
+  **Symbio needs no change:** it already subscribes to `OnSchemaEscapeDetected`, so the channel simply
+  starts working if it moves to PostgreSQL — which is why this was done before the move rather than after.
 
 ### The escape channel fabricated anomalies, and on three providers it never fired at all (2026-09-02)
 
