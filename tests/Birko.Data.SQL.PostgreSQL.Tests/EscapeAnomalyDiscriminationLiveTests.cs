@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Birko.Data.Models;
 using Birko.Data.SQL.Attributes;
 using Birko.Data.SQL.Connectors;
@@ -157,27 +158,22 @@ public class EscapeAnomalyDiscriminationLiveTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠ <b>TASK-295 — the end-to-end anomaly decision cannot be exercised on this provider at all, and
-    /// this records why rather than leaving the gap as prose.</b>
+    /// <b>TASK-295 — the created table is recorded here now, so the anomaly is observable on this
+    /// provider at all.</b>
     ///
-    /// <para><c>AbstractConnector.RecordTableCreated</c> is called from exactly one place: the <b>base</b>
-    /// <c>CreateTable(string, IEnumerable&lt;string&gt;)</c>. PostgreSQL, MySQL and SQL Server each
-    /// <b>override</b> that method with their own emitter and none of them records — so
-    /// <c>TablesCreated</c> is permanently empty on three of the four providers, and with it TASK-286's
-    /// annotation (always "NO recorded CREATE TABLE"), TASK-287's <c>SchemaEscapes</c> channel and
-    /// TASK-288's healing. The whole escape/heal apparatus is SQLite-only in practice.</para>
+    /// <para>⚠ This test was written by [[TASK-293]] asserting the <b>defect</b>: <c>TablesCreated</c> was
+    /// permanently <b>empty</b> on this provider, because <c>RecordTableCreated</c> was called from the
+    /// base <c>CreateTable(string, IEnumerable&lt;string&gt;)</c> and this connector <b>overrode</b> that
+    /// method. TASK-295 inverted it rather than replacing it — the before/after pair on one test is the
+    /// record, as TASK-277 did to TASK-244's pin and TASK-265 to TASK-257's.</para>
     ///
-    /// <para>Fifth instance of this repo's own <i>"a funnel with four overrides is not a funnel"</i>
-    /// (TASK-215, TASK-242, TASK-243, TASK-245).</para>
-    ///
-    /// <para>⚠ <b>Do not "fix" this by adding the call to the three overrides and flipping the
-    /// assertion.</b> [[TASK-295]] owns the shape of that change — the recording wants a placement an
-    /// override cannot bypass, not a fourth copy — and it needs its own before/after measurement per
-    /// provider. TASK-293's claim, that the discriminator reads the provider error rather than the
-    /// statement, is asserted above and does not depend on this.</para>
+    /// <para>What was inert until then, on every provider but SQLite: TASK-286's annotation (always "NO
+    /// recorded CREATE TABLE"), TASK-287's <c>SchemaEscapes</c> channel, and TASK-288's healing — so a
+    /// table that vanished beneath an initialised store never healed and every write threw until the
+    /// process restarted.</para>
     /// </summary>
     [Fact]
-    public void TASK295_this_provider_records_no_created_tables_so_the_anomaly_is_unobservable_here()
+    public void TASK295_the_created_table_is_recorded_so_the_anomaly_is_observable_here()
     {
         if (!RequireServer()) return;
         Exec("DROP TABLE IF EXISTS \"PgAnomMovement\" CASCADE");
@@ -186,15 +182,64 @@ public class EscapeAnomalyDiscriminationLiveTests : IDisposable
         connector.CreateTable(new[] { typeof(PgAnomMovement) });
 
         _out.WriteLine($"created=[{string.Join(", ", connector.TablesCreated.Keys)}]");
-        connector.TablesCreated.Should().BeEmpty(
-            "PostgreSQLConnector overrides CreateTable(string, IEnumerable<string>) and does not call "
-            + "RecordTableCreated. When TASK-295 lands, this inverts to Contain(\"PgAnomMovement\")");
+        connector.TablesCreated.Keys.Should().Contain("PgAnomMovement",
+            "the recording now lives in a non-virtual wrapper this connector's CreateTableCore override "
+            + "cannot bypass");
 
-        // The consequence, measured rather than inferred: with nothing recorded, a table this connector
-        // really did create and that really did vanish reads as a benign first touch.
+        // And the consequence: a table this connector created and that then vanished is now the ANOMALY
+        // here, not a benign first touch.
         Exec("DROP TABLE IF EXISTS \"PgAnomMovement\" CASCADE");
-        connector.SelectCount(typeof(PgAnomMovement)).Should().Be(0);
-        connector.SchemaEscapes.Should().BeEmpty();
-        connector.SchemaGeneration.Should().Be(0);
+        connector.SelectCount(typeof(PgAnomMovement)).Should().Be(0,
+            "TASK-285's answer is unchanged — the count is still 0, it is now also RECORDED");
+        connector.SchemaEscapes.Should().ContainSingle()
+            .Which.TableNames.Should().Contain("PgAnomMovement");
+        connector.SchemaEscapes.Single().Annotation.Should()
+            .Contain("but this connector already created it");
+        connector.SchemaGeneration.Should().Be(1, "TASK-288's healing reads this");
+    }
+
+    /// <summary>
+    /// <b>TASK-295 — and TASK-288's healing therefore works here, which is the outage half.</b>
+    /// With the table dropped beneath an initialised store, the failing write must report (TASK-277) and
+    /// the <b>next</b> one must succeed. Before this it never did on this provider: the store kept its
+    /// remembered <c>_initialized</c> because <c>SchemaGeneration</c> never moved, so every write threw
+    /// until the process restarted.
+    /// </summary>
+    [Fact]
+    public async Task TASK295_a_vanished_table_heals_on_the_next_write_here_too()
+    {
+        if (!RequireServer()) return;
+        Exec("DROP TABLE IF EXISTS \"PgAnomMovement\" CASCADE");
+
+        var store = new AsyncPostgreSQLStore<PgAnomMovement>();
+        store.SetSettings(Settings());
+        await store.CreateAsync(new PgAnomMovement { Guid = Guid.NewGuid(), Value = "seed" });
+
+        Exec("DROP TABLE IF EXISTS \"PgAnomMovement\" CASCADE");
+
+        var first = await Attempt(store, "w1");
+        first.Should().BeFalse(
+            "the attempt against the missing table is still REPORTED — TASK-277's contract, which healing "
+            + "must not buy recovery back by going quiet about");
+
+        var second = await Attempt(store, "w2");
+        second.Should().BeTrue(
+            "before TASK-295 this provider's SchemaGeneration never moved, so the store trusted its "
+            + "remembered initialization forever and w2, w3, w4 ... all threw as well");
+
+        (await store.CountAsync()).Should().Be(1, "w2 landed; the seed went with the dropped table");
+    }
+
+    private static async Task<bool> Attempt(AsyncPostgreSQLStore<PgAnomMovement> store, string value)
+    {
+        try
+        {
+            await store.CreateAsync(new PgAnomMovement { Guid = Guid.NewGuid(), Value = value });
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }
