@@ -3,7 +3,7 @@ id: TASK-296
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P1
 assignee: unassigned
 created: 2026-09-02
@@ -11,7 +11,7 @@ depends-on: []
 blocks: []
 related: [TASK-276, TASK-285, TASK-286, TASK-287, TASK-288, TASK-290, TASK-294]
 findings: []
-pr: null
+pr: e37c871 (Birko.Data.SQL.SqLite) + baa1ffd (SqLite.Tests) + 766aef8 (PostgreSQL.Tests)
 github-issue: null
 jira-key: null
 affects: [Birko.Data.SQL.SqLite]
@@ -79,12 +79,109 @@ already returned a wrong count, and healing does not retract it.
 
 ## Acceptance
 
-- [ ] The remedy is chosen against a measurement of the **steady state**, not only the storm.
-- [ ] WAL is evaluated as the alternative, and the choice between the two (or both) is stated with its
-      reason.
-- [ ] The reproduction in `ColdTableStormTests` shows 0 escapes on the shipped default afterwards, and its
-      pooled/unpooled control pair is updated to say what the new default is.
-- [ ] The other three providers are checked with the same storm shape, now that TASK-295 makes their
-      escape channel work — a "should not arise" is a prediction until measured.
-- [ ] Whatever is chosen, `SqLiteSettings.GetConnectionString()` remains overridable so a consumer can opt
-      back out, and that opt-out has a test (§ SH-H037).
+- [x] The remedy is chosen against a measurement of the **steady state**, not only the storm — and the
+      steady state **inverted** the storm's verdict on pooling.
+- [x] WAL evaluated and chosen, with the reason: it fixes the defect, keeps pooling, and is 5× faster
+      warm where `Pooling=False` is 1.5× slower.
+- [x] The reproduction shows 0 escapes on the shipped default, and the control pair now includes a
+      rollback-journal variant that **still fires** — which is what stops that 0 being a broken repro.
+- [x] PostgreSQL checked with the same shape: 0 escapes, 0 failures, 2 of 2. MySQL and SQL Server
+      explicitly **not** measured, with the reason stated rather than implied.
+- [x] The opt-out is a settable `SqLiteSettings.JournalMode` (`"DELETE"`, or null/empty for "leave the
+      file alone"), and both have tests. `GetConnectionString()` is untouched and still overridable.
+
+---
+
+## Closed 2026-09-02 — the remedy is WAL, and the steady state is what chose it
+
+### The measurement that decided it, and it inverted the storm
+
+The storm made `Pooling=False` look free — 2.4× *faster*. That is a contention artefact. Measured on the
+ordinary case instead (warm store, sequential, 200 × write + count + filtered read,
+`ConnectionModeSteadyStateTests`):
+
+| configuration | run 1 | run 2 | vs default | escapes (storm) |
+|---|---|---|---|---|
+| pooled + rollback journal — the old shipped default | 1,801 ms | 1,819 ms | — | **7 of 7 runs, 2-9 each** |
+| **unpooled** + rollback journal | 2,731 ms | 2,791 ms | **1.52× slower** | 0 of 4 |
+| pooled + **WAL** | **351 ms** | **369 ms** | **0.19× — 5× faster** | **0 of 5** |
+
+So WAL wins on every measured axis: it removes the defect, keeps pooling, is 5× faster warm and 20-40×
+faster under the storm. `Pooling=False` removes the defect and costs 52% in the ordinary case.
+
+### The fix
+
+`SqLiteSettings.JournalMode`, defaulting to `"WAL"`, applied **once per connector** by
+`SqLiteConnector.ApplyJournalMode` — once is enough because WAL is persistent in the database file, and it
+runs on a connection of its own because `CreateConnection` returns an unopened connection by contract.
+
+⚠ **The whitelist is two values, and that is a measurement, not caution.** SQLite persists a journal mode
+in the file **only for WAL**; the rollback modes are a *per-connection* property. Measured
+(`Which_journal_modes_persist_across_connections`, kept in the tree): set `TRUNCATE`, `PERSIST`, `MEMORY`
+or `OFF` on one connection and a new connection reports `delete`. Since this seam applies the PRAGMA once,
+on its own connection, accepting those four would take the value and **silently do nothing** — the
+silent-drop shape § SH-H037 forbids. So they are refused, with a message that says why. `DELETE` is kept
+because it is meaningful: it takes a database back *out* of WAL, persistently.
+
+Three properties, each tested:
+
+- **The value is whitelisted**, because it is interpolated into `PRAGMA journal_mode=…`, which takes no
+  parameter — § Conventions' identifier family at a fourth kind of sink, a bare keyword in statement
+  position, where refusal is the only containment (TASK-255's reasoning). A payload never reaches the
+  database.
+- **A mode that cannot be applied is RECORDED, not thrown** — `JournalModeInEffect` /
+  `JournalModeFailure`, on the same terms as `IndexCreationFailures` (TASK-204) and `SubscriberFailures`
+  (TASK-289). A journal mode is a concurrency property, not the caller's operation, so a database that
+  cannot take WAL must still be usable. ⚠ And `JournalModeInEffect` must be **read** rather than assumed:
+  WAL needs shared memory and does not engage on most network filesystems, and SQLite reports the mode
+  actually in force rather than failing.
+- **Applied once, proved by poisoning the setting afterwards.** An earlier version of that test asserted
+  the mode was still right after twenty operations, which a per-statement implementation would also have
+  satisfied — it pinned the outcome, not the once-ness.
+
+### The cross-provider answer
+
+**PostgreSQL: 0 escapes, 0 failures, 2 of 2 runs** (`ColdTableStormLiveTests`, 60 distinct cold tables ×
+3 concurrent callers in waves). Its catalogue is server-side and its visibility transactional, so the
+SQLite mechanism has no analogue — measured rather than predicted, as the acceptance asked.
+
+⚠ **It was only askable because of [[TASK-295]].** Before that, `TablesCreated` was permanently empty on
+this provider, so a run against that code would have reported a clean 0 for entirely the wrong reason.
+MySQL and SQL Server were **not** measured: same server-side transactional catalogue, and the fix is
+SQLite-only, so they are unaffected either way. Stated rather than implied.
+
+### Measurements
+
+`BIRKO_REQUIRE_LIVE` set, live PostgreSQL 16 and on-disk SQLite: **1,269 tests, 0 failed, 0 skipped**
+across eight suites — `Birko.Data.SQL` 667, SqLite **331** (310 → 331), PostgreSQL **98** (96 → 98),
+Migrations.SQL 54, SqLite.View 9, InMemory 69, JSON 23, XML 18. The SQLite suite is **4 of 4 clean** on
+repeat runs, and identical with `BIRKO_STORM` set (331 either way).
+
+**Mutations, disjoint:**
+
+| mutation | red |
+|---|---|
+| default back to `"DELETE"` | **3** guards **and the storm produces 15 escapes** and fails — the fix's proof in both directions |
+| whitelist removed (raw value interpolated) | **3** — the payload and per-connection-mode cases |
+| throw instead of recording an unusable mode | **3** — the store must survive a journal mode it cannot have |
+
+### ⚠ Two fixture faults of my own, both worth recording
+
+1. **A test that was flaky by construction, twice.** It set the file to `TRUNCATE` and expected to find it
+   there later. It passed in isolation only because connection pooling happened to hand the store the same
+   handle that had set it in memory, and failed at random in a full parallel run. The cause is the very
+   fact this task is about — only WAL persists — which is why that probe is now a committed test rather
+   than a note. **A mode that does not persist cannot be used as a fixture's distinctive marker.**
+2. **`An_explicit_DELETE_is_honoured` was vacuous as first written.** It asserted `delete` on a fresh
+   database, where delete is the default — so it passed however the code behaved. It now starts the file
+   in WAL and shows it reverted, which is a real assertion about a persistent change.
+
+### Deliberately not done
+
+- **`Pooling=False` was not shipped.** It fixes the defect and costs 52% in the ordinary case; WAL fixes it
+  and pays back 5×. The unpooled storm variant stays in the tree as the control that *named* the
+  mechanism, labelled as not being the remedy.
+- **MySQL and SQL Server storms**, per the reason above.
+- **Nothing about the count path.** [[TASK-294]] still owns the fact that a count under lock contention
+  faults; WAL reduces that contention sharply but does not change the decision.
+- **No consumer-side change.** Symbio picks this up by rebuilding — see the report.

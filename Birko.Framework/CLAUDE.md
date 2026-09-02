@@ -374,6 +374,49 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **A remedy is priced on the STEADY STATE, not on the reproduction that found the defect — and a knob may
+  only offer what the mechanism can actually deliver.** TASK-296, closing the thread TASK-290 named. Every
+  Birko SQLite database ran on SQLite's rollback journal, where a statement on a **pooled** `sqlite3`
+  handle can be answered from a schema image older than a `CREATE TABLE` another connection has already
+  committed — so a freshly created table reads as missing and, since TASK-285 answers that with `0`, does
+  so **silently**. The fix is `SqLiteSettings.JournalMode`, defaulting to `WAL`. Seven parts generalise:
+  - **The storm's verdict was the opposite of the truth, on the axis that decides.** Both candidate
+    remedies looked free there: `Pooling=False` ran 2.4× *faster* than the default. Measured on the
+    ordinary case instead — warm store, sequential, 200 × write+count+read — it is **1.52× slower**
+    (2,731 ms against 1,801 ms), because a storm is dominated by lock contention while the ordinary case
+    pays for opening a real handle per statement. WAL is **5× faster** (351 ms) and removes the defect
+    too. **A benchmark taken under the pathology measures the pathology.**
+  - **Only WAL is a persistent journal mode, and that fact shaped the API rather than a footnote.**
+    Measured: set `TRUNCATE`, `PERSIST`, `MEMORY` or `OFF` on one connection and a *new* connection
+    reports `delete`; only `WAL` comes back as itself. Since the seam applies the PRAGMA **once, on a
+    connection of its own**, accepting those four would take the value and silently do nothing — so they
+    are **refused**, with the reason in the message. The whitelist is `WAL` and `DELETE`, and `DELETE`
+    earns its place by being the persistent way back *out* of WAL. § SH-H037 applied to a setting rather
+    than to a mapper: **do not accept what you cannot deliver.**
+  - **Once per database is enough precisely because the mode is persistent** — and the once-ness is proved
+    by *poisoning the setting afterwards* and showing nothing notices. The first version of that test
+    asserted the mode was still right after twenty operations, which a per-statement implementation would
+    also have satisfied: it pinned the outcome, not the property.
+  - **⚠ A mode that does not persist cannot be a fixture's marker, and this cost two flaky rounds.** The
+    opt-out test put the file into `TRUNCATE` and expected to find it there later. It passed in isolation
+    only because pooling happened to hand the store the same handle that had set it in memory, and failed
+    at random in a parallel run — the very mechanism the task is about, arriving inside its own test. The
+    discriminator that works is `JournalModeInEffect` staying **null**: a state the file alone cannot
+    express.
+  - **⚠ And the neighbouring test was vacuous.** *"An explicit DELETE is honoured"* asserted `delete` on a
+    **fresh** database, where delete is the default — it passed however the code behaved. It now starts
+    the file in WAL and shows it reverted. **When a test asserts a value that is also the default, it is
+    asserting nothing.**
+  - **A concurrency property that cannot be applied is RECORDED, not thrown.** `JournalModeInEffect` /
+    `JournalModeFailure`, on the same terms as `IndexCreationFailures` (TASK-204) and `SubscriberFailures`
+    (TASK-289). WAL needs shared memory and does not engage on most network filesystems, and SQLite
+    *reports* the mode in force rather than failing — so `JournalModeInEffect` has to be **read** rather
+    than assumed, and a database that cannot take WAL must still be usable.
+  - **The cross-provider "should not arise" was measured, and it was only askable because of TASK-295.**
+    PostgreSQL: 0 escapes over 60 cold tables × 3 concurrent callers, 2 of 2 runs — its catalogue is
+    server-side and transactionally visible, so the mechanism has no analogue. Before TASK-295 that run
+    would have reported a clean 0 **for the wrong reason**, because `TablesCreated` was empty there. When
+    an instrument has just been repaired, note which of your negatives predate the repair.
 - **A load defect is reproduced by matching the CONCURRENCY SHAPE, not by turning the load up — and the
   shape that mattered here was several callers per table, not more tables at once.** TASK-290, closed after
   nineteen hypotheses. The escape consumer Symbio had been chasing for a fortnight is now named: **a
@@ -2046,6 +2089,45 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### SQLite databases now run on WAL, which closes the schema-escape thread (2026-09-02)
+
+TASK-296, the remedy for the mechanism [[TASK-290]] named. Every Birko SQLite database ran on SQLite's
+rollback journal, where a statement on a **pooled** `sqlite3` handle can be answered from a schema image
+older than a `CREATE TABLE` another connection has already committed — a freshly created table reads as
+missing, and since TASK-285 answers that with `0`, silently. `SqLiteSettings.JournalMode` now defaults to
+`"WAL"`. Verified with `BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16 and on-disk SQLite:
+**1,269 tests, 0 failed, 0 skipped** across eight suites; the SQLite suite is 4 of 4 clean on repeats and
+identical with `BIRKO_STORM` set. The standing rule is in § Conventions. Seven things worth carrying:
+
+- **The storm's verdict was the opposite of the truth on the axis that decides.** Both candidate remedies
+  looked free there — `Pooling=False` ran 2.4× *faster*. On the ordinary case (warm, sequential,
+  200 × write+count+read) it is **1.52× slower**: 2,731 ms against 1,801 ms. WAL is **5× faster**
+  (351 ms) *and* removes the defect *and* keeps pooling. A benchmark taken under the pathology measures
+  the pathology.
+- **Only WAL is a persistent journal mode, and that shaped the API.** Measured: `TRUNCATE`, `PERSIST`,
+  `MEMORY` and `OFF` are per-connection — a new connection reports `delete`. The seam applies the PRAGMA
+  once, on its own connection, so accepting those four would take the value and silently do nothing. They
+  are refused with the reason; the whitelist is `WAL` and `DELETE`, the latter being the persistent way
+  back out of WAL.
+- **The value is whitelisted because it is a bare keyword in statement position** — `PRAGMA journal_mode=…`
+  takes no parameter, so refusal is the only containment. § Conventions' identifier family at a fourth
+  kind of sink.
+- **A journal mode that cannot be applied is recorded, not thrown** (`JournalModeInEffect` /
+  `JournalModeFailure`). WAL needs shared memory and does not engage on most network filesystems, and
+  SQLite reports the mode in force rather than failing — so that property must be **read**, not assumed.
+- **The control pair now includes a rollback-journal variant that still fires**, which is what stops the
+  new default's 0 being a broken reproduction. Mutation: putting the default back to `DELETE` reds 3
+  guards **and the storm produces 15 escapes**.
+- **⚠ Two fixture faults of mine, both instructive.** The opt-out test used `TRUNCATE` as its distinctive
+  marker and was flaky twice — a mode that does not persist cannot be a marker, and it only ever passed
+  because pooling handed back the same handle: the task's own mechanism, inside its own test. And
+  *"an explicit DELETE is honoured"* asserted `delete` on a **fresh** database, where delete is the
+  default, so it passed however the code behaved.
+- **PostgreSQL measured clean** (0 escapes, 60 cold tables × 3 callers, 2 of 2) — the mechanism has no
+  analogue on a server-side transactional catalogue. ⚠ That was only askable because of [[TASK-295]]:
+  before it, `TablesCreated` was empty there and the same run would have reported 0 for the wrong reason.
+  MySQL and SQL Server deliberately not measured, and said so.
 
 ### The schema-ensure escape is named: a pooled connection answering from a stale schema image (2026-09-02)
 
