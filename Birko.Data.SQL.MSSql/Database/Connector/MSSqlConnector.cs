@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -76,6 +76,22 @@ namespace Birko.Data.SQL.Connectors
         /// SQL Server phrases a missing table as "Invalid object name 'x'" (error 208). Adds that to the
         /// base SQLite match so the reader yields an empty result rather than faulting.
         /// </summary>
+        /// <summary>
+        /// TASK-293 — the object name out of <c>Invalid object name 'dbo.Widgets'.</c>
+        /// </summary>
+        /// <remarks>
+        /// Taken from between the quotes, and the schema qualifier is stripped by <c>TrimTableName</c>
+        /// because <c>TablesCreated</c> is keyed by the bare framework table name. SQL Server does not
+        /// expose the object name as a structured field on <c>SqlError</c>, so the message is the only
+        /// source; error 208 is what says the message has this shape.
+        /// </remarks>
+        public override string? MissingTableName(Exception ex)
+        {
+            var fromBase = base.MissingTableName(ex);
+            if (!string.IsNullOrEmpty(fromBase)) return fromBase;
+            return IsMissingTableException(ex) ? FirstQuotedToken(ex.Message) : null;
+        }
+
         public override bool IsMissingTableException(Exception ex)
         {
             if (base.IsMissingTableException(ex)) return true;
