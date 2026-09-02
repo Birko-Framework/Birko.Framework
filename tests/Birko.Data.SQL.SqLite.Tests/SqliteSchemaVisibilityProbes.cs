@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -274,6 +276,146 @@ public class SqliteSchemaVisibilityProbes : IDisposable
         finally
         {
             journalHandle?.Dispose();
+        }
+    }
+
+    // ─────────── TASK-290: the mechanism, below the framework, with the cookie read ───────────
+
+    private static bool RequireStorm(ITestOutputHelper output)
+    {
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BIRKO_STORM")))
+        {
+            return true;
+        }
+        output.WriteLine("SKIPPED: set BIRKO_STORM to run this load probe (~15 s).");
+        return false;
+    }
+
+    /// <summary>
+    /// <b>TASK-290's answer, reproduced with raw Microsoft.Data.Sqlite and nothing of this framework in
+    /// the way — so the failing connection is ours and its schema cookie can be read.</b>
+    ///
+    /// <para>The shape is the framework's, faithfully: a writer that opens a connection per
+    /// <c>CREATE TABLE</c> and commits it (<c>RunCommandTransaction</c>), and readers that open a
+    /// connection per <c>SELECT count(*)</c> (<c>RunCommand</c>) against tables the writer has
+    /// <b>already committed</b>. Connection pooling is on, which is what the framework's connection
+    /// string gets by default — it emits only <c>Data Source</c>, an optional <c>Password</c> and
+    /// <c>Default Timeout</c>.</para>
+    ///
+    /// <para>What it prints for each failure is the datum the whole investigation was missing: the
+    /// <c>PRAGMA schema_version</c> of the connection that <b>just failed</b>, beside the value an
+    /// independent connection reports at the same moment. A cookie that is <b>behind</b> is the stale
+    /// schema image, stated as a measurement instead of inferred from a symptom.</para>
+    ///
+    /// <para>⚠ This is a diagnostic, not a guard: it is load-dependent and gated on <c>BIRKO_STORM</c>.
+    /// The framework-level reproduction and its pooled/unpooled control live in
+    /// <c>ColdTableStormTests</c>.</para>
+    /// </summary>
+    [Fact]
+    public async Task APooledConnectionCanAnswerFromAStaleSchemaImage()
+    {
+        if (!RequireStorm(_out)) return;
+
+        var cs = Cs("rawpool.db");
+        using (var seed = new SqliteConnection(cs))
+        {
+            seed.Open();
+            using var cmd = seed.CreateCommand();
+            cmd.CommandText = "CREATE TABLE Anchor (Id INTEGER)";
+            cmd.ExecuteNonQuery();
+        }
+
+        var created = 0;                 // tables the writer has COMMITTED, monotonic
+        var stop = false;
+        var findings = new List<string>();
+        var sync = new object();
+
+        var writer = Task.Run(() =>
+        {
+            for (var i = 0; i < 200 && !stop; i++)
+            {
+                // The framework's shape: a connection and a transaction per DDL statement.
+                using var db = new SqliteConnection(cs);
+                db.Open();
+                using (var tx = db.BeginTransaction())
+                using (var cmd = db.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = $"CREATE TABLE IF NOT EXISTS T{i:000} (Id INTEGER)";
+                    cmd.ExecuteNonQuery();
+                    tx.Commit();
+                }
+                db.Close();
+                Volatile.Write(ref created, i + 1);
+            }
+        });
+
+        var readers = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+        {
+                        while (!Volatile.Read(ref stop))
+            {
+                var ceiling = Volatile.Read(ref created);
+                if (ceiling == 0) continue;
+                // The NEWEST table the writer has already committed. That is the framework's shape: a
+                // caller released from another caller's _initLock immediately counts the table that init
+                // just created, so the create is milliseconds old — which is the whole window. Targeting a
+                // random older table found nothing in 200 creates, because a pooled handle gets many
+                // chances to refresh in between.
+                var target = $"T{ceiling - 1:000}";
+
+                using var db = new SqliteConnection(cs);
+                db.Open();
+                try
+                {
+                    using var cmd = db.CreateCommand();
+                    cmd.CommandText = $"SELECT count(*) FROM \"{target}\"";
+                    cmd.ExecuteScalar();
+                }
+                catch (SqliteException ex)
+                {
+                    // The decisive read: this connection is STILL OPEN, so its own cookie is available.
+                    long onFailing = -1;
+                    try { onFailing = SchemaVersion(db); } catch { }
+                    long independent = -1;
+                    var presentNow = false;
+                    try
+                    {
+                        using var other = new SqliteConnection(cs);
+                        other.Open();
+                        independent = SchemaVersion(other);
+                        presentNow = Scalar(other,
+                            $"SELECT count(*) FROM sqlite_master WHERE type='table' AND name='{target}'") == "1";
+                    }
+                    catch { }
+
+                    lock (sync)
+                    {
+                        findings.Add($"{target}: code={ex.SqliteErrorCode} "
+                            + $"cookieOnFailingConnection={onFailing} cookieIndependent={independent} "
+                            + $"presentNow={presentNow} committedCeiling={ceiling} :: {ex.Message}");
+                    }
+                }
+                db.Close();
+            }
+        })).ToArray();
+
+        await writer;
+        Volatile.Write(ref stop, true);
+        await Task.WhenAll(readers);
+
+        _out.WriteLine($"committed tables: {Volatile.Read(ref created)}; failures: {findings.Count}");
+        foreach (var f in findings.Take(12))
+        {
+            _out.WriteLine("  " + f);
+        }
+
+        // No assertion on the COUNT of failures: this is a race and a quiet run proves nothing either way.
+        // What is asserted is the classification of whatever did fail, because that is the finding.
+        foreach (var f in findings)
+        {
+            f.Should().Contain("presentNow=True",
+                "every failure here must be against a table that IS in the file — otherwise this probe is "
+                + "measuring a missing table rather than a stale view of a present one");
         }
     }
 }

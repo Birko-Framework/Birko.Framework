@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Birko.Data.SQL;
 using Birko.Data.SQL.Connectors;
 using Birko.Data.SQL.SqLite.Stores;
+using Birko.Data.SQL.Stores;
 using FluentAssertions;
 using Microsoft.Data.Sqlite;
 using Xunit;
@@ -275,5 +276,258 @@ public class ColdTableStormTests : IDisposable
             + "TASK-286's annotation and is transition-fired, so there are several ways for it to be "
             + "silent while the condition is happening")
             .Which.TableNames.Should().Contain("Probe000");
+    }
+
+
+    /// <summary>
+    /// What an <b>independent</b> connection sees at the exact moment an escape is detected.
+    /// </summary>
+    /// <remarks>
+    /// This is the measurement that separates TASK-290's two remaining families, and it needs no framework
+    /// plumbing at all: <c>OnSchemaEscapeDetected</c> is raised <b>synchronously</b> from inside
+    /// <c>EnsureSchemaAndReport</c>, so a handler runs while the failing statement's flow is still on the
+    /// stack. A handler that then opens its own connection and asks <c>sqlite_master</c> answers the only
+    /// question left:
+    /// <list type="bullet">
+    /// <item>the table is <b>absent</b> from the file → something removed it, or it was never durably
+    /// there. A visibility story is dead;</item>
+    /// <item>the table is <b>present</b> → the failing statement read an image that did not contain it,
+    /// i.e. a visibility effect, and <c>schema_version</c> says how far behind.</item>
+    /// </list>
+    /// <para>Safe by construction since TASK-289: a throwing handler is isolated and recorded rather than
+    /// replacing the exception in flight.</para>
+    /// </remarks>
+    private sealed record EscapeObservation(
+        string Tables, bool TablePresentNow, long SchemaVersionNow, int TablesInFileNow);
+
+    private List<EscapeObservation> ObserveEscapes(SqLiteConnector connector, SqLiteSettings settings)
+    {
+        var seen = new List<EscapeObservation>();
+        var sync = new object();
+        connector.OnSchemaEscapeDetected += escape =>
+        {
+            var name = escape.TableNames.FirstOrDefault() ?? "(none)";
+            using var db = new SqliteConnection(settings.GetConnectionString());
+            db.Open();
+            using var cmd = db.CreateCommand();
+            cmd.CommandText = "SELECT (SELECT count(*) FROM sqlite_master WHERE type='table' AND name=$n), "
+                + "(SELECT count(*) FROM sqlite_master WHERE type='table')";
+            cmd.Parameters.AddWithValue("$n", name);
+            using var reader = cmd.ExecuteReader();
+            reader.Read();
+            var present = reader.GetInt32(0) > 0;
+            var total = reader.GetInt32(1);
+            reader.Close();
+            using var pragma = db.CreateCommand();
+            pragma.CommandText = "PRAGMA schema_version";
+            var version = Convert.ToInt64(pragma.ExecuteScalar());
+            lock (sync)
+            {
+                seen.Add(new EscapeObservation(string.Join(",", escape.TableNames), present, version, total));
+            }
+        };
+        return seen;
+    }
+
+    // ───────────── TASK-290 Round 2: the two shapes Round 1's probes left open ─────────────
+
+    /// <summary>
+    /// <b>An open boundary holds an UNCOMMITTED create, which Round 1 measured reads as
+    /// <c>no such table</c> with no lock error — so this is the one interleaving that could produce the
+    /// anomaly without anything being removed.</b>
+    ///
+    /// <para>Flow A opens a <c>SqlUnitOfWork</c>, first-touches the entity (so the <c>CREATE TABLE</c>
+    /// runs on A's connection inside A's transaction and <c>TablesCreated</c> records it immediately) and
+    /// then <b>holds</b>. Flow B counts the same table on the same singleton store, concurrently.</para>
+    ///
+    /// <para>Round 1 argued from the code that B cannot see the uncommitted image, because B's own
+    /// schema-ensure has to take SQLite's write lock first and will block on A. This measures it instead —
+    /// the discipline this task exists to apply, since thirteen hypotheses have already died by code
+    /// reading. Whatever B does, the outcome is printed and the escape count asserted.</para>
+    /// </summary>
+    [Fact]
+    public async Task AnOpenBoundaryHoldingAnUncommittedCreate_DoesNotProduceAnAnomalousEscape()
+    {
+        var settings = new SqLiteSettings(_root, $"boundary{Interlocked.Increment(ref _seq)}.db")
+        {
+            // Short, so a blocked reader fails fast and visibly instead of hiding inside the default 30 s.
+            CommandTimeout = 3,
+        };
+        var connector = Connector(settings);
+        var store = new AsyncSQLiteStore<Probe000>();
+        store.SetSettings(settings);
+
+        var created = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var holder = Task.Run(async () =>
+        {
+            await using var uow = SqlUnitOfWork.FromStore(store);
+            await uow.BeginAsync();
+            // First touch INSIDE the boundary: the DDL joins A's transaction and is not committed.
+            await store.CreateAsync(new Probe000 { Guid = Guid.NewGuid() });
+            created.SetResult();
+            await release.Task;
+            await uow.RollbackAsync();
+        });
+
+        await created.Task;
+        connector.TablesCreated.Keys.Should().Contain("Probe000",
+            "the create is recorded the moment the statement runs, not when the boundary commits — which "
+            + "is what makes this interleaving a candidate at all");
+
+        long count = -1;
+        Exception? failure = null;
+        var reader = Task.Run(async () =>
+        {
+            try { count = await store.CountAsync(); }
+            catch (Exception ex) { failure = ex; }
+        });
+
+        await reader;
+        release.SetResult();
+        await holder;
+
+        _out.WriteLine($"[boundary] reader count={count} "
+            + $"failure={failure?.GetType().Name}: {Trim(failure?.Message)}");
+        if (failure != null)
+        {
+            _out.WriteLine($"           chain: {Chain(connector, failure)}");
+        }
+        Report(connector, failure == null ? Array.Empty<Exception>() : new[] { failure }, "boundary");
+
+        connector.SchemaEscapes.Should().BeEmpty(
+            "a concurrent reader cannot reach the uncommitted image: its own schema-ensure has to take "
+            + "SQLite's write lock first and blocks on the boundary holder, so it either waits or reports "
+            + "SQLITE_BUSY — never 'no such table' for a table this connector recorded");
+    }
+
+    /// <summary>
+    /// <b>The tuned storm.</b> Round 1's variants saturated the command timeout — 6-7 <c>SQLite Error 5</c>
+    /// per run, each after roughly 30 s of waiting — which is strictly more contended than the condition
+    /// being chased: the consumer measured <c>Error 5 = 0</c> across five cycles, so its contention never
+    /// exceeded that ceiling.
+    ///
+    /// <para>So this one is shaped the other way: smaller <b>waves</b> with several concurrent callers per
+    /// table, repeated, so schema-ensure and counts interleave without piling up. Multiple callers per
+    /// table matter because that is the consumer's actual profile — three concurrent
+    /// <c>GET /movement-codes</c> in the cycle that produced its clearest evidence — and because a caller
+    /// that waits on another's <c>_initLock</c> proceeds to its statement the instant that init returns.</para>
+    /// </summary>
+    [Fact]
+    public async Task TheTunedStorm_SmallerWavesWithSeveralCallersPerTable()
+    {
+        if (!RequireStorm()) return;
+        var settings = Fresh();
+        var connector = Connector(settings);
+        var probes = ColdTableProbes.All.Select(t => MakeProbe(t, settings)).ToArray();
+        var observed = ObserveEscapes(connector, settings);
+
+        const int waveSize = 24;      // tables per wave
+        const int callersPerTable = 3;
+        var failures = new List<Exception>();
+
+        for (var offset = 0; offset < probes.Length; offset += waveSize)
+        {
+            var wave = probes.Skip(offset).Take(waveSize).ToArray();
+            var work = new List<Func<CancellationToken, Task>>();
+            foreach (var probe in wave)
+            {
+                for (var c = 0; c < callersPerTable; c++)
+                {
+                    work.Add(async ct => await probe.Read(ct));
+                }
+            }
+            failures.AddRange(await Storm(work));
+        }
+
+        Report(connector, failures, $"tuned-storm waves of {waveSize}x{callersPerTable}");
+        foreach (var o in observed)
+        {
+            _out.WriteLine($"  OBSERVED [{o.Tables}] presentNow={o.TablePresentNow} "
+                + $"schemaVersionNow={o.SchemaVersionNow} tablesInFileNow={o.TablesInFileNow}");
+        }
+
+        connector.TablesCreated.Should().HaveCount(probes.Length,
+            "every probe must have schema-ensured, or the storm never reached the condition");
+
+        // ⚠ The COUNT of escapes is deliberately not asserted: this is a race, and a quiet run would
+        // prove nothing either way. What is asserted is the classification of whatever did fire, because
+        // that is TASK-290's finding — the table is IN THE FILE, observed synchronously from an
+        // independent connection, so nothing removed it and the failing statement read a stale image.
+        // The claim that it fires at all rests on the recorded 7-of-7 runs (2-9 escapes each) in
+        // TASK-290's Round 2 section, and on TheTunedStorm_WithConnectionPoolingDisabled as its control.
+        observed.Should().OnlyContain(o => o.TablePresentNow,
+            "an escape against a table that is genuinely absent would mean this probe is measuring "
+            + "something else entirely");
+    }
+
+    /// <summary>
+    /// <c>SqLiteSettings.GetConnectionString()</c> is virtual, which makes the decisive experiment
+    /// possible with no framework change: the same storm, on a connection string that disables
+    /// <b>connection pooling</b>.
+    /// </summary>
+    /// <remarks>
+    /// The framework emits only <c>Data Source</c>, an optional <c>Password</c> and
+    /// <c>Default Timeout</c>, so pooling is on — Microsoft.Data.Sqlite pools by default, and a pooled
+    /// handle keeps its <c>sqlite3</c> connection alive across <c>Close()</c>, including its page and
+    /// schema caches. Every framework read and write opens and closes a connection per statement
+    /// (<c>RunCommand</c>, <c>RunCommandTransaction</c>), so under load the same handles circulate.
+    /// </remarks>
+    private sealed class UnpooledSqLiteSettings : SqLiteSettings
+    {
+        public UnpooledSqLiteSettings(string location, string name) : base(location, name) { }
+
+        public override string GetConnectionString() => base.GetConnectionString() + ";Pooling=False";
+    }
+
+    /// <summary>
+    /// The same tuned storm with pooling <b>off</b>. If the escapes vanish, the mechanism is named: a
+    /// pooled <c>sqlite3</c> handle answering a statement from a schema image older than a create another
+    /// connection had already committed. If they persist, pooling is not it and the next probe is the
+    /// failing connection's own <c>PRAGMA schema_version</c>.
+    /// </summary>
+    [Fact]
+    public async Task TheTunedStorm_WithConnectionPoolingDisabled()
+    {
+        if (!RequireStorm()) return;
+        var settings = new UnpooledSqLiteSettings(_root, $"unpooled{Interlocked.Increment(ref _seq)}.db");
+        var connector = Connector(settings);
+        var probes = ColdTableProbes.All.Select(t => MakeProbe(t, settings)).ToArray();
+        var observed = ObserveEscapes(connector, settings);
+
+        const int waveSize = 24;
+        const int callersPerTable = 3;
+        var failures = new List<Exception>();
+
+        for (var offset = 0; offset < probes.Length; offset += waveSize)
+        {
+            var wave = probes.Skip(offset).Take(waveSize).ToArray();
+            var work = new List<Func<CancellationToken, Task>>();
+            foreach (var probe in wave)
+            {
+                for (var c = 0; c < callersPerTable; c++)
+                {
+                    work.Add(async ct => await probe.Read(ct));
+                }
+            }
+            failures.AddRange(await Storm(work));
+        }
+
+        Report(connector, failures, $"unpooled waves of {waveSize}x{callersPerTable}");
+        foreach (var o in observed)
+        {
+            _out.WriteLine($"  OBSERVED [{o.Tables}] presentNow={o.TablePresentNow} "
+                + $"schemaVersionNow={o.SchemaVersionNow} tablesInFileNow={o.TablesInFileNow}");
+        }
+
+        connector.TablesCreated.Should().HaveCount(probes.Length,
+            "every probe must have schema-ensured, or this variant is not comparable with the pooled one");
+        connector.SchemaEscapes.Should().BeEmpty(
+            "THE CONTROL, and TASK-290's answer. The only difference from the pooled variant is "
+            + "`Pooling=False` on the connection string. Measured: pooled fires on 7 of 7 runs with 2-9 "
+            + "escapes each, unpooled 0 of 4 — and unpooled is also about 2.4x FASTER here (16 s against "
+            + "38-40 s), which is worth knowing before treating pooling as a performance feature");
+        observed.Should().BeEmpty();
     }
 }
