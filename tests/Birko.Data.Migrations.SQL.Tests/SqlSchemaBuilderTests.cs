@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using Birko.Data.Migrations.SQL.Context;
 using Birko.Data.Patterns.Schema;
@@ -190,5 +190,40 @@ public class SqlSchemaBuilderTests : IDisposable
         schema.CreateIndex("Users", "IX_Users_Ok").WithField("Name").Build();
 
         CountMaster(conn, "index", "IX_Users_Ok").Should().Be(1);
+    }
+
+    /// <summary>
+    /// <b>TASK-295 — a table created through the migration builder is recorded on the connector, and that
+    /// is the reason the recording sits where it does.</b>
+    ///
+    /// <para>The defect was that <c>RecordTableCreated</c> was called from the <b>virtual</b>
+    /// <c>AbstractConnector.CreateTable(string, IEnumerable&lt;string&gt;)</c> — the very method every
+    /// provider overrides — so <c>TablesCreated</c> was permanently empty on four of five connectors. The
+    /// obvious alternative fix was to record in the <c>IDictionary</c> dispatcher instead, which every
+    /// override funnels through.</para>
+    ///
+    /// <para>⚠ <b>This test is what rules that alternative out.</b> <c>SqlSchemaBuilder</c> is the one
+    /// external caller that reaches the single-table overload <b>directly</b>
+    /// (<c>SqlSchemaBuilder.cs</c>, <c>Build()</c>), bypassing the dispatcher entirely — so recording
+    /// there would have left every migration-created table unrecorded, silently, and only on this path.
+    /// The chosen shape is a non-virtual public wrapper around a <c>protected virtual CreateTableCore</c>,
+    /// which covers this caller and the four provider overrides at once.</para>
+    /// </summary>
+    [Fact]
+    public void TASK295_a_table_created_through_the_builder_is_recorded_on_the_connector()
+    {
+        using var conn = OpenConnection();
+        var connector = Connector();
+        var schema = new SqlSchemaBuilder(conn, null, connector);
+
+        schema.CreateCollection("BuilderRecorded")
+            .WithField("Id", FieldType.Guid, isPrimary: true)
+            .WithField("Name", FieldType.String, maxLength: 100)
+            .Build();
+
+        CountMaster(conn, "table", "BuilderRecorded").Should().Be(1, "the premise: the table was created");
+        connector.TablesCreated.Keys.Should().Contain("BuilderRecorded",
+            "the migration builder calls the single-table overload directly, so a recording placed in the "
+            + "IDictionary dispatcher would miss it — which is why it is in the wrapper instead");
     }
 }
