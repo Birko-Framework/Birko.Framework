@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Birko.Data.Models;
 using Birko.Data.SQL.Attributes;
 using Birko.Data.SQL.Connectors;
@@ -113,17 +114,22 @@ public class EscapeAnomalyDiscriminationLiveTests : IDisposable
     }
 
     /// <summary>
-    /// ⚠ <b>TASK-295 — the end-to-end anomaly decision cannot be exercised on this provider at all.</b>
-    /// <c>RecordTableCreated</c> is called only from the <b>base</b>
-    /// <c>CreateTable(string, IEnumerable&lt;string&gt;)</c>, and this provider overrides it without
-    /// recording — so <c>TablesCreated</c> is permanently empty here, and with it TASK-286's annotation,
-    /// TASK-287's channel and TASK-288's healing.
-    /// <para>⚠ Do not "fix" this by adding the call to the three overrides and flipping the assertion:
-    /// [[TASK-295]] owns that change, which wants a placement an override cannot bypass rather than a
-    /// fourth copy, plus a per-provider before/after measurement.</para>
+    /// <b>TASK-295 — the created table is recorded here now, so the anomaly is observable on this
+    /// provider at all.</b>
+    ///
+    /// <para>⚠ This test was written by [[TASK-293]] asserting the <b>defect</b>: <c>TablesCreated</c> was
+    /// permanently <b>empty</b> on this provider, because <c>RecordTableCreated</c> was called from the
+    /// base <c>CreateTable(string, IEnumerable&lt;string&gt;)</c> and this connector <b>overrode</b> that
+    /// method. TASK-295 inverted it rather than replacing it — the before/after pair on one test is the
+    /// record, as TASK-277 did to TASK-244's pin and TASK-265 to TASK-257's.</para>
+    ///
+    /// <para>What was inert until then, on every provider but SQLite: TASK-286's annotation (always "NO
+    /// recorded CREATE TABLE"), TASK-287's <c>SchemaEscapes</c> channel, and TASK-288's healing — so a
+    /// table that vanished beneath an initialised store never healed and every write threw until the
+    /// process restarted.</para>
     /// </summary>
     [Fact]
-    public void TASK295_this_provider_records_no_created_tables_so_the_anomaly_is_unobservable_here()
+    public void TASK295_the_created_table_is_recorded_so_the_anomaly_is_observable_here()
     {
         if (!RequireServer()) return;
         Exec("DROP TABLE IF EXISTS [MsAnomMovement]");
@@ -132,12 +138,64 @@ public class EscapeAnomalyDiscriminationLiveTests : IDisposable
         connector.CreateTable(new[] { typeof(MsAnomMovement) });
 
         _out.WriteLine($"created=[{string.Join(", ", connector.TablesCreated.Keys)}]");
-        connector.TablesCreated.Should().BeEmpty(
-            "when TASK-295 lands this inverts to Contain(\"MsAnomMovement\")");
+        connector.TablesCreated.Keys.Should().Contain("MsAnomMovement",
+            "the recording now lives in a non-virtual wrapper this connector's CreateTableCore override "
+            + "cannot bypass");
+
+        // And the consequence: a table this connector created and that then vanished is now the ANOMALY
+        // here, not a benign first touch.
+        Exec("DROP TABLE IF EXISTS [MsAnomMovement]");
+        connector.SelectCount(typeof(MsAnomMovement)).Should().Be(0,
+            "TASK-285's answer is unchanged — the count is still 0, it is now also RECORDED");
+        connector.SchemaEscapes.Should().ContainSingle()
+            .Which.TableNames.Should().Contain("MsAnomMovement");
+        connector.SchemaEscapes.Single().Annotation.Should()
+            .Contain("but this connector already created it");
+        connector.SchemaGeneration.Should().Be(1, "TASK-288's healing reads this");
+    }
+
+    /// <summary>
+    /// <b>TASK-295 — and TASK-288's healing therefore works here, which is the outage half.</b>
+    /// With the table dropped beneath an initialised store, the failing write must report (TASK-277) and
+    /// the <b>next</b> one must succeed. Before this it never did on this provider: the store kept its
+    /// remembered <c>_initialized</c> because <c>SchemaGeneration</c> never moved, so every write threw
+    /// until the process restarted.
+    /// </summary>
+    [Fact]
+    public async Task TASK295_a_vanished_table_heals_on_the_next_write_here_too()
+    {
+        if (!RequireServer()) return;
+        Exec("DROP TABLE IF EXISTS [MsAnomMovement]");
+
+        var store = new AsyncMSSqlStore<MsAnomMovement>();
+        store.SetSettings(Settings());
+        await store.CreateAsync(new MsAnomMovement { Guid = Guid.NewGuid(), Value = "seed" });
 
         Exec("DROP TABLE IF EXISTS [MsAnomMovement]");
-        connector.SelectCount(typeof(MsAnomMovement)).Should().Be(0);
-        connector.SchemaEscapes.Should().BeEmpty();
-        connector.SchemaGeneration.Should().Be(0);
+
+        var first = await Attempt(store, "w1");
+        first.Should().BeFalse(
+            "the attempt against the missing table is still REPORTED — TASK-277's contract, which healing "
+            + "must not buy recovery back by going quiet about");
+
+        var second = await Attempt(store, "w2");
+        second.Should().BeTrue(
+            "before TASK-295 this provider's SchemaGeneration never moved, so the store trusted its "
+            + "remembered initialization forever and w2, w3, w4 ... all threw as well");
+
+        (await store.CountAsync()).Should().Be(1, "w2 landed; the seed went with the dropped table");
+    }
+
+    private static async Task<bool> Attempt(AsyncMSSqlStore<MsAnomMovement> store, string value)
+    {
+        try
+        {
+            await store.CreateAsync(new MsAnomMovement { Guid = Guid.NewGuid(), Value = value });
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }
