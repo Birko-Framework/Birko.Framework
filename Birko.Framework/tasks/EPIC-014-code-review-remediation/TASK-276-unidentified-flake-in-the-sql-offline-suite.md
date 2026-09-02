@@ -392,3 +392,23 @@ which is this task's signature. Three things worth carrying:
   call buys nothing and costs a shared-state side effect. The three new classes carry a remark saying
   so. The twenty-four pre-existing ones are deliberately untouched — removing them is a change to
   passing tests across the project and belongs to this task, with its own before/after measurement.
+
+---
+
+## 2026-09-02 (later) — one more unidentified live-suite failure, from TASK-291/294's verification
+
+`Birko.Data.SQL.MSSql.Tests` failed **1 of 111** once, during an eleven-suite sweep with four database
+containers running (PostgreSQL, MySQL, SQL Server, TimescaleDB). **Its identity was not captured** — the
+sweep only collected the summary line — and **5 subsequent isolated runs were clean**, 111/111 each.
+
+Recorded here rather than as a footnote on TASK-291/294 because this task is the home for exactly this
+shape: a live or cross-class failure that does not reproduce on demand. Three things about it:
+
+- **It is not attributable to that change on the evidence available.** The change (preserving an
+  exception's type instead of rewrapping it) is provider-independent and its own suite is 5/5 clean; but
+  neither is that a clearance, since the identity is unknown.
+- **The condition differs from this task's other instances**: SQL Server rather than SQLite, and no
+  `ClearAllPools` involved. So it may well be a third shape rather than the same one.
+- **What would settle it** is a trx logger on the sweep rather than a summary grep, so the next occurrence
+  names itself. That is the cheap change to make before the next multi-suite run, and it is the same
+  correction this task already needed once.

@@ -374,6 +374,45 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **An exception's TYPE is a contract three mechanisms select on, so rewrap only where the rewrap earns
+  something — and enumerate the filters before you replace an exception in flight.** TASK-291 + TASK-294,
+  filed apart and closed as one change because they were one line. `EnsureSchemaAndReport` rewrapped
+  **every** exception from every provider's `OnException` as `new Exception(DescribeSchemaEscape(ex, …), ex)`.
+  For a missing table that is the point (TASK-286's annotation rides on the message deliberately). For
+  everything else `DescribeSchemaEscape` returns the command text unchanged, so the rewrap contributed the
+  SQL and the **loss of the type**. Now a non-missing-table failure is reported as itself, with the
+  statement on `Exception.Data`. Six parts generalise:
+  - **The third consumer of the type was found by grepping the filters, not by reading the task files.**
+    Neither task mentioned retry. `AbstractConnectorBase.ExecuteWithRetry` filters on
+    `IsTransientException(ex)` — the **direct** predicate, not a chain walk — so a rewrapped
+    `SQLITE_BUSY` stopped being transient and **a `RetryPolicy` a consumer had configured silently never
+    fired** for any failure raised inside the try. § TASK-289's rule ("grep the filters before adding
+    anything that can replace an exception") read in reverse: it applies to *removing* a replacement too,
+    and to finding out what the replacement was already breaking.
+  - **Two tasks that name the same line are one change.** Filed separately for good reasons — a
+    cancellation is the caller's own decision, a lock timeout is not — and fixing them apart would have
+    meant reasoning about the same catch twice and shipping the second on top of the first's assumptions.
+    **When two filed defects quote the same statement, price them together before splitting the work.**
+  - **Keep what the rewrap was actually adding.** For these shapes it was the command text, so that moves
+    to `Exception.Data[AbstractConnector.CommandTextDataKey]`. Dropping it would have traded one
+    diagnostic for another and called it a fix.
+  - **`ExceptionDispatchInfo.Capture(ex).Throw()`, never `throw ex`** — and this one is **witnessed**
+    rather than defensive (§ TASK-261): the mutation reds exactly one test, and the stack head visibly
+    degrades from `Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC` to `EnsureSchemaAndReport`.
+    Say which, because the two look identical in a diff.
+  - **⚠ The first version of the end-to-end test measured the one path that was already fine.**
+    `RunCommandTransaction` opens its connection and calls `BeginTransaction()` **outside** the `try`, and
+    Microsoft.Data.Sqlite issues `BEGIN IMMEDIATE` for its default isolation level — so a lock contended
+    *before* the statement never reaches this funnel, already surfaces with its type, and already retries
+    (measured: **0** `OnExecute` for the INSERT, raw `SqliteException` code 5). The defect is only on
+    failures raised *inside* the try. **Before provoking a condition, check which side of the `try` it
+    lands on**; the contrast is now pinned so the next reader does not repeat the mistake.
+  - **A remedy's reachability can drop without its wrongness changing, and both belong in the record.**
+    TASK-296 put SQLite on WAL, where readers do not block writers, so the contention that produced
+    TASK-294's original 6-7 `Error 5` per storm run is largely gone. That is a reason to re-measure a
+    filed premise before working it — not a reason to close it quietly, and not a reason to widen a catch:
+    answering `0` for a *busy* database would be a fabrication where `0` for a *missing* table is the
+    truth.
 - **A remedy is priced on the STEADY STATE, not on the reproduction that found the defect — and a knob may
   only offer what the mechanism can actually deliver.** TASK-296, closing the thread TASK-290 named. Every
   Birko SQLite database ran on SQLite's rollback journal, where a statement on a **pooled** `sqlite3`
@@ -2089,6 +2128,40 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A blanket rewrap was silently disabling the retry policy, cancellation handling and every host `catch` (2026-09-02)
+
+TASK-291 + TASK-294, filed apart and closed as one change because they were one line.
+`EnsureSchemaAndReport` rewrapped **every** exception as `new Exception(DescribeSchemaEscape(ex, …), ex)`
+— right for a missing table, where TASK-286's annotation rides on the message deliberately, and pure loss
+for everything else, where `DescribeSchemaEscape` returns the command text unchanged. Verified with
+`BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16, MySQL 8.4, SQL Server 2022, TimescaleDB 2 and on-disk
+SQLite: **1,614 tests, 0 failed, 0 skipped** across eleven suites. The standing rule is in § Conventions.
+Six things worth carrying:
+
+- **Step 0 found a third consequence neither task file had**, and it was found by enumerating the catch
+  filters rather than by reading the tickets: `ExecuteWithRetry` filters on `IsTransientException(ex)` —
+  the **direct** predicate, not a chain walk — so a rewrapped `SQLITE_BUSY` stopped being transient and
+  **a `RetryPolicy` a consumer configured silently never fired** on any failure raised inside the try.
+- **Two tasks naming the same line are one change.** Fixing them apart would have meant reasoning about
+  the same catch twice and building the second on the first's assumptions.
+- **Keep what the rewrap was actually contributing.** The command text moves to
+  `Exception.Data[AbstractConnector.CommandTextDataKey]`; dropping it would have traded one diagnostic for
+  another and called that a fix.
+- **`ExceptionDispatchInfo.Capture(ex).Throw()`, not `throw ex`, and it is witnessed** — the mutation reds
+  exactly one test and the stack head degrades from
+  `Microsoft.Data.Sqlite.SqliteException.ThrowExceptionForRC` to `EnsureSchemaAndReport`.
+- **⚠ The first end-to-end test measured the one path that was already fine.**
+  `RunCommandTransaction` calls `BeginTransaction()` outside its `try` and Microsoft.Data.Sqlite issues
+  `BEGIN IMMEDIATE`, so a lock contended *before* the statement never reaches this funnel, already keeps
+  its type and already retries — measured as 0 `OnExecute` for the INSERT and a raw `SqliteException`
+  code 5. The contrast is pinned; the defect is only on failures raised inside the try.
+- **⚠ TASK-294's premise is now much rarer and that is recorded, not used to close it quietly.** TASK-296
+  put SQLite on WAL, where readers do not block writers, so its original 6-7 `Error 5` per storm run are
+  largely gone. Reachability dropped; wrongness did not — and answering `0` for a *busy* database was
+  never a candidate, because `0` is the truth for a missing table and a fabrication for a locked one.
+  Also recorded on [[TASK-276]]: one unidentified `MSSql` failure (1 of 111) during the eleven-suite
+  sweep, identity not captured, 5 subsequent isolated runs clean.
 
 ### SQLite databases now run on WAL, which closes the schema-escape thread (2026-09-02)
 
