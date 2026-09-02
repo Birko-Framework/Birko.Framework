@@ -78,6 +78,13 @@ public class ColdTableStormTests : IDisposable
     private SqLiteSettings Fresh() => new SqLiteSettings(_root, $"storm{Interlocked.Increment(ref _seq)}.db");
 
     /// <summary>
+    /// The same, on an explicit journal mode. <c>"DELETE"</c> is SQLite's own default and what this
+    /// framework left in place until TASK-296 — i.e. the configuration the defect lives on.
+    /// </summary>
+    private SqLiteSettings Fresh(string journalMode)
+        => new SqLiteSettings(_root, $"storm{Interlocked.Increment(ref _seq)}.db") { JournalMode = journalMode };
+
+    /// <summary>
     /// The two storm tests are <b>opt-in</b>, and a skipped run says so out loud — same idiom as the
     /// live provider suites.
     /// </summary>
@@ -451,12 +458,63 @@ public class ColdTableStormTests : IDisposable
         connector.TablesCreated.Should().HaveCount(probes.Length,
             "every probe must have schema-ensured, or the storm never reached the condition");
 
-        // ⚠ The COUNT of escapes is deliberately not asserted: this is a race, and a quiet run would
-        // prove nothing either way. What is asserted is the classification of whatever did fire, because
-        // that is TASK-290's finding — the table is IN THE FILE, observed synchronously from an
-        // independent connection, so nothing removed it and the failing statement read a stale image.
-        // The claim that it fires at all rests on the recorded 7-of-7 runs (2-9 escapes each) in
-        // TASK-290's Round 2 section, and on TheTunedStorm_WithConnectionPoolingDisabled as its control.
+        // TASK-296 — this is the FIX's proof, and it is only worth anything because the identical shape
+        // on the rollback journal still fires: see TheTunedStorm_OnTheRollbackJournal_IsWhereTheDefectLives,
+        // which is what stops this 0 being a broken reproduction. Run the two together.
+        connector.SchemaEscapes.Should().BeEmpty(
+            "on the shipped default (WAL) the stale-schema-image read does not happen. Measured: this "
+            + "exact shape fired on 7 of 7 runs with 2-9 escapes each while the framework left SQLite on "
+            + "its rollback journal, and 0 of 3 after");
+        observed.Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// <b>TASK-296 — the defect, still reproducible on the rollback journal, which is what makes the
+    /// WAL result above mean something.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠ <b>The escape COUNT is deliberately not asserted: this is a race.</b> A quiet run would prove
+    /// nothing either way, and a <c>&gt;= 1</c> assertion would be a flake waiting for a faster machine.
+    /// What is asserted is the classification of whatever fires — the table is <b>in the file</b>,
+    /// observed synchronously from an independent connection, so nothing removed it and the failing
+    /// statement read a stale image. The claim that it fires at all is the recorded 7-of-7 (2-9 escapes
+    /// each) in TASK-290's Round 2 section.
+    /// </remarks>
+    [Fact]
+    public async Task TheTunedStorm_OnTheRollbackJournal_IsWhereTheDefectLives()
+    {
+        if (!RequireStorm()) return;
+        var settings = Fresh("DELETE");
+        var connector = Connector(settings);
+        var probes = ColdTableProbes.All.Select(t => MakeProbe(t, settings)).ToArray();
+        var observed = ObserveEscapes(connector, settings);
+
+        const int waveSize = 24;
+        const int callersPerTable = 3;
+        var failures = new List<Exception>();
+
+        for (var offset = 0; offset < probes.Length; offset += waveSize)
+        {
+            var wave = probes.Skip(offset).Take(waveSize).ToArray();
+            var work = new List<Func<CancellationToken, Task>>();
+            foreach (var probe in wave)
+            {
+                for (var c = 0; c < callersPerTable; c++)
+                {
+                    work.Add(async ct => await probe.Read(ct));
+                }
+            }
+            failures.AddRange(await Storm(work));
+        }
+
+        Report(connector, failures, $"rollback-journal waves of {waveSize}x{callersPerTable}");
+        foreach (var o in observed)
+        {
+            _out.WriteLine($"  OBSERVED [{o.Tables}] presentNow={o.TablePresentNow} "
+                + $"schemaVersionNow={o.SchemaVersionNow} tablesInFileNow={o.TablesInFileNow}");
+        }
+
+        connector.TablesCreated.Should().HaveCount(probes.Length);
         observed.Should().OnlyContain(o => o.TablePresentNow,
             "an escape against a table that is genuinely absent would mean this probe is measuring "
             + "something else entirely");
@@ -491,7 +549,12 @@ public class ColdTableStormTests : IDisposable
     public async Task TheTunedStorm_WithConnectionPoolingDisabled()
     {
         if (!RequireStorm()) return;
-        var settings = new UnpooledSqLiteSettings(_root, $"unpooled{Interlocked.Increment(ref _seq)}.db");
+        // On the ROLLBACK JOURNAL deliberately: with WAL the defect is gone anyway, so a WAL+unpooled
+        // run would say nothing about pooling. This isolates the one variable it is about.
+        var settings = new UnpooledSqLiteSettings(_root, $"unpooled{Interlocked.Increment(ref _seq)}.db")
+        {
+            JournalMode = "DELETE",
+        };
         var connector = Connector(settings);
         var probes = ColdTableProbes.All.Select(t => MakeProbe(t, settings)).ToArray();
         var observed = ObserveEscapes(connector, settings);
@@ -524,10 +587,12 @@ public class ColdTableStormTests : IDisposable
         connector.TablesCreated.Should().HaveCount(probes.Length,
             "every probe must have schema-ensured, or this variant is not comparable with the pooled one");
         connector.SchemaEscapes.Should().BeEmpty(
-            "THE CONTROL, and TASK-290's answer. The only difference from the pooled variant is "
-            + "`Pooling=False` on the connection string. Measured: pooled fires on 7 of 7 runs with 2-9 "
-            + "escapes each, unpooled 0 of 4 — and unpooled is also about 2.4x FASTER here (16 s against "
-            + "38-40 s), which is worth knowing before treating pooling as a performance feature");
+            "THE CONTROL that named the mechanism (TASK-290): the only difference from the rollback-journal "
+            + "variant is `Pooling=False`. Measured: pooled 7 of 7 runs with 2-9 escapes each, unpooled "
+            + "0 of 4. ⚠ It is NOT the remedy TASK-296 chose — it is 1.5x SLOWER in the warm sequential "
+            + "case (2,731 ms against 1,801 ms for 200 write+count+read cycles) while WAL is 5x faster. "
+            + "The 2.4x speedup it shows under the storm is a contention artefact");
         observed.Should().BeEmpty();
     }
+
 }
