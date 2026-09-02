@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -110,6 +110,21 @@ namespace Birko.Data.SQL.Connectors
         /// to any of them turns an error into a plausible wrong answer. <c>1146 ER_NO_SUCH_TABLE</c> is the
         /// signal; the chain is walked because the driver wraps in some paths.
         /// </remarks>
+        /// <summary>
+        /// TASK-293 — the table name out of <c>Table 'db.widgets' doesn't exist</c>.
+        /// </summary>
+        /// <remarks>
+        /// Taken from between the quotes rather than after a phrase, because MySQL localises the prose in
+        /// this message and never the identifier. The <c>db.</c> qualifier is stripped by
+        /// <c>TrimTableName</c>, since <c>TablesCreated</c> is keyed by the bare framework table name.
+        /// </remarks>
+        public override string? MissingTableName(Exception ex)
+        {
+            var fromBase = base.MissingTableName(ex);
+            if (!string.IsNullOrEmpty(fromBase)) return fromBase;
+            return IsMissingTableException(ex) ? FirstQuotedToken(ex.Message) : null;
+        }
+
         public override bool IsMissingTableException(Exception ex)
         {
             if (base.IsMissingTableException(ex)) return true;
