@@ -124,6 +124,30 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <summary>
+        /// TASK-293 — the relation name out of <c>relation "x" does not exist</c>.
+        /// </summary>
+        /// <remarks>
+        /// Guarded by <see cref="IsMissingTableException"/> first, so the <c>42P01</c> shape that is about
+        /// the <i>statement</i> rather than a missing relation
+        /// (<c>missing FROM-clause entry for table "x"</c>) does not yield a name — otherwise this would
+        /// hand back a table that exists perfectly well, which is the false positive the base method
+        /// exists to remove.
+        /// <para>
+        /// The identifier is taken from between the double quotes rather than after a phrase, because
+        /// PostgreSQL localises the prose in this message and never the identifier.
+        /// </para>
+        /// </remarks>
+        public override string? MissingTableName(Exception ex)
+        {
+            var fromBase = base.MissingTableName(ex);
+            if (!string.IsNullOrEmpty(fromBase)) return fromBase;
+
+            if (!IsMissingTableException(ex)) return null;
+            var pgEx = FindPostgresException(ex);
+            return FirstQuotedToken(pgEx?.MessageText ?? ex.Message);
+        }
+
+        /// <summary>
         /// The <see cref="PostgresException"/> in an exception chain, if any. Npgsql wraps in some paths, and
         /// the message-substring test this replaced matched a wrapped exception by accident; walking the
         /// chain keeps that reachability without the false positives.
