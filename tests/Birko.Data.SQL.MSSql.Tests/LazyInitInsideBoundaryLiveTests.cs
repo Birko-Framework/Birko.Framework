@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -324,5 +324,53 @@ public class LazyInitInsideBoundaryLiveTests : IDisposable
 
         TableExists().Should().BeTrue();
         CommittedCount().Should().Be(3);
+    }
+
+    // ------------------------------------------- TASK-290: the OTHER transaction door
+
+    /// <summary>
+    /// <b>TASK-290 — the per-store door left TASK-244's residue behind, and this is the provider-general
+    /// half of it.</b> TASK-244's acceptance asked for one answer applied identically to the ambient door
+    /// and to <c>SetTransactionContext</c>. The DDL half landed on both; the "do not remember it" half did
+    /// not, because <c>AbstractAsyncStore</c> evaluates <c>CanRememberInitialization</c> <i>after</i>
+    /// <c>InitCoreAsync</c> returns — and <c>InitCoreAsync</c> holds the per-store scope only for its own
+    /// duration, so by then <c>AmbientTransaction</c> is null again and <c>DdlSurvivesRollback</c>
+    /// answered <c>true</c> about a create that had just been rolled back.
+    /// </summary>
+    /// <remarks>
+    /// Nothing about this is SQLite-specific — the condition is
+    /// <c>AmbientTransaction != null &amp;&amp; SupportsTransactionalDdl</c>, which holds here too. It is
+    /// asserted per provider because the residue's consequence is the provider's: the store goes on to
+    /// write against a table that is not there, and TASK-277 makes that report rather than vanish.
+    /// </remarks>
+    [Fact]
+    public async Task TASK290_the_per_store_door_does_not_remember_an_init_that_was_rolled_back()
+    {
+        if (!RequireServer()) return;
+        NoTable();
+        var store = AsyncStore();
+
+        using (var connection = new SqlConnection(Settings().GetConnectionString()))
+        {
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+            store.SetTransactionContext(new SqlTransactionContext(connection, transaction));
+            await store.CreateAsync(Rows("first attempt"), null, CancellationToken.None);
+            transaction.Rollback();
+        }
+        store.SetTransactionContext(null);
+
+        TableExists().Should().BeFalse(
+            "the precondition: this provider has transactional DDL, so the schema-ensure went back with "
+          + "the boundary");
+
+        // The plainest possible next operation on the same store instance, with no boundary at all.
+        await store.CreateAsync(Rows("second attempt"), null, CancellationToken.None);
+
+        TableExists().Should().BeTrue(
+            "before TASK-290 the store remembered the undone init, so this write went to a table that "
+          + "does not exist — reported, not silent (TASK-277), and recorded as an ANOMALOUS schema escape "
+          + "because the connector still had the CREATE TABLE on file");
+        CommittedCount().Should().Be(1);
     }
 }
