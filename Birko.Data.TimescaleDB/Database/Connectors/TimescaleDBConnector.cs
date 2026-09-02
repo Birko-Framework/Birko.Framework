@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Birko.Data.SQL.Connectors;
@@ -180,9 +180,13 @@ namespace Birko.Data.SQL.Connectors
         /// </para>
         /// </para>
         /// </remarks>
-        public override void CreateTable(string name, IEnumerable<string> fields)
+        // TASK-295 — CreateTableCore, not CreateTable: the public wrapper on AbstractConnector owns
+        // RecordTableCreated, and while this was an override of the public method that bookkeeping was
+        // skipped entirely on this provider. TablesCreated was permanently empty here, so TASK-286's
+        // annotation, TASK-287's escape channel and TASK-288's healing were all inert.
+        protected override void CreateTableCore(string name, IEnumerable<string> fields)
         {
-            base.CreateTable(name, fields);
+            base.CreateTableCore(name, fields);
 
             if (_timescaleSettings == null || string.IsNullOrEmpty(_timescaleSettings.TimeColumn))
             {
