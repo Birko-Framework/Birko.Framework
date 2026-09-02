@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -325,5 +325,50 @@ public class LazyInitInsideBoundaryLiveTests : IDisposable
 
         TableExists().Should().BeTrue();
         CommittedCount().Should().Be(3);
+    }
+
+    // ------------------------------------------- TASK-290: the OTHER transaction door
+
+    /// <summary>
+    /// <b>TASK-290 — MySQL is the provider where remembering a boundary-time init is CORRECT, and this
+    /// asserts that side.</b> The residue TASK-290 fixed on SQLite, PostgreSQL and SQL Server cannot
+    /// arise here: MySQL implicitly commits around every DDL statement, so
+    /// <c>SupportsTransactionalDdl</c> is <c>false</c>, <c>DoDdlCommand</c> suppresses the ambient, and
+    /// the <c>CREATE TABLE</c> lands on a connection of its own and survives the caller's rollback
+    /// (TASK-243). The table is therefore durably there and the store is entitled to remember it.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ <b>Without this the capability is indistinguishable from a blanket "never remember".</b>
+    /// TASK-290's fix moved <i>when</i> durability is asked, not <i>what</i> is asked — and the one
+    /// mutation that shows it is still a per-provider answer rather than a blanket is this test going red
+    /// while the other three suites stay green. Do not "unify" the four providers from symmetry: the two
+    /// halves of TASK-243's trade land on opposite providers on purpose.
+    /// </remarks>
+    [Fact]
+    public async Task TASK290_the_per_store_door_may_remember_here_because_the_ddl_commits_itself()
+    {
+        if (!RequireServer()) return;
+        NoTable();
+        var store = AsyncStore();
+
+        using (var connection = new MySqlConnection(Settings().GetConnectionString()))
+        {
+            await connection.OpenAsync();
+            using var transaction = connection.BeginTransaction();
+            store.SetTransactionContext(new SqlTransactionContext(connection, transaction));
+            await store.CreateAsync(Rows("first attempt"), null, CancellationToken.None);
+            transaction.Rollback();
+        }
+        store.SetTransactionContext(null);
+
+        TableExists().Should().BeTrue(
+            "MySQL's DDL is not transactional, so schema-ensure was suppressed off the boundary and the "
+          + "table survives the rollback — the opposite of every other provider, and deliberate");
+
+        await store.CreateAsync(Rows("second attempt"), null, CancellationToken.None);
+
+        TableExists().Should().BeTrue();
+        CommittedCount().Should().Be(1,
+            "the row from the rolled-back attempt is gone; the one from the plain write is not");
     }
 }
