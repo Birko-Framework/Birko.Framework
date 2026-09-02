@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -65,6 +65,133 @@ namespace Birko.Data.SQL.Connectors
             }
         }
 
+        // TASK-296 — 0 until the journal mode has been applied for this database, 1 after.
+        //
+        // Once per CONNECTOR, which is once per database per process: DataBase.GetConnector caches per
+        // (type, settings id). That is enough because journal_mode is PERSISTENT IN THE FILE — SQLite
+        // stores it in the header, so a later connection inherits it without being told.
+        private int _journalModeApplied;
+
+        /// <summary>
+        /// The journal mode SQLite reported after this connector tried to apply
+        /// <c>SqLiteSettings.JournalMode</c> — or null if it has not run yet, or was switched off.
+        /// </summary>
+        /// <remarks>
+        /// ⚠ <b>Read this rather than assuming the setting took.</b> WAL needs shared memory and does not
+        /// engage on most network filesystems or for an in-memory database; SQLite reports the mode that
+        /// is actually in force rather than failing, so this is the only way to know. See
+        /// <see cref="JournalModeFailure"/> for the case where the attempt threw instead.
+        /// </remarks>
+        public string? JournalModeInEffect { get; private set; }
+
+        /// <summary>
+        /// The exception from applying the journal mode, if it threw. Null in the normal case.
+        /// </summary>
+        /// <remarks>
+        /// Recorded rather than thrown, deliberately, and on the same "swallowed means recorded" terms as
+        /// <c>IndexCreationFailures</c> (TASK-204) and <c>SubscriberFailures</c> (TASK-289): a journal mode
+        /// is an optimisation and a concurrency property, not the caller's operation, so a database that
+        /// cannot take WAL must still be usable. What must not happen is that the failure is invisible.
+        /// </remarks>
+        public Exception? JournalModeFailure { get; private set; }
+
+        /// <summary>
+        /// The journal modes this seam can actually deliver: <c>WAL</c> and <c>DELETE</c>. The value is
+        /// interpolated into <c>PRAGMA journal_mode=…</c>, which takes no parameter, so this whitelist
+        /// <b>is</b> the containment.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// § Conventions' identifier family, at a fourth kind of sink: a bare keyword in statement
+        /// position. Nothing quotes it, so escaping contains nothing and refusal is the only mechanism
+        /// left — exactly TASK-255's reasoning for a bare column identifier. A closed set is right here
+        /// where it was wrong in TASK-260, because the engine's own grammar is closed.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>Two values rather than SQLite's six, and that is a measurement rather than caution.</b>
+        /// A journal mode is persistent in the database file <b>only for WAL</b>; the rollback modes are
+        /// a <i>per-connection</i> property. Measured (<c>Which_journal_modes_persist_across_connections</c>):
+        /// set <c>TRUNCATE</c>, <c>PERSIST</c>, <c>MEMORY</c> or <c>OFF</c> on one connection and a new
+        /// connection reports <c>delete</c>; only <c>WAL</c> comes back as itself. This seam applies the
+        /// PRAGMA <b>once, on a connection of its own</b>, so accepting those four would accept a value
+        /// and then do nothing — the silent-drop shape § SH-H037 exists to forbid. <c>DELETE</c> is kept
+        /// because it is meaningful: it takes a database <i>out</i> of WAL, persistently, and is SQLite's
+        /// own default otherwise.
+        /// </para>
+        /// </remarks>
+        private static readonly string[] _journalModes = { "WAL", "DELETE" };
+
+        /// <summary>
+        /// Applies <c>SqLiteSettings.JournalMode</c> once for this database. Best effort: a mode that
+        /// cannot be set leaves the database on whatever it had.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// TASK-296, and it is a <b>correctness</b> fix before a performance one. On the rollback journal
+        /// a statement on a pooled <c>sqlite3</c> handle can be answered from a schema image older than a
+        /// <c>CREATE TABLE</c> another connection has already committed, so a freshly created table reads
+        /// as missing — and since TASK-285 a count of a missing table answers <c>0</c>, so it does so
+        /// silently. Measured (TASK-290's storm): rollback journal <b>7 of 7</b> runs affected, 2-9
+        /// occurrences each; WAL <b>0 of 5</b>.
+        /// </para>
+        /// <para>
+        /// ⚠ <b>Why not <c>Pooling=False</c>, which also fixes it.</b> It is <b>1.5× slower</b> in the warm
+        /// sequential case (2,731 ms against 1,801 ms for 200 write+count+read cycles), while WAL is
+        /// <b>5× faster</b> (351 ms). The storm made pooling-off look free — 2.4× faster there — which is
+        /// a contention artefact and exactly why the remedy was not chosen on a storm number.
+        /// </para>
+        /// <para>
+        /// It runs on a connection of its own rather than on the caller's, because <c>CreateConnection</c>
+        /// returns an <b>unopened</b> connection by contract and callers open it themselves. One extra
+        /// open per database per process.
+        /// </para>
+        /// </remarks>
+        private void ApplyJournalMode(SqLiteSettings settings)
+        {
+            if (System.Threading.Interlocked.Exchange(ref _journalModeApplied, 1) != 0)
+            {
+                return;
+            }
+
+            var requested = settings.JournalMode?.Trim();
+            if (string.IsNullOrEmpty(requested))
+            {
+                // The full opt-out: emit no PRAGMA at all and leave the file exactly as it is.
+                return;
+            }
+
+            var mode = Array.Find(_journalModes,
+                m => string.Equals(m, requested, StringComparison.OrdinalIgnoreCase));
+            if (mode == null)
+            {
+                JournalModeFailure = new ArgumentException(
+                    $"Unsupported SQLite journal mode '{requested}'. Expected one of: "
+                    + string.Join(", ", _journalModes)
+                    + ". SQLite persists a journal mode in the database file only for WAL — the rollback "
+                    + "modes (TRUNCATE, PERSIST, MEMORY, OFF) are per-connection, and this setting is "
+                    + "applied once on a connection of its own, so accepting one would silently do "
+                    + "nothing. Set SqLiteSettings.JournalMode to null or empty to leave the database's "
+                    + "own journal mode untouched.",
+                    nameof(SqLiteSettings.JournalMode));
+                return;
+            }
+
+            try
+            {
+                using var db = new SqliteConnection(settings.GetConnectionString());
+                db.Open();
+                using var command = db.CreateCommand();
+                command.CommandText = "PRAGMA journal_mode=" + mode;
+                JournalModeInEffect = Convert.ToString(command.ExecuteScalar());
+            }
+            catch (Exception ex)
+            {
+                // Best effort. A database that cannot take the requested mode is still usable, and the
+                // failure is on the record rather than in the caller's face.
+                JournalModeFailure = ex;
+            }
+        }
+
         public override DbConnection CreateConnection(PasswordSettings settings)
         {
             if (settings == null || string.IsNullOrEmpty(Path))
@@ -76,6 +203,7 @@ namespace Birko.Data.SQL.Connectors
 
             if (settings is SqLiteSettings sqliteSettings)
             {
+                ApplyJournalMode(sqliteSettings);
                 var connection = new SqliteConnection(sqliteSettings.GetConnectionString());
                 if (init)
                 {
