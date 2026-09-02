@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -422,7 +422,11 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <inheritdoc />
-        public override void CreateTable(string name, IEnumerable<string> fields)
+        // TASK-295 — CreateTableCore, not CreateTable: the public wrapper on AbstractConnector owns
+        // RecordTableCreated, and while this was an override of the public method that bookkeeping was
+        // skipped entirely on this provider. TablesCreated was permanently empty here, so TASK-286's
+        // annotation, TASK-287's escape channel and TASK-288's healing were all inert.
+        protected override void CreateTableCore(string name, IEnumerable<string> fields)
         {
             // DoDdlCommand, not DoCommand: on a provider whose DDL is not transactional this must not run
             // on an ambient boundary's connection, because the statement would implicitly commit it
