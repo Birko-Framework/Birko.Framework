@@ -374,6 +374,44 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **A load defect is reproduced by matching the CONCURRENCY SHAPE, not by turning the load up — and the
+  shape that mattered here was several callers per table, not more tables at once.** TASK-290, closed after
+  nineteen hypotheses. The escape consumer Symbio had been chasing for a fortnight is now named: **a
+  statement on a POOLED `sqlite3` handle is answered from a schema image older than a `CREATE TABLE` that
+  another connection has already committed.** Six parts generalise:
+  - **More contention is not closer to the condition.** Round 1's storm fired 200 cold tables at once and
+    produced 6-7 `SQLite Error 5` per run and **0** escapes — it saturated the 30 s command timeout, i.e.
+    it was *further* from the target, whose own evidence recorded `Error 5 = 0`. Waves of 24 tables × **3
+    concurrent callers per table** fire on 7 of 7 runs. The reason is structural and worth carrying: a
+    caller that waits on another's `_initLock` proceeds to its statement the **instant** that init returns,
+    so it reads a table whose create is milliseconds old. **When a reproduction will not fire, match the
+    caller topology before raising the volume.**
+  - **A single-variable control is what turns a reproduction into a named mechanism.** `Pooling=False` on
+    the connection string, nothing else changed: **0 of 4** runs against 7 of 7. `SqLiteSettings.GetConnectionString()`
+    is `virtual`, so that control needed **no framework change** — check for an existing seam before
+    building plumbing.
+  - **Ask whether the thing is ABSENT or merely INVISIBLE, and there is usually a synchronous way to ask.**
+    `OnSchemaEscapeDetected` is raised inside `EnsureSchemaAndReport`, so a handler runs while the failing
+    flow is still on the stack; one that opens its own connection reported `presentNow=True` on **every**
+    escape. That single fact killed the entire "something removed it" family — where hypotheses 1-13 and
+    TASK-292 all lived — and it cost fifteen lines. Round 1's plan had called for three new public probe
+    fields; the one that mattered was reachable from an event that already existed.
+  - **Design the fixture so a known false-positive channel cannot explain the result.** The probe tables
+    are fixed-width `Probe000`…`Probe199`, so no name is a substring of another and § TASK-293's matcher
+    cannot account for any escape. That was designed in *before* TASK-293's fix existed, which is the only
+    reason the numbers were usable when it landed.
+  - **⚠ Say what was not measured, and do not narrate a cause you did not observe.** The internal reason
+    inside SQLite or Microsoft.Data.Sqlite is **not** established. A raw-driver probe with the framework's
+    shape — connection per DDL, connection per read, pooling on, readers targeting the newest committed
+    table — did **not** reproduce it in 200 creates, so something about the framework's pattern beyond
+    "pooled connection-per-statement" is required. That negative result is kept in the tree so the next
+    attempt does not repeat it.
+  - **Naming a mechanism and spending its blast radius are different tasks.** `Pooling=False` is one line,
+    removes the defect in this measurement, and is **2.4× faster** in this workload — which is the opposite
+    of the usual assumption about pooling and precisely why one workload on one machine is not enough to
+    change the shipped default for every SQLite consumer. Filed as [[TASK-296]] with the numbers and with
+    WAL named as the alternative that might keep pooling. **A measurement that makes a change look free is
+    the moment to be more careful, not less.**
 - **Bookkeeping a rule depends on goes in a NON-VIRTUAL wrapper around a `*Core` seam — putting it in the
   virtual method means it runs on exactly the providers that did not override.** TASK-295, and the fifth
   instance of § TASK-243's *"a funnel with four overrides is not a funnel"*. `RecordTableCreated` was called
@@ -2008,6 +2046,42 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The schema-ensure escape is named: a pooled connection answering from a stale schema image (2026-09-02)
+
+TASK-290, the open half of consumer Symbio's TASK-602, closed after nineteen hypotheses. **A statement on a
+pooled `sqlite3` handle is answered from a schema image older than a `CREATE TABLE` that another connection
+has already committed.** Reproduced in this repo, observed synchronously, and isolated by a single-variable
+control. Verified `Birko.Data.SQL.SqLite.Tests` **310 passed**, 0 failed, 0 skipped, both with and without
+`BIRKO_STORM` set. The standing rule is in § Conventions. Six things worth carrying:
+
+- **The ingredient was the caller topology, not the volume.** Round 1's 200-tables-at-once storm produced
+  6-7 `SQLite Error 5` per run and **0** escapes — more contended than the condition, whose own evidence
+  had `Error 5 = 0`. Waves of 24 tables × **3 callers per table** fire on **7 of 7** runs (2-9 escapes
+  each). A caller released from another's `_initLock` reads a table whose create is milliseconds old.
+- **The control is one variable and needed no framework change**, because
+  `SqLiteSettings.GetConnectionString()` is virtual: `Pooling=False` gives **0 of 4** runs against 7 of 7.
+  It also runs **2.4× faster** (16 s against 38-40 s), which is the opposite of the usual assumption.
+- **`presentNow=True` on every escape.** `OnSchemaEscapeDetected` fires synchronously inside
+  `EnsureSchemaAndReport`, so a handler opening its own connection can ask `sqlite_master` while the
+  failing flow is still on the stack. The table is in the file — so this is a stale read, which killed the
+  entire "something removed it" family in fifteen lines. Round 1 had planned three new public probe fields;
+  the one that mattered was reachable from an event that already existed.
+- **It matches the consumer's signature on every recorded axis:** all `SELECT count(*)`; created→missing
+  windows of 19-30 ms against its 28-66 ms; **zero** thrown failures, so each escape served a silently
+  wrong `0`; and no `SQLite Error 5`. Fixed-width probe names mean TASK-293's substring channel cannot
+  account for any of it — designed in before that fix existed.
+- **⚠ What is not measured is said so.** The internal reason inside SQLite/Microsoft.Data.Sqlite is not
+  established, and a raw-driver probe with the framework's shape did **not** reproduce it in 200 creates —
+  that negative result is kept in the tree so the next attempt does not repeat it. Two further hypotheses
+  died here: an unmapped entity's schema-ensure does no-op silently but annotates as benign (and then
+  throws `NullReferenceException`, so it is loud); and a boundary holding an uncommitted create gives a
+  concurrent reader `SQLITE_BUSY`, never the uncommitted image — measured, where Round 1 had only reasoned.
+- **The remedy is filed, not taken.** `Pooling=False` is one line and removes the defect here, but it
+  changes the shipped connection behaviour of every SQLite consumer on the strength of one workload on one
+  machine. [[TASK-296]] (P1) owns it with the numbers, with WAL named as the alternative that might keep
+  pooling, and with the other three providers to be checked now that TASK-295 makes their escape channel
+  work at all.
 
 ### A vanished table healed on SQLite and nowhere else, because the recording sat in the virtual method (2026-09-02)
 

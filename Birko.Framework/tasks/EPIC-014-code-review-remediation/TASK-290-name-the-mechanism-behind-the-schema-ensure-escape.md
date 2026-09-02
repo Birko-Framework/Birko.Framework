@@ -3,15 +3,15 @@ id: TASK-290
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: done
 priority: P1
 assignee: unassigned
 created: 2026-09-02
 depends-on: []
 blocks: []
-related: [TASK-270, TASK-276, TASK-285, TASK-286, TASK-287, TASK-288, TASK-289, TASK-292]
+related: [TASK-270, TASK-276, TASK-285, TASK-286, TASK-287, TASK-288, TASK-289, TASK-292, TASK-296]
 findings: []
-pr: null
+pr: (investigation; the reproduction and probes are test-only. The remedy is TASK-296)
 github-issue: null
 jira-key: null
 affects: [Birko.Data.SQL, Birko.Data.SQL.SqLite]
@@ -184,19 +184,22 @@ Two plumbing constraints, both already visible in the code:
 
 ## Acceptance
 
-- [ ] The mechanism is **named**, with a measurement that distinguishes it from the alternatives above —
-      not an inference from code reading.
-- [ ] A framework-level reproduction exists in the tree and fires reliably, with its benign control
-      counted in the same run, and mutation-proven not to be vacuous.
-- [ ] The two corrections above are either confirmed by measurement or withdrawn, in writing. Neither may
-      be left standing as a plausible-sounding claim.
-- [ ] Hypothesis D is measured, and if the substring matcher can fabricate an anomaly the consequence for
-      `SchemaGeneration` is stated (and given an id if it is not fixed here).
-- [ ] If a fix lands it does **not** re-introduce a 500 on the count path (TASK-285 removed that
-      deliberately) and does **not** make writes quiet (TASK-277: a write against a missing table must
-      keep reporting).
-- [ ] If the answer is "correct SQLite behaviour under concurrent DDL, and the consumer must not do that",
-      it is said plainly.
+- [x] The mechanism is **named**, with a measurement that distinguishes it from the alternatives above —
+      a statement on a pooled `sqlite3` handle answered from a schema image older than a committed
+      `CREATE TABLE`. Distinguished by a single-variable control (`Pooling=False`: 0 of 4 runs against
+      7 of 7) and by a synchronous observation that the table **is** in the file at failure time.
+- [x] A framework-level reproduction exists in the tree and fires reliably — 7 of 7 runs, 2-9 escapes
+      each, with the unpooled variant as its control. ⚠ Its escape **count** is deliberately not asserted
+      (it is a race); what is asserted is the classification of whatever fires, plus 0 on the control.
+- [x] The two corrections were confirmed by measurement in Round 1, in writing.
+- [x] Hypothesis D measured and fixed — [[TASK-293]]. The reproduction uses fixed-width names so that
+      channel cannot account for any of Round 2's escapes.
+- [x] No fix landed here, so neither contract was touched: the count path still answers `0` (TASK-285) and
+      writes still report (TASK-277). The remedy is [[TASK-296]], filed with the measurement.
+- [x] The answer is **not** "correct SQLite behaviour the consumer must avoid", and that is said plainly:
+      it is a driver-level staleness that the framework's connection-per-statement pattern exposes, with a
+      measured remedy. ⚠ The internal reason inside SQLite/Microsoft.Data.Sqlite is **not** measured and is
+      not guessed at.
 
 ## Out of scope
 
@@ -305,3 +308,103 @@ before believing it either way.
 - **Hypothesis D (the substring matcher).** Not measured. It remains a live false-positive channel and it
   now also moves `SchemaGeneration`, which invalidates every store on the connector — under load a
   positive feedback loop. Three of the consumer's eight escaped tables sit on such a relation.
+
+---
+
+## Round 2 — 2026-09-02: the mechanism is NAMED, with a controlled variable
+
+> **A statement on a POOLED `sqlite3` handle is answered from a schema image older than a `CREATE TABLE`
+> that another connection has already committed.** Disabling Microsoft.Data.Sqlite's connection pooling
+> eliminates it entirely.
+
+Criterion 4 is satisfied. The evidence is a reproduction in this repo, a synchronous observation of the
+file at failure time, and a single-variable control.
+
+### The reproduction, and the ingredient Round 1 was missing
+
+`ColdTableStormTests.TheTunedStorm_SmallerWavesWithSeveralCallersPerTable` — 200 distinct cold entity
+types, one shared connector, one SQLite file, driven in **waves of 24 tables × 3 concurrent callers per
+table** rather than 200 at once.
+
+⚠ **The ingredient was NOT more contention — it was several callers per table.** Round 1's 200-at-once
+storm produced 6-7 `SQLite Error 5` per run and **0** escapes; it was *more* contended than the condition,
+saturating the 30 s command timeout. Three callers per table is the consumer's actual profile (its
+clearest cycle had three concurrent `GET /movement-codes`), and it matters because a caller that waits on
+another's `_initLock` proceeds to its statement the **instant** that init returns — so it counts a table
+whose create is milliseconds old.
+
+| variant | runs | escapes | `created` | other failures | duration |
+|---|---|---|---|---|---|
+| pooled (the framework's default connection string) | **7** | **2, 8, 8, 6, 9, 8, 5** | 200/200 | **0** | 34-41 s |
+| `Pooling=False`, nothing else changed | **4** | **0, 0, 0, 0** | 200/200 | **0** | **15-16 s** |
+
+It matches the consumer's signature on every axis that was recorded: all `SELECT count(*)`; created→missing
+windows of **19-30 ms** against its 28-66 ms; **zero** thrown failures, so each escape served a silently
+wrong `0`; and **no `SQLite Error 5`**, which is what its `Error 5 = 0` was consistent with.
+
+⚠ **Fixed-width probe names (`Probe000`…`Probe199`) mean no name is a substring of another**, so
+[[TASK-293]]'s false-positive channel cannot account for any of these. That was designed in before the
+fix existed and is why these numbers are usable.
+
+### The observation that settles what kind of failure it is
+
+`OnSchemaEscapeDetected` is raised **synchronously** from inside `EnsureSchemaAndReport`, so a handler
+runs while the failing flow is still on the stack. The handler opens its **own** connection and asks
+`sqlite_master`:
+
+```
+OBSERVED [Probe026] presentNow=True schemaVersionNow=48 tablesInFileNow=48
+OBSERVED [Probe048] presentNow=True schemaVersionNow=72 tablesInFileNow=72
+OBSERVED [Probe054] presentNow=True schemaVersionNow=72 tablesInFileNow=72
+```
+
+**`presentNow=True` on every escape.** The table is in the file at the moment the count says it is not. So
+nothing removed it, nothing rolled it back, and the create was durable — this is a **stale read**, not a
+missing table. That kills the whole "something removed it" family, which is where hypotheses 1-13 and
+TASK-292 all lived.
+
+Note it needed **no framework change at all**: Round 1's plan called for three probe fields, and the one
+that mattered turned out to be reachable from the existing event.
+
+### Two more hypotheses killed on the way
+
+| # | Hypothesis | Verdict |
+|---|---|---|
+| 18 | `InitCore` completes without issuing any DDL — `LoadTables` skips a type with no metadata, so a store could record itself initialised over a table that was never created | ✗ **killed, and the prediction held.** `SilentNoOpSchemaEnsureTests`: an unmapped entity's `InitAsync` does return silently with 0 tables in the file — but `TablesCreated` stays empty, so the failure is the **benign** branch and cannot be the anomaly. Worth knowing separately: the next operation throws `NullReferenceException`, so it is loud rather than silent — a poor error, not a quiet wrong answer |
+| 19 | A boundary holding an **uncommitted** create, which Round 1 measured reads as `no such table` with no lock error — the one interleaving that could produce the anomaly with nothing removed | ✗ **killed by measurement rather than by the code reading Round 1 offered.** A concurrent reader gets `SQLITE_BUSY(5)`: its own schema-ensure must take the write lock first and blocks on the boundary holder. It never reaches the uncommitted image |
+
+### What is NOT established, said plainly
+
+⚠ **The internal reason inside SQLite or Microsoft.Data.Sqlite is not measured, and this section does not
+guess at it.** What is measured is that pooling is the difference. A raw-driver probe
+(`SqliteSchemaVisibilityProbes.APooledConnectionCanAnswerFromAStaleSchemaImage`) with the framework's
+shape — a connection per `CREATE TABLE`, a connection per count, pooling on, readers targeting the newest
+committed table — **did not reproduce it** in 200 creates. So it needs something about the framework's
+pattern beyond "pooled connection-per-statement": most likely the number of *concurrent* DDL transactions
+from distinct connections (24 flows serialised by the connector's DDL lock, plus each table's index DDL),
+against many short-lived pooled handles. That probe is kept, with its negative result, so the next attempt
+does not repeat it.
+
+The datum that would close this completely is the **failing** connection's own `PRAGMA schema_version`,
+and it is the one thing still out of reach without framework plumbing — the raw probe was written to get
+it and found no failure to read it from.
+
+### What follows, and what deliberately did not happen here
+
+`Pooling=False` is a one-line change to `SqLiteSettings.GetConnectionString()`, it eliminates the defect in
+this measurement, and it is **2.4× faster** in this workload — which is worth stating because pooling is
+normally assumed to be the performance choice. It is nevertheless a change to the shipped default
+connection behaviour of every SQLite consumer, so it is **filed as [[TASK-296]] rather than made here**:
+the blast radius (steady-state throughput, file-handle churn, `ClearAllPools` interactions, whether WAL
+would be the better answer) needs its own measurement, and this task's job was to name the mechanism.
+
+Not done, deliberately:
+
+- **WAL as an alternative control.** WAL has a genuinely different snapshot mechanism, so it is the other
+  candidate remedy — but `journal_mode` is not a connection-string keyword, so it needs a PRAGMA on open,
+  which is framework plumbing. TASK-296's business.
+- **Re-running the consumer's harness.** Its 12 escapes predate [[TASK-293]], so up to 5 may have been
+  fabricated by the substring matcher. That re-measurement is consumer-side and belongs to Symbio
+  TASK-602; nothing here depends on it, since this reproduction has clean names by construction.
+- **Any change to the count path.** [[TASK-294]] still owns the fact that a count under lock contention
+  faults, which this round observed again in the boundary probe.
