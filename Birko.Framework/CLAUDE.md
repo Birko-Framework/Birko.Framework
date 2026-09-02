@@ -374,6 +374,53 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **Ask the question of the ERROR, not of the statement — and when a justification says "a false positive
+  is harmless here", check whether that is still true.** TASK-293. `AbstractConnector` decides whether a
+  schema escape is *the anomaly* (a table this connector created, reported missing) and asked it of the
+  **statement**: does any recorded table name occur as a **substring** of the SQL? Two false positives
+  follow, both measured, and the second needs no unlucky naming at all — a recorded `Movement` makes a
+  first touch of `StockMovements` read as the anomaly, and a statement naming two tables (one created, one
+  not) reads as the anomaly on the strength of the created one, which is the ordinary shape of a view or a
+  multi-type count. The provider's own error names the table that is **actually** missing and names only
+  that one, so the discriminator can be exact: `AbstractConnectorBase.MissingTableName` /
+  `MissingTableNameChain`, deliberately in the `IsMissingTableException` family. Seven parts generalise:
+  - **The comment that licensed the looseness had expired, and nothing said so.** It read *"a false
+    positive costs one extra line in an exception nobody sees unless something already went wrong"* — true
+    when TASK-286 wrote it, false from TASK-288 on, because the same answer now drives `SchemaGeneration`
+    and therefore every store's `CanTrustRememberedInitialization`. So a fabricated anomaly invalidates the
+    remembered init of **every** store on the connector, each re-running `CREATE TABLE IF NOT EXISTS` under
+    the DDL lock while its own reads wait: a positive feedback loop keyed on load. **When a later change
+    makes a value load-bearing, the cheapness argument attached to it has to be re-read** — the same file
+    already records that TASK-286's own "diagnostic only: nothing branches on it" had to be corrected.
+  - **Extract around the QUOTES, never around the English.** PostgreSQL and MySQL localise the prose in
+    these messages and never the identifier, so a phrase-anchored parse silently stops matching on a server
+    whose `lc_messages` is not English — and a silent non-match here *disables* TASK-288's healing rather
+    than announcing anything. Same reasoning `IsMissingTableException` already records for keying
+    PostgreSQL on the SQLSTATE instead of on text.
+  - **Gate the extractor on the classification it belongs to.** PostgreSQL's `42P01` is also
+    `missing FROM-clause entry for table "x"`, where the relation exists perfectly well; TASK-211 excluded
+    that from `IsMissingTableException`, and an ungated extractor reintroduces it by parsing the quotes of
+    a message it was never entitled to read. Measured live: ungating reds exactly that test.
+  - **Strip the qualifier, because the map is keyed bare.** `TablesCreated` is keyed by the `Table.Name`
+    the framework created, so MySQL's `birkoview.` prefix would fail to find the very entry it is looking
+    for. Measured: removing the strip reds MySQL and leaves MSSql green, whose message carries no
+    qualifier — so the two providers are not interchangeable evidence.
+  - **Keep the loose path as a FALLBACK and pin its trigger.** Answering "not the anomaly" when the wording
+    cannot be parsed is tidier code and worse behaviour: a store whose table really vanished stays broken
+    for the life of the process, silently. Erring toward re-running is the asymmetry
+    `AbstractStore.CanRememberInitialization` records. A test pins the trigger (a message carrying the
+    wording but no extractable name) so its reachability is measured rather than assumed.
+  - **Measure the wording per provider on a live server, not from the documentation.** Four different
+    shapes, and the fix depends on all four: `no such table: X`, `42P01: relation "X" does not exist`,
+    `Table 'db.X' doesn't exist`, `Invalid object name 'X'.` — the typed exception path is the half no
+    offline test can produce, which is why each provider suite carries it.
+  - **⚠ And it surfaced that the whole apparatus is SQLite-only.** Writing the per-provider tests showed
+    `RecordTableCreated` is called from exactly one place — the **base** `CreateTable(string, fields)` —
+    which PostgreSQL, MySQL and SQL Server all **override** without recording. So `TablesCreated` is
+    permanently empty there, and with it TASK-286's annotation, TASK-287's channel and TASK-288's healing.
+    Fifth instance of § TASK-243's *"a funnel with four overrides is not a funnel"*. [[TASK-295]] owns it,
+    with a pin in each provider suite that says not to fix it by adding a fourth copy of the call — a rule
+    with one statement and four implementations is the shape this file keeps recording.
 - **A durability question must be asked while the thing that makes it durable is still in scope — and a
   rule enforced in a base class about state a derived class publishes and withdraws is a rule enforced at
   the wrong moment.** TASK-292, found while working [[TASK-290]]. TASK-244's rule is *schema-ensure
@@ -1918,6 +1965,51 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The escape channel fabricated anomalies, and on three providers it never fired at all (2026-09-02)
+
+TASK-293, the highest-value item [[TASK-290]]'s Round 1 left queued: the discriminator for *"a table this
+connector created, reported missing"* was a **substring search over the statement**. Two false positives,
+both measured before a line changed, and the second needs no unlucky naming — a recorded `Movement` makes
+a first touch of `StockMovements` read as the anomaly, and a statement naming two tables (one created, one
+not) reads as the anomaly on the strength of the created one, which is the ordinary shape of a view or a
+multi-type count. Fixed by asking the provider's own error, which names the table that is actually missing
+and names only that one. Verified with `BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16, MySQL 8.4,
+SQL Server 2022 and on-disk SQLite: **1,325 tests, 0 failed, 0 skipped** across six SQL suites, plus 244
+in five adjacent suites needing no server. The standing rule is in § Conventions. Six things worth
+carrying:
+
+- **The comment that licensed the looseness had expired.** It said a false positive *"costs one extra line
+  in an exception nobody sees"* — true when TASK-286 wrote it, false from TASK-288 on, because the same
+  answer now drives `SchemaGeneration` and so invalidates the remembered init of **every** store on the
+  connector. Under load that is a positive feedback loop, i.e. the profile TASK-290's trigger has.
+- **It re-reads the consumer's evidence.** Three of the eight tables in Symbio's storm evidence sit on a
+  substring relation (`Movements`⊂`StockMovements`, `Reservations`⊂`StockReservations`,
+  `Events`⊂`AlarmEvents`), so up to 5 of its 12 escapes may have been fabricated. Ranking this ahead of
+  another storm cycle was the point.
+- **Extract around the quotes, never around the English** — PostgreSQL and MySQL localise the prose and
+  never the identifier, and a silent non-match here disables TASK-288's healing rather than announcing
+  anything. And gate the extractor on `IsMissingTableException`, or PostgreSQL's statement-shaped `42P01`
+  (`missing FROM-clause entry`) hands back a relation that exists perfectly well — TASK-211's narrowing,
+  inherited rather than re-derived.
+- **The fallback is kept and its trigger is pinned.** Answering "not the anomaly" when a wording cannot be
+  parsed is tidier and worse: a store whose table really vanished would stay broken for the life of the
+  process, silently. Erring toward re-running is the asymmetry `CanRememberInitialization` records.
+- **⚠ Writing the per-provider tests found something bigger: the whole apparatus is SQLite-only.**
+  `RecordTableCreated` is called from exactly one place — the **base** `CreateTable(string, fields)` — and
+  PostgreSQL, MySQL and SQL Server each override it without recording, TimescaleDB inheriting PostgreSQL's.
+  Measured live on all three: `TablesCreated` empty, `SchemaEscapes` empty, `SchemaGeneration` 0 even for a
+  table the connector created and that was then dropped. So TASK-286's annotation, TASK-287's channel and
+  TASK-288's healing are all inert off SQLite — which is the only provider the consumer runs today, and
+  TASK-256 records that a move to PostgreSQL is expected. Fifth instance of *"a funnel with four overrides
+  is not a funnel"*. [[TASK-295]] (P1) owns it, and each provider suite pins the gap with an instruction
+  not to fix it by adding a fourth copy of the call.
+- **Mutations, disjoint:** revert to the substring scan → 2 of 5 red, exactly the false-positive pair with
+  both true positives green; ungate the PostgreSQL extractor → 1 live test; remove the qualifier strip →
+  MySQL red and **MSSql green**, since its message carries no qualifier, so the two are not
+  interchangeable evidence. Also filed: [[TASK-294]] (P2) — a count that hits lock contention is a 500 on
+  every provider, which the storm reproduced 6-7 times per run while TASK-285 exempts only a *missing*
+  table.
 
 ### A rolled-back schema-ensure was still remembered on one of the two transaction doors (2026-09-02)
 
