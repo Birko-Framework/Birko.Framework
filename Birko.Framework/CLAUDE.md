@@ -374,6 +374,49 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **A durability question must be asked while the thing that makes it durable is still in scope — and a
+  rule enforced in a base class about state a derived class publishes and withdraws is a rule enforced at
+  the wrong moment.** TASK-292, found while working [[TASK-290]]. TASK-244's rule is *schema-ensure
+  participates in the caller's boundary, and a participating schema-ensure is not remembered*, and its own
+  acceptance demanded one answer for both transaction doors. The first half landed on both; the second
+  landed on one, because of an evaluation **order** rather than a missing branch:
+  `AbstractAsyncStore.EnsureInitializedAsync` evaluates `_initialized = CanRememberInitialization` **after**
+  `InitCoreAsync` returns, and `InitCoreAsync` publishes the per-store context with
+  `using var _tx = EnterTransactionScope()` — so that scope is already disposed when the base asks, and
+  `DdlSurvivesRollback`'s `AmbientTransaction == null` term answered `true` about a create sitting in a
+  caller's still-open transaction. The fix captures the answer at the end of `InitCore*`, inside the scope,
+  and `CanRememberInitialization` reads the captured value. Seven parts generalise:
+  - **The two doors looked identical and differed only in WHO holds the scope.** `SqlUnitOfWork` is entered
+    by the caller and spans the whole operation, so the base's late question still saw the ambient;
+    `SetTransactionContext` is published *by the method being asked about* and withdrawn on the way out.
+    Fourth instance of § TASK-274's *two doors onto one feature must give one answer*, and the first where
+    the disagreement is about **when** a shared expression is evaluated rather than about what it says.
+  - **The sync store is the worse half and had no correct path to compare against.**
+    `SqlUnitOfWork.FromStore` takes an `AsyncDataBaseStore`, so `SetTransactionContext` is the **only**
+    transaction door a sync store has — the broken one. When a defect splits by door, check whether some
+    caller has only the broken door; that caller has no green neighbour to make the asymmetry visible.
+  - **It manufactures § TASK-290's signature on a legitimate path, which is what made it P1.** No `DROP`,
+    no concurrency: recorded `CREATE TABLE`, init gate passed, table absent. Measured on SQLite — the next
+    count answered `0` with **one anomalous escape recorded** and `SchemaGeneration` 0 → 1, and the next
+    write threw carrying TASK-286's annotation. A framework that can produce its own diagnostic's alarm
+    condition will have that alarm misread.
+  - **The provider split is measured, and MySQL's opposite answer is asserted.** The condition is
+    `AmbientTransaction != null && SupportsTransactionalDdl`, so reverting the fix reds the new test on
+    SQLite, PostgreSQL 16 and SQL Server 2022 and leaves MySQL 8.4 **green** — its DDL commits itself, so
+    `DoDdlCommand` suppresses the ambient, the table survives the rollback and remembering is *correct*
+    (TASK-243). Without that green-side test the fix is indistinguishable from a blanket "never remember".
+  - **Change WHEN it is asked, never WHAT is asked.** The captured value still comes from
+    `Connector.DdlSurvivesRollback` — the same expression `DoDdlCommand` consults — so the provider switch
+    keeps one producer. Re-deriving the condition at the store (`TransactionContext != null ? … : …`) was
+    the obvious alternative and is a second implementation of a rule this file has already watched drift.
+  - **The blanket fix is the one to guard against, and the steady-state control is what catches it.**
+    Forcing the captured flag permanently false reds 4 tests including `VanishedTableHealingTests`'
+    *"an unaffected store does not re-initialise on every operation"* — the hook is read on every CRUD
+    call, so a flag that drifted would turn every operation into a schema-ensure.
+  - **⚠ Its sibling question does NOT have the same trap, and saying so stops the next reader "fixing" it.**
+    TASK-288's `CanTrustRememberedInitialization` is read at *use* time, outside any of `InitCore`'s
+    scopes, and compares a counter rather than asking about an ambient — so it is unaffected. The trap is
+    specific to a question whose answer depends on scope that the method under test owns.
 - **An identifier that reaches interpolated SQL is resolved against table metadata, never validated as
   text — and the two sinks share one lookup.** Values are parameterised; *identifiers* cannot be, so every
   column name in `CommandText` arrives by interpolation and the only safe source is the schema. Two sinks
@@ -1875,6 +1918,51 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A rolled-back schema-ensure was still remembered on one of the two transaction doors (2026-09-02)
+
+TASK-292, found while working [[TASK-290]] — the open half of consumer Symbio's TASK-602, which asks why a
+statement reports a table missing that this connector created while the store's init gate had passed.
+TASK-244's acceptance demanded one answer for both transaction doors; it landed on one. The per-store door
+(`SetTransactionContext`) publishes its scope *inside* `InitCore*` and withdraws it on the way out, while
+`AbstractAsyncStore` evaluates `CanRememberInitialization` **after** that method returns — so
+`DdlSurvivesRollback`'s `AmbientTransaction == null` term answered `true` about a create still sitting in a
+caller's open transaction. Verified with `BIRKO_REQUIRE_LIVE` set against live **PostgreSQL 16**,
+**MySQL 8.4**, **SQL Server 2022** and on-disk SQLite: **1,415 tests, 0 failed, 0 skipped** across nine
+suites — SqLite 298 (287 → 298), PostgreSQL 93, MySQL 98, MSSql 108, `Birko.Data.SQL` 655,
+Migrations.SQL 53, InMemory 69, JSON 23, XML 18. The standing rule is in § Conventions. Six things worth
+carrying:
+
+- **It manufactures TASK-290's signature on a legitimate path, with no `DROP` and no concurrency** —
+  recorded `CREATE TABLE`, init gate passed, table absent. The next count answered `0` with one
+  **anomalous** escape recorded and `SchemaGeneration` 0 → 1; the next write threw with TASK-286's
+  annotation. A framework able to produce its own alarm condition will have that alarm misread.
+- **⚠ And it is NOT Symbio's mechanism, which is the honest result rather than the convenient one.** Symbio
+  reaches transactions through `SqlTransactionBoundary` → `SqlUnitOfWork` (the ambient door, unaffected)
+  and its own tests explicitly reject `SetTransactionContext` for a singleton store. TASK-290 stays open.
+- **Not SQLite-specific, and that was measured on three servers.** Reverting reds the new test on SQLite,
+  PostgreSQL and SQL Server and leaves **MySQL green**, because its DDL commits itself so remembering is
+  correct there (TASK-243). The green side is asserted, or the fix is indistinguishable from a blanket
+  "never remember" — which is the mutation that reds 4 tests including the steady-state control.
+- **Four hypotheses about the consumer's escape were killed by measurement**, in probes now in the tree: a
+  committed create is immediately visible to an already-open connection (so no stale pooled schema cache);
+  a hot journal does undo a create but the commit **fails loudly with Error 10**, so nothing gets recorded;
+  a reader inside an open read transaction **blocks** the writer's commit rather than reading past it, so a
+  committed create cannot be invisible; and the failure-versus-classification race cannot span the
+  consumer's 28-66 ms windows. The one baseline that *is* confirmed: an **uncommitted** create reads as
+  `SQLITE_ERROR 1: no such table`, never `SQLITE_BUSY`.
+- **Two of the consumer's readings were corrected.** "All twelve escapes are counts" is an artefact of the
+  instrument — both reader paths swallow a missing table at the reader, so a `SELECT` can never reach the
+  channel and only counts and writes are visible. And `Error 5 = 0` is not evidence of no contention:
+  `Default Timeout=30` absorbs BUSY up to that ceiling, so the storm's Error 5 failures arrive only after
+  ~30 s of waiting.
+- **⚠ The 200-table storm reproduces contention, not the anomaly** — `created=200`, `escapes=0`, and 6-7
+  `SQLite Error 5` failures per run. It is in the tree opt-in behind `BIRKO_STORM` with a non-gated
+  positive control, because a diagnostic that saturates the disk reds its neighbours: adding three classes
+  that each call the project's idiomatic process-wide `SqliteConnection.ClearAllPools()` in `Dispose()`
+  took the suite from 6/6 clean to 1-2 failures per 6 runs, and removing those three calls restored it.
+  That dose-response is recorded on [[TASK-276]], whose leading hypothesis was killed in **isolation** and
+  reproduces at **suite scale**.
 
 ### A throwing diagnostic subscriber could reopen TASK-285 from outside the framework (2026-08-31)
 

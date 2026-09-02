@@ -354,3 +354,41 @@ the next session should be designed to answer — not "make the suite green".
 Suggested next experiment, since the lever now exists: under load, with `ClearAllPools` removed, ~200 runs
 per arm; and separately a targeted harness that drives concurrent `RunReaderCommandAsync` against one
 cached connector with **no** `ClearAllPools` anywhere, which answers the production question directly.
+
+---
+
+## 2026-09-02 — the killed hypothesis reproduces at SUITE scale, found incidentally by [[TASK-290]]
+
+⚠ **Do not read this task's "the leading hypothesis is wrong, and now recorded as wrong" as covering
+what follows.** The process-wide `SqliteConnection.ClearAllPools()` calls were killed here by measuring
+**one clear against one in-flight connection in isolation** — an open connection survives a foreign
+clear, a pooled one reopens fine, and 400 interleavings produced nothing. All of that still stands. What
+was never measured is the same calls at **suite scale**, where xUnit runs collections in parallel and
+~24 teardowns fire them against every other class's pooled connections.
+
+TASK-290 added three test classes to `Birko.Data.SQL.SqLite.Tests`, each with the project's idiomatic
+`SqliteConnection.ClearAllPools()` in `Dispose()`. Measured, same machine, back to back:
+
+| configuration | full-suite runs | failures |
+|---|---|---|
+| before the change (287 tests) | 6 | **0** |
+| + the new classes, each calling `ClearAllPools()` in `Dispose()` | 6 | **1-2 per 6 runs** |
+| + the new classes, `ClearAllPools()` removed from those three | 6 | **0** |
+
+The failures were cross-class and both wore `SQLITE_BUSY`: once
+`TransactionBoundaryEndToEndTests.SetTransactionContext_is_honoured_rather_than_accepted_and_dropped`,
+once `PerStoreDoorResidueTests` failing at `BeginTransaction`. Each affected test **passes in isolation**,
+which is this task's signature. Three things worth carrying:
+
+- **The rate is a function of how many teardowns clear the pool, not of any one clear.** Adding three
+  copies to twenty-four moved a clean suite to a reproducible flake; removing those three restored it.
+  That is a dose-response relationship, which is stronger evidence than the isolation test that killed
+  the hypothesis.
+- **The exception SHAPE differs from this task's headline.** The failure recorded here was
+  `ObjectDisposedException: 'SQLitePCL.sqlite3'` — a disposed *handle*. What TASK-290 produced was
+  `SQLITE_BUSY`, i.e. a SQLite error code. So this may be a sibling rather than the same defect, and it
+  is recorded as such rather than claimed as the answer. It does not explain the disposed handle.
+- **Nothing here needs a pool clear.** Every test in these suites owns its own database file, so the
+  call buys nothing and costs a shared-state side effect. The three new classes carry a remark saying
+  so. The twenty-four pre-existing ones are deliberately untouched — removing them is a change to
+  passing tests across the project and belongs to this task, with its own before/after measurement.
