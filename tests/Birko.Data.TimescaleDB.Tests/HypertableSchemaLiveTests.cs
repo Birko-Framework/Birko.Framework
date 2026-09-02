@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using Birko.Data.Models;
 using Birko.Data.SQL.Connectors;
@@ -509,5 +509,56 @@ public class HypertableSchemaLiveTests : IDisposable
             text += e.Message + " | ";
         }
         return text;
+    }
+
+    // ─────────────────── TASK-295: the fifth connector records its creates too ───────────────────
+
+    /// <summary>
+    /// <b>TASK-295 — this connector records the tables it creates, which it did not before.</b>
+    ///
+    /// <para><c>RecordTableCreated</c> used to be called from the <b>virtual</b>
+    /// <c>AbstractConnector.CreateTable(string, IEnumerable&lt;string&gt;)</c>, i.e. from the very method
+    /// this class overrides — and its <c>base.</c> call went to <c>PostgreSQLConnector</c>'s override,
+    /// which also did not record. So <c>TablesCreated</c> was permanently empty here, taking TASK-286's
+    /// annotation, TASK-287's escape channel and TASK-288's healing with it. The recording now sits in a
+    /// non-virtual wrapper that no override can bypass.</para>
+    /// </summary>
+    [Fact]
+    public void TASK295_a_created_hypertable_is_recorded()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.CreateTable(new[] { typeof(TimeKeyedRow) });
+
+        IsHypertable(TimeKeyedTable).Should().BeTrue("the premise: this really is the hypertable path");
+        connector.TablesCreated.Keys.Should().Contain(TimeKeyedTable);
+    }
+
+    /// <summary>
+    /// <b>And a hypertable conversion that DEGRADES still records, because the plain table is there.</b>
+    ///
+    /// <para>A Guid-keyed entity cannot become a hypertable — TimescaleDB refuses a unique index that
+    /// omits the partitioning column — so <c>CreateTable</c> records the failure and does not throw
+    /// (TASK-254). TASK-254's licence for degrading is precisely that <i>the wreckage is usable</i>: the
+    /// plain table is committed and fully readable and writable. So the create did happen, and recording
+    /// it is correct rather than generous — otherwise a table that later vanished would read as a benign
+    /// first touch on exactly the entities that already have a schema problem.</para>
+    /// </summary>
+    [Fact]
+    public void TASK295_a_degraded_hypertable_conversion_still_records_the_plain_table()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+        IsHypertable(GuidKeyedTable).Should().BeFalse(
+            "the premise: the conversion failed and was degraded, not thrown");
+        connector.TablesCreated.Keys.Should().Contain(GuidKeyedTable,
+            "the plain table is committed and usable — TASK-254's whole licence for degrading — so the "
+            + "create is a fact and must be on record");
     }
 }
