@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Birko.Data.Models;
 using Birko.Data.SQL.Attributes;
@@ -261,5 +262,105 @@ public class UnbuildableIndexEndToEndTests : IDisposable
         connector.IndexCreationFailures[0].IndexName.Should().Be("aa_bad_unique");
         IndexNames(connector, "BadIdxDocs").Should().Contain("zz_good_plain",
             "the async path is also one attempt per index");
+    }
+
+    // ───────────────────── TASK-283: a throwing subscriber must not brick the entity ─────────────────
+
+    /// <summary>
+    /// <b>TASK-283 — a subscriber that throws must not defeat TASK-204's degrade.</b>
+    ///
+    /// <para><c>RecordIndexCreationFailure</c> raises the event <b>inside</b> the <c>catch</c> that
+    /// implements the degrade, and a store sets <c>_initialized</c> only <i>after</i> schema-ensure
+    /// returns. So an escaping handler exception left the entity's whole surface — <b>reads included</b> —
+    /// throwing on every later operation: the failure TASK-204 exists to remove, reintroduced through the
+    /// channel that reports it.</para>
+    ///
+    /// <para>The trigger is ordinary rather than theoretical: the event's own summary invites a host to
+    /// <i>"subscribe to log or escalate"</i>, and escalating by rethrowing is a normal thing to write.</para>
+    /// </summary>
+    [Fact]
+    public async Task AThrowingSubscriber_DoesNotDefeatTheDegrade()
+    {
+        var connector = await SeedDuplicatesAsync();
+        connector.OnIndexCreationFailed += _ => throw new InvalidOperationException("handler escalated");
+
+        var store = PerRequestStore();
+
+        // The read surface is what TASK-204 bought and what a throwing subscriber took away again.
+        var count = await store.CountAsync();
+        count.Should().Be(2,
+            "before TASK-283 the handler's exception propagated out of schema-ensure, so the store never "
+            + "initialised and every later operation on this entity threw — reads included");
+
+        connector.IndexCreationFailures.Should().ContainSingle(
+            "the degrade itself is unchanged: the index that cannot be built is still recorded")
+            .Which.IndexName.Should().Be("aa_bad_unique");
+        IndexNames(connector, "BadIdxDocs").Should().Contain("zz_good_plain",
+            "and the buildable index beside it is still created");
+    }
+
+    /// <summary>
+    /// The handler's own failure is <b>recorded</b>, not discarded — otherwise a broken subscriber and an
+    /// event that never fired look identical from outside.
+    /// </summary>
+    /// <remarks>
+    /// § TASK-289's rule, which this channel now shares: swallowed means recorded. Note the sink is a
+    /// collection and deliberately <b>not</b> another event — announcing a subscriber failure through a
+    /// subscriber is the same hole one level up.
+    /// </remarks>
+    [Fact]
+    public async Task AThrowingSubscribersOwnFailure_IsRecorded()
+    {
+        var connector = await SeedDuplicatesAsync();
+        connector.OnIndexCreationFailed += _ => throw new InvalidOperationException("handler escalated");
+
+        await PerRequestStore().CountAsync();
+
+        connector.SubscriberFailures.Should().ContainSingle()
+            .Which.Channel.Should().Be("OnIndexCreationFailed",
+                "keyed by (channel, exception type), so a logging bug and a metrics bug stay "
+                + "distinguishable");
+        connector.SubscriberFailures[0].Error.Should().BeOfType<InvalidOperationException>();
+    }
+
+    /// <summary>
+    /// <b>Per subscriber, not one <c>try</c> around the multicast.</b> A host with a logger and a metric
+    /// must not lose the metric to a bug in the logger.
+    /// </summary>
+    [Fact]
+    public async Task OneThrowingSubscriber_DoesNotSuppressTheOthers()
+    {
+        var connector = await SeedDuplicatesAsync();
+        var second = 0;
+        var third = 0;
+        connector.OnIndexCreationFailed += _ => throw new InvalidOperationException("first blew up");
+        connector.OnIndexCreationFailed += _ => Interlocked.Increment(ref second);
+        connector.OnIndexCreationFailed += _ => Interlocked.Increment(ref third);
+
+        await PerRequestStore().CountAsync();
+
+        second.Should().Be(1, "a plain Invoke stops at the first delegate that throws");
+        third.Should().Be(1);
+        connector.SubscriberFailures.Should().ContainSingle("only the first one failed");
+    }
+
+    /// <summary>
+    /// ⚠ The contract that <b>is</b> consumed, asserted so the hardening cannot quietly change it.
+    /// Measured at TASK-283 across all 16 consumer repos: <b>zero</b> subscriptions to
+    /// <c>OnIndexCreationFailed</c>, but <c>IndexCreationFailures</c> has a real reader. The collection is
+    /// what a consumer depends on, and it must behave exactly as before whether a subscriber throws or
+    /// not.
+    /// </summary>
+    [Fact]
+    public async Task TheRecordedCollection_IsUnaffectedByWhatSubscribersDo()
+    {
+        var withThrower = await SeedDuplicatesAsync();
+        withThrower.OnIndexCreationFailed += _ => throw new InvalidOperationException("boom");
+        await PerRequestStore().CountAsync();
+
+        withThrower.IndexCreationFailures.Should().ContainSingle();
+        withThrower.IndexCreationFailures[0].TableName.Should().Be("BadIdxDocs");
+        withThrower.IndexCreationFailures[0].IndexName.Should().Be("aa_bad_unique");
+        withThrower.IndexCreationFailures[0].Error.Should().NotBeNull();
     }
 }
