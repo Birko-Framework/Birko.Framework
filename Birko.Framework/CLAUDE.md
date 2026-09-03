@@ -374,6 +374,35 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   - **The per-store door's own failure mode is loud, so it was NOT the consumer's.** On SQLite it throws
     `SQLite Error 5` — a 500, not a 200. Worth stating because the tempting conclusion ("the DDL ran on
     another connection, that's the bug") is measurably the wrong half.
+- **A blast radius is a measurement with an expiry date, and a stale one can argue for the wrong decision
+  in either direction.** TASK-283 existed, and TASK-254 deliberately left its channel unhardened, because
+  `OnIndexCreationFailed` was recorded as *"consumed by Symbio in production code, its host, two test files
+  and its specs"* — so changing whether a handler's exception propagates would be a behaviour change on
+  consumed surface. Re-measured at TASK-283's own criterion 1: **zero** `+=` subscriptions across all 16
+  consumer repos. The "consumers" were doc comments, one of them (`Program.cs`) explaining why it does
+  **not** read the channel. Five parts generalise:
+  - **Grep for the SUBSCRIPTION, not for the identifier.** Every one of the cited references matched a
+    search for the name; none of them was a handler. A channel's consumers are its `+=` sites, and a
+    documented contract is not a subscriber.
+  - **The stale count conflated two contracts that need separating.** The *collection*
+    `IndexCreationFailures` genuinely has a reader; the *event* has none. They are different surfaces with
+    different obligations, and the fix hardens the second while leaving the first byte-identical — with a
+    test asserting the collection is unaffected by whatever subscribers do.
+  - **§ TASK-259's rule cuts both ways.** It was written because a stale count let a wrong claim reach a
+    commit message; here a stale count kept a P2 defect open for nine days and made it look blocked on a
+    consumer decision that did not exist. **Re-measure before deciding you are blocked, not just before
+    claiming you are safe.**
+  - **Consistency is a reason to widen a task's stated scope, and saying so is the price.** This task's
+    "out of scope" excluded the hypertable channel because TASK-254 had fixed it — true, but *differently*:
+    a single `try { Invoke } catch { }` that swallows without recording. Leaving it would have left two
+    policies side by side, which the same task's criterion 6 forbids. Both moved onto TASK-289's
+    `RaiseDiagnostic`, so all three channels share one implementation. **When an out-of-scope bullet and an
+    acceptance criterion disagree, the criterion is the one that was thought about.**
+  - **⚠ `pg_isready` answers DURING initdb.** A readiness loop built on it hands back a database that is
+    about to restart: the TimescaleDB suite reported 15 of 17 failing, entirely from the fixture, and gave
+    56/56 twice against a genuinely-up server. Wait on an actual query (`psql -c "SELECT 1"`). Same class
+    as § TASK-259's skip-as-failure trap — a readiness check that answers the wrong question is
+    indistinguishable from a broken change.
 - **An exception's TYPE is a contract three mechanisms select on, so rewrap only where the rewrap earns
   something — and enumerate the filters before you replace an exception in flight.** TASK-291 + TASK-294,
   filed apart and closed as one change because they were one line. `EnsureSchemaAndReport` rewrapped
@@ -2128,6 +2157,32 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### A throwing diagnostic subscriber could brick an entity, and the reason it was left alone had expired (2026-09-03)
+
+TASK-283. `RecordIndexCreationFailure` raised `OnIndexCreationFailed` with a bare `Invoke` **inside** the
+catch implementing TASK-204's degrade, and stores set `_initialized` only after schema-ensure returns — so
+a subscriber that threw left the entity's whole surface, reads included, throwing until restart. Exactly
+what TASK-204 removed, reintroduced through the channel that reports it. Verified with
+`BIRKO_REQUIRE_LIVE` set against four live servers and on-disk SQLite: **1,619 tests, 0 failed, 0 skipped**
+across eleven suites. The standing rule is in § Conventions. Five things worth carrying:
+
+- **The premise that kept it open for nine days was stale.** TASK-254 left this channel bare because it had
+  real consumers where the hypertable one had none. Re-measured: **0** `+=` subscriptions across all 16
+  consumer repos — the cited "consumers" were doc comments, one of them explaining why it does *not* read
+  the channel. It had been free to harden the whole time.
+- **Grep for the subscription, not the identifier**, and keep the *collection* and the *event* apart: the
+  collection has one real reader and is untouched, with a test saying so.
+- **§ TASK-259 cuts both ways** — a stale blast radius can make you claim safety you do not have, or block
+  on a decision that does not exist. Re-measure before concluding you are blocked.
+- **The hypertable channel moved too, narrowing this task's own out-of-scope bullet on purpose.** It was
+  not broken, but it was fixed *differently* — a single `try` that swallows without recording — and two
+  policies side by side is the divergence criterion 6 forbids. All three channels now share TASK-289's
+  `RaiseDiagnostic`, which also gives the hypertable channel per-subscriber isolation and turns its silent
+  swallow into a recorded one.
+- **⚠ `pg_isready` answers during initdb.** The TimescaleDB suite reported 15 of 17 failing purely from
+  that, and 56/56 twice once the server was genuinely up. Wait on a real query. This sweep also ran with a
+  trx logger, the correction [[TASK-276]] asked for after a previous run lost a failure's identity.
 
 ### A blanket rewrap was silently disabling the retry policy, cancellation handling and every host `catch` (2026-09-02)
 

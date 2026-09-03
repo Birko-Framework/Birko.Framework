@@ -3,18 +3,18 @@ id: TASK-283
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-25
 depends-on: []
 blocks: []
-related: [TASK-204, TASK-254]
+related: [TASK-204, TASK-254, TASK-276, TASK-289]
 findings: []
-pr: null
+pr: cb9773a (Birko.Data.SQL) + bf045f4 (Birko.Data.TimescaleDB) + 9eb46a7 (SqLite.Tests) + 0102408 (TimescaleDB.Tests)
 github-issue: null
 jira-key: null
-affects: [Birko.Data.SQL]
+affects: [Birko.Data.SQL, Birko.Data.TimescaleDB]
 ---
 
 # A throwing `OnIndexCreationFailed` subscriber defeats TASK-204's degrade and bricks the entity
@@ -98,3 +98,97 @@ Whatever this task measures for the consumed index channel should become the sin
 do not let TASK-289 and TASK-254 set a de-facto convention by being the cheap ones. But equally, do not
 "unify" `OnIndexCreationFailed` from symmetry before the consumer re-measurement this task's own first
 acceptance criterion requires.
+
+---
+
+## Closed 2026-09-03 — and criterion 1 inverted the task's own premise
+
+### Step 0: the blast radius that justified leaving this alone was stale
+
+The task's central claim — and TASK-254's reason for hardening the hypertable channel and **not** this one
+— was that `OnIndexCreationFailed` is *"consumed by Symbio in production code, its host, two test files,
+and as a documented contract"*, so changing whether a handler's exception propagates would be a behaviour
+change on consumed surface.
+
+Re-measured across all 16 consumer repos, which criterion 1 exists to demand:
+
+| the claim | measured 2026-09-03 |
+|---|---|
+| consumed in production code (`UniqueIndexDataCheck.cs`) | a **doc comment** |
+| consumed by the host (`Program.cs:766`) | a comment saying *"**Not** read from `AbstractConnector.IndexCreationFailures`"*, with its reason |
+| two test files | one reads the **collection**; the other mentions the event in a doc comment |
+| **`OnIndexCreationFailed +=` subscriptions, all 16 repos** | **0** |
+
+**There is no handler.** Nothing can throw from a channel nobody subscribes to, so this sat in exactly
+TASK-254's position — free to harden — and had done since it was filed. Criterion 2 ("establish whether any
+consumer's handler can actually throw today") answers itself, and criterion 4's decision has no
+consumer intent to respect.
+
+⚠ **The distinction that survives the re-measurement, and that the fix must not touch:** the *collection*
+`IndexCreationFailures` **is** consumed — one real read, `Symbio.Tests.Unit/V1InertnessTests.cs:332`. The
+event is not. Those are different contracts and the stale count conflated them.
+
+### The fix
+
+`RecordIndexCreationFailure` now raises through `AbstractConnector.RaiseDiagnostic` (TASK-289's helper)
+instead of a bare `Invoke`.
+
+⚠ **And the hypertable channel moved with it, narrowing this task's own "out of scope" bullet
+deliberately.** That bullet says TASK-254 fixed it — true, it was not broken. But it was fixed
+*differently*: a single `try { Invoke } catch { }` that swallows without recording. Leaving it there would
+have left two policies side by side, which is precisely the silent divergence **criterion 6** forbids, and
+TASK-289 had already recorded that the general helper exists so channels "adopt it rather than add a third
+variant". Measured free: **0** consumer subscriptions to `OnHypertableCreationFailed` either; the only
+subscribers are this project's own tests. All three diagnostic channels now share one implementation.
+
+Two behaviours change on the hypertable channel, both corrections:
+
+- **per subscriber, not one `try` around the multicast** — a single `try` stops at the first delegate that
+  throws, so a host with a logger and a metric loses the metric to a bug in the logger;
+- **swallowed now means recorded**, on `SubscriberFailures`. TASK-254's comment argued the opposite
+  ("their own handler failing is their concern, not a second schema failure"); TASK-289 overturned that
+  reasoning on the grounds that a broken handler and an event that never fired look identical from
+  outside. That overturning is now applied where it was first argued.
+
+### Acceptance
+
+- [x] Consumer surface re-measured first — and it inverted the premise.
+- [x] Whether a consumer's handler can throw: **no consumer handler exists**, on any of the 16 repos.
+- [x] The degrade is unconditional: a throwing subscriber does not leave the store uninitialised.
+- [x] Swallowed **and recorded** on `SubscriberFailures`, keyed by (channel, exception type). The sink is
+      deliberately a collection and not another event — announcing a subscriber failure through a
+      subscriber is the same hole one level up.
+- [x] Proven able to fail, with disjoint mutations.
+- [x] The two channels end up **consistent** — one implementation, not a documented divergence.
+
+### Measurements
+
+`BIRKO_REQUIRE_LIVE` set, live PostgreSQL 16 / MySQL 8.4 / SQL Server 2022 / TimescaleDB 2 and on-disk
+SQLite: **1,619 tests, 0 failed, 0 skipped** across eleven suites — SqLite **341** (337 → 341),
+TimescaleDB **56** (55 → 56), `Birko.Data.SQL` 667, PostgreSQL 98, MySQL 101, MSSql 111,
+Migrations.SQL 54, Migrations.TimescaleDB 81, InMemory 69, JSON 23, XML 18.
+
+**Mutations, disjoint:**
+
+| mutation | red |
+|---|---|
+| index channel back to a bare `Invoke` | **4 of 13** — the degrade, the recorded subscriber failure, the per-subscriber isolation, and the collection contract |
+| hypertable channel back to TASK-254's single swallowing `try` | **2 of 56** — the recorded failure and the per-subscriber isolation; the degrade itself stayed green, which is the point: that half was already right |
+
+### ⚠ A fixture trap worth recording
+
+The TimescaleDB suite first reported **15 of 17 failing**, and the cause was the container rather than the
+change: `pg_isready` answers **during initdb**, before the server restarts for real, so a readiness loop
+built on it hands back a database that is about to go away. Rerunning against a genuinely-up server gave
+56/56 twice. The fix is to wait on an actual query (`psql -c "SELECT 1"`), which the later sweeps do —
+and it is the same class as § TASK-259's "I fell into the skip-as-failure trap I had documented one task
+earlier".
+
+This sweep also ran with a **trx logger**, which is the correction [[TASK-276]] asked for after the
+previous run lost an MSSql failure's identity to a summary-only grep.
+
+### Deliberately not done
+
+- **`SchemaEnsureFailureLog<T>` still does not raise.** The invoke stays in each caller so every channel
+  keeps its own event type and public surface — this task's own out-of-scope note, and it still holds.
+- **No consumer change.** Symbio subscribes to neither event; the collection it does read is untouched.
