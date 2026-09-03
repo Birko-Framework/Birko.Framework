@@ -499,6 +499,37 @@ public class HypertableSchemaLiveTests : IDisposable
         act.Should().NotThrow("the caller's handler failing is not a second schema failure");
         connector.HypertableCreationFailures.Should().ContainSingle(
             "and the record still stands — the report is not lost with the handler");
+
+        // TASK-283 — the swallow now RECORDS. TASK-254 wrote this channel's own try/catch and argued the
+        // handler's failure was "their concern, not a second schema failure"; TASK-289 overturned that for
+        // OnSchemaEscapeDetected on the grounds that a broken handler and an event that never fired look
+        // identical from outside, and TASK-283 brought this channel onto the same shared RaiseDiagnostic
+        // rather than leave two policies side by side.
+        connector.SubscriberFailures.Should().ContainSingle()
+            .Which.Channel.Should().Be("OnHypertableCreationFailed");
+        connector.SubscriberFailures[0].Error.Should().BeOfType<InvalidOperationException>();
+    }
+
+    /// <summary>
+    /// TASK-283 — <b>per subscriber, not one <c>try</c> around the multicast</b>, so a host with a logger
+    /// and a metric does not lose the metric to a bug in the logger. This channel got that property by
+    /// adopting the shared helper; before, a single <c>try</c> stopped at the first delegate that threw.
+    /// </summary>
+    [Fact]
+    public void One_throwing_subscriber_does_not_suppress_the_others()
+    {
+        if (!RequireServer()) return;
+        DropBoth();
+
+        var connector = new TimescaleDBConnector(Settings());
+        var second = 0;
+        connector.OnHypertableCreationFailed += _ => throw new InvalidOperationException("first blew up");
+        connector.OnHypertableCreationFailed += _ => second++;
+
+        connector.CreateTable(new[] { typeof(GuidKeyedRow) });
+
+        second.Should().Be(1);
+        connector.SubscriberFailures.Should().ContainSingle("only the first one failed");
     }
 
     private static string Flatten(Exception ex)
