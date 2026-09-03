@@ -234,27 +234,26 @@ namespace Birko.Data.SQL.Connectors
                 return;
             }
 
-            try
-            {
-                OnHypertableCreationFailed?.Invoke(failure);
-            }
-            catch
-            {
-                // A subscriber that throws must NOT defeat the degrade. This invoke runs inside
-                // CreateTable's catch, so an escaping handler exception would propagate out of schema-ensure
-                // and leave the store permanently uninitialised -- precisely the failure TASK-254 exists to
-                // remove, reintroduced through the reporting channel. The summary on the event invites a host
-                // to "log or escalate", and escalating by rethrowing is the realistic trigger.
-                //
-                // Swallowed rather than recorded anywhere: the caller asked to be told about a degraded
-                // conversion, and their own handler failing is their concern, not a second schema failure.
-                // Found by code-review at TASK-254's close gate.
-                //
-                // The index channel (AbstractConnector.RecordIndexCreationFailure) has the identical hole and
-                // is deliberately NOT changed here: it has real consumers, so altering whether a handler's
-                // exception propagates is a behaviour change on consumed surface and wants its own
-                // measurement. TASK-283 owns it.
-            }
+            // TASK-283 — migrated onto the shared RaiseDiagnostic. TASK-254 wrote this channel's own
+            // `try { Invoke } catch { }` because it was the first of its kind; TASK-289 then built the
+            // general helper for OnSchemaEscapeDetected and recorded that the expensive channel should
+            // "adopt it rather than add a third variant". With TASK-283 adopting it for the index
+            // channel, leaving this one on a private policy would be the silent divergence between the
+            // two that TASK-283's own acceptance forbids — so all three now share one implementation.
+            //
+            // Two behaviours change here, and both are corrections rather than side effects:
+            //
+            //   * PER SUBSCRIBER, not one try around the multicast. A single try stops at the first
+            //     delegate that throws, so a host with a logger and a metric loses the metric to a bug
+            //     in the logger (TASK-289).
+            //   * SWALLOWED NOW MEANS RECORDED, on SubscriberFailures. TASK-254's comment argued the
+            //     opposite — "their own handler failing is their concern, not a second schema failure" —
+            //     and TASK-289 overturned that reasoning for its own channel: a broken handler and an
+            //     event that never fired look identical from outside, and this is what tells them apart.
+            //
+            // Free to change: measured at TASK-283, ZERO consumer subscriptions to this event across all
+            // 16 repos; the only subscribers are this project's own tests.
+            RaiseDiagnostic(OnHypertableCreationFailed, failure, nameof(OnHypertableCreationFailed));
         }
 
         /// <summary>
