@@ -1,5 +1,5 @@
 ---
-id: TASK-290
+id: TASK-297
 parent: null
 feature: null
 status: todo
@@ -81,6 +81,24 @@ launch from a repo with no entry point?** Answer that before editing it.
 - Adding a CI workflow. This repo cannot pass one in isolation — every build input is in a sibling git repo obtainable from no feed — and that is a separate, larger decision.
 - `README.md` § *License* reading `Part of the Birko Framework.` while `License.md` is a full MIT grant. Prose staleness, noted by the same survey as an aside, not a broken path.
 
+## Renumbered from TASK-290 (2026-09-04)
+
+Filed as `TASK-290` on 2026-09-01. A second `TASK-290` was filed on 2026-09-02 under EPIC-014
+(*"Name the mechanism behind the schema-ensure escape"*) by an agent that computed the next id from
+`tasks/EPIC-*/` alone and never globbed `tasks/_loose/` — so the ID-generation rule ("global counters per
+type, unique project-wide") was broken by a partial scan of exactly the folder this task lives in.
+
+**This file renumbered rather than the newer one, against the usual first-claim rule, and the asymmetry is
+the reason:** measured 2026-09-04, the EPIC-014 `TASK-290` is named in **6 commit messages** (`15e67c5`,
+`436b050`, `987448e`, `b9357be`, `dc2b3a0`, `2e2fd4d`), in the `related:` lists and prose of six sibling
+task files, in `CLAUDE.md` § Conventions and § Recent Updates, and in consumer Symbio's own TASK-602 as
+*"Birko TASK-290"*. Commit messages are immutable, and a cross-repo citation cannot be rewritten from here
+at all. This file was referenced **nowhere** but itself and the generated dashboard.
+
+So renumbering the later claimant would have orphaned six commits and a cross-tree reference to fix a
+collision that costs nothing to fix here. Recorded because the outcome otherwise reads as the rule simply
+not holding.
+
 ## Human test plan
 
 - [ ] Open the repo in VS Code and run the default build task; confirm it builds rather than erroring on a missing project
@@ -88,4 +106,4 @@ launch from a repo with no entry point?** Answer that before editing it.
 
 ## Implementation plan
 
-_Populated by `/tasks plan TASK-290` — leave empty until then._
+_Populated by `/tasks plan TASK-297` — leave empty until then._
