@@ -127,6 +127,7 @@
 ## Health
 - **Birko.Health** - IHealthCheck, HealthCheckRunner, DiskSpace/Memory checks
 - **Birko.Health.Data** - SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, TimescaleDB, CosmosDB, Vault, MQTT, SMTP, WebSocket, TCP, SSE checks
+- **Birko.Health.Data.SQL** - schema drift (a column whose stored type is no longer the declared one) + unbuilt indexes
 - **Birko.Health.Redis** - Redis PING + latency
 - **Birko.Health.Azure** - Blob Storage, Key Vault checks
 
@@ -174,7 +175,7 @@ All test projects use xUnit + FluentAssertions. Each `*.Tests` project has its o
 - Birko.Storage.Tests, Birko.Storage.AzureBlob.Tests
 - Birko.Telemetry.Tests, Birko.Telemetry.OpenTelemetry.Tests
 - Birko.Rules.Tests, Birko.Data.Processors.Tests, Birko.Data.Aggregates.Tests
-- Birko.Health.Tests, Birko.Health.Azure.Tests
+- Birko.Health.Tests, Birko.Health.Azure.Tests, Birko.Health.Data.SQL.Tests
 - Birko.Messaging.Tests, Birko.Messaging.Razor.Tests
 - Birko.Serialization.Tests, Birko.Time.Tests, Birko.Caching.Hybrid.Tests
 - Birko.Localization.Tests, Birko.Localization.Data.Tests, Birko.Data.Localization.Tests

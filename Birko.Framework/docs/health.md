@@ -230,6 +230,37 @@ HTTP GET with `Accept: text/event-stream`:
 var check = new SseHealthCheck("http://localhost:3000/events");
 ```
 
+## Schema Drift Health Check (Birko.Health.Data.SQL)
+
+Birko never reconciles an existing table: `CREATE TABLE` is guarded by `IF NOT EXISTS` and schema-ensure
+only creates. So changing a model — adding `[MaxLengthField]`, changing a decimal's precision, changing a
+property's type — leaves the old column in place, and the first sign is an exception on whichever request
+touches that column first. This check is what lets somebody find out before that happens.
+
+```csharp
+var check = new SchemaDriftHealthCheck(
+    () => DataBase.GetConnector<SqLiteConnector>(settings),
+    new[] { typeof(Customer), typeof(Invoice) });
+
+var result = await check.CheckAsync(ct);
+// Degraded — result.Data["drift"]:
+//   ["Invoice.Total: declared NUMERIC(18,2), stored REAL"]
+```
+
+It reports three kinds of disagreement — `TypeMismatch`, `Missing` (declared but absent) and `Unexpected`
+(present but undeclared) — and folds in `AbstractConnector.IndexCreationFailures`, the indexes
+schema-ensure recorded rather than threw on, which nothing else reads.
+
+**Degraded, never Unhealthy.** Drift means the database disagrees with the models, not that it is
+unreachable; reporting it Unhealthy would pull an instance out of a load balancer for a condition only a
+human can fix. Reachability is `SqlHealthCheck`'s question.
+
+**"Could not determine" is never reported as healthy.** A provider whose column catalogue this framework
+cannot read, or a table that does not exist yet, is called out explicitly rather than counted as clean.
+
+It is a **separate project** from `Birko.Health.Data` so that leaf stays dependency-free — see the comment
+in `Birko.Health.Data.SQL.projitems`.
+
 ## Redis Health Check (Birko.Health.Redis)
 
 Sends PING command, measures latency. Degrades above 100ms:
@@ -390,6 +421,7 @@ app.MapGet("/health/live", async () =>
 |---------|--------|-------------|
 | `Birko.Health` | DiskSpace, Memory, Runner | None |
 | `Birko.Health.Data` | SQL, Elasticsearch, MongoDB, RavenDB, InfluxDB, Vault, MQTT, SMTP | System.Data.Common, System.Net.Http, System.Net.Sockets |
+| `Birko.Health.Data.SQL` | Schema drift + unbuilt indexes | Birko.Data.SQL |
 | `Birko.Health.Redis` | Redis PING | StackExchange.Redis |
 | `Birko.Health.Azure` | Azure Blob Storage, Azure Key Vault | Birko.Storage.AzureBlob, Birko.Security.AzureKeyVault |
 

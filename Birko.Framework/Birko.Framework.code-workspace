@@ -1,4 +1,4 @@
-{
+﻿{
 	"folders": [
 		{
 			"name": "AI / Birko.AI",
@@ -451,6 +451,10 @@
 		{
 			"name": "Health / Birko.Health.Data",
 			"path": "../Birko.Health.Data"
+		},
+		{
+			"name": "Health / Birko.Health.Data.SQL",
+			"path": "../Birko.Health.Data.SQL"
 		},
 		{
 			"name": "Health / Birko.Health.Redis",
@@ -1051,6 +1055,10 @@
 		{
 			"name": "Tests / Birko.Health.Azure.Tests",
 			"path": "../../Framework.Tests/Birko.Health.Azure.Tests"
+		},
+		{
+			"name": "Tests / Birko.Health.Data.SQL.Tests",
+			"path": "../../Framework.Tests/Birko.Health.Data.SQL.Tests"
 		},
 		{
 			"name": "Tests / Birko.Health.Redis.Tests",

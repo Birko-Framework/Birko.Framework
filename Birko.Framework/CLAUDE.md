@@ -86,6 +86,11 @@ Birko.AI.Contracts (zero deps: ILlmProvider, Message, ContentBlock, Tool, AgentO
     -> Birko.AI.Orchestration (ITaskDispatcher, ImplementationPlan, StepDependencyAnalyzer)
   -> Birko.AI.Resilience (ProviderRateLimiter, ProviderCircuitBreaker, CostTrackingService, TrackedLlmProvider)
 
+Birko.Health (IHealthCheck, HealthCheckResult, HealthCheckRunner — zero deps)
+  -> Birko.Health.Data (SQL, Mongo, Raven, SMTP, MQTT, TCP … — still zero Birko deps, BCL + delegates only)
+  -> Birko.Health.Data.SQL (SchemaDriftHealthCheck) + Birko.Data.SQL
+     (a per-dependency sibling, like .Redis and .Azure, so the Health leaf stays dependency-free)
+
 Birko.Communication.OAuth (IOAuthClient, OAuthClient, OAuthSettings)
   -> Birko.Communication.OAuth.Providers (GitHubOAuthProvider — pre-configured device flow)
 
@@ -2141,6 +2146,57 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   5 stores → 5 entries, 5 re-executed failing DDL statements). Key such collections by their identity,
   fire events on the **transition** into the condition, and **clear the record when it no longer holds** —
   a report that cannot un-report is a report an operator learns to ignore.
+- **A check that compares DECLARED against STORED asks the schema for the stored side, never the driver
+  — and the declared side is the method that emits the DDL.** TASK-269, and the first member of the
+  reporting family (TASK-204, TASK-254, TASK-287, TASK-289) that has to *read* the database rather than
+  record what the framework already knows. The framework never reconciles an existing table —
+  `CREATE TABLE` is guarded by `IF NOT EXISTS` and schema-ensure only creates — so a model change, or an
+  upgrade past any of the column-typing fixes (TASK-257, TASK-264, TASK-265, TASK-266, TASK-275), leaves
+  the old column in place with no signal but an exception at the call site. Six parts generalise:
+  - **⚠ The provider-independent surface CANNOT see a type's parameters, so the obvious implementation
+    misses the worst case.** Consumer Symbio's `SchemaDriftCheck` reads `SELECT * FROM T WHERE 1 = 0` and
+    takes the reader's column *names*, deliberately avoiding a catalogue query on the stated grounds that
+    *"a diagnostic that only runs on the dialect the developer happens to use is precisely how this defect
+    survived in the first place"*. Extending that with `GetDataTypeName()` is the natural move and is
+    measurably wrong: it returns `VARCHAR` for `VARCHAR(255)` and `DECIMAL` for `DECIMAL(18,2)`, and
+    `GetColumnSchema()` answers `ColumnSize = -1` with **null** precision and scale. So the check would
+    report TASK-264's silent money truncation — `DECIMAL(18,0)` against `DECIMAL(18,2)`, *the same
+    keyword* — as a clean bill of health. **The reasoning was right for names and does not transfer to
+    types; check whether a borrowed justification covers the thing you are borrowing it for.**
+  - **The dialect branch is therefore the only mechanism, and it goes on the connector — where every
+    other provider capability already is.** `StoredColumnsSql` / `RenderStoredType`, in the family of
+    `SupportsTransactionalDdl`, `FoldsUnquotedIdentifiers`, `SupportsPartialIndexes`,
+    `RequiresOrderByForPaging`: stated once per provider, both sides asserted per provider. Symbio's
+    objection was sound *for Symbio*, which has no connector to hang a branch on. The framework does, and
+    the answer to "don't let a dialect branch rot" is to state it once and test it, not to avoid it.
+  - **⚠ `DbDataReader.GetFieldType()` reports the stored VALUE's affinity, not the declaration.**
+    Measured on SQLite: a `REAL` column holding the text `'not-a-number'` reads back as `String`, and one
+    column answered `String` on a zero-row reader and `Double` on a populated one. A check built on it
+    reports drift, or not, according to which rows happen to be in the table. `GetDataTypeName()` is
+    stable across all three cases — it is *insufficient*, not unstable, and the two failure modes are
+    worth telling apart.
+  - **The declared side has ONE producer and it is `ConvertType`, the method `CREATE TABLE` uses.** So
+    the check cannot drift away from the DDL, and every past *and future* column-typing rule is covered
+    without being restated. A check that re-derived the expected type would be the second implementation
+    of the rule — the shape this file keeps recording. It also means a test must never spell out an
+    expected type by hand for the healthy case, or the test becomes the third.
+  - **"Could not answer" is never "nothing is wrong".** `SchemaDriftReport.Supported` /
+    `TableExists` / `IsClean` keep them apart: a provider with no readable catalogue, an unmapped type, or
+    a table a lazy store has not created yet must not read as healthy. That conflation *is* the defect
+    this family exists to close — § TASK-287's *a silence is only evidence where the instrument can see*,
+    applied at the moment of reporting rather than of measuring. And a diagnostic must not throw on the
+    likeliest mistake a host makes: `DataBase.LoadTable` answers **null** for a type with no `[Table]` and
+    no `ModelMap`, which surfaced as a `NullReferenceException` until it was guarded.
+  - **The subscriber ships in the same change, or this is TASK-204 again.** Re-measured 2026-09-07:
+    `OnIndexCreationFailed +=` has **0** subscribers across all 16 consumer repos, so every index failure
+    since TASK-204 has been silent while TASK-245, TASK-248 and TASK-257 each found real ones hiding
+    behind it. So the health check reports drift **and** `IndexCreationFailures` — one door for *"is my
+    schema what my models think it is?"* — and it is `Degraded`, never `Unhealthy`, because pulling an
+    instance out of a load balancer for a condition only a human can fix is how a diagnostic becomes an
+    outage. It lives in a **per-dependency sibling** (`Birko.Health.Data.SQL`, like `.Redis` and
+    `.Azure`), because `Birko.Health.Data` is dependency-free by construction; TASK-234 refused exactly
+    this edge for Redis, and the distinguishing measurement is that a Redis check is useful *without*
+    Birko.Redis while a schema-drift check is meaningless without Birko.Data.SQL.
 
 ## Task tracking — this repo is the polyrepo family's aggregator
 
@@ -2225,6 +2281,55 @@ edit here, live immediately).
 ## Recent Updates
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+
+### Nothing reported a stale column type, and the obvious way to detect it would have missed the worst case (2026-09-07)
+
+TASK-269. Birko never reconciles an existing table — `CREATE TABLE` is guarded by `IF NOT EXISTS` and
+schema-ensure only creates — so a model change, or an upgrade past any of the column-typing fixes
+(TASK-257, TASK-264, TASK-265, TASK-266, TASK-275), leaves the old column in place with no signal but an
+exception at the call site. `AbstractConnector.DetectDrift` now answers it and
+`Birko.Health.Data.SQL.SchemaDriftHealthCheck` reads it. Verified against live **PostgreSQL 16**,
+**MySQL 8.4**, **SQL Server 2022** and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set: **1,562 tests,
+0 failed, 0 skipped** across eight suites, 23 new. The standing rule is in § Conventions. Eight things
+worth carrying:
+
+- **⚠ The provider-independent mechanism cannot see the width, and measuring that inverted the design.**
+  Consumer Symbio's `SchemaDriftCheck` reads `SELECT * FROM T WHERE 1 = 0` and takes the reader's column
+  *names*, explicitly to avoid "a diagnostic that only runs on the dialect the developer happens to use".
+  Extending it with `GetDataTypeName()` was the obvious move and is **wrong**: measured, it returns
+  `VARCHAR` for `VARCHAR(255)` and `DECIMAL` for `DECIMAL(18,2)`, and `GetColumnSchema()` answers
+  `ColumnSize = -1` with null precision and scale. So a reader-based check reports TASK-264's silent money
+  truncation — `DECIMAL(18,0)` against `DECIMAL(18,2)`, the same keyword — as a **clean bill of health**.
+- **The dialect branch is the only mechanism that answers, so it goes where every other provider
+  capability already lives.** Symbio's reasoning was right for *names* and does not transfer; it also had
+  no connector to hang a branch on, and this framework does. Same family as `SupportsTransactionalDdl`,
+  `FoldsUnquotedIdentifiers`, `SupportsPartialIndexes`.
+- **⚠ `GetFieldType()` is value-dependent and must never be the oracle.** Measured: a SQLite `REAL` column
+  holding the text `'not-a-number'` reads back as `String`, and one column answered `String` empty and
+  `Double` populated. Drift would be reported or not according to which rows happened to be in the table.
+- **One producer for the declared side, and it is the method `CREATE TABLE` uses.** `ConvertType`, so the
+  check and the DDL cannot disagree and every past and future column-typing rule is covered without being
+  restated. A check that re-derived the expected type is the second implementation this epic keeps paying
+  for.
+- **The subscriber ships with it, because a channel with no reader is the defect being closed.**
+  Re-measured 2026-09-07: `OnIndexCreationFailed +=` has **0** subscribers across all 16 consumer repos,
+  so every index failure since TASK-204 has been silent. The health check reports both, giving that
+  channel its first reader.
+- **⚠ Every one of the five fixes has a zero deployed population, and my own recommendation overstated
+  it.** No consumer selects a server provider (`"Default": "SQLite"` in every Symbio environment; every
+  non-test `DataProvider.MsSql` is a switch case), and TASK-264's only non-test `ISchemaBuilder` hit is a
+  doc comment saying why it is *not* used. So the justification is **model evolution against an existing
+  database**, not the five fixes — a live population of every consumer.
+- **A new sibling project, not a file in `Birko.Health.Data`**, which is dependency-free by construction.
+  TASK-234 refused exactly this for Redis; the distinguishing measurement is that a Redis check is useful
+  without Birko.Redis while a SQL-schema-drift check is meaningless without Birko.Data.SQL — and 2 of 2
+  aggregators importing `Birko.Health.Data` already import `Birko.Data.SQL`.
+- **⚠ Two defects the live run caught that no offline test could.** PostgreSQL's `RegclassLiteral`
+  returns the literal's *contents*, not a quoted literal, so the catalogue query raised `42703` on every
+  table until the quotes were added; and `RunReaderCommandOn` invokes its transform **once per row** with
+  the reader already positioned, so a transform that loops internally silently loses the **first column of
+  every table**. Both were found by tests, not by reading.
 
 ### A `byte[]` index key meant no table at all, and the wide composite was pinned rather than guarded (2026-09-07)
 

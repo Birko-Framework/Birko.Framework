@@ -1,4 +1,4 @@
-<Solution>
+﻿<Solution>
   <Folder Name="/BackgroundJobs/">
     <Project Path="../Birko.BackgroundJobs/Birko.BackgroundJobs.shproj" />
     <Project Path="../Birko.BackgroundJobs.SQL/Birko.BackgroundJobs.SQL.shproj" />
@@ -162,6 +162,7 @@
   <Folder Name="/Health/">
     <Project Path="../Birko.Health/Birko.Health.shproj" />
     <Project Path="../Birko.Health.Data/Birko.Health.Data.shproj" />
+    <Project Path="../Birko.Health.Data.SQL/Birko.Health.Data.SQL.shproj" />
     <Project Path="../Birko.Health.Redis/Birko.Health.Redis.shproj" />
     <Project Path="../Birko.Health.Azure/Birko.Health.Azure.shproj" />
   </Folder>
@@ -249,6 +250,7 @@
     <Project Path="../../Framework.Tests/Birko.Health.Tests/Birko.Health.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Azure.Tests/Birko.Health.Azure.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Health.Redis.Tests/Birko.Health.Redis.Tests.csproj" />
+    <Project Path="../../Framework.Tests/Birko.Health.Data.SQL.Tests/Birko.Health.Data.SQL.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Telemetry.OpenTelemetry.Tests/Birko.Telemetry.OpenTelemetry.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Caching.Hybrid.Tests/Birko.Caching.Hybrid.Tests.csproj" />
     <Project Path="../../Framework.Tests/Birko.Data.Aggregates.Tests/Birko.Data.Aggregates.Tests.csproj" />
