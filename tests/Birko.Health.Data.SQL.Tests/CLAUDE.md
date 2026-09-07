@@ -6,6 +6,25 @@ Tests for `Birko.Health.Data.SQL` — the schema-drift detection in `AbstractCon
 ## Scope
 
 - **`SchemaDriftEndToEndTests`** — the mechanism end to end on **on-disk SQLite**, which needs no server.
+- **`SchemaDriftOperatorViewTests`** — TASK-269's human review, made repeatable: it renders what an
+  *operator* sees for the three cases that matter, side by side.
+
+## Reading the operator transcript
+
+```
+dotnet test --nologo --filter SchemaDriftOperatorViewTests --logger "console;verbosity=detailed"
+```
+
+⚠ **This is not decoration, and the reason is worth keeping.** The task's human test plan asked a person
+to read a real health report on the grounds that *"a green automated assertion that the API returns a
+list is not sufficient"*. It earned its keep on the first run: an absent table reported `Healthy` with
+the description *"Schema matches the models (1 type(s) checked)"* — a match asserted for a type whose
+table had never been read. **Fifteen automated tests had missed it**, because every one of them asserted
+`SchemaDriftReport.IsClean` — which was correct — and none read the rendered status. A report model can
+be right while the output lies.
+
+The class asserts as well as printing, because a test that only prints cannot fail. The mutation that
+restores the old description reds it.
 
 ## Why SQLite here
 
