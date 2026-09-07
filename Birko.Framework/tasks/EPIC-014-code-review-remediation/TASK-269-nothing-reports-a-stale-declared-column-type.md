@@ -349,3 +349,16 @@ Two tests added as a pair (hedged wording when something was skipped, plain word
 otherwise the fix could be satisfied by always hedging). Mutation F, restoring the old line, reds the
 first and nothing else. Suite 13 -> 15, all green. § Conventions' rule amended, because as first written
 it said an unchecked type "must not read as healthy" and the shipped code now deliberately does.
+
+**The harness is now in the suite** (`Birko.Health.Data.SQL.Tests/SchemaDriftOperatorViewTests`, d167166),
+so the review is repeatable rather than a one-off transcript:
+
+```
+dotnet test --nologo --filter SchemaDriftOperatorViewTests --logger "console;verbosity=detailed"
+```
+
+It asserts as well as printing — a class that only rendered would be a test that cannot fail — and its
+assertions are deliberately about the **rendered** output rather than about `SchemaDriftReport`, since
+that exact split is what let the defect through. All three cases stay in one test because their value is
+the comparison: read in sequence, the third case's wording is obviously load-bearing; apart, they read as
+three unrelated passes.
