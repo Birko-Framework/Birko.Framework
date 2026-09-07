@@ -20,21 +20,21 @@
 > orphaning it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays
 > `in-progress` with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-07 11:37. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-07 12:40. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status      | Epics | Stories | Tasks |
 |-------------|-------|---------|-------|
 | planned     | 10    | 24      | —     |
-| todo        | —     | —       | 129   |
+| todo        | —     | —       | 128   |
 | in-progress | 7     | 10      | 3     |
 | review      | —     | —       | 11    |
 | blocked     | —     | —       | 2     |
-| done        | 1     | 22      | 123   |
+| done        | 1     | 22      | 124   |
 | cancelled   | 0     | 0       | 1     |
 
-`todo` by priority: 26× P1 · 92× P2 · 11× P3.
+`todo` by priority: 25× P1 · 92× P2 · 11× P3.
 
 ## In progress now
 
@@ -153,7 +153,7 @@ _Generated 2026-09-07 11:37. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
 
-- **EPIC-014** Code review — audit remediation — in-progress (90/161 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (91/161 tasks done)
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
@@ -172,7 +172,7 @@ _Generated 2026-09-07 11:37. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
   - [x] TASK-264 A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
   - [x] TASK-265 On MySQL a `[UniqueField]` or `[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created · FEATURE-014
-  - [ ] TASK-266 Index keys that are still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit · FEATURE-014
+  - [x] TASK-266 Index keys that are still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit · FEATURE-014
   - [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again 🔍 review · FEATURE-014
   - [x] TASK-273 `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql · FEATURE-014
   - [x] TASK-275 `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row — and no predicate can be attached to it · FEATURE-014

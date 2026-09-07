@@ -2166,6 +2166,51 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### A `byte[]` index key meant no table at all, and the wide composite was pinned rather than guarded (2026-09-07)
+
+TASK-266, the binary and width half TASK-257 deliberately left when every one of its criteria said
+*string*. `ConvertType` mapped `DbType.Binary` to `VARBINARY(MAX)` / `LONGBLOB` unconditionally, and
+neither provider can use an unbounded blob as an index key. Verified with `BIRKO_REQUIRE_LIVE` set
+against live **SQL Server 2022 (16.0.4265.3)** — the build this task's own numbers came from — **MySQL
+8.4.11**, **PostgreSQL 16.15**, **TimescaleDB 2/PG16** and on-disk SQLite: **1,599 tests, 0 failed,
+0 skipped** across nine suites, 43 new. The standing rule is in § Conventions. Eight things worth
+carrying:
+
+- **An inline `UNIQUE` over `VARBINARY(MAX)` is not merely a lost index — it is Msg 1919 + Msg 1750 and
+  `TRY/CATCH` cannot intercept it**, so the batch aborts and the whole `CREATE TABLE` fails. A
+  `[UniqueField] byte[]` entity had *no table*. On MySQL the same shape is ERROR 1170.
+- **The remedy the task wanted was not expressible, which is what widened the fix.** `BinaryField` had
+  no length at all and `CreateAbstractField` never passed `maxLength` for a `byte[]`, so
+  `[MaxLengthField(32)]` was silently dropped — "declare a width" would have been § TASK-263's *escape
+  hatch that did not open*. Opening it is half the change, and it is the shape a real binary key (a hash,
+  a UUID) actually wants.
+- **Bound at the provider, never refuse the declaration** — an unbounded binary unique key is legal on
+  PostgreSQL and SQLite, so a framework-wide refusal would break a working entity on two providers to fix
+  two others. § TASK-248's veto, third time it has decided one of these.
+- **Gate on the field's runtime type, because `DbType.Object` shares that `case` on all four
+  connectors.** A serialized object has no byte width, and a length applied to one would truncate it.
+  Tested both ways, including that a null field neither NREs nor gets bounded.
+- **⚠ The wide composite is PINNED, not fixed, and one measurement decided that.** 4 × `NVARCHAR(255)`
+  is 2040 bytes against a 1700-byte limit; SQL Server creates the index anyway with a warning, rejects a
+  max-width INSERT (Msg 1946) — **and a short row still inserts fine**. So it is data-dependent rather
+  than broken, and refusing at DDL would break working code (`PredicateScope`'s rule). It is also not
+  computable where the type is chosen: `ConvertType` sees one field, no index.
+- **The two providers behave oppositely here, and both are pinned.** MySQL **refuses** the same
+  4-column index outright (ERROR 1071, 4080 of 3072 bytes) where SQL Server only warns. So a framework
+  guard would duplicate one server while regressing the other — and note how tight MySQL's margin is:
+  three columns is 3060 bytes, inside the limit by **twelve**.
+- **255 is a cross-provider agreement, not either server's ceiling** — measured, `VARBINARY(901)` indexes
+  on SQL Server (the real limit being 1700 bytes) and `VARBINARY(3072)` on MySQL. The same model runs on
+  both, so a width that indexes on one must index on the other. Same reasoning TASK-257 recorded for the
+  string knob.
+- **⚠ Two measurement faults of mine, both of which looked like code failures.** I set
+  `BIRKO_REQUIRE_LIVE` globally across suites whose servers were not up and read the resulting 63 and 65
+  failures as signal — the skip-as-failure trap § TASK-259 records falling into one task after
+  documenting it. And my new MySQL live class defaulted `BIRKO_MYSQL_PASSWORD` to `Birko!Passw0rd`
+  while **all nine** existing classes there default to `root`, producing 65 unrelated `Access denied`
+  failures — the same fixture trap TASK-273 recorded *in that very suite*. Both diagnosed by reading the
+  failure rather than the pass/fail bit.
+
 ### A migration's declared column metadata never reached the column, and money became a float (2026-09-07)
 
 TASK-264. `SchemaField` adapts a `FieldDescriptor` to the SQL layer's field model and forwarded **5 of
