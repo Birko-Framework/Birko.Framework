@@ -190,6 +190,20 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected virtual int IndexedStringColumnLength => 255;
 
+        /// <summary>
+        /// Byte width for an unlengthed <c>byte[]</c> column that an index or constraint names
+        /// (TASK-266). Matches <see cref="IndexedStringColumnLength"/>'s number on purpose, though the
+        /// unit differs — bytes here, characters there.
+        /// </summary>
+        /// <remarks>
+        /// The real ceiling is SQL Server's 1700-byte nonclustered index key, not 255: measured on
+        /// 16.0.4265.3, <c>VARBINARY(901) UNIQUE</c> is accepted. 255 is chosen to agree with MySQL, whose
+        /// own limit is 3072 bytes — the same model runs on both servers, so a width that indexes on one
+        /// must index on the other. Override to widen; a test covers the override, because "the real
+        /// ceiling is the key limit, not this number" is otherwise a comment nothing enforces.
+        /// </remarks>
+        protected virtual int IndexedBinaryColumnLength => 255;
+
         public override string ConvertType(DbType type, AbstractField field)
         {
             switch (type)
@@ -245,6 +259,26 @@ namespace Birko.Data.SQL.Connectors
                 case DbType.Binary:
                     // BINARY with no length defaults to BINARY(1) in SQL Server, truncating any
                     // blob/serialized object to a single byte. Use VARBINARY(MAX) (CR-M137).
+                    //
+                    // TASK-266 — the same three-way choice the string arm below makes, for the same
+                    // reason: VARBINARY(MAX) cannot be an index key. Measured on 16.0.4265.3, an inline
+                    // UNIQUE over it raises Msg 1919 + Msg 1750 and is NOT catchable by TRY/CATCH, so the
+                    // entire CREATE TABLE aborts; VARBINARY(255) and even VARBINARY(901) are fine, the real
+                    // ceiling being the 1700-byte nonclustered key rather than 900.
+                    //
+                    // Gated on `field is BinaryField` because DbType.Object shares this arm on all four
+                    // connectors, and a serialized object has no business carrying a byte width.
+                    if (field is Fields.BinaryField binaryField)
+                    {
+                        if (binaryField.MaxLength != null && binaryField.MaxLength > 0)
+                        {
+                            return string.Format("VARBINARY({0})", binaryField.MaxLength);
+                        }
+                        if (binaryField.IsInIndexKey)
+                        {
+                            return string.Format("VARBINARY({0})", IndexedBinaryColumnLength);
+                        }
+                    }
                     return "VARBINARY(MAX)";
                 case DbType.Guid:
                     return "UNIQUEIDENTIFIER";
