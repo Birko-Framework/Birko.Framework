@@ -211,6 +211,32 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <inheritdoc />
+        /// <summary>
+        /// TASK-269 — MySQL's column catalogue. <c>COLUMN_TYPE</c> is used rather than
+        /// <c>DATA_TYPE</c> because it carries the type <b>verbatim</b> with its parameters and its
+        /// modifiers — <c>varchar(255)</c>, <c>decimal(18,2)</c>, <c>int unsigned</c>, <c>tinyint(1)</c> —
+        /// which is exactly <see cref="ConvertType"/>'s vocabulary. <c>DATA_TYPE</c> gives the bare
+        /// keyword and would reproduce the very defect this task exists to close: <c>decimal(18,0)</c>
+        /// and <c>decimal(18,2)</c> are both just <c>decimal</c>.
+        /// </summary>
+        /// <remarks>
+        /// Scoped to the connection's own schema via <c>DATABASE()</c>. Without it a server hosting two
+        /// databases with a same-named table returns both, and the drift answer becomes whichever row
+        /// arrived last. The table name is a literal here, not an identifier, so it is escaped rather
+        /// than quoted (§ Conventions, TASK-253).
+        /// </remarks>
+        protected override string? StoredColumnsSql(string tableName)
+            => string.Format(
+                "SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS " +
+                "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{0}'",
+                SqlLiteral.EscapeLiteral(tableName));
+
+        /// <summary>
+        /// Identity: <c>COLUMN_TYPE</c> already matches <see cref="ConvertType"/>'s shape, and the
+        /// comparison is case-insensitive.
+        /// </summary>
+        protected override string RenderStoredType(StoredColumn column) => column.TypeName;
+
         public override string ConvertType(DbType type, AbstractField field)
         {
             switch (type)
