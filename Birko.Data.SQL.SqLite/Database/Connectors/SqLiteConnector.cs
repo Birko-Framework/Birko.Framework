@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -222,6 +222,26 @@ namespace Birko.Data.SQL.Connectors
             }
             return fallbackConnection;
         }
+
+        /// <summary>
+        /// TASK-269 — SQLite's column catalogue. <c>pragma_table_info</c> reports the declared type
+        /// <b>verbatim</b>, parameters included (<c>DECIMAL(18,2)</c>, not <c>DECIMAL</c>), which is the
+        /// whole reason this framework asks a catalogue rather than the reader: measured, a zero-row
+        /// <c>SELECT *</c> strips the parameters on this very provider.
+        /// </summary>
+        /// <remarks>
+        /// The table name reaches the statement as a quoted <i>literal</i>, not as an identifier, so it
+        /// is escaped with <see cref="SqlLiteral.EscapeLiteral"/> — the sink family § Conventions records
+        /// under TASK-253, where the tell is "a quoted literal, not a name".
+        /// </remarks>
+        protected override string? StoredColumnsSql(string tableName)
+            => string.Format("SELECT name, type FROM pragma_table_info('{0}')", SqlLiteral.EscapeLiteral(tableName));
+
+        /// <summary>
+        /// Identity: <c>pragma_table_info</c> already speaks <see cref="ConvertType"/>'s vocabulary,
+        /// because for a framework-created table the declared type IS what ConvertType emitted.
+        /// </summary>
+        protected override string RenderStoredType(StoredColumn column) => column.TypeName;
 
         public override string ConvertType(DbType type, AbstractField field)
         {
