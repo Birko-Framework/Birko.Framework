@@ -205,6 +205,76 @@ namespace Birko.Data.SQL.Connectors
         }
 
         /// <inheritdoc />
+        /// <summary>
+        /// TASK-269 — PostgreSQL's column catalogue.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>format_type(atttypid, atttypmod)</c> rather than <c>information_schema.columns</c>: it
+        /// renders the type <b>with its modifier</b> in one value — <c>numeric(18,2)</c>,
+        /// <c>character varying(255)</c> — where the information-schema view splits the width into a
+        /// separate column and reports the base type only. One value cannot disagree with itself.
+        /// </para>
+        /// <para>
+        /// ⚠ <b><c>attnum &gt; 0 AND NOT attisdropped</c> is load-bearing.</b> <c>pg_attribute</c> holds
+        /// the system columns (<c>ctid</c>, <c>xmin</c>, …) at negative <c>attnum</c> and keeps dropped
+        /// columns as tombstones named <c>........pg.dropped.N........</c>. Without the filter every
+        /// table reports six <see cref="SchemaDrift.ColumnDriftKind.Unexpected"/> columns it does not
+        /// have, so the report is noise on every entity from the first run.
+        /// </para>
+        /// <para>
+        /// The relation is resolved through <c>::regclass</c>, so the name is quoted as an identifier
+        /// inside a literal — <see cref="AbstractConnectorBase.RegclassLiteral"/>, the producer
+        /// § Conventions records under TASK-253. A bare name would fold and miss every PascalCase table
+        /// this framework creates (TASK-472).
+        /// </para>
+        /// </remarks>
+        protected override string? StoredColumnsSql(string tableName)
+            => string.Format(
+                "SELECT a.attname, format_type(a.atttypid, a.atttypmod) " +
+                "FROM pg_attribute a WHERE a.attrelid = '{0}'::regclass " +
+                "AND a.attnum > 0 AND NOT a.attisdropped",
+                RegclassLiteral(tableName));
+
+        /// <summary>
+        /// Canonicalises <c>format_type</c>'s spelling into <see cref="ConvertType"/>'s.
+        /// </summary>
+        /// <remarks>
+        /// PostgreSQL reports its own preferred names, which are not the ones this framework emits:
+        /// <c>character varying</c> for <c>VARCHAR</c>, <c>timestamp without time zone</c> for
+        /// <c>TIMESTAMP</c> and <c>timestamp with time zone</c> for <c>TIMESTAMPTZ</c> (the TASK-263
+        /// distinction — conflating them would hide a <c>[UtcField]</c> column that lost its opt-in).
+        /// Both are the same type, so mapping is not normalising away a real difference; the modifier
+        /// is preserved untouched, which is the part that matters.
+        /// </remarks>
+        protected override string RenderStoredType(StoredColumn column)
+        {
+            var value = (column.TypeName ?? string.Empty).Trim();
+
+            // Split the modifier off so the base name can be mapped without disturbing the width.
+            var paren = value.IndexOf('(');
+            var baseName = (paren >= 0 ? value.Substring(0, paren) : value).Trim().ToUpperInvariant();
+            var modifier = paren >= 0 ? value.Substring(paren) : string.Empty;
+
+            switch (baseName)
+            {
+                case "CHARACTER VARYING": baseName = "VARCHAR"; break;
+                case "CHARACTER": baseName = "CHAR"; break;
+                case "TIMESTAMP WITHOUT TIME ZONE": baseName = "TIMESTAMP"; break;
+                case "TIMESTAMP WITH TIME ZONE": baseName = "TIMESTAMPTZ"; break;
+                case "TIME WITHOUT TIME ZONE": baseName = "TIME"; break;
+                case "TIME WITH TIME ZONE": baseName = "TIMETZ"; break;
+                case "INT4": baseName = "INTEGER"; break;
+                case "INT8": baseName = "BIGINT"; break;
+                case "INT2": baseName = "SMALLINT"; break;
+                case "BOOL": baseName = "BOOLEAN"; break;
+                case "FLOAT8": baseName = "DOUBLE PRECISION"; break;
+                case "FLOAT4": baseName = "REAL"; break;
+            }
+
+            return baseName + modifier;
+        }
+
         public override string ConvertType(DbType type, AbstractField field)
         {
             switch (type)
