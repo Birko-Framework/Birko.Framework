@@ -10,7 +10,7 @@ depends-on: []
 blocks: []
 related: [TASK-204, TASK-257]
 findings: []
-pr: "Birko.Data.SQL 2590cbf + SqLite ade986f + MySQL 704c5b7 + MSSql 87654ff + PostgreSQL e4725fc + Birko.Health.Data.SQL 17b4098"
+pr: "Birko.Data.SQL 2590cbf + Health.Data.SQL fix c59b5f9 + SqLite ade986f + MySQL 704c5b7 + MSSql 87654ff + PostgreSQL e4725fc + Birko.Health.Data.SQL 17b4098"
 github-issue: null
 jira-key: null
 ---
@@ -293,7 +293,59 @@ are pre-existing, in its own condition-strategy test files, and were attributed 
 
 ## Human test plan
 
-- [ ] A human confirms the drift report is visible where an operator would look. Register
+- [x] A human confirms the drift report is visible where an operator would look. Register
       `SchemaDriftHealthCheck` in a host, point it at a database whose column was changed by hand, and
       confirm the health endpoint reports **Degraded** with the column named — a green automated
       assertion that the API returns a list is explicitly not sufficient for this task.
+
+---
+
+## Human review, 2026-09-07 — run, and it found a defect
+
+The plan asked a human to read a real health report rather than trust an automated assertion. A harness
+stood up three SQLite databases and rendered what an operator sees. **That is what caught the defect the
+15 automated tests did not.**
+
+**Case 2, a database whose columns were changed by hand — correct, and the reason the task exists:**
+
+```
+Status      : Degraded
+Description : Schema disagrees with the models: 4 column(s) drifted, 0 index(es) not built.
+   drift:
+      - Invoice.Total: declared NUMERIC(18,2), stored REAL
+      - Invoice.Reference: declared TEXT, not present
+      - Invoice.Note: present as TEXT, not declared
+      - Invoice.Legacy_Id: present as INTEGER, not declared
+```
+
+`Invoice.Total` is TASK-264's shape exactly: money declared `DECIMAL(18,2)` and stored as binary floating
+point, and the case both provider-independent reader APIs report as healthy.
+
+**Case 3, a table that does not exist yet — the defect:**
+
+```
+Status      : Healthy
+Description : Schema matches the models (1 type(s) checked).      <-- never checked it
+   tablesNotYetCreated: 1
+```
+
+It asserted a match for a type whose table it had never read — the exact silence this task exists to
+remove, arriving in the one line an operator reads. `absent` was computed, placed in `Data`, and never
+branched on. **Every automated test about an unchecked type asserted `SchemaDriftReport.IsClean`**, which
+was correct and still is; none read the rendered status. A report model can be right while the output
+lies.
+
+Fixed in `Birko.Health.Data.SQL` c59b5f9. `Healthy` is kept and the two "could not answer" cases stay
+split, because they are different conditions — an unsupported provider is permanent (Degraded), an absent
+table is expected and self-healing, and Degraded there would make every fresh deployment Degraded until
+each entity happened to be touched. The honesty requirement moved to the wording:
+
+```
+Description : Schema matches the models for 0 of 1 type(s); 1 table(s) not created yet, so they were
+              not checked.
+```
+
+Two tests added as a pair (hedged wording when something was skipped, plain wording when nothing was —
+otherwise the fix could be satisfied by always hedging). Mutation F, restoring the old line, reds the
+first and nothing else. Suite 13 -> 15, all green. § Conventions' rule amended, because as first written
+it said an unchecked type "must not read as healthy" and the shipped code now deliberately does.

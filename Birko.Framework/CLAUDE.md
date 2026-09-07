@@ -2187,6 +2187,19 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     applied at the moment of reporting rather than of measuring. And a diagnostic must not throw on the
     likeliest mistake a host makes: `DataBase.LoadTable` answers **null** for a type with no `[Table]` and
     no `ModelMap`, which surfaced as a `NullReferenceException` until it was guarded.
+  - **⚠ But "not clean" and "not healthy" are DIFFERENT questions, and the split is self-healing versus
+    permanent.** The first version of this rule said an unchecked type "must not read as healthy", and the
+    shipped check deliberately contradicts it — because stores create their table on first use, so at boot
+    **every** table is absent, and a Degraded there makes every fresh deployment Degraded until each entity
+    happens to be touched. That is a report an operator learns to ignore, i.e. the same defect one level
+    up. So an **absent table stays Healthy** (expected, self-healing) while an **unsupported provider is
+    Degraded** (permanent, never resolves), and the honesty requirement moves to the *wording*: the
+    description may never claim a match for a type it did not check. `IsClean` on the report is still false
+    for both — the report answers *"was this verified"*, the status answers *"should anyone act"*.
+    **Found by a human review harness, not by the tests**, which asserted `IsClean` on the report and never
+    read the one line an operator actually sees: the check said *"Schema matches the models (1 type(s)
+    checked)"* about a table it had never read. **When a rule about reporting is written, check it against
+    the rendered output, not against the model behind it.**
   - **The subscriber ships in the same change, or this is TASK-204 again.** Re-measured 2026-09-07:
     `OnIndexCreationFailed +=` has **0** subscribers across all 16 consumer repos, so every index failure
     since TASK-204 has been silent while TASK-245, TASK-248 and TASK-257 each found real ones hiding
