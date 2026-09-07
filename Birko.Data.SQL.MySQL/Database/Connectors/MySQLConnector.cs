@@ -78,6 +78,19 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected virtual int IndexedStringColumnLength => 255;
 
+        /// <summary>
+        /// Byte width for an unlengthed <c>byte[]</c> column that an index or constraint names
+        /// (TASK-266). Same number as <see cref="IndexedStringColumnLength"/>, different unit — bytes
+        /// here, characters there.
+        /// </summary>
+        /// <remarks>
+        /// MySQL's own ceiling is the 3072-byte InnoDB key (measured on 8.4.11, utf8mb4 / dynamic row
+        /// format), so there is room for far more. 255 is chosen to agree with SQL Server, whose
+        /// nonclustered key limit is 1700 bytes: the same model runs on both, so a width that indexes on
+        /// one must index on the other.
+        /// </remarks>
+        protected virtual int IndexedBinaryColumnLength => 255;
+
         public override bool IsTransientException(Exception ex)
         {
             if (base.IsTransientException(ex)) return true;
@@ -247,6 +260,25 @@ namespace Birko.Data.SQL.Connectors
                     return "TINYINT UNSIGNED";
                 case DbType.Object:
                 case DbType.Binary:
+                    // TASK-266 — MySQL cannot use a BLOB/TEXT column in a key without a key length:
+                    // measured on 8.4.11, both `LONGBLOB UNIQUE` inline and CREATE INDEX over a LONGBLOB
+                    // raise ERROR 1170. VARBINARY(255) is fine, and the ceiling here is the 3072-byte
+                    // InnoDB key limit (VARBINARY(3072) OK, VARBINARY(3073) ERROR 1071) — wider than SQL
+                    // Server's 1700, which is why the shared default is the narrower 255.
+                    //
+                    // Gated on `field is BinaryField` because DbType.Object shares this arm and a
+                    // serialized object has no byte width to declare.
+                    if (field is Fields.BinaryField binaryField)
+                    {
+                        if (binaryField.MaxLength != null && binaryField.MaxLength > 0)
+                        {
+                            return string.Format("VARBINARY({0})", binaryField.MaxLength);
+                        }
+                        if (binaryField.IsInIndexKey)
+                        {
+                            return string.Format("VARBINARY({0})", IndexedBinaryColumnLength);
+                        }
+                    }
                     return "LONGBLOB";
                 case DbType.Guid:
                     return "CHAR(36)";
