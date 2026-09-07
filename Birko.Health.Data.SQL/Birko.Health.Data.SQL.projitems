@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>47a672d2-5314-4bad-8ea5-8e8dd7575988</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>Birko.Health.Data.SQL</Import_RootNamespace>
+  </PropertyGroup>
+  <!-- Why this is its own project rather than a file in Birko.Health.Data (TASK-269).
+
+       Birko.Health.Data is dependency-free by construction: every check in it works off a BCL
+       abstraction or a delegate, so SqlHealthCheck takes a Func<DbConnection> and knows nothing about
+       Birko.Data.*. SchemaDriftHealthCheck cannot: it compares a model's declared columns against the
+       table behind them, so it needs AbstractConnector and the SchemaDriftReport it produces. Putting
+       it there would drag ~12 shared projects (Data.Core, Data.Stores, Data.Repositories, Data.Patterns,
+       Models, Serialization, Rules, Time, ...) into a consumer that wanted one SMTP check.
+
+       That is TASK-234's rule, recorded in Birko.Health.Redis.projitems: a health check must not make a
+       consumer take a subset it did not ask for. This project satisfies it rather than bending it, and
+       the distinguishing measurement is worth stating, because the two cases look identical and are not:
+
+         - RedisHealthCheck is genuinely useful to a consumer with NO Birko.Redis: it takes an
+           IConnectionMultiplexer the consumer already has. So depending on Birko.Redis would have been
+           a real, unwanted cost, and TASK-234 refused it.
+
+         - A SQL schema-drift check is MEANINGLESS to a consumer with no Birko.Data.SQL. The dependency
+           is inherent to the feature, not incidental to its packaging. Measured 2026-09-07 across all 16
+           consumer repos: 7 of 7 aggregators importing Birko.Data.SQL exist, and 2 of 2 that import
+           Birko.Health.Data ALSO import Birko.Data.SQL, so the edge costs nothing today, and a
+           consumer that does not want it simply does not import this project.
+
+       Same shape as Birko.Health.Redis and Birko.Health.Azure: the per-dependency sibling is how this
+       framework keeps the Health leaf small. -->
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)SchemaDriftHealthCheck.cs" />
+  </ItemGroup>
+</Project>
