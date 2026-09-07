@@ -2,7 +2,7 @@
 id: TASK-270
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-21
@@ -10,7 +10,7 @@ depends-on: []
 blocks: []
 related: [TASK-204, TASK-240, TASK-259]
 findings: []
-pr: null
+pr: "Birko.Data.SQL 16ae547 + Birko.Data.SQL.Tests 021b2c3"
 github-issue: null
 jira-key: null
 affects: [Birko.Data.SQL]
@@ -81,14 +81,14 @@ Prefer 3 first, then 1; treat 2 as its own task if it survives the measurement.
 
 ## Acceptance criteria
 
-- [ ] A decision recorded on each of the three questions, with reasons.
-- [ ] Whatever is chosen, **recurrence is prevented mechanically** — a test that fails when per-caller or
+- [x] A decision recorded on each of the three questions, with reasons.
+- [x] Whatever is chosen, **recurrence is prevented mechanically** — a test that fails when per-caller or
       per-operation state is added to a connector. A § Conventions entry alone does not satisfy this; three
       instances shipped while the relevant reasoning was already written down.
-- [ ] `RetryPolicy`'s settability resolved (removed, or documented as deliberately global with the reason).
-- [ ] If a DI seam is added, the blast radius of `DataBase.GetConnector` measured across all 16 consumer
+- [x] `RetryPolicy`'s settability resolved (removed, or documented as deliberately global with the reason).
+- [x] If a DI seam is added, the blast radius of `DataBase.GetConnector` measured across all 16 consumer
       repos first, and the static path kept working or its removal staged.
-- [ ] Proven able to fail.
+- [x] Proven able to fail.
 
 ## Out of scope
 
@@ -99,5 +99,121 @@ Prefer 3 first, then 1; treat 2 as its own task if it survives the measurement.
 
 ## Human test plan
 
-- [ ] N/A — mechanical; the proof is the enforcement test failing when mutable per-caller state is added, and
+- [x] N/A — mechanical; the proof is the enforcement test failing when mutable per-caller state is added, and
       the existing suites staying green.
+
+---
+
+## Step 0 — measured 2026-09-07, before a line changed
+
+### (a) The audit in this file was three weeks stale, and one of its counts was wrong
+
+| claim in this file | re-measured 2026-09-07 |
+|---|---|
+| `RetryPolicy` — *"0 assignments anywhere in the framework or in any of the 16 consumer repos"* | **2** — `RetryTests` and `RewrapClassificationTests`. Still **0** in production and in all 16 consumer repos, so the conclusion survives; the claim as written did not. |
+| *"nothing is currently firing"* | **false** — see (b) |
+| four connector events | **five** now (`OnSchemaEscapeDetected`, TASK-287) |
+| `GetConnector` blast radius, unmeasured | **29** call sites in consumer repos, 19 in the framework, 80 in its tests |
+
+Third time this session a stale count needed correcting before it could be used (§ TASK-283's rule).
+
+### (b) ⚠ Instance FOUR was already in the code, and it was live
+
+`IsInitializing` was `{ get; protected set; }` — a plain mutable flag on the process-wide connector,
+guarding `DoInit`:
+
+```csharp
+if (!IsInitializing) { IsInitializing = true; OnInit?.Invoke(this); IsInitializing = false; }
+```
+
+Two defects, and the second is the one that matters:
+
+1. The check-then-set is unsynchronised, so two flows can both enter.
+2. **Worse: a second flow that sees the flag set has its initialisation SILENTLY DISCARDED** — not
+   deferred, not retried. It returns and carries on believing init ran. That is precisely the
+   "one caller's state silently changes another caller's outcome" shape of instances one to three.
+
+And a third, found while fixing it: **a throwing `OnInit` handler left the flag stuck `true` forever**,
+because the reset was a bare assignment rather than a `finally`. That permanently suppressed `DoInit`
+for every caller of that database for the life of the process — the same "a subscriber can wedge the
+framework" family as TASK-283 and TASK-289.
+
+Latent today only because `OnInit` has **0** consumer subscribers (measured: the single consumer
+subscription in all 16 repos is Symbio's `OnSchemaEscapeDetected`). Latent is not fixed.
+
+## Decisions (criterion 1)
+
+### Q3 first, as this file advised — a mechanical guard, because prose demonstrably is not enough
+
+`ConnectorSharedStateTests`. Instances **two, three and four all shipped after** § Conventions already
+said not to do this, so *"I didn't add mutable state"* is construction and this is the evidence. Two
+rules plus three controls:
+
+- **No settable public/protected instance property on a connector**, except a justified ledger.
+- **No public/protected `Set*` method taking a `DbConnection`/`DbTransaction`** — instance three's exact
+  shape, as a regression guard now that TASK-259 has deleted it.
+- Plus a **behavioural** pair for instance four (one flow must not suppress another's init; a throwing
+  handler must not wedge the connector) and a **scan control**, because the type filter could otherwise
+  exclude everything and make the whole file vacuous in silence.
+
+### Q1 — `IsInitializing` FIXED; `RetryPolicy` kept and justified in the ledger
+
+`IsInitializing` is now an `AsyncLocal<bool>` **per instance**, exposed read-only, entered through a
+scope that restores on exception. Flow-scoped *and* instance-scoped, so a handler re-entering this
+connector still short-circuits — which is what the guard is for — while another flow, or another
+connector in the same flow, is unaffected. Same mechanism TASK-240 introduced for the transaction.
+
+**`RetryPolicy` stays settable, deliberately, and the obvious fix was measured and rejected.** Moving it
+onto `Settings` looks like the clean answer and is not one: `Settings.GetId()` is
+`Location:Name(:UserName:Port)` and carries neither it nor `CommandTimeout`, so two settings objects
+differing only in retry policy **already share one connector and the first caller's value wins** — the
+hazard TASK-276 pinned for `CommandTimeout`. Relocating it would hide the sharing rather than remove it.
+One policy per database is the correct scope anyway, since the connector *is* per database. It is
+therefore a ledger entry with that reasoning attached, which criterion 3 explicitly permits — and the
+ledger has its own test so an entry that stops being needed must be deleted rather than quietly
+covering something else.
+
+### Q2 — DI seam DEFERRED, now with a number
+
+**29 `GetConnector` call sites across the consumer repos** (Symbio's `SchemaEscapeReporter`,
+WorkoutTracker's `IStoreFactory` / `RepsStorageBootstrapper` / `SqliteStoreFactory`, plus tests). That is
+a breaking change needing its own blast-radius work and staged removal, exactly as this file said. Not
+started, and deliberately not half-started.
+
+## Verified
+
+`BIRKO_REQUIRE_LIVE` set, against live PostgreSQL 16, MySQL 8.4, SQL Server 2022 and on-disk SQLite:
+**1,479 tests, 0 failed** across seven suites — SQL 678 (+6), SQLite 341, PostgreSQL 107, MySQL 119,
+MSSql 132, Migrations.SQL 87, Health.Data.SQL 16.
+
+### Mutations — four, disjoint
+
+| mutation | reds |
+|---|---|
+| add a settable `CurrentCallerTag` (instance five) | **1** — the shape rule |
+| reintroduce `SetExternalTransaction(conn, tx)` (instance three) | **1** — the connection/transaction rule |
+| revert `IsInitializing` to a shared settable flag | **3** — the shape rule *and both behavioural tests* |
+| add a stale ledger entry | **1** — the ledger-currency test |
+
+The third is the one worth noting: the behavioural tests fail against the *old* code, so they are
+regression provers rather than pins — the old `DoInit` really did discard a concurrent flow's init.
+
+## ⚠ Found during the sweep, and it identifies another open task
+
+The MSSql suite failed 1 of 132, and this time the identity was captured with a trx logger:
+`SchemaEnsureRollbackResidueLiveTests.A_write_to_a_missing_table_fails_instead_of_reporting_success`.
+8/8 clean alone, ~1 in 5 in-suite. Mechanism: every class in that suite shares one cached connector, so
+another class's deliberate schema escape bumps `SchemaGeneration`, this test's store re-initialises and
+**re-creates the table it had just dropped**. Full evidence written to [[TASK-276]], which has been
+waiting for exactly this. Not a product defect — TASK-288's healing is correct — and **not a fifth
+ledger entry**, because `SchemaGeneration` *should* be shared: it is about the database, not about a
+caller. What it demonstrates is the other half of this task's thesis, that even correctly-shared
+connector state has cross-caller reach.
+
+## Out of scope, restated
+
+- The DI seam (Q2) — deferred with its measurement above.
+- Fixing TASK-276's test isolation — recorded there with a proposed fix, not applied here.
+- Provider connectors' own state — the enforcement tests see only the abstract types compiled into
+  `Birko.Data.SQL.Tests`, which is where all four instances lived. Said on the test class rather than
+  implied.

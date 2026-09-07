@@ -2146,6 +2146,46 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
   5 stores → 5 entries, 5 re-executed failing DDL statements). Key such collections by their identity,
   fire events on the **transition** into the condition, and **clear the record when it no longer holds** —
   a report that cannot un-report is a report an operator learns to ignore.
+- **A process-wide cached object keeps attracting per-caller state, and the only thing that stops the
+  next instance is a test.** TASK-270. `DataBase.GetConnector` caches a connector per (type, settings id)
+  for the life of the process, so it is reachable, shared and long-lived — and **four** independent
+  features have now put one caller's state on it: the unit-of-work's `DbTransaction` (TASK-240), the
+  append-only index-failure list, the migrations builder's connection *and* transaction (TASK-259), and
+  `IsInitializing`. Four developers reached for "just put it on the connector" independently. Five parts
+  generalise:
+  - **§ Conventions saying so is not a mechanism — instances two, three and four all shipped *after* the
+    reasoning was written down.** `ConnectorSharedStateTests` asserts the shape by reflection: no settable
+    public/protected instance property, and no `Set*` method taking a `DbConnection`/`DbTransaction`
+    (instance three's exact signature, as a regression guard now that it is deleted). *"I didn't add
+    mutable state"* is construction; a test that fails when someone does is evidence.
+  - **The exemption is a LEDGER with a reason per entry, and the ledger has its own currency test.**
+    A flat "no settable state" rule was not achievable without a breaking change, and a rule that cannot
+    pass gets deleted. `RetryPolicy` is the one entry, with its justification attached — and a test fails
+    if an entry stops being needed, because a ledger that keeps a stale entry stops being a record and
+    becomes a blanket (§ TASK-222's rule, applied to state instead of to query shapes).
+  - **⚠ The obvious relocation was measured and rejected: moving it onto `Settings` HIDES the sharing
+    rather than removing it.** `Settings.GetId()` is `Location:Name(:UserName:Port)` and carries neither
+    `RetryPolicy` nor `CommandTimeout`, so two settings objects differing only in one of those **already**
+    share a connector and the first caller's value silently wins for everyone. One policy per database is
+    the correct scope anyway, since the connector *is* per database. **Check what the cache key actually
+    contains before "fixing" shared state by moving it next to the key.**
+  - **A re-entrancy guard is per CALL FLOW, and a flag on a shared object is not one.** `IsInitializing`
+    was a plain mutable bool guarding `DoInit`, so a second flow arriving while the first was inside its
+    `OnInit` handlers had its initialisation **silently discarded** — not deferred, not retried; it
+    returned believing init had run. The unsynchronised check-then-set was the smaller half. Now an
+    `AsyncLocal<bool>` per instance, entered through a scope — flow-scoped *and* instance-scoped, the same
+    mechanism TASK-240 used to move the transaction off this same object. And the scope **restores on
+    exception**, which the old assignment pair did not: a throwing `OnInit` handler left the flag stuck
+    `true`, permanently suppressing `DoInit` for every caller of that database (§ TASK-289's family,
+    arriving through a guard instead of a diagnostic).
+  - **⚠ Correctly-shared state still has cross-caller reach, and that is a different finding from the
+    four above.** `SchemaGeneration` *should* live on the connector — it is about the database, not about
+    a caller — and TASK-288's healing depends on every store seeing it. The consequence, measured while
+    closing this task: in a suite where all classes share one settings id, **one class's deliberate schema
+    escape re-initialises another class's store and re-creates a table that test had just dropped**, at
+    about 1 run in 5 (identity captured on [[TASK-276]]; 8/8 clean when the class runs alone). Not a
+    defect, and **not a ledger entry** — but a test whose premise is a store's initialisation history must
+    not share a connector with tests that invalidate it.
 - **A check that compares DECLARED against STORED asks the schema for the stored side, never the driver
   — and the declared side is the method that emits the DDL.** TASK-269, and the first member of the
   reporting family (TASK-204, TASK-254, TASK-287, TASK-289) that has to *read* the database rather than
@@ -2295,6 +2335,44 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+
+
+### Four features had put per-caller state on the process-wide connector, and only a test can stop the fifth (2026-09-07)
+
+TASK-270. `DataBase.GetConnector` caches a connector per (type, settings id) for the life of the process,
+and four independent features have put one caller's state on it — the unit-of-work's `DbTransaction`
+(TASK-240), the append-only index-failure list, the migrations builder's connection and transaction
+(TASK-259), and now `IsInitializing`. Verified with `BIRKO_REQUIRE_LIVE` set against live PostgreSQL 16,
+MySQL 8.4, SQL Server 2022 and on-disk SQLite: **1,479 tests, 0 failed** across seven suites, 6 new. The
+standing rule is in § Conventions. Six things worth carrying:
+
+- **⚠ Instance four was already in the code and this task's own audit said "nothing is currently firing".**
+  `IsInitializing` was a plain mutable flag guarding `DoInit`, so a second flow arriving while the first
+  was inside its `OnInit` handlers had its initialisation **silently discarded** — not deferred, not
+  retried. The unsynchronised check-then-set was the smaller half.
+- **And a third defect fell out of fixing it:** the reset was a bare assignment, not a `finally`, so a
+  throwing `OnInit` handler left the flag stuck `true` and permanently suppressed `DoInit` for every
+  caller of that database. Now an `AsyncLocal<bool>` per instance behind a scope.
+- **Prose is not a mechanism.** Instances two, three and four all shipped *after* § Conventions said not
+  to do this. `ConnectorSharedStateTests` asserts the shape by reflection, plus two behavioural tests for
+  instance four — and the mutation reverting `IsInitializing` reds all three, so they are regression
+  provers rather than pins.
+- **⚠ The obvious fix for `RetryPolicy` was measured and rejected.** Moving it onto `Settings` hides the
+  sharing rather than removing it: `GetId()` is `Location:Name(:UserName:Port)` and carries neither it nor
+  `CommandTimeout`, so two settings differing only there already share a connector and the first caller
+  wins. It stays settable as a **ledger entry with its reasoning**, and the ledger has a currency test so
+  a stale entry must be deleted rather than silently covering something else.
+- **⚠ Three of this file's own counts were stale and one was wrong** — `RetryPolicy` assignments were
+  claimed as 0 and are 2 (both tests, so the conclusion held and the claim did not), four events are now
+  five, and the DI-seam blast radius was unmeasured: **29 `GetConnector` call sites across the consumer
+  repos**, which is why Q2 is deferred rather than half-started.
+- **⚠ The sweep identified [[TASK-276]]'s flake, which had been open since TASK-273 with no identity.**
+  `SchemaEnsureRollbackResidueLiveTests.A_write_to_a_missing_table_fails_instead_of_reporting_success`,
+  8/8 clean alone and ~1 in 5 in-suite. Every class in that suite shares one cached connector, so another
+  class's deliberate schema escape bumps `SchemaGeneration`, this test's store re-initialises and
+  re-creates the table it had just dropped. Not a product defect — TASK-288's healing is correct — and not
+  a ledger entry, because `SchemaGeneration` *should* be shared. It is the other half of the thesis:
+  correctly-shared state still has cross-caller reach.
 
 ### Nothing reported a stale column type, and the obvious way to detect it would have missed the worst case (2026-09-07)
 

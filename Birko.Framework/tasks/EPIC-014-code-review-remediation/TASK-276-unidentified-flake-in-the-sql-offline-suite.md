@@ -412,3 +412,68 @@ shape: a live or cross-class failure that does not reproduce on demand. Three th
 - **What would settle it** is a trx logger on the sweep rather than a summary grep, so the next occurrence
   names itself. That is the cheap change to make before the next multi-suite run, and it is the same
   correction this task already needed once.
+
+---
+
+## 2026-09-07 — the MSSql failure is IDENTIFIED, with a mechanism
+
+Caught during TASK-270's regression sweep and then reproduced deliberately. **This closes the "identity
+not captured" gap** this task has been carrying since TASK-273.
+
+### The test
+
+```
+Birko.Data.SQL.MSSql.Tests.SchemaEnsureRollbackResidueLiveTests
+    .A_write_to_a_missing_table_fails_instead_of_reporting_success
+
+Expected a <System.Exception> to be thrown because the row cannot be stored, so the caller
+must not be told it was, but no exception was thrown.
+```
+
+### Evidence
+
+| run shape | result |
+|---|---|
+| full MSSql suite (132 tests) | **1 failure**, then 132/132 on immediate rerun |
+| full suite, 5 runs with a trx logger | **1 failure on run 5** — captured |
+| **the class alone, 8 runs** | **8/8 clean** |
+
+Alone it never fires; in-suite it fires at roughly 1 in 5. So it is a **cross-class** interaction, which
+is what every previous round suspected and none had evidenced.
+
+### ⚠ Mechanism — and it is NOT a product defect
+
+`AsyncDataBaseStore.CanTrustRememberedInitialization` is
+`Connector.SchemaGeneration == _initSchemaGeneration`, and `_schemaGeneration` is a field on the
+connector — which `DataBase.GetConnector` caches **process-wide per (type, settings id)**. Every class in
+this suite builds `MSSqlSettings` from the same host/database/user/port, so **they all share one
+connector**.
+
+Several classes deliberately provoke a schema escape (a write against a dropped table). Each one bumps
+that shared `SchemaGeneration`. Any store on that connector — including this test's — then fails
+`CanTrustRememberedInitialization`, re-initialises inside `EnsureInitializedAsync`, and **re-creates the
+table this test had just dropped**. The write then succeeds honestly, and the expected exception never
+comes.
+
+So the sequence the test asserts (*store believes it is initialised, table is gone, write must throw*) is
+broken by TASK-288's healing arriving from **another test class**. The healing is correct — in production,
+"an escape was seen on this database, so re-check the schema" is exactly what should happen. The defect is
+test isolation.
+
+### Where it belongs
+
+This is [[TASK-270]]'s thesis with a measured instance, but it is **not a fifth entry in that task's
+ledger**: `SchemaGeneration` *should* be shared, because it is about the database rather than about a
+caller. What this shows is the other half — **even correctly-shared connector state has cross-caller
+reach, and a test that depends on a store's initialisation history must not share a connector with
+tests that invalidate it.**
+
+### Proposed fix (not applied — this task was not the one in hand)
+
+Give `SchemaEnsureRollbackResidueLiveTests` its own settings id, so it gets its own cached connector:
+a distinct `Database` (or any component of `GetId()`, which is `Location:Name:UserName:Port`). That is a
+fixture change, contained, and it should make the class immune rather than merely luckier — verify by
+running the full suite ~10 times, since 5 was enough to see it once.
+
+**Do not "fix" it by weakening the assertion.** The behaviour it pins is TASK-277's: a write to a missing
+table must never report success. That rule is right and the test is right; only its isolation is wrong.
