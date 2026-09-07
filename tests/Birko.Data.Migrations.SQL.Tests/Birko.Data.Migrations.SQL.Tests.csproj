@@ -37,6 +37,10 @@
   <Import Project="..\..\Framework\Birko.Data.SQL.View\Birko.Data.SQL.View.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.SQL.ViewModel\Birko.Data.SQL.ViewModel.projitems" Label="Shared" />
   <Import Project="..\..\Framework\Birko.Data.SQL.SqLite\Birko.Data.SQL.SqLite.projitems" Label="Shared" />
+  <!-- TASK-264: needed to assert MSSql column typing from a migration; the MSSql-specific
+       defects (NVARCHAR(MAX) unindexable, bare DECIMAL = DECIMAL(18,0)) are untestable without it. -->
+  <Import Project="..\..\Framework\Birko.Data.SQL.MSSql\Birko.Data.SQL.MSSql.projitems" Label="Shared" />
+  <Import Project="..\..\Framework\Birko.Data.SQL.MySQL\Birko.Data.SQL.MySQL.projitems" Label="Shared" />
   <!-- TASK-246: the live-provider half of the migration unique-index proof. A silently non-unique index is
        a data-integrity defect, and a SQLite-only suite is what let it ship — so one real server is
        exercised too. Gated on BIRKO_PG_HOST; the suite skips cleanly without it. -->
