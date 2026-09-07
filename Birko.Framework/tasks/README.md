@@ -20,21 +20,21 @@
 > orphaning it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays
 > `in-progress` with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-04 09:54. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-07 10:26. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status      | Epics | Stories | Tasks |
 |-------------|-------|---------|-------|
 | planned     | 10    | 24      | —     |
-| todo        | —     | —       | 129   |
+| todo        | —     | —       | 128   |
 | in-progress | 7     | 10      | 3     |
-| review      | —     | —       | 10    |
+| review      | —     | —       | 11    |
 | blocked     | —     | —       | 2     |
 | done        | 1     | 22      | 122   |
 | cancelled   | 0     | 0       | 1     |
 
-`todo` by priority: 28× P1 · 91× P2 · 10× P3.
+`todo` by priority: 27× P1 · 91× P2 · 10× P3.
 
 ## In progress now
 
@@ -48,6 +48,7 @@ _Generated 2026-09-04 09:54. Run `/tasks triage` to refresh. **Do not hand-edit*
 - [TASK-136](EPIC-001-web-components-ui-polish/STORY-023-form-associated-elements/TASK-136-bform-validate-surfaces-control-validity.md) — `b-form.validate()` surfaces a control's own verdict — on a whitelist, not `checkValidity()` (P1, ai)
 - [TASK-135](EPIC-016-birko-backports-from-reps/STORY-052-component-gaps-from-catalogue-adoption/TASK-135-b-input-decimal-comma-locale-mode.md) — `b-input type="decimal"`: comma-locale decimal entry, owned by the component (P1, ai)
 - [TASK-228](EPIC-013-reference-consumers/TASK-228-track-birko-sandbox-in-git.md) — `Birko.Sandbox` is not a git repository — the smoke harness and the only dependency manifest exist on one disk (P1, ai)
+- [TASK-267](EPIC-014-code-review-remediation/TASK-267-verify-conventions-shadow-does-not-shadow.md) — The project-local `verify-conventions` did not run at the close gate, again (P1, ai)
 - [TASK-001](EPIC-001-web-components-ui-polish/STORY-001-bare-attribute/TASK-001-add-bare-attribute-to-form-controls.md) — Add `bare` attribute to all form controls (P2, ai)
 - [TASK-002](EPIC-001-web-components-ui-polish/STORY-002-editable-table-migration/TASK-002-benchmark-and-migrate-editable-table.md) — Benchmark + migrate b-editable-table to bare components (P2, ai)
 - [TASK-042](EPIC-016-birko-backports-from-reps/STORY-039-cross-provider-sql-di/TASK-042-store-factory-di-mssql-mysql-postgres.md) — Backport store-factory + DI extension to MSSql / MySQL / PostgreSQL (P2, ai)
@@ -172,7 +173,7 @@ _Generated 2026-09-04 09:54. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [ ] TASK-264 A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
   - [x] TASK-265 On MySQL a `[UniqueField]` or `[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created · FEATURE-014
   - [ ] TASK-266 Index keys that are still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit · FEATURE-014
-  - [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again · FEATURE-014
+  - [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again 🔍 review · FEATURE-014
   - [x] TASK-273 `CompositeIndex` cannot express a filter predicate, so a unique index over a NULLABLE column is unusable on MSSql · FEATURE-014
   - [x] TASK-275 `[UniqueField]` on a nullable column is an inline constraint, so on MSSql it rejects the second ordinary row — and no predicate can be attached to it · FEATURE-014
   - [x] TASK-277 A write to a missing table reports SUCCESS on EVERY provider — `OnException` swallows it and `DoInit` does nothing · FEATURE-014
