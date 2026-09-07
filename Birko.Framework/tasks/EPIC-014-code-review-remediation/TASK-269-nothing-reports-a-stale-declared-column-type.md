@@ -2,7 +2,7 @@
 id: TASK-269
 parent: EPIC-014
 feature: FEATURE-014
-status: review
+status: done
 priority: P2
 assignee: ai
 created: 2026-08-21
@@ -362,3 +362,13 @@ assertions are deliberately about the **rendered** output rather than about `Sch
 that exact split is what let the defect through. All three cases stay in one test because their value is
 the comparison: read in sequence, the third case's wording is obviously load-bearing; apart, they read as
 three unrelated passes.
+
+### Signed off 2026-09-07
+
+The human read the three-case transcript and confirmed it. That was the last item; the task is `done`.
+
+What the sign-off actually covers, said plainly so a later reader knows its scope: a person read the
+**rendered** output for the control, a hand-altered database and an as-yet-uncreated table, and agreed
+that an operator meeting those three would understand what to do. It does not cover a running host's
+endpoint, which no consumer has wired yet — adopting the check is a consumer decision and Symbio was
+out of bounds this session.
