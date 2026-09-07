@@ -4,6 +4,752 @@ Newest-first record of architectural and behavioral changes that preserve design
 
 ---
 
+## 2026-08-31 — A throwing diagnostic subscriber could reopen TASK-285 from outside the framework
+
+TASK-289, found by running TASK-288's close gate — "did this spawn anything?" — on eleven lines committed
+an hour earlier. `OnSchemaEscapeDetected` was raised inside `EnsureSchemaAndReport`, between building
+TASK-286's annotated exception and throwing it, so a handler that threw **replaced** it: the write lost the
+annotation, and `SelectCount`'s `catch … when (IsMissingTableExceptionChain(ex))` **stopped matching**, so
+the count threw instead of returning `0`. Fixed while the channel still had **zero** consumers. Verified
+with `BIRKO_REQUIRE_LIVE` set: `Birko.Data.SQL.SqLite.Tests` **287 passed** (277 → 287), 0 failed,
+0 skipped, plus seven adjacent suites. The standing rule is in § Conventions. Six things worth carrying:
+
+- **An exception filter is a silent coupling.** A `when` clause cannot fail loudly — an exception of the
+  wrong shape simply is not caught — so anything able to substitute an exception in flight can switch off a
+  `catch` from a distance, with no diagnostic at all.
+- **Per subscriber, never one `try` around the multicast**, or a bug in the host's logger silently costs it
+  the metric registered after it. Not in the filed criteria; it fell out of writing the helper.
+- **Swallowed means recorded, and the sink cannot be an event.** `SubscriberFailures` is keyed current
+  state like `IndexCreationFailures`; the absence of an event on it is asserted by a test, because
+  announcing a subscriber failure through a subscriber is the same hole again.
+- **Harden while there are no consumers, and check whether that window is closing.** P1 against its
+  sibling TASK-283's P2 on timing, not severity — the Symbio task that would create the first subscriber
+  was about to be written. `OnIndexCreationFailed` is deliberately untouched and its call site now says so.
+- **⚠ The fix made one of its own acceptance criteria untestable.** The ordering test written for it could
+  not fail — true of the unfixed code, vacuous once the exception cannot escape. Caught by running the
+  mutation, re-aimed at what a handler observes when called, and the swap recorded in the test itself.
+- **Mutations, disjoint:** bare `Invoke` → 6 red with exactly the 4 must-not-change controls green; one
+  `try` around the multicast → 1; swallow without recording → 1; bump after the raise → 1.
+
+---
+
+## 2026-08-31 — A table that vanished under a store never came back, and every write 500-ed until restart
+
+TASK-288, the framework half of consumer Symbio's TASK-627. `EnsureSchemaAndReport` documented itself, and
+TASK-277 justified it, as *"rethrow so this attempt is reported, but call `DoInit()` so the next attempt can
+succeed"* — and the second half was never delivered. Measured before a line changed, on SQLite with the
+table dropped beneath an initialised store: **five consecutive writes threw and `sqlite_master` held 0 rows
+throughout**, while only a fresh store instance recovered it, which is what proved the broken state was in
+memory rather than on disk. Verified with `BIRKO_REQUIRE_LIVE` set: `Birko.Data.SQL.SqLite.Tests` **277
+passed** (271 → 277) plus twelve adjacent suites, **0 failed, 0 skipped**. The standing rule is in
+§ Conventions. Six things worth carrying:
+
+- **TASK-277 wrote the disproof of its own next paragraph.** It records that `DoInit()` raises `OnInit`,
+  which nothing in the framework subscribes to, and condemns the *swallow* on exactly that ground — then
+  leaves the identical mechanism standing one paragraph later as the *promise*. The store's `_initialized`
+  short-circuits before `InitCore` is reached anyway, so nothing could have re-created the table.
+- **The wrong state was in a different class from the code that detected the failure.** The connector saw
+  the missing table; the flag that had to change was the store's. `CanTrustRememberedInitialization` is
+  `CanRememberInitialization`'s other half — *may I remember this?* at init time versus *does what I
+  remembered still hold?* at use time — and it is consulted in both the outer fast path and the inner
+  double-check, because guarding only the outer one lets a waiting thread return without re-initialising.
+- **A pull across that gap, never a subscription.** Connectors are cached process-wide while stores are
+  per-request, so subscribing would accumulate dead stores on a process-lifetime object — TASK-204's defect
+  through a different door. A counter compared at the gate cannot leak.
+- **⚠ Healing withdrew a discriminator Symbio TASK-602 was reasoning from**, so the replacement signal was
+  part of the fix rather than a nicety: every invalidation is recorded on TASK-287's `SchemaEscapes` channel,
+  so an absent table is now recorded instead of inferred. A mutation shows the two halves are independent —
+  healing without recording passes every observability test — which is exactly why they shipped together.
+- **The framework's own recorded asymmetry decided it.** `CanRememberInitialization` already says answering
+  "no" costs one idempotent `CREATE TABLE IF NOT EXISTS` while answering it wrongly leaves a store broken for
+  the life of the process. The measurement was that bad outcome, so the rule answered itself.
+- **Mutations, disjoint:** never distrust → 2 red, both healing tests, every observability test green; heal
+  the async store only → 1 red, the sync one; bump for every missing table rather than the anomaly → 1 red,
+  the benign first-touch pin, which is what stops the fix re-running schema-ensure hundreds of times per
+  start-up. **Still open on Symbio's side:** nothing subscribes to `OnSchemaEscapeDetected`, so neither this
+  nor TASK-287 is visible in production yet.
+
+---
+
+## 2026-08-31 — The count path swallowed the escape annotation, so the instrument was blind where it mattered
+
+TASK-287, the hole between two individually correct fixes. TASK-285 made a `COUNT` of a missing table return
+`0`; TASK-286 made `EnsureSchemaAndReport` annotate its exception for the anomaly. The annotation travels on
+the exception, and the count catch had just consumed it. Measured against a live Symbio API, both halves in
+the same forced condition minutes apart: **COUNT → `200`, `totalCount: 0`, zero log lines; write → `500`,
+annotation logged** — and both occurrences TASK-602 ever recorded were counts, so nineteen bring-ups
+reporting `0` escapes was a blind instrument's `0`. Verified with `BIRKO_REQUIRE_LIVE` set:
+`Birko.Data.SQL.SqLite.Tests` **271 passed** (261 → 271), `Birko.Data.SQL.Tests` 655, 0 failed, 0 skipped.
+The standing rule is in § Conventions. Five things worth carrying:
+
+- **A silence is only evidence where the instrument can see.** The same "0 escapes" number was real on the
+  write path and vacuous on the count path, and nothing distinguished them.
+- **Discriminate on the anomaly, not on the condition containing it.** Benign lazy first-touch is also a
+  missing table and is ~245× more common per bring-up; the mutation that swaps the annotation for
+  "the table was missing" reds exactly the benign-path tests, which is why those exist.
+- **⚠ Recording is not rethrowing.** A throw looks more correct — `0` is a wrong answer when the table is not
+  genuinely missing — and it silently reopens what TASK-285 closed at roughly one bring-up in five. Adding an
+  instrument must not smuggle in a behaviour change.
+- **⚠ The chain walk is defensive, not witnessed, and says so.** Measured: on both live SQLite count paths
+  the annotation sits at depth 0, so collapsing the loop reds only a synthetic test. Kept because the depth
+  is a property of the call stack, and the failure mode of guessing wrong is a guard that never matches —
+  which has already happened once here.
+- **Mutations, disjoint:** remove both recordings → 3 red, all count-path, **write-path test green**, which
+  is the direction the task existed for; remove only the sync call → 2 red, async green; collapse the chain
+  walk → 1; discriminate on missing-table → 2. **Superseded in part one commit later by TASK-288**, which
+  needed the same detection to drive a heal and therefore moved it into `EnsureSchemaAndReport`; the two
+  count-path call sites went with it, and one assertion in this task's suite was inverted rather than
+  deleted.
+
+---
+
+## 2026-08-24 — A continuous aggregate could not be created through the migration runner at all
+
+TASK-281, spawned by `code-review` at TASK-255's close gate hours earlier and rated the most valuable thing
+that review produced. `SqlMigrationSettings.UseTransaction` defaults to `true`, and both continuous-aggregate
+statements raise **SQLSTATE `25001`** inside a transaction block — so through the only path a real migration
+takes, `CreateContinuousAggregate` and `RefreshContinuousAggregate` could only ever fail. Verified against
+live **TimescaleDB 2.29.2 / PostgreSQL 16.15** with `BIRKO_REQUIRE_LIVE` set: **71 passed, 0 failed,
+0 skipped** (61 → 71, +10). The standing rule is in § Conventions. Seven things worth carrying:
+
+- **The task was planned AFTER Step 0, not before it** — its own criterion 1 said the hypothesis might be
+  false, and the finding came from a reviewer that had already been wrong once in the same pass. Planning
+  first would have invited the plan to assume the defect. It was confirmed, and the same probes priced both
+  remedies.
+- **The two statements needed opposite answers.** `CREATE … WITH (timescaledb.continuous)` refuses only
+  because it performs an initial refresh, so `WITH NO DATA` fixes it in place; `refresh_continuous_aggregate`
+  has no such escape and is refused with a message instead. Treating the family alike would have shipped
+  either a needless limitation or a statement that still fails.
+- **The grill found the mechanism the plan had missed, and it changed the severity.** The plan concluded a
+  transactional migration could *never* populate an aggregate. False: `add_continuous_aggregate_policy` **is**
+  transaction-safe, and a refresh *policy* is how TimescaleDB intends an aggregate to be kept current — the
+  framework simply had no emitter. It was added in the same change, because documenting a remedy the
+  framework cannot perform is TASK-263's *"named an escape hatch that did not open"*.
+- **`WITH NO DATA` is emitted unconditionally**, not only inside a transaction — § TASK-274's *two doors, one
+  answer*. The cost (an empty view until populated) was measured at **0 callers across 16 consumer repos**
+  before it was chosen, and is asserted by a test so nobody "fixes" the emptiness and silently reintroduces
+  `25001`.
+- **The refusal is justified by routing, not by the server's message being poor.** PostgreSQL's own error is
+  excellent; what it cannot know is `UseTransaction` or this framework's policy emitter, so the guard names
+  **both** doors — and the opt-out has its own end-to-end test, per § SH-H037, because a guard whose escape
+  hatch does not open is a wall wearing a door's label.
+- **The prover was watched red before a line changed**, with the failure landing on the aggregate statement
+  rather than an earlier one — which is what probe F (`create_hypertable` is transaction-safe) was measured
+  for. Mutations: drop `WITH NO DATA` → 5 red; disable the refusal → 1; drop `RegclassLiteral` from the new
+  emitter → 3, including the **live** policy test, since a bare PascalCase view folds and the policy cannot
+  find its aggregate.
+- **⚠ A fixture fault, and a wrong prediction, both recorded.** `Reset()` dropped `__BirkoMigrations` when the
+  real version table is `__Migrations`, so a recorded version survived, `Migrate()` found nothing to do and
+  **returned success having created nothing** — false green in one ordering, false red in another (§ TASK-259).
+  Fixed, then proven by running the class green in isolation *twice*. And the plan's claim that CR-H071's two
+  tests would stay green as untouched controls was **false**: they assert the semicolon adjacent to
+  `GROUP BY bucket`, and `WITH NO DATA` now sits between. The assertions were re-expressed to preserve the
+  dangling-comma intent, not weakened.
+
+---
+
+## 2026-08-24 — No continuous aggregate over a framework-created table could ever be built
+
+TASK-255, filed by TASK-253's audit of the same file. `BuildContinuousAggregateSql` hardcoded its bucketing
+column as the literal `time` — CR-H070's defect, fixed in `BuildCompressionPolicySql` four methods above and
+left here by **the very commit that fixed it**: `531d816` edited the defect line while naming the finding.
+No framework-created table can have such a column, since column definitions are emitted bare and every Birko
+entity is PascalCase. Verified against live **TimescaleDB 2.29.2 / PostgreSQL 16.15** with
+`BIRKO_REQUIRE_LIVE` set: `Birko.Data.Migrations.TimescaleDB.Tests` **61 passed** (56 → 61) and
+`Birko.Data.SQL.Tests` **653 passed** (+20), 0 failed, 0 skipped, no new nullable warning. The standing rule
+is in § Conventions. Six things worth carrying:
+
+- **Latent, and said so up front.** 0 of 16 consumer repos call it; 1 (`Birko.Sandbox`) merely imports the
+  `.projitems`. The fix removes a trap rather than repairing damage — TASK-246 had to be corrected after the
+  fact for claiming live impact it did not have, so the number came first.
+- **The containment mechanism is REFUSAL, and that is new.** A column reference in real identifier position
+  must be emitted **bare**, so no quote character encloses it and escaping contains nothing. The only
+  containment left is a whitelist — `DataBase.ValidateColumnIdentifier`, sharing `_unqualifiedIdentifier`
+  with its index sibling and differing **only in the message**, because the index guard's wording would tell
+  a migration author about `CREATE INDEX` (§ SH-H037/TASK-215). Pointing one at the other reds exactly one
+  test; the other 19 stay green, which is the claim.
+- **Bare is witnessed, not argued.** Rendering with `QuoteIdentifier` fails both live tests: the fixture
+  creates `(Ts timestamptz …)` bare inside a quoted table, so PostgreSQL stores `ts`. TASK-129 got this
+  exact question backwards by reasoning from one sink, which is why it was measured.
+- **Two conventions live in one file, split by what kind of argument it is.** The sibling's
+  `orderByColumn = "time"` looked like the precedent to copy — until `git show 531d816` showed the parameter
+  did not exist before that commit, so the default was a **source-compatibility artefact**, not a judgement.
+  The older convention for a *time-dimension column* is the opposite: `CreateHypertable` requires it, in four
+  signatures. **Measure a precedent's motivation, not its shape.** The sibling's default is the same defect
+  and is spawned as [[TASK-279]] rather than fixed from symmetry.
+- **A default the compiler can forbid beats one a test forbids.** Placing the required parameter before the
+  existing optional one makes a default `CS1737` — not expressible. So the reflection pin is **defensive,
+  not witnessed**, and is labelled that way. The cost is the other half, measured on this change: 6 of 8
+  call sites failed loudly (`CS7036`) and **2 rebound silently**, because every parameter is `string`.
+  Affordable at 0 non-test callers; not a manoeuvre to copy where consumers exist.
+- **Five mutations, disjoint.** Restore the literal → 3 red (both live + the rendering pin) with the CR-H071
+  pair and the literal-`time` test **green**, which is the discrimination control the task demanded. Drop the
+  guard → 3. Quote instead of bare → 3. Give the parameter a default → **does not compile**. Delegate the new
+  guard to the index one → 1, the message test alone.
+
+---
+
+## 2026-08-23 — Three migration index builders created nothing, and six dropped their flags
+
+TASK-274, the last of the index family. Filed as "the second lane drops `Sparse`", and the measurement found
+much more: `Sparse()` and `WithProperty()` were `=> this` in **all six** schema builders, and the
+ElasticSearch, RavenDB and CosmosDB builders had no `Build()` override at all — inheriting
+`IIndexBuilder.Build()`'s no-op default while accumulating fields, a `Unique()` flag and a live client. A
+migration declared an index there and nothing was ever created. Verified against live MongoDB 7 (as a
+single-node replica set), SQL Server 2022, PostgreSQL 16.15, MySQL 8.4.11 and on-disk SQLite with
+`BIRKO_REQUIRE_LIVE` set: **1,704 tests, 0 failed, 0 skipped** across eighteen suites, 24 new. The standing
+rule is in § Conventions. Six things worth carrying:
+
+- **The filed defect was the smallest part of it.** "Sparse is a no-op" was true; "three of six builders
+  create nothing at all" was the finding, and it only appeared because the task's first step was to read
+  every implementation rather than the one the title named.
+- **A default no-op on an interface method is a silent-drop generator.** `Build() { }` exists so
+  eagerly-creating providers need not implement it — and three providers that create nothing inherited it
+  and looked implemented.
+- **Two doors, one answer.** Mongo's index manager honoured `Sparse` while its migration builder discarded
+  it. Third instance after TASK-214 and TASK-244, and the tell is always that both doors look right alone.
+- **Where backends genuinely disagree, refuse rather than pick.** Mongo's sparse compound index includes a
+  document when ANY key is present; a SQL partial index requires ALL of them. Single-column is honoured
+  (the readings coincide), compound is refused, and the message names the explicit alternative.
+- **Gaining a capability means re-checking the guards it implies.** SQL expresses `Sparse` through
+  TASK-273's predicates, so this lane now carries predicates — and `SqlIndexManager.CreateAsync` bypasses
+  the funnel that validates them. `RequireExpressiblePredicates` moved to the base and became public: one
+  producer, two callers. TASK-273 had recorded that bypass as an out-of-scope note the day before, which is
+  why it was not re-discovered the hard way.
+- **⚠ A live suite needs the right server SHAPE.** Starting a standalone `mongod` made five untouched
+  transaction tests fail, because MongoDB transactions need a replica set — as that suite's own first test
+  states. `--replSet` + `rs.initiate()` fixed the fixture and all 97 passed. "Is it up?" is not "is it the
+  server these tests describe?".
+
+---
+
+## 2026-08-23 — MySQL could not create a table with an unlengthed unique or primary string
+
+TASK-265, filed by TASK-257 in August and closed once the live measurement it was waiting for existed.
+`MySQLConnector.ConvertType` read the narrow `IsIndexed`, which `LoadIndexes` sets only for
+`[IndexedField]`/`[CompositeIndex]` — so an inline `UNIQUE` or `PRIMARY KEY` over an unlengthed string emitted
+`LONGTEXT`, and MySQL cannot use a BLOB/TEXT column in a key without a key length. Verified on live MySQL
+8.4.11 plus the other three providers with `BIRKO_REQUIRE_LIVE` set: **1,433 tests, 0 failed, 0 skipped**
+across eighteen suites, 3 new. The standing rule is in § Conventions. Five things worth carrying:
+
+- **The task was re-scoped before it was worked, and it had shrunk by a day.** TASK-275 (closed hours
+  earlier) moved every *nullable* `[UniqueField]` column onto a synthesised index, which bounded it through
+  the existing branch. Measuring the four shapes separately showed the two that were still broken: a
+  `[RequiredField]` unique column and a `[PrimaryField]` string. Both `ERROR 1170`.
+- **The one-word fix was predicted in the filing and still not made until measured.** TASK-257 wrote down
+  that `field.IsIndexed → field.IsInIndexKey` was "very likely" the answer and refused to do it, because
+  this epic's recurring defect is a change believed correct on a provider nobody ran. The prediction was
+  right; making it wait cost nothing and would have caught it had it been wrong.
+- **The test that recorded the gap was inverted, not deleted.** It asserted `LONGTEXT` and said in its own
+  failure message not to "fix" it by flipping the connector. A gap recorded as prose evaporates; a gap
+  recorded as a passing test with instructions closes itself when somebody finally measures.
+- **The over-long write is refused, not truncated — measured, and pinned.** `ERROR 1406`, 0 rows, because
+  `sql_mode` carries `STRICT_TRANS_TABLES`. Without it MySQL truncates with a warning, which would make the
+  UNIQUE constraint quietly weaker than declared. Same load-bearing session setting as TASK-257's
+  `ANSI_WARNINGS` on SQL Server.
+- **Mutation: reverting to the narrow flag fails 5 of 97** — the two inverted theory cases and all three new
+  live tests — while the other three providers stay green, since they never read this branch.
+
+---
+
+## 2026-08-23 — A unique column that was allowed to be empty rejected the second empty row
+
+TASK-275, the last member of the index/NULL family that TASK-273 opened. `[UniqueField]` produces no index
+definition at all — `FieldDefinition` emits `UNIQUE` inline — so TASK-273's predicate could not reach it, and
+on SQL Server an inline `UNIQUE` over a nullable column admits one NULL row and rejects every later row that
+leaves the column unset (`Msg 2627`). Nullable unique columns now carry a synthesised
+`CREATE UNIQUE INDEX … WHERE col IS NOT NULL` instead. Verified against live SQL Server 2022, PostgreSQL
+16.15, MySQL 8.4.11 and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set: **1,430 tests, 0 failed, 0 skipped**
+across eighteen suites, 11 new. The standing rule is in § Conventions. Six things worth carrying:
+
+- **The blast radius decided the shape, and it was measured first.** Exactly **2** production
+  `[UniqueField]` declarations sit on a nullable column across the framework, its tests and all consumer
+  repos (BardStudio `MusicTrack.FilePath`, Presenter `PresentationEntity.Slug`) — and note they are
+  *non-nullable in C#*, which the framework does not read, so they are nullable in the database. Every
+  `[PrimaryField]` hit is the framework's own `Guid?` key, where `PRIMARY KEY` implies NOT NULL and the
+  question cannot arise. Small enough to change the shape; the alternative was documenting a limit that
+  consumers plainly do not read.
+- **Scoped to nullable columns only**, so `[RequiredField]` and `[PrimaryField]` keep byte-identical DDL. One
+  producer (`AbstractField.UsesInlineUniqueConstraint`), consulted by all four `FieldDefinition`s.
+- **DDL changes on four providers; behaviour changes on one.** That is the claim a per-provider suite has to
+  make, and each one does: SQLite and PostgreSQL and MySQL assert the rule is *unchanged*, MSSql asserts it
+  is *fixed*, with the error code moving from 2627 (constraint) to 2601 (index) as the task predicted.
+- **It reuses TASK-273 rather than re-implementing it** — the synthesised index goes through the same
+  `WhereNotNull` accumulator, so MySQL's drop-the-term policy applies for free. Mutation: removing the
+  predicate leaves **MySQL green** while MSSql and SQLite go red, which is the provider-correct signature.
+- **⚠ It incidentally fixes part of TASK-265, and that is recorded rather than claimed.** An unlengthed
+  `[UniqueField]` string is `LONGTEXT` on MySQL and `LONGTEXT UNIQUE` is ERROR 1170, so such a table could
+  not be created at all; moving the constraint to an index makes the column an index key, which bounds it to
+  `VARCHAR(255)`. TASK-265 still owns the `[PrimaryField]` and non-nullable cases, which keep the inline
+  form.
+- **Two of TASK-257's pins changed meaning and were updated, not deleted.** Its point — a `UNIQUE` column is
+  an index key invisible to `IsIndexed` — now holds only for the inline shapes; both tests moved to
+  `[RequiredField]` columns and a new one asserts that a nullable unique column *is* visible, because it now
+  has a real index.
+
+---
+
+## 2026-08-23 — Every limited read on SQL Server emitted invalid T-SQL
+
+TASK-278, spawned an hour earlier by TASK-277 and closed the same day. `LimitOffsetDefinition` emitted
+`FETCH NEXT n ROWS ONLY` with the `OFFSET` present only when the caller supplied one, and T-SQL accepts
+neither that nor `OFFSET`/`FETCH` without an `ORDER BY`. So `ReadFirstAsync` — the single-row read this
+framework's own guide recommends — could not work on that provider at all, and no unsorted page could be
+fetched. Verified against live SQL Server 2022, PostgreSQL 16.15, MySQL 8.4.11 and on-disk SQLite with
+`BIRKO_REQUIRE_LIVE` set: **1,389 tests, 0 failed, 0 skipped** across twelve suites, 16 new. The standing
+rule is in § Conventions. Five things worth carrying:
+
+- **It was found by strengthening a vacuous assertion, not by looking for it.** TASK-244's tests said
+  `read.Should().NotBeNull()` after a write, which passes on an empty enumerable because a bulk store's
+  `Read(filter)` returns the collection. Asserting the row instead failed instantly on MSSql. A test that
+  cannot fail is worse than no test, because it occupies the space where a real one would go.
+- **There was no paging coverage anywhere in the tree.** Not thin — none, on any provider. That is the whole
+  explanation for how a documented API stayed unusable on a whole provider. This task adds it on SQLite as
+  well as MSSql, so the shared base path is pinned by the provider everything else inherits.
+- **The precondition is supplied where it is known.** `RequiresOrderByForPaging` lets
+  `CreateSelectCommand` — which knows whether the caller passed a sort — synthesise
+  `ORDER BY (SELECT NULL)`. Threading that fact into the emitter's `public virtual` signature was rejected
+  because adding a parameter silently orphans existing overrides.
+- **`TOP (n)` was the tempting alternative and would have been two code paths**: it lives in the SELECT list,
+  not the tail, and an offset still forces the OFFSET/FETCH form and therefore the sort.
+- **Mutations, disjoint by provider:** omitting the offset again → 3 red on MSSql, others green; removing the
+  synthesised sort → the same 3; making the capability unconditionally true → MSSql **green** while SQLite
+  and the base pins go red, which is the only way that over-broad fix shows up.
+
+---
+
+## 2026-08-23 — A write to a missing table reported success on every provider
+
+TASK-277, spawned by TASK-244 an hour earlier and closed the same day. It is the half that turned that
+task's residue into consumer Symbio's report: the residue lost one operation, this made the operation answer
+**200**. All four `OnException` handlers answered a missing table with `DoInit()` and a *return*, so the
+statement was discarded and reported as successful. Verified against live PostgreSQL 16.15, SQL Server 2022,
+MySQL 8.4.11 and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set: **1,384 tests, 0 failed, 0 skipped** across
+twelve suites, 5 new. The standing rule is in § Conventions. Five things worth carrying:
+
+- **My own task file understated the scope, and reading the siblings corrected it.** It said SQLite's
+  handler was the one TASK-211 had not reached. True of the *narrowing* — but the **swallow itself was on all
+  four providers**, so this was framework-wide silent data loss, not a SQLite quirk.
+- **The recovery branch could never have worked.** `DoInit()` raises `OnInit`, which nothing in the framework
+  subscribes to, and the failed statement is never retried. A branch that neither repairs nor retries is
+  just a swallow with a reassuring name.
+- **The read path never reaches that handler**, which is what made the fix surgical: `RunReaderCommandOn`
+  catches `IsMissingTableException` itself. So TASK-211's "a read of a missing table answers empty" is
+  untouched, and both sides of the asymmetry now have a test.
+- **Blast radius measured before shipping: exactly one test**, the defect-pin from TASK-244, which was
+  inverted rather than replaced. A removal that breaks nothing is a swallow nothing relied on — the opposite
+  of TASK-211, whose narrowing broke two suites.
+- **⚠ A vacuous assertion was hiding a second defect, and strengthening it found it.**
+  `read.Should().NotBeNull()` after a write passes on an empty enumerable, because a bulk store's
+  `Read(filter)` returns the collection (§ Conventions). Asserting the row instead failed immediately on
+  MSSql: `Invalid usage of the option NEXT in the FETCH statement`. Measured — a limit with no offset is
+  Msg 153 and offset+limit without `ORDER BY` is Msg 102, while `TOP (n)` and an explicit sort both work —
+  so `ReadFirstAsync` cannot work on SQL Server at all. Filed as [[TASK-278]] (P1) with the measurement
+  table and the fix shape.
+
+---
+
+## 2026-08-23 — A rolled-back schema-ensure left a store believing it was initialised
+
+TASK-244, raised P3 → P1 the day before by consumer Symbio (its TASK-527) after a live instance left a
+database unbuildable. The task had been open since TASK-243 as a design question — *should schema-ensure
+participate in the caller's transaction?* — and it is now answered, in the direction the measurements forced:
+**it participates, and a participating schema-ensure is not remembered.** Verified against live PostgreSQL
+16.15, SQL Server 2022, MySQL 8.4.11 and on-disk SQLite with `BIRKO_REQUIRE_LIVE` set throughout: **1,292
+tests, 0 failed, 0 skipped** across nine suites — SQL 624, SQLite 236 (+3), PostgreSQL 88 (+3), MySQL 90
+(+3), MSSql 96 (+3), Migrations.SQL 49, InMemory 69, JSON 23, XML 18 — 12 new. The standing rule is in
+§ Conventions. Seven things worth carrying:
+
+- **The consumer's symptom was not reproducible, so the mechanism was reproduced instead.** Four
+  from-scratch bring-ups had succeeded, so nothing was gained by chasing the trigger. Tracing the ordering
+  in source gave a chain that rebuilds the symptom deterministically in three assertions, and the first
+  test written was a *reproduction*, not a fix.
+- **It takes two framework behaviours, and each alone is survivable.** The residue — `_initialized = true`
+  after a schema-ensure the boundary then rolled back — loses one operation. The swallow —
+  `SqLiteConnector.OnException` answering "no such table" with `DoInit()` and no rethrow, where `DoInit`
+  raises an event nothing subscribes to — is what makes that operation report **200**. Fixed the first,
+  filed the second as [[TASK-277]] with a test that pins the defect so it cannot be believed fixed.
+- **The obvious reading of the evidence was the wrong half, and measuring said so.** "The DDL ran on a
+  connection other than the boundary's" is true — of the `SetTransactionContext` door, which was never
+  publishing the boundary before schema-ensure ran. But on SQLite that path throws `SQLite Error 5` after
+  the command timeout: a 500, not a silent 200. Real defect, fixed in the same change, *not* the consumer's
+  mechanism.
+- **Both doors now agree, which is what the acceptance asked for.** `InitCore`/`InitCoreAsync` enter the
+  transaction scope, so the per-store door lands the DDL exactly where the ambient door does.
+- **MySQL keeps the opposite answer and now has a test saying so.** `DdlSurvivesRollback` is true there
+  because `DoDdlCommand` suppresses the ambient (TASK-243), so the store legitimately remembers its
+  initialization — and the mutation that makes the capability ignore the provider switch fails **only** the
+  MySQL suite. Without that pin the flag would have been indistinguishable from "never remember".
+- **Three mutations, disjoint and provider-correct.** Remembering unconditionally: 1 red each on SQLite,
+  PostgreSQL and SQL Server, MySQL green. Dropping the scope from `InitCore`: the same three, with SQLite
+  taking 3s — the lock timeout, i.e. the deadlock hazard the task warned about, arriving as a test failure
+  instead of an outage. Capability ignoring the switch: MySQL alone.
+- **⚠ A flake was found and is not being reported as clean.** `Birko.Data.Migrations.SQL.Tests` failed
+  `SchemaBuilderBoundaryLeakTests.Without_a_runner_transaction_nothing_is_published_either` once in 16 runs
+  with `ObjectDisposedException: 'SQLitePCL.sqlite3'`. Measured against the pre-fix code (0 in 10) and after
+  (0 in a further 10), so not attributable to this change; the test takes a **process-wide cached connector**
+  via `DataBase.GetConnector`, which is [[TASK-270]]'s subject and [[TASK-276]]'s hypothesis. Recorded on
+  TASK-276 with the test name and the exception, which is more than that task had.
+
+---
+
+## 2026-08-22 — A unique index over a nullable column was undeclarable, and broke ordinary inserts on MSSql
+
+TASK-273, raised by consumer Symbio while ruling its v1 frozen schema. `CompositeIndex` carried `Name`,
+`Properties` and `IsUnique` and nothing else, so "unique **where** the column is not null" could not be said —
+and the obvious full index is not merely weaker there, it is wrong: SQL Server treats NULLs as equal, so
+`UNIQUE (TenantGuid, ExternalId)` admits one NULL row per tenant and rejects the second ordinary account.
+`[CompositeIndex]` and `[IndexedField]` now take `WhereNotNull` / `WhereNull`. Verified against live
+**SQL Server 2022 (16.0.4265.3)**, **PostgreSQL 16.15**, **MySQL 8.4.11**, **TimescaleDB 2/PG16** and on-disk
+**SQLite 3.53.3** with `BIRKO_REQUIRE_LIVE` set throughout: **1,164 tests, 0 skipped** across six suites —
+`Birko.Data.SQL` 619 (+22), MSSql 93 (+6), MySQL 85 (+7), PostgreSQL 85 (+3), SQLite 233 (+4),
+Migrations.SQL 49 (unchanged) — 42 new, no new nullable warning. **Not a clean sweep: one unidentified
+single-test failure in the offline suite, seen twice in ~19 runs and never reproduced** — see the last bullet.
+The standing rule is in § Conventions. Nine things worth carrying:
+
+- **Step 0 measured before a line was written, and it corrected the plan twice.** The code is **`Msg 2601`**,
+  not the `2627` its TASK-257 neighbours cite; and the `Msg 1934` risk — SQL Server requires a specific
+  SET-option state for *any* DML against a table carrying a filtered index, which this framework never sets —
+  is **absent** on `Microsoft.Data.SqlClient` defaults (`ARITHABORT` reads 0 and it works anyway, because
+  `ANSI_WARNINGS ON` implies it). That was the one finding that could have made the approach unusable here.
+- **The task named one polarity; the framework's own code demanded two.** `ISoftDeletable` is
+  `DateTime? DeletedAt` with null meaning active, and Symbio's `BaseEntity` carries it on every entity — so
+  "unique among live rows" (`WHERE DeletedAt IS NULL`, over a **non-key** column) was the next caller before
+  this task existed. Reading the consumer's own decorators is what turned a bool into two column lists.
+- **Dropping an unexpressible term is safe only sometimes, and the first version of this rule got it wrong.**
+  It shipped as "drop `IS NOT NULL`, refuse `IS NULL`" — the natural generalisation of NULL-distinctness, and
+  invalid as soon as the predicate column is not one of the index's key columns:
+  `UNIQUE (TenantGuid, Number) WHERE ApprovedAt IS NOT NULL` dropped to `UNIQUE (TenantGuid, Number)` rejects
+  two unapproved drafts sharing a number, which the declaration permits. The close-gate review caught it —
+  after two of my own tests had encoded it — and the rule is now a three-way classification: non-unique →
+  drop, unique with the term over a key column → drop, otherwise refuse. It also found the mirror: a
+  non-unique partial index was being refused on MySQL although dropping its term is harmless, so a declared
+  optimisation was simply absent there.
+- **MySQL could have honoured it and deliberately does not.** A functional key part —
+  `UNIQUE (TenantGuid, (CASE WHEN DeletedAt IS NULL THEN Number END))` — was measured enforcing exactly the
+  right rule on 8.4.11. Declined for four stated reasons and recorded on the property, so the next author
+  meets a decision rather than a gap.
+- **The plan review caught a wrong claim no later test would have caught.** It said "reject a predicate column
+  whose field `IsNotNull`" — but that flag is set from the CLR type only for value types, so a `string`
+  primary key reads `false` and a `WhereNull` on it would have indexed zero rows silently. Now
+  `IsNotNull || IsPrimary`, and the mutation narrowing it back fails **exactly one** test.
+- **Six mutations, each isolating one claim, all disjoint** — MSSql tail 3 of 6; base tail 2 of 3 (PG) and
+  2 of 4 (SQLite); MySQL capability forced true 5 of 6; the two `LoadIndexes` resolution points 3 and 7 of 22;
+  the async funnel guard exactly 1, failing on the exception **type**, which is why the refusal happens before
+  `DoDdlCommand`.
+- **Three fixture faults, each indistinguishable from the feature failing** — MySQL `1364` (an INSERT omitting
+  `AbstractLogModel`'s NOT NULL timestamps), a PostgreSQL catalogue query lower-casing a table name
+  `CreateTable` quotes, and a full-run 46-of-84 MySQL failure that was purely a missing `BIRKO_MYSQL_PASSWORD`
+  in my environment. Read, not dismissed; that suite's password default now matches its siblings.
+- **The close gate found two things the implementation had not asked about, and produced two spawns.** The
+  async funnel guard had no coverage at all (TASK-245: an async store's schema-ensure runs the *sync*
+  `CreateTable`, so nothing reaches `CreateIndexesAsync`) — now tested. And `SqlIndexManager.CreateAsync`
+  calls `CreateIndexSql` **directly**, bypassing the guard: harmless today because that lane carries no
+  predicates, which is exactly why it is recorded on [[TASK-274]]. Spawned [[TASK-274]] (the second index lane
+  drops `Sparse` — `IIndexBuilder.Sparse()` is `=> this` in all six schema builders) and [[TASK-275]]
+  (`[UniqueField]` on a nullable column is an inline constraint with the identical defect and no predicate can
+  attach to it — `Msg 2627` / `Msg 156`, measured). Also confirmed live: this repo's project-local
+  `verify-conventions` still does not shadow the generic one at the gate ([[TASK-267]]).
+- **⚠ And it did not end clean, which is recorded rather than rounded off.** `Birko.Data.SQL.Tests` failed
+  **1 of 619 twice in ~19 full-suite runs** and the identity was never captured: 8 further runs with a trx
+  logger were clean, the new class alone is clean 6 of 6, and the suite *without* it is clean 5 of 5 — so the
+  evidence points at a cross-class interaction through `DataBase`'s static table cache under xUnit's parallel
+  collections (this task adds four deliberately-invalid entity types, whose `LoadTable` throws), and no
+  further. Precedent for writing it down is TASK-259's own unreproducible SQLite failure; the difference is
+  that this one is plausibly caused by the change, so it is [[TASK-276]] rather than a footnote.
+
+---
+
+## 2026-08-21 — A chunk-interval reader had been broken for the whole TimescaleDB 2.x line
+
+TASK-261, found while writing TASK-253's live suite — the first draft of a chunk-interval assertion failed for
+the same reason the product code did. `GetChunkInterval` read `chunk_time_interval` from
+`timescaledb_information.hypertables`; 2.0 moved that value to `timescaledb_information.dimensions` and renamed
+it `time_interval`, so the method raised `42703` on every supported server, unswallowed. Latent — the only
+references in the tree were its own declaration and that test, and no consumer calls it. Verified on live
+**TimescaleDB 2.29.2 / PostgreSQL 16.15** plus the four SQL providers: **1,229 tests green, 0 failed** across
+nine suites, 4 net new. The standing rule is in § Conventions. Five things worth carrying:
+
+- **The task began with a test asserting the defect, so the work was to invert it, not to write it.** The
+  `42703` assertion is deleted rather than kept beside the new one — two tests asserting opposite things about
+  one method is a contradiction for the next reader, not extra coverage.
+- **One of the three reverts fails nothing, and that is reported rather than hidden.** Restoring the old column
+  fails 4 of 56; dropping the `COALESCE` fails exactly the integer-partitioned case; dropping
+  `AND dimension_number = 1` fails **0**, because the view carries its own `ORDER BY` and the right row comes
+  back first. So that clause is **defensive, not witnessed** — kept because correctness without it rests on an
+  ordering the catalogue does not promise, and the hazard is pinned by asserting the catalogue's shape
+  (2 dimension rows, 1 carrying an interval) instead of pretending the reader can see it. My own doc comment
+  initially claimed the failure did occur; the revert is what caught that.
+- **The column that names the shape does not discriminate it.** An integer-partitioned hypertable reports
+  `dimension_type = 'Time'` on 2.29.2, with `time_interval` NULL and the width in `integer_interval` — so
+  branching on the type would have been wrong, and the discriminator is which interval column is populated.
+  The reader coalesces, because returning null would claim no interval is configured when one is.
+- **Another product's catalogue is a dependency with an expiry, and nothing typed says so.** The old spelling
+  was presumably correct on 1.x and nothing recorded that it could lapse. The remark now names the version the
+  query targets, so the next break is readable rather than silent.
+- **The out-of-scope survey was actually run, and it is clean.** The framework holds exactly two
+  `timescaledb_information` queries — this one and `IsHypertable`, whose column still exists and has live
+  coverage. The remaining `chunk_time_interval` occurrences are `create_hypertable`'s named argument, which is
+  current. No internal `_timescaledb_catalog` use anywhere. Nothing spawned.
+
+---
+
+## 2026-08-21 — A migration could not name a table in another schema, because one helper served two kinds of name
+
+TASK-262, both halves filed by TASK-253's own close-gate review as regressions that task introduced. Routing
+the TimescaleDB migration emitters through `QuoteIdentifier` — correct for a name from `Table.Name` — turned an
+author's `reporting.evts` into `'"reporting.evts"'`, one identifier containing a period. Verified against live
+**TimescaleDB 2.29.2 / PostgreSQL 16.15**, the exact version the task's original measurements used, plus SQL
+Server 2022, PostgreSQL 16, MySQL 8.4 and on-disk SQLite: **1,225 tests green, 0 failed** across nine suites,
+16 new. The standing rule is in § Conventions. Six things worth carrying:
+
+- **Measure the fix's shape, not just the defect.** Reverting to a bare name would have restored the qualified
+  case; per-part quoting is *strictly better*, and only measuring showed it — `'"reporting"."Evts4"'` and
+  `'"Rep Ort"."Ev ts"'` each created a hypertable, and neither is reachable bare. The fix ends up more capable
+  than the code TASK-253 replaced.
+- **The trade is real, lopsided, and measured.** Splitting on unquoted dots gives up a table literally named
+  `a.b` — kept reachable as `"a.b"`, since caller-quoting suppresses the split. Cost: **0 of 317**
+  `[Table("…")]` declarations anywhere contain a dot.
+- **A quoted-text scanner needs the provider's delimiters, and MSSql's are asymmetric.** `[`/`]` differ, so a
+  same-character scanner mis-detects the quoted part. Exposed once as `IdentifierQuoteOpen`/`Close` beside
+  `QuoteIdentifier`, covered offline for all three shapes despite only PostgreSQL having callers — and a test
+  fake that overrode the quoting without the delimiters was corrected in the same change, because an
+  unfaithful fake is how an override goes untested.
+- **The second half was documented rather than fixed, and the reason is structural.** The column-name fold
+  cannot become conditional on the caller's spelling, because the same producer serves the *store*, where an
+  unquoted name means the quoted identifier the framework created (TASK-472). Making unquoted mean "fold me"
+  would re-break that defect — the one whose failure is swallowed. With 0 emitter call sites, an opt-out on
+  seven methods is speculative API; the limit and the shape of the eventual fix are written on the class.
+- **Answering "should this support schemas?" surfaced that the framework has no schema concept at all** —
+  nothing on `Attributes.Table`, `Tables.Table` or any `Settings`. Kept out of this task deliberately: it is a
+  feature touching ~10 emitters, not a P2 regression fix. Filed as [[TASK-272]] with the design settled —
+  identity on the table, rendering and capability on the connector, because a connector holds one schema at
+  most while `Tables.Table` holds no connector.
+- **Reverts:** whole-name quoting fails **4 of 52** — all four new live tests — while the 48 pre-existing tests
+  stay green, which is what proves the fix additive and the new tests the thing that witnesses it. Also
+  measured for the spawn: on MySQL 8.4 `CREATE SCHEMA reporting` created a *sibling database*, so
+  `SupportsSchemas` will be genuinely two-sided rather than an unconditional flag.
+
+---
+
+## 2026-08-21 — A migration left its disposed connection on the shared connector, and the next store died of it
+
+TASK-259, found while grilling TASK-253's plan. `SqlSchemaBuilder` called
+`_connector.SetExternalTransaction(_connection, _transaction)` at three sites and **never called it again with
+nulls** — and it was the framework's last user of that mechanism, which both stores had abandoned in TASK-240
+with comments explaining why. Connectors are cached process-wide per (type, settings id), so a migration's
+connection and transaction stayed on the shared object; the runner's `using` then disposed both. Verified
+against live **SQL Server 2022**, **PostgreSQL 16**, **MySQL 8.4**, **TimescaleDB 2/PG16** and on-disk SQLite
+with `BIRKO_REQUIRE_LIVE` set throughout: **1,165 tests green, 0 failed** across eight suites, 2 new. The
+standing rule is in § Conventions. Seven things worth carrying:
+
+- **"Measure before fixing" inverted the task's own hypothesis — twice.** Its title said the defect *may be
+  entirely latent*. Measured: **firing on the default configuration**, and worse than described. Not just "a
+  subsequent command takes the wrong branch" — the first thing a store does is its lazy schema-ensure, so the
+  `CREATE TABLE IF NOT EXISTS` ran on the dead connection and threw, which leaves the store permanently
+  uninitialised. One migration kills every store sharing that (type, settings id) for the process lifetime.
+- **Latent in production for a reason unrelated to the defect.** The legacy branch needed `ExternalConnection`
+  **and** `ExternalTransaction` non-null, and both shipped consumers set `UseTransaction = false` deliberately
+  (Symbio: its DDL goes through the connector's own connection, so an outer runner transaction deadlocks
+  single-writer SQLite). So the guard never fired — but the **connection was leaked on every configuration**;
+  only the consequence was gated on the transaction. The dangerous value was the default.
+- **The last caller moving off a mechanism is when the mechanism goes.** With `SqlSchemaBuilder` on
+  `AmbientSqlTransaction`, `SetExternalTransaction` had **0** production callers (measured across 16 consumer
+  repos), so it, its two properties and its four read branches were deleted — TASK-247's rule applied to a
+  boundary mechanism instead of a raw-SQL fallback. Leaving a public process-wide setter in place would have
+  preserved the trap just closed.
+- **My own duplication defeated my own proof.** The first draft wrote the helper three times; reverting one
+  copy left the regression test **green**, because the migration runs through the nested collection builder.
+  Fourth instance of *"a funnel with four overrides is not a funnel"* — and the first where the duplication
+  broke the *revert* rather than the fix. One `internal static` producer; the revert then failed 2 of 49.
+- **A fixture mismatch is indistinguishable from the bug.** The regression test failed *after* the fix because
+  the migration declared `Guid`+`Name` while the probe derived from `AbstractLogModel` and so also had
+  `CreatedAt`/`UpdatedAt` — which `CREATE TABLE IF NOT EXISTS` will not add. Read the failure, not the bit.
+- **I fell into the skip-as-failure trap I had documented one task earlier.** Running with
+  `BIRKO_REQUIRE_LIVE=1` reported 14 failures in `Birko.Data.Migrations.TimescaleDB.Tests` — no TimescaleDB was
+  running. 48/48 without the flag. Started the container rather than narrowing the flag, which is what makes
+  the 1,165 figure mean something. Also recorded: one **unreproducible** SQLite failure (228/229) seen once and
+  green on four subsequent runs; noted rather than dismissed.
+- **Two decisions elsewhere rested on this defect and are now reopened.** TASK-253 rejected routing the
+  TimescaleDB migration emitters through the connector *because* doing so required `SetExternalTransaction`;
+  that constraint is gone, so the choice is open again (recorded at `TimescaleDBMigration`, not acted on —
+  it is a live-path behaviour change wanting its own measurement). And § Conventions' *"the legacy pair is
+  deliberately **not** suppressed"* was a blessing of the status quo, where the status quo was this bug; it now
+  reads one-mechanism-one-rule. Spawned **[[TASK-270]]**: three separate features have now put per-caller state
+  on the process-wide cached connector, so the pattern — not the instances — needs an answer, and the cheapest
+  valuable piece is a test that fails when someone adds the fourth.
+
+---
+
+## 2026-08-21 — On MSSql no predicate on an unlengthed `string` worked, and the obvious fix would not have fixed the index
+
+TASK-257, filed by consumer Symbio (TASK-472) after `DeleteWhereAsync(x => x.Label == "a")` failed on MSSql
+16.00.4265 with *"The data types text and nvarchar are incompatible in the equal to operator"*. The cause was
+column typing, not the boundary being verified: `ConvertType` mapped every string that is not a `CharField` to
+the deprecated `TEXT`. Verified against live **SQL Server 2022 (16.0.4265.3)** — the reported build — plus live
+**PostgreSQL 16**, live **MySQL 8.4** and on-disk SQLite — the three this change must not disturb — with
+`BIRKO_REQUIRE_LIVE` set throughout so no gated suite silently skipped: **1,117 tests green, 0 failed** across
+seven suites — MSSql 87 (was 61), `Birko.Data.SQL` 575 (was 565), SQLite 229, MySQL 78 (was 74),
+PostgreSQL 82, MSSql.View 19, Migrations.SQL 47 — **40 new**. No new nullable warning in any touched project (the 64
+standing ones in `Birko.Data.SQL.Tests` are in its own test files and are unchanged by this work — measured
+by stashing the change, not assumed). The standing rule is in § Conventions. Eight things worth carrying:
+
+- **The blast radius was the whole provider, not an exotic shape.** A plain `public string Name { get; set; }`
+  with no length attribute is what consumers write, and it is on essentially every consumer entity —
+  so every `Find`/`FindAll`/`Count`/`DeleteWhere` predicate and every `SortBy` over a string column threw on
+  MSSql. Never noticed because consumers test on SQLite and the MSSql live suites added by TASK-242/243 assert
+  on bulk writes and lazy init, never on a string predicate.
+- **Step 0 measured what the plan intended to cite, and two of the four premises were wrong.** Against a `TEXT`
+  column: `=`/`<>`/`IN` → **402** (the draft said 8116); `LOWER` → **8116**; `ORDER BY` *and* `GROUP BY` → **306**;
+  `DISTINCT` → **421**, a fourth code the draft did not predict; `LIKE` and `IS NULL` → **legal**. Skipping that
+  step would have shipped a test asserting the wrong error number and a comment stating it.
+- **`NVARCHAR(MAX)` alone would have fixed the predicates and reported success on the indexes.** Measured: an
+  index over `NVARCHAR(MAX)` raises the **same Msg 1919** as one over `TEXT`. Worse for `UNIQUE`/`PRIMARY KEY`,
+  which `FieldDefinition` emits as **inline column constraints** — those took down the entire `CREATE TABLE`.
+  And since TASK-204 schema-ensure *records* an unbuildable index rather than throwing, with nothing subscribing,
+  the half-fix would have been silent.
+- **`IsIndexed` could not see the constraint case, so the predicate was resolved once.**
+  `AbstractField.IsInIndexKey => IsIndexed || IsUnique || IsPrimary` — `LoadIndexes` marks only
+  `[IndexedField]`/`[CompositeIndex]`, so a `[UniqueField]` string is an index key the old flag called `false`.
+  MSSql reads the new property; **MySQL deliberately still reads the narrow one** (it has the identical
+  `LONGTEXT UNIQUE` → 1170 hole, but changing its DDL needs a live 8.4 run), and a test pins that asymmetry so
+  nobody unifies it from symmetry.
+- **255 matches MySQL on purpose, and SQL Server had room for more.** Its key limit is 1700 bytes nonclustered /
+  900 clustered — 850 / 450 characters — so 450 was available and was rejected: the same model runs on both
+  servers, and a value that indexes on one must index on the other. Overridable, and the override has its own
+  test, since "the real ceiling is the key limit, not this number" is otherwise unenforced prose.
+- **Reverts — four, each isolating one claim.** (a) restore `return "TEXT"` → **25 of 85**, and the LIKE test is
+  **not** among them, which is what confirms those three assertions were pins rather than provers. (b) always
+  `NVARCHAR(MAX)`, bounded branch unreachable → **11 of 85**, with **all 9 predicate tests still green** — the
+  two halves proven independent rather than argued. (c) drop each `IsIndexed` marking site in turn → **4** and
+  **2**, in disjoint sets; TASK-248's equivalent revert failed **0**, which is why this suite declares one entity
+  per attribute form. (d) narrow `IsInIndexKey` back to `IsIndexed` → **4**, exactly the UNIQUE/PRIMARY cases.
+- **Two fixtures were rigged and a third file's doc was stale.** `BulkTransactionBoundaryLiveTests` carried
+  `map.Property(x => x.Name).HasPrecision(100)`, which *looks* like a length and is not one —
+  `ModelMapRegistry` keeps fluent length as mapping metadata and never applies it to the SQL field, so that
+  column had always been `TEXT`. Removed rather than corrected, since unlengthed is the honest shape. The old
+  `IndexedStringColumnTypeTests` asserted `TEXT` for indexed *and* unindexed and called the consequence a known
+  out-of-scope divergence; its premise is gone, so it was rewritten. Also corrected: `AbstractField.IsIndexed`
+  and `MySQLConnector` both claimed "the other three providers index a TEXT column happily" — **MSSql cannot**,
+  and it was the only one of the three that couldn't.
+
+- **The close gate found something the implementation had not asked about, and it was a security property.**
+  Bounding a UNIQUE column is only acceptable because the over-long write is *refused*, and that rests entirely
+  on `ANSI_WARNINGS`. Measured: **ON** (SqlClient's default; the framework never sets it) → Msg 2628, nothing
+  stored. **OFF** → the value is silently truncated to 255 and a second, genuinely different value sharing that
+  prefix comes back as **Msg 2627, duplicate key** — the constraint quietly weaker than declared, which is the
+  exact failure TASK-248 rejected prefix indexes to avoid, arriving through a session setting instead. No defect
+  (and `[MaxLengthField(n)]` has always had the identical property on three providers), but it is the reason the
+  bounded branch is safe, so it is recorded rather than relied on by luck. The gate also caught a convention
+  miss of its own: `IsInIndexKey` is declared in `Birko.Data.SQL` and was tested only from the two provider
+  suites, so § Testing's *"tests in `Birko.{Project}.Tests`"* wanted a suite in its own project — now
+  `IsInIndexKeyTests` (10).
+
+---
+
+## 2026-08-19 — `[UtcField]` opened the door TASK-256's rule had named
+
+TASK-263, spawned by TASK-256's planning grill. That task settled what a plain `DateTime` column means on
+PostgreSQL — a wall clock — and named an opt-in for the case it deliberately does not serve, a value whose
+**instant** must be unambiguous. The opt-in did not exist: `ConvertType` had always mapped
+`DbType.DateTimeOffset` to `TIMESTAMPTZ` (PostgreSQL) and `DATETIMEOFFSET` (MSSql), but `CreateAbstractField`
+had no arm and no attribute can override a `DbType`, so the rule pointed at a mapped, walled-off door.
+`[UtcField]` on a `DateTime` property is that door. Verified against live **PostgreSQL 16**, **SQL Server
+2022**, **MySQL 8.4** and on-disk SQLite: **1,011 tests green across five suites** (565 · 82 · 61 · 74 · 229),
+31 new. The standing rules are in § Conventions. Six things worth carrying:
+
+- **The promise is the weakest provider's, not the best column type's.** MySQL's `DATETIME` and SQLite's
+  numeric affinity cannot carry an offset, and a field cannot behave differently per provider — `Tables.Table`
+  holds no connector and `AbstractField.Read` goes through the provider-blind `DataBase.Read`. So the contract
+  is *the instant is exact and reads back as UTC*, and a caller's original offset is normalised away
+  **everywhere, including on the two providers that could have kept it**. Uniformity beat per-provider fidelity
+  for the second time in two tasks, for TASK-256's reason: the product tests on SQLite and deploys on
+  PostgreSQL.
+- **An attribute, not a `DateTimeOffset` CLR property** — that type would advertise an offset half the providers
+  cannot honour, and an API that over-promises is worse than one stating its limit. It is also cheaper: an
+  existing `DateTime` model opts in per property with no type change.
+- **The two features compose because of a bound value's CLR TYPE, and that is now load-bearing.** TASK-256
+  strips `Kind` from every bound `DateTime` on PostgreSQL, on a premise this task falsified; `AddParameter`
+  cannot know the target column, so `UtcDateTimeField.Write` returns a **`DateTimeOffset`**, which the
+  stripper's `is DateTime` test misses. Reverting to a bare `DateTime` stores the instant **an hour out,
+  silently** — 1 of 82, and only the non-UTC database sees it.
+- **Measure the read, not just the write.** `GetDateTime` is wrong or fatal on three of four providers: it
+  **throws** `InvalidCastException` on MSSql's `datetimeoffset`, returns `Kind=Local` on SQLite and
+  `Unspecified` on MySQL. Only `GetFieldValue<DateTimeOffset>(i).UtcDateTime` is exact everywhere — the obvious
+  implementation would have passed on PostgreSQL and failed outright on MSSql.
+- **The delegated survey is answered, and the answer is "change nothing".** A plain `Kind=Utc` `DateTime` is
+  stored unshifted on MySQL, MSSql and SQLite, and shifted on PostgreSQL — which reproduces the pre-TASK-256
+  defect and so validates the probe. TASK-256's normalisation stays PostgreSQL-only on evidence rather than
+  being spread on symmetry.
+- **Two gaps are now recorded as decisions rather than left looking like oversights.** `DbType.Date`,
+  `DbType.Time` and a CLR `DateTimeOffset` property are unreachable from a model **by design**, written down at
+  `CreateAbstractField` since that dispatch is the only producer of fields; and SQLite's declared-`INTEGER` /
+  stored-ISO-text mismatch is pinned by a test rather than "fixed" into a divergence from plain
+  `DbType.DateTime`, which declares `INTEGER` and stores text too.
+
+---
+
+## 2026-08-19 — A UTC `DateTime` could not be bulk-inserted, and was silently shifted one row at a time
+
+TASK-256, filed by consumer Symbio (TASK-472) after a real entity hit `BulkInsertAsync`. The filed defect was
+loud and real — PostgreSQL's binary `COPY` passes `NpgsqlDbType.Timestamp` explicitly and Npgsql **refuses** a
+`Kind=Utc` value, so `CreateManyAsync` threw for every UTC-kinded entity. Measuring it found **a second defect
+on the path the task had cleared as working**: `AddParameter` binds no `DbType`, so Npgsql infers `timestamptz`
+and the server casts it into the timezone-less column **through the session's `TimeZone`** — storing `11:30`
+for a `10:30` UTC value on a UTC+1 server, with no error. Verified against live **PostgreSQL 16** and
+**TimescaleDB 2 / PG16** (Npgsql 10.0.3): PostgreSQL **76** tests (was 67), TimescaleDB **44** (was 42), plus
+MySQL 8.4, SQL Server 2022, SQLite and `Birko.Data.SQL` (555) all green; 0 nullable warnings. The standing rule
+is in § Conventions. Seven things worth carrying:
+
+- **The task named the loud half and cleared the quiet one.** Its scope note said *"the binary COPY path
+  only… `CreateAsync` works"* — true only on a UTC-configured server. Fixing the named half alone would have
+  left the two write paths storing **different instants**, so a bulk-written row would not match a filter bound
+  through the parameterised path. Both are now normalised by one producer,
+  `PostgreSQLConnector.NormalizeTimestampValue`.
+- **The framework's own base model emitted the value its own connector refused.**
+  `Birko.Data.SQL/Models/AbstractLogModel.cs:17-18` initialises `CreatedAt`/`UpdatedAt` from `DateTime.UtcNow`,
+  so this was every `AbstractDatabaseLogModel` descendant on every consumer — not a Symbio quirk. That also
+  killed the fail-fast option: refusing the value, per § SH-H037, would have refused a write from every
+  framework entity. Second inversion of that rule after TASK-248.
+- **`TIMESTAMPTZ` is the honest type and still the wrong answer.** Reopened during the grill precisely because
+  it is cheapest now — no PostgreSQL data exists and models are about to freeze. Rejected on measurement: it
+  makes PostgreSQL the **only** tz-aware provider (SQLite numeric, MySQL `DATETIME`, MSSql `DATETIME2`), and
+  since the product **tests on SQLite and will deploy on PostgreSQL**, a green test would stop proving
+  production behaviour. It also breaks the `Unspecified` case (`10:30` in → `09:30Z` back) and its `ALTER`
+  silently reinterprets existing rows in the session TZ. **Uniformity across providers beat per-provider
+  correctness.**
+- **The chosen rule was already the consumer's rule.** Symbio's `UtcDateTimeJsonConverter` treats an
+  `Unspecified` value from storage **as UTC** and converts for display via `Birko.Time`'s `ITimeZoneConverter`
+  from a UTC baseline. So "the caller re-attaches the `Kind`" was written and shipped before the task existed —
+  reading the consumer's conversion layer is what made the decision cheap.
+- **On a correctly-configured server the silent half is unobservable, so the test misconfigures one.** Both
+  paths store `10:30` on a UTC server whatever the code does — reverting the parameter fix fails **nothing**
+  there. `PostgreSqlSettings.GetConnectionString()` emits no `Timezone` key, so `SET TimeZone` on a test's own
+  connection cannot reach the store's; the test creates a **dedicated database** with
+  `ALTER DATABASE … SET TimeZone` and calls **`NpgsqlConnection.ClearAllPools()`**, without which a pooled
+  connection keeps `Etc/UTC` and the test silently measures nothing. Measured both ways.
+- **Reverts:** COPY writer **16 of 76** · `AddParameter` **1 of 76** — and that one is exactly the non-UTC test
+  · base COPY vs the TimescaleDB suite **15 of 44**, which is how the inherited fix was proven rather than
+  read. The blast radius was measured before the parameterised path was touched: `DataProviders.Default` is
+  `SQLite` and **no deployment holds PostgreSQL data**, so no stored row could be orphaned — a window that
+  closes when production moves to PostgreSQL, which is why both halves landed now (same shape as TASK-219).
+- **The close gate caught my own rule overstating itself.** The first draft said "every write boundary strips
+  `Kind`". The bulk update/delete paths bypass `AddParameter` entirely — pre-create parameters with
+  `DBNull.Value`, `Prepare()`, assign `.Value` per row — so six binding sites sit structurally outside the
+  funnel; measured, they are unshifted anyway, because `Prepare()` pins each parameter to the column's real
+  type before a value is assigned. The fix was neither to wire them nor to wave them off but to **pin the
+  mechanism**, so dropping `Prepare()` fails a test rather than silently shifting. The word that made the rule
+  true — *un-prepared* — was earned by measuring, not by reasoning (§ TASK-258).
+- **Two fixtures were rigged, one by omission.** TimescaleDB's built rows `Unspecified` with a comment
+  explaining the refusal — a defect worked around in a fixture. PostgreSQL's `BulkRow` carried **no `DateTime`
+  property at all**, which is the same avoidance with nothing to notice. De-rigging both is what makes the COPY
+  revert fail 16 rather than a handful. Spawned **TASK-263**: `ConvertType` maps `DbType.DateTimeOffset` to
+  `TIMESTAMPTZ` (and `DATETIMEOFFSET` on MSSql) but **nothing can reach it** — no `DateTimeOffset` arm in
+  `CreateAbstractField`, no attribute can override a `DbType` — so there is no way to persist an instant with
+  its offset, and the new rule's named escape hatch does not exist yet.
+
+---
+
 ## 2026-08-18 — The migration emitters wrote the same statement without the escaping
 
 TASK-253, spawned by TASK-472. That task fixed `create_hypertable` in `TimescaleDBConnector` after measuring
