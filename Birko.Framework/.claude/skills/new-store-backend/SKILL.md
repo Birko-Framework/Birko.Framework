@@ -131,7 +131,7 @@ If `family = BackgroundJobs`:
 - `README.md` — add the new backend to the storage matrix.
 - `docs/stores.md` (or `docs/workflow.md` / `docs/background-jobs.md`) — document the platform, settings, connection-string format, native bulk semantics, health check.
 - Root `CLAUDE.md` § "Dependency Flow" — add the new project to the appropriate branch of the diagram.
-- Root `CLAUDE.md` § "Recent Updates" — add a dated entry summarizing what the new backend offers. Use [[roll-changelog]] when the section gets long.
+- Root `CLAUDE.md` § "Recent Updates" — add a dated entry summarizing what the new backend offers. Use [[roll-birko-changelog]] when the section gets long.
 
 ## After implementing
 

@@ -1,16 +1,31 @@
 ---
-name: verify-conventions
-description: Lint the staged or current diff against the conventions documented in `Birko.Framework/CLAUDE.md`. Use when the user says "verify conventions", "check birko rules", "lint pred commitom", "skontroluj zmeny", "are my changes following birko conventions", or before any commit on Birko.Framework. **Project-local variant that deliberately shares the generic `verify-conventions` name so it shadows it here; it runs the generic pass first (step 0), then these concrete checks.** Catches nullable-warning regressions (CS8600–CS8625), concrete stores overriding public CRUD instead of `*Core`, missing tests for new public methods, hard-coded paths instead of `$(BirkoSrc)`, `RemoteSettings` constructed inline instead of via `base.SetSettings()`, missing `Recent Updates` entries, missing required files or `.slnx` / `.code-workspace` / `.csproj` registrations for new projects, and new projects missing from the documentation index.
+name: verify-birko-conventions
+description: Lint the staged or current diff against the conventions documented in `Birko.Framework/CLAUDE.md`. Use when the user says "verify conventions", "check birko rules", "lint pred commitom", "skontroluj zmeny", "are my changes following birko conventions", or before any commit on Birko.Framework. **The project-local EXTENSION of the generic `verify-conventions`. It does NOT shadow it -- measured 2026-09-07, a name present at both user and project level resolves user-level first, so shadowing is not a mechanism in this runtime. The generic skill discovers this file by path and hands off to it; it also stands alone. Run the generic pass first (step 0) unless the generic skill already did, then these concrete checks.** Catches nullable-warning regressions (CS8600–CS8625), concrete stores overriding public CRUD instead of `*Core`, missing tests for new public methods, hard-coded paths instead of `$(BirkoSrc)`, `RemoteSettings` constructed inline instead of via `base.SetSettings()`, missing `Recent Updates` entries, missing required files or `.slnx` / `.code-workspace` / `.csproj` registrations for new projects, and new projects missing from the documentation index.
 ---
 
 # Birko Framework — Convention Verifier
 
-> **Shadows the generic `verify-conventions` — and therefore must EXTEND it, not replace it.**
-> Project-local skills win by *name* inside their repo, so this file is what `/tasks close` step 5b
-> and `/fix-next` step 8 actually load here; the generic skill does not also run. It was previously
-> called `verify-birko-conventions`, which shadowed nothing — those gates silently ran the generic
-> lint and none of the concrete checks below. Now the reverse risk applies, so **run step 0 first**:
-> the generic pass is not optional, and checks 1–10 are additive to it, not a substitute.
+> **The project-local EXTENSION of the generic `verify-conventions` — it must EXTEND it, not replace it.**
+>
+> ⚠ **It does not shadow the generic skill, and it never could.** Measured 2026-09-07 from the skill
+> loader's own banner: `Skill(verify-conventions)` resolved to the user-level junction
+> (`~/.claude/skills/verify-conventions` → the generic file), while `Skill(new-store-backend)`, which
+> has no user-level entry, resolved to this repo. So **project-local skills are discoverable, but a
+> name present at both levels resolves user-level first.** Name-shadowing is not a supported
+> mechanism here.
+>
+> That was mis-stated through two rounds of fixes (TASK-267). This file was originally
+> `verify-birko-conventions`, was renamed to `verify-conventions` on the theory that name equality
+> produces shadowing, and the gates went on silently running the generic lint and none of checks
+> 1–10. The name is now distinct again, and **reachability no longer depends on resolution order**:
+> the generic skill's discovery step globs for this file by path, runs its own pass, then hands off
+> here and names this file on its report header. If it cannot, it reports a blocker rather than a
+> clean pass.
+>
+> **Two doors, one answer.** Invoked directly (`/verify-birko-conventions`) this file owns the whole
+> run, so **step 0 is mandatory**. Reached by discovery, the generic pass has already happened —
+> **skip step 0a–c and say so on the report**, or the two skills loop. Either way checks 1–10 are
+> additive to the generic pass, never a substitute for it.
 
 A pre-commit / post-change lint that enforces the rules listed in:
 
@@ -39,7 +54,13 @@ Run these checks in order. For each violation found, report:
 - **The rule violated**
 - **Suggested fix** (one-line)
 
-### 0. The generic pass — run this FIRST, every time
+### 0. The generic pass — run this FIRST, unless the generic skill already did
+
+> **Which door did you come through?** If the generic `verify-conventions` skill discovered this file
+> and handed off, its pass has already run: **skip 0a–c, and say so on the report** (*"generic pass:
+> already run by the discovering skill"*). Repeating it would loop the two skills and double every
+> generic finding. If you were invoked directly, 0a–c are **mandatory** — nothing else has run them.
+
 
 Checks 1–10 are a **frozen list**, written against the conventions as they stood when this file was
 authored. They cannot notice a rule added to `CLAUDE.md` afterwards. The generic

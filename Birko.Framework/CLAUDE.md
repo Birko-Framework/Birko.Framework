@@ -2133,8 +2133,16 @@ before the aggregator commit — otherwise the tracking file lands referencing n
 `.claude/skills/` is the home of the Birko-specific skills. They **build on top of the generic
 project-lifecycle-skills set** (never the reverse — the generic skills know only a "stack
 scaffolder" hook, not Birko). Project-local ones (new-birko-subproject, new-store-backend,
-verify-conventions (the project-local shadow of the generic one), the roll-changelog shadow) auto-load
-only inside this repo; the
+verify-birko-conventions, roll-birko-changelog) are reachable only inside this repo — **and reachability
+comes from a distinct name, not from shadowing.** Measured at TASK-267: a skill name present at both
+`~/.claude/skills/` and this repo's `.claude/skills/` resolves **user-level first**, so the two that used
+to share a generic name (`verify-conventions`, `roll-changelog`) never ran at all, and every close gate
+silently linted with the generic skill while the repo believed otherwise. Project-local skills *are*
+discovered — one with no user-level twin resolves here — so the defect was precedence, never discovery.
+The gate is now wired the other way round: the generic `verify-conventions` **globs for
+`.claude/skills/verify-*conventions*/SKILL.md`**, runs its own pass, hands off, and names the extension
+on its report header — reporting a **blocker** if it finds one it did not run. So the Birko checks are
+reachable through either door, and a run that skipped them says so instead of reporting a clean pass; the
 consumer-facing ones (birko-new-project, new-birko-web-page, new-birko-web-component,
 design-agent) are shared user-level via [install-skills.ps1](install-skills.ps1) (junctions —
 edit here, live immediately).
@@ -2156,7 +2164,47 @@ edit here, live immediately).
 
 ## Recent Updates
 
-The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
+
+### The close gate's project-local convention checks had never run, twice over (2026-09-07)
+
+TASK-267, its own P1 and about the gate rather than the code. This repo ships
+`.claude/skills/verify-conventions/` on the theory that a project-local skill shadows a user-level one of
+the same name — the header said so, `install-skills.ps1` said so, § *Skills shipped by this repo* said so,
+and the **generic** skill said so. Measured 2026-09-07 from the skill loader's own banner:
+`Skill(verify-conventions)` resolved to `~/.claude/skills/verify-conventions` (the generic file, none of
+checks 1–10), while `Skill(new-store-backend)` — no user-level twin — resolved to this repo. So
+**project-local skills are discoverable and a colliding name resolves user-level first**: the failure was
+precedence, never discovery, and shadowing was never a mechanism. Every `/tasks close` and `/fix-next` in
+this repo has linted with the generic skill alone. The standing rule is in § *Skills shipped by this
+repo*. Seven things worth carrying:
+
+- **The premise was written down in four places, which is why two fixes bounced off it.** The first fix
+  renamed `verify-birko-conventions` → `verify-conventions`; it could not have worked, and nothing
+  verified that it had. § *verify the escape hatch opens* — a fix whose mechanism was never executed.
+- **The detector belongs in the skill that WINS, not the one that loses.** Same discipline TASK-295
+  records for `CreateTable`: bookkeeping a rule depends on goes in the non-bypassable wrapper. So the
+  generic `verify-conventions` gained a **step 0** that globs
+  `.claude/skills/verify-*conventions*/SKILL.md`, runs its own pass, hands off, and **names the extension
+  on its report header** — reporting a 🛑 if it finds one it did not run. A distinct name is what *arms*
+  the gate; the old header claimed renaming would disarm it.
+- **Two doors, one answer** (§ TASK-274). `verify-birko-conventions` is now directly invokable *and*
+  reachable by discovery, so its step 0 is conditional on which door was used — mandatory when invoked
+  directly, skipped with a note when the generic pass already ran, or the two skills loop and double
+  every finding.
+- **The audit found a second instance and four non-instances.** `roll-changelog` collided identically and
+  also never ran (renamed `roll-birko-changelog`). Four skills junction *into this repo*, so they resolve
+  to the same bytes either way and were never at risk; two have no user-level twin and always worked.
+- **The five `[[verify-birko-conventions]]` references were not stale — they were early.** They are
+  correct again without being touched.
+- **⚠ The gate caught a real violation on the change that made it able to fire.** Running it on this
+  diff, check 9 reported the missing `Recent Updates` entry — this one. Before the fix that check could
+  not have run at all.
+- **⚠ What is NOT fixed: a skill instruction is not an enforcement mechanism.** Step 0 is as hard as a
+  skill system allows — it is in the file that always loads, at the top, with a blocker for the negative
+  case — but nothing *compels* an agent to execute it. A pre-commit hook is the only mechanism that
+  cannot be skipped, and § *Where this runs* already names [[update-config]] for it. Recorded rather than
+  claimed as closed.
 
 ### A throwing diagnostic subscriber could brick an entity, and the reason it was left alone had expired (2026-09-03)
 

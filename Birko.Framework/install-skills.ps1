@@ -4,16 +4,23 @@
 #
 # Only the consumer-facing skills are shared user-level (they're needed OUTSIDE this
 # repo — scaffolding a new consumer, prototyping in a consumer app). The rest of
-# .claude/skills (new-birko-subproject, new-store-backend, verify-conventions,
-# the roll-changelog shadow) stay project-local: Claude Code auto-loads them only inside
-# this repo, which is exactly their scope. verify-conventions and roll-changelog
-# deliberately share the generic skills' names so they SHADOW them here — that is the
-# whole mechanism, and renaming either one silently disarms the gates that call them.
+# .claude/skills (new-birko-subproject, new-store-backend, verify-birko-conventions,
+# roll-birko-changelog) stay project-local, which is exactly their scope.
 #
-# !! NEVER add a name-sharing shadow (verify-conventions, roll-changelog) to $shared.
-# Shadowing is scoped by living in THIS repo's .claude/skills. Junctioning one into
-# ~/.claude/skills would replace the generic skill for EVERY project on this machine
-# with the Birko-specific variant. Same hazard the lifecycle repo's skills-pi/ carries.
+# !! NAME-SHADOWING DOES NOT WORK — do not reintroduce it (TASK-267).
+# This header used to claim verify-conventions and roll-changelog "deliberately share the
+# generic skills' names so they SHADOW them here", and that renaming either one would
+# "silently disarm the gates". Both statements are false, and backwards. Measured
+# 2026-09-07 from the skill loader's own banner: a name present at BOTH ~/.claude/skills
+# and this repo's .claude/skills resolves USER-LEVEL FIRST, so the colliding local copies
+# never ran and every close gate silently linted with the generic skill. A distinct name
+# is what ARMS them: the generic verify-conventions now discovers
+# .claude/skills/verify-birko-conventions/ by path and hands off to it, and reports a
+# blocker if it finds one it did not run.
+#
+# !! Still NEVER add these two to $shared. Junctioning a project-local variant into
+# ~/.claude/skills would apply the Birko-specific checks to EVERY project on this machine.
+# Same hazard the lifecycle repo's skills-pi/ carries.
 #
 # These skills BUILD ON TOP of the generic project-lifecycle-skills set
 # (github.com -> project-lifecycle-skills; install that one first) — e.g.

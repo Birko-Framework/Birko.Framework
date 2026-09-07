@@ -60,7 +60,7 @@ Every project directory must contain:
   depends on.
 - A package declared in a `.projitems` is *injected* into the importing project, so a consumer that also
   declares it gets **NU1504 duplicate PackageReference** — a warning normally, an **error** under the
-  `-warnaserror` that `verify-conventions` check 1 runs. So when you add a declaration, remove it from the
+  `-warnaserror` that `verify-birko-conventions` check 1 runs. So when you add a declaration, remove it from the
   dependents in the same change.
 - Shipping the backends as real NuGet packages is **deferred** until the libraries stabilise. Declaring here
   is forward-compatible with that: a package's dependency list is exactly this set.
@@ -108,7 +108,7 @@ and that are easy to get wrong by hand:
 - **Check the resolved transitive, not the top-level version number.** `Microsoft.Data.Sqlite` 10.0.0 is
   newer than 9.0.19 and *worse*: 10.0.0 resolves `SQLitePCLRaw` 2.1.11, 9.0.19 resolves the fixed 2.1.12.
 
-Promotion to a build error stays where it is — `verify-conventions` check 1, on the diff of the task in hand,
+Promotion to a build error stays where it is — `verify-birko-conventions` check 1, on the diff of the task in hand,
 where a human is present to judge it. Making it a global error would break every affected project today and,
 with floating versions, could break any build at any time from an upstream publication nobody chose.
 
@@ -168,7 +168,7 @@ A new project is not "registered" until it appears in the framework's **document
 
 Exclusions: `.Tests`, `.ViewModel`, `.Views` companions inherit their parent's documentation and need no separate index row (but confirm the parent is indexed). Test projects are never listed in the project index.
 
-This is the gap that build-file registration alone misses — a project can compile and ship yet be invisible in every human-facing doc. `verify-conventions` check #11 lints for it.
+This is the gap that build-file registration alone misses — a project can compile and ship yet be invisible in every human-facing doc. `verify-birko-conventions` check #7b lints for it.
 
 ## Test Requirements
 Every new public functionality must have corresponding unit tests:

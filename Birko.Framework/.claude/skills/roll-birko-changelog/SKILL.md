@@ -1,5 +1,5 @@
 ---
-name: roll-changelog
+name: roll-birko-changelog
 description: Prune the "Recent Updates" section in `Birko.Framework/CLAUDE.md` by moving the oldest entries into `CHANGELOG.md`. Use when the user says "roll changelog", "prune recent updates", "move oldest entries to CHANGELOG", "uprac CLAUDE.md", "presun do CHANGELOG", or notes that `Recent Updates` has grown too large. Reads CLAUDE.md, identifies the oldest N `### Title (YYYY-MM-DD)` entries, converts them to the CHANGELOG format `## YYYY-MM-DD — Title`, prepends them to CHANGELOG.md (under the intro paragraph, above existing entries — newest-first within CHANGELOG), and deletes them from CLAUDE.md. Mirrors what the user did manually in commit `0f51a01` ("docs: backfill CHANGELOG with 5 entries from CLAUDE.md Recent Updates").
 ---
 

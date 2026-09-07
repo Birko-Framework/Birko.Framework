@@ -93,7 +93,7 @@ Per [[feedback_update_docs]] and CLAUDE.md "Recent Updates" cadence:
 
 1. **Component inventory table** in `Birko.Web.Components/CLAUDE.md` — add a row.
 2. **`src/locales/en.json`** — add the new `bwc.*` keys.
-3. **Root `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md`** § "Recent Updates" — add a `### Birko.Web.Components — b-{name} (YYYY-MM-DD)` entry describing what the component does and any notable patterns. Use [[roll-changelog]] when that section gets long.
+3. **Root `C:\Source\Birko\Framework\Birko.Framework\CLAUDE.md`** § "Recent Updates" — add a `### Birko.Web.Components — b-{name} (YYYY-MM-DD)` entry describing what the component does and any notable patterns. Use [[roll-birko-changelog]] when that section gets long.
 4. **`README.md`** — update the components-by-category list if you add a notable component.
 5. **API.md** in `Birko.Web.Components/` (if present) — add the new component's API surface.
 

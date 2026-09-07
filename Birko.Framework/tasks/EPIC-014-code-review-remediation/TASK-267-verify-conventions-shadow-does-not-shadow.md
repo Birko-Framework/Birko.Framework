@@ -2,7 +2,7 @@
 id: TASK-267
 parent: EPIC-014
 feature: FEATURE-014
-status: todo
+status: review
 priority: P1
 assignee: ai
 created: 2026-08-21
@@ -10,7 +10,7 @@ depends-on: []
 blocks: []
 related: [TASK-257]
 findings: []
-pr: null
+pr: "project-lifecycle-skills 4aad076 (generic skill: discovery step) + this repo's commit below"
 github-issue: null
 jira-key: null
 ---
@@ -73,21 +73,144 @@ Option 1 or 3; 2 is what the original name did, and it is what failed the first 
 
 ## Acceptance criteria
 
-- [ ] Root cause established: why the project-local file is not loaded, with the resolution order stated.
-- [ ] A mechanism chosen that **cannot** silently fail — i.e. if the Birko checks do not run, the gate says
+- [x] Root cause established: why the project-local file is not loaded, with the resolution order stated.
+- [x] A mechanism chosen that **cannot** silently fail — i.e. if the Birko checks do not run, the gate says
       so rather than reporting a clean pass.
-- [ ] Proven able to fail: demonstrate the gate reporting the Birko checks as *not run*, then reporting
+- [x] Proven able to fail: demonstrate the gate reporting the Birko checks as *not run*, then reporting
       them as run. "It resolved this time" is not evidence; show the negative case.
-- [ ] The other project-local skills audited for the same problem, since they share the mechanism.
-- [ ] `CLAUDE.md` § *Skills shipped by this repo* corrected — it currently states these "auto-load only
+- [x] The other project-local skills audited for the same problem, since they share the mechanism.
+- [x] `CLAUDE.md` § *Skills shipped by this repo* corrected — it currently states these "auto-load only
       inside this repo", which is the belief this task falsifies.
 
 ## Out of scope
 
 - Changing what the Birko checks themselves assert. This task is about whether they run.
 
+## Implementation plan
+
+### Step 0 — measured 2026-09-07, before a line changed
+
+Both probes are empirical, from the skill loader's own banner:
+
+| probe | banner | conclusion |
+|---|---|---|
+| `Skill(verify-conventions)` | `C:\Users\FinStat\.claude\skills\verify-conventions` | the **user-level junction** -> the generic skill. Body carried none of checks 1-10. |
+| `Skill(new-store-backend)` | `C:\Source\...\Birko.Framework\.claude\skills\new-store-backend` | project-local `.claude/skills/` **is** resolved. |
+
+**Root cause, stated as a resolution order:** project-local skills are discoverable, but a name present
+at *both* user level and project level resolves **user-level first**. Name-shadowing is therefore not a
+supported mechanism in this runtime, and never was — so the rename that was the first fix could not have
+worked, and neither could any second attempt at the same shape.
+
+**Audit of every local skill (criterion 4).** Two collide with a user-level junction pointing at the
+generic skill, and both lose: `verify-conventions` and `roll-changelog`. Four (`birko-new-project`,
+`design-agent`, `new-birko-web-page`, `new-birko-web-component`) have user-level junctions pointing back
+**into this repo**, so they resolve to the same bytes either way and are harmless by construction —
+`install-skills.ps1` shares exactly that set. Two (`new-birko-subproject`, `new-store-backend`) have no
+user-level entry at all and win locally.
+
+**The false premise is written down in four places**, which is why it survived two fixes:
+
+1. the generic skill's § Scope layering — *"Name it `verify-conventions`, exactly. Shadowing works by folder name."*
+2. this repo's `.claude/skills/verify-conventions/SKILL.md` header — *"Project-local skills win by name inside their repo"*
+3. `install-skills.ps1`'s header — *"deliberately share the generic skills' names so they SHADOW them here — that is the point"*
+4. `CLAUDE.md` § *Skills shipped by this repo* — *"auto-load only inside this repo"*
+
+### The fix — put the detector in the skill that WINS, not the one that loses
+
+The mechanism that cannot silently fail has to live in whatever always runs, and that is the **generic**
+skill. This is the same discipline § TASK-295 records for `CreateTable`: bookkeeping a rule depends on
+goes in the non-bypassable wrapper, not in the implementation that gets overridden.
+
+1. **Rename the local skill to `verify-birko-conventions`** — a distinct name, so it is directly
+   invokable and collides with nothing. This also makes the five existing `[[verify-birko-conventions]]`
+   references correct; they were not stale, they were early.
+2. **Give the generic skill a discovery step** that globs the repo for a project-local extension, runs
+   the generic pass, then reads and executes it, and **names it on the report header**. If an extension
+   exists and was not executed, that is a **blocker**, not a clean pass. Fixes every project, not just
+   this one.
+3. **Correct all four statements of the false premise** with the measured resolution order.
+4. **`roll-changelog`** -> `roll-birko-changelog`. Not a gate (nothing calls it automatically), so it
+   needs reachability, not discovery.
+5. **The local skill's step 0 becomes conditional** — reached via discovery the generic pass has already
+   run, so re-running it would loop; invoked directly it must still run.
+
+### Proven able to fail (criterion 3)
+
+The negative case is already captured above: invoking `verify-conventions` loaded the generic body with no
+Birko checks. The positive case is the same invocation after the fix naming the extension on its header.
+Both are recorded, because "it resolved this time" is not evidence.
+
+### Out of scope, deliberately
+
+- **What the Birko checks assert** — unchanged; this task is about whether they run.
+- **Any framework code.** Nothing under `Birko.Data.*` is touched.
+
 ## Human test plan
 
 - [ ] Run `/tasks close` (or `/verify-conventions`) in this repo and confirm from its own output that the
       project-local checks executed — the report must name the Birko-specific checks, not just the generic
       rulebook sweep. A human reads the report; that is the verification.
+
+---
+
+## Worked 2026-09-07 — status `review`, pending the human read of one report
+
+### What was measured, before a line changed
+
+| probe | loader banner | conclusion |
+|---|---|---|
+| `Skill(verify-conventions)` | `~\.claude\skills\verify-conventions` | the user-level junction -> the **generic** file; body carried none of checks 1-10 |
+| `Skill(new-store-backend)` | `...\Birko.Framework\.claude\skills\new-store-backend` | project-local `.claude/skills/` **is** resolved |
+
+**Resolution order:** project-local skills are discoverable; a name present at both user and project
+level resolves **user-level first**. So shadowing was never a mechanism, the first fix could not have
+worked, and a second attempt at the same shape could not have either.
+
+### What changed
+
+- **`verify-conventions` -> `verify-birko-conventions`**, `roll-changelog` -> `roll-birko-changelog`
+  (distinct names, no collision, both directly invokable). The five existing
+  `[[verify-birko-conventions]]` references were **not stale — they were early**, and are correct again
+  untouched.
+- **The generic skill gained step 0** (`project-lifecycle-skills`, commit below): glob
+  `.claude/skills/verify-*conventions*/SKILL.md`, run the generic pass, hand off, **name the extension on
+  the report header**, and report a 🛑 for one found-but-not-run. The detector lives in the skill that
+  *wins* resolution — § TASK-295's non-bypassable-wrapper rule, applied to a gate.
+- **All four statements of the false premise corrected** — the generic skill's § Scope layering and its
+  description, this repo's local skill header and description, `install-skills.ps1`'s header (which
+  claimed renaming would *disarm* the gates, exactly backwards), and `CLAUDE.md` § *Skills shipped by
+  this repo*. Three `CLAUDE-maintenance.md` references were repointed at the renamed skill, and a wrong
+  check number (`#11`, which does not exist) corrected to `#7b`.
+- **The local step 0 is now conditional on the entry door**, or the generic and local skills loop and
+  every generic finding is reported twice.
+
+### Proven able to fail
+
+The negative case is the Step 0 table above: the gate loaded the generic body with no Birko checks.
+The positive case is the same invocation afterwards — step 0 globbed, found
+`.claude/skills/verify-birko-conventions/SKILL.md`, and ran it. **And it caught a real violation on the
+change that made it able to fire:** check 9 (5+ files, no `Recent Updates` entry) reported the missing
+entry, which is now written. Before the fix that check could not have run at all.
+
+### Audit (criterion 4)
+
+Two collided with a user-level junction pointing at the generic skill and both lost —
+`verify-conventions` and `roll-changelog`. Four (`birko-new-project`, `design-agent`,
+`new-birko-web-page`, `new-birko-web-component`) have junctions pointing **into this repo**, so they
+resolve to the same bytes either way and were never at risk; `install-skills.ps1` shares exactly that
+set. Two (`new-birko-subproject`, `new-store-backend`) have no user-level twin and always worked.
+
+### ⚠ Deliberately not done, and why the status is `review`
+
+- **A skill instruction is not an enforcement mechanism.** Step 0 is as hard as a skill system allows —
+  in the file that always loads, at the top, with a blocker for the negative case — but nothing
+  *compels* an agent to execute it. Only a pre-commit hook cannot be skipped, and the generic skill's
+  § *Where this runs* already names [[update-config]] for that. Recorded, not claimed as closed; if the
+  gate is seen to skip step 0 in practice, that is the escalation.
+- **What the Birko checks assert is unchanged** — this task was about whether they run.
+- **`roll-birko-changelog` got reachability, not discovery.** Nothing invokes it automatically, so it
+  has no gate to go silent on; renaming is the whole fix.
+- **No framework code touched.** Nothing under `Birko.Data.*`.
+- **The human test plan is unrun by a human.** I executed the gate and read its report; the plan asks a
+  human to. That is the only thing between `review` and `done`.
