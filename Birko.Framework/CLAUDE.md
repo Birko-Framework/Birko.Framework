@@ -1781,6 +1781,33 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     and failed in the branch everybody uses, and a green suite said nothing. **Where a component has a
     fallback branch, a test that takes the fallback is not a test of the component** — check which branch your
     fixture selects before trusting it, and prefer a revert to a reading.
+    **Fourth instance (TASK-264), and the one that names the mechanism: a connector reads a column's WIDTH
+    off the field's RUNTIME TYPE, not off a property.** `SchemaField` adapts a migration's
+    `FieldDescriptor` to the SQL field model and forwarded **5 of its 15** properties, deriving straight
+    from `AbstractField` — while `ConvertType` tests `field is CharField` before it will emit
+    `NVARCHAR(n)`, and `field is DecimalField && Precision != null && Scale != null` before
+    `DECIMAL(p,s)`. It satisfied neither test, so a declared `maxLength` produced the unbounded type and a
+    declared `precision`/`scale` produced a bare `DECIMAL` — default scale **0** on SQL Server and MySQL,
+    i.e. **money truncated to whole units**, and on **SQLite, this framework's default provider**, an
+    unqualified decimal falls back to **`REAL`**, so a column declared `DECIMAL(18,2)` held binary
+    floating point. Both silent. So: **a descriptor is adapted through ONE factory that dispatches to the
+    field subclass carrying the metadata** (`SchemaField.For`), mirroring `CreateAbstractField`'s dispatch
+    **including its `MaxLength`-then-`Precision` fallback for strings**, so the two producers cannot
+    disagree about what a length is — and every construction site goes through it, which the mutation
+    bypassing only the `ALTER TABLE ADD` site proves was necessary (it reds exactly one test). Three
+    corollaries. **The filed half need not be the worse half**: the task named `MaxLength` and the
+    unfiled decimal half was nastier, and fixing one without the other is § TASK-207's *re-keying half a
+    dictionary is not a fix, it is a narrower bug*. **Both sides of every such switch are pinned** — an
+    undeclared length must *still* be unbounded and an undeclared precision must still be the provider's
+    default, or the fix is indistinguishable from imposing a ceiling on values that write fine today
+    (§ TASK-248) — and SQLite's `TEXT` is asserted as *correct* rather than as a gap, since it has no
+    length-enforcing string type and pinning it is what stops a later reader "fixing" it into a
+    divergence. And **`IsIndexed` cannot be set on this path at all**: `SqlCollectionBuilder` and
+    `SqlIndexBuilder` are separate builders with separate `Build()` calls and no shared state, often in
+    separate migrations, so at `CREATE TABLE` time nothing knows an index is coming — `LoadIndexes`' trick
+    of seeing a whole entity's attributes at once has no analogue. Honouring `MaxLength` resolves the case
+    that matters and leaves the undeclared one **loud** (Msg 1919 / ERROR 1170 on the explicit
+    `CreateIndexes` call, which per TASK-204 still throws).
   - **A public contract can be *narrowed to what it meant* rather than preserved literally.** "The public
     `CreateIndexes` still throws" (TASK-204) is about an index that cannot be **built**; it was never about
     "already present", which the other three providers report as success. Making MySQL idempotent there
@@ -1853,6 +1880,39 @@ Use `$(BirkoSrc)` (resolved from a root `Directory.Build.props`) for all `Import
     absorbed. Note the survey itself had to be corrected twice — the consumer entities declare their
     attributes fully qualified (`[Birko.Data.SQL.Attributes.CompositeIndex(...)]`), which an unqualified grep
     misses entirely. **Verify a blast-radius count against one known instance before trusting it.**
+  - **Fifth member (TASK-266): the same veto for `byte[]` — and the remedy the task wanted was not
+    expressible, which is what widened the fix.** `ConvertType` mapped `DbType.Binary` to
+    `VARBINARY(MAX)` / `LONGBLOB` unconditionally, and neither provider can use an unbounded blob as an
+    index key, so a `[UniqueField] byte[]` entity had **no table at all** — measured on SQL Server 2022
+    (16.0.4265.3) the inline `UNIQUE` is **Msg 1919 + Msg 1750**, which `TRY/CATCH` cannot intercept, so
+    the batch aborts and the whole `CREATE TABLE` fails; **ERROR 1170** on MySQL 8.4.11. Bounded at those
+    two providers via `IsInIndexKey`, **never refused at load**, because the identical declaration is
+    legal on PostgreSQL and SQLite and a framework-wide refusal would break a working entity on two
+    providers to fix two others — TASK-248's veto, third time it has decided one of these. Four parts:
+    - **"Declare a width" is only a remedy if a width can be declared.** `BinaryField` had no length at
+      all and `CreateAbstractField` never passed `maxLength` for a `byte[]`, so `[MaxLengthField(32)]` on
+      one was **silently dropped**; shipping only the provider bound would have been § TASK-263's *escape
+      hatch that did not open*. Opening it is half the change, and it is the shape a real binary key (a
+      hash, a UUID) actually wants. Spelled `MaxLength`, deliberately not `CharField.Lenght` — a
+      misspelling that is shipped public API is not a convention a new member inherits.
+    - **Gate on the field's runtime type, because `DbType.Object` shares that `case` on all four
+      connectors.** A serialized object has no byte width and a length applied to one would truncate it;
+      test both ways, including that a null field neither NREs nor gets bounded.
+    - **255 is a cross-provider agreement, not either server's ceiling** — measured, `VARBINARY(901)`
+      indexes on SQL Server (the real limit being 1700 bytes nonclustered) and `VARBINARY(3072)` on MySQL.
+      The same model runs on both, so a width that indexes on one must index on the other. Same reasoning
+      TASK-257 recorded for the string knob, and the same shape of escape hatch —
+      `protected virtual int IndexedBinaryColumnLength`, overridden in a test on each provider, because
+      *"the real ceiling is the key limit, not this number"* is otherwise a comment nothing enforces.
+    - **⚠ The wide composite is PINNED, not guarded, and the two providers answer oppositely.**
+      4 × `NVARCHAR(255)` is 2040 bytes against SQL Server's 1700: it creates the index **with a warning**,
+      rejects a max-width INSERT (Msg 1946) — **and a short row still inserts fine**. So it is
+      data-dependent rather than broken, and refusing at DDL would break working code (`PredicateScope`'s
+      *a false refusal breaks working code*). MySQL **refuses** the same 4-column index outright
+      (ERROR 1071, 4080 of 3072 bytes), so a framework guard would duplicate one server while regressing
+      the other — and note how tight that margin is: three columns is 3060 bytes, inside the limit by
+      **twelve**. It is also not computable where the type is chosen: `ConvertType` sees one field, never
+      an index.
 - **A fallback branch nobody can reach is not a safety net — it is a second implementation that drifts, and
   it can invalidate the tests of the first.** TASK-247, closing the index-DDL family. `SqlSchemaBuilder` took
   an *optional* connector and carried a hand-written raw-SQL fallback in all eight of its methods for the null
