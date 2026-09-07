@@ -107,13 +107,13 @@ namespace Birko.Data.Migrations.SQL.Context
         public void AddField(string collectionName, FieldDescriptor field)
         {
             using var boundary = EnterAmbientBoundary();
-            _connector.AlterTableAdd(collectionName, new[] { new SchemaField(field) });
+            _connector.AlterTableAdd(collectionName, new[] { SchemaField.For(field) });
         }
 
         public void DropField(string collectionName, string fieldName)
         {
             using var boundary = EnterAmbientBoundary();
-            var field = new SchemaField(new FieldDescriptor { Name = fieldName, Type = FieldType.String });
+            var field = SchemaField.For(new FieldDescriptor { Name = fieldName, Type = FieldType.String });
             _connector.AlterTableDrop(collectionName, new[] { field });
         }
 
@@ -273,11 +273,15 @@ namespace Birko.Data.Migrations.SQL.Context
                 // a composite primary key via migrations would need connector support, which is a task of its
                 // own rather than a fallback nobody could reach correctly.
                 using var boundary = EnterAmbientBoundary();
-                var fieldDefinitions = _fields.Select(f =>
-                {
-                    var schemaField = new SchemaField(f);
-                    return _connector.FieldDefinition(schemaField);
-                });
+                // TASK-264. Two things here, both previously dropped on the way in:
+                //   * IsIgnored is honoured, matching the [IgnoreField] / [NotMapped] check
+                //     CreateAbstractField performs *before* its own dispatch — so "not a column" means
+                //     the same thing on both paths. An ignored descriptor used to get a column anyway.
+                //   * SchemaField.For, not `new SchemaField(...)`, so a declared maxLength / precision /
+                //     scale reaches the connector at all. See the remarks on SchemaField.
+                var fieldDefinitions = _fields
+                    .Where(f => !f.IsIgnored)
+                    .Select(f => _connector.FieldDefinition(SchemaField.For(f)));
                 _connector.CreateTable(_name, fieldDefinitions);
             }
 
