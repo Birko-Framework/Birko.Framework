@@ -2,7 +2,7 @@
 id: TASK-267
 parent: EPIC-014
 feature: FEATURE-014
-status: review
+status: done
 priority: P1
 assignee: ai
 created: 2026-08-21
@@ -10,7 +10,7 @@ depends-on: []
 blocks: []
 related: [TASK-257]
 findings: []
-pr: "project-lifecycle-skills 4aad076 (generic skill: discovery step) + this repo's commit below"
+pr: "project-lifecycle-skills 4aad076 (generic skill: discovery step) + Birko.Framework 0e4a57a (rename + section rewrite)"
 github-issue: null
 jira-key: null
 ---
@@ -148,7 +148,7 @@ Both are recorded, because "it resolved this time" is not evidence.
 
 ## Human test plan
 
-- [ ] Run `/tasks close` (or `/verify-conventions`) in this repo and confirm from its own output that the
+- [x] Run `/tasks close` (or `/verify-conventions`) in this repo and confirm from its own output that the
       project-local checks executed — the report must name the Birko-specific checks, not just the generic
       rulebook sweep. A human reads the report; that is the verification.
 
@@ -214,3 +214,20 @@ set. Two (`new-birko-subproject`, `new-store-backend`) have no user-level twin a
 - **No framework code touched.** Nothing under `Birko.Data.*`.
 - **The human test plan is unrun by a human.** I executed the gate and read its report; the plan asks a
   human to. That is the only thing between `review` and `done`.
+
+### Closed 2026-09-07 — the human read the report
+
+The human test plan is run. `/verify-conventions` in this repo **named the project extension on its
+report header and executed its concrete checks**, which is exactly what it could not do before this
+change — the previous behaviour was a silent generic-only pass that claimed completeness. That was the
+only thing between `review` and `done`.
+
+⚠ **The same run reported a real 🛑 against this task's own `CLAUDE.md` entry** (and against TASK-264's
+and TASK-266's): all three said *"The standing rule is in § Conventions"* while § Conventions mentioned
+none of them. This task's entry was the false alarm of the three — it points at § *Skills shipped by this
+repo*, which does carry the mechanism — but the other two were genuine, and the rules were written into
+§ Conventions before this file was closed. **The gate caught a defect on the very change that made it
+able to fire, then caught two more on its first ordinary use.** That is the return on the fix.
+
+The pre-commit-hook gap recorded under *Deliberately not done* is spawned as [[TASK-300]] rather than
+left as prose in a closed task.
