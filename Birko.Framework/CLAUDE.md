@@ -2166,6 +2166,53 @@ edit here, live immediately).
 
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
+### A migration's declared column metadata never reached the column, and money became a float (2026-09-07)
+
+TASK-264. `SchemaField` adapts a `FieldDescriptor` to the SQL layer's field model and forwarded **5 of
+its 15** properties. The connectors read a column's size off the field's **runtime type** — `field is
+CharField` before a length, `field is DecimalField && Precision != null && Scale != null` before a
+precision — and `SchemaField` derived straight from `AbstractField`, so it satisfied neither test.
+Verified `Birko.Data.Migrations.SQL.Tests` **87 passed** (54 → 87), plus the two suites that import it
+(`Migrations.TimescaleDB` 81, `SQL.View.Migrations` 14): **183 tests, 0 failed, 0 skipped**. The standing
+rule is in § Conventions. Seven things worth carrying:
+
+- **The unfiled half was the worse half.** The task named `MaxLength`; the same method dropped
+  `Precision`/`Scale` with a nastier outcome. A bare `DECIMAL` has default scale **0** on SQL Server and
+  MySQL, so declared money was **truncated to whole units** — and on **SQLite, this framework's default
+  provider**, an unqualified decimal falls back to **`REAL`**, so a column declared `DECIMAL(18,2)` held
+  binary floating point. Both silent. Fixing one and not the other is § TASK-207's *"re-keying half a
+  dictionary is not a fix, it is a narrower bug"*.
+- **⚠ Two of the task's own premises were wrong, and measuring inverted both.** It said the index failure
+  is *"recorded on `IndexCreationFailures` and silent (TASK-204)"*: no — `CreateIndexes` catches only
+  `IsIndexAlreadyExistsException`, which the base returns `false` for and **MSSql does not override**
+  (only MySQL does, for 1061), so that filter cannot match *any* exception there and Msg 1919
+  propagates. The recording lives in *schema-ensure's* per-index catch, which a migration never enters.
+  Verified from the type system, which is stronger than a live run.
+- **`IsIndexed` cannot be set here, and the fix works anyway.** `SqlCollectionBuilder` and
+  `SqlIndexBuilder` are separate nested classes with separate `Build()` calls and no shared state, often
+  in separate migrations — so at `CREATE TABLE` time nothing knows an index is coming, and
+  `DataBase.LoadIndexes`' trick of seeing a whole entity's attributes has no analogue. Criterion 2 is
+  therefore answered **built when a length is declared, loud when not**: no cross-builder state, no
+  imposed ceiling, and it is what the author must do on MySQL regardless.
+- **One producer, mirroring the attribute path's dispatch — including its quirk.** `SchemaField.For`
+  copies `CreateAbstractField`'s `MaxLength`-then-`Precision` fallback for strings, so the two producers
+  cannot disagree about what a length is. All three construction sites go through it; the mutation that
+  bypasses only the `AddField` site reds **exactly one** test, which is what proves the `ALTER TABLE ADD`
+  path needed wiring independently.
+- **Both sides of every switch are pinned.** An undeclared length must *still* be unbounded and an
+  undeclared precision must still be the provider's default — otherwise the fix is indistinguishable from
+  bounding every migration string, which would impose a ceiling on values that write fine today
+  (§ TASK-248).
+- **SQLite's `TEXT` is asserted as correct, not as a gap.** It has no length-enforcing string type, so
+  the criterion's "all four providers" is honestly three; pinning `TEXT` is what stops a later reader
+  "fixing" SQLite into a divergence from its own convention. Fourth instance of § TASK-245's *"look for
+  the field that gets lost on the way in"*, after TASK-245, TASK-246 and TASK-274.
+- **⚠ Two knobs deliberately left, both spawned rather than absorbed.** `DefaultValue` is accepted by
+  `WithField` and **no connector emits `DEFAULT` at all** ([[TASK-298]] — a knob the mechanism cannot
+  deliver, § TASK-296); `IndexName`/`IndexOrder`/`IndexDescending` are read by **nothing in any backend**,
+  so an inline index declaration yields a column and no index ([[TASK-299]], which is also the one shape
+  where `IsIndexed` *would* be knowable at column time). Missing features, not dropped assignments.
+
 ### The close gate's project-local convention checks had never run, twice over (2026-09-07)
 
 TASK-267, its own P1 and about the gate rather than the code. This repo ships

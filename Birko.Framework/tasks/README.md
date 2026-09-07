@@ -20,21 +20,21 @@
 > orphaning it exists to prevent — the reasoning is in its own `EPIC.md` (§ *Why this epic stays
 > `in-progress` with no open tasks*), which is why this dashboard no longer restates it.
 
-_Generated 2026-09-07 10:26. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
+_Generated 2026-09-07 11:37. Run `/tasks triage` to refresh. **Do not hand-edit** — changes will be overwritten._
 
 ## Counts
 
 | Status      | Epics | Stories | Tasks |
 |-------------|-------|---------|-------|
 | planned     | 10    | 24      | —     |
-| todo        | —     | —       | 128   |
+| todo        | —     | —       | 129   |
 | in-progress | 7     | 10      | 3     |
 | review      | —     | —       | 11    |
 | blocked     | —     | —       | 2     |
-| done        | 1     | 22      | 122   |
+| done        | 1     | 22      | 123   |
 | cancelled   | 0     | 0       | 1     |
 
-`todo` by priority: 27× P1 · 91× P2 · 10× P3.
+`todo` by priority: 26× P1 · 92× P2 · 11× P3.
 
 ## In progress now
 
@@ -153,7 +153,7 @@ _Generated 2026-09-07 10:26. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [x] TASK-037 Replace the TUI example with an extracted backend integration smoke-harness consumer · FEATURE-013
   - [ ] TASK-038 Birko.Web playground: component gallery + live token editor + theme-CSS export ← in-progress · FEATURE-013
 
-- **EPIC-014** Code review — audit remediation — in-progress (89/159 tasks done)
+- **EPIC-014** Code review — audit remediation — in-progress (90/161 tasks done)
   - [x] TASK-196 `x.Col.Date == value` matched zero rows on every input, every column, every day · FEATURE-014
   - [x] TASK-197 `TimeOnly` had no column mapping — and after [[TASK-112]] it took the whole entity down · FEATURE-014
   - [x] TASK-204 An index that could not be built took the entity's whole read surface with it — permanently · FEATURE-014
@@ -170,7 +170,7 @@ _Generated 2026-09-07 10:26. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [x] TASK-256 PostgreSQL's binary `COPY` cannot bind a UTC `DateTime`, and the test suite is green because its fixture avoids it · FEATURE-014
   - [x] TASK-257 On MSSql an unlengthed `string` column becomes `TEXT`, so **no predicate on it works** · FEATURE-014
   - [x] TASK-259 `SqlSchemaBuilder` publishes its connection onto a process-wide cached connector and never clears it · FEATURE-014
-  - [ ] TASK-264 A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
+  - [x] TASK-264 A migration's declared column metadata is dropped on the way to the connector · FEATURE-014
   - [x] TASK-265 On MySQL a `[UniqueField]` or `[PrimaryField]` unlengthed string emitted `LONGTEXT`, so the table could not be created · FEATURE-014
   - [ ] TASK-266 Index keys that are still wrong after TASK-257: a `byte[]` column, and a composite too wide for the key limit · FEATURE-014
   - [ ] TASK-267 The project-local `verify-conventions` did not run at the close gate, again 🔍 review · FEATURE-014
@@ -228,6 +228,7 @@ _Generated 2026-09-07 10:26. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [x] TASK-287 The count path swallows TASK-286's escape annotation, so the instrument is blind where it is needed
   - [x] TASK-288 A table that vanishes under an initialised store never comes back — every write 500s until restart
   - [x] TASK-294 A count that hits lock contention is a 500, while a count of a missing table is `0` · FEATURE-014
+  - [ ] TASK-298 A migration can declare a column default, and no connector emits one · FEATURE-014
   - [ ] TASK-144 `RuleSpecification` and `RuleExpressionConverter` are two translators of one rule model · FEATURE-014
   - [ ] TASK-146 Nothing pins that the async repository has no connector-bypassing read · FEATURE-014
   - [ ] TASK-226 Per-sub-repo `docs/specs/` trees for the 4 single-repo areas (and the 64 unspecced projects) · FEATURE-014
@@ -237,6 +238,7 @@ _Generated 2026-09-07 10:26. Run `/tasks triage` to refresh. **Do not hand-edit*
   - [ ] TASK-239 Packages declared that .NET 10 already provides — `NU1510`, the mirror image of TASK-234 · FEATURE-014
   - [ ] TASK-282 The TimescaleDB migration emitters bypass the connector — an option TASK-259 reopened and nobody owns · FEATURE-014
   - [x] TASK-291 `EnsureSchemaAndReport` rewraps a cancellation as a bare `Exception`, so a client that hung up becomes a 500 · FEATURE-014
+  - [ ] TASK-299 `FieldDescriptor`'s three index properties are read by nothing, in any backend · FEATURE-014
   - STORY-024 Critical findings — done (0/0)
   - STORY-025 High findings — done (0/0)
   - STORY-026 Medium findings — in-progress (0/0)
