@@ -204,6 +204,75 @@ namespace Birko.Data.SQL.Connectors
         /// </remarks>
         protected virtual int IndexedBinaryColumnLength => 255;
 
+        /// <summary>
+        /// TASK-269 — SQL Server's column catalogue.
+        /// </summary>
+        /// <remarks>
+        /// <c>sys.columns</c> rather than <c>information_schema.COLUMNS</c>: the latter reports
+        /// <c>character_maximum_length</c> as <c>-1</c> for MAX but silently omits columns of types it
+        /// cannot describe, while <c>sys.columns</c> is the server's own definitive list.
+        /// <c>OBJECT_ID</c> resolves the name in the current schema, so the literal is escaped
+        /// (§ Conventions, TASK-253) rather than quoted as an identifier.
+        /// </remarks>
+        protected override string? StoredColumnsSql(string tableName)
+            => string.Format(
+                "SELECT c.name, t.name, c.max_length, c.precision, c.scale " +
+                "FROM sys.columns c JOIN sys.types t ON c.user_type_id = t.user_type_id " +
+                "WHERE c.object_id = OBJECT_ID('{0}')",
+                SqlLiteral.EscapeLiteral(tableName));
+
+        protected override StoredColumn ReadStoredColumn(DbDataReader reader)
+            => new StoredColumn(
+                reader.GetString(0),
+                reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                reader.IsDBNull(2) ? (long?)null : Convert.ToInt64(reader.GetValue(2)),
+                reader.IsDBNull(3) ? (int?)null : Convert.ToInt32(reader.GetValue(3)),
+                reader.IsDBNull(4) ? (int?)null : Convert.ToInt32(reader.GetValue(4)));
+
+        /// <summary>
+        /// Renders a <c>sys.columns</c> row into <see cref="ConvertType"/>'s vocabulary.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// ⚠ <b><c>max_length</c> is in BYTES, and for an <c>N</c>-prefixed type that is twice the
+        /// declared character count.</b> So a column declared <c>NVARCHAR(255)</c> reports 510, and
+        /// halving it is what makes the comparison against <c>ConvertType</c>'s <c>NVARCHAR(255)</c>
+        /// meaningful. Getting this wrong would report every bounded string column as drifted — a
+        /// false positive on every entity, which is worse than the hole (see § Conventions'
+        /// <c>PredicateScope</c> rule: a false refusal breaks working code).
+        /// </para>
+        /// <para>
+        /// <c>-1</c> is MAX for both the <c>N</c> and non-<c>N</c> forms and must not be halved.
+        /// </para>
+        /// </remarks>
+        protected override string RenderStoredType(StoredColumn column)
+        {
+            var name = (column.TypeName ?? string.Empty).ToUpperInvariant();
+
+            switch (name)
+            {
+                case "NVARCHAR":
+                case "NCHAR":
+                    return column.Size == -1
+                        ? string.Format("{0}(MAX)", name)
+                        : string.Format("{0}({1})", name, (column.Size ?? 0) / 2);
+                case "VARCHAR":
+                case "CHAR":
+                case "VARBINARY":
+                case "BINARY":
+                    return column.Size == -1
+                        ? string.Format("{0}(MAX)", name)
+                        : string.Format("{0}({1})", name, column.Size ?? 0);
+                case "DECIMAL":
+                case "NUMERIC":
+                    return column.Precision != null && column.Scale != null
+                        ? string.Format("{0}({1},{2})", name, column.Precision, column.Scale)
+                        : name;
+                default:
+                    return name;
+            }
+        }
+
         public override string ConvertType(DbType type, AbstractField field)
         {
             switch (type)
