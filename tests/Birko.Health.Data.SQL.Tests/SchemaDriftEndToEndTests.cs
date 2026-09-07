@@ -283,6 +283,59 @@ public class SchemaDriftEndToEndTests : IDisposable
         result.Description!.Should().Contain("1 column(s) drifted");
     }
 
+    /// <summary>
+    /// ⚠ Found by the TASK-269 human review harness, not by these tests, and that is the lesson worth
+    /// keeping. Every earlier assertion about an unchecked type read <c>SchemaDriftReport.IsClean</c> —
+    /// which was correct — and none read the one line an operator actually sees. The check reported
+    /// <c>Healthy</c> with the description <i>"Schema matches the models (1 type(s) checked)"</i> about a
+    /// type whose table it had never read.
+    ///
+    /// <para>
+    /// <b>Healthy is right and the wording was not.</b> Stores create their table on first use, so at
+    /// boot every table is absent; reporting Degraded there would make every fresh deployment Degraded
+    /// until each entity happened to be touched — a report an operator learns to ignore, which is its own
+    /// documented defect. An unsupported provider is the opposite: permanent, so it stays Degraded. The
+    /// two must not be unified.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task The_health_check_never_claims_a_match_for_a_table_it_did_not_check()
+    {
+        var settings = NewDatabase();
+        CreateTableWithRawDdl(settings, @"CREATE TABLE ""Unrelated"" (X TEXT)");
+
+        var check = new SchemaDriftHealthCheck(() => Connector(settings), new[] { typeof(Widget) });
+        var result = await check.CheckAsync();
+
+        // Healthy, because an absent table is expected and self-healing.
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Data!["tablesNotYetCreated"].Should().Be(1);
+
+        // But the description must not assert a match it never verified.
+        result.Description.Should().NotBeNull();
+        result.Description!.Should().Contain("not created yet");
+        result.Description.Should().Contain("0 of 1");
+        result.Description.Should().NotBe("Schema matches the models (1 type(s) checked).");
+    }
+
+    /// <summary>
+    /// The other half of the pair: with nothing absent, the plain wording is used. Without this, the fix
+    /// above could be satisfied by always emitting the hedged sentence, which would be a different lie.
+    /// </summary>
+    [Fact]
+    public async Task The_health_check_uses_the_plain_wording_when_everything_was_checked()
+    {
+        var settings = NewDatabase();
+        var connector = Connector(settings);
+        connector.CreateTable(new[] { typeof(Widget) });
+
+        var result = await new SchemaDriftHealthCheck(() => connector, new[] { typeof(Widget) }).CheckAsync();
+
+        result.Status.Should().Be(HealthStatus.Healthy);
+        result.Description!.Should().Contain("1 type(s) checked");
+        result.Description.Should().NotContain("not created yet");
+    }
+
     [Fact]
     public void The_health_check_refuses_a_null_connector_factory()
     {
