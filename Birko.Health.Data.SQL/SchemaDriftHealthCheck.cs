@@ -128,6 +128,29 @@ public sealed class SchemaDriftHealthCheck : IHealthCheck
                     data));
             }
 
+            // ⚠ An absent table is Healthy, and its DESCRIPTION still has to say so.
+            //
+            // The two "could not answer" cases are not the same and must not be unified. An unsupported
+            // provider is PERMANENT -- it never resolves, so it is Degraded above. A table that does not
+            // exist yet is EXPECTED and SELF-HEALING: stores create their table on first use, so at boot
+            // every table is absent, and reporting Degraded there would make every fresh deployment
+            // Degraded until each entity happened to be touched. That is a report an operator learns to
+            // ignore, which § Conventions records as its own defect (TASK-204's keyed-not-appended rule).
+            //
+            // What is NOT acceptable is claiming a match that was never verified. Saying "Schema matches
+            // the models (1 type(s) checked)" about a type whose table was never read is the silence this
+            // whole family exists to remove, arriving in the one line an operator actually reads. Found by
+            // the TASK-269 human review harness, not by the tests -- which asserted IsClean on the report
+            // and never read the status the operator sees.
+            if (absent.Count > 0)
+            {
+                var verified = reports.Count - absent.Count;
+                return Task.FromResult(HealthCheckResult.Healthy(
+                    $"Schema matches the models for {verified} of {reports.Count} type(s); "
+                    + $"{absent.Count} table(s) not created yet, so they were not checked.",
+                    data));
+            }
+
             return Task.FromResult(HealthCheckResult.Healthy(
                 $"Schema matches the models ({reports.Count} type(s) checked).", data));
         }
