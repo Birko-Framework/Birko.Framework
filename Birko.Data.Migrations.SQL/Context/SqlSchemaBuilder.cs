@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Linq;
@@ -123,10 +123,24 @@ namespace Birko.Data.Migrations.SQL.Context
         /// <remarks>
         /// TASK-247 deleted every other raw-SQL branch in this class; this one has nothing to delegate to —
         /// <c>AbstractConnector</c> exposes no rename. It at least quotes through the connector's dialect now
-        /// rather than a hardcoded <c>"</c>. Note <c>RENAME COLUMN</c> is not universal (MySQL only supports
-        /// it from 8.0; older versions need <c>CHANGE</c>), so this is a latent per-provider gap of the same
-        /// family as the ones that task closed — recorded rather than fixed, because nothing in the tree or in
-        /// any consumer calls it.
+        /// rather than a hardcoded <c>"</c>.
+        /// <para>
+        /// ⚠ <b>DECIDED NOT TO FIX (TASK-252 #1), and here is the measurement.</b> <c>RENAME COLUMN</c>
+        /// requires <b>MySQL 8.0+</b>, while <c>Birko.Data.SQL.MySQL/CLAUDE.md</c> declares support from
+        /// <b>5.7</b> — so on the oldest declared-supported MySQL this method cannot work. It is not fixed
+        /// because the fallback is not a dialect swap: measured on 8.4.11, <c>ALTER TABLE t CHANGE b b2</c>
+        /// without a type is <c>ERROR 1064</c>, and only <c>CHANGE b b2 VARCHAR(50)</c> succeeds. So a 5.7
+        /// path must first read the column's <b>full definition</b> from the catalogue and restate it —
+        /// real work, on a method with <b>0</b> callers in the framework, its tests, and all 16 consumer
+        /// repos (re-measured 2026-09-08). Restating a definition also risks silently changing a column
+        /// that a rename should leave alone.
+        /// </para>
+        /// <para>
+        /// The limit is recorded on <c>Birko.Data.SQL.MySQL/CLAUDE.md</c> beside the version claim it
+        /// contradicts, so it is discoverable from the promise rather than only from here. If a caller ever
+        /// appears on MySQL 5.7, the fix is a connector-level rename with a capability flag, in the family
+        /// of <c>SupportsTransactionalDdl</c>.
+        /// </para>
         /// </remarks>
         public void RenameField(string collectionName, string oldName, string newName)
         {
