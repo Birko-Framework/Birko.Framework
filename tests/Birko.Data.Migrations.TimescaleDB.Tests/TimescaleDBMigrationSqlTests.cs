@@ -257,17 +257,47 @@ public class TimescaleDBMigrationSqlTests
                        + "schedule_interval => INTERVAL '1 hour');");
 
     /// <summary>
-    /// A null or empty <c>start_offset</c> means "from the beginning of time" in TimescaleDB, and must be
-    /// emitted as the bare keyword — a quoted <c>'NULL'</c> would be the string, not the keyword.
+    /// A <see langword="null"/> <c>start_offset</c> means "from the beginning of time" in TimescaleDB, and
+    /// must be emitted as the bare keyword — a quoted <c>'NULL'</c> would be the string, not the keyword.
     /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void ContinuousAggregatePolicy_EmitsABareNullStartOffset(string? startOffset)
+    [Fact]
+    public void ContinuousAggregatePolicy_EmitsABareNullStartOffset()
         => TimescaleDBMigration.BuildContinuousAggregatePolicySql(
-                Connector(), "DailyStats", startOffset, "1 hour", "1 hour")
+                Connector(), "DailyStats", null, "1 hour", "1 hour")
             .Should().Contain("start_offset => NULL,")
             .And.NotContain("'NULL'");
+
+    /// <summary>
+    /// ⚠ <b>An EMPTY <c>start_offset</c> is not a synonym for null, and this test used to assert that it
+    /// was.</b> It was an <c>[InlineData("")]</c> row on the test above — so the suite actively encoded the
+    /// defect (TASK-284).
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>NULL</c> means "refresh from the beginning of time", so <c>IsNullOrEmpty</c> turned an empty
+    /// configuration value into a semantically much wider policy — every chunk, on every run of the job,
+    /// with no error anywhere. Config binding, <c>LoadFrom</c> and JSON/env deserialisation all produce
+    /// <c>""</c> where the author wrote nothing.
+    /// </para>
+    /// <para>
+    /// The asymmetry was the tell: every other interval in this class already failed loudly on an empty
+    /// string. Measured on TimescaleDB 2.29.2, <c>INTERVAL ''</c> is
+    /// <c>invalid input syntax for type interval: ""</c> — so emitting it is what makes this parameter
+    /// behave like its neighbours, and the live twin of this test proves the server really does reject it.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void ContinuousAggregatePolicy_DoesNotTreatAnEmptyStartOffsetAsAllOfHistory()
+    {
+        var sql = TimescaleDBMigration.BuildContinuousAggregatePolicySql(
+            Connector(), "DailyStats", "", "1 hour", "1 hour");
+
+        sql.Should().NotContain("start_offset => NULL",
+            "an empty offset must not silently widen the policy to every chunk ever recorded");
+        sql.Should().Contain("start_offset => INTERVAL ''",
+            "it must reach the server as an interval, which rejects it — the same loud failure every "
+            + "other interval in this class already produces");
+    }
 
     /// <summary>
     /// <b>Two expression groupings using the same function must not collide.</b> A grouping is spliced into
