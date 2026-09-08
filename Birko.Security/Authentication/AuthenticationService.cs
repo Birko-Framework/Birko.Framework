@@ -45,12 +45,35 @@ namespace Birko.Security.Authentication
 
             // Initialize cache immediately to avoid first-request latency
             InitializeCache();
+
+            // SH-H040: refusing every request is the right answer to a misconfiguration, but doing it
+            // silently is not — an operator would see uniform 401s with nothing pointing at the cause.
+            if (IsMisconfigured)
+            {
+                _logger?.LogError(
+                    "Authentication is ENABLED but no token or binding survived expansion, so every request "
+                    + "will be rejected. Check that each configured token is non-empty and that any ${{VAR}} "
+                    + "placeholder names a variable that is set to a non-blank value. To allow all callers "
+                    + "deliberately, set Enabled = false instead.");
+            }
         }
 
         /// <summary>
-        /// Checks if authentication is enabled and tokens are configured
+        /// Checks if authentication is enabled <b>and</b> at least one token or binding survived expansion.
         /// </summary>
-        /// <returns>True if authentication is enabled; otherwise, false</returns>
+        /// <remarks>
+        /// ⚠ <b>This is not the question a gate should ask</b> (SH-H040). It answers "enabled AND
+        /// configured", so it returns <c>false</c> for two states that must be treated oppositely: auth
+        /// deliberately switched off, and auth switched on but misconfigured to nothing. A caller that
+        /// reads it as "enabled" and allows everything when it is false serves an open endpoint on a
+        /// misconfiguration. Gate on <see cref="IsAuthenticationDisabled"/> instead, and use
+        /// <see cref="IsMisconfigured"/> to report the bad state.
+        /// <para>
+        /// Its return value is deliberately unchanged: five transport wrappers expose it publicly and a
+        /// test pins all three of its states.
+        /// </para>
+        /// </remarks>
+        /// <returns>True if authentication is enabled and something is configured; otherwise, false</returns>
         public bool IsAuthenticationEnabled()
         {
             _lock.EnterReadLock();
@@ -65,6 +88,57 @@ namespace Birko.Security.Authentication
         }
 
         /// <summary>
+        /// True when the operator has deliberately switched authentication off — the <b>only</b> state in
+        /// which a gate may allow every caller through.
+        /// </summary>
+        /// <remarks>
+        /// SH-H040. This is the opt-out that makes refusing a misconfiguration legitimate rather than a
+        /// wall: <c>Enabled = false</c> is an explicit decision, whereas <c>Enabled = true</c> with nothing
+        /// configured is a mistake. Reads only <c>_config.Enabled</c>, so it needs no lock — the expanded
+        /// collections are not consulted, which is precisely the point.
+        /// </remarks>
+        public bool IsAuthenticationDisabled => !_config.Enabled;
+
+        /// <summary>
+        /// True when authentication is switched <b>on</b> but nothing usable survived expansion, so every
+        /// request will be rejected.
+        /// </summary>
+        /// <remarks>
+        /// SH-H040. Exposed because a service that refuses everything is as hard to diagnose as one that
+        /// allows everything if it does so silently — the framework's report-rather-than-swallow rule. The
+        /// constructor also logs this at error level.
+        /// <para>
+        /// The reachable causes are: <c>Enabled: true</c> with empty <c>Tokens</c> and empty
+        /// <c>TokenBindings</c>; a <c>${VAR}</c> whose variable exists but is <b>blank</b>, since
+        /// <c>GetEnvironmentVariable</c> then returns <c>""</c> rather than <c>null</c> and the
+        /// <c>?? value</c> fallback in <see cref="ExpandEnvironmentVariable"/> never fires; or tokens that
+        /// are whitespace in configuration. A <b>renamed or absent</b> variable is <i>not</i> a cause — it
+        /// falls back to the literal <c>"${VAR}"</c>, which is kept, so authentication stays on and every
+        /// real token is rejected. That distinction is the one the original finding got backwards.
+        /// </para>
+        /// </remarks>
+        public bool IsMisconfigured
+        {
+            get
+            {
+                if (!_config.Enabled)
+                {
+                    return false;
+                }
+
+                _lock.EnterReadLock();
+                try
+                {
+                    return _expandedTokens.Count == 0 && _expandedBindings.Count == 0;
+                }
+                finally
+                {
+                    _lock.ExitReadLock();
+                }
+            }
+        }
+
+        /// <summary>
         /// Validates a token against the configured tokens and optional IP binding
         /// </summary>
         /// <param name="token">The token to validate</param>
@@ -72,8 +146,13 @@ namespace Birko.Security.Authentication
         /// <returns>True if the token is valid; otherwise, false</returns>
         public bool ValidateToken(string? token, string? clientIp)
         {
-            // If authentication is not enabled, allow all connections
-            if (!IsAuthenticationEnabled())
+            // SH-H040: gate on the OPT-OUT, not on "enabled AND configured". The previous check was
+            // `!IsAuthenticationEnabled()`, which is also false when authentication is switched ON and
+            // misconfigured to nothing — so a config with the flag set and an empty token list allowed
+            // every caller, including one presenting a null token. Only a deliberate `Enabled = false`
+            // may allow all; a misconfiguration now falls through to the rejection at the end of this
+            // method, which was unreachable until this line changed.
+            if (IsAuthenticationDisabled)
             {
                 return true;
             }
