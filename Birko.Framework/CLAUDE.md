@@ -2393,6 +2393,63 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### 39 of the 57 high spec-harvest findings had no task, a month after the same defect was fixed for medium (2026-09-08)
+
+The intake nobody had run. [[STORY-051]] held **31 task files covering 18 of its 57 findings**; the other
+**39 had no task at all**, so they were invisible to `/tasks pick`, to the `Next up` snapshot and to
+[[fix-next]] — *a checklist line is filed, not scheduled*. [[STORY-053]] diagnosed exactly that for the
+**medium** tier on 2026-08-09 and fixed it by decomposing into 22 per-area triage tasks; the fix was never
+applied to the tier that outranks it, where **high** means silent data loss, cross-tenant leakage, auth
+bypass, or a destructive operation on the wrong rows. Filed as **15 per-area tasks** (TASK-308–322), all 39
+findings covered, `fix-next`'s pool **66 → 81**. Seven things worth carrying:
+
+- **The rule the medium tier fixed did not propagate to the tier above it, and nothing noticed for a
+  month.** Both stories cite the same rule; only one was decomposed. **When a scheduling defect is fixed in
+  one container, check its siblings in the same change** — the severity stories are three instances of one
+  shape, and the highest-severity one was the one left out.
+- **⚠ Checked item by item before filing, per [[TASK-252]]'s lesson, and it changed the count.** The naive
+  arithmetic (57 − 17 closed) says 40; the answer is **39**, because `SH-H037` has a `done` task *and* a
+  `todo` follow-up. And **13** of the 39 are *mentioned* in closed task bodies — every one of those mentions
+  turns out to be an explicit *"separate task"* / *"unverified"* / *"not fixed here"* boundary, so none was
+  quietly already fixed. That check is cheap at filing time and expensive at draining time.
+- **⚠ A finding can be contested rather than merely open, and that must ride on the task.** Three closed
+  tasks record `SH-H049` as *"downgraded in STORY-051, not tasked"*; [[TASK-118]] then described a live
+  fail-open path **through** it and closed saying *"SH-H049 is not fixed here. This task routes around it
+  rather than through it."* Both are on the record and they disagree. [[TASK-311]] carries the instruction
+  to re-measure the downgrade's premise before relying on it — § TASK-283's rule, which exists because a
+  stale measurement kept a P2 open for nine days; here a stale *downgrade* is how a P0 stays invisible.
+- **⚠ The mechanical priority rule degenerates here, so it was replaced with a stated one.** `/tasks
+  intake` says *"theme 1–2 blockers → P0"* — but every finding in this story is high severity, so applying
+  it literally makes all 15 tasks P0 and ranks nothing. The rule used instead was calibrated against the
+  story's **existing** 8 P0s (auth bypass, SQL injection, whole-table write, cross-tenant read/delete,
+  silent non-persistence): **P0** = the claim, if true, is auth bypass, cross-tenant leakage, or silent
+  loss/destruction of data; **P1** = confined to one opted-into feature, decorator, migration or provider.
+  Five P0, ten P1, and **each task states its own reason** so the call can be argued with rather than
+  inherited.
+- **⚠ Consumer reach was measured per area, and it is mostly latent — which is recorded without being used
+  as a discount.** Only **two** areas have live consumer use of the exact type the finding names:
+  `security-and-authorization` (`AuthenticationService`, **6** consumer `.cs` files) and
+  `filter-expression-translation` (`Birko.Data.SQL` in **6** consumer aggregators, on every SQL read's
+  path). For the rest the module is imported by an aggregator — often only `Birko.Sandbox`, which imports
+  everything — and **0** consumer `.cs` files construct the type. Each task carries its own number, because
+  a fix should be priced on what it protects; and each also carries the counter-warning, since this
+  framework's recent history is largely defects that stayed latent until a consumer selected the backend
+  (§ TASK-219/256: the window *"closes the moment one does"*).
+- **The acceptance criteria encode this epic's own hard-won lessons rather than restating a template.**
+  Every task requires that a claim of *silent* loss be asserted as **observed state** — rows counted, the
+  value read back, the tenant that could see it — *never* that no exception was thrown, because § Conventions
+  records several defects that a "did not throw" assertion hid, including one in this epic that hid a live
+  MSSql failure for weeks. `confirmed-wider` is an allowed verdict too: of the 15 findings ever hand-checked,
+  one was re-verified **wider** than filed, so a claim is not a ceiling.
+- **⚠ Regenerating the dashboard surfaced two bugs in the generator itself.** Task titles were being read
+  from the whole file, so the frontmatter's own `# status: todo | in-progress | …` comment became the
+  displayed title of ~14 tasks (visible in the previous dashboard); and every link was built by stripping a
+  forward-slash prefix from a path `glob` had returned with **backslashes**, so the strip silently did
+  nothing and every link resolved to `tasks/tasks/…` from a file already inside `tasks/`. Both fixed. The
+  count is now verified against `find | wc -l` (**292** task files) rather than against the previous
+  dashboard, which had drifted to 269. **A generated artifact nobody diffs is a place where two bugs can
+  live in plain sight.**
+
 ### The three `in-progress` tasks are cleared, and two of them were stale rather than unfinished (2026-09-08)
 
 Asked for as step 1 of a backlog review: `TASK-038`, `TASK-258` and `TASK-276` had sat `in-progress` for

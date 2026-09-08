@@ -11,13 +11,88 @@ finding-ids: SH-H001 … SH-H057
 
 # Spec-harvest — high findings
 
+## Decomposed 2026-09-08 — the other 39 findings now have tasks
+
+This story held **31 task files covering 18 of its 57 findings**. The remaining **39 had no task at
+all**, so they were invisible to `/tasks pick`, to the `Next up` snapshot and to [[fix-next]] — *a
+checklist line is filed, not scheduled*. That is the exact defect [[STORY-053]] diagnosed for the
+**medium** tier on 2026-08-09 and fixed by decomposing into 22 per-area triage tasks; it was never
+applied to the tier that outranks it. Filed by `/tasks intake --epic EPIC-014 --story STORY-051` into
+**15 per-area tasks**, one per `### area:` section of the findings doc that still has open findings.
+
+Grouping is by **area**, for the reason STORY-053 recorded: findings in one area share a spec, a source
+set and frequently a root cause, and the intake rule is that findings fixed in one edit are one task.
+Two areas needed no task — `bulk-filter-operations` and `entity-tagging` are fully covered by existing
+work.
+
+| Task | Area | Open findings | Priority |
+|---|---|---|---|
+| [[TASK-308]] | `filter-expression-translation` | 7 (`SH-H021`,`022`,`024`–`028`) | **P0** |
+| [[TASK-309]] | `data-sync` | 7 (`SH-H008`–`SH-H014`) | **P0** |
+| [[TASK-310]] | `caching` | 3 (`SH-H004`,`005`,`007`) | **P0** |
+| [[TASK-311]] | `tenant-isolation` | 2 (`SH-H049`,`053`) | **P0** |
+| [[TASK-312]] | `security-and-authorization` | 1 (`SH-H040`) | **P0** |
+| [[TASK-314]] | `migrations` | 5 (`SH-H029`–`SH-H033`) | P1 |
+| [[TASK-313]] | `entity-localization` | 4 (`SH-H015`–`SH-H018`) | P1 |
+| [[TASK-315]] | `workflow-state-machine` | 2 (`SH-H056`,`057`) | P1 |
+| [[TASK-316]] | `repository-contract` | 2 (`SH-H034`,`035`) | P1 |
+| [[TASK-317]] | `background-jobs` | 1 (`SH-H001`) | P1 |
+| [[TASK-318]] | `event-bus-and-messaging` | 1 (`SH-H020`) | P1 |
+| [[TASK-319]] | `schema-index-and-ddl` | 1 (`SH-H038`) | P1 |
+| [[TASK-320]] | `specifications-and-paging` | 1 (`SH-H045`) | P1 |
+| [[TASK-321]] | `store-crud-contract` | 1 (`SH-H046`) | P1 |
+| [[TASK-322]] | `views-and-aggregation` | 1 (`SH-H055`) | P1 |
+
+### The priority rule, stated so it is not arbitrary
+
+Every finding here is high severity, so severity cannot be the discriminator — applying the intake
+verb's "theme 1–2 blockers → P0" mechanically would make all 15 tasks P0 and rank nothing. The rule
+used instead was calibrated against this story's **existing** 8 P0 tasks (auth bypass, SQL injection,
+whole-table write, cross-tenant read/delete, silent non-persistence):
+
+- **P0** — the claim, if true, is auth bypass, cross-tenant leakage, or silent loss/destruction of data.
+- **P1** — a real defect whose blast radius is confined to one opted-into feature, decorator, migration
+  or provider.
+
+Each task states its own reason in a **Why P0/P1** line, so the call can be argued with rather than
+inherited.
+
+### ⚠ Consumer reach was measured, and it is mostly latent
+
+Measured 2026-09-08 across all 16 consumer repos, and recorded per task so a fix is priced on what it
+protects rather than on the claim's wording. Only **two** areas have live consumer use of the exact
+type the finding names:
+
+- `security-and-authorization` — `AuthenticationService`, **6** consumer `.cs` files.
+- `filter-expression-translation` — `Birko.Data.SQL` in **6** consumer aggregators, and `DataBase.cs`
+  is on every SQL read's path.
+
+For the rest, the module is imported by an aggregator (often only `Birko.Sandbox`, which imports
+everything) and **0** consumer `.cs` files construct the type. That is **not** a reason to downweight
+them — this framework's recent history is largely defects that stayed latent until a consumer selected
+the backend, and § TASK-219/256 record that the window *"closes the moment one does"*. It is a reason
+not to overstate urgency.
+
+### ⚠ Nothing was quietly already-fixed — checked item by item
+
+[[TASK-252]]'s lesson (*a grouped latent-gaps task must be re-checked item by item before it is
+worked*) was applied at filing rather than at draining. **13** of the 39 are *mentioned* in closed
+task bodies; every one of those mentions is an explicit **"separate task"**, **"unverified"** or
+**"not fixed here"** boundary, so none is closed. Two carry-overs worth knowing:
+
+- **`SH-H049` is contested, not merely open.** Three closed tasks call it *"downgraded in STORY-051,
+  not tasked"*, while [[TASK-118]] describes a live fail-open path through it and closed saying *"SH-H049
+  is not fixed here. This task routes around it rather than through it."* [[TASK-311]] carries the
+  instruction to re-measure the downgrade's premise before relying on it.
+- **`SH-H038` has been mis-cited once already** — [[TASK-197]] corrected a working tree that used it for
+  an unrelated field-mapping defect. It is the ElasticSearch reindex finding and nothing else.
+
 ## Progress
 
 **17 / 57 findings closed** (SH-H039 via [[TASK-108]], SH-H047 via [[TASK-114]], SH-H054 via [[TASK-115]],
 SH-H003 via [[TASK-110]], SH-H048 via [[TASK-118]], SH-H050+SH-H051+SH-H052 via [[TASK-113]],
 SH-H002+SH-M023 via [[TASK-109]], SH-H041+SH-H042+SH-H043+SH-H044 via [[TASK-116]], SH-H036 via [[TASK-125]], SH-H019 via [[TASK-126]],
-SH-H023 via [[TASK-111]]) — **20 of 23 tasks
-done, 1 in review, 2 todo.** [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
+SH-H023 via [[TASK-111]]) — and **18 of the 57 findings now have a task**, across 31 files: 29 done, 1 in review ([[TASK-118]]), 1 cancelled. The **other 39 findings were decomposed into 15 per-area triage tasks on 2026-09-08** — see the section above; the counts in the rest of this paragraph predate that and describe the original 23-task set. [[TASK-137]] closed the defect [[TASK-109]] filed against itself while being
 planned, and closed it much wider than filed: the empty `NOT IN`'s `1 = 1` was not merely an injection
 lookalike in a log, it was a **non-empty `WHERE` that constrains nothing**, so it satisfied the whole-table
 write guard TASK-109 had installed 18 days earlier and `Delete(x => !empty.Contains(x.Col))` emptied the
