@@ -3,15 +3,15 @@ id: TASK-258
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress  # offline half done and mutation-proven; criterion 1 is UNANSWERABLE as shipped
+status: done  # scope narrowed: criteria 1-2 are unanswerable as shipped and move to TASK-305
 priority: P2
 assignee: ai
 created: 2026-08-18
 depends-on: []
 blocks: []
-related: [TASK-242, TASK-243, TASK-256, TASK-257]
+related: [TASK-242, TASK-243, TASK-256, TASK-257, TASK-305]
 findings: []
-pr: null
+pr: "Birko.Data.SQL.Tests@3a49fef"
 github-issue: null
 jira-key: null
 ---
@@ -52,12 +52,17 @@ It is the weakest of the family and the last one open — but "weakest" is not "
 
 ## Acceptance criteria
 
-- [ ] **SQLite still retries and converges.** Force a transient `SQLITE_BUSY`/`SQLITE_LOCKED` on the
-      own-connection bulk path and assert the operation retried *and* ended with the correct row set — not
-      merely that it did not throw. The retry only being safe *because the batch rolled back first* is the
-      part to pin: assert no duplicate or partially-applied rows after a retried attempt.
-- [ ] **The three server providers still do not retry.** Assert their own-connection bulk path makes exactly
-      one attempt, so no consumer silently loses a retry it used to have — and none silently gains one.
+- [ ] → **[[TASK-305]]. UNANSWERABLE as shipped, not unmeasured.** *SQLite still retries and converges.*
+      Force a transient `SQLITE_BUSY`/`SQLITE_LOCKED` on the own-connection bulk path and assert the
+      operation retried *and* ended with the correct row set — not merely that it did not throw. The retry
+      only being safe *because the batch rolled back first* is the part to pin: assert no duplicate or
+      partially-applied rows after a retried attempt. **There is no policy to retry under** (see the
+      finding below), so this becomes a real question only when a default lands — which is TASK-305's
+      subject, and TASK-305 carries this criterion verbatim.
+- [ ] → **[[TASK-305]]. TRIVIALLY TRUE today, for a reason unrelated to the flag.** *The three server
+      providers still do not retry.* Assert their own-connection bulk path makes exactly one attempt, so no
+      consumer silently loses a retry it used to have — and none silently gains one. Asserting it now would
+      pin the vacuous state and read as if it had verified the real one.
 - [x] **The participating path never retries, on any provider, whatever the flag says.** **DONE** -
       `RetryWhenOwnedTests` (`Birko.Data.SQL.Tests/Connectors/`), sync and async, `retryWhenOwned: true`
       passed deliberately with a policy set. Provider-independent, so it is asserted offline rather than
@@ -109,25 +114,48 @@ Consequences for this task's own criteria:
 
 ⚠ **This is a decision, not a defect to fix here.** Whether a default `RetryPolicy` *should* be configured
 is a resilience-policy question with a blast radius across every provider, and this task's own out-of-scope
-says a wrong claim gets corrected by its own task with its own decision. **Filed nothing yet** - it needs a
-product call first, not an implementation.
+says a wrong claim gets corrected by its own task with its own decision. **Filed as [[TASK-305]] on
+2026-09-08** — it needs a product call first, not an implementation.
 
 ⚠ Two tests (`WithTheSHIPPEDDefaults_*`) exist to **fail** the day a default policy lands. That is the
 alarm, not a regression: at that moment SQLite's bulk paths silently start retrying and criterion 1 becomes
 a real question. Whoever makes that change should answer it rather than update these tests.
 
-## What remains
+## Closed 2026-09-08 — scope narrowed to what is answerable, remainder owned by [[TASK-305]]
 
-Only the live per-provider half: **that each provider passes the right flag value under a real transient
-error** - induced `SQLITE_BUSY` from a held write lock on SQLite, a deadlock or serialization failure on the
-three servers, sync and async. The call sites were read and do match the claim (PostgreSQL/MySQL/MSSql pass
-`false` explicitly at all 18 bulk sites; SQLite passes nothing and takes the `true` default), but reading is
-not measuring - which is the whole reason this task exists.
+**What this task asked was answered.** The word `preserve` in `retryWhenOwned`'s contract turned out to
+name a no-op, and that finding — with the two alarm tests that make it self-reporting — is the deliverable.
+Four of six criteria are met and mutation-proven (4 mutations, each hitting exactly its intended targets,
+`Birko.Data.SQL` verified byte-identical to HEAD afterwards). Committed as `Birko.Data.SQL.Tests@3a49fef`;
+the `pr:` field had been left `null`, which is corrected in this pass.
 
-⚠ And note what that half is worth **today**: with no policy configured it would assert that all four
-providers make one attempt, for reasons having nothing to do with the flag. **It is worth doing after the
-policy decision above, not before** - otherwise it pins the vacuous state and reads as if it had verified
-the real one.
+**The two criteria that stay open are not unfinished work — they are questions this task's own answer made
+vacuous.** Both now carry `→ [[TASK-305]]` above, which repeats them verbatim so nothing is lost. Closing
+here rather than parking `in-progress` indefinitely, because the remainder is blocked on a **product
+decision this task is explicitly not entitled to make**, and an `in-progress` task is one no scheduler
+offers and no reader can act on.
+
+### ⚠ The central claim was re-measured before the successor cited it, and it is wider than recorded
+
+TASK-258's original sweep was 2026-08-22 and ~30 tasks old. Re-run 2026-09-08:
+
+| where | `RetryPolicy =` assignments |
+|---|---|
+| framework production code (all `Birko.*`) | **0** |
+| all 16 consumer repos — production **and** test | **0** |
+| any `appsettings*.json` in any consumer | **0** |
+| framework test code | **3 files** — `RetryTests.cs`, `RetryWhenOwnedTests.cs`, `RewrapClassificationTests.cs` |
+
+The third file is new since the original count — it arrived with TASK-291/294, whose own fix (an exception
+rewrap that had been defeating `IsTransientException`) is the *second* defect traceable to nobody ever
+exercising this machinery. The conclusion is unchanged and the surface is one file larger. **Re-measure
+before citing** (§ TASK-283) applied to this task's own number, and it is the reason TASK-305 opens with a
+current count rather than an inherited one.
+
+### Verified at close
+
+`Birko.Data.SQL.Tests`: **686 passed, 0 failed, 0 skipped** (the suite has grown from the 597 recorded when
+this work landed; nothing here changed).
 
 ## Out of scope
 

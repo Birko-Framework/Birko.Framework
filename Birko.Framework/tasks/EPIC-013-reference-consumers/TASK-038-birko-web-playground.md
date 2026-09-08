@@ -2,14 +2,14 @@
 id: TASK-038
 parent: EPIC-013
 feature: FEATURE-013
-status: in-progress
+status: review  # verified headlessly 2026-09-08; only the manual round-trip is left
 priority: P2
 assignee: ai
 created: 2026-06-18
 depends-on: []
 blocks: []
-related: [TASK-036, TASK-037]
-pr: null
+related: [TASK-036, TASK-037, TASK-307]
+pr: "Birko.Web.Playground@961bd48"
 github-issue: null
 jira-key: null
 ---
@@ -68,30 +68,114 @@ Suggested name: `Birko.Web.Playground`. Final name is a small open decision.
 
 **Section nav → `b-tabs` (2026-06-18):** the `b-ribbon` rendered an empty panel row (it's a full app-shell ribbon, not a tab strip). Switched to `b-tabs` with each category's gallery rendered **inside the tab's slot panel** — normal tab strip + content below, panels lazy-populated on first activation. Confirmed **no `b-accordion` component exists** (only internal collapse in `b-form`/`b-kanban`), so token groups stay on native `<details>` (the platform disclosure). Rebuilds green.
 
-**Remaining for done:**
+**Remaining for done (as of 2026-06-18):**
 - Browser re-check: tabs switch sections cleanly; sections render; token groups collapse/expand; `b-*` editors restyle live; export round-trips. Report any `[playground] …` console warnings.
+
+## Worked 2026-09-08 — the re-check is DONE, headlessly, and it found two real gaps
+
+That item sat unticked for 82 days while the playground itself moved on considerably (it grew
+`verify.mjs`, `device-fix-check.mjs`, seven smoke suites and ~1 MB of bundle), so this file was three
+months stale rather than blocked. The re-check was run rather than deferred again, and two of the
+criteria it covers turned out **not** to be satisfied.
+
+### Verified headlessly — the whole of that "browser re-check" line
+
+`node build.js && node verify.mjs && node device-fix-check.mjs`, exit 0 on both:
+
+| measurement | result |
+|---|---|
+| sections switch and populate | all 6 — inputs 24, layout 13, data 16, feedback 9, nav 5, command 1 |
+| components rendered | **68** |
+| rendered EMPTY (no shadow content, no note) | **none** |
+| catalogue tags not registered | **none** (no `reportMissing` warning) |
+| token groups built | **9** |
+| smoke suites | 667/667 — description 90, ribbon-overflow 16, bare 113, ribbon-scaling 44, form-assoc 104, backport 283, i18n-message 17 |
+| `device-fix-check` | **68/68** |
+| `[playground]` warnings | none; the only non-info lines are `grid-bench` measurements |
+
+### ⚠ Two criteria were confirmed only by eye, and one of them was FALSE
+
+`verify.mjs` counted sections, components and token *groups* — it never touched the token editor's
+behaviour or the export, which are half of what this task is for. Driving them found:
+
+- **Download-as-file did not exist.** The export criterion is *"copy-to-clipboard **and**
+  download-as-file"*; there was no `Blob`, no `download`, no anchor anywhere in `src/`. Only the
+  clipboard half had ever been built, and nothing said so. Now implemented.
+- **The live-edit selector is not the one this file specifies**, deliberately and for a good reason —
+  see the annotated criterion below. The code recorded the reason; this file never learned it.
+
+Everything else held: one edit yields exactly one exported declaration (the clean-diff criterion), both
+export shapes render, and the edit reaches a rendered component's computed style.
+
+### The checks are now part of the verdict, not a printout
+
+12 named token/export checks in `verify.mjs`, each carrying its measured value in the name (that
+harness's own convention), and wired into `process.exitCode` — *a check nobody fails is not a check*.
+
+**Mutations, disjoint:**
+
+| mutation | red |
+|---|---|
+| dispatch the token's **base** value, so no edit registers | **7 of 12** — including `(#2563eb -> #2563eb)` and `0 declaration(s)`, i.e. the failure names what it saw |
+| give both export shapes the same download filename | **1** — the shape-naming check, and only it |
+
+### ⚠ Fixed a defect I had introduced in the harness itself
+
+An earlier edit in this session left a literal **NUL byte** in `verify.mjs` (a lost backslash turned
+`'\u0000'` into the character), which made `grep` treat the file as binary and would have made the next
+person's search silently miss it. Removed. Worth recording because the file still ran perfectly — a
+harness can be quietly corrupt and green.
+
+### Status → `review`
+
+Only the **round-trip into a fresh consumer** is left, which needs a second app and is genuinely human.
+The two `[~]` criteria are capability-present/mechanism-different and are decisions rather than defects;
+the token-editor half is [[TASK-307]].
 
 ## Acceptance criteria
 
 ### App shell
-- [ ] New sibling checkout with the universal layer (`README.md`, `CLAUDE.md`, `License.md`, `.gitignore`)
-- [ ] Consumes `birko-web-core` / `birko-web-components` / `birko-web-shell` via the `BIRKO_SRC` esbuild alias convention; `build.js` resolves the `Birko\Web` bucket (walk-up to `Birko/Web`, or `BIRKO_SRC` override) — no machine-specific absolute path committed
-- [ ] Links base `tokens.css` + lets the user load any built-in theme (`dark`/`neon`/`finstat`) as a starting point via `registerThemes()`
+- [x] New sibling checkout with the universal layer (`README.md`, `CLAUDE.md`, `License.md`, `.gitignore`)
+- [x] Consumes `birko-web-core` / `birko-web-components` / `birko-web-shell` via the `BIRKO_SRC` esbuild alias convention; `build.js` resolves the `Birko\Web` bucket (walk-up to `Birko/Web`, or `BIRKO_SRC` override) — no machine-specific absolute path committed
+- [~] Links base `tokens.css` + lets the user load any built-in theme as a starting point — **the
+      capability is there and the mechanism differs.** A `b-segmented` switcher applies each shipped
+      theme via `data-theme` on `<html>`, and `themeTokens.get(activeTheme())` makes the active theme the
+      base the export diffs against (so "as a starting point" is real). But it does **not** call
+      `registerThemes()` — it sets the attribute directly. Left open rather than ticked: the criterion
+      names a specific API, and whether the playground should dogfood it is a decision, not an oversight.
 
 ### Component gallery
-- [ ] Every `b-*` component is listed and rendered with at least one representative instance
-- [ ] Per-component controls to toggle the common attribute surface (`variant`, `size`, `disabled`, state attrs, key slots) and live-update the instance
-- [ ] Driven by a manifest derived from the catalogue so new components don't silently go missing (auto-derive where feasible; otherwise a maintained list + a check that flags components absent from the gallery)
+- [x] Every `b-*` component is listed and rendered with at least one representative instance
+- [x] Per-component controls to toggle the common attribute surface (`variant`, `size`, `disabled`, state attrs, key slots) and live-update the instance
+- [x] Driven by a manifest derived from the catalogue so new components don't silently go missing (auto-derive where feasible; otherwise a maintained list + a check that flags components absent from the gallery)
 
 ### Token editor
-- [ ] Edits the full `--b-*` token set (colors, spacing, radius, typography incl. `--b-font-heading`, table/header/row tokens, status-alpha + overlay systems, z-index, the playground-relevant subset documented in `tokens.css`) — ideally the editor's token list is **parsed from `tokens.css`** so it stays in sync automatically
-- [ ] Edits apply live to a `[data-theme="playground"]` block; the gallery restyles without reload
-- [ ] Sensible editors per token kind (color → `b-color-picker`, lengths → number+unit, etc.); reset-to-base and load-from-built-in-theme actions
+- [x] Edits the full `--b-*` token set (colors, spacing, radius, typography incl. `--b-font-heading`, table/header/row tokens, status-alpha + overlay systems, z-index, the playground-relevant subset documented in `tokens.css`) — ideally the editor's token list is **parsed from `tokens.css`** so it stays in sync automatically
+- [x] Edits apply live and the gallery restyles without reload — **verified headlessly** (`--b-color-primary`
+      `#2563eb` → `#ff00ff` in a rendered component's computed style).
+      ⚠ **Not via `[data-theme="playground"]`, and this criterion's wording is stale rather than unmet.**
+      The shipped selector is `:root[data-pg-edits]`, and the code says why: live edits layer *on top of*
+      the selected theme, and an element has only one `data-theme` — claiming it dropped the user back to
+      light the moment they touched a token and let a theme switch wipe the edits. `(0,2,0)` beats the
+      themes' `(0,1,0)`, so it still wins. The test asserts the **shipped** selector and explicitly
+      asserts `data-theme` is *not* used, so nobody can "fix" it back.
+- [~] Sensible editors per token kind; reset-to-base and load-from-built-in-theme actions — **half
+      shipped.** Hex colours get `b-color-picker` (with the alpha slider for `#rgba`/`#rrggbbaa`),
+      `#reset-btn` resets to base, and the theme switcher is the load-from-built-in action. **Not**
+      shipped: `rgba()`/`hsla()` tokens and length tokens both fall back to a text `b-input`. Owned by
+      [[TASK-307]] — the source comment called it a "tracked follow-up" and measurement showed nothing
+      tracked it.
 
 ### Export
-- [ ] Export produces a valid CSS file in two selectable shapes: (a) `[data-theme="<name>"] { … }` theme block, (b) `:root` `tokens.css`-style override
-- [ ] Exported CSS only emits tokens that differ from the chosen base (clean diff, like the existing `dark.css`/`neon.css`/`finstat.css`), with a header comment explaining how to wire it (`registerThemes([{id,label,icon}])` + link the file)
-- [ ] Copy-to-clipboard and download-as-file; round-trip verified — pasting the export into a fresh consumer reproduces the previewed look
+- [x] Export produces a valid CSS file in two selectable shapes: (a) `[data-theme="<name>"] { … }` theme block, (b) `:root` `tokens.css`-style override
+- [x] Exported CSS only emits tokens that differ from the chosen base (clean diff, like the existing `dark.css`/`neon.css`/`finstat.css`), with a header comment explaining how to wire it (`registerThemes([{id,label,icon}])` + link the file)
+- [x] Copy-to-clipboard and download-as-file — **download did not exist until 2026-09-08** (no `Blob`,
+      no `download` anywhere); added, naming the file for the shape being exported
+      (`my-brand.theme.css` vs `tokens.override.css`) because the two are wired differently at the far
+      end. Both halves are now asserted in `verify.mjs`.
+- [ ] ⚠ **Round-trip verified — pasting the export into a fresh consumer reproduces the previewed look.**
+      The one criterion a headless harness cannot answer, since it needs a second app. Left for the
+      human test plan below; everything upstream of it is measured.
 
 ## Out of scope
 
@@ -102,8 +186,8 @@ Suggested name: `Birko.Web.Playground`. Final name is a small open decision.
 
 ## Human test plan
 
-- [ ] `node build.js` resolves `BIRKO_SRC`, copies `tokens.css`, bundles the `birko-web-*` aliases with no "file not found"; app loads in a browser
-- [ ] Gallery shows the full catalogue; flipping a control (e.g. `b-button` `variant`/`size`) updates the live instance
-- [ ] Edit a token (e.g. `--b-color-primary`) → gallery components restyle immediately
+- [x] `node build.js` resolves `BIRKO_SRC`, copies `tokens.css`, bundles the `birko-web-*` aliases with no "file not found"; app loads in a browser
+- [x] Gallery shows the full catalogue; flipping a control (e.g. `b-button` `variant`/`size`) updates the live instance
+- [x] Edit a token (e.g. `--b-color-primary`) → gallery components restyle immediately
 - [ ] Export as a `[data-theme="my-brand"]` block; paste into a throwaway consumer + `registerThemes([{id:'my-brand',…}])` + link the file → the consumer matches the previewed look
-- [ ] Export as `:root` override; confirm it only contains changed tokens (clean diff vs base)
+- [x] Export as `:root` override; confirm it only contains changed tokens (clean diff vs base)

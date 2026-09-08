@@ -2393,6 +2393,65 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### The three `in-progress` tasks are cleared, and two of them were stale rather than unfinished (2026-09-08)
+
+Asked for as step 1 of a backlog review: `TASK-038`, `TASK-258` and `TASK-276` had sat `in-progress` for
+82, 21 and 17 days. **All three repos were clean** — no uncommitted work anywhere — so `in-progress` was
+a status nobody had resolved, not work in flight. An `in-progress` task is one no scheduler offers and no
+reader can act on, which is why this was worth doing before picking anything new. Verified: MSSql
+**133/133 × 12 loaded runs**, `Birko.Data.SQL` **686/686**, playground `verify.mjs` **679 checks** +
+`device-fix-check` **68/68**, exit 0 throughout. Eight things worth carrying:
+
+- **TASK-258 was answered, not unfinished — and the honest close is a NARROWED scope plus a successor.**
+  Its question was what `retryWhenOwned`'s *"preserve each provider's retry policy"* preserves; the answer
+  is **a no-op**, because `RetryPolicy` defaults to `None` and `ExecuteWithRetry` short-circuits. So its
+  criteria 1-2 are not open work, they are questions its own answer made vacuous. Both now carry
+  `→ [[TASK-305]]` verbatim, and the `pr:` field that had been left `null` points at the commit that
+  landed 21 days ago. Parking such a task `in-progress` indefinitely hides a finished finding behind an
+  unfinished-looking status.
+- **⚠ Re-measured the claim before the successor cited it, and it had grown.** TASK-258's sweep was 17
+  days and ~30 tasks old. Re-run: **0** `RetryPolicy` assignments in framework production code, **0**
+  across all 16 consumer repos (production *and* test), **0** in any `appsettings*.json` — and **3** test
+  files rather than 2, the new one arriving with TASK-291/294, whose own fix (a rewrap that defeated
+  `IsTransientException`) is the *second* defect traceable to nobody ever exercising this machinery.
+- **⚠ And the successor got a measured motivation it would not otherwise have had.** Running the MSSql
+  suite under load produced a **SQL Server deadlock** — `1205`, *"Rerun the transaction"* — which
+  `MSSqlConnector.IsTransientException` **already enumerates** and whose summary advertises it. So the
+  framework identifies the textbook retryable error and retries nothing. TASK-305 now opens on an observed
+  failure instead of a structural argument.
+- **A fully-diagnosed mechanism can be tested deterministically, so the race need not be reproduced.**
+  TASK-276's MSSql instance was diagnosed 2026-09-07 (a sibling class's schema escape bumps the shared
+  connector's `SchemaGeneration`, so this class's store re-initialises and re-creates the table it had just
+  dropped) with a fix *proposed and never applied*. Applied: its own database, hence its own cached
+  connector. The test provokes the escape **synchronously** on the shared connector and asserts this
+  connector did not see it — no interleaving required. Both halves are asserted, so a change that stopped
+  the healing altogether reds it too rather than passing quietly.
+- **⚠ TASK-303's fix for the identical twin does not port, and the measurement is what says so.** A shared
+  xUnit collection served the TimescaleDB instance two days earlier because the overlap was 5 classes. Here
+  **13 of 19** classes issue `DROP TABLE`, so a collection covering them is
+  `"parallelizeTestCollections": false` in all but name — the fix TASK-276 explicitly forbids. A separate
+  settings id is also *immune by construction*: a class added later cannot reach the connector at all.
+- **⚠ The load lever generalises, and the loaded arm found a DIFFERENT flake than the one under fix.**
+  0/12 idle against 1/12 loaded, same binary — TASK-276 had established load-as-trigger for the SQLite
+  *pool* flake only, and it now holds for a second suite and a second mechanism. But the failure was
+  `NullableUniqueColumnLiveTests` deadlocking, not the target, so **the before/after distinguishes nothing
+  for the target** and the fix rests on the mechanism plus the deterministic test. Said plainly rather than
+  glossed; the deadlock is [[TASK-306]], and the 0-after does not cover it either (~1 in 12 is the expected
+  outcome either way).
+- **⚠ TASK-038 was three months stale, and the criteria "confirmed by eye" were where the defects were.**
+  Its one remaining item was a browser re-check; the playground had meanwhile grown two headless harnesses
+  that answer it. Running them: 68 components, 0 empty, 9 token groups, 0 warnings. But `verify.mjs`
+  counted *groups* and never drove the editor or the export — and **download-as-file had never been built**
+  (no `Blob`, no `download` anywhere), while the live-edit selector is deliberately `:root[data-pg-edits]`
+  and not the `[data-theme="playground"]` the task specifies, for a reason the code recorded and the task
+  file never learned (an element has one `data-theme`, so claiming it wiped the edits on a theme switch).
+  **When a criterion has only ever been eyeballed, drive it before ticking it.**
+- **⚠ I left a literal NUL byte in `verify.mjs`, and it ran green.** A lost backslash through a heredoc
+  turned `'\u0000'` into the character, which makes `grep` treat the file as binary — so the next person's
+  search would silently miss it. Removed, and the same trap then bit a task file. Recorded because the
+  harness worked perfectly throughout: **a test harness can be quietly corrupt and green.**
+
+
 
 
 

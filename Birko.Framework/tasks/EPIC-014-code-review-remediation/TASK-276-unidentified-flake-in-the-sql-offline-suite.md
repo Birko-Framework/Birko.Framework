@@ -3,15 +3,15 @@ id: TASK-276
 parent: EPIC-014
 feature: FEATURE-014
 # status: todo | in-progress | review (code done, sign-off pending) | blocked | done | cancelled
-status: in-progress
+status: todo  # narrowed 2026-09-08 to the titular Birko.Data.SQL.Tests flake; the other four instances are fixed or owned
 priority: P2
 assignee: ai
 created: 2026-08-22
 depends-on: []
 blocks: []
-related: [TASK-273, TASK-259]
+related: [TASK-273, TASK-259, TASK-303, TASK-305, TASK-306]
 findings: []
-pr: "Birko.Data.SQL.SqLite.Tests (pool helper + guard) + Birko.Health.Data.SQL.Tests"
+pr: "Birko.Data.SQL.SqLite.Tests (pool helper + guard) + Birko.Health.Data.SQL.Tests + Birko.Data.SQL.MSSql.Tests@dd953da"
 github-issue: null
 jira-key: null
 ---
@@ -621,3 +621,96 @@ introduced rather than a long-standing defect.
 
 **The generalisable half is the tooling:** a sweep loop that greps only the summary line destroys the
 evidence. Keeping a `.trx` per project turned two lost identities into a diagnosis on the first attempt.
+
+
+---
+
+## 2026-09-08 (later) — the MSSql instance is FIXED, and the load lever found a fourth instance instead
+
+Worked as step 1 of clearing the three `in-progress` tasks. The one actionable item left in this file was
+the MSSql fix *proposed but not applied* on 2026-09-07. It is applied, with a deterministic test, and the
+loaded control turned up something else.
+
+### The fix, and why it is the shape it is
+
+`SchemaEnsureRollbackResidueLiveTests` now uses a database of its own (`{BIRKO_MSSQL_DB}_residue`,
+created on demand via `master`), so `GetId()` differs and `DataBase.GetConnector` hands it its own
+connector. No sibling can bump its `SchemaGeneration`.
+
+⚠ **A shared xUnit collection was considered and rejected on a measurement.** That is how [[TASK-303]]
+fixed the TimescaleDB twin two days earlier, so it was the obvious move. It does not port: there the
+overlap was 5 classes, here **13 of 19** classes issue `DROP TABLE`, so a collection covering them is
+`"parallelizeTestCollections": false` in all but name — which this file names as the wrong fix. A
+separate settings id is also *immune by construction* rather than merely non-concurrent-with-what-exists:
+a class added later cannot reach this connector at all, whereas a collection must be remembered and
+extended. That was this file's own stated bar — *"immune rather than merely luckier"*.
+
+### The interleaving did not have to be forced, because the mechanism was already known
+
+Criterion 4 allows pinning whatever is deterministic when the race cannot be reproduced. Here it can be
+side-stepped entirely: the escape is provoked **synchronously** on the shared connector and the test
+asserts this class's connector did not see it.
+`This_class_does_not_share_a_connector_with_the_rest_of_the_suite` asserts the ids differ, the connector
+instances differ, the sibling's generation **bumped** (TASK-288's healing, working — the control that
+stops the test being vacuous) and this connector's **did not**.
+
+**Mutations, disjoint:**
+
+| mutation | red |
+|---|---|
+| `Database` back to the shared `birkoview` | **1** — the isolation test, and only it |
+| remove the sibling's `DROP TABLE`, so no escape is provoked | **1** — the *healing* half, with `found 0L`, proving the test is not vacuous |
+
+### ⚠ The before/after distinguishes nothing for the target, and the loaded arm found a DIFFERENT flake
+
+| arm | runs | failures |
+|---|---|---|
+| before, idle | 12 | **0** |
+| before, **under 8 CPU burners** | 12 | **1 — but not the target test** |
+| after, under 8 CPU burners | 12 | **0** (133 tests) |
+
+The one loaded failure was
+`NullableUniqueColumnLiveTests.A_required_unique_column_keeps_its_inline_constraint`, a SQL Server
+**deadlock** (`Process ID 72 … chosen as the deadlock victim. Rerun the transaction.`) — a different
+class, a different mechanism, no connector state involved. So the target coupling was **not** reproduced
+in 24 runs, and the fix rests on the mechanism diagnosed 2026-09-07 plus the deterministic test above,
+exactly as this file's `ClearAllPools` fix rested on its mechanism. *A fix whose before/after fails
+nothing is a missing reproduction* — said again rather than glossed.
+
+⚠ **And the 0-after must not be read as covering the deadlock either.** At ~1 in 12 that is the expected
+outcome whether or not anything changed, and nothing in this fix touches lock contention. Filed as
+[[TASK-306]] with the measurement, because the sharing is suite-wide (MSSql 13 of 19 classes, PostgreSQL
+12 of 19, MySQL 11 of 16 — all on one `birkoview`) and the remedy does not scale by hand.
+
+### ⚠ The load lever generalises, which is a new result
+
+This file established load-as-trigger for the SQLite **pool** flake only. It now holds for a second
+suite and a second mechanism: **0/12 idle, 1/12 loaded**, same binary. Treat an idle repeated-run
+measurement in any of these suites as measuring nothing.
+
+### A by-product worth carrying: the deadlock is the case the retry machinery exists for
+
+`MSSqlConnector.IsTransientException` explicitly enumerates `1205 // Deadlock victim` and the server
+itself says *"Rerun the transaction"* — yet nothing retried, because the default `RetryPolicy` is `None`
+and `ExecuteWithRetry` short-circuits before the classification is consulted. Recorded on [[TASK-305]] as
+its first *measured* motivation, where before it had only the structural argument from [[TASK-258]].
+⚠ It is not the fix for TASK-306: a retry would mask that flake, not remove it.
+
+### Narrowed — what is left on this task
+
+**Only the titular subject:** one test in `Birko.Data.SQL.Tests` failing about 10% of full-suite runs,
+still **unidentified**, never recurred, **686/686** today. Everything else this file accumulated is now
+closed or owned:
+
+| instance | state |
+|---|---|
+| `Birko.Data.SQL.Tests` (titular) | **open** — no identity, no reproduction |
+| `Birko.Data.Migrations.SQL.Tests` + the SQLite pool family | fixed 2026-09-08 (`SqlitePool` + guard) |
+| `Birko.Data.SQL.MSSql.Tests` — `SchemaGeneration` coupling | **fixed here** |
+| `Birko.Data.Migrations.TimescaleDB.Tests` | fixed by [[TASK-303]] (shared collection over 5 classes) |
+| `Birko.Data.SQL.MSSql.Tests` — parallel-DDL deadlock | [[TASK-306]] |
+
+Its own standing instruction still applies to what remains: *if it has not recurred after a few weeks of
+ordinary sweeps, cancel this task and say which change is the likeliest cause rather than leaving it open
+indefinitely.* First sighting was 2026-08-22, so that clock has ~2 weeks left; **and note the lever
+above** — a fortnight of *idle* runs is not the evidence that instruction wants.
