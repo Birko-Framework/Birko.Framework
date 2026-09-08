@@ -56,7 +56,7 @@ public class BulkTransactionBoundaryEndToEndTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePool.ClearForDirectory(_root, 2);   // TASK-276: never process-wide
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
     }
 

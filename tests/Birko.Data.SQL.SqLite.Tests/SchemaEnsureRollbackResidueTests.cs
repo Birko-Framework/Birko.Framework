@@ -57,7 +57,7 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        SqlitePool.ClearForDirectory(_root);   // TASK-276: never process-wide
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
     }
 
@@ -213,7 +213,9 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
             drop.CommandText = "DROP TABLE \"ResidueSeeds\"";
             drop.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        // TASK-276 -- precise, not process-wide: the store's pooled handle must be dropped so the next
+        // statement cannot be served from a schema image that still has the table.
+        SqlitePool.ClearFor(settings);
 
         Func<Task> write = async () => await store.CreateAsync(new Seed { Guid = Guid.NewGuid(), Name = "lost" });
 
@@ -252,7 +254,8 @@ public class SchemaEnsureRollbackResidueTests : IDisposable
             drop.CommandText = "DROP TABLE \"ResidueSeeds\"";
             drop.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        // TASK-276 -- precise, not process-wide. See the write twin above.
+        SqlitePool.ClearFor(settings);
 
         Func<Task> read = async () => await store.ReadAsync(x => x.Name == "anything", null, null, null, default);
 

@@ -38,7 +38,7 @@ public class SqliteSchemaVisibilityProbes : IDisposable
     }
 
     /// <remarks>
-    /// ⚠ <b>No <c>SqliteConnection.ClearAllPools()</c> here, deliberately — measured.</b> Twenty-four of
+    /// ⚠ <b>No a process-wide pool clear here, deliberately — measured.</b> Twenty-four of
     /// this project's teardowns call it, and it is <b>process-wide</b>: it reaches every other test class's
     /// pooled connections, including ones with a command in flight, because xUnit runs collections in
     /// parallel. Adding three more copies of it took this suite from 6/6 clean to a reproducible ~1-2 in 6
@@ -226,7 +226,8 @@ public class SqliteSchemaVisibilityProbes : IDisposable
             seed.CommandText = "PRAGMA journal_mode=delete; CREATE TABLE Anchor (Id INTEGER);";
             seed.ExecuteNonQuery();
         }
-        SqliteConnection.ClearAllPools();
+        // TASK-276 -- precise: this probe owns "hot.db", and Cs() is the exact connection string.
+        SqlitePool.ClearFor(Cs("hot.db"));
 
         FileStream? journalHandle = null;
         Exception? commitFailure = null;
@@ -266,7 +267,7 @@ public class SqliteSchemaVisibilityProbes : IDisposable
 
             journalHandle?.Dispose();
             journalHandle = null;
-            SqliteConnection.ClearAllPools();
+            SqlitePool.ClearFor(Cs("hot.db"));   // TASK-276 -- precise
 
             using var after = new SqliteConnection(Cs("hot.db"));
             after.Open();

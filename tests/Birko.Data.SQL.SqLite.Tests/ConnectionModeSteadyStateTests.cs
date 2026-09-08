@@ -41,7 +41,7 @@ public class ConnectionModeSteadyStateTests : IDisposable
         Directory.CreateDirectory(_root);
     }
 
-    /// <remarks>No process-wide <c>ClearAllPools()</c> — see [[TASK-276]].</remarks>
+    /// <remarks>No process-wide a process-wide pool clear — see [[TASK-276]].</remarks>
     public void Dispose()
     {
         try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }

@@ -42,7 +42,7 @@ public class EscapeAnomalyDiscriminationTests : IDisposable
     }
 
     /// <remarks>
-    /// No <c>SqliteConnection.ClearAllPools()</c> — see <c>PerStoreDoorResidueTests</c> and [[TASK-276]].
+    /// No a process-wide pool clear — see <c>PerStoreDoorResidueTests</c> and [[TASK-276]].
     /// </remarks>
     public void Dispose()
     {
