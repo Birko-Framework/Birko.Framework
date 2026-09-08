@@ -41,6 +41,40 @@ them. So a mechanism exists and is either not being run, or is being run and its
 not fire for a file inside an *already-mapped project* — which is the shape both misses had. Establishing
 which is the first half of this task.
 
+### Third instance, 2026-09-08 (from [[TASK-312]])
+
+`SH-H040` was an authentication fail-open with **two** gates. The engine gate
+(`Birko.Security/Authentication/AuthenticationService.cs`) is covered — `security-and-authorization`
+globs `../Birko.Security/**/*.cs`, and its requirement *"Static-token authentication is disabled unless
+enabled and populated"* documented the defect verbatim, including the words *"the service fails open"*, so
+the fix produced a real spec diff.
+
+The **second** gate is not covered by anything. Measured: **0** of `docs/specs/*.md` mention
+`SseAuthenticationService`, and `docs/specs/.map.yml` has no glob reaching
+`Birko.Communication.SSE` at all. So an auth-bypass fix in a transport middleware produced **no** spec
+diff, and the spec layer cannot say whether SSE authenticates anything.
+
+⚠ **The shape is worse than under-coverage of a helper.** The two previous instances were internal
+resolvers; this one is a network-facing authentication boundary on a whole transport. And note what it
+does to this epic's own evidence rule: a fix's spec diff is supposed to *be* the evidence, so for the SSE
+half there was none to review — the regression tests had to carry it alone.
+
+⚠ **Checked immediately rather than left as a question, and the answer is worse: ALL FOUR transports
+that share this engine have zero globs.** Measured 2026-09-08 against `docs/specs/.map.yml`:
+
+| Project | Globs reaching it |
+|---|---|
+| `Birko.Communication.SSE` | **0** |
+| `Birko.Communication.WebSocket` | **0** |
+| `Birko.Communication.REST.Server` | **0** |
+| `Birko.Communication.SOAP` | **0** |
+
+Each of those four contains an authentication middleware or service that gates network traffic — the
+`RestAuthenticationMiddleware`, two WebSocket gates, and the SSE gate `SH-H040`'s fix had to touch. So the
+spec layer describes the shared **engine** and none of the four **boundaries** that call it, which is
+precisely the seam an auth defect hides in. That makes this task's subject a security-coverage gap rather
+than a tidiness one, and it is the reason its priority is worth re-reading.
+
 ## Acceptance criteria
 
 - [ ] Establish why the two known gaps were not caught — not run, not surfaced, or not detected for a file

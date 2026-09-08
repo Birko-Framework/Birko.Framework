@@ -2393,6 +2393,62 @@ edit here, live immediately).
 The rolling per-change log now lives entirely in [CHANGELOG.md](CHANGELOG.md) (newest-first). Add new architectural / behavioral change notes here as `### Title (YYYY-MM-DD)` entries; when this section grows past ~5–8 entries, roll the oldest into CHANGELOG.md (the project-local `/roll-birko-changelog` skill does this). Granular code-review-remediation progress is tracked in `tasks/EPIC-014-code-review-remediation`, not here.
 
 
+### An authentication service allowed everything when it was switched ON but misconfigured (2026-09-08)
+
+TASK-312 / `SH-H040`, the first `/fix-next` pick from the newly-drainable high pool. A Birko service with
+`Enabled: true` and no usable token accepted **every** caller, including one presenting no token at all.
+`ValidateToken` gated on `IsAuthenticationEnabled()`, which answers *"enabled **and** configured"* — so a
+config section with the flag set and the token list empty collapsed into the same allow-all branch as a
+deliberate `Enabled = false`. Four transports share that engine. **128 tests green** across five suites,
+two disjoint mutations. Eight things worth carrying:
+
+- **One question standing in for two is the whole defect, and the fix is to separate them at one
+  producer.** `IsAuthenticationDisabled` (`!_config.Enabled`) is now the only state a gate may treat as
+  allow-all; `IsMisconfigured` reports the other; both gates read the producer, so a third caller cannot
+  reintroduce the split. `IsAuthenticationEnabled()` is deliberately **unchanged** — five transport
+  wrappers expose it and a test pins all three of its answers, so moving the *gate* was smaller and safer
+  than redefining the method.
+- **The correct behaviour was already written and unreachable.** `ValidateToken` ended with
+  `LogWarning("Authentication enabled but no tokens or bindings configured"); return false;` — dead,
+  because the gate in front returned `true` for exactly that state. § TASK-247's *a fallback nobody can
+  reach* shape, guarding an auth decision. **Most of this fix was making existing code reachable**, which
+  is also the strongest evidence of what the author intended.
+- **⚠ The filed trigger was the SAFE case, and reproducing it as written would have closed the finding as
+  a false positive.** It blamed *"a renamed `${VAR}`"*. Measured: an absent variable makes
+  `GetEnvironmentVariable` return `null`, so `ExpandEnvironmentVariable`'s `?? value` **keeps the literal**
+  `"${VAR}"` — non-blank, so retained, authentication stays on, every real token refused. That fails
+  **closed**. The real triggers are nothing-configured-at-all and a variable that **exists and is blank**
+  (`""`, where the `??` never fires). The safe case is now pinned as a *contrast* test so nobody "fixes"
+  the fallback into a fail-open. **Re-verify a finding's trigger, not just its mechanism.**
+- **⚠ There were TWO independent gates and only one was filed.** `SseAuthenticationService`
+  (`:94`) gated on `IsAuthenticationEnabled()` directly and returned `Success` *before extracting a
+  token*. Proven independent by mutation: with the engine already fixed, reverting the SSE gate alone
+  still reds 2 of 24. § TASK-215's *guard the whole verb family or none of it* — shipping half a fix for
+  an auth bypass is not a partial improvement.
+- **⚠ The security pass found a defect in my own fix, which is why it is conditional-but-not-optional.**
+  The misconfiguration arm first returned `Fail("Authentication is misconfigured on the server")` to an
+  **anonymous** caller — a distinguishable signal that the server is in a known-broken state. It now
+  returns the same message as an invalid token, with the operator detail in the `LogError` only, and a
+  test pins the two refusals as indistinguishable. **A gate axis that only ever passes is not being run.**
+- **Rejected: throwing from the constructor.** Loudest, and § SH-H037 would permit it since the opt-out
+  exists and is checked first. Rejected on blast radius per § TASK-256's inversion of the same instinct:
+  a consumer in this state is running an *open* endpoint, and a throw converts their running service into
+  a start-up failure. Refusing at validate time closes the hole; `IsMisconfigured` + `LogError` give the
+  operator the signal. **A service that silently refuses everything is as hard to diagnose as one that
+  silently allows everything**, which is why the report is part of the fix rather than a nicety.
+- **The defect lived in the GAP between two passing tests.** `IsAuthenticationEnabled_False_WhenEnabledButNoTokens`
+  and `ValidateToken_AllowsAny_WhenAuthenticationDisabled` both existed and both were honest; nobody had
+  ever asserted `ValidateToken` with `Enabled = true` **and** no tokens. So a green suite said nothing —
+  a different failure from § TASK-284/279's *a test was asserting the defect*, and worth telling apart:
+  **there was nothing to correct, only something absent.**
+- **⚠ And it measured that NO spec area covers any of the four transports.** `docs/specs/.map.yml` has
+  **0** globs reaching `Birko.Communication.SSE`, `.WebSocket`, `.REST.Server` or `.SOAP`, and **0** specs
+  mention `SseAuthenticationService` — so the SSE half of an auth-bypass fix produced **no spec diff**,
+  and the evidence this epic normally relies on did not exist for it. The spec layer describes the shared
+  engine and none of the four network boundaries that call it. Appended as a **third instance** to
+  [[TASK-142]] rather than spawned as a duplicate, and it upgrades that task from tidiness to a
+  security-coverage gap.
+
 ### 16 findings recovered from a lost harvest pass: 11 folded, 5 duplicates, and the one proposed high downgraded (2026-09-08)
 
 TASK-195, closing [[STORY-055]]. The 2026-07-30 harvest aggregated by `severity`, a field its **first**

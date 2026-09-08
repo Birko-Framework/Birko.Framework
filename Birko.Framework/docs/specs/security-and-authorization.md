@@ -649,24 +649,45 @@ The system SHALL make `UseResolvedPermissions` remove the first existing `ICurre
 - **When** a request reaches the middleware
 - **Then** the middleware's `IUserPermissionResolver` parameter cannot be resolved and the request fails with the container's own resolution exception
 
-### Requirement: Static-token authentication is disabled unless enabled and populated
+### Requirement: Static-token authentication allows everything only when deliberately switched off
 
-The system SHALL make `AuthenticationService.IsAuthenticationEnabled` return true only when
-`AuthenticationConfiguration.Enabled` is true **and** at least one expanded token or token binding survived
-initialisation. When authentication is not enabled, `ValidateToken` SHALL return **true** for every input,
-including a null token — the service fails open.
+The system SHALL treat `AuthenticationConfiguration.Enabled = false` as the **only** state in which every
+caller is allowed through, exposed as `AuthenticationService.IsAuthenticationDisabled`. When `Enabled` is
+true but no expanded token or binding survived initialisation, the service SHALL **reject** every caller
+rather than allowing them, SHALL report the state through `IsMisconfigured`, and SHALL log an error at
+construction naming both the likely causes and the deliberate opt-out.
+
+`IsAuthenticationEnabled` SHALL continue to return true only when `Enabled` is true **and** at least one
+expanded token or binding survived initialisation — it answers "enabled and configured", which is a
+different question from the one a gate asks, and it is unchanged because five transport wrappers expose it.
 
 #### Scenario: Feature switched off
 
 - **Given** a configuration with `Enabled = false` and several tokens
 - **When** `ValidateToken(null, "10.0.0.1")` is called
-- **Then** it returns `true`
+- **Then** it returns `true`, and `IsMisconfigured` is false — a deliberate switch-off is not a fault
 
 #### Scenario: Enabled but nothing configured
 
 - **Given** a configuration with `Enabled = true`, `Tokens` empty and `TokenBindings` empty
 - **When** `ValidateToken("anything", "10.0.0.1")` is called
-- **Then** `IsAuthenticationEnabled()` is false, so it returns `true`
+- **Then** it returns `false`, and so does `ValidateToken(null, "10.0.0.1")`
+- **And** `IsMisconfigured` is true while `IsAuthenticationEnabled()` remains false
+
+#### Scenario: Enabled with tokens that do not survive expansion
+
+- **Given** a configuration with `Enabled = true` and `Tokens` containing only whitespace, or a `${VAR}`
+  whose environment variable exists and is **blank** (so `GetEnvironmentVariable` returns `""`, the
+  `?? value` fallback does not fire, and the token is dropped)
+- **When** `ValidateToken` is called with any input
+- **Then** it returns `false`
+
+#### Scenario: Enabled with a `${VAR}` that names an absent variable
+
+- **Given** a configuration with `Enabled = true` and a single token `"${MISSING}"` whose variable is unset
+- **When** `ValidateToken` is called
+- **Then** the literal `"${MISSING}"` is retained as the token, so `IsMisconfigured` is false and the
+  service fails **closed** — every real token is rejected and only the literal is accepted
 
 #### Scenario: Enabled and configured, no token presented
 

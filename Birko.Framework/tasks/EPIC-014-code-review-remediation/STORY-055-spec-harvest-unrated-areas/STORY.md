@@ -128,17 +128,24 @@ Fixing anything. This story ends when the findings are rated, given `SH-` ids, a
 - [x] The three areas' findings are recovered verbatim with file, line and reasoning (2026-07-31)
 - [x] The recovery is committed to the repo, off the perishable journal
 - [x] The root cause of the loss is recorded, not just the loss (schema change between passes)
-- [ ] Severities confirmed for all 16
-- [ ] `SH-` ids assigned, continuing the existing ranges — **do not renumber** `SH-H`/`SH-M`/`SH-L`
-- [ ] Folded into `SPEC-HARVEST-FINDINGS-2026-07-30.md` under their severity sections
-- [ ] Header total corrected from 865, with the split recomputed **after** de-duplication, and each severity
-      story's `finding-count` updated. ~~881 (58 · 430 · 393)~~ was this story's original arithmetic and is
-      wrong: it adds all 16, but `SLI-4`/`SLI-6` are already filed as `SH-L297`/`SH-L298`, so at least two of
-      them must not be counted again. The real number falls out of the de-duplication criterion below
-- [ ] The coverage-gaps note rewritten or deleted — it currently says "complete"
-- [ ] Duplicates cross-referenced rather than double-filed. **Known overlap:** two `SH-L` entries near lines
-      4829/4835 of the findings doc already describe SLI-4 (non-volatile double-checked read) and SLI-6
-      (undisposed `SemaphoreSlim`), filed under another area. Check for others before assigning ids.
+- [x] Severities confirmed for all 16 — **0 high, 7 medium, 4 low, 5 duplicates.** The proposed high (`UOW-1`) was downgraded on measurement; see [[TASK-195]]
+- [x] `SH-` ids assigned, continuing the existing ranges — `SH-M422`–`SH-M428`, `SH-L388`–`SH-L391`, appended past the maxima. **Nothing renumbered**: verified mechanically, the id set went 865 → 876 with **0 lost**
+- [x] Folded into `SPEC-HARVEST-FINDINGS-2026-07-30.md` under their severity sections, as three new `### area:` blocks in Medium and two in Low, keeping both sections alphabetically ordered (25 and 24 areas)
+- [x] Header total corrected from 865 to **876 (57 · 428 · 391)**, split recomputed after de-duplication,
+      and `finding-count` updated on [[STORY-053]] (421 → 428) and [[STORY-054]] (387 → 391).
+      ~~881 (58 · 430 · 393)~~ was this story's original arithmetic and was wrong by **5**, in two ways it
+      half-anticipated: it counted `SLI-4`/`SLI-6` although it knew they were already `SH-L297`/`SH-L298`
+      (the "at least two" it predicted), it did **not** know `SLI-1`/`SLI-2`/`SLI-3` were duplicates too,
+      and its one high moved to medium. ⚠ [[STORY-051]]'s count is **deliberately unchanged at 57** —
+      recorded there as a non-change with its reason, since the recovered set produced no high finding
+- [x] The coverage-gaps note rewritten — it now states what happened (swept, lost to a mid-project schema change, recovered from the journal on 2026-07-31, folded 2026-09-08) and carries the duplicate mapping table
+- [x] Duplicates cross-referenced rather than double-filed — and there were **five, not the two this
+      story knew about**. `SLI-1`→`SH-M307`, `SLI-2`+`SLI-3`→`SH-M316` (one finding spanning both halves),
+      `SLI-4`→`SH-L297`, `SLI-6`→`SH-L298`. The first three were found only by searching the findings doc
+      for every *file* the recovered findings name: the two store bases returned 15 existing ids, while
+      `AbstractModel.cs`, `AbstractLogModel.cs`, `SqlUnitOfWork.cs`, `SqlTransactionContext.cs` and
+      `ElasticSearchUnitOfWork.cs` returned **0**. Cross-referenced onto [[TASK-163]] and [[TASK-182]],
+      which already own those ids; nothing was added to their `findings:` lists
 
 ## Human test plan
 

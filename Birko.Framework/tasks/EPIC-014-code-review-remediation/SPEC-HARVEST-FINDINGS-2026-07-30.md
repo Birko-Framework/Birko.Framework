@@ -339,7 +339,39 @@ A stored column of "PBKDF2-SHA512:600000::" splits into 4 parts and passes the a
 
 `../Birko.Security/Authentication/AuthenticationService.cs:76`  ·  _restates a first-pass finding_
 
-ValidateToken opens with `if (!IsAuthenticationEnabled()) return true;` and IsAuthenticationEnabled is false when Enabled is false OR every configured token/binding expanded to empty at construction. A renamed ${VAR} that leaves Tokens empty silently turns an authenticating endpoint into an open one — every caller, including one presenting a null token, is accepted.
+**Verdict: CONFIRMED, TRIGGER CORRECTED, and WIDENED (2026-09-08, [[TASK-312]]) — FIXED**
+
+The mechanism holds exactly. `ValidateToken` opened with `if (!IsAuthenticationEnabled()) return true;`, and
+`IsAuthenticationEnabled` is false both when `Enabled` is false **and** when every configured token or
+binding expanded to empty — so a deliberate switch-off and a misconfiguration collapsed into one allow-all
+branch, accepting every caller including one presenting a null token.
+
+⚠ **The trigger as filed is the SAFE case.** *"A renamed `${VAR}` that leaves Tokens empty"* does not
+happen: `Environment.GetEnvironmentVariable` returns `null` for an absent variable, so
+`ExpandEnvironmentVariable`'s `?? value` retains the literal `"${VAR}"`, which is non-blank and is kept.
+Authentication therefore stays **on** and every real token is refused — it fails **closed**. Measured with a
+probe mirroring the method. Anyone reproducing this finding as filed would have seen a 401 and closed it as
+a false positive. The reachable triggers are:
+
+- `Enabled: true` with **empty** `Tokens` and `TokenBindings` — no environment variables involved;
+- `${VAR}` where the variable **exists and is blank** — `GetEnvironmentVariable` returns `""`, not `null`,
+  so the `??` fallback never fires and `IsNullOrWhiteSpace` drops the token (`docker -e VAR=`, an empty
+  systemd `Environment=`, a blank CI variable);
+- tokens that are whitespace in configuration.
+
+⚠ **Widened: there were TWO independent gates.** Besides `ValidateToken` (reached by
+`RestAuthenticationMiddleware`, `WebSocketMiddleware` and `WebSocketEndpointExtensions`),
+`Birko.Communication.SSE/Middleware/SseAuthenticationService.cs:94` gated on `IsAuthenticationEnabled()`
+directly and returned `SseAuthenticationResult.Success(...)` before extracting a token. Fixing only the
+filed site would have left SSE fail-open — proven by mutation: with the engine fixed, reverting the SSE
+gate alone still reds 2 of 24 SSE tests.
+
+**Fixed** by separating the two questions at one producer: `IsAuthenticationDisabled` (`!_config.Enabled`)
+is now the only allow-all state, `IsMisconfigured` reports the bad one, the constructor logs it, and both
+gates read the producer. `IsAuthenticationEnabled()` is unchanged — five transport wrappers expose it and a
+test pins all three of its answers. Note the correct behaviour was already written and **unreachable**: the
+method already ended in `LogWarning("Authentication enabled but no tokens or bindings configured"); return
+false;`, dead behind the gate.
 
 ### area: specifications-and-paging
 
